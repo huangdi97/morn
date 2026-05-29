@@ -1,0 +1,21 @@
+修复 chat/engine.py 中 _call_cloud 方法，兼容 SenseNova API 中深度思考模型的回复格式。
+
+SenseNova 的 deepseek-v4-flash 模型把实际回复放在 message["reasoning_content"] 而不是 message["content"] 里。需要 fallback 读取。
+
+修复方式：在 _call_cloud 的最后，解析 response.json() 时：
+
+```python
+data = await resp.json()
+message = data["choices"][0]["message"]
+content = message.get("content", "").strip()
+if not content:
+    content = message.get("reasoning_content", "").strip()
+    if not content:
+        raise RuntimeError("empty response from API")
+return content
+```
+
+同时把 config.json 中的 model_name 从 "deepseek/deepseek-v4-flash" 改为 "deepseek-v4-flash"（不带 provider 前缀）。
+
+验证：
+python3 -m pytest tests/test_chat_engine.py -v

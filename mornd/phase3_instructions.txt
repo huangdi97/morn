@@ -1,0 +1,880 @@
+# Morn v0.1 · 阶段 3/8：SQLite 记忆存储（store.py）
+
+## 生成文件清单
+
+本阶段生成 2 个文件：
+
+| 文件 | 说明 |
+|------|------|
+| mornd/morn_core/memory/store.py | 记忆存储层：事件胶囊 + FTS5 + 软遗忘 |
+| mornd/tests/test_memory_store.py | 记忆存储完整测试 |
+
+---
+
+## 文件 1：mornd/morn_core/memory/store.py
+
+### 依赖导入
+
+```python
+import json
+import random
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+import aiosqlite
+```
+
+### MemoryStore 类
+
+```python
+class MemoryStore:
+    """
+    Morn 记忆存储层。
+    管理事件胶囊的 CRUD、FTS5 全文检索、软遗忘机制。
+    
+    使用方式：
+        async with MemoryStore(data_dir) as store:
+            event_id = await store.add_capsule({...})
+            results = await store.search_fts("关键词")
+    
+    SQLite 文件路径：{data_dir}/memory.db
+    """
+    
+    def __init__(self, data_dir: Path):
+        self.data_dir = Path(data_dir)
+        self.db_path = self.data_dir / "memory.db"
+        self.db: Optional[aiosqlite.Connection] = None
+
+    async def __aenter__(self) -> "MemoryStore":
+        """异步上下文管理器入口：打开数据库连接并初始化 schema"""
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.db = await aiosqlite.connect(str(self.db_path))
+        self.db.row_factory = aiosqlite.Row  # 行按列名访问
+        await self.db.execute("PRAGMA journal_mode=WAL")
+        await self.db.execute("PRAGMA foreign_keys=ON")
+        await self._create_schema()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """异步上下文管理器出口：关闭数据库连接"""
+        if self.db:
+            await self.db.close()
+            self.db = None
+```
+
+### _create_schema()
+
+```python
+    async def _create_schema(self):
+        """创建或迁移数据库 schema（幂等，多次执行不报错）。
+        
+        执行顺序：
+        1. CREATE TABLE IF NOT EXISTS capsules
+        2. CREATE VIRTUAL TABLE IF NOT EXISTS capsules_fts
+        3. CREATE TRIGGER IF NOT EXISTS (INSERT + DELETE 各一个)
+        4. CREATE INDEX IF NOT EXISTS（3 个）
+        """
+```
+
+#### capsules 表定义
+
+```sql
+CREATE TABLE IF NOT EXISTS capsules (
+    event_id        TEXT PRIMARY KEY,
+    timestamp       TEXT NOT NULL,           -- ISO8601: "2026-05-27T17:30:12Z"
+    entities        TEXT NOT NULL DEFAULT '[]',   -- JSON 数组: '["创建者", "Morn"]'
+    emotion_score   REAL NOT NULL DEFAULT 0.0,    -- -1.0 ~ 1.0
+    emotion_tag     TEXT NOT NULL DEFAULT '',      -- "高兴/满足"
+    description     TEXT NOT NULL,                 -- 事件描述文本
+    importance_weight REAL NOT NULL DEFAULT 0.5,   -- 0.0 ~ 1.0
+    causal_edges    TEXT NOT NULL DEFAULT '[]',    -- JSON 数组: '["evt_xxx", "evt_yyy"]'
+    source          TEXT NOT NULL DEFAULT 'chat',  -- 'chat' / 'system' / 'evolution'
+    forgotten       INTEGER NOT NULL DEFAULT 0,    -- 0=正常, 1=系统遗忘
+    forget_creator  INTEGER NOT NULL DEFAULT 0,    -- 0=正常, 1=创建者请求遗忘
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+#### FTS5 虚拟表定义
+
+```sql
+CREATE VIRTUAL TABLE IF NOT EXISTS capsules_fts USING fts5(
+    event_id UNINDEXED,
+    description,
+    entities,
+    content='capsules',
+    content_rowid='rowid'
+);
+```
+
+#### 触发器定义
+
+```sql
+-- INSERT 触发器：自动同步到 FTS5
+CREATE TRIGGER IF NOT EXISTS capsules_ai AFTER INSERT ON capsules
+BEGIN
+    INSERT INTO capsules_fts(rowid, event_id, description, entities)
+    VALUES (new.rowid, new.event_id, new.description, new.entities);
+END;
+
+-- DELETE 触发器：自动从 FTS5 删除
+CREATE TRIGGER IF NOT EXISTS capsules_ad AFTER DELETE ON capsules
+BEGIN
+    INSERT INTO capsules_fts(capsules_fts, rowid, event_id, description, entities)
+    VALUES ('delete', old.rowid, old.event_id, old.description, old.entities);
+END;
+```
+
+#### 索引定义
+
+```sql
+-- 情感标签检索加速
+CREATE INDEX IF NOT EXISTS idx_capsules_emotion ON capsules(emotion_tag);
+
+-- 时间范围检索加速
+CREATE INDEX IF NOT EXISTS idx_capsules_timestamp ON capsules(timestamp);
+
+-- 遗忘过滤检索加速（/status 计数时用）
+CREATE INDEX IF NOT EXISTS idx_capsules_forget ON capsules(forget_creator);
+```
+
+### _make_event_id()
+
+```python
+    @staticmethod
+    def _make_event_id() -> str:
+        """生成唯一事件胶囊 ID。
+        
+        格式：evt_YYYYMMDD_HHMMSS_XXX
+        其中 XXX = random.randint(100, 999)
+        
+        示例：evt_20260527_173012_742
+        
+        注意：此方法不保证全局唯一，冲突时调用方需重试。
+        """
+        now = datetime.now(timezone.utc)
+        timestamp = now.strftime("%Y%m%d_%H%M%S")
+        suffix = random.randint(100, 999)
+        return f"evt_{timestamp}_{suffix}"
+```
+
+### add_capsule()
+
+```python
+    async def add_capsule(self, capsule: dict) -> str:
+        """写入一个新事件胶囊。
+        
+        参数：
+            capsule: dict，支持字段见下方默认值。必需字段：description
+        
+        返回：
+            str: 生成的 event_id
+        
+        异常：
+            RuntimeError: 3 次重试后仍失败
+        
+        默认值填充逻辑：
+            event_id: 未提供则 self._make_event_id()
+            timestamp: 未提供则 datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            entities: 未提供则 "[]"
+            emotion_score: 未提供则 0.0
+            emotion_tag: 未提供则 ""
+            description: 必需，缺失则抛 ValueError("description is required")
+            importance_weight: 未提供则 0.5
+            causal_edges: 未提供则 "[]"
+            source: 未提供则 "chat"
+            forgotten: 未提供则 0
+            forget_creator: 未提供则 0
+        
+        重试逻辑：
+            1. 外层 for attempt in range(3) 循环
+            2. 捕获所有 Exception（不只是 IntegrityError）
+            3. attempt < 2 时：记录 warning 日志，等待 0.5 秒后重试
+            4. attempt == 2（最后一次）：记录 error 日志，
+               抛 RuntimeError("add_capsule failed after 3 retries: {原始错误}")
+           日志通过 logging.getLogger("morn.memory") 输出
+        """
+        # 1. 验证 description
+        if "description" not in capsule or not capsule["description"].strip():
+            raise ValueError("description is required")
+        
+        # 2. 填充默认值
+        event_id = capsule.get("event_id", self._make_event_id())
+        timestamp = capsule.get("timestamp",
+            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+        
+        # 3. 构建完整数据
+        data = {
+            "event_id": event_id,
+            "timestamp": timestamp,
+            "entities": capsule.get("entities", "[]"),
+            "emotion_score": capsule.get("emotion_score", 0.0),
+            "emotion_tag": capsule.get("emotion_tag", ""),
+            "description": capsule["description"],
+            "importance_weight": capsule.get("importance_weight", 0.5),
+            "causal_edges": capsule.get("causal_edges", "[]"),
+            "source": capsule.get("source", "chat"),
+            "forgotten": capsule.get("forgotten", 0),
+            "forget_creator": capsule.get("forget_creator", 0),
+        }
+        
+        # 4. 执行 INSERT，最多重试 3 次
+        for attempt in range(3):
+            try:
+                await self.db.execute("""
+                    INSERT INTO capsules
+                    (event_id, timestamp, entities, emotion_score, emotion_tag,
+                     description, importance_weight, causal_edges, source,
+                     forgotten, forget_creator)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    data["event_id"], data["timestamp"], data["entities"],
+                    data["emotion_score"], data["emotion_tag"],
+                    data["description"], data["importance_weight"],
+                    data["causal_edges"], data["source"],
+                    data["forgotten"], data["forget_creator"],
+                ))
+                await self.db.commit()
+                return data["event_id"]
+            except Exception as e:
+                if attempt < 2:
+                    logger = logging.getLogger("morn.memory")
+                    logger.warning("add_capsule attempt %d failed: %s", attempt + 1, e)
+                    # 生成新的 event_id 防止主键冲突
+                    data["event_id"] = self._make_event_id()
+                    await asyncio.sleep(0.5)
+                else:
+                    logger = logging.getLogger("morn.memory")
+                    logger.error("add_capsule failed after 3 attempts: %s", e)
+                    raise RuntimeError(f"add_capsule failed after 3 retries: {e}")
+```
+
+### get_capsule()
+
+```python
+    async def get_capsule(self, event_id: str) -> Optional[dict]:
+        """按 event_id 精确检索事件胶囊。
+        
+        参数：
+            event_id: str
+        
+        返回：
+            匹配的 capsule dict，字段名同 add_capsule 的输入
+            未找到返回 None
+        
+        实现：
+        cursor = await self.db.execute(
+            "SELECT * FROM capsules WHERE event_id = ?", (event_id,))
+        row = await cursor.fetchone()
+        if row is None: return None
+        return dict(row)
+        """
+```
+
+### search_fts()
+
+```python
+    async def search_fts(self, query: str, limit: int = 10) -> list[dict]:
+        """FTS5 全文检索。
+        
+        参数：
+            query: str，FTS5 查询语法（支持 AND/OR 等，见 SQLite FTS5 文档）
+                  注意：FTS5 默认用双引号括短语，如 '"衰老干预"'
+            limit: int，最多返回条数，默认 10
+        
+        返回：
+            list[dict]，按 FTS5 rank 排序
+        
+        实现：
+        1. SQL 用 JOIN capsules_fts：
+           SELECT c.* FROM capsules c
+           JOIN capsules_fts f ON c.event_id = f.event_id
+           WHERE capsules_fts MATCH ? AND c.forget_creator = 0
+           ORDER BY rank
+           LIMIT ?
+        
+        2. 注意：MATCH 语法要求 query 中不含非法字符（如未闭合的引号）
+           如果 MATCH 抛 aiosqlite.OperationalError，捕获后返回空列表
+           （不要在 retrieve 时让用户看到数据库错误）
+        """
+        try:
+            cursor = await self.db.execute("""
+                SELECT c.* FROM capsules c
+                JOIN capsules_fts f ON c.event_id = f.event_id
+                WHERE capsules_fts MATCH ? AND c.forget_creator = 0
+                ORDER BY rank
+                LIMIT ?
+            """, (query, limit))
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+        except aiosqlite.OperationalError:
+            # FTS5 查询语法错误（如未闭合的引号），安全返回空列表
+            return []
+```
+
+### search_by_entity()
+
+```python
+    async def search_by_entity(self, entity: str, limit: int = 10) -> list[dict]:
+        """按实体检索。
+        
+        参数：
+            entity: str，实体名称（如 "创建者"）
+            limit: int
+        
+        返回：
+            list[dict]，按时间降序排列
+        
+        实现：SELECT * FROM capsules WHERE entities LIKE ? AND forget_creator=0
+               ORDER BY timestamp DESC LIMIT ?
+               entities LIKE '%"创建者"%'  （用 % 包裹实体名做模糊匹配）
+        
+        注意：LIKE 匹配是近似匹配，"Morn" 可能匹配 "Morn实例"
+              如果需要精确匹配，后续版本改用 JSON 解析
+        """
+```
+
+### search_by_timerange()
+
+```python
+    async def search_by_timerange(self, start: str, end: str,
+                                   limit: int = 50) -> list[dict]:
+        """时间范围检索。
+        
+        参数：
+            start: str，起始时间 ISO8601（含），如 "2026-05-01T00:00:00Z"
+            end: str，结束时间 ISO8601（含）
+            limit: int
+        
+        返回：
+            list[dict]，按时间降序
+        
+        实现：
+        SELECT * FROM capsules
+        WHERE timestamp >= ? AND timestamp <= ? AND forget_creator = 0
+        ORDER BY timestamp DESC LIMIT ?
+        """
+```
+
+### get_recent()
+
+```python
+    async def get_recent(self, limit: int = 20) -> list[dict]:
+        """获取最近的 N 条记忆（排除被遗忘的）。
+        
+        参数：
+            limit: int
+        
+        返回：
+            list[dict]，按时间降序
+        
+        实现：
+        SELECT * FROM capsules WHERE forget_creator = 0
+        ORDER BY timestamp DESC LIMIT ?
+        """
+```
+
+### count()
+
+```python
+    async def count(self) -> int:
+        """获取当前有效记忆总数（排除被遗忘的）。
+        
+        返回：
+            int
+        
+        实现：
+        SELECT COUNT(*) FROM capsules WHERE forget_creator = 0
+        """
+```
+
+### forget()
+
+```python
+    async def forget(self, event_id: str) -> bool:
+        """创建者请求软遗忘。
+        
+        将 forget_creator 标记为 1，记忆不再出现在主动检索中。
+        数据物理保留，可解除遗忘。
+        
+        参数：
+            event_id: str
+        
+        返回：
+            bool: True=成功标记, False=event_id 不存在
+        
+        实现：
+        cursor = await self.db.execute(
+            "UPDATE capsules SET forget_creator=1 WHERE event_id=? AND forget_creator=0",
+            (event_id,))
+        await self.db.commit()
+        return cursor.rowcount > 0
+        """
+```
+
+### unforget()
+
+```python
+    async def unforget(self, event_id: str) -> bool:
+        """解除软遗忘。
+        
+        将 forget_creator 恢复为 0，记忆重新出现在主动检索中。
+        
+        参数：
+            event_id: str
+        
+        返回：
+            bool: True=成功恢复, False=event_id 不存在或未被遗忘
+        
+        实现：
+        cursor = await self.db.execute(
+            "UPDATE capsules SET forget_creator=0 WHERE event_id=? AND forget_creator=1",
+            (event_id,))
+        await self.db.commit()
+        return cursor.rowcount > 0
+        """
+```
+
+### update_emotion()
+
+```python
+    async def update_emotion(self, event_id: str, score: float,
+                              tag: str) -> bool:
+        """更新事件胶囊的情感评分和标签（覆盖旧值）。
+        
+        参数：
+            event_id: str
+            score: float, -1.0 ~ 1.0
+            tag: str, 如 "高兴/满足"
+        
+        返回：
+            bool: 是否存在该 event_id
+        
+        实现：
+        UPDATE capsules SET emotion_score=?, emotion_tag=? WHERE event_id=?
+        """
+```
+
+### add_emotion_tag()
+
+```python
+    async def add_emotion_tag(self, event_id: str, score: float,
+                               tag: str) -> bool:
+        """追加情感标签（后见之明标记）。
+        
+        保留原标签，将新标签作为 JSON 数组追加到 emotion_tag 字段。
+        格式：原 "高兴" → '["高兴", "怀念"]'
+        
+        参数：
+            event_id: str
+            score: float
+            tag: str, 新标签
+        
+        返回：
+            bool: 是否存在该 event_id
+        
+        实现：
+        1. 先 SELECT emotion_tag FROM capsules WHERE event_id=?
+        2. 如果原字段为空或非 JSON 数组格式：
+           新值 = json.dumps([原值, tag])
+           如果原值为空字符串：json.dumps([tag])
+        3. 如果原字段已是 JSON 数组：
+           解析为 list，append(tag)，重新 json.dumps
+        4. UPDATE emotion_tag=? AND emotion_score=? WHERE event_id=?
+        """
+```
+
+### get_capsules_by_emotion()
+
+```python
+    async def get_capsules_by_emotion(self, tag: str,
+                                       limit: int = 50) -> list[dict]:
+        """按情感标签检索事件胶囊。
+        
+        参数：
+            tag: str, 情感标签名（如 "高兴"）
+            limit: int
+        
+        返回：
+            list[dict]，按时间降序
+        
+        实现：
+        SELECT * FROM capsules
+        WHERE emotion_tag LIKE ? AND forget_creator=0
+        ORDER BY timestamp DESC LIMIT ?
+        
+        使用 LIKE '%高兴%' 匹配，因为 emotion_tag 可能是 JSON 数组字符串
+        """
+```
+
+### cleanup_expired()
+
+```python
+    async def cleanup_expired(self, retention_days: int = 30):
+        """标记超过保留期的旧记忆为系统遗忘。
+        
+        不物理删除，将 forgotten 标记为 1。
+        后续可通过 vacuum 或归档彻底清理。
+        
+        参数：
+            retention_days: int, 保留天数，默认 30
+        
+        注意：L4 人格记忆（source='evolution'）不受此限制，
+              不参与过期清理。
+        
+        实现：
+        UPDATE capsules SET forgotten=1
+        WHERE timestamp < datetime('now', ?) AND source != 'evolution'
+        AND forgotten = 0 AND forget_creator = 0
+        参数：f'-{retention_days} days'
+        """
+```
+
+### vacuum()
+
+```python
+    async def vacuum(self):
+        """压缩数据库，回收已删除/标记的空间。
+        
+        实现：
+        await self.db.execute("VACUUM")
+        
+        注意：VACUUM 需要排他锁，运行时所有其他操作等待。
+              建议在低负载时段调用。
+        """
+```
+
+### close()
+
+```python
+    async def close(self):
+        """显式关闭数据库连接。
+        
+        实现：
+        if self.db: await self.db.close(); self.db = None
+        """
+```
+
+---
+
+## 文件 2：mornd/tests/test_memory_store.py
+
+```python
+"""记忆存储层测试。"""
+
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+import pytest
+
+# 确保 morn_core 可导入
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from morn_core.memory.store import MemoryStore
+
+
+@pytest.fixture
+def data_dir():
+    """创建临时目录用作数据目录"""
+    with tempfile.TemporaryDirectory(prefix="morn_test_") as tmpdir:
+        yield Path(tmpdir)
+
+
+@pytest.mark.asyncio
+async def test_enter_exit_creates_db_file(data_dir):
+    """async with MemoryStore 后应创建 memory.db 文件"""
+    async with MemoryStore(data_dir) as store:
+        assert store.db is not None
+        assert store.db_path.exists()
+    # 退出后连接应关闭
+    assert store.db is None
+
+
+@pytest.mark.asyncio
+async def test_add_and_get_capsule(data_dir):
+    """写入事件胶囊后能按 event_id 检索回来"""
+    async with MemoryStore(data_dir) as store:
+        event_id = await store.add_capsule({
+            "entities": json.dumps(["创建者", "Morn"]),
+            "emotion_score": 0.8,
+            "emotion_tag": "高兴",
+            "description": "创建者说今天心情很好",
+            "importance_weight": 0.6,
+        })
+        assert event_id.startswith("evt_")
+        retrieved = await store.get_capsule(event_id)
+        assert retrieved is not None
+        assert retrieved["description"] == "创建者说今天心情很好"
+        assert retrieved["emotion_score"] == 0.8
+        assert retrieved["emotion_tag"] == "高兴"
+
+
+@pytest.mark.asyncio
+async def test_add_capsule_missing_description(data_dir):
+    """缺少 description 字段应抛 ValueError"""
+    async with MemoryStore(data_dir) as store:
+        with pytest.raises(ValueError, match="description is required"):
+            await store.add_capsule({"entities": "[]"})
+
+
+@pytest.mark.asyncio
+async def test_get_nonexistent_capsule(data_dir):
+    """不存在的 event_id 返回 None"""
+    async with MemoryStore(data_dir) as store:
+        result = await store.get_capsule("evt_nonexistent")
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_fts_search(data_dir):
+    """FTS5 全文检索应返回匹配的记忆"""
+    async with MemoryStore(data_dir) as store:
+        await store.add_capsule({
+            "entities": json.dumps(["创建者"]),
+            "description": "创建者提到他正在研究衰老干预",
+        })
+        await store.add_capsule({
+            "entities": json.dumps(["创建者"]),
+            "description": "今天天气很好，适合散步",
+        })
+        results = await store.search_fts("衰老")
+        assert len(results) >= 1
+        assert "衰老" in results[0]["description"]
+
+
+@pytest.mark.asyncio
+async def test_fts_search_excludes_forgotten(data_dir):
+    """FTS5 检索应排除被遗忘的记忆"""
+    async with MemoryStore(data_dir) as store:
+        eid = await store.add_capsule({
+            "entities": json.dumps(["创建者"]),
+            "description": "创建者说了一件他不想被记住的事",
+        })
+        await store.forget(eid)
+        results = await store.search_fts("不想被记住")
+        assert len(results) == 0
+
+
+@pytest.mark.asyncio
+async def test_fts_search_bad_query(data_dir):
+    """FTS5 非法查询语法应返回空列表而非崩溃"""
+    async with MemoryStore(data_dir) as store:
+        # 未闭合的引号是非法 FTS5 查询
+        results = await store.search_fts('未闭合的"引号')
+        assert results == []
+
+
+@pytest.mark.asyncio
+async def test_forget_and_unforget(data_dir):
+    """软遗忘和解除遗忘"""
+    async with MemoryStore(data_dir) as store:
+        eid = await store.add_capsule({
+            "entities": json.dumps(["创建者"]),
+            "description": "需要被遗忘的内容",
+        })
+        
+        # 标记遗忘
+        assert await store.forget(eid) is True
+        assert await store.forget(eid) is False  # 重复遗忘返回 False
+        
+        # 解除遗忘
+        assert await store.unforget(eid) is True
+        assert await store.unforget(eid) is False  # 已解除，再次返回 False
+        
+        # 再次检索应能搜到
+        results = await store.search_fts("需要被遗忘")
+        assert len(results) >= 1
+
+
+@pytest.mark.asyncio
+async def test_count(data_dir):
+    """计数功能"""
+    async with MemoryStore(data_dir) as store:
+        assert await store.count() == 0
+        await store.add_capsule({"entities": "[]", "description": "a"})
+        assert await store.count() == 1
+        await store.add_capsule({"entities": "[]", "description": "b"})
+        await store.add_capsule({"entities": "[]", "description": "c"})
+        assert await store.count() == 3
+
+
+@pytest.mark.asyncio
+async def test_count_excludes_forgotten(data_dir):
+    """计数应排除被遗忘的记忆"""
+    async with MemoryStore(data_dir) as store:
+        eid = await store.add_capsule({"entities": "[]", "description": "forget me"})
+        assert await store.count() == 1
+        await store.forget(eid)
+        assert await store.count() == 0
+
+
+@pytest.mark.asyncio
+async def test_get_recent(data_dir):
+    """get_recent 应按时间降序返回"""
+    async with MemoryStore(data_dir) as store:
+        await store.add_capsule({"entities": "[]", "description": "first"})
+        import asyncio
+        await asyncio.sleep(0.01)  # 确保时间戳不同
+        await store.add_capsule({"entities": "[]", "description": "second"})
+        recent = await store.get_recent(limit=2)
+        assert recent[0]["description"] == "second"
+
+
+@pytest.mark.asyncio
+async def test_update_emotion(data_dir):
+    """情感标签更新"""
+    async with MemoryStore(data_dir) as store:
+        eid = await store.add_capsule({
+            "entities": "[]",
+            "description": "good news",
+            "emotion_score": 0.5,
+            "emotion_tag": "中性",
+        })
+        updated = await store.update_emotion(eid, 0.9, "兴奋")
+        assert updated is True
+        cap = await store.get_capsule(eid)
+        assert cap["emotion_score"] == 0.9
+        assert cap["emotion_tag"] == "兴奋"
+        
+        # 不存在的 event_id 返回 False
+        assert await store.update_emotion("evt_ghost", 0.0, "") is False
+
+
+@pytest.mark.asyncio
+async def test_add_emotion_tag(data_dir):
+    """追加情感标签（后见之明标记）"""
+    async with MemoryStore(data_dir) as store:
+        eid = await store.add_capsule({
+            "entities": "[]",
+            "description": "a memory",
+            "emotion_tag": "高兴",
+        })
+        await store.add_emotion_tag(eid, -0.2, "怀念")
+        cap = await store.get_capsule(eid)
+        # 检查是否是 JSON 数组
+        tags = json.loads(cap["emotion_tag"])
+        assert "高兴" in tags
+        assert "怀念" in tags
+
+
+@pytest.mark.asyncio
+async def test_cleanup_expired(data_dir):
+    """过期清理标记（不删除 chat 源 30 天前的记忆，但保留 evolution 源）"""
+    async with MemoryStore(data_dir) as store:
+        # 直接 SQL 插入一条过去 31 天的记录
+        import datetime
+        old_time = (datetime.datetime.now(datetime.timezone.utc) -
+                    datetime.timedelta(days=31))
+        old_ts = old_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        await store.db.execute("""
+            INSERT INTO capsules (event_id, timestamp, description, source)
+            VALUES (?, ?, ?, 'chat')
+        """, ("evt_old", old_ts, "old memory"))
+        await store.db.commit()
+        
+        # 再插入一条 evolution 源的老记录
+        await store.db.execute("""
+            INSERT INTO capsules (event_id, timestamp, description, source)
+            VALUES (?, ?, ?, 'evolution')
+        """, ("evt_old_evo", old_ts, "old evolution"))
+        await store.db.commit()
+        
+        await store.cleanup_expired(retention_days=30)
+        
+        # chat 源应被标记
+        cap = await store.get_capsule("evt_old")
+        assert cap["forgotten"] == 1
+        
+        # evolution 源应保留
+        cap_evo = await store.get_capsule("evt_old_evo")
+        assert cap_evo["forgotten"] == 0
+
+
+@pytest.mark.asyncio
+async def test_search_by_timerange(data_dir):
+    """时间范围检索"""
+    async with MemoryStore(data_dir) as store:
+        await store.add_capsule({
+            "entities": "[]", "description": "today",
+            "timestamp": "2026-05-27T10:00:00Z",
+        })
+        await store.add_capsule({
+            "entities": "[]", "description": "yesterday",
+            "timestamp": "2026-05-26T10:00:00Z",
+        })
+        results = await store.search_by_timerange(
+            "2026-05-27T00:00:00Z", "2026-05-28T00:00:00Z")
+        assert len(results) == 1
+        assert results[0]["description"] == "today"
+```
+
+---
+
+## 验证步骤（按顺序执行）
+
+### 步骤 1：语法检查
+
+```bash
+cd /home/hermes/morn
+python3 -c "from morn_core.memory.store import MemoryStore; print('import OK')"
+```
+
+**预期输出**：
+```
+import OK
+```
+
+### 步骤 2：单元测试
+
+```bash
+cd /home/hermes/morn
+python3 -m pytest tests/test_memory_store.py -v
+```
+
+**预期输出**：全部 16 个测试 PASSED
+
+### 步骤 3：集成验证
+
+```bash
+cd /home/hermes/morn
+python3 -c "
+import tempfile, json, asyncio
+from pathlib import Path
+from morn_core.memory.store import MemoryStore
+
+async def test():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        async with MemoryStore(Path(tmpdir)) as store:
+            # 写入
+            eid = await store.add_capsule({
+                'entities': json.dumps(['创建者']),
+                'description': '测试记忆',
+                'emotion_tag': '测试',
+            })
+            print(f'写入: {eid}')
+            
+            # 计数
+            print(f'记忆条数: {await store.count()}')
+            
+            # 检索
+            results = await store.search_fts('测试')
+            print(f'检索结果: {len(results)} 条')
+            
+            # 遗忘
+            await store.forget(eid)
+            print(f'遗忘后计数: {await store.count()}')
+            
+            # 解除遗忘
+            await store.unforget(eid)
+            print(f'解除后计数: {await store.count()}')
+            
+            print('全部通过 ✅')
+
+asyncio.run(test())
+"
+```

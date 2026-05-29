@@ -1,0 +1,234 @@
+# Phase 8: 元认知系统（consciousness）（~3天）
+## 目标
+实现 Morn 的内心生活基础：轻量自省循环，让她在没人对话时也能感知自己的状态。
+
+## 设计原则
+- 不阻塞主事件循环
+- 自省结果写入记忆系统（作为特殊事件胶囊）
+- 所有频率可配置（从 config.json 读取）
+- v0.1 只做最基础的：记录状态快照 + 简单情感趋势分析
+
+## 改动文件
+1. morn_core/consciousness/self_reflection.py — 新增，元认知核心
+2. morn_core/server.py — 集成元认知循环
+3. tests/test_self_reflection.py — 新增测试
+
+## 实现细节
+
+### 1. self_reflection.py
+
+```python
+import asyncio
+import logging
+import time
+from datetime import datetime, timezone
+from typing import Optional
+
+
+class SelfReflection:
+    """Morn 元认知子系统。
+    
+    在后台运行自省循环，记录状态快照并写入记忆系统。
+    
+    触发频率（可配置）：
+    - light_reflection: 每 60 秒 — 记录基本状态（心跳、情感、记忆数）
+    - deep_reflection: 每 5 分钟 — 分析情感趋势、记忆增长
+    
+    自省结果以事件胶囊形式写入记忆系统，source="self_reflection"。
+    """
+    
+    def __init__(self, memory_store, emotion_state, instance_name: str,
+                 light_interval: int = 60, deep_interval: int = 300):
+        self.memory_store = memory_store
+        self.emotion = emotion_state
+        self.instance_name = instance_name
+        self.light_interval = light_interval  # 秒
+        self.deep_interval = deep_interval     # 秒
+        self._logger = logging.getLogger("morn.consciousness")
+        
+        self._light_count = 0
+        self._deep_count = 0
+        self._emotion_history = []  # [(timestamp, calmness, pleasure, connection)]
+        self._last_deep_time = 0.0
+        self._shutdown = False
+    
+    def _get_status_description(self) -> str:
+        """生成当前状态描述"""
+        e = self.emotion
+        now = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        return (f"[{now}] 平静:{e.calmness:.2f} 愉悦:{e.pleasure:.2f} "
+                f"联结:{e.connection:.2f} | 已自省 {self._light_count} 次")
+    
+    def _analyze_emotion_trend(self) -> str:
+        """分析近期情感趋势，生成一句自省结论。"""
+        if len(self._emotion_history) < 4:
+            return "情感数据不足，无法分析趋势。"
+        
+        # 只看最近 10 条
+        recent = self._emotion_history[-10:]
+        if len(recent) < 2:
+            return "情感数据不足，无法分析趋势。"
+        
+        first = recent[0]
+        last = recent[-1]
+        
+        calm_delta = last[1] - first[1]
+        pleasure_delta = last[2] - first[2]
+        connect_delta = last[3] - first[3]
+        
+        parts = []
+        if pleasure_delta > 0.1:
+            parts.append("愉悦感上升")
+        elif pleasure_delta < -0.1:
+            parts.append("愉悦感下降")
+        else:
+            parts.append("愉悦感稳定")
+        
+        if calm_delta > 0.05:
+            parts.append("心情更平静")
+        elif calm_delta < -0.05:
+            parts.append("略有波动")
+        
+        if connect_delta > 0.1:
+            parts.append("联结感增强")
+        elif connect_delta < -0.1:
+            parts.append("联结感减弱")
+        
+        return "，".join(parts) + "。"
+    
+    async def light_reflection(self):
+        """轻量自省：记录当前状态快照。"""
+        self._light_count += 1
+        desc = self._get_status_description()
+        
+        # 记录到情感历史
+        self._emotion_history.append((
+            time.time(),
+            self.emotion.calmness,
+            self.emotion.pleasure,
+            self.emotion.connection,
+        ))
+        # 仅保留最近 100 条
+        if len(self._emotion_history) > 100:
+            self._emotion_history.pop(0)
+        
+        # 写入记忆（每 60 秒一次，太频繁不写）
+        # 每 5 次轻量自省写一次记忆 = 每 5 分钟写一条快照
+        if self._light_count % 5 == 0:
+            await self._save_snapshot(desc)
+    
+    async def deep_reflection(self):
+        """深度自省：分析趋势，生成自省结论。"""
+        self._deep_count += 1
+        trend = self._analyze_emotion_trend()
+        
+        desc = (f"深度自省 #{self._deep_count}: {self._get_status_description()} | "
+                f"趋势: {trend}")
+        
+        self._logger.info(f"deep reflection: {desc}")
+        await self._save_snapshot(desc, importance=0.6)
+    
+    async def _save_snapshot(self, description: str, importance: float = 0.3):
+        """将自省结果写入记忆。"""
+        if not self.memory_store:
+            return
+        try:
+            await self.memory_store.add_capsule({
+                "entities": '["morn", "self_reflection"]',
+                "emotion_score": self.emotion.pleasure,
+                "emotion_tag": "自省",
+                "description": description,
+                "source": "self_reflection",
+                "importance_weight": importance,
+            })
+        except Exception as e:
+            self._logger.error(f"save snapshot failed: {e}")
+    
+    async def reflection_loop(self):
+        """主循环。"""
+        light_counter = 0
+        while not self._shutdown:
+            await asyncio.sleep(1)
+            light_counter += 1
+            
+            if light_counter >= self.light_interval:
+                light_counter = 0
+                await self.light_reflection()
+            
+            # 深度自省每 deep_interval 秒一次
+            if self._deep_count == 0 or \
+               (time.time() - self._last_deep_time) >= self.deep_interval:
+                self._last_deep_time = time.time()
+                await self.deep_reflection()
+    
+    def stop(self):
+        self._shutdown = True
+```
+
+### 2. server.py 集成
+
+在 async_main 中，增加 consciousness 循环：
+
+```python
+from morn_core.consciousness.self_reflection import SelfReflection
+
+# 在 init_subsystems 之后、创建 tasks 之前：
+self_reflection = None
+if state.chat_engine and state.memory_store:
+    self_reflection = SelfReflection(
+        memory_store=state.memory_store,
+        emotion_state=state.chat_engine.emotion,
+        instance_name=instance_name,
+        light_interval=config.get("reflection_light_interval", 60),
+        deep_interval=config.get("reflection_deep_interval", 300),
+    )
+
+tasks = [
+    asyncio.create_task(heartbeat_loop(state), name="morn-heartbeat"),
+    asyncio.create_task(memory_monitor(state), name="morn-memmon"),
+    asyncio.create_task(wal_checkpoint(state), name="morn-wal"),
+    asyncio.create_task(cli_loop(state), name="morn-cli"),
+]
+
+# 添加自省循环
+if self_reflection:
+    tasks.append(
+        asyncio.create_task(self_reflection.reflection_loop(), name="morn-reflection")
+    )
+```
+
+### 3. 配置默认值
+
+在 server.py 的 default_config 中增加：
+```python
+"reflection_light_interval": 60,   # 轻量自省间隔（秒）
+"reflection_deep_interval": 300,   # 深度自省间隔（秒）
+```
+
+## 测试 tests/test_self_reflection.py
+
+**注意：** SelfReflection 使用 asyncio.sleep 的内部循环。不要在测试中运行完整循环。测试应：
+- 直接调用 light_reflection()、deep_reflection()
+- 使用 mock 或临时的 memory_store
+- 检查写入记忆的胶囊内容是否正确
+
+测试清单（至少 12 个测试）：
+1. test_initial_state — 初始化后 light_count=0, deep_count=0
+2. test_light_reflection_increments_count — light_reflection 后计数+1
+3. test_light_reflection_records_emotion — light_reflection 后 emotion_history 增加
+4. test_light_reflection_every_5th_saves — 第 5 次 light_reflection 保存记忆
+5. test_deep_reflection_saves_memory — deep_reflection 写入事件胶囊
+6. test_deep_reflection_memory_has_correct_source — 胶囊 source="self_reflection"
+7. test_analyze_emotion_trend_rising — 愉悦感上升时趋势分析正确
+8. test_analyze_emotion_trend_falling — 愉悦感下降时趋势分析正确
+9. test_analyze_emotion_trend_insufficient_data — 数据不足时返回"数据不足"
+10. test_stop_halts_loop — stop() 后 loop 终止
+11. test_status_description_format — 状态描述字符串包含情感值
+12. test_integration_with_memory_store — 使用真实 MemoryStore 验证写入
+
+## 验证
+1. 所有测试通过：`python -m pytest tests/test_self_reflection.py -v`
+2. 全部已有测试不回归：`python -m pytest tests/ -v`
+3. 启动 server 确认自省循环运行
+4. 运行 5 分钟后 /status 查看记忆数量增加（自省事件胶囊）
+5. 日志中能看到 "deep reflection" 信息

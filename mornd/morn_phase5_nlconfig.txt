@@ -1,0 +1,182 @@
+# Phase 5: 自然语言配置（~3小时）
+## 目标
+让创建者可以在对话中通过自然语言修改 Morn 的运行时参数，无需手动编辑 config.json。
+
+## 改动文件
+1. morn_core/chat/engine.py — 新增 ConfigManager 类，处理自然语言配置指令
+2. morn_core/server.py — config 引用注入 ChatEngine
+3. tests/test_nl_config.py — 新增测试文件
+
+## 实现细节
+
+### 1. ConfigManager 类（放在 chat/engine.py 底部）
+
+```python
+import re
+import json
+from pathlib import Path
+
+class ConfigManager:
+    """处理自然语言配置指令。
+    
+    支持的配置项：
+    - 模式切换：mode（cloud/hybrid/local）
+    - 温度：temperature（0.0-2.0）
+    - 实例名：instance_name
+    - 实例类型：instance_type（陪伴型/助手型/平衡型）
+    
+    配置持久化到实例 config.json。
+    """
+    
+    def __init__(self, config_path: Path, config: dict, chat_engine):
+        self.config_path = Path(config_path)
+        self.config = config
+        self.engine = chat_engine
+    
+    def detect_and_apply(self, text: str) -> tuple[bool, str]:
+        """检测用户消息是否包含配置指令。如果匹配，修改配置并返回确认消息。
+        
+        返回：(是否匹配, 回复消息)
+        如果匹配，调用方直接返回 reply_msg，不走 LLM。
+        """
+        text_lower = text.strip()
+        
+        # 1. 模式切换
+        mode_map = {
+            "纯本地": "local", "本地模式": "local", "本地": "local",
+            "离线模式": "local", "用本地": "local", "用本地模型": "local",
+            "纯云端": "cloud", "云端模式": "cloud", "云端": "cloud",
+            "用云端": "cloud", "用云端模型": "cloud",
+            "混合": "hybrid", "混合模式": "hybrid", "自动切换": "hybrid",
+            "智能模式": "hybrid",
+        }
+        for keyword, mode in mode_map.items():
+            if keyword in text_lower and self._is_config_request(text_lower, keyword):
+                self.config["mode"] = mode
+                self.engine._mode = mode
+                self._save()
+                mode_names = {"cloud": "纯云端", "local": "纯本地", "hybrid": "混合智能"}
+                return True, f"已切换到{mode_names[mode]}模式。以后我会优先使用{'云端' if mode=='cloud' else '本地' if mode=='local' else '混合'}模型和你对话。"
+        
+        # 2. 温度调节
+        temp_match = re.search(r'温度[调到设为改为]?(\d+\.?\d*)', text_lower)
+        if temp_match:
+            try:
+                val = float(temp_match.group(1))
+                if 0.0 <= val <= 2.0:
+                    self.config["temperature"] = val
+                    self.engine._temperature = val
+                    self._save()
+                    return True, f"温度已设为 {val}。{'我会更' + ('精确' if val < 0.5 else '自由' if val > 1.2 else '平衡地') + '回复。'}"
+                else:
+                    return True, "温度在 0.0 到 2.0 之间选一个吧。"
+            except ValueError:
+                pass
+        
+        # 3. 改名
+        name_match = re.search(r'(改名叫|名字改成|改名为|叫我)\s*(.{1,16})', text_lower)
+        if name_match:
+            new_name = name_match.group(2).strip()
+            if 1 <= len(new_name) <= 16:
+                self.config["instance_name"] = new_name
+                self.engine.instance_name = new_name
+                self._save()
+                return True, f"好，以后就叫我 {new_name} 了。"
+        
+        # 4. 改类型
+        type_map = {"陪伴型": "陪伴型", "助手型": "助手型", "平衡型": "平衡型"}
+        type_match = re.search(r'(改成|换为|改为|变[成回])\s*(陪伴|助手|平衡)', text_lower)
+        if type_match:
+            raw = type_match.group(2)
+            if raw == "陪伴":
+                self.config["instance_type"] = "陪伴型"
+            elif raw == "助手":
+                self.config["instance_type"] = "助手型"
+            else:
+                self.config["instance_type"] = "平衡型"
+            self.engine._instance_type = self.config["instance_type"]
+            self._save()
+            return True, f"知道了，以后我就是{self.config['instance_type']}。"
+        
+        return False, ""
+    
+    def _is_config_request(self, text: str, keyword: str) -> bool:
+        """判断用户是否真的在改配置，而不是聊天中偶然提到关键词。"""
+        # 如果关键词在句中且周围是配置相关词，视为配置请求
+        idx = text.find(keyword)
+        if idx < 0:
+            return False
+        # 关键词在开头或前面是切换词
+        before = text[max(0,idx-10):idx].strip()
+        config_triggers = ["改为", "改成", "切换", "用", "调", "设置", "变成", "变回"]
+        return not before or any(t in before for t in config_triggers)
+    
+    def _save(self):
+        with open(self.config_path, "w") as f:
+            json.dump(self.config, f, indent=2, ensure_ascii=False)
+```
+
+### 2. 修改 ChatEngine.__init__
+
+在 `__init__` 末尾添加：
+```python
+config_path = self.config.get("_config_path")
+if config_path:
+    self.config_manager = ConfigManager(Path(config_path), self.config, self)
+else:
+    self.config_manager = None
+```
+
+同时保存 `_temperature` 属性：`self._temperature = float(config.get("temperature", 0.7))`
+
+### 3. 修改 ChatEngine.chat 方法
+
+在 _search_memory 之后、_assemble_prompt 之前插入配置检测：
+```python
+if self.config_manager:
+    matched, reply = self.config_manager.detect_and_apply(user_message)
+    if matched:
+        return reply
+```
+
+### 4. 修改 server.py
+
+在 ChatEngine 初始化时，多传一个参数：
+```python
+config["_config_path"] = str(data_dir / "config.json")
+self.chat_engine = ChatEngine(
+    instance_name=instance_name,
+    memory_store=state.memory_store,
+    config=config,
+)
+```
+
+### 5. 修改 _call_cloud
+
+temperature 字段改为从 `self._temperature` 读取：
+```python
+temperature = getattr(self, '_temperature', self.config.get("temperature", 0.7))
+```
+
+### 6. 测试文件 tests/test_nl_config.py
+
+测试清单（至少 14 个测试）：
+1. test_detect_mode_switch_local — "改成纯本地模式" → True, "已切换到纯本地模式"
+2. test_detect_mode_switch_cloud — "用云端" → True
+3. test_detect_mode_switch_hybrid — "混合模式" → True
+4. test_detect_temperature — "温度调到0.3" → True
+5. test_detect_temperature_out_of_range — "温度调到10" → True (提示范围)
+6. test_detect_rename — "改名叫小美" → True
+7. test_detect_type_change — "改成陪伴型" → True
+8. test_no_match_normal_conversation — "今天天气不错" → False
+9. test_no_match_casual_mention — "本地人推荐的美食" → False（不匹配配置关键词）
+10. test_persistence — 修改后重新加载 config.json，确认持久化
+11. test_config_manager_init — ConfigManager 初始化正常
+12. test_name_too_long — 改名超过16字被拒绝或截断
+13. test_mode_values_preserved — 模式切换后其他配置不变
+14. test_integration_with_engine — ConfigManager 挂在 ChatEngine 上工作正常
+
+## 验证
+1. 所有测试通过：`python -m pytest tests/test_nl_config.py -v`
+2. 全部已有测试不回归：`python -m pytest tests/ -v`
+3. 手动测试：启动 server，发"改成纯本地模式"，观察回复和 config.json

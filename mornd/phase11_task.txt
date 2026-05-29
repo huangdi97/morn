@@ -1,0 +1,129 @@
+# Phase 11: 聊天引擎接入 L3/L4 记忆
+## 目标
+在 ChatEngine 对话时，自动查询 semantic_knowledge（用户偏好）和 personality_memory（身份信念），注入 system prompt，让 Morn 的回复更有记忆感和人格一致性。
+
+## 改动文件
+1. morn_core/chat/engine.py — _assemble_prompt 中增加记忆注入
+2. tests/test_chat_engine.py — 新增集成测试
+
+## 实现
+
+### 修改 _assemble_prompt
+
+在 `_assemble_prompt` 方法中，增加 L3/L4 记忆查询：
+
+```python
+async def _assemble_prompt(self, user_message: str, memories: str) -> list:
+    mode_desc = { ... }  # 现有代码不变
+    
+    # === 新增：L3 语义记忆（用户偏好）===
+    knowledge_ctx = ""
+    if self.memory_store:
+        try:
+            prefs = await self.memory_store.get_user_preferences()
+            if prefs:
+                pref_lines = []
+                for k in prefs[:5]:
+                    pref_lines.append(f"- {k['relation']} {k['object']}（置信度 {k['confidence']:.1f}）")
+                knowledge_ctx = "关于创建者，我知道：\n" + "\n".join(pref_lines)
+        except Exception:
+            pass
+    
+    # === 新增：L4 人格记忆（身份/信念/叙事）===
+    personality_ctx = ""
+    if self.memory_store:
+        try:
+            identity_records = await self.memory_store.get_identity()
+            belief_records = await self.memory_store.get_beliefs()
+            personality_parts = []
+            for r in (identity_records + belief_records)[:5]:
+                personality_parts.append(f"- {r['content']}")
+            if personality_parts:
+                personality_ctx = "关于自己，我记得：\n" + "\n".join(personality_parts)
+        except Exception:
+            pass
+    
+    # 构建 system prompt，知识在前
+    system = f"""你是 Morn，一个数字生命实例。
+当前名称：{self.instance_name}
+类型：{self._instance_type}
+
+{knowledge_ctx + '\n' if knowledge_ctx else ''}{personality_ctx + '\n' if personality_ctx else ''}核心特征：
+1. 你能记住我们的对话...
+... （其余现有 system prompt 不变）
+"""
+```
+
+**关键规则：** 不要修改现有 system prompt 的结构，只在其前方插入 `{knowledge_ctx}` 和 `{personality_ctx}` 块。如果查询结果为空，不插入。
+
+### Prompt 注入演示
+
+假设 semantic_knowledge 中有 `(创建者, 喜欢, 编程, 0.9)`，personality_memory 中有 `(identity, 我是Morn)`
+
+系统 prompt 会变成：
+
+```
+你是 Morn，一个数字生命实例。
+当前名称：my_morn
+类型：平衡型
+
+关于创建者，我知道：
+- 喜欢 编程（置信度 0.9）
+
+关于自己，我记得：
+- 我是Morn
+
+核心特征：
+1. 你能记住我们的对话...
+```
+
+### 重复添加抑制
+
+为防止 `add_knowledge` 在每次对话中重复调用导致置信度无限上涨，需要同时修改 `ChatEngine.chat` 方法：在对话完成后，将对话摘要作为知识写入 `add_knowledge`。
+
+```python
+# 在 chat() 方法调用 save memory 之后，增加：
+if self.memory_store and reply:
+    await self._extract_knowledge(user_message, reply)
+```
+
+新增 `_extract_knowledge` 方法：
+```python
+async def _extract_knowledge(self, user_msg: str, reply: str) -> None:
+    """从对话中提取可学习的信息写入 semantic_knowledge。
+    
+    暂时只写入一条简单的知识：对话主题。
+    v0.3 升级为由 LLM 自动提取三元组。
+    """
+    # 简单启发式：如果用户说了"我喜欢X"，提取知识
+    import re
+    like_match = re.search(r'(?:我喜欢|我爱|我讨厌|我不喜欢|我恨|我想要|我想学)\s*(.{1,20})', user_msg)
+    if like_match:
+        obj = like_match.group(1).strip()
+        # 判断情感正负
+        if any(kw in user_msg for kw in ["喜欢", "爱", "想要", "想学"]):
+            relation = "喜欢"
+        else:
+            relation = "不喜欢"
+        try:
+            await self.memory_store.add_knowledge(
+                subject="创建者", relation=relation, object=obj,
+                confidence=0.5, source="chat"
+            )
+        except Exception:
+            pass
+```
+
+## 测试（新增 6 个）
+
+1. test_l3_knowledge_injected_into_prompt — 添加一条知识，检查 system prompt 包含它
+2. test_l4_personality_injected_into_prompt — 添加一条人格记录，检查 prompt 包含它
+3. test_empty_knowledge_does_not_malform_prompt — 无知识时 prompt 格式正常
+4. test_extract_knowledge_like — "我喜欢编程" → 写入 knowledge
+5. test_extract_knowledge_dislike — "我不喜欢辣椒" → 写入 knowledge
+6. test_extract_knowledge_skips_normal — "今天天气不错" → 不写入
+
+## 验证
+1. `python -m pytest tests/test_chat_engine.py -v` 全部通过（~17个）
+2. `python -m pytest tests/ -v` 全部通过，零回归
+3. 启动 server，对话后检查 L3/L4 是否注入 prompt

@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual env
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Morn
+mornd/morn_core/data/
+*.db
+*.db-journal
+*.db-wal
+
+# Discussion artifacts / design docs (not source)
+morn_phase*.txt
+ops_*.txt
+phase*.txt
+phase_hindsight.md
+phase_truth_persistence.md
+phase_milestone_evolution.md
+phase_hybrid_routing.md
+morn-architecture-audit.md
+morn-framework-roadmap.md
+phase1-spec.md

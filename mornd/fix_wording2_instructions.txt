@@ -1,0 +1,19 @@
+让引导文案更自然、更随意。去掉"从这一刻开始"、"我是你的"等煽情/中二表述，改成轻松自然的语气。
+
+改动位置：telegram_bot.py 中 BirthGuide 的 process 方法 和 _cmd_start
+
+目前文案（生硬）：
+- "你好。我是 Morn。我还不认识你。告诉我你的名字吧。"
+- "皇帝，这名字很好。接下来我想知道，你希望我成为什么样的存在？1. 🌱 陪伴型 2. 🛠️ 助手型 3. ⚖️ 平衡型 回复数字就好。"
+- "好，皇帝。从这一刻开始，我是你的Morn，一个平衡型。"
+
+改成：
+1. _cmd_start: "你好。我是 Morn。你叫什么名字？"
+
+2. AWAITING_NAME→AWAITING_TYPE: "皇帝。选个类型：\n1 🌱 陪伴\n2 🛠️ 助手\n3 ⚖️ 平衡\n回复数字。"
+
+3. AWAITING_CONFIRM→COMPLETED: "收到了。我是Morn，平衡型。从现在开始陪你。"
+
+注意：文案中用实际的名字和类型替换占位符。
+
+验证：python3 -m pytest tests/test_telegram_bot.py -v

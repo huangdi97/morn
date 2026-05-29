@@ -1,0 +1,24 @@
+# B: 诞生引导文案简化
+## 改动
+只改 `morn_core/presence/telegram_bot.py` 中的引导文案，不涉及逻辑。
+
+## 当前文案（AWAITING_NAME 初始）
+"你好。我是 Morn。你叫什么名字？"
+
+## 目标文案
+"我是Morn。你叫什么名字？"
+
+## 当前文案（AWAITING_CONFIRM 完成）
+"收到了。我是Morn，{type}。从现在开始陪你。"
+
+## 目标文案（两行）
+"好，记住了，{name}。"
+"我是你的{type}。以后想聊什么都可以。"
+
+## 改动位置
+1. `_cmd_start` 方法中的 `"你好。我是 Morn。你叫什么名字？"` → `"我是Morn。你叫什么名字？"`
+2. `process` 方法中 AWAITING_CONFIRM 状态的完成消息（第 212 行附近）
+
+## 验证
+1. `python -m pytest tests/test_telegram_bot.py -v` 全部通过
+2. 只改文本内容，不改逻辑
