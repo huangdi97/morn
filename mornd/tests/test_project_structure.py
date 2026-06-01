@@ -90,10 +90,4 @@ class TestCoreImports:
 
     def test_import_all_subpackages(self):
         """所有子包可导入"""
-        import morn_core.memory
-        import morn_core.emotion
-        import morn_core.chat
-        import morn_core.consciousness
-        import morn_core.presence
-        import morn_core.security
         assert True

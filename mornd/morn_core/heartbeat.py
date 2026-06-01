@@ -1,6 +1,5 @@
 import asyncio
 import gc
-import logging
 import os
 import time
 

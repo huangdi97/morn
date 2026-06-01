@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from morn.contrib.security_advanced.ethical_judgment import EthicalJudgment, EthicalProposal, ABSOLUTE_FORBIDDEN, REFUSED_OPERATIONS
+from morn.contrib.security_advanced.ethical_judgment import EthicalJudgment
 
 
 class TestDefaultState:

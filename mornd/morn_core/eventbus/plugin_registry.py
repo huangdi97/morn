@@ -1,4 +1,3 @@
-import logging
 import time
 
 from morn_core.eventbus.bus import EventBus, Event, Priority

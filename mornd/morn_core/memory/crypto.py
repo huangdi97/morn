@@ -1,11 +1,9 @@
 import os
-import json
 import base64
 import logging
 from pathlib import Path
 
 from Crypto.Cipher import AES
-from Crypto.Protocol.KDF import PBKDF2
 
 
 class MemoryCrypto:

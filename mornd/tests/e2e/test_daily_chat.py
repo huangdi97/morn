@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 from unittest.mock import AsyncMock

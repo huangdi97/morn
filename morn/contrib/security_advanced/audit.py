@@ -241,7 +241,7 @@ class AuditReplay:
 
         lines = [
             f"## Security Summary (past {days} days)\n",
-            f"\n",
+            "\n",
             f"- **Total intercepted**: {total}\n",
             f"  - Blocked: {blocks}\n",
             f"  - Warned: {warns}\n",
@@ -250,7 +250,7 @@ class AuditReplay:
             f"  - Rule changes: {rule_changes}\n",
         ]
         if top_rules:
-            lines.append(f"- **Top 3 rules triggered**:\n")
+            lines.append("- **Top 3 rules triggered**:\n")
             for i, (rule_id, count) in enumerate(top_rules, 1):
                 lines.append(f"  {i}. {rule_id} ({count}次)\n")
         lines.append(f"- **Trend**: {trend}\n")

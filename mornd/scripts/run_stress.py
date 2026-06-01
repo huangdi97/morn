@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from tests.stress_test import StressTest, StressReport
+from tests.stress_test import StressTest
 
 logging.basicConfig(
     level=logging.INFO,

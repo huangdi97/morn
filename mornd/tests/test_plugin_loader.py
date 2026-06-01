@@ -1,5 +1,5 @@
 import pytest
-from morn.kernel.plugin import MornPlugin, PluginDependency, PluginContext
+from morn.kernel.plugin import MornPlugin
 from morn.kernel.plugin_loader import PluginLoader
 
 

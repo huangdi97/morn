@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from morn_core.eventbus.bus import EventBus, Event, Priority
-from morn_core.eventbus.hooks import HookManager, HookRegistration
+from morn_core.eventbus.hooks import HookManager
 from morn_core.eventbus.health_monitor import HealthMonitor
 from morn_core.security.user_protection import UserProtection
 from morn_core.security.external_boundary import ExternalBoundary

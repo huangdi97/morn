@@ -1,6 +1,5 @@
 """依恋系统 BondTracker 测试。"""
 
-import json
 import os
 import sys
 import tempfile

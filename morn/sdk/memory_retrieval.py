@@ -3,7 +3,6 @@ import json
 import logging
 import time
 from collections import defaultdict
-from typing import Optional
 
 logger = logging.getLogger("morn.retrieval")
 
@@ -306,4 +305,3 @@ class LayeredRetrievalEngine(RetrievalEngine):
         return await super().search(query, entities, timerange, k, min_score, emotion_state=emotion_state)
 
 
-from morn.contrib.memory_advanced.raw_snapshot_store import RawSnapshot, RawSnapshotStore

@@ -1,7 +1,6 @@
 import time
-import copy
 import logging
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger("morn.evolution")
 

@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import sys
-from typing import Any, Optional
+from typing import Optional
 
 logger = logging.getLogger("morn.mcp")
 

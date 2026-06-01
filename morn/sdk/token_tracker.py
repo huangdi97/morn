@@ -7,8 +7,6 @@
 
 import logging
 import time
-from collections import defaultdict
-from typing import Optional
 
 logger = logging.getLogger("morn.token_tracker")
 

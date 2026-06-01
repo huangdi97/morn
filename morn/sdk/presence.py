@@ -1,6 +1,5 @@
 """Morn Presence 基类——对话界面接入点"""
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class MornPresence(ABC):

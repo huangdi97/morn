@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable
 
-from .bus import EventBus, Priority
+from .bus import EventBus
 
 
 @dataclass

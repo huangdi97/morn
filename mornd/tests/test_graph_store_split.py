@@ -1,12 +1,11 @@
 import os
 import sys
 
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from morn.contrib.memory_advanced.graph_store import (
-    GraphStore, SemanticGraph, TemporalGraph, CausalGraph, GraphMode,
+    GraphStore, GraphMode,
 )
 
 

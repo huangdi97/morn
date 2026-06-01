@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Optional
 
 import aiohttp
-import ollama
 
 from morn.sdk.token_tracker import TokenTracker
 
@@ -474,6 +473,8 @@ class ChatEngine:
                 return content
 
     async def _call_local(self, messages: list, was_fallback: bool = False) -> str:
+        import ollama  # 懒导入：ollama 是可选依赖 [local-llm]
+
         model = self.config.get("ollama_model", "qwen2.5:1.5b")
         host = self.config.get("ollama_host", "http://localhost:11434")
         client = ollama.AsyncClient(host=host)
@@ -637,4 +638,3 @@ class ConfigManager:
             json.dump(self.config, f, indent=2, ensure_ascii=False)
 
 
-from morn.sdk.redis_cache import RedisCache

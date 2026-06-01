@@ -1,12 +1,11 @@
 import os
 import sys
-import json
 import tempfile
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from morn.contrib.security_advanced.risk_guard import DynamicPermissions, DEFAULT_PERMISSIONS
+from morn.contrib.security_advanced.risk_guard import DynamicPermissions
 
 
 class TestSixDimensionEvaluation:

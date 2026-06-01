@@ -1,6 +1,6 @@
 """HealthMonitor 插件——系统健康监控"""
 import time
-from morn.core.plugin import MornPlugin, PluginContext, PluginDependency
+from morn.core.plugin import MornPlugin, PluginContext
 from morn.core.hooks import HookRegistration
 from morn.core.bus import Event, Priority
 

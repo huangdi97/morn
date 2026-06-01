@@ -62,7 +62,6 @@ class TestBirthGuide:
 
     async def _process(self, guide, text):
         """辅助方法：调用 async process"""
-        import asyncio
         return await guide.process(text)
 
     def test_name_accepted(self):

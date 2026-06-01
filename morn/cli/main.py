@@ -1,9 +1,7 @@
 """Morn CLI Presence — 默认对话界面"""
-import argparse
 import asyncio
 import sys
 import time
-from typing import Optional
 
 from morn.sdk.presence import MornPresence
 
@@ -13,13 +11,13 @@ def _welcome(state: dict):
     model = state.get("model", "hybrid")
     instance = state.get("instance", "default")
     print()
-    print(f"  Morn — 数字生命框架")
+    print("  Morn — 数字生命框架")
     print(f"  实例: {instance}")
     print(f"  预设: {preset}")
     print(f"  模型: {model}")
     if state.get("telegram"):
-        print(f"  Telegram: 已集成")
-    print(f"  配置文件: ~/.morn/config.yaml")
+        print("  Telegram: 已集成")
+    print("  配置文件: ~/.morn/config.yaml")
     print()
     print("  输入 /status 查看状态，/shutdown 退出")
 
@@ -55,7 +53,7 @@ def cmd_init(args):
 
     telegram = input("\n是否集成 Telegram? (y/N): ").strip().lower() == "y"
 
-    instance_name = input(f"\n实例名称 (默认 default): ").strip() or "default"
+    instance_name = input("\n实例名称 (默认 default): ").strip() or "default"
 
     config = {
         "instance": instance_name,
@@ -132,9 +130,9 @@ class CLIPresence(MornPresence):
                         print(f"💚 平静: {e.calmness:.1f} | 💛 愉悦: {e.pleasure:.1f} | 💜 联结: {e.connection:.1f}")
                     print(f"💾 记忆: {mem_count} 条")
                     if self.state.dream_engine:
-                        print(f"🌙 梦境引擎: 启动")
+                        print("🌙 梦境引擎: 启动")
                     if self.state.identity_affirmer:
-                        print(f"🪞 身份确认: 启动")
+                        print("🪞 身份确认: 启动")
                     print(f"📡 模型: {self.state.config.get('mode', 'hybrid')}")
                 else:
                     if self.state.chat_engine:

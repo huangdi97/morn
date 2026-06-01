@@ -1,6 +1,5 @@
-import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -161,7 +160,7 @@ class RuleLearner:
                     rule_id = f"SYNC_{len(existing) + 1:03d}"
                     new_rule = SecurityRule(
                         rule_id=rule_id,
-                        name=f"Synced from safety event",
+                        name="Synced from safety event",
                         pattern=evt["suggested_rule"],
                         category="learned",
                         severity="medium",

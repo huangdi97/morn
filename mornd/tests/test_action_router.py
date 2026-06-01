@@ -3,8 +3,6 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from morn_core.action.cli_executor import CLIExecutor
-from morn_core.action.api_caller import APICaller
 from morn_core.action.multi_path import ActionRouter
 
 

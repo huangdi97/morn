@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from morn.contrib.security_advanced.audit import SecurityAuditLog, AuditEntry, AuditReplay
+from morn.contrib.security_advanced.audit import SecurityAuditLog, AuditReplay
 
 
 @pytest.fixture

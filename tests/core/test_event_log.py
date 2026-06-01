@@ -1,6 +1,4 @@
-import asyncio
 
-import pytest
 
 from morn.core.bus import Event, Priority
 from morn.core.event_log import EventLog

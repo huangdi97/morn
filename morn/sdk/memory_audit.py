@@ -2,7 +2,6 @@ import difflib
 import json
 import logging
 import re
-from typing import Optional
 
 logger = logging.getLogger("morn.audit")
 

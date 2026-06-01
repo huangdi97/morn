@@ -68,7 +68,7 @@ class TestModuleImports:
 
     def test_all_modules_import(self):
         """所有模块可导入"""
-        from morn_core.server import main, load_config, MornState, parse_args
+        from morn_core.server import main, load_config
         from morn_core.memory.store import MemoryStore
         from morn_core.chat.engine import ChatEngine, EmotionState
         from morn_core.security.user_protection import UserProtection
@@ -101,7 +101,7 @@ class TestEndToEnd:
     async def test_memory_chat_protection_flow(self):
         """记忆 → 对话 → 保护层，数据流可跑通"""
         from morn_core.memory.store import MemoryStore
-        from morn_core.chat.engine import ChatEngine, EmotionState
+        from morn_core.chat.engine import ChatEngine
         from morn_core.security.user_protection import UserProtection
 
         with tempfile.TemporaryDirectory() as tmpdir:

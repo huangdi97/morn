@@ -11,8 +11,6 @@ from morn.contrib.memory_advanced.external_memory import (
     ExternalMemoryAdapter,
     VoidAdapter,
     Mem0Adapter,
-    LettaAdapter,
-    ZepAdapter,
 )
 
 

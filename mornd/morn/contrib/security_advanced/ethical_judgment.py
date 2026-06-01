@@ -268,7 +268,7 @@ class IntentDriftDetector:
             if entry.get("risk_level") in ("⚫",) and entry["diverges"]:
                 new_alerts.append({
                     "level": "red",
-                    "message": f"HTZ/LTZ级别操作偏离",
+                    "message": "HTZ/LTZ级别操作偏离",
                     "step": entry["step"],
                 })
 

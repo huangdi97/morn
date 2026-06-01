@@ -1,5 +1,5 @@
 """自我瘦身插件——周期性诊断并清理冗余记忆和技能"""
-from morn.kernel.plugin import MornPlugin, PluginContext
+from morn.kernel.plugin import MornPlugin
 from morn.kernel.hooks import HookRegistration
 from morn.kernel.bus import Event, Priority
 

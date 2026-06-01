@@ -2,7 +2,6 @@
 import asyncio
 import sys
 import time
-from typing import Optional
 
 from morn.sdk.presence import MornPresence
 
@@ -53,9 +52,9 @@ class CLIPresence(MornPresence):
                         print(f"💚 平静: {e.calmness:.1f} | 💛 愉悦: {e.pleasure:.1f} | 💜 联结: {e.connection:.1f}")
                     print(f"💾 记忆: {mem_count} 条")
                     if self.state.dream_engine:
-                        print(f"🌙 梦境引擎: 启动")
+                        print("🌙 梦境引擎: 启动")
                     if self.state.identity_affirmer:
-                        print(f"🪞 身份确认: 启动")
+                        print("🪞 身份确认: 启动")
                     print(f"📡 模型: {self.state.config.get('mode', 'hybrid')}")
                 else:
                     if self.state.chat_engine:

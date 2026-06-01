@@ -6,7 +6,7 @@ import os
 import re
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from morn_core.eventbus.bus import EventBus, Event, Priority

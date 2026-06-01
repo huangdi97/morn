@@ -1,7 +1,7 @@
 """Morn 插件系统——PluginInfo（历史兼容）和 MornPlugin（抽象基类）"""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from .hooks import HookRegistration

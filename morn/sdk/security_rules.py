@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -208,7 +208,6 @@ def reset_rules() -> None:
     _rules.extend(_DEFAULT_RULES)
 
 
-import logging
 
 
 class SecurityValidator:
@@ -230,7 +229,6 @@ class SecurityValidator:
         return {"verdict": "allow", "reason": "操作已通过安全验证", "rule": ""}
 
     def sync_rules_from_learner(self, learner) -> int:
-        from morn.contrib.security_advanced.rule_learner import RuleLearner
         import asyncio
         if hasattr(learner, 'sync_to_validator'):
             return asyncio.run(learner.sync_to_validator(self))

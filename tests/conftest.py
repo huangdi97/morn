@@ -1,7 +1,7 @@
 import asyncio
 import pytest
 
-from morn.core.bus import Event, EventBus, Priority
+from morn.core.bus import EventBus
 
 
 @pytest.fixture

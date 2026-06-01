@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from morn_core.memory.trash_bin import TrashBin, PROTECTED_TYPES, TRASHABLE_TYPES
+from morn_core.memory.trash_bin import TrashBin
 
 
 @pytest.fixture

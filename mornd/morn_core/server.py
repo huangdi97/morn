@@ -11,13 +11,12 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
-import psutil
 
 from morn_core.eventbus.bus import EventBus, Event, Priority
 from morn_core.eventbus.hooks import HookManager, HookRegistration
 from morn_core.eventbus.plugin_registry import register_all_plugin_hooks
 from morn_core.memory.store import MemoryStore
-from morn_core.chat.engine import ChatEngine, EmotionState
+from morn_core.chat.engine import ChatEngine
 from morn_core.heartbeat import heartbeat_loop, memory_monitor, wal_checkpoint
 from morn_core.security.user_protection import UserProtection
 from morn_core.consciousness.self_reflection import SelfReflection
@@ -199,9 +198,9 @@ async def cli_loop(state: MornState):
                     print(f"💚 平静: {e.calmness:.1f} | 💛 愉悦: {e.pleasure:.1f} | 💜 联结: {e.connection:.1f}")
                 print(f"💾 记忆: {mem_count} 条")
                 if state.dream_engine:
-                    print(f"🌙 梦境引擎: 启动")
+                    print("🌙 梦境引擎: 启动")
                 if state.identity_affirmer:
-                    print(f"🪞 身份确认: 启动")
+                    print("🪞 身份确认: 启动")
                 print(f"📡 模型: {state.config.get('mode', 'hybrid')}")
             else:
                 if state.chat_engine:
@@ -441,12 +440,12 @@ async def main():
     if state.chat_engine:
         print(f"  情感: {state.chat_engine.emotion}")
     if state.dream_engine:
-        print(f"  梦境引擎: 启动")
+        print("  梦境引擎: 启动")
     if state.identity_affirmer:
-        print(f"  身份确认: 启动")
+        print("  身份确认: 启动")
     print(f"  Telegram: {'已连接' if state.telegram_bot else '未配置（仅命令行模式）'}")
     print(f"  模型: {config.get('mode', 'hybrid')}")
-    print(f"\n输入 /status 查看状态，/shutdown 退出\n")
+    print("\n输入 /status 查看状态，/shutdown 退出\n")
 
     await asyncio.gather(*tasks, return_exceptions=True)
     await event_bus.stop()

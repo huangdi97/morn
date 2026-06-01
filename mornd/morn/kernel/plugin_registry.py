@@ -1,4 +1,3 @@
-import logging
 import time
 
 from .bus import EventBus, Event, Priority

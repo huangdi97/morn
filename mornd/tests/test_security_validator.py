@@ -4,14 +4,13 @@ import os
 import sys
 import tempfile
 import threading
-from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from morn_core.security.security_validator import SecurityValidator, ValidationResult, watch_config_reload
-from morn_core.eventbus.bus import EventBus, Event, Priority
+from morn_core.eventbus.bus import EventBus
 from morn_core.action.cli_executor import CLIExecutor
 
 

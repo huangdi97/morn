@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from morn_core.memory.retrieval import RawSnapshotStore, RawSnapshot
+from morn_core.memory.retrieval import RawSnapshotStore
 from morn_core.memory.store import MemoryStore
 
 

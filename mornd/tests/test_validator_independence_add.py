@@ -1,11 +1,10 @@
 import os
 import sys
 
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from morn_core.security.rules import SecurityValidator, get_all_rules
+from morn_core.security.rules import SecurityValidator
 
 
 class TestValidatorIndependence:

@@ -379,7 +379,6 @@ class ChallengeMode:
         topics = []
         cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
         try:
-            import json
             cursor = await self.memory_store.db.execute("""
                 SELECT * FROM capsules
                 WHERE timestamp < ? AND source NOT IN ('self_reflection', 'security')

@@ -3,7 +3,6 @@
 import enum
 import logging
 import platform
-import sys
 
 logger = logging.getLogger("morn.sandbox")
 

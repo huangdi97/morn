@@ -34,7 +34,7 @@ class ExampleHelloPlugin(MornPlugin):
         ))
 
     async def on_unload(self):
-        print(f"[ExampleHello] on_unload: cleaning up")
+        print("[ExampleHello] on_unload: cleaning up")
         await super().on_unload()
 
     async def on_event(self, event: Event):

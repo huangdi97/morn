@@ -3,7 +3,6 @@
 import importlib
 import inspect
 import logging
-import pkgutil
 from pathlib import Path
 from typing import Optional
 

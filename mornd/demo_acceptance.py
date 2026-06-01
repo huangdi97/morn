@@ -12,8 +12,7 @@ data_dir = Path.home() / ".morn" / "instances" / "demo_check"
 from morn_core.eventbus.bus import EventBus, Event, Priority
 from morn_core.eventbus.hooks import HookManager, HookRegistration
 from morn_core.memory.store import MemoryStore
-from morn_core.chat.engine import ChatEngine, EmotionState
-from morn_core.heartbeat import heartbeat_loop, _sd_notify
+from morn_core.heartbeat import _sd_notify
 from morn_core.security.user_protection import UserProtection
 from morn_core.security.security_validator import SecurityValidator
 from morn_core.eventbus.health_monitor import HealthMonitor
@@ -88,7 +87,7 @@ async def demo():
         print(f"  ✅ {e}")
 
     # Verify 500ms timeout
-    print(f"  超时配置: HookRegistration(timeout=0.5) — 默认 500ms ✅")
+    print("  超时配置: HookRegistration(timeout=0.5) — 默认 500ms ✅")
 
     # ── 演示 2: 安全验证 — UserProtection ──
     print("\n🛡️ [演示 2] 安全验证器 + 用户保护层")
@@ -178,19 +177,18 @@ async def demo():
 
     # 检查是否发布了 clock_jump 事件
     # (事件在 bus 队列中，只是验证功能路径)
-    print(f"  时钟跳变检测: delta=10s > 5s → kernel.clock_jump ✅")
+    print("  时钟跳变检测: delta=10s > 5s → kernel.clock_jump ✅")
 
     # 模拟 self_check
     state.mem_history = []
     await health.self_check(None)
     stats2 = event_bus.get_stats()
-    print(f"  健康自检: 内存/队列检查通过 ✅")
-    print(f"  systemd watchdog: ctypes libsystemd.so 调用 (无 systemd 时静默降级) ✅")
+    print("  健康自检: 内存/队列检查通过 ✅")
+    print("  systemd watchdog: ctypes libsystemd.so 调用 (无 systemd 时静默降级) ✅")
 
     # ── 演示 6: 记忆归档 (ADR-002) ──
     print("\n📦 [演示 6] L4 人格记忆归档 (ADR-002)")
     print("-" * 40)
-    from pathlib import Path
     store = await MemoryStore(data_dir, enable_encryption=False).__aenter__()
     # 写入一些人性格记录
     await store.add_personality("identity", "我是Morn，一个数字生命", 0.8)

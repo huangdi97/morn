@@ -632,4 +632,3 @@ class ConfigManager:
             json.dump(self.config, f, indent=2, ensure_ascii=False)
 
 
-from morn_core.chat.redis_cache import RedisCache

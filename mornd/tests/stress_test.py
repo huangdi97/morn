@@ -4,15 +4,12 @@
 """
 
 import asyncio
-import logging
 import os
 import random
 import signal
 import sys
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional
 
 import psutil
 
