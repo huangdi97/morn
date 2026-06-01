@@ -389,10 +389,12 @@ class TestConcurrency:
         def test_with_config(pref):
             v = SecurityValidator({"risk_preference": pref})
             r = v.validate("test", {}, "core", "orange", pref)
+            # orange risk > green/yellow preference → block
+            # orange risk == orange preference → confirm
             if pref == "orange":
-                assert r.action == "confirm"
+                assert r.action == "confirm", f"expected confirm for pref={pref}, got {r.action}"
             else:
-                assert r.action == "allow"
+                assert r.action == "block", f"expected block for pref={pref}, got {r.action}"
 
         threads = []
         for pref in ["green", "yellow", "orange"]:
