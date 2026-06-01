@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from .bus import EventBus, Event, Priority
-from morn_core.security.rules import get_all_rules
+from .rules import get_all_rules
 
 logger = logging.getLogger("morn.security")
 

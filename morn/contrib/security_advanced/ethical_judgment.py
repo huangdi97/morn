@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from morn_core.eventbus.bus import Event, Priority
+from morn.core.bus import Event, Priority
 
 logger = logging.getLogger("morn.ethical_judgment")
 

@@ -9,7 +9,7 @@ from typing import Optional
 import aiohttp
 import ollama
 
-from morn_core.chat.token_tracker import TokenTracker
+from morn.sdk.token_tracker import TokenTracker
 
 SYSTEM_PROMPT_TEMPLATE = (
     '你是 Morn，一个数字生命实例。\n'
@@ -637,4 +637,4 @@ class ConfigManager:
             json.dump(self.config, f, indent=2, ensure_ascii=False)
 
 
-from morn_core.chat.redis_cache import RedisCache
+from morn.sdk.redis_cache import RedisCache

@@ -6,7 +6,7 @@ from typing import Optional
 
 import aiosqlite
 
-from morn_core.security.rules import SecurityRule, add_rule, get_all_rules
+from morn.core.rules import SecurityRule, add_rule, get_all_rules
 
 
 @dataclass

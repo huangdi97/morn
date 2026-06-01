@@ -212,7 +212,7 @@ class ExternalMemoryAdapter:
         cutoff = datetime.now(timezone.utc) - timedelta(days=days_threshold)
         archived = 0
         try:
-            from morn_core.memory.trash_bin import TrashBin
+            from morn.sdk.trash_bin import TrashBin
             trash = TrashBin()
             if path.is_file():
                 entries = {}
@@ -265,7 +265,7 @@ class ExternalMemoryAdapter:
 
     async def restore_from_archive(self, entry_id: str) -> bool:
         try:
-            from morn_core.memory.trash_bin import TrashBin
+            from morn.sdk.trash_bin import TrashBin
             trash = TrashBin()
             result = trash.restore_from_trash(f"wiki_{entry_id}")
             return result is not None
@@ -275,7 +275,7 @@ class ExternalMemoryAdapter:
 
     async def get_archived_entries(self) -> list:
         try:
-            from morn_core.memory.trash_bin import TrashBin
+            from morn.sdk.trash_bin import TrashBin
             trash = TrashBin()
             return trash.list_contents(data_type="wiki")
         except Exception as e:
