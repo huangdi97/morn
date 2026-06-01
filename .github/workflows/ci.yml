@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]" || pip install -e ".[test]" || pip install -e .
+
+      - name: Check tests directory
+        id: check_tests
+        run: |
+          if [ -d tests ] && [ "$(ls -A tests/ 2>/dev/null)" ]; then
+            echo "has_tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_tests=false" >> $GITHUB_OUTPUT
+            echo "::warning title=tests skipped::tests/ directory not found or empty"
+          fi
+
+      - name: Run tests
+        if: steps.check_tests.outputs.has_tests == 'true'
+        run: python -m pytest tests/ -x -q --timeout=60
+
+      - name: Lint with ruff
+        continue-on-error: true
+        run: |
+          pip install ruff
+          ruff check .

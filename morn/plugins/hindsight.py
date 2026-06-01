@@ -1,5 +1,5 @@
 """后见之明插件——每小时回顾情感并触发反思"""
-from morn.core.plugin import MornPlugin, PluginContext
+from morn.core.plugin import MornPlugin, PluginContext, PluginDependency
 from morn.core.hooks import HookRegistration
 from morn.core.bus import Event, Priority
 
@@ -11,6 +11,10 @@ class HindsightPlugin(MornPlugin):
     plugin_class = "A"
     needs_periodic_trigger = True
     usage_hint = "low"
+    dependencies = [PluginDependency("chat_engine", "0.1.0"), PluginDependency("memory_store", "0.1.0")]
+    required_permissions = ["memory.read", "emotion.read"]
+    optional_permissions = []
+    health_check_interval = 60
 
     def __init__(self, state_ref=None):
         super().__init__()

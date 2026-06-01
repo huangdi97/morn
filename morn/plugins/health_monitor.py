@@ -1,6 +1,6 @@
 """HealthMonitor 插件——系统健康监控"""
 import time
-from morn.core.plugin import MornPlugin, PluginContext
+from morn.core.plugin import MornPlugin, PluginContext, PluginDependency
 from morn.core.hooks import HookRegistration
 from morn.core.bus import Event, Priority
 
@@ -12,6 +12,10 @@ class HealthMonitorPlugin(MornPlugin):
     plugin_class = "S"
     needs_periodic_trigger = True
     usage_hint = "low"
+    dependencies = []
+    required_permissions = ["system.memory.read", "system.process.read"]
+    optional_permissions = []
+    health_check_interval = 30
 
     def __init__(self):
         super().__init__()

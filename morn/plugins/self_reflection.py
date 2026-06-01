@@ -1,5 +1,5 @@
 """自我反思插件——定期进行轻量自省并记录情感快照"""
-from morn.core.plugin import MornPlugin, PluginContext
+from morn.core.plugin import MornPlugin, PluginContext, PluginDependency
 from morn.core.hooks import HookRegistration
 from morn.core.bus import Event
 
@@ -11,6 +11,10 @@ class SelfReflectionPlugin(MornPlugin):
     plugin_class = "B"
     needs_periodic_trigger = True
     usage_hint = "low"
+    dependencies = [PluginDependency("memory_store", "0.1.0"), PluginDependency("chat_engine", "0.1.0")]
+    required_permissions = ["memory.read", "emotion.read"]
+    optional_permissions = ["memory.write"]
+    health_check_interval = 60
 
     def __init__(self):
         super().__init__()

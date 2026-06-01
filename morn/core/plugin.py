@@ -33,11 +33,13 @@ class PluginDependency:
 
 
 class PluginContext:
-    def __init__(self, event_bus=None, hook_manager=None, config=None, data_dir=None):
+    def __init__(self, event_bus=None, hook_manager=None, config=None, data_dir=None,
+                 quota_manager=None):
         self.event_bus = event_bus
         self.hook_manager = hook_manager
         self.config = config or {}
         self.data_dir = data_dir
+        self.quota_manager = quota_manager
 
 
 class MornPlugin(ABC):
@@ -50,6 +52,8 @@ class MornPlugin(ABC):
     needs_periodic_trigger: bool = False
     usage_hint: str = "low"
     plugin_class: str = ""
+    health_check_interval: int = 60
+    capabilities: list[dict] = []
 
     def __init__(self):
         self.context: Optional[PluginContext] = None
@@ -72,6 +76,9 @@ class MornPlugin(ABC):
 
     async def on_chat(self, message: str):
         pass
+
+    async def health_check(self) -> bool:
+        return True
 
     @property
     def is_loaded(self) -> bool:

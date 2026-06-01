@@ -6,7 +6,7 @@ __version__ = "0.1.0"
 from morn.core import (
     EventBus, Event, Priority,
     HookManager, HookRegistration,
-    SecurityValidator,
+    PluginLoader, SecurityValidator,
     heartbeat_loop, memory_monitor,
 )
 
@@ -14,6 +14,18 @@ from morn.core import (
 
 def __getattr__(name):
     """延迟导入：from morn import ChatEngine → lazy import from morn.sdk"""
+    if name in ("MornPlugin", "PluginContext", "PluginDependency"):
+        from morn.core.plugin import (
+            MornPlugin as _MornPlugin,
+            PluginContext as _PluginContext,
+            PluginDependency as _PluginDependency,
+        )
+        _lazy = {
+            "MornPlugin": _MornPlugin,
+            "PluginContext": _PluginContext,
+            "PluginDependency": _PluginDependency,
+        }
+        return _lazy[name]
     if name in ("ChatEngine", "MemoryStore", "UserProtection", "MornPresence"):
         from morn.sdk import (
             ChatEngine as _ChatEngine,
@@ -61,7 +73,8 @@ __all__ = [
     # 内核
     "EventBus", "Event", "Priority",
     "HookManager", "HookRegistration",
-    "SecurityValidator",
+    "PluginLoader", "SecurityValidator",
+    "MornPlugin", "PluginContext", "PluginDependency",
     "heartbeat_loop", "memory_monitor",
     # SDK（延迟加载）
     "ChatEngine", "MemoryStore", "UserProtection",

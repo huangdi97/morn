@@ -10,6 +10,7 @@ from .audit import AuditPlugin
 from .thinking_evolution import ThinkingEvolutionPlugin
 from .milestones import MilestonePlugin
 from .hindsight import HindsightPlugin
+from .example_hello import ExampleHelloPlugin
 
 __all__ = [
     "HealthMonitorPlugin",
@@ -23,4 +24,5 @@ __all__ = [
     "ThinkingEvolutionPlugin",
     "MilestonePlugin",
     "HindsightPlugin",
+    "ExampleHelloPlugin",
 ]

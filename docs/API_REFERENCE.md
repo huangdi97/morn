@@ -119,6 +119,22 @@ class MyPlugin(MornPlugin):
 | `on_event(event)` | 有订阅的事件时 |
 | `on_heartbeat(tick)` | 每次心跳（如果 `needs_periodic_trigger=True`） |
 | `on_chat(message)` | 有对话时 |
+| `health_check()` | 定期健康检查 |
+
+### MornPlugin 类属性
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `plugin_id` | `str` | 唯一标识 |
+| `name` | `str` | 可读名称 |
+| `version` | `str` | 语义化版本 |
+| `dependencies` | `list[PluginDependency]` | 依赖插件列表 |
+| `required_permissions` | `list[str]` | 必要权限 |
+| `optional_permissions` | `list[str]` | 可选权限 |
+| `needs_periodic_trigger` | `bool` | 是否需要周期性触发 |
+| `usage_hint` | `str` | 资源消耗提示 |
+| `health_check_interval` | `int` | 健康检查间隔（秒） |
+| `capabilities` | `list[dict]` | MCP 能力列表 |
 
 ### PluginContext
 
@@ -130,6 +146,134 @@ PluginContext(
     data_dir=None,
 )
 ```
+
+---
+
+## 核心组件（morn.core）
+
+### EventLog
+
+事件日志，记录所有通过 EventBus 发布的事件。
+
+```python
+from morn.core.event_log import EventLog
+
+log = EventLog(event_bus, max_entries=1000)
+await log.start()
+
+# 查询
+recent = log.recent(10)
+by_type = log.filter_by_type("heartbeat.minute")
+```
+
+| 方法 | 说明 |
+|------|------|
+| `start()` | 开始监听事件总线 |
+| `stop()` | 停止监听 |
+| `recent(n)` | 返回最近 n 条事件 |
+| `filter_by_type(type)` | 按类型过滤事件 |
+| `clear()` | 清空日志 |
+
+### PluginContract
+
+插件 YAML 契约解析，将插件类属性映射为结构化契约。
+
+```python
+from morn.core.plugin_contract import PluginContract, parse_contract
+
+contract = parse_contract(MyPlugin)
+# contract.plugin_id, contract.dependencies, contract.permissions, ...
+```
+
+| 方法 | 说明 |
+|------|------|
+| `parse_contract(plugin_cls)` | 从插件类解析契约 |
+| `contract.to_dict()` | 序列化为字典 |
+| `contract.validate()` | 验证契约完整性 |
+
+### ConfigWatcher
+
+配置文件热重载监视器。
+
+```python
+from morn.core.config_watcher import ConfigWatcher
+
+watcher = ConfigWatcher("path/to/config.yaml", callback=on_change)
+await watcher.start()
+```
+
+| 方法 | 说明 |
+|------|------|
+| `start()` | 开始监视文件变更 |
+| `stop()` | 停止监视 |
+| `get_config()` | 获取当前配置快照 |
+
+### MCPServer
+
+MCP Server 管理器，自动将插件注册为 MCP 端点。
+
+```python
+from morn.core.mcp_server import MCPServer
+
+mcp = MCPServer(enabled=True)
+mcp.register_plugin(my_plugin)
+await mcp.start()
+```
+
+| 方法 | 说明 |
+|------|------|
+| `start()` | 启动 MCP Server |
+| `stop()` | 停止 MCP Server |
+| `register_plugin(plugin)` | 手动注册插件端点 |
+| `unregister_plugin(plugin_id)` | 注销插件端点 |
+
+### Sandbox
+
+进程级沙箱，支持分级隔离。
+
+```python
+from morn.core.sandbox import Sandbox, SandboxLevel
+
+# SandboxLevel.NONE     — 无限制
+# SandboxLevel.RESTRICTED — 受限文件系统 + 网络白名单
+# SandboxLevel.SANDBOXED  — 隔离文件系统 + 禁止网络 + seccomp
+
+sandbox = Sandbox(level=SandboxLevel.SANDBOXED)
+sandbox.apply()  # 调用 seccomp 应用规则
+```
+
+| 方法 | 说明 |
+|------|------|
+| `apply()` | 应用沙箱规则 |
+| `apply_filesystem_restrictions()` | 应用文件系统限制 |
+| `apply_seccomp_filter()` | 应用 seccomp BPF 过滤 |
+
+### ResourceQuota
+
+资源配额管理，跟踪 token 和内存使用。
+
+```python
+from morn.core.resource_quota import TokenCounter, QuotaManager, QuotaExceeded
+
+manager = QuotaManager()
+counter = TokenCounter(limit=100000)
+
+# 检查配额
+quota = manager.get_quota("my_plugin")
+# quota.tokens_remaining, quota.memory_bytes_remaining
+
+# 消费 token
+if counter.consume(500):
+    print("token 足够")
+else:
+    raise QuotaExceeded("token 不足")
+```
+
+| 类 | 说明 |
+|----|------|
+| `TokenCounter` | Token 计数器，带速率限制 |
+| `QuotaManager` | 全局配额管理器 |
+| `QuotaExceeded` | 配额超限异常 |
 
 ---
 

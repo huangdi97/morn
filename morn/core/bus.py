@@ -91,8 +91,10 @@ class _Queue:
 
 
 class EventBus:
-    def __init__(self, loop: asyncio.AbstractEventLoop):
+    def __init__(self, loop: asyncio.AbstractEventLoop, event_log=None):
         self._loop = loop
+        self._event_log = event_log
+        self._replaying = False
         self._queues = {
             Priority.HIGH: _Queue(),
             Priority.MEDIUM: _Queue(),
@@ -107,6 +109,8 @@ class EventBus:
         self._wakeup = asyncio.Event()
 
     async def publish(self, event: Event) -> None:
+        if not self._replaying and self._event_log:
+            await self._event_log.append(event)
         self._queues[event.priority].put_nowait(event)
         self._stats.published += 1
         self._wakeup.set()
@@ -177,6 +181,16 @@ class EventBus:
             "queue_depth_medium": self._queues[Priority.MEDIUM].qsize(),
             "queue_depth_low": self._queues[Priority.LOW].qsize(),
         }
+
+    async def replay_events(self, event_log, after_rowid: int = 0) -> int:
+        self._replaying = True
+        try:
+            events = await event_log.replay_since(after_rowid)
+            for event in events:
+                await self.publish(event)
+            return len(events)
+        finally:
+            self._replaying = False
 
     async def _dispatch_loop(self) -> None:
         while self._running:

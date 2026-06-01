@@ -35,6 +35,19 @@ local-llm = ["ollama>=0.3"]
 vector = ["chromadb>=0.5.0"]
 all = ["morn[telegram,local-llm,vector]"]
 
+[project.entry-points."morn.plugins"]
+health_monitor = "morn.plugins.health_monitor:HealthMonitorPlugin"
+audit = "morn.plugins.audit:AuditPlugin"
+bond_tracker = "morn.plugins.bond_tracker:BondTrackerPlugin"
+dream_engine = "morn.plugins.dream_engine:DreamEnginePlugin"
+hindsight = "morn.plugins.hindsight:HindsightPlugin"
+identity_affirmer = "morn.plugins.identity_affirmer:IdentityAffirmerPlugin"
+intent_drift = "morn.plugins.intent_drift:IntentDriftPlugin"
+milestones = "morn.plugins.milestones:MilestonePlugin"
+self_pruner = "morn.plugins.self_pruner:SelfPrunerPlugin"
+self_reflection = "morn.plugins.self_reflection:SelfReflectionPlugin"
+thinking_evolution = "morn.plugins.thinking_evolution:ThinkingEvolutionPlugin"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 timeout = 60
