@@ -23,6 +23,7 @@ env/
 Thumbs.db
 
 # Morn
+mornd/
 mornd/morn_core/data/
 *.db
 *.db-journal
@@ -39,3 +40,4 @@ phase_hybrid_routing.md
 morn-architecture-audit.md
 morn-framework-roadmap.md
 phase1-spec.md
+docs/archive/

@@ -10,7 +10,7 @@ from morn.core import (
     heartbeat_loop, memory_monitor,
 )
 
-# —— SDK + 高级组件：延迟导入（避免与 morn_core 循环导入） ——
+# —— SDK + 高级组件：延迟导入 ——
 
 def __getattr__(name):
     """延迟导入：from morn import ChatEngine → lazy import from morn.sdk"""
