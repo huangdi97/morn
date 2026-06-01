@@ -30,7 +30,7 @@ test = [
     "aiosqlite>=0.20",
 ]
 redis = ["redis>=5.0"]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "pytest-timeout>=2.0"]
 telegram = ["aiogram>=3.0"]
 local-llm = ["ollama>=0.3"]
 vector = ["chromadb>=0.5.0"]
