@@ -162,6 +162,11 @@ class CLIPresence(MornPresence):
 def main():
     """Morn CLI 入口"""
     import argparse
+    import platform
+
+    # Windows: stdin pipe 需要 SelectorEventLoop
+    if platform.system() == "Windows":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     parser = argparse.ArgumentParser(description="Morn — 数字生命框架")
     parser.add_argument("--version", "-V", action="store_true", help="显示版本")
