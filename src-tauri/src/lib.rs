@@ -1,4 +1,7 @@
 use std::sync::Mutex;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::Manager;
 use tauri::State;
 
 use morn::console::ConsoleBackend;
@@ -20,6 +23,42 @@ pub struct AppState {
     pub tester: Mutex<Option<StudioTester>>,
     pub console: Mutex<Option<ConsoleBackend>>,
     pub storage: Mutex<Option<Storage>>,
+}
+
+fn setup_autostart(app: &tauri::App) {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            let autostart_dir = std::path::PathBuf::from(&home).join(".config/autostart");
+            if std::fs::create_dir_all(&autostart_dir).is_ok() {
+                if let Ok(exe) = std::env::current_exe() {
+                    let desktop_entry = format!(
+                        "[Desktop Entry]\nType=Application\nName=Morn\nExec={}\nX-GNOME-Autostart-enabled=true\n",
+                        exe.display()
+                    );
+                    let _ =
+                        std::fs::write(autostart_dir.join("morn-desktop.desktop"), desktop_entry);
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(exe) = std::env::current_exe() {
+            let _ = std::process::Command::new("reg")
+                .args([
+                    "add",
+                    "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                    "/v",
+                    "Morn",
+                    "/d",
+                    &exe.display().to_string(),
+                    "/f",
+                ])
+                .output();
+        }
+    }
 }
 
 #[tauri::command]
@@ -431,6 +470,57 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            setup_autostart(app);
+
+            let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+
+            TrayIconBuilder::new()
+                .icon(tauri::image::Image::from_bytes(include_bytes!(
+                    "../icons/tray-icon.png"
+                ))?)
+                .menu(&menu)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        if let Some(window) = tray.app_handle().get_webview_window("main") {
+                            if window.is_visible().unwrap_or(false) {
+                                let _ = window.hide();
+                            } else {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
+
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .manage(AppState {
             supervisor: Mutex::new(supervisor),
             turn_count: Mutex::new(0),

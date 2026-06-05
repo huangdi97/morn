@@ -994,37 +994,99 @@ html, body, #root {
   .chat-area {
     padding: 8px;
   }
-
   .message {
     max-width: 90%;
   }
-
   .console-grid {
     grid-template-columns: 1fr;
   }
-
   .component-list {
     width: 100%;
     max-height: 180px;
     border-right: none;
     border-bottom: 1px solid var(--border);
   }
-
   .header h1 {
     font-size: 14px;
   }
-
   .main-tabs button {
     padding: 8px 12px;
     font-size: 13px;
   }
-
   .console-table {
     font-size: 12px;
   }
-
   .console-table thead th,
   .console-table tbody td {
     padding: 6px 8px;
+  }
+  .chat-container {
+    border-radius: 0;
+    padding: 0;
+  }
+  .mobile-menu {
+    display: block;
+  }
+  .template-grid {
+    grid-template-columns: 1fr;
+  }
+  .studio-tabs {
+    overflow-x: auto;
+  }
+  .studio-tabs button {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 10px;
+  }
+  .header h1 {
+    font-size: 13px;
+  }
+  .status {
+    font-size: 10px;
+    width: 100%;
+    order: 3;
+  }
+  .message {
+    max-width: 100%;
+  }
+  .bubble {
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+  .input-bar {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .input-bar textarea {
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+  .input-bar button {
+    padding: 6px 14px;
+    font-size: 13px;
+    height: 32px;
+  }
+  .main-tabs button {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .console-card {
+    padding: 12px;
+  }
+  .console-card-title {
+    font-size: 13px;
+  }
+  .console-card-body {
+    font-size: 12px;
+  }
+  .studio-tabs button {
+    padding: 6px 10px;
+    font-size: 12px;
   }
 }

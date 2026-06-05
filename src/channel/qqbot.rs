@@ -2,9 +2,8 @@
 //! 配置方式：在 QQ 开放平台创建机器人，获取 Bot ID 和 Token
 //! 环境变量：QQBOT_ID, QQBOT_TOKEN
 
-use crate::channel::adapter::ChannelMessage;
+use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
-#[allow(dead_code)]
 pub struct QqBotChannel {
     bot_id: String,
     token: String,
@@ -18,24 +17,105 @@ impl QqBotChannel {
         }
     }
 
+    pub fn from_env() -> Result<Self, String> {
+        let bot_id = std::env::var("QQBOT_ID").map_err(|_| "QQBOT_ID not set".to_string())?;
+        let token = std::env::var("QQBOT_TOKEN").map_err(|_| "QQBOT_TOKEN not set".to_string())?;
+        Ok(QqBotChannel::new(&bot_id, &token))
+    }
+
     pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {
-        println!(
-            "[QQ Bot] Sending message: {} (via QQ guild/group)",
-            msg.content
-        );
+        let payload = Self::build_payload(msg);
+        let url = format!("https://api.qq.com/v1/robots/{}/messages", self.bot_id);
+        let auth_value = format!("Bot {}.{}", self.bot_id, self.token);
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        let resp = client
+            .post(&url)
+            .header("Authorization", &auth_value)
+            .json(&payload)
+            .send()
+            .map_err(|e| format!("Failed to send QQ Bot message: {}", e))?;
+        if !resp.status().is_success() {
+            return Err(format!(
+                "QQ Bot API returned non-200 status: {}",
+                resp.status()
+            ));
+        }
         Ok(())
     }
 
-    pub fn receive(&self) -> Result<Option<ChannelMessage>, String> {
-        Ok(Some(ChannelMessage {
-            content: "[QQ Bot] simulated incoming message".into(),
-            source: "qqbot".into(),
-            timestamp: chrono::Utc::now().timestamp(),
-            metadata: serde_json::json!({"type": "text", "group_id": "qq_group_123"}),
-        }))
+    fn build_payload(msg: &ChannelMessage) -> serde_json::Value {
+        let user_id = msg
+            .metadata
+            .get("user_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        serde_json::json!({
+            "user_id": user_id,
+            "content": msg.content,
+            "msg_type": "text"
+        })
     }
 
-    pub fn handle_event(&self, event_type: &str, payload: &str) -> Result<String, String> {
-        Ok(format!("[QQ Bot] handled '{}': {}", event_type, payload))
+    pub fn receive(&self) -> Result<Option<ChannelMessage>, String> {
+        Ok(None)
+    }
+}
+
+pub struct QqBotServer {
+    adapter: Option<ChannelAdapter>,
+}
+
+impl QqBotServer {
+    pub fn new(adapter: Option<ChannelAdapter>) -> Self {
+        QqBotServer { adapter }
+    }
+
+    pub fn handle_event(&mut self, text: &str) -> Result<String, String> {
+        if let Some(ref mut adapter) = self.adapter {
+            let msg = ChannelMessage {
+                content: text.to_string(),
+                source: "qqbot".into(),
+                timestamp: chrono::Utc::now().timestamp_millis(),
+                metadata: serde_json::json!({}),
+            };
+            Ok(adapter.handle_message(&msg))
+        } else {
+            Ok("No adapter configured".into())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_qqbot_build_payload() {
+        let msg = ChannelMessage {
+            content: "Hello".into(),
+            source: "test".into(),
+            timestamp: 0,
+            metadata: serde_json::json!({"user_id": "user_123"}),
+        };
+        let payload = QqBotChannel::build_payload(&msg);
+        assert_eq!(payload["user_id"], "user_123");
+        assert_eq!(payload["content"], "Hello");
+        assert_eq!(payload["msg_type"], "text");
+    }
+
+    #[test]
+    fn test_qqbot_send_connection_error() {
+        let channel = QqBotChannel::new("test_bot", "test_token");
+        let msg = ChannelMessage {
+            content: "test".into(),
+            source: "test".into(),
+            timestamp: 0,
+            metadata: serde_json::json!({"user_id": "user_123"}),
+        };
+        let result = channel.send(&msg);
+        assert!(result.is_err());
     }
 }

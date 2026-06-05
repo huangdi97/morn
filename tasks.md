@@ -1,265 +1,238 @@
-# Morn 用户体验层全面实现
+# Morn 收尾阶段：OS 层 + 渠道做真 + 手机端
 
 ## 14 条核心准则编程原则
 
 **1. Think Before Coding** — 理解全貌再动手
-**2. Simplicity First** — 简单优先，不加不必要的抽象层
+**2. Simplicity First** — 简单优先
 **3. Surgical Changes** — 一次一事
 **4. Goal-Driven Execution** — 先明确"要什么"再"怎么写"
-**5. 架构优先，拒绝补丁** — 不堆补丁，架构不合理就重构
-**6. 面向组件的构建** — 模块化，每个组件职责清晰
-**7. 显式优于隐式** — 明确的数据流和依赖
-**8. 代码整洁与自文档化** — 代码即文档
+**5. 架构优先，拒绝补丁**
+**6. 面向组件的构建**
+**7. 显式优于隐式**
+**8. 代码整洁与自文档化**
 **9. 单一职责** — 一个函数/类只做一件事
-**10. 组合优于委托** — 组合模式 > 继承
-**11. 单一状态源** — 状态只在一个地方管理
-**12. 避免语法糖** — 可读性 > 炫技
-**13. 命名一致性** — 同一概念用同一命名
-**14. 文件不超过 300 行** — 超了拆
+**10. 组合优于委托**
+**11. 单一状态源**
+**12. 避免语法糖**
+**13. 命名一致性**
+**14. 文件不超过 300 行**
 
 ## 低耦合原则
-1. **模块间只通过公开接口通信** — 不要跨模块直接访问内部结构体字段
-2. **测试独立于实现细节** — 测试公共 API 而非私有函数
-3. **新测试模块互相独立** — 每个 `#[cfg(test)] mod tests` 只测试本模块功能
+1. 模块间只通过公开接口通信
+2. 测试独立于实现细节
+3. 新测试模块互相独立
 
 ## 执行方式
-- 所有代码修改必须通过 **opencode run** 执行
-- 每阶段完成后运行 `cargo fmt && cargo build && cargo test && cargo fmt --check`
-- 全部完成后运行全量验证：`cd web && npm run build`
+- 所有代码修改必须通过 **opencode run**
+- 每阶段完后运行 `cargo fmt && cargo build && cargo test`
+- 全部完成后全量验证：`cargo build + cargo test + cargo fmt --check + cd web && npm run build`
 
 ---
 
-## 阶段一：一句话构建 Agent（NL → COO 自动组装）
+## 阶段一：深度 OS 层（系统托盘 + 开机自启）
 
 ### 背景
-目前 AgentBuilder 是表单填写（选 tools/knowledge/skills/persona/model），用户需要写代码般的操作。改成：输入一句自然语言描述，COO 自动分析并生成完整的 Agent 定义。
+目前 Morn 只是一个 CLI 应用 + Tauri 窗口。设计文档要求：开机自启动、系统托盘常驻、后台运行。
 
-### 技术方案
-1. COO/Supervisor 新增 `create_agent_from_nl(nl: &str) -> Result<AgentDef>` 方法
-2. 该方法调用 ChatAgent（现有的 chat_agent.rs）用 LLM 分析自然语言描述，返回 AgentDef JSON
-3. 前端 AgentBuilder 新增「自然语言输入」模式 vs 「表单编辑」模式
+### 任务 1.1: 添加 Tauri 系统托盘
 
-### 任务 1.1: 后端 NL→AgentDef 流水线
+**文件:** `src-tauri/src/lib.rs` + `src-tauri/Cargo.toml`
 
-**文件:** `src/core/supervisor.rs`
+在 Cargo.toml 中添加：
+```toml
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-notification = "2"
+```
 
-在 `Supervisor` 结构体中添加：
-
+Tauri 2 的系统托盘实现：
 ```rust
-pub fn create_agent_from_nl(&self, nl: &str) -> Result<AgentDef, String> {
-    // 1. 构造 LLM prompt，要求分析自然语言描述
-    //    输入示例："帮我创建一个股票分析 Agent，能够获取 K 线、计算技术指标、生成报告"
-    // 2. 调用 chat_fn 获取 LLM 返回的 AgentDef JSON
-    // 3. 解析并验证返回的 AgentDef
-    // 4. 检查 Registry 中是否存在匹配的组件
-    // 5. 返回 AgentDef
+use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
+use tauri::menu::{MenuBuilder, SubmenuBuilder};
+
+// 在 setup 中创建托盘图标
+// 右键菜单：显示窗口 / 隐藏窗口 / 退出
+// 左键点击：切换窗口显示状态
+// 托盘图标使用内嵌图标或默认图标
+```
+
+### 任务 1.2: Windows 开机自启
+
+**文件:** `src-tauri/src/lib.rs`
+
+通过 Windows 注册表实现开机自启（不需要额外依赖）：
+```rust
+use std::os::windows::process::CommandExt;
+
+fn set_auto_start(enabled: bool) -> Result<(), String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| e.to_string())?;
+    let key = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    let app_name = "Morn";
+    // 使用 reg add / reg delete 命令
 }
 ```
 
-AgentDef 结构（agentbuilder.rs 中已有类似定义）：
-```rust
-pub struct AgentDef {
-    pub name: String,
-    pub persona: String,
-    pub model: String,
-    pub tools: Vec<String>,
-    pub knowledge: Vec<String>,
-    pub skills: Vec<String>,
-}
-```
+### 任务 1.3: 主窗口最小化到托盘
 
-LLM prompt 要足够结构化，示例格式：
-```
-用户需求：{nl}
-请从以下可用组件中匹配：
-工具：{tools_list}
-知识：{knowledge_list}
-技能：{skills_list}
-人格：{personas}
-返回 JSON：
-{ name: string, persona: string, model: string, tools: string[], knowledge: string[], skills: string[] }
-```
+**文件:** `src-tauri/src/lib.rs`
 
-### 任务 1.2: Tauri 命令暴露 NL 接口
-
-**文件:** `src/main.rs`
-
-新增 Tauri 命令：
-```rust
-#[tauri::command]
-fn create_agent_from_description(nl: String, state: tauri::State<AppState>) -> Result<String, String> {
-    // 调用 supervisor.create_agent_from_nl(&nl)
-    // 返回 AgentDef JSON 字符串
-}
-```
-
-### 任务 1.3: 前端 AgentBuilder 增加 NL 输入模式
-
-**文件:** `web/src/studio/AgentBuilder.tsx`
-
-改动：
-1. 页面顶部增加模式切换：「自然语言描述」/「手动编辑」
-2. 自然语言模式：一个大输入框 + 「生成 Agent」按钮
-3. 调用 `invoke("create_agent_from_description", { nl })`
-4. 返回结果后自动填充到表单，用户可进一步编辑
-5. 表单模式保留现有 UI
-
-同时添加一个文案提示框，示例输入：
-```
-"创建一个股票分析助手，能获取行情数据、计算 MACD/RSI 指标、分析市场情绪并生成报告"
-"帮我写一个生物文献翻译 Agent，能查 PubMed，翻译论文并总结要点"
-```
+实现最小化时隐藏到系统托盘而非任务栏：
+- 点击关闭按钮 → 隐藏到托盘
+- 托盘图标左键 → 显示/隐藏切换
+- 退出确认对话框
 
 ---
 
-## 阶段二：可视化节点编辑器（ComfyUI 风格）
+## 阶段二：渠道 stub 做真
 
 ### 背景
-目前 AgentBuilder 是固定表单（选 Persona/Tools/Knowledge/Skills/Model），用户无法自由组合组件的关系。改成拖拽式节点编辑器——像搭积木一样连接组件。
+目前 QQ 机器人/微信公众号/微信小程序三个渠道只有骨架 struct，没有任何 HTTP 通信。类似 DingTalk/Feishu/WeCom 的 webhook POST 实现。
 
-### 技术方案
-1. 安装 `reactflow` 作为节点编辑器引擎
-2. 创建 `NodeCanvas.tsx` 组件作为编辑器主体
-3. 定义节点类型：PersonaNode、ToolNode、KnowledgeNode、SkillNode、ModelNode、AgentNode
-4. 节点输入/输出端口：每个组件类型有标准 IO 端口
-5. 连线逻辑：从输出端口拖到输入端口建立连接
-6. 将节点图序列化为 AgentDef → 可发布
+### 任务 2.1: QQ 机器人渠道做真
 
-### 任务 2.1: 安装 reactflow 依赖
+**文件:** `src/channel/qqbot.rs`
 
-```bash
-cd web && npm install reactflow @types/reactflow
+腾讯 QQ 机器人 API（基于 QQ 开放平台）：
+```rust
+fn send_message(&self, user_id: &str, content: &str) -> Result<(), String> {
+    let url = format!("https://api.qq.com/v1/robots/{}/messages", self.bot_id);
+    let body = json!({
+        "user_id": user_id,
+        "content": content,
+        "msg_type": "text"
+    });
+    // reqwest::blocking POST with auth header
+    // 类似 dingtalk.rs 的模式
+}
 ```
 
-### 任务 2.2: 创建 NodeCanvas 组件
+核心实现：
+1. POST 消息到 QQ 机器人 API endpoint
+2. 带 Bot Token 认证（从环境变量读取）
+3. 接收消息模型（轮询或 webhook 回调）
+4. 错误处理 + 单元测试
+5. 注册到 ChannelAdapter
 
-**文件:** `web/src/studio/NodeCanvas.tsx`
+### 任务 2.2: 微信公众号渠道做真
 
-功能：
-- 使用 ReactFlow 作为底层
-- 左侧面板是组件库面板（Tool/Knowledge/Skill/Persona/Model）
-- 拖拽组件到画布创建节点
-- 节点显示：标题 + IO 端口（圆形输入/输出点）
-- 连线：从输出端口拖到输入端口
-- 右键菜单：删除节点/编辑/配置
-- 右上角按钮：导出为 AgentDef / 发布 / 保存
+**文件:** `src/channel/wechat_mp.rs`
 
-节点颜色方案（暗色主题与现有 UI 一致）：
-- PersonaNode: 紫色 (#7c3aed)
-- ToolNode: 蓝色 (#3b82f6)
-- KnowledgeNode: 绿色 (#22c55e)
-- SkillNode: 橙色 (#f59e0b)
-- ModelNode: 红色 (#ef4444)
-- AgentNode: 青色 (#06b6d4)
+微信公众平台 API（服务号）：
+1. 获取 access_token（使用 AppID + AppSecret）
+2. 发送模板消息/客服消息
+3. 接收消息回调验证
+4. 消息格式转换（xml ↔ ChannelMessage）
 
-### 任务 2.3: 定义节点类型和 IO 端口
+```rust
+fn get_access_token(&self) -> Result<String, String> {
+    let url = format!(
+        "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={}&secret={}",
+        self.app_id, self.app_secret
+    );
+    // reqwest get → 返回 access_token
+}
 
-每种组件类型定义标准的 IO 端口：
-
-```
-PersonaNode:
-  输入: [system_prompt]
-  输出: [persona_config]
-
-ToolNode:
-  输入: [params]
-  输出: [result]
-
-KnowledgeNode:
-  输入: [query]
-  输出: [data]
-
-SkillNode:
-  输入: [input]
-  输出: [output]
-
-ModelNode:
-  输入: [prompt]
-  输出: [response]
-
-AgentNode:
-  输入: [user_input, persona_config, tool_result, knowledge_data, skill_result, model_response]
-  输出: [agent_output]
+fn send_custom_message(&self, open_id: &str, content: &str) -> Result<(), String> {
+    let token = self.get_access_token()?;
+    let url = format!("https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token={}", token);
+    let body = json!({
+        "touser": open_id,
+        "msgtype": "text",
+        "text": { "content": content }
+    });
+    // reqwest POST
+}
 ```
 
-### 任务 2.4: 图形→AgentDef 序列化
+### 任务 2.3: 微信小程序渠道做真
 
-编写 `serializeGraph(graph: Node[]) -> AgentDef` 函数：
-1. 遍历所有节点
-2. 提取每个节点的配置数据
-3. 按类型归类（Persona → agent.persona, Tools → agent.tools 等）
-4. 返回标准的 AgentDef 结构
-5. 兼容现有的 AgentBuilder 发布流程
+**文件:** `src/channel/miniprogram.rs`
 
-### 任务 2.5: 集成到 Studio 页面
+小程序云开发 / 消息推送 API：
+1. 获取 access_token（同微信公众号，使用 AppID + AppSecret）
+2. 订阅消息推送
+3. 客服消息接口
 
-**文件:** `web/src/studio/AgentBuilder.tsx`
-
-在 AgentBuilder 中新增「可视化编辑」tab，与「表单编辑」tab 并列：
-- Tab 1: 表单编辑（现有模式）
-- Tab 2: 可视化编辑（NodeCanvas）
-
-现有发布按钮同时在两种模式下可用。
+结构类似上面两个渠道，使用 reqwest::blocking。
 
 ---
 
-## 阶段三：Marvis 式开箱即用体验
+## 阶段三：手机端 PWA
 
 ### 背景
-要让非程序员拿到就能用，需要：预置模板、引导流程、快捷操作、系统常驻。
+设计文档要求手机 App 实时看 Agent 干活。最快速方案：把现有 Web 前端改为 PWA（无需原生开发）。
 
-### 任务 3.1: 预置 Agent 模板
+### 任务 3.1: Service Worker
 
-**文件:** `src/core/registry.rs`
+**文件:** `web/public/sw.js`（新增）
 
-在 `register_defaults()` 中注册 6 个开箱即用的 Agent 模板（作为预置能力）：
+基本的 service worker：
+```javascript
+const CACHE = "morn-v1";
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(["/", "/index.html"])));
+});
+self.addEventListener("fetch", (e) => {
+  e.respondWith(
+    caches.match(e.request).then(r => r || fetch(e.request))
+  );
+});
+```
 
-1. **research-assistant** — 研究助手：web_search + knowledge + summarization
-2. **data-analyst** — 数据分析师：get_kline + calc_macd + chart + report
-3. **writing-assistant** — 写作助手：translate + grammar + format + style
-4. **coding-helper** — 编码助手：code_review + debug + format + test
-5. **translation-agent** — 翻译 Agent：translate + proofread + glossary
-6. **general-assistant** — 通用助手（默认）：混合工具集
+在 `web/index.html` 中注册：
+```html
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js");
+}
+</script>
+```
 
-每个模板包含预配置的 tools、skills、persona、model。
+### 任务 3.2: manifest.json
 
-### 任务 3.2: 前端模板选择器
+**文件:** `web/public/manifest.json`（新增）
 
-**文件:** `web/src/studio/TemplateSelector.tsx`
+```json
+{
+  "name": "Morn Agent Platform",
+  "short_name": "Morn",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#161b22",
+  "icons": []
+}
+```
 
-改动：从硬编码卡片改为从后端加载模板列表，展示每个模板的：
-- 名称 + Emoji 图标
-- 简短描述（2-3 行）
-- 包含的组件列表（标签形式）
-- "使用此模板"按钮
+在 `index.html` 中添加 link tag。
 
-点击后自动填充到 AgentBuilder（两种模式均支持），用户可直接发布。
+需要生成一个简单的 SVG 图标作为 PWA 图标（用内联 SVG 或 base64）。
 
-### 任务 3.3: 工作台快捷命令
+### 任务 3.3: 响应式 CSS 适配
 
-**文件:** `web/src/App.tsx` + 新增 `web/src/QuickActions.tsx`
+**文件:** `web/src/App.css`
 
-在聊天输入框上方增加快捷按钮行：
-- 📊 数据分析
-- 📝 写作
-- 🔍 搜索研究
-- 💻 编码
-- 🌐 翻译
+添加移动端响应式适配：
+- 媒体查询：`@media (max-width: 768px)` 和 `(max-width: 480px)`
+- 调整聊天界面在手机上的布局（全宽、大按钮、底部输入固定）
+- Studio NodeCanvas 在手机上的简化视图
+- Console 页面卡片堆叠
 
-点击快捷按钮自动发送预配置 prompt 到聊天 Agent。
-这些同时展示在 Dashboard 首页作为欢迎快捷卡片。
+核心改动：
+```css
+@media (max-width: 768px) {
+  .chat-container { padding: 0; border-radius: 0; }
+  .sidebar { display: none; }
+  .mobile-menu { display: block; }
+  .console-grid { grid-template-columns: 1fr; }
+}
+```
 
-### 任务 3.4: 启动指引（Onboarding）
+### 任务 3.4: manifest 生成脚本
 
-**文件:** `web/src/console/Dashboard.tsx`
+在 vite.config.ts 中配置 PWA 插件或手动生成 manifest。
 
-新增首次运行检测：
-1. 检查 localStorage 的 `morn_onboarded` 标记
-2. 如果未标记，展示欢迎对话框：
-   - Step 1: "欢迎使用 Morn" — 一句话介绍
-   - Step 2: "选择你的第一个 Agent" — 从模板列表选
-   - Step 3: "试试吧" — 打开工作台，预填第一条消息
-3. 完成后设置标记
+最简单方式：手动创建 `web/public/manifest.json` 和 `web/public/sw.js`，vite 自动复制到构建输出。
 
 ---
 
@@ -270,5 +243,5 @@ cd ~/morn-desktop
 cargo build 2>&1 | grep -E "^(warning|error)" | wc -l   # = 0
 cargo test 2>&1 | grep "test result"                     # all passed
 cargo fmt --check                                         # no diff
-cd web && npm run build                                   # web 构建成功
+cd web && npm run build                                   # web build success
 ```

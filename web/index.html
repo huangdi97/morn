@@ -4,9 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Morn</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#161b22" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js");
+}
+</script>
   </body>
 </html>
