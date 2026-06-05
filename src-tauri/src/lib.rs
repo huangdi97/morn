@@ -71,9 +71,14 @@ fn clear_history(state: State<AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn list_components(type_filter: Option<String>, state: State<AppState>) -> Result<serde_json::Value, String> {
+fn list_components(
+    type_filter: Option<String>,
+    state: State<AppState>,
+) -> Result<serde_json::Value, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    let mgr = manager.as_ref().ok_or_else(|| "StudioManager not initialized".to_string())?;
+    let mgr = manager
+        .as_ref()
+        .ok_or_else(|| "StudioManager not initialized".to_string())?;
     let components = mgr.list_components(type_filter.as_deref());
     Ok(serde_json::to_value(components).map_err(|e| e.to_string())?)
 }
@@ -81,15 +86,24 @@ fn list_components(type_filter: Option<String>, state: State<AppState>) -> Resul
 #[tauri::command]
 fn get_component(id: String, state: State<AppState>) -> Result<serde_json::Value, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    let mgr = manager.as_ref().ok_or_else(|| "StudioManager not initialized".to_string())?;
+    let mgr = manager
+        .as_ref()
+        .ok_or_else(|| "StudioManager not initialized".to_string())?;
     let detail = mgr.get_component(&id)?;
     Ok(serde_json::to_value(detail).map_err(|e| e.to_string())?)
 }
 
 #[tauri::command]
-fn create_component(name: String, component_type: String, config_json: Option<String>, state: State<AppState>) -> Result<String, String> {
+fn create_component(
+    name: String,
+    component_type: String,
+    config_json: Option<String>,
+    state: State<AppState>,
+) -> Result<String, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    let mgr = manager.as_ref().ok_or_else(|| "StudioManager not initialized".to_string())?;
+    let mgr = manager
+        .as_ref()
+        .ok_or_else(|| "StudioManager not initialized".to_string())?;
     let id = mgr.create_component(CreateComponentDef {
         name,
         component_type,
@@ -99,23 +113,50 @@ fn create_component(name: String, component_type: String, config_json: Option<St
 }
 
 #[tauri::command]
-fn update_component(id: String, name: Option<String>, config_json: Option<String>, status: Option<String>, state: State<AppState>) -> Result<(), String> {
+fn update_component(
+    id: String,
+    name: Option<String>,
+    config_json: Option<String>,
+    status: Option<String>,
+    state: State<AppState>,
+) -> Result<(), String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    let mgr = manager.as_ref().ok_or_else(|| "StudioManager not initialized".to_string())?;
-    mgr.update_component(&id, UpdateComponentDef { name, config_json, status })
+    let mgr = manager
+        .as_ref()
+        .ok_or_else(|| "StudioManager not initialized".to_string())?;
+    mgr.update_component(
+        &id,
+        UpdateComponentDef {
+            name,
+            config_json,
+            status,
+        },
+    )
 }
 
 #[tauri::command]
 fn delete_component(id: String, state: State<AppState>) -> Result<(), String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    let mgr = manager.as_ref().ok_or_else(|| "StudioManager not initialized".to_string())?;
+    let mgr = manager
+        .as_ref()
+        .ok_or_else(|| "StudioManager not initialized".to_string())?;
     mgr.delete_component(&id)
 }
 
 #[tauri::command]
-fn assemble_agent(name: String, persona: String, model: String, tools: Vec<String>, knowledge: Vec<String>, skills: Vec<String>, state: State<AppState>) -> Result<serde_json::Value, String> {
+fn assemble_agent(
+    name: String,
+    persona: String,
+    model: String,
+    tools: Vec<String>,
+    knowledge: Vec<String>,
+    skills: Vec<String>,
+    state: State<AppState>,
+) -> Result<serde_json::Value, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    let mgr = manager.as_ref().ok_or_else(|| "StudioManager not initialized".to_string())?;
+    let mgr = manager
+        .as_ref()
+        .ok_or_else(|| "StudioManager not initialized".to_string())?;
 
     let persona_obj = match persona.as_str() {
         "researcher" => morn::component::persona::create_researcher_persona(),
@@ -153,9 +194,15 @@ fn assemble_agent(name: String, persona: String, model: String, tools: Vec<Strin
 }
 
 #[tauri::command]
-fn test_component(id: String, input: String, state: State<AppState>) -> Result<serde_json::Value, String> {
+fn test_component(
+    id: String,
+    input: String,
+    state: State<AppState>,
+) -> Result<serde_json::Value, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
-    let mgr = manager.as_ref().ok_or_else(|| "StudioManager not initialized".to_string())?;
+    let mgr = manager
+        .as_ref()
+        .ok_or_else(|| "StudioManager not initialized".to_string())?;
     let data = morn::core::component::Data::text(&input);
     let result = mgr.test_component(&id, data)?;
     Ok(serde_json::to_value(result).map_err(|e| e.to_string())?)
@@ -164,14 +211,18 @@ fn test_component(id: String, input: String, state: State<AppState>) -> Result<s
 #[tauri::command]
 fn publish_component(id: String, state: State<AppState>) -> Result<(), String> {
     let publisher = state.publisher.lock().map_err(|e| e.to_string())?;
-    let pubr = publisher.as_ref().ok_or_else(|| "StudioPublisher not initialized".to_string())?;
+    let pubr = publisher
+        .as_ref()
+        .ok_or_else(|| "StudioPublisher not initialized".to_string())?;
     pubr.publish_agent(&id)
 }
 
 #[tauri::command]
 fn get_system_status(state: State<AppState>) -> Result<serde_json::Value, String> {
     let console = state.console.lock().map_err(|e| e.to_string())?;
-    let con = console.as_ref().ok_or_else(|| "ConsoleBackend not initialized".to_string())?;
+    let con = console
+        .as_ref()
+        .ok_or_else(|| "ConsoleBackend not initialized".to_string())?;
     let dashboard = con.get_dashboard();
     let system_info = con.get_system_info();
     Ok(serde_json::json!({
@@ -183,7 +234,9 @@ fn get_system_status(state: State<AppState>) -> Result<serde_json::Value, String
 #[tauri::command]
 fn get_component_topology(state: State<AppState>) -> Result<serde_json::Value, String> {
     let console = state.console.lock().map_err(|e| e.to_string())?;
-    let con = console.as_ref().ok_or_else(|| "ConsoleBackend not initialized".to_string())?;
+    let con = console
+        .as_ref()
+        .ok_or_else(|| "ConsoleBackend not initialized".to_string())?;
     let topology = con.get_topology();
     Ok(serde_json::to_value(topology).map_err(|e| e.to_string())?)
 }
@@ -203,12 +256,7 @@ pub fn run() {
     let publisher = Some(StudioPublisher::new(registry.clone(), storage.clone()));
     let tester = Some(StudioTester::new());
     let console = Some(ConsoleBackend::new(
-        registry,
-        storage,
-        None,
-        None,
-        None,
-        None,
+        registry, storage, None, None, None, None,
     ));
 
     tauri::Builder::default()
