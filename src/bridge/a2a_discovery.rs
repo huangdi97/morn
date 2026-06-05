@@ -36,7 +36,8 @@ impl A2ADiscovery {
                     for agent in agents {
                         let id = agent.id.clone();
                         {
-                            let mut agents = self.remote_agents.lock().map_err(|e| e.to_string())?;
+                            let mut agents =
+                                self.remote_agents.lock().map_err(|e| e.to_string())?;
                             agents.insert(id, agent.clone());
                         }
                         discovered.push(agent);
@@ -71,11 +72,7 @@ impl A2ADiscovery {
         A2AProtocol::send(endpoint, &msg)
     }
 
-    pub fn poll_task_status(
-        &self,
-        endpoint: &str,
-        task_id: &str,
-    ) -> Result<A2AMessage, String> {
+    pub fn poll_task_status(&self, endpoint: &str, task_id: &str) -> Result<A2AMessage, String> {
         let msg = A2AMessage::TaskStatus {
             task_id: task_id.to_string(),
             status: "polling".into(),
@@ -91,12 +88,10 @@ impl A2ADiscovery {
 }
 
 pub fn start_discovery_service(discovery: Arc<Mutex<A2ADiscovery>>) {
-    std::thread::spawn(move || {
-        loop {
-            std::thread::sleep(Duration::from_secs(30));
-            if let Ok(d) = discovery.lock() {
-                let _ = d.discover_peers();
-            }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(30));
+        if let Ok(d) = discovery.lock() {
+            let _ = d.discover_peers();
         }
     });
 }

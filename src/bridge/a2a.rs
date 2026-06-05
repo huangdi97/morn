@@ -117,9 +117,7 @@ mod tests {
             endpoint: "http://localhost:9090".into(),
             public_key: "pubkey123".into(),
         };
-        let msg = A2AMessage::AgentList {
-            agents: vec![card],
-        };
+        let msg = A2AMessage::AgentList { agents: vec![card] };
         let data = A2AProtocol::serialize(&msg).unwrap();
         let back = A2AProtocol::deserialize(&data).unwrap();
         match back {

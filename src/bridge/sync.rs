@@ -53,10 +53,7 @@ impl SyncEngine {
                     let _ = storage.mark_event_synced(&event.id);
                 }
             } else {
-                return Err(format!(
-                    "Sync push returned status: {}",
-                    resp.status()
-                ));
+                return Err(format!("Sync push returned status: {}", resp.status()));
             }
         }
 
@@ -73,7 +70,10 @@ impl SyncEngine {
             .build()
             .map_err(|e| format!("Sync pull HTTP client error: {}", e))?;
         let resp = client
-            .get(&format!("{}/sync/pull?device_id={}", server_url, self.device_id))
+            .get(&format!(
+                "{}/sync/pull?device_id={}",
+                server_url, self.device_id
+            ))
             .send()
             .map_err(|e| format!("Sync pull error: {}", e))?;
         let events: Vec<SyncEventRecord> = resp
@@ -119,7 +119,12 @@ impl SyncEngine {
         storage.insert_sync_event(&event)
     }
 
-    pub fn register_device(&self, storage: &Storage, name: &str, public_key: &str) -> Result<(), String> {
+    pub fn register_device(
+        &self,
+        storage: &Storage,
+        name: &str,
+        public_key: &str,
+    ) -> Result<(), String> {
         let device = DeviceRecord {
             id: self.device_id.clone(),
             name: name.to_string(),
@@ -131,13 +136,11 @@ impl SyncEngine {
 }
 
 pub fn start_sync_loop(engine: Arc<Mutex<SyncEngine>>) {
-    std::thread::spawn(move || {
-        loop {
-            std::thread::sleep(Duration::from_secs(60));
-            if let Ok(engine) = engine.lock() {
-                let _ = engine.push_changes();
-                let _ = engine.pull_changes();
-            }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(60));
+        if let Ok(engine) = engine.lock() {
+            let _ = engine.push_changes();
+            let _ = engine.pull_changes();
         }
     });
 }
@@ -150,7 +153,8 @@ mod tests {
     #[test]
     fn test_sync_event_record() {
         let storage = Storage::new_in_memory().unwrap();
-        let engine = SyncEngine::new("device-1", None).with_storage(Arc::new(Mutex::new(storage.clone())));
+        let engine =
+            SyncEngine::new("device-1", None).with_storage(Arc::new(Mutex::new(storage.clone())));
 
         engine
             .record_event("agent", "agent-1", "update", r#"{"name":"test"}"#)
