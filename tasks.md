@@ -1,118 +1,200 @@
-# Morn Market 交易流 — 任务清单
+# Morn 创作台前端 ↔ 后端 — 任务清单
 
 ## 核心准则 (编程原则)
 
 ### 14条核心准则
 
-1. **Think Before Coding** — 阅读整个任务文件再动手，理解现有代码结构
-2. **The Code Works** — 每次修改后 `cargo build` 通过，`cargo test` 全绿
-3. **Small Batches** — 改一个模块编译一次，不堆砌批量修改
-4. **No Dead Code** — 不添加未使用的函数或注释
-5. **Single Source of Truth** — 数据库结构以代码中的 schema 为准
-6. **Test the Paths** — 新增功能必须加测试覆盖
-7. **Fail Fast** — 遇到编译错误立即停止并输出
-8. **Leave It Better** — 代码格式统一，遵守现有风格
-9. **Never Guess the Stack** — 从实际代码中理解现有 API
-10. **Read Before You Write** — 先读 marketplace.rs、storage.rs、cli.rs 再动手
+1. **Think Before Coding** — 阅读整个任务文件再动手，理解现有前后端结构
+2. **The Code Works** — 每次修改后 `cargo build` 通过，Tauri 构建通过
+3. **Small Batches** — 每完成一个任务的改动就验证编译
+4. **No Dead Code** — 不添加未使用的 Tauri 命令或前端组件
+5. **Single Source of Truth** — 前端 API 类型与后端 Rust 结构体保持一致
+6. **Test the Paths** — Tauri 命令添加后确保编译通过
+7. **Fail Fast** — 遇到编译/类型错误立即停止
+8. **Leave It Better** — 前端风格与现有 App.tsx 保持一致（暗色主题、GitHub 色调）
+9. **Never Guess the Stack** — 从实际代码中理解 Tauri invoke 接口
+10. **Read Before You Write** — 先读 src-tauri/src/lib.rs、web/src/App.tsx 等关键文件
 11. **Prefer Friction Logs** — 记录构建中遇到的问题
-12. **Respect the Dependency** — marketplace 依赖 storage 模块
-13. **No Ambiguous Names** — 变量/函数命名清晰
+12. **Respect the Dependency** — 前端依赖 @tauri-apps/api（已安装）
+13. **No Ambiguous Names** — Tauri 命令命名统一 camelCase
 14. **Document Decisions, Not Drama** — 写清晰的代码注释
 
 ### 低耦合3条
 
-1. **模块独立** — marketplace 模块只依赖 core::storage，不依赖 CLI 模块
-2. **接口一致** — CLI 命令风格与现有 `/help`、`/status` 一致
-3. **渐进增强** — 不破坏现有测试，加法优先
+1. **视图独立** — 工作台/创作台/管理台三个视图互相独立，通过导航切换
+2. **命令独立** — 每个 Tauri 命令做一件事，不搞大而全
+3. **前端状态本地化** — 各组件管理自己的 state，不搞全局状态管理
 
 ### 执行规则
 
 - 按任务顺序执行
-- 每个任务后 `cargo build && cargo test`
+- 每个任务后 `cargo build` 验证
 - 以 `~/morn-desktop/` 为根目录
+- 前端文件在 `web/src/` 下
+- 后端 Tauri 命令在 `src-tauri/src/lib.rs` 中
 - 最终 git add/commit/push 到 main
 
 ---
 
 ## 前置阅读
 
-开始前先读以下文件了解现有结构：
-- `src/market/marketplace.rs` — 现有 Market 实现
-- `src/core/storage.rs` — SQLite 存储模块
-- `src/channel/cli.rs` — CLI 通道，需添加市场命令
-- `src/core/registry.rs` — 能力注册中心，安装需要这里
+- `src-tauri/src/lib.rs` — 现有 Tauri 命令
+- `src-tauri/Cargo.toml` — Tauri 依赖
+- `web/src/App.tsx` — 主页面（工作台）
+- `web/src/App.css` — 样式
+- `web/vite.config.ts` — Vite 配置
+- `web/package.json` — 前端依赖
+- `src/studio/manager.rs` — 创作台后端
+- `src/studio/tester.rs` — 测试器
+- `src/studio/publisher.rs` — 发布器
+- `src/console/mod.rs` — 管理台后端
 
 ---
 
 ## 任务列表
 
-### 任务1: Storage 增加市场表
+### 任务1: Tauri 后端 — 注册创作台命令
 
-在 `src/core/storage.rs` 中增加 3 张表：
-- `market_listings` — Listing 数据（id, item_type, name, description, price, author, rating, downloads, created_at）
-- `market_transactions` — 交易记录（id, listing_id, buyer, amount, timestamp）
-- `market_licenses` — 许可证（id, listing_id, user_id, granted_at, expires_at）
+在 `src-tauri/src/lib.rs` 中新增以下 Tauri 命令：
 
-添加对应的 CRUD 方法：
-- `save_listing(&self, listing: &Listing) -> Result<(), String>`
-- `list_listings(&self, filter: Option<&str>) -> Result<Vec<Listing>, String>`
-- `get_listing(&self, id: &str) -> Result<Option<Listing>, String>`
-- `save_transaction(&self, tx: &Transaction) -> Result<(), String>`
-- `save_license(&self, lic: &License) -> Result<(), String>`
-- `get_user_licenses(&self, user_id: &str) -> Result<Vec<License>, String>`
-- `update_listing_rating(&self, id: &str, rating: f64, downloads: u64) -> Result<(), String>`
-- `delete_listing(&self, id: &str) -> Result<(), String>`
+**创作台组件管理：**
+- `list_components(type_filter: Option<String>, state)` — 列出组件
+- `get_component(id: String, state)` — 获取组件详情
+- `create_component(name: String, component_type: String, config_json: Option<String>, state)` — 创建组件
+- `update_component(id: String, name: Option<String>, config_json: Option<String>, status: Option<String>, state)` — 更新组件
+- `delete_component(id: String, state)` — 删除组件
 
-注意：Listing/Transaction/License 定义在 marketplace.rs 中，storage.rs 需要引用它们。
-为避免循环依赖，在 `market/` 模块中定义数据结构，storage.rs 引用。
+**Agent 组装：**
+- `assemble_agent(name: String, persona: String, model: String, tools: Vec<String>, knowledge: Vec<String>, skills: Vec<String>, state)` — 从组件组装 Agent
 
-### 任务2: Marketplace 对接 Storage
+**测试与发布：**
+- `test_component(id: String, input: String, state)` — 测试组件
+- `publish_component(id: String, state)` — 发布组件到市场
 
-修改 `src/market/marketplace.rs`：
-- 构造函数 `Marketplace::new(storage: Storage)` — 从 storage 加载数据
-- `list_builtin()` 静态方法 — 创建内置 Listing 并写入 storage（如果不存在）
-- 所有方法改为通过 Storage 操作，而非 HashMap
-- 保留方法签名不变（list/get/purchase/publish/rate/search/install/transactions/user_licenses）
+**管理台：**
+- `get_system_status(state)` — 系统健康状态
+- `get_component_topology(state)` — 组件拓扑
 
-### 任务3: CLI 增加市场命令
+需要：
+- 将 StudioManager、StudioPublisher、StudioTester 加入 AppState
+- 在 run() 中创建并注入这些实例
+- 注册所有新命令到 invoke_handler
 
-修改 `src/channel/cli.rs`：
-- 添加 `/market` 子命令系列：
-  - `/market list` — 列出市场上所有商品（可加类型过滤：`/market list tool`）
-  - `/market show <id>` — 查看商品详情
-  - `/market buy <id>` — 购买商品
-  - `/market install <id>` — 安装已购买的商品
-  - `/market search <query>` — 搜索商品
-  - `/market my` — 查看我的购买/许可证
-  - `/market publish <id>` — 发布组件到市场
-- 保持现有 `/help` 命令更新，增加市场命令说明
+注意：
+- 所有命令返回 `Result<serde_json::Value, String>` 以保持统一
+- 使用 `tokio::runtime::Runtime::new()` 包裹异步调用（如 chat_agent）
+- 保持与现有 `send_message`、`get_status`、`clear_history` 命令风格一致
 
-### 任务4: 购买 → 安装全链路
+### 任务2: 前端导航栏
 
-实现购买后的实际安装逻辑：
-- `purchase()` 创建 Transaction + License，写入 storage
-- `install()` 检查 License 后，将商品对应的能力注册到 Registry
-- 实现一个 `install_to_registry()` 私有方法，将 Listing 转换为注册项
+修改 `web/src/App.tsx`：
 
-### 任务5: 测试
+添加顶部导航栏，三个标签页：
+- **💬 工作台 (Workbench)** — 现有聊天界面
+- **🔧 创作台 (Studio)** — 组件编辑 + Agent 组装 + 测试
+- **📊 管理台 (Console)** — 拓扑图 + 系统状态
 
-为新增功能写测试：
-- Storage 市场表 CRUD 测试
-- Market 持久化后的购买/安装/评分集成测试
-- CLI 市场命令的基本测试（mock 不需要真实的终端交互）
+导航逻辑：
+- 使用 `useState<"workbench" | "studio" | "console">("workbench")` 控制当前视图
+- 导航栏样式与现有暗色主题一致（GitHub 色调）
+- 导航项点击切换视图
 
-### 任务6: 清理与提交
+### 任务3: 创作台前端 — ComponentEditor 接线
+
+修改 `web/src/studio/ComponentEditor.tsx`：
+
+将 `handleSave` 改为真实调用 Tauri 后端：
+```typescript
+const handleSave = async () => {
+  const id = await invoke("create_component", {
+    name: def.name,
+    componentType: def.type,
+    configJson: def.config,
+  });
+  setSaved(true);
+  setLastCreatedId(id);
+  setTimeout(() => setSaved(false), 2000);
+};
+```
+
+需添加：
+- `import { invoke } from "@tauri-apps/api/core";`
+- 保存后清空表单或显示成功状态
+- 类型字段保持与后端一致
+
+### 任务4: 创作台前端 — AgentBuilder 接线
+
+修改 `web/src/studio/AgentBuilder.tsx`：
+
+将 build 按钮改为调用 `assemble_agent`：
+```typescript
+const handleBuild = async () => {
+  const id = await invoke("assemble_agent", {
+    name: def.name,
+    persona: def.persona,
+    model: def.model,
+    tools: def.tools,
+    knowledge: def.knowledge,
+    skills: def.skills,
+  });
+  setAgentId(id);
+  setStep(2); // show success
+};
+```
+
+添加：
+- `import { invoke } from "@tauri-apps/api/core";`
+- 成功后的 Agent ID 显示
+- 错误处理
+
+### 任务5: 创作台前端 — TestPanel 接线
+
+修改 `web/src/studio/TestPanel.tsx`：
+
+将 Test 按钮改为调用 `test_component`，获取真实测试结果展示。
+
+### 任务6: 创作台前端 — TemplateSelector
+
+修改 `web/src/studio/TemplateSelector.tsx`：
+
+从 `list_components()` 加载可用组件列表，而不是硬编码。
+
+### 任务7: 管理台前端接线
+
+修改 `web/src/console/Topology.tsx`：
+
+从后端调用 `get_component_topology` 获取实时组件拓扑，而不是硬编码。
+
+调用 `get_system_status` 显示真实系统状态。
+
+### 任务8: 样式整合
+
+更新 `web/src/App.css`：
+
+- 添加导航栏样式（标签页切换）
+- 添加创作台表单样式
+- 添加管理台表格/拓扑样式
+- 确保所有视图在暗色主题下一致
+
+### 任务9: 编译验证
+
+```bash
+cd ~/morn-desktop/src-tauri && cargo build 2>&1
+cd ~/morn-desktop/web && npm install --silent && npx tsc --noEmit 2>&1 || echo "TypeScript check done (non-blocking if no tsc config)"
+```
+
+### 任务10: Git 提交与推送
 
 ```bash
 cd ~/morn-desktop
-cargo build 2>&1
-cargo test 2>&1
 git add -A
-git commit -m "feat: market transaction flow with SQLite persistence
+git commit -m "feat(studio): connect frontend to backend via Tauri commands
 
-- Add market tables (listings/transactions/licenses) to Storage
-- Wire Marketplace to SQLite storage
-- Add /market CLI commands (list/show/buy/install/search/my/publish)
-- Implement purchase→install full pipeline with Registry integration"
+- Add 8 Tauri commands for studio/console operations
+- Add navigation (workbench/studio/console)
+- Wire ComponentEditor to create_component backend
+- Wire AgentBuilder to assemble_agent backend
+- Wire TestPanel to test_component backend
+- Wire Topology to get_component_topology backend"
 git push origin main
 ```

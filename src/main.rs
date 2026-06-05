@@ -39,9 +39,11 @@ fn main() {
             let supervisor = Supervisor::new(storage.clone(), None);
             let _assembler = AgentAssembler::new(Some(registry.lock().unwrap().clone()));
 
-            let chat_fn = Arc::new(move |prompt: &str, system: &str| -> Result<String, String> {
-                chat_agent.chat(prompt, system)
-            });
+            let chat_fn = Arc::new(
+                move |prompt: &str, system: &str| -> Result<String, String> {
+                    chat_agent.chat(prompt, system)
+                },
+            );
 
             run_cli(supervisor, chat_fn, security, storage, registry);
         }
@@ -59,8 +61,16 @@ fn main() {
     }
 }
 
-fn run_cli(supervisor: Supervisor, chat_fn: Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>, _security: Arc<Mutex<SecurityGuard>>, storage: Option<Storage>, registry: Arc<Mutex<Registry>>) {
+fn run_cli(
+    supervisor: Supervisor,
+    chat_fn: Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>,
+    _security: Arc<Mutex<SecurityGuard>>,
+    storage: Option<Storage>,
+    registry: Arc<Mutex<Registry>>,
+) {
     let mut adapter = ChannelAdapter::new(Some(supervisor));
-    let marketplace = storage.map(|s| Marketplace::new(s)).expect("Storage required for marketplace");
+    let marketplace = storage
+        .map(|s| Marketplace::new(s))
+        .expect("Storage required for marketplace");
     cli::run_repl(&mut adapter, chat_fn, &marketplace, &registry);
 }

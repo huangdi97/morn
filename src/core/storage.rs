@@ -559,9 +559,11 @@ impl Storage {
         };
         let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
         let rows = if let Some(f) = filter {
-            stmt.query_map(params![f], map_listing_row).map_err(|e| e.to_string())?
+            stmt.query_map(params![f], map_listing_row)
+                .map_err(|e| e.to_string())?
         } else {
-            stmt.query_map([], map_listing_row).map_err(|e| e.to_string())?
+            stmt.query_map([], map_listing_row)
+                .map_err(|e| e.to_string())?
         };
         let mut listings = Vec::new();
         for row in rows {
@@ -599,7 +601,13 @@ impl Storage {
         conn.execute(
             "INSERT INTO market_licenses (id, listing_id, user_id, granted_at, expires_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![lic.id, lic.listing_id, lic.user_id, lic.granted_at, lic.expires_at],
+            params![
+                lic.id,
+                lic.listing_id,
+                lic.user_id,
+                lic.granted_at,
+                lic.expires_at
+            ],
         )
         .map_err(|e| e.to_string())?;
         Ok(())
@@ -628,7 +636,12 @@ impl Storage {
         Ok(licenses)
     }
 
-    pub fn update_listing_rating(&self, id: &str, rating: f64, downloads: u64) -> Result<(), String> {
+    pub fn update_listing_rating(
+        &self,
+        id: &str,
+        rating: f64,
+        downloads: u64,
+    ) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
             "UPDATE market_listings SET rating = ?1, downloads = ?2 WHERE id = ?3",
@@ -802,7 +815,9 @@ mod tests {
         let filtered_empty = storage.list_listings(Some("knowledge")).unwrap();
         assert_eq!(filtered_empty.len(), 0);
 
-        storage.update_listing_rating("listing-test-1", 4.5, 101).unwrap();
+        storage
+            .update_listing_rating("listing-test-1", 4.5, 101)
+            .unwrap();
         let updated = storage.get_listing("listing-test-1").unwrap().unwrap();
         assert_eq!(updated.rating, 4.5);
         assert_eq!(updated.downloads, 101);

@@ -102,13 +102,19 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
                 return;
             }
             for listing in &listings {
-                println!("  [{}] {} ({} | {} MORN | ★ {})", listing.id, listing.name, listing.item_type, listing.price, listing.rating);
+                println!(
+                    "  [{}] {} ({} | {} MORN | ★ {})",
+                    listing.id, listing.name, listing.item_type, listing.price, listing.rating
+                );
             }
         }
         "show" => {
             let id = match parts.get(2) {
                 Some(id) => id,
-                None => { println!("  Usage: /market show <id>"); return; }
+                None => {
+                    println!("  Usage: /market show <id>");
+                    return;
+                }
             };
             match market.get(id) {
                 Some(listing) => {
@@ -128,17 +134,26 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
         "buy" => {
             let id = match parts.get(2) {
                 Some(id) => id,
-                None => { println!("  Usage: /market buy <id>"); return; }
+                None => {
+                    println!("  Usage: /market buy <id>");
+                    return;
+                }
             };
             match market.purchase(id, "cli-user") {
-                Ok(license) => println!("  Purchased! License: {} (expires: {:?})", license.id, license.expires_at),
+                Ok(license) => println!(
+                    "  Purchased! License: {} (expires: {:?})",
+                    license.id, license.expires_at
+                ),
                 Err(e) => println!("  Purchase failed: {}", e),
             }
         }
         "install" => {
             let id = match parts.get(2) {
                 Some(id) => id,
-                None => { println!("  Usage: /market install <id>"); return; }
+                None => {
+                    println!("  Usage: /market install <id>");
+                    return;
+                }
             };
             match market.install(id, "cli-user") {
                 Ok(()) => {
@@ -154,7 +169,10 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
         "search" => {
             let query = match parts.get(2) {
                 Some(q) => *q,
-                None => { println!("  Usage: /market search <query>"); return; }
+                None => {
+                    println!("  Usage: /market search <query>");
+                    return;
+                }
             };
             let results = market.search(query);
             if results.is_empty() {
@@ -162,7 +180,10 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
                 return;
             }
             for listing in &results {
-                println!("  [{}] {} ({} | {} MORN | ★ {})", listing.id, listing.name, listing.item_type, listing.price, listing.rating);
+                println!(
+                    "  [{}] {} ({} | {} MORN | ★ {})",
+                    listing.id, listing.name, listing.item_type, listing.price, listing.rating
+                );
             }
         }
         "my" => {
@@ -173,14 +194,22 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
             }
             for lic in &licenses {
                 let listing = market.get(&lic.listing_id);
-                let name = listing.map(|l| l.name).unwrap_or_else(|| lic.listing_id.clone());
-                println!("  {} - {} (granted: {}, expires: {:?})", lic.id, name, lic.granted_at, lic.expires_at);
+                let name = listing
+                    .map(|l| l.name)
+                    .unwrap_or_else(|| lic.listing_id.clone());
+                println!(
+                    "  {} - {} (granted: {}, expires: {:?})",
+                    lic.id, name, lic.granted_at, lic.expires_at
+                );
             }
         }
         "publish" => {
             let name = match parts.get(2) {
                 Some(n) => n,
-                None => { println!("  Usage: /market publish <id> <type> <price>"); return; }
+                None => {
+                    println!("  Usage: /market publish <id> <type> <price>");
+                    return;
+                }
             };
             let item_type = parts.get(3).unwrap_or(&"tool");
             let price: f64 = parts.get(4).unwrap_or(&"0.0").parse().unwrap_or(0.0);
