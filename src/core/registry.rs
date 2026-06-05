@@ -22,6 +22,7 @@ pub struct Capability {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct Registry {
     capabilities: HashMap<String, Capability>,
     storage: Option<Storage>,

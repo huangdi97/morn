@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct ScoreRecord {
@@ -95,7 +94,7 @@ impl TrustEvaluator {
         let output_score = output.score();
         let trace_score = trace.score();
         let component_score = component.score();
-        let drift_score = drift.score();
+        let _drift_score = drift.score();
 
         let overall =
             output_score * 0.3 + trace_score * 0.3 + component_score * 0.2 + user_feedback * 0.2;

@@ -9,6 +9,7 @@ pub trait Memory: IOComponent {
     fn search(&self, query: &str, namespace: &str) -> Result<Vec<(String, String)>, String>;
 }
 
+#[allow(dead_code)]
 pub struct SqliteMemory {
     id: String,
     name: String,

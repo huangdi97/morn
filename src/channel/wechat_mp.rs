@@ -4,6 +4,7 @@
 
 use crate::channel::adapter::ChannelMessage;
 
+#[allow(dead_code)]
 pub struct WeChatMpChannel {
     app_id: String,
     app_secret: String,

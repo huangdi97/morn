@@ -1,4 +1,3 @@
-use crate::component::tool::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
@@ -20,6 +19,7 @@ pub trait Skill: IOComponent {
     fn execute(&mut self, input: Data) -> Result<Data, String>;
 }
 
+#[allow(dead_code)]
 pub struct WebResearchSkill {
     id: String,
     name: String,
@@ -129,6 +129,7 @@ impl Skill for WebResearchSkill {
     }
 }
 
+#[allow(dead_code)]
 pub struct DataAnalysisSkill {
     id: String,
     name: String,
@@ -242,6 +243,7 @@ impl Skill for DataAnalysisSkill {
     }
 }
 
+#[allow(dead_code)]
 pub struct ReportGenSkill {
     id: String,
     name: String,
@@ -326,6 +328,7 @@ impl Skill for ReportGenSkill {
     }
 }
 
+#[allow(dead_code)]
 pub struct CodeReviewSkill {
     id: String,
     name: String,

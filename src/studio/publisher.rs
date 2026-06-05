@@ -1,6 +1,7 @@
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 
+#[allow(dead_code)]
 pub struct StudioPublisher {
     registry: Option<Registry>,
     storage: Option<Storage>,

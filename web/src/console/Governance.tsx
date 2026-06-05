@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface ApiKeyInfo {
   id: string;
@@ -16,47 +17,53 @@ interface ApprovalItem {
   requested_at: string;
 }
 
-const cardStyle: React.CSSProperties = {
-  background: "#161b22",
-  borderRadius: "8px",
-  padding: "16px",
-  border: "1px solid #30363d",
-  marginBottom: "12px",
-};
-
 export default function Governance() {
-  const [keys] = useState<ApiKeyInfo[]>([
-    { id: "key-1", name: "DeepSeek Production", provider: "deepseek", masked_key: "sk-****-abcd", last_used: "2024-01-15T10:30:00Z" },
-  ]);
+  const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
+  const [threshold, setThreshold] = useState(50);
 
-  const [approvals] = useState<ApprovalItem[]>([
-    { id: "app-1", action: "execute_shell: ls /root", requester: "Research Agent", reason: "Need to access config files", requested_at: "2024-01-15T10:30:00Z" },
-  ]);
+  useEffect(() => {
+    invoke<any>("get_system_status").then((res) => {
+      if (res.dashboard?.api_keys) {
+        setKeys(res.dashboard.api_keys);
+      }
+      if (res.dashboard?.approvals) {
+        setApprovals(res.dashboard.approvals);
+      }
+      if (res.dashboard?.trust_threshold !== undefined) {
+        setThreshold(res.dashboard.trust_threshold);
+      }
+    }).catch(() => {});
+  }, []);
 
   return (
     <div>
       <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Governance</h2>
 
-      <div style={cardStyle}>
+      <div className="gov-card">
         <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>API Keys</div>
-        {keys.map(k => (
-          <div key={k.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #21262d" }}>
-            <div>
-              <div style={{ color: "#e6edf3" }}>{k.name}</div>
-              <div style={{ color: "#8b949e", fontSize: "12px" }}>{k.provider}</div>
+        {keys.length === 0 ? (
+          <div style={{ color: "#8b949e" }}>No data available</div>
+        ) : (
+          keys.map(k => (
+            <div key={k.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #21262d" }}>
+              <div>
+                <div style={{ color: "#e6edf3" }}>{k.name}</div>
+                <div style={{ color: "#8b949e", fontSize: "12px" }}>{k.provider}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ color: "#d29922", fontFamily: "monospace" }}>{k.masked_key}</div>
+                <div style={{ color: "#8b949e", fontSize: "12px" }}>Last used: {k.last_used.slice(0, 10)}</div>
+              </div>
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ color: "#d29922", fontFamily: "monospace" }}>{k.masked_key}</div>
-              <div style={{ color: "#8b949e", fontSize: "12px" }}>Last used: {k.last_used.slice(0, 10)}</div>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
-      <div style={cardStyle}>
+      <div className="gov-card">
         <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>Approval Queue</div>
         {approvals.length === 0 ? (
-          <div style={{ color: "#8b949e" }}>No pending approvals</div>
+          <div style={{ color: "#8b949e" }}>No data available</div>
         ) : (
           approvals.map(a => (
             <div key={a.id} style={{ padding: "8px 0", borderBottom: "1px solid #21262d" }}>
@@ -71,11 +78,11 @@ export default function Governance() {
         )}
       </div>
 
-      <div style={cardStyle}>
+      <div className="gov-card">
         <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>Trust Threshold</div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <input type="range" min="0" max="100" defaultValue={50} style={{ flex: 1 }} />
-          <span style={{ color: "#e6edf3" }}>50%</span>
+          <input type="range" min="0" max="100" value={threshold} onChange={e => setThreshold(Number(e.target.value))} style={{ flex: 1 }} />
+          <span style={{ color: "#e6edf3" }}>{threshold}%</span>
         </div>
       </div>
     </div>

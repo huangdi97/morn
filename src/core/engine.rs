@@ -163,7 +163,7 @@ impl TaskEngine {
         &self,
         plan: &TaskPlan,
         execute_fn: &dyn Fn(&SubTaskDef) -> Result<String, String>,
-        timeout_secs: Option<u64>,
+        _timeout_secs: Option<u64>,
         max_retries: Option<u32>,
     ) -> Result<TaskResult, String> {
         if let Some(ref bus) = self.event_bus {

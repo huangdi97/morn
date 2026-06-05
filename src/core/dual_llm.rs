@@ -59,6 +59,7 @@ pub enum InjectionRisk {
     High(String),
 }
 
+#[allow(dead_code)]
 pub struct DualLlmGuard {
     primary: Option<ChatAgent>,
     secondary: Option<ChatAgent>,
@@ -224,7 +225,7 @@ impl DualLlmGuard {
         }
     }
 
-    fn run_secondary_check(&self, input: &str) -> CheckResult {
+    fn run_secondary_check(&self, _input: &str) -> CheckResult {
         CheckResult::Pass
     }
 

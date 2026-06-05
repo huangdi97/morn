@@ -4,6 +4,7 @@
 
 use crate::channel::adapter::ChannelMessage;
 
+#[allow(dead_code)]
 pub struct QqBotChannel {
     bot_id: String,
     token: String,

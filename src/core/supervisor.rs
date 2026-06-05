@@ -1,5 +1,5 @@
 use crate::core::event_bus::{
-    SimpleEventBus, EVENT_SUPERVISOR_PLAN_CREATED, EVENT_TASK_COMPLETED, EVENT_TASK_FAILED,
+    SimpleEventBus, EVENT_SUPERVISOR_PLAN_CREATED, EVENT_TASK_COMPLETED,
 };
 use crate::core::storage::{DecisionRecord, Storage, TaskRecord};
 use serde_json::Value;

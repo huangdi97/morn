@@ -15,6 +15,7 @@ pub trait Knowledge: IOComponent {
     fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), String>;
 }
 
+#[allow(dead_code)]
 pub struct StaticKnowledge {
     id: String,
     name: String,
@@ -108,6 +109,7 @@ impl Knowledge for StaticKnowledge {
     }
 }
 
+#[allow(dead_code)]
 pub struct FileKnowledge {
     id: String,
     name: String,
@@ -203,6 +205,7 @@ impl Knowledge for FileKnowledge {
     }
 }
 
+#[allow(dead_code)]
 pub struct SqliteKnowledge {
     id: String,
     name: String,

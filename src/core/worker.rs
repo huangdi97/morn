@@ -6,6 +6,7 @@ pub struct WorkerPool {
     running: Arc<Mutex<bool>>,
 }
 
+#[allow(dead_code)]
 struct WorkerHandle {
     channel_id: String,
     thread: Option<std::thread::JoinHandle<()>>,

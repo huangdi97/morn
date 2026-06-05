@@ -1,9 +1,8 @@
-use crate::core::component::Component;
-use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[allow(dead_code)]
 pub struct ComponentSummary {
     pub id: String,
     pub name: String,
@@ -36,6 +35,7 @@ pub struct UpdateComponentDef {
     pub status: Option<String>,
 }
 
+#[allow(dead_code)]
 pub struct StudioManager {
     registry: Option<Registry>,
     storage: Option<Storage>,

@@ -1,12 +1,12 @@
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
-use serde_json::Value;
 
 pub trait Tool: IOComponent {
     fn execute(&mut self, input: Data) -> Result<Data, String>;
 }
 
+#[allow(dead_code)]
 pub struct WebSearchTool {
     id: String,
     name: String,
@@ -90,6 +90,7 @@ impl Tool for WebSearchTool {
     }
 }
 
+#[allow(dead_code)]
 pub struct ReadFileTool {
     id: String,
     name: String,
@@ -170,6 +171,7 @@ impl Tool for ReadFileTool {
     }
 }
 
+#[allow(dead_code)]
 pub struct WriteFileTool {
     id: String,
     name: String,
@@ -244,11 +246,12 @@ impl SecureComponent for WriteFileTool {
 }
 
 impl Tool for WriteFileTool {
-    fn execute(&mut self, input: Data) -> Result<Data, String> {
+    fn execute(&mut self, _input: Data) -> Result<Data, String> {
         Ok(Data::text("[write_file] written successfully"))
     }
 }
 
+#[allow(dead_code)]
 pub struct ExecPythonTool {
     id: String,
     name: String,
@@ -332,6 +335,7 @@ impl Tool for ExecPythonTool {
     }
 }
 
+#[allow(dead_code)]
 pub struct GetTimeTool {
     id: String,
     name: String,
@@ -406,6 +410,7 @@ impl Tool for GetTimeTool {
     }
 }
 
+#[allow(dead_code)]
 pub struct CalcTool {
     id: String,
     name: String,
@@ -486,6 +491,7 @@ impl Tool for CalcTool {
     }
 }
 
+#[allow(dead_code)]
 pub struct SendMsgTool {
     id: String,
     name: String,
@@ -566,6 +572,7 @@ impl Tool for SendMsgTool {
     }
 }
 
+#[allow(dead_code)]
 pub struct HttpRequestTool {
     id: String,
     name: String,

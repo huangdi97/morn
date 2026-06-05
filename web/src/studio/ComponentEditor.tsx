@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 type ComponentType = "tool" | "knowledge" | "skill" | "persona" | "memory" | "model";
@@ -9,25 +9,89 @@ interface ComponentDef {
   config: string;
 }
 
+interface ComponentSummary {
+  id: string;
+  name: string;
+  component_type: string;
+  status: string;
+}
+
 export function ComponentEditor() {
   const [type, setType] = useState<ComponentType>("tool");
   const [def, setDef] = useState<ComponentDef>({ name: "", type: "tool", config: "{}" });
   const [saved, setSaved] = useState(false);
   const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [components, setComponents] = useState<ComponentSummary[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const loadComponents = async () => {
+    try {
+      const list = await invoke<ComponentSummary[]>("list_components", { typeFilter: null });
+      setComponents(list);
+    } catch (e: any) {
+      setError(e.toString());
+    }
+  };
+
+  useEffect(() => {
+    loadComponents();
+  }, []);
+
+  const selectComponent = async (c: ComponentSummary) => {
+    setSelectedId(c.id);
+    setType(c.component_type as ComponentType);
+    setDef({ name: c.name, type: c.component_type as ComponentType, config: "{}" });
+    setEditingId(null);
+    try {
+      const configJson = await invoke<string>("get_component", { id: c.id });
+      setDef({ name: c.name, type: c.component_type as ComponentType, config: configJson });
+      setEditingId(c.id);
+    } catch {
+      setDef({ name: c.name, type: c.component_type as ComponentType, config: "{}" });
+    }
+  };
 
   const handleSave = async () => {
     try {
       setError(null);
-      const id = await invoke<string>("create_component", {
-        name: def.name,
-        componentType: def.type,
-        configJson: def.config,
-      });
-      setLastCreatedId(id);
+      if (editingId) {
+        await invoke<string>("update_component", {
+          id: editingId,
+          name: def.name,
+          componentType: def.type,
+          configJson: def.config,
+        });
+      } else {
+        const id = await invoke<string>("create_component", {
+          name: def.name,
+          componentType: def.type,
+          configJson: def.config,
+        });
+        setLastCreatedId(id);
+      }
       setSaved(true);
       setDef({ name: "", type: "tool", config: "{}" });
+      setEditingId(null);
+      setSelectedId(null);
+      await loadComponents();
       setTimeout(() => setSaved(false), 2000);
+    } catch (e: any) {
+      setError(e.toString());
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      setError(null);
+      await invoke("delete_component", { id });
+      if (selectedId === id) {
+        setDef({ name: "", type: "tool", config: "{}" });
+        setEditingId(null);
+        setSelectedId(null);
+      }
+      await loadComponents();
     } catch (e: any) {
       setError(e.toString());
     }
@@ -112,9 +176,29 @@ export function ComponentEditor() {
   };
 
   return (
-    <div className="component-editor">
-      <h2>Component Editor</h2>
-      <div className="editor-form">
+    <div className="component-editor" style={{ display: "flex", gap: "16px" }}>
+      <div className="component-list" style={{ width: "250px", flexShrink: 0 }}>
+        <h3>Existing Components</h3>
+        {components.map((c) => (
+          <div
+            key={c.id}
+            className={`component-list-item${selectedId === c.id ? " selected" : ""}`}
+            onClick={() => selectComponent(c)}
+          >
+            <span className="component-type-badge">{c.component_type}</span>
+            <span className="component-name">{c.name}</span>
+            <span className="component-status">{c.status}</span>
+            <button
+              className="component-delete-btn"
+              onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }}
+            >
+              Delete
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="editor-form" style={{ flex: 1 }}>
+        <h2>Component Editor</h2>
         <label>Type:</label>
         <select value={type} onChange={(e) => setType(e.target.value as ComponentType)}>
           <option value="tool">Tool</option>
@@ -132,8 +216,14 @@ export function ComponentEditor() {
           placeholder="Component name"
         />
         {renderConfigEditor()}
-        <button onClick={handleSave}>Save Component</button>
-        {saved && <span className="saved-indicator">Saved! ID: {lastCreatedId}</span>}
+        <button onClick={handleSave}>
+          {editingId ? "Update Component" : "Save Component"}
+        </button>
+        {saved && (
+          <span className="saved-indicator">
+            Saved!{editingId ? "" : ` ID: ${lastCreatedId}`}
+          </span>
+        )}
         {error && <span className="error-indicator">Error: {error}</span>}
       </div>
     </div>

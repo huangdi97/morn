@@ -1,7 +1,9 @@
+use crate::bridge::a2a_discovery::A2ADiscovery;
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
 use crate::core::supervisor::Supervisor;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum CollaborationMode {
@@ -60,11 +62,13 @@ pub struct TeamMemberOutput {
     pub confidence: f64,
 }
 
+#[allow(dead_code)]
 pub struct Orchestrator {
     registry: Option<Registry>,
     supervisor: Option<Supervisor>,
     event_bus: Option<SimpleEventBus>,
     teams: HashMap<String, TeamDef>,
+    a2a_discovery: Option<Arc<Mutex<A2ADiscovery>>>,
 }
 
 impl Orchestrator {
@@ -78,7 +82,13 @@ impl Orchestrator {
             supervisor,
             event_bus,
             teams: HashMap::new(),
+            a2a_discovery: None,
         }
+    }
+
+    pub fn with_a2a(mut self, discovery: Arc<Mutex<A2ADiscovery>>) -> Self {
+        self.a2a_discovery = Some(discovery);
+        self
     }
 
     pub fn create_team(&mut self, def: TeamDef) -> Result<String, String> {

@@ -16,14 +16,37 @@ type View = "workbench" | "studio" | "console";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  timestamp: number;
 }
+
+const CHAT_KEY = "morn_chat_history";
+const THEME_KEY = "morn_theme";
 
 function App() {
   const [view, setView] = useState<View>("workbench");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [theme, setTheme] = useState<string>(() => {
+    return localStorage.getItem(THEME_KEY) || "dark";
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
+  }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     invoke("get_status").then((s: any) => {
@@ -33,18 +56,33 @@ function App() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isTyping]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  };
 
   const sendMessage = async () => {
     if (!input.trim()) return;
 
-    const userMsg: Message = { role: "user", content: input };
-    setMessages((prev) => [...prev, userMsg]);
+    const text = input.trim();
     setInput("");
 
+    if (text === "/clear") {
+      await invoke("clear_history");
+      setMessages([]);
+      const s: any = await invoke("get_status");
+      setStatus(`v${s.version} | ${s.turn_count} turns`);
+      return;
+    }
+
+    const userMsg: Message = { role: "user", content: text, timestamp: Date.now() };
+    setMessages((prev) => [...prev, userMsg]);
+    setIsTyping(true);
+
     try {
-      const response = await invoke<string>("send_message", { text: input });
-      const assistantMsg: Message = { role: "assistant", content: response };
+      const response = await invoke<string>("send_message", { text });
+      const assistantMsg: Message = { role: "assistant", content: response, timestamp: Date.now() };
       setMessages((prev) => [...prev, assistantMsg]);
 
       const s: any = await invoke("get_status");
@@ -53,8 +91,11 @@ function App() {
       const errorMsg: Message = {
         role: "assistant",
         content: `Error: ${e}`,
+        timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsTyping(false);
     }
   };
 
@@ -70,6 +111,13 @@ function App() {
       e.preventDefault();
       sendMessage();
     }
+  };
+
+  const formatTime = (ts: number) => {
+    const d = new Date(ts);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
   };
 
   const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test">("builder");
@@ -121,15 +169,29 @@ function App() {
         <button className="clear-btn" onClick={clearHistory}>
           Clear
         </button>
+        <button className="theme-toggle" onClick={toggleTheme}>
+          {theme === "dark" ? "\u2600" : "\u263E"}
+        </button>
       </header>
 
       <main className="chat-area">
         {messages.map((msg, i) => (
           <div key={i} className={`message ${msg.role}`}>
             <div className="avatar">{msg.role === "user" ? "U" : "M"}</div>
-            <div className="bubble">{msg.content}</div>
+            <div className="bubble">
+              <div className="bubble-text">{msg.content}</div>
+              <span className="timestamp">{formatTime(msg.timestamp)}</span>
+            </div>
           </div>
         ))}
+        {isTyping && (
+          <div className="message assistant">
+            <div className="avatar">M</div>
+            <div className="bubble typing-indicator">
+              <span>typing...</span>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </main>
 
@@ -149,7 +211,7 @@ function App() {
   );
 
   return (
-    <div className="app">
+    <div className={`app${theme === "light" ? " light" : ""}`}>
       <nav className="main-tabs">
         <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")}>Workbench</button>
         <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")}>Studio</button>

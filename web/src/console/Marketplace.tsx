@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface Listing {
   id: string;
@@ -11,23 +12,23 @@ interface Listing {
   downloads: number;
 }
 
-const cardStyle: React.CSSProperties = {
-  background: "#161b22",
-  borderRadius: "8px",
-  padding: "16px",
-  border: "1px solid #30363d",
-};
+const hardcodedListings: Listing[] = [
+  { id: "l1", name: "Web Search Pro", item_type: "tool", description: "Advanced web search", price: 0.001, author: "Morn Labs", rating: 4.5, downloads: 1230 },
+  { id: "l2", name: "Stock Market Data", item_type: "knowledge", description: "Real-time stock quotes", price: 0.01, author: "Morn Labs", rating: 4.2, downloads: 890 },
+  { id: "l3", name: "Deep Research Skill", item_type: "skill", description: "Multi-step research", price: 0.01, author: "Morn Labs", rating: 4.8, downloads: 560 },
+  { id: "l4", name: "Research Agent", item_type: "agent", description: "Full-featured research agent", price: 0.05, author: "Morn Labs", rating: 4.6, downloads: 340 },
+  { id: "l5", name: "Weekly Report", item_type: "workflow", description: "Auto report generation", price: 0.03, author: "Morn Labs", rating: 4.1, downloads: 120 },
+];
 
 export default function Marketplace() {
-  const [listings] = useState<Listing[]>([
-    { id: "l1", name: "Web Search Pro", item_type: "tool", description: "Advanced web search", price: 0.001, author: "Morn Labs", rating: 4.5, downloads: 1230 },
-    { id: "l2", name: "Stock Market Data", item_type: "knowledge", description: "Real-time stock quotes", price: 0.01, author: "Morn Labs", rating: 4.2, downloads: 890 },
-    { id: "l3", name: "Deep Research Skill", item_type: "skill", description: "Multi-step research", price: 0.01, author: "Morn Labs", rating: 4.8, downloads: 560 },
-    { id: "l4", name: "Research Agent", item_type: "agent", description: "Full-featured research agent", price: 0.05, author: "Morn Labs", rating: 4.6, downloads: 340 },
-    { id: "l5", name: "Weekly Report", item_type: "workflow", description: "Auto report generation", price: 0.03, author: "Morn Labs", rating: 4.1, downloads: 120 },
-  ]);
-
+  const [listings, setListings] = useState<Listing[]>(hardcodedListings);
   const [tab, setTab] = useState("all");
+
+  useEffect(() => {
+    invoke<Listing[]>("get_marketplace_listings").then(setListings).catch(() => {
+      setListings(hardcodedListings);
+    });
+  }, []);
 
   const filtered = tab === "all" ? listings : listings.filter(l => l.item_type === tab);
 
@@ -68,7 +69,7 @@ export default function Marketplace() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
         {filtered.map(listing => (
-          <div key={listing.id} style={cardStyle}>
+          <div key={listing.id} className="market-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ color: getTypeColor(listing.item_type), fontSize: "11px", textTransform: "uppercase" }}>
                 {listing.item_type}

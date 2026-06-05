@@ -1,9 +1,5 @@
-use crate::component::knowledge::Knowledge;
-use crate::component::memory::Memory;
 use crate::component::model::ModelConfig;
 use crate::component::persona::Persona;
-use crate::component::skill::Skill;
-use crate::component::tool::Tool;
 use crate::core::component::Component;
 use crate::core::registry::Registry;
 
@@ -18,6 +14,7 @@ pub struct AgentDef {
     pub memory: Option<String>,
 }
 
+#[allow(dead_code)]
 pub struct AgentAssembler {
     registry: Option<Registry>,
 }
@@ -33,6 +30,7 @@ impl AgentAssembler {
         let _persona = def.persona;
         let _model = def.model;
 
+        #[allow(dead_code)]
         struct AssembledAgent {
             id: String,
             name: String,
