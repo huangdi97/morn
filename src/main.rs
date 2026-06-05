@@ -9,6 +9,7 @@ use morn::core::registry::Registry;
 use morn::core::security::SecurityGuard;
 use morn::core::storage::Storage;
 use morn::core::supervisor::Supervisor;
+use morn::market::Marketplace;
 
 fn main() {
     let api_key = env::var("MORN_API_KEY");
@@ -38,13 +39,11 @@ fn main() {
             let supervisor = Supervisor::new(storage.clone(), None);
             let _assembler = AgentAssembler::new(Some(registry.lock().unwrap().clone()));
 
-            let chat_fn = Arc::new(
-                move |prompt: &str, system: &str| -> Result<String, String> {
-                    chat_agent.chat(prompt, system)
-                },
-            );
+            let chat_fn = Arc::new(move |prompt: &str, system: &str| -> Result<String, String> {
+                chat_agent.chat(prompt, system)
+            });
 
-            run_cli(supervisor, chat_fn, security);
+            run_cli(supervisor, chat_fn, security, storage, registry);
         }
         Err(_) => {
             println!("[Morn] MORN_API_KEY not set.");
@@ -60,11 +59,8 @@ fn main() {
     }
 }
 
-fn run_cli(
-    supervisor: Supervisor,
-    chat_fn: Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>,
-    _security: Arc<Mutex<SecurityGuard>>,
-) {
+fn run_cli(supervisor: Supervisor, chat_fn: Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>, _security: Arc<Mutex<SecurityGuard>>, storage: Option<Storage>, registry: Arc<Mutex<Registry>>) {
     let mut adapter = ChannelAdapter::new(Some(supervisor));
-    cli::run_repl(&mut adapter, chat_fn);
+    let marketplace = storage.map(|s| Marketplace::new(s)).expect("Storage required for marketplace");
+    cli::run_repl(&mut adapter, chat_fn, &marketplace, &registry);
 }
