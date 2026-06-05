@@ -7,6 +7,7 @@ use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 pub struct WeChatMpChannel {
     app_id: String,
     app_secret: String,
+    access_token: Option<String>,
 }
 
 impl WeChatMpChannel {
@@ -14,6 +15,7 @@ impl WeChatMpChannel {
         WeChatMpChannel {
             app_id: app_id.to_string(),
             app_secret: app_secret.to_string(),
+            access_token: None,
         }
     }
 
@@ -25,7 +27,10 @@ impl WeChatMpChannel {
         Ok(WeChatMpChannel::new(&app_id, &app_secret))
     }
 
-    pub fn get_access_token(&self) -> Result<String, String> {
+    pub fn get_access_token(&mut self) -> Result<String, String> {
+        if let Some(ref token) = self.access_token {
+            return Ok(token.clone());
+        }
         let url = format!(
             "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={}&secret={}",
             self.app_id, self.app_secret
@@ -42,6 +47,7 @@ impl WeChatMpChannel {
             .json()
             .map_err(|e| format!("Failed to parse access token response: {}", e))?;
         if let Some(token) = body.get("access_token").and_then(|v| v.as_str()) {
+            self.access_token = Some(token.to_string());
             Ok(token.to_string())
         } else {
             let err_msg = body
@@ -52,7 +58,7 @@ impl WeChatMpChannel {
         }
     }
 
-    pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {
+    pub fn send(&mut self, msg: &ChannelMessage) -> Result<(), String> {
         let payload = Self::build_payload(msg);
         let access_token = self.get_access_token()?;
         let url = format!(
@@ -143,7 +149,7 @@ mod tests {
 
     #[test]
     fn test_wechat_mp_send_connection_error() {
-        let channel = WeChatMpChannel::new("invalid_appid", "invalid_secret");
+        let mut channel = WeChatMpChannel::new("invalid_appid", "invalid_secret");
         let msg = ChannelMessage {
             content: "test".into(),
             source: "test".into(),
@@ -156,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_wechat_mp_access_token_error() {
-        let channel = WeChatMpChannel::new("bad_appid", "bad_secret");
+        let mut channel = WeChatMpChannel::new("bad_appid", "bad_secret");
         let result = channel.get_access_token();
         assert!(result.is_err());
     }

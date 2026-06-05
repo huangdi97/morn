@@ -53,13 +53,13 @@ impl MiniProgramChannel {
     }
 
     pub fn send(&mut self, msg: &ChannelMessage) -> Result<(), String> {
+        let touser = msg.metadata["touser"]
+            .as_str()
+            .ok_or_else(|| "Missing 'touser' in message metadata".to_string())?;
         let token = match &self.access_token {
             Some(t) => t.clone(),
             None => self.get_access_token()?,
         };
-        let touser = msg.metadata["touser"]
-            .as_str()
-            .ok_or_else(|| "Missing 'touser' in message metadata".to_string())?;
         let payload = serde_json::json!({
             "touser": touser,
             "msgtype": "text",
@@ -149,8 +149,6 @@ mod tests {
     #[test]
     fn test_send_missing_touser() {
         let mut channel = MiniProgramChannel::new("test_id", "test_secret");
-        // Pre-set access token to skip real HTTP call
-        channel.access_token = Some("fake_token".into());
         let msg = ChannelMessage {
             content: "Hello".into(),
             source: "test".into(),
