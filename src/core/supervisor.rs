@@ -101,6 +101,8 @@ pub struct Supervisor {
     max_history: usize,
     turn_count: u64,
     mode: CooMode,
+    user_id: Option<String>,
+    user_teams: Vec<String>,
 }
 
 impl Supervisor {
@@ -112,7 +114,28 @@ impl Supervisor {
             max_history: 10,
             turn_count: 0,
             mode: CooMode::Active,
+            user_id: None,
+            user_teams: Vec::new(),
         }
+    }
+
+    pub fn with_user(mut self, user_id: &str, teams: &[String]) -> Self {
+        self.user_id = Some(user_id.to_string());
+        self.user_teams = teams.to_vec();
+        self
+    }
+
+    pub fn set_user(&mut self, user_id: &str, teams: &[String]) {
+        self.user_id = Some(user_id.to_string());
+        self.user_teams = teams.to_vec();
+    }
+
+    pub fn user_id(&self) -> Option<&str> {
+        self.user_id.as_deref()
+    }
+
+    pub fn user_teams(&self) -> &[String] {
+        &self.user_teams
     }
 
     pub fn turn_count(&self) -> u64 {
@@ -126,6 +149,13 @@ impl Supervisor {
     }
     pub fn set_mode(&mut self, mode: CooMode) {
         self.mode = mode;
+    }
+
+    pub fn list_available_agents<'a>(
+        &self,
+        registry: &'a crate::core::registry::Registry,
+    ) -> Vec<&'a crate::core::registry::Capability> {
+        registry.list_available(self.user_id.as_deref(), &self.user_teams)
     }
 
     pub fn decide_level(&self, text: &str) -> DecisionLevel {

@@ -1,3 +1,7 @@
+//! 注意：此通道需要 [微信公众号] 真实应用注册才能使用
+//! 配置方式：在微信公众平台注册服务号，获取 AppID 和 AppSecret
+//! 环境变量：WECHAT_MP_APPID, WECHAT_MP_SECRET
+
 use crate::channel::adapter::ChannelMessage;
 
 pub struct WeChatMpChannel {

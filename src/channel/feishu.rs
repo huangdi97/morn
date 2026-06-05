@@ -1,3 +1,7 @@
+//! 注意：此通道需要 [飞书] 真实应用注册才能使用
+//! 配置方式：在飞书开放平台创建应用，获取 Webhook URL
+//! 环境变量：FEISHU_WEBHOOK_URL
+
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 pub struct FeishuChannel {

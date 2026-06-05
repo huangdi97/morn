@@ -5,4 +5,5 @@ pub mod computer;
 pub mod console;
 pub mod core;
 pub mod market;
+pub mod org;
 pub mod studio;

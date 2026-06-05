@@ -1,200 +1,245 @@
-# Morn 创作台前端 ↔ 后端 — 任务清单
+# Morn 三大方向 — 渠道真实化 + 电脑操控 + 企业多人版
 
 ## 核心准则 (编程原则)
 
-### 14条核心准则
-
-1. **Think Before Coding** — 阅读整个任务文件再动手，理解现有前后端结构
-2. **The Code Works** — 每次修改后 `cargo build` 通过，Tauri 构建通过
-3. **Small Batches** — 每完成一个任务的改动就验证编译
-4. **No Dead Code** — 不添加未使用的 Tauri 命令或前端组件
-5. **Single Source of Truth** — 前端 API 类型与后端 Rust 结构体保持一致
-6. **Test the Paths** — Tauri 命令添加后确保编译通过
-7. **Fail Fast** — 遇到编译/类型错误立即停止
-8. **Leave It Better** — 前端风格与现有 App.tsx 保持一致（暗色主题、GitHub 色调）
-9. **Never Guess the Stack** — 从实际代码中理解 Tauri invoke 接口
-10. **Read Before You Write** — 先读 src-tauri/src/lib.rs、web/src/App.tsx 等关键文件
-11. **Prefer Friction Logs** — 记录构建中遇到的问题
-12. **Respect the Dependency** — 前端依赖 @tauri-apps/api（已安装）
-13. **No Ambiguous Names** — Tauri 命令命名统一 camelCase
-14. **Document Decisions, Not Drama** — 写清晰的代码注释
-
-### 低耦合3条
-
-1. **视图独立** — 工作台/创作台/管理台三个视图互相独立，通过导航切换
-2. **命令独立** — 每个 Tauri 命令做一件事，不搞大而全
-3. **前端状态本地化** — 各组件管理自己的 state，不搞全局状态管理
-
-### 执行规则
-
-- 按任务顺序执行
-- 每个任务后 `cargo build` 验证
-- 以 `~/morn-desktop/` 为根目录
-- 前端文件在 `web/src/` 下
-- 后端 Tauri 命令在 `src-tauri/src/lib.rs` 中
-- 最终 git add/commit/push 到 main
+14条核心准则（Think Before Coding、The Code Works、Small Batches、No Dead Code、Single Source of Truth、Test the Paths、Fail Fast、Leave It Better、Never Guess the Stack、Read Before You Write、Prefer Friction Logs、Respect the Dependency、No Ambiguous Names、Document Decisions, Not Drama）
++ 低耦合3条（模块独立、接口一致、渐进增强）
++ 执行规则（按任务顺序、每个任务后 cargo build && cargo test、git push 到 main）
 
 ---
 
 ## 前置阅读
 
-- `src-tauri/src/lib.rs` — 现有 Tauri 命令
-- `src-tauri/Cargo.toml` — Tauri 依赖
-- `web/src/App.tsx` — 主页面（工作台）
-- `web/src/App.css` — 样式
-- `web/vite.config.ts` — Vite 配置
-- `web/package.json` — 前端依赖
-- `src/studio/manager.rs` — 创作台后端
-- `src/studio/tester.rs` — 测试器
-- `src/studio/publisher.rs` — 发布器
-- `src/console/mod.rs` — 管理台后端
+- `src/channel/telegram.rs` — 现有 Telegram stub
+- `src/channel/adapter.rs` — 通道适配器
+- `src/computer/` 下所有文件
+- `src/core/storage.rs` — Storage 模块（企业版需要新表）
+- Cargo.toml — 已有 reqwest + tokio 依赖，足够做 HTTP 请求
 
 ---
 
-## 任务列表
+## 阶段一：渠道真实接入
 
-### 任务1: Tauri 后端 — 注册创作台命令
+### 任务1: Telegram 通道做真
 
-在 `src-tauri/src/lib.rs` 中新增以下 Tauri 命令：
+改造 `src/channel/telegram.rs`，从 stub 变成真实 Telegram Bot API 调用。
 
-**创作台组件管理：**
-- `list_components(type_filter: Option<String>, state)` — 列出组件
-- `get_component(id: String, state)` — 获取组件详情
-- `create_component(name: String, component_type: String, config_json: Option<String>, state)` — 创建组件
-- `update_component(id: String, name: Option<String>, config_json: Option<String>, status: Option<String>, state)` — 更新组件
-- `delete_component(id: String, state)` — 删除组件
+**技术要求：**
+- 使用 `reqwest` 发 HTTP POST 到 `https://api.telegram.org/bot<token>/sendMessage`
+- 从 `TELEGRAM_BOT_TOKEN` 环境变量读取 bot token
+- `send()` 方法真实发送消息
+- `send_message()` 支持 parse_mode（Markdown/MarkdownV2/HTML）
+- `set_webhook()` 真实设置 webhook
+- 错误处理：网络超时、API 错误码、token 无效
 
-**Agent 组装：**
-- `assemble_agent(name: String, persona: String, model: String, tools: Vec<String>, knowledge: Vec<String>, skills: Vec<String>, state)` — 从组件组装 Agent
+**新增文件：** 无，改造现有 `telegram.rs`
+**验证：** cargo build 通过 + cargo test 通过 + 实际发一条消息（可选）
 
-**测试与发布：**
-- `test_component(id: String, input: String, state)` — 测试组件
-- `publish_component(id: String, state)` — 发布组件到市场
+### 任务2: SMTP 通道做真
 
-**管理台：**
-- `get_system_status(state)` — 系统健康状态
-- `get_component_topology(state)` — 组件拓扑
+改造 `src/channel/smtp.rs`，使用 `lettre` crate 发送真实邮件。
 
-需要：
-- 将 StudioManager、StudioPublisher、StudioTester 加入 AppState
-- 在 run() 中创建并注入这些实例
-- 注册所有新命令到 invoke_handler
-
-注意：
-- 所有命令返回 `Result<serde_json::Value, String>` 以保持统一
-- 使用 `tokio::runtime::Runtime::new()` 包裹异步调用（如 chat_agent）
-- 保持与现有 `send_message`、`get_status`、`clear_history` 命令风格一致
-
-### 任务2: 前端导航栏
-
-修改 `web/src/App.tsx`：
-
-添加顶部导航栏，三个标签页：
-- **💬 工作台 (Workbench)** — 现有聊天界面
-- **🔧 创作台 (Studio)** — 组件编辑 + Agent 组装 + 测试
-- **📊 管理台 (Console)** — 拓扑图 + 系统状态
-
-导航逻辑：
-- 使用 `useState<"workbench" | "studio" | "console">("workbench")` 控制当前视图
-- 导航栏样式与现有暗色主题一致（GitHub 色调）
-- 导航项点击切换视图
-
-### 任务3: 创作台前端 — ComponentEditor 接线
-
-修改 `web/src/studio/ComponentEditor.tsx`：
-
-将 `handleSave` 改为真实调用 Tauri 后端：
-```typescript
-const handleSave = async () => {
-  const id = await invoke("create_component", {
-    name: def.name,
-    componentType: def.type,
-    configJson: def.config,
-  });
-  setSaved(true);
-  setLastCreatedId(id);
-  setTimeout(() => setSaved(false), 2000);
-};
-```
-
-需添加：
-- `import { invoke } from "@tauri-apps/api/core";`
-- 保存后清空表单或显示成功状态
-- 类型字段保持与后端一致
-
-### 任务4: 创作台前端 — AgentBuilder 接线
-
-修改 `web/src/studio/AgentBuilder.tsx`：
-
-将 build 按钮改为调用 `assemble_agent`：
-```typescript
-const handleBuild = async () => {
-  const id = await invoke("assemble_agent", {
-    name: def.name,
-    persona: def.persona,
-    model: def.model,
-    tools: def.tools,
-    knowledge: def.knowledge,
-    skills: def.skills,
-  });
-  setAgentId(id);
-  setStep(2); // show success
-};
-```
-
-添加：
-- `import { invoke } from "@tauri-apps/api/core";`
-- 成功后的 Agent ID 显示
+**技术要求：**
+- 在 Cargo.toml 添加 `lettre` 依赖（带 smtp-transport + rustls-tls feature）
+- 从环境变量读取 SMTP 配置：SMTP_HOST、SMTP_PORT、SMTP_USERNAME、SMTP_PASSWORD、SMTP_FROM
+- `send_report()` 真实发送邮件
+- 支持 TLS 加密连接
 - 错误处理
 
-### 任务5: 创作台前端 — TestPanel 接线
+### 任务3: REST API 通道做真
 
-修改 `web/src/studio/TestPanel.tsx`：
+改造 `src/channel/rest_api.rs`，添加真实的 HTTP 服务器。
 
-将 Test 按钮改为调用 `test_component`，获取真实测试结果展示。
+**技术要求：**
+- 使用 `actix-web` 或 `axum` 启动 HTTP 服务器
+- 支持 POST `/chat` — 接受消息文本，返回 AI 回复
+- 支持 GET `/status` — 返回系统状态 JSON
+- 支持 POST `/clear` — 清除对话历史
+- 服务器端口通过 `API_PORT` 环境变量配置（默认 8080）
+- `axum` 更轻量，优先
 
-### 任务6: 创作台前端 — TemplateSelector
+### 任务4-8: 其它渠道 stub 标注
 
-修改 `web/src/studio/TemplateSelector.tsx`：
-
-从 `list_components()` 加载可用组件列表，而不是硬编码。
-
-### 任务7: 管理台前端接线
-
-修改 `web/src/console/Topology.tsx`：
-
-从后端调用 `get_component_topology` 获取实时组件拓扑，而不是硬编码。
-
-调用 `get_system_status` 显示真实系统状态。
-
-### 任务8: 样式整合
-
-更新 `web/src/App.css`：
-
-- 添加导航栏样式（标签页切换）
-- 添加创作台表单样式
-- 添加管理台表格/拓扑样式
-- 确保所有视图在暗色主题下一致
-
-### 任务9: 编译验证
-
-```bash
-cd ~/morn-desktop/src-tauri && cargo build 2>&1
-cd ~/morn-desktop/web && npm install --silent && npx tsc --noEmit 2>&1 || echo "TypeScript check done (non-blocking if no tsc config)"
+对 dingtalk/feishu/wecom/qqbot/wechat_mp/miniprogram/webhook 不做真实改造（需要对应平台的真实账号/应用），但在每个文件顶部加文档注释说明：
+```rust
+//! 注意：此通道需要 [平台名称] 真实应用注册才能使用
+//! 配置方式：xxx
 ```
 
-### 任务10: Git 提交与推送
+---
+
+## 阶段二：电脑操控做真
+
+### 任务9: 文件系统操作做真
+
+改造 `src/computer/fs_ops.rs`：
+- `read()` — 已真实 ✅
+- `write()` — 已真实 ✅
+- `move()` — 已真实 ✅
+- `delete()` — 已真实 ✅
+- `search()` — 已真实 ✅
+- `compress()` — 从 `[simulated]` 改为调用系统 `tar` 或 `zip` 命令实现真实压缩
+
+### 任务10: 桌面操作做真（PowerShell 桥接）
+
+改造 `src/computer/desktop_ops.rs`：
+
+在 Windows 环境下（通过 `cfg!(target_os = "windows")` 判断），调用 PowerShell 命令：
+- `mouse_move(x, y)` — 用 PowerShell `[System.Windows.Forms.Cursor]::Position`
+- `mouse_click(button)` — 用 user32.dll `mouse_event`
+- `keyboard_type(text)` — 用 `SendKeys`
+- `screenshot()` — 用 `[System.Windows.Forms.Screen]::PrimaryScreen` 截图
+- 注：需要添加 `windows` 或使用 PowerShell 桥接
+
+在非 Windows 环境（Linux/WSL）保持 `[simulated]` 并打印提示。
+
+**更实用的做法：** 
+从 WSL 调用 PowerShell.exe 执行命令：
+- `powershell.exe -Command "[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(x,y)"`
+- `powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('text')"`
+- 截图用 `powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; ..."`
+
+### 任务11: 浏览器操控做真
+
+改造 `src/computer/browser_ops.rs`：
+
+`navigate(url)` — 调用系统默认浏览器打开 URL：
+- Windows: `cmd.exe /c start <url>`
+- Linux: `xdg-open <url>`
+
+`content_extract(url)` — 使用 reqwest 抓取并提取网页内容文本
+
+### 任务12: 应用操控做真
+
+改造 `src/computer/app_ops.rs`：
+
+`launch(app_name)` — 启动应用：
+- Windows: `cmd.exe /c start <app_name>` 或 PSH `Start-Process`
+- Linux: `which <app> && <app> &`
+
+`list()` — 列出正在运行的进程：
+- Windows: `tasklist`
+- Linux: `ps aux`
+
+`close(app_name)` — 结束进程：
+- Windows: `taskkill /IM <name>`
+- Linux: `pkill <name>`
+
+### 任务13: 系统操控做真
+
+改造 `src/computer/sys_ops.rs`：
+
+`network_status()` — 使用 `ping` 或 reqwest 检查网络连通性
+`power_status()` — 读取 `/sys/class/power_supply/` (Linux) 或 PSH `Get-WmiObject`
+`get_volume()` / `set_volume(level)` — WSL 中可用 pactl/amixer（Linux）或 PSH 调用 Windows
+
+注意：shutdown/sleep/restart 保持 `[simulated]` 并打印警告，避免误操作。
+
+### 任务14: 感知模块做真
+
+改造 `src/computer/perception.rs`：
+
+`pixel_screenshot()` — 截取屏幕像素（依赖 screenshot 实现）
+`ocr()` — 调用 tesseract CLI（如果已安装）或保持 simulated
+`accessibility_tree()` — 保持 simulated（需要系统级权限）
+
+---
+
+## 阶段三：企业多人版
+
+### 任务15: 用户与团队数据模型
+
+在 `src/core/storage.rs` 中新增表：
+- `users` — id, username, display_name, role(admin/user/viewer), created_at, last_login
+- `teams` — id, name, description, owner_id, created_at
+- `team_members` — id, team_id, user_id, role(owner/admin/member), joined_at
+- `agent_permissions` — id, agent_id, user_id, team_id(optional), permission(read/use/manage/admin), granted_at
+- `audit_log` — id, user_id, action, target_type, target_id, details_json, created_at
+
+添加对应的 CRUD 方法到 Storage。
+
+### 任务16: 团队管理模块
+
+新建 `src/org/mod.rs` 和 `src/org/team.rs`：
+
+TeamManager：
+- `create_team(name, description, owner_id)` — 创建团队
+- `add_member(team_id, user_id, role)` — 添加成员
+- `remove_member(team_id, user_id)` — 移除成员
+- `list_teams(user_id)` — 用户的团队列表
+- `list_members(team_id)` — 团队成员列表
+- `transfer_ownership(team_id, new_owner_id)` — 转移所有权
+
+UserManager：
+- `register(username, display_name, role)` — 注册用户
+- `get_user(id)` — 获取用户信息
+- `list_users()` — 所有用户
+
+### 任务17: 权限系统
+
+新建 `src/org/permissions.rs`：
+
+PermissionChecker：
+- `check(user_id, action, target)` — 检查是否有权限
+- `grant(user_id, agent_id, permission)` — 授权
+- `revoke(user_id, agent_id)` — 撤销
+- `list_permissions(agent_id)` — 查看谁有什么权限
+
+权限等级：read < use < manage < admin
+- read：只看 Agent 信息，不能调用
+- use：可以调用 Agent
+- manage：可以修改 Agent 配置
+- admin：可以删除/转移 Agent + 管理权限
+
+### 任务18: Agent 共享
+
+改造 `src/core/registry.rs` 和 `src/core/supervisor.rs`：
+
+- Agent 可以标记为 public（所有人可用）/ team（团队可用）/ private（仅自己）
+- Supervisor 执行时根据用户身份过滤可用 Agent
+- 团队共享的 Agent 可以设置每日调用额度
+
+### 任务19: 审计日志
+
+新建 `src/org/audit.rs`：
+
+- 记录：谁在什么时间做了什么操作
+- `AuditLogger` — 自动记录所有关键操作（用户登录/登出、Agent 创建/修改/删除、权限变更、团队变更）
+- `query(user_id, date_range, action_type)` — 查询审计日志
+- 从 `src/console/governance.rs` 关联审计数据
+
+### 任务20: 管理台 — 组织管理页面（Tauri 命令）
+
+在 `src-tauri/src/lib.rs` 添加 Tauri 命令：
+- `create_user` / `list_users`
+- `create_team` / `list_teams` / `add_member` / `remove_member`
+- `grant_permission` / `revoke_permission`
+- `get_audit_log`
+
+### 任务21: 测试
+
+为所有新增模块写测试：
+- 用户 CRUD 测试
+- 团队增删改测试
+- 权限检查测试（read < use < manage < admin 层级）
+- Agent 共享测试（public/team/private）
+- 审计日志测试
+- 确保 0 新增 warning
+
+### 任务22: 验证与提交
 
 ```bash
 cd ~/morn-desktop
+cargo build 2>&1
+cargo test 2>&1
+# 检查是否有新增 warning（新代码应 0 warning）
+cargo build 2>&1 | grep "warning" | wc -l
 git add -A
-git commit -m "feat(studio): connect frontend to backend via Tauri commands
+git commit -m "feat: channel real implementation + computer control + org system
 
-- Add 8 Tauri commands for studio/console operations
-- Add navigation (workbench/studio/console)
-- Wire ComponentEditor to create_component backend
-- Wire AgentBuilder to assemble_agent backend
-- Wire TestPanel to test_component backend
-- Wire Topology to get_component_topology backend"
+- Telegram, SMTP, REST API channels now use real APIs
+- Computer control uses PowerShell/OS calls instead of simulated
+- Add org module: users, teams, permissions, audit log
+- Add enterprise multi-user support"
 git push origin main
 ```

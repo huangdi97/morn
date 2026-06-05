@@ -1,3 +1,7 @@
+//! 注意：此通道需要 [微信小程序] 真实应用注册才能使用
+//! 配置方式：在微信公众平台注册小程序，获取 AppID
+//! 环境变量：MINIPROGRAM_APPID
+
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 pub struct MiniProgramChannel {

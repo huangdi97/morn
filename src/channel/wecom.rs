@@ -1,3 +1,7 @@
+//! 注意：此通道需要 [企业微信] 真实应用注册才能使用
+//! 配置方式：在企业微信后台创建应用，获取 Webhook URL
+//! 环境变量：WECOM_WEBHOOK_URL
+
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 pub struct WeComChannel {

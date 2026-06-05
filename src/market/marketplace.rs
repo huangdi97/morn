@@ -243,6 +243,10 @@ impl Marketplace {
             total_calls: 0,
             success_calls: 0,
             avg_latency_ms: 0.0,
+            visibility: "public".to_string(),
+            owner_id: None,
+            team_id: None,
+            daily_quota: 0,
         };
         registry.register(cap);
         Ok(())

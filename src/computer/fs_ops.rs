@@ -87,10 +87,43 @@ pub fn search(pattern: &str, root: &str) -> ComputerOpResult {
 }
 
 pub fn compress(source: &str, dest: &str) -> ComputerOpResult {
-    ComputerOpResult {
-        success: true,
-        data: format!("[simulated] compressed {} to {}", source, dest),
-        security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
-        approval_required: false,
+    let result = std::process::Command::new("tar")
+        .args(["-czf", dest, "-C"])
+        .arg(
+            std::path::Path::new(source)
+                .parent()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| ".".to_string()),
+        )
+        .arg(
+            std::path::Path::new(source)
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_else(|| source.to_string()),
+        )
+        .output();
+
+    match result {
+        Ok(output) if output.status.success() => ComputerOpResult {
+            success: true,
+            data: format!("Compressed {} to {}", source, dest),
+            security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
+            approval_required: false,
+        },
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            ComputerOpResult {
+                success: false,
+                data: format!("Compression failed: {}", stderr),
+                security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
+                approval_required: false,
+            }
+        }
+        Err(e) => ComputerOpResult {
+            success: false,
+            data: format!("Compression error: {}", e),
+            security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
+            approval_required: false,
+        },
     }
 }

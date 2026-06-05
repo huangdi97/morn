@@ -1,3 +1,7 @@
+//! 注意：此通道需要 [QQ 机器人] 真实应用注册才能使用
+//! 配置方式：在 QQ 开放平台创建机器人，获取 Bot ID 和 Token
+//! 环境变量：QQBOT_ID, QQBOT_TOKEN
+
 use crate::channel::adapter::ChannelMessage;
 
 pub struct QqBotChannel {

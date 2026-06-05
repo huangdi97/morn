@@ -1,3 +1,7 @@
+//! 注意：此通道需要配置 Webhook 接收 URL 才能使用
+//! 配置方式：设置接收 HTTP POST 的回调地址
+//! 环境变量：WEBHOOK_LISTEN_URL
+
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 pub struct WebhookReceiver {

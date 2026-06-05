@@ -15,6 +15,10 @@ pub struct Capability {
     pub total_calls: u64,
     pub success_calls: u64,
     pub avg_latency_ms: f64,
+    pub visibility: String,
+    pub owner_id: Option<String>,
+    pub team_id: Option<String>,
+    pub daily_quota: u64,
 }
 
 #[derive(Clone)]
@@ -60,6 +64,10 @@ impl Registry {
             total_calls: 0,
             success_calls: 0,
             avg_latency_ms: 0.0,
+            visibility: "public".to_string(),
+            owner_id: None,
+            team_id: None,
+            daily_quota: 0,
         };
         self.capabilities
             .insert(default_cap.id.clone(), default_cap);
@@ -96,6 +104,30 @@ impl Registry {
 
     pub fn list_all(&self) -> Vec<&Capability> {
         self.capabilities.values().collect()
+    }
+
+    pub fn list_available(&self, user_id: Option<&str>, user_teams: &[String]) -> Vec<&Capability> {
+        self.capabilities
+            .values()
+            .filter(|c| match c.visibility.as_str() {
+                "public" => true,
+                "private" => {
+                    if let Some(uid) = user_id {
+                        c.owner_id.as_deref() == Some(uid)
+                    } else {
+                        false
+                    }
+                }
+                "team" => {
+                    if let Some(ref tid) = c.team_id {
+                        user_teams.iter().any(|ut| ut == tid)
+                    } else {
+                        false
+                    }
+                }
+                _ => true,
+            })
+            .collect()
     }
 
     pub fn get(&self, id: &str) -> Option<&Capability> {
