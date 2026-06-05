@@ -1,6 +1,6 @@
 use crate::core::component::Data;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct TestStep {
     pub name: String,
     pub description: String,
@@ -8,7 +8,7 @@ pub struct TestStep {
     pub success: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct TestResult {
     pub steps: Vec<TestStep>,
     pub total_duration_ms: f64,

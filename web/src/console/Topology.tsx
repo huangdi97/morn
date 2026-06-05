@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface TopologyNode {
   id: string;
@@ -24,13 +25,11 @@ const nodeStyle: React.CSSProperties = {
 };
 
 export default function Topology() {
-  const [nodes] = useState<TopologyNode[]>([
-    { id: "chat-agent", name: "Chat Agent", node_type: "agent", status: "active" },
-    { id: "web-search", name: "Web Search", node_type: "tool", status: "active" },
-    { id: "deepseek", name: "DeepSeek Model", node_type: "model", status: "active" },
-    { id: "knowledge-base", name: "Knowledge Base", node_type: "knowledge", status: "active" },
-    { id: "cli-channel", name: "CLI Channel", node_type: "channel", status: "active" },
-  ]);
+  const [nodes, setNodes] = useState<TopologyNode[]>([]);
+
+  useEffect(() => {
+    invoke<TopologyNode[]>("get_component_topology").then(setNodes).catch(() => {});
+  }, []);
 
   const getNodeColor = (type: string) => {
     switch (type) {
@@ -47,6 +46,7 @@ export default function Topology() {
     <div>
       <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Component Topology</h2>
       <div style={containerStyle}>
+        {nodes.length === 0 && <p style={{ color: "#8b949e" }}>No components registered yet.</p>}
         {nodes.map((node) => (
           <div key={node.id} style={{ ...nodeStyle, borderLeft: `3px solid ${getNodeColor(node.node_type)}` }}>
             <div style={{ color: getNodeColor(node.node_type), fontSize: "11px", textTransform: "uppercase" }}>

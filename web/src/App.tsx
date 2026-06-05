@@ -1,5 +1,17 @@
 import { useState, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { ComponentEditor } from "./studio/ComponentEditor";
+import { AgentBuilder } from "./studio/AgentBuilder";
+import { TestPanel } from "./studio/TestPanel";
+import Topology from "./console/Topology";
+import SystemInfo from "./console/SystemInfo";
+import Dashboard from "./console/Dashboard";
+import CostCenter from "./console/CostCenter";
+import Governance from "./console/Governance";
+import Security from "./console/Security";
+import Marketplace from "./console/Marketplace";
+
+type View = "workbench" | "studio" | "console";
 
 interface Message {
   role: "user" | "assistant";
@@ -7,6 +19,7 @@ interface Message {
 }
 
 function App() {
+  const [view, setView] = useState<View>("workbench");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("");
@@ -59,8 +72,49 @@ function App() {
     }
   };
 
-  return (
-    <div className="app">
+  const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test">("builder");
+  const [consoleTab, setConsoleTab] = useState<"dashboard" | "topology" | "system" | "cost" | "governance" | "security" | "market">("dashboard");
+
+  const renderStudio = () => (
+    <div className="studio-view">
+      <nav className="studio-tabs">
+        <button className={studioTab === "editor" ? "active" : ""} onClick={() => setStudioTab("editor")}>Component Editor</button>
+        <button className={studioTab === "builder" ? "active" : ""} onClick={() => setStudioTab("builder")}>Agent Builder</button>
+        <button className={studioTab === "test" ? "active" : ""} onClick={() => setStudioTab("test")}>Test Runner</button>
+      </nav>
+      <div className="studio-content">
+        {studioTab === "editor" && <ComponentEditor />}
+        {studioTab === "builder" && <AgentBuilder />}
+        {studioTab === "test" && <TestPanel />}
+      </div>
+    </div>
+  );
+
+  const renderConsole = () => (
+    <div className="console-view">
+      <nav className="console-tabs">
+        <button className={consoleTab === "dashboard" ? "active" : ""} onClick={() => setConsoleTab("dashboard")}>Dashboard</button>
+        <button className={consoleTab === "topology" ? "active" : ""} onClick={() => setConsoleTab("topology")}>Topology</button>
+        <button className={consoleTab === "system" ? "active" : ""} onClick={() => setConsoleTab("system")}>System</button>
+        <button className={consoleTab === "cost" ? "active" : ""} onClick={() => setConsoleTab("cost")}>Cost</button>
+        <button className={consoleTab === "governance" ? "active" : ""} onClick={() => setConsoleTab("governance")}>Governance</button>
+        <button className={consoleTab === "security" ? "active" : ""} onClick={() => setConsoleTab("security")}>Security</button>
+        <button className={consoleTab === "market" ? "active" : ""} onClick={() => setConsoleTab("market")}>Marketplace</button>
+      </nav>
+      <div className="console-content">
+        {consoleTab === "dashboard" && <Dashboard />}
+        {consoleTab === "topology" && <Topology />}
+        {consoleTab === "system" && <SystemInfo />}
+        {consoleTab === "cost" && <CostCenter />}
+        {consoleTab === "governance" && <Governance />}
+        {consoleTab === "security" && <Security />}
+        {consoleTab === "market" && <Marketplace />}
+      </div>
+    </div>
+  );
+
+  const renderWorkbench = () => (
+    <>
       <header className="header">
         <h1>Morn</h1>
         <span className="status">{status}</span>
@@ -91,6 +145,19 @@ function App() {
           Send
         </button>
       </footer>
+    </>
+  );
+
+  return (
+    <div className="app">
+      <nav className="main-tabs">
+        <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")}>Workbench</button>
+        <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")}>Studio</button>
+        <button className={view === "console" ? "active" : ""} onClick={() => setView("console")}>Console</button>
+      </nav>
+      {view === "workbench" && renderWorkbench()}
+      {view === "studio" && renderStudio()}
+      {view === "console" && renderConsole()}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 type ComponentType = "tool" | "knowledge" | "skill" | "persona" | "memory" | "model";
 
@@ -12,10 +13,24 @@ export function ComponentEditor() {
   const [type, setType] = useState<ComponentType>("tool");
   const [def, setDef] = useState<ComponentDef>({ name: "", type: "tool", config: "{}" });
   const [saved, setSaved] = useState(false);
+  const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    try {
+      setError(null);
+      const id = await invoke<string>("create_component", {
+        name: def.name,
+        componentType: def.type,
+        configJson: def.config,
+      });
+      setLastCreatedId(id);
+      setSaved(true);
+      setDef({ name: "", type: "tool", config: "{}" });
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e: any) {
+      setError(e.toString());
+    }
   };
 
   const renderConfigEditor = () => {
@@ -45,7 +60,7 @@ export function ComponentEditor() {
       case "skill":
         return (
           <div>
-            <p>Skill Steps (one per line: tool_id -> depends_on)</p>
+            <p>Skill Steps (one per line: tool_id → depends_on)</p>
             <textarea
               value={def.config}
               onChange={(e) => setDef({ ...def, config: e.target.value })}
@@ -118,7 +133,8 @@ export function ComponentEditor() {
         />
         {renderConfigEditor()}
         <button onClick={handleSave}>Save Component</button>
-        {saved && <span className="saved-indicator">Saved!</span>}
+        {saved && <span className="saved-indicator">Saved! ID: {lastCreatedId}</span>}
+        {error && <span className="error-indicator">Error: {error}</span>}
       </div>
     </div>
   );

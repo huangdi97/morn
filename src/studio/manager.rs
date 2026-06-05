@@ -3,7 +3,7 @@ use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ComponentSummary {
     pub id: String,
     pub name: String,
@@ -12,7 +12,7 @@ pub struct ComponentSummary {
     pub trust_score: f64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ComponentDetail {
     pub id: String,
     pub name: String,

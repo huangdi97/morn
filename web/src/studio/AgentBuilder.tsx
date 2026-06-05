@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface AgentDef {
   name: string;
@@ -12,11 +13,13 @@ interface AgentDef {
 const PERSONAS = ["assistant", "analyst", "researcher", "writer", "coder", "translator", "reviewer"];
 const MODELS = ["deepseek-chat", "deepseek-reasoner", "gpt-4o", "claude-3"];
 const TOOLS = ["web_search", "read_file", "write_file", "exec_python", "get_time", "calc", "send_msg", "http_request"];
-const KNOWLEDGE = ["static", "file", "sqlite"];
 const SKILLS = ["web_research", "data_analysis", "report_gen", "code_review"];
 
 export function AgentBuilder() {
   const [step, setStep] = useState(0);
+  const [agentId, setAgentId] = useState<string | null>(null);
+  const [building, setBuilding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [def, setDef] = useState<AgentDef>({
     name: "",
     persona: "assistant",
@@ -41,6 +44,27 @@ export function AgentBuilder() {
       : ["web_search", "read_file"];
     setDef({ ...def, name: description, persona, tools });
     setStep(1);
+  };
+
+  const handleBuild = async () => {
+    try {
+      setBuilding(true);
+      setError(null);
+      const result = await invoke<{ agent_id: string }>("assemble_agent", {
+        name: def.name,
+        persona: def.persona,
+        model: def.model,
+        tools: def.tools,
+        knowledge: def.knowledge,
+        skills: def.skills,
+      });
+      setAgentId(result.agent_id);
+      setStep(2);
+    } catch (e: any) {
+      setError(e.toString());
+    } finally {
+      setBuilding(false);
+    }
   };
 
   const renderStep = () => {
@@ -94,24 +118,27 @@ export function AgentBuilder() {
             </div>
             <div className="step-buttons">
               <button onClick={() => setStep(0)}>Back</button>
-              <button onClick={() => setStep(2)}>Test Agent</button>
+              <button onClick={handleBuild} disabled={building}>
+                {building ? "Building..." : "Build Agent"}
+              </button>
             </div>
+            {error && <div className="error-indicator">{error}</div>}
           </div>
         );
       case 2:
         return (
           <div className="studio-step">
-            <h3>Test Your Agent</h3>
+            <h3>Agent Created Successfully!</h3>
             <div className="test-panel">
               <p>Agent: {def.name}</p>
               <p>Persona: {def.persona}</p>
               <p>Model: {def.model}</p>
               <p>Tools: {def.tools.join(", ")}</p>
               <p>Skills: {def.skills.join(", ")}</p>
+              {agentId && <p className="agent-id">Agent ID: {agentId}</p>}
             </div>
             <div className="step-buttons">
-              <button onClick={() => setStep(1)}>Back</button>
-              <button onClick={() => alert("Agent created!")}>Create Agent</button>
+              <button onClick={() => { setStep(0); setAgentId(null); }}>Create Another</button>
             </div>
           </div>
         );
@@ -126,7 +153,7 @@ export function AgentBuilder() {
       <div className="steps-indicator">
         <span className={step >= 0 ? "active" : ""}>Describe</span>
         <span className={step >= 1 ? "active" : ""}>Configure</span>
-        <span className={step >= 2 ? "active" : ""}>Test</span>
+        <span className={step >= 2 ? "active" : ""}>Done</span>
       </div>
       {renderStep()}
     </div>

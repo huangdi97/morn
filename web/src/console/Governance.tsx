@@ -1,12 +1,5 @@
 import { useState } from "react";
 
-interface PolicyException {
-  id: string;
-  policy_name: string;
-  reason: string;
-  expires_at: string;
-}
-
 interface ApiKeyInfo {
   id: string;
   name: string;

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface DashboardData {
   total_tasks: number;
@@ -36,15 +37,9 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const result = await (window as any).__TAURI_INTERNALS__?.invoke?.("get_dashboard");
-        if (result) setData(result);
-      } catch {
-        // fallback to defaults
-      }
-    };
-    fetchData();
+    invoke<{ dashboard: DashboardData; system_info: any }>("get_system_status").then((res) => {
+      setData(res.dashboard);
+    }).catch(() => {});
   }, []);
 
   const cards = [

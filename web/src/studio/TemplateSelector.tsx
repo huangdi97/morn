@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface Template {
   id: string;
@@ -9,7 +10,15 @@ interface Template {
   icon: string;
 }
 
-const TEMPLATES: Template[] = [
+interface ComponentSummary {
+  id: string;
+  name: string;
+  component_type: string;
+  status: string;
+  trust_score: number;
+}
+
+const DEFAULT_TEMPLATES: Template[] = [
   { id: "research", name: "Researcher", description: "Rigorous multi-source research agent", persona: "researcher", tools: ["web_search", "read_file", "exec_python"], icon: "🔬" },
   { id: "analyst", name: "Analyst", description: "Data-driven analysis and insights", persona: "analyst", tools: ["web_search", "read_file", "calc"], icon: "📊" },
   { id: "coder", name: "Coder", description: "Code generation and review", persona: "coder", tools: ["read_file", "write_file", "exec_python"], icon: "💻" },
@@ -21,12 +30,29 @@ const TEMPLATES: Template[] = [
 
 export function TemplateSelector({ onSelect }: { onSelect?: (template: Template) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<Template[]>(DEFAULT_TEMPLATES);
+
+  useEffect(() => {
+    invoke<ComponentSummary[]>("list_components", { typeFilter: null }).then((list) => {
+      if (list.length > 0) {
+        const extra: Template[] = list.map((c) => ({
+          id: c.id,
+          name: c.name,
+          description: `Type: ${c.component_type} | Score: ${c.trust_score}`,
+          persona: "assistant",
+          tools: [],
+          icon: "🧩",
+        }));
+        setTemplates([...DEFAULT_TEMPLATES, ...extra]);
+      }
+    }).catch(() => {});
+  }, []);
 
   return (
     <div className="template-selector">
       <h2>Choose a Template</h2>
       <div className="template-grid">
-        {TEMPLATES.map((t) => (
+        {templates.map((t) => (
           <div
             key={t.id}
             className={`template-card ${selected === t.id ? "selected" : ""}`}

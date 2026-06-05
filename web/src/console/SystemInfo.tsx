@@ -1,4 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+
+interface SystemInfoData {
+  version: string;
+  cpu_usage: number;
+  memory_used_mb: number;
+  memory_total_mb: number;
+  disk_free_mb: number;
+  os: string;
+  uptime_secs: number;
+}
 
 const cardStyle: React.CSSProperties = {
   background: "#161b22",
@@ -8,17 +19,23 @@ const cardStyle: React.CSSProperties = {
 };
 
 export default function SystemInfo() {
-  const [info] = useState({
+  const [info, setInfo] = useState<SystemInfoData>({
     version: "0.1.0",
-    cpu_usage: 12.5,
-    memory_used_mb: 256,
+    cpu_usage: 0,
+    memory_used_mb: 0,
     memory_total_mb: 8192,
     disk_free_mb: 50000,
     os: "linux",
-    uptime_secs: 45000,
+    uptime_secs: 0,
   });
 
-  const memoryPercent = (info.memory_used_mb / info.memory_total_mb) * 100;
+  useEffect(() => {
+    invoke<{ dashboard: any; system_info: SystemInfoData }>("get_system_status").then((res) => {
+      setInfo(res.system_info);
+    }).catch(() => {});
+  }, []);
+
+  const memoryPercent = info.memory_total_mb > 0 ? (info.memory_used_mb / info.memory_total_mb) * 100 : 0;
   const diskPercent = (info.disk_free_mb / 100000) * 100;
   const uptimeHours = (info.uptime_secs / 3600).toFixed(1);
 
