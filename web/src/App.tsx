@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ComponentEditor } from "./studio/ComponentEditor";
 import { AgentBuilder } from "./studio/AgentBuilder";
 import { TestPanel } from "./studio/TestPanel";
+import { QuickActions } from "./QuickActions";
 import Topology from "./console/Topology";
 import SystemInfo from "./console/SystemInfo";
 import Dashboard from "./console/Dashboard";
@@ -106,6 +107,10 @@ function App() {
     setStatus(`v${s.version} | ${s.turn_count} turns`);
   };
 
+  const sendQuickAction = async (text: string) => {
+    setInput(text);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -175,6 +180,14 @@ function App() {
       </header>
 
       <main className="chat-area">
+        {messages.length === 0 && (
+          <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-secondary)" }}>
+            <div style={{ fontSize: "48px", marginBottom: "12px" }}>🤖</div>
+            <h2 style={{ color: "var(--text-primary)", margin: "0 0 8px 0" }}>欢迎使用 Morn</h2>
+            <p style={{ fontSize: "14px", margin: "0 0 24px 0" }}>选择快捷任务或直接输入你的问题</p>
+            <QuickActions onSend={sendQuickAction} />
+          </div>
+        )}
         {messages.map((msg, i) => (
           <div key={i} className={`message ${msg.role}`}>
             <div className="avatar">{msg.role === "user" ? "U" : "M"}</div>

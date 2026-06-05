@@ -4,54 +4,55 @@ import { invoke } from "@tauri-apps/api/core";
 interface Template {
   id: string;
   name: string;
+  icon: string;
   description: string;
   persona: string;
+  model: string;
   tools: string[];
-  icon: string;
+  knowledge: string[];
+  skills: string[];
 }
 
-interface ComponentSummary {
-  id: string;
-  name: string;
-  component_type: string;
-  status: string;
-  trust_score: number;
-}
-
-const DEFAULT_TEMPLATES: Template[] = [
-  { id: "research", name: "Researcher", description: "Rigorous multi-source research agent", persona: "researcher", tools: ["web_search", "read_file", "exec_python"], icon: "🔬" },
-  { id: "analyst", name: "Analyst", description: "Data-driven analysis and insights", persona: "analyst", tools: ["web_search", "read_file", "calc"], icon: "📊" },
-  { id: "coder", name: "Coder", description: "Code generation and review", persona: "coder", tools: ["read_file", "write_file", "exec_python"], icon: "💻" },
-  { id: "writer", name: "Writer", description: "Content creation and editing", persona: "writer", tools: ["web_search", "read_file"], icon: "✍️" },
-  { id: "assistant", name: "Assistant", description: "General purpose helper", persona: "assistant", tools: ["web_search", "read_file", "get_time", "calc"], icon: "🤖" },
-  { id: "translator", name: "Translator", description: "Multi-language translation", persona: "translator", tools: ["web_search"], icon: "🌐" },
-  { id: "reviewer", name: "Reviewer", description: "Code and document review specialist", persona: "reviewer", tools: ["read_file"], icon: "👁️" },
+const FALLBACK_TEMPLATES: Template[] = [
+  { id: "research-assistant", name: "研究助手", icon: "🔬", description: "多源信息检索、知识整合与摘要生成", persona: "researcher", model: "deepseek-chat", tools: ["web_search", "read_file"], knowledge: ["docs", "data_sources"], skills: ["summarization", "report_generation"] },
+  { id: "data-analyst", name: "数据分析师", icon: "📊", description: "获取行情数据、计算技术指标、生成图表", persona: "analyst", model: "deepseek-chat", tools: ["get_kline", "calc_macd", "chart", "exec_python"], knowledge: ["docs", "data_sources"], skills: ["report_generation"] },
+  { id: "writing-assistant", name: "写作助手", icon: "✍️", description: "翻译、语法检查、格式润色与风格优化", persona: "writer", model: "deepseek-chat", tools: ["web_search", "read_file", "write_file"], knowledge: ["glossary"], skills: ["translation", "grammar_check", "format", "style", "proofread"] },
+  { id: "coding-helper", name: "编码助手", icon: "💻", description: "代码审查、调试、格式化和测试", persona: "coder", model: "deepseek-chat", tools: ["read_file", "write_file", "exec_python"], knowledge: ["docs"], skills: ["code_review", "debug", "format", "test"] },
+  { id: "translation-agent", name: "翻译 Agent", icon: "🌐", description: "多语言翻译、校对和专业术语管理", persona: "translator", model: "deepseek-chat", tools: ["web_search", "read_file"], knowledge: ["glossary"], skills: ["translation", "proofread"] },
+  { id: "general-assistant", name: "通用助手", icon: "🤖", description: "混合工具集的通用助手，适合日常问答", persona: "assistant", model: "deepseek-chat", tools: ["web_search", "read_file", "get_time", "calc"], knowledge: ["docs"], skills: [] },
 ];
 
-export function TemplateSelector({ onSelect }: { onSelect?: (template: Template) => void }) {
+interface TemplateSelectorProps {
+  onSelect?: (template: Template) => void;
+}
+
+export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
   const [selected, setSelected] = useState<string | null>(null);
-  const [templates, setTemplates] = useState<Template[]>(DEFAULT_TEMPLATES);
+  const [templates, setTemplates] = useState<Template[]>(FALLBACK_TEMPLATES);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    invoke<ComponentSummary[]>("list_components", { typeFilter: null }).then((list) => {
+    invoke<Template[]>("list_agent_templates").then((list) => {
       if (list.length > 0) {
-        const extra: Template[] = list.map((c) => ({
-          id: c.id,
-          name: c.name,
-          description: `Type: ${c.component_type} | Score: ${c.trust_score}`,
-          persona: "assistant",
-          tools: [],
-          icon: "🧩",
-        }));
-        setTemplates([...DEFAULT_TEMPLATES, ...extra]);
+        setTemplates(list);
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  const componentTags = (t: Template): string[] => {
+    const tags: string[] = [];
+    tags.push(`🧑 ${t.persona}`);
+    tags.push(`🤖 ${t.model}`);
+    if (t.tools.length > 0) tags.push(`🔧 ${t.tools.length} tools`);
+    if (t.skills.length > 0) tags.push(`⚡ ${t.skills.length} skills`);
+    return tags;
+  };
 
   return (
     <div className="template-selector">
-      <h2>Choose a Template</h2>
-      <div className="template-grid">
+      <h2>选择一个模板</h2>
+      {loading && <p style={{ color: "var(--text-secondary)" }}>加载中...</p>}
+      <div className="template-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "12px" }}>
         {templates.map((t) => (
           <div
             key={t.id}
@@ -60,11 +61,39 @@ export function TemplateSelector({ onSelect }: { onSelect?: (template: Template)
               setSelected(t.id);
               onSelect?.(t);
             }}
+            style={{
+              background: selected === t.id ? "var(--bg-tertiary)" : "var(--bg-secondary)",
+              border: selected === t.id ? "2px solid var(--accent)" : "1px solid var(--border)",
+              borderRadius: "8px",
+              padding: "16px",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
           >
-            <div className="template-icon">{t.icon}</div>
-            <div className="template-name">{t.name}</div>
-            <div className="template-desc">{t.description}</div>
-            <div className="template-tools">{t.tools.join(", ")}</div>
+            <div style={{ fontSize: "28px", marginBottom: "8px" }}>{t.icon}</div>
+            <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px", fontSize: "15px" }}>{t.name}</div>
+            <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "10px", lineHeight: "1.4" }}>{t.description}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "12px" }}>
+              {componentTags(t).map((tag, i) => (
+                <span key={i} style={{
+                  fontSize: "11px", padding: "2px 6px", borderRadius: "4px",
+                  background: "var(--bg-tertiary)", color: "var(--text-secondary)",
+                  border: "1px solid var(--border)",
+                }}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelect?.(t); }}
+              style={{
+                width: "100%", padding: "6px 12px", borderRadius: "6px",
+                background: "var(--accent)", color: "#fff", border: "none",
+                cursor: "pointer", fontSize: "13px", fontWeight: 500,
+              }}
+            >
+              使用此模板
+            </button>
           </div>
         ))}
       </div>

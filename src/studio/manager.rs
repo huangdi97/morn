@@ -78,6 +78,13 @@ impl StudioManager {
         components
     }
 
+    pub fn list_templates(&self) -> Vec<crate::core::registry::AgentTemplate> {
+        self.registry
+            .as_ref()
+            .map(|r| r.list_templates().into_iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
     pub fn get_component(&self, id: &str) -> Result<ComponentDetail, String> {
         if let Some(ref storage) = self.storage {
             if let Some(agent) = storage.get_agent(id)? {

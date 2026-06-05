@@ -1,6 +1,17 @@
 use crate::core::event_bus::{SimpleEventBus, EVENT_SUPERVISOR_PLAN_CREATED, EVENT_TASK_COMPLETED};
 use crate::core::storage::{DecisionRecord, Storage, TaskRecord};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NLAgentDef {
+    pub name: String,
+    pub persona: String,
+    pub model: String,
+    pub tools: Vec<String>,
+    pub knowledge: Vec<String>,
+    pub skills: Vec<String>,
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SubTaskDef {
@@ -406,6 +417,52 @@ impl Supervisor {
 
         let result = self.execute_plan(&plan, chat_fn)?;
         Ok(result.summary)
+    }
+
+    pub fn create_agent_from_nl(
+        &self,
+        nl: &str,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+    ) -> Result<NLAgentDef, String> {
+        let system_prompt = "You are an agent configuration assistant. Analyze the user's natural language description and return a JSON object with the agent definition. Only return valid JSON, no markdown, no explanation.";
+
+        let prompt = format!(
+            r#"User wants to create an agent. Analyze this description:
+{}
+Available personas: assistant, analyst, researcher, writer, coder, translator, reviewer
+Available models: deepseek-chat, deepseek-reasoner
+Available tools: web_search, read_file, write_file, exec_python, calc, get_time, get_kline, calc_macd, chart
+Available knowledge: docs, glossary, data_sources
+Available skills: summarization, translation, code_review, grammar_check, format, style, proofread, report_generation, debug, test
+
+Return a JSON object with exactly these fields (all strings or string arrays):
+{{
+  "name": "short agent name (2-5 words)",
+  "persona": "most appropriate persona from the list above",
+  "model": "deepseek-chat",
+  "tools": ["list", "of", "tool", "names"],
+  "knowledge": ["list", "of", "knowledge", "sources"],
+  "skills": ["list", "of", "skills"]
+}}
+Select tools, knowledge, and skills that best match the user's described use case."#,
+            nl
+        );
+
+        let response = chat_fn(&prompt, system_prompt)?;
+
+        let cleaned = response
+            .trim()
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+
+        serde_json::from_str::<NLAgentDef>(cleaned).map_err(|e| {
+            format!(
+                "Failed to parse LLM response as AgentDef: {}. Raw: {}",
+                e, cleaned
+            )
+        })
     }
 
     pub fn clear_history(&mut self) {

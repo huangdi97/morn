@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { NodeCanvas } from "./NodeCanvas";
 
 interface AgentDef {
   name: string;
@@ -20,6 +21,13 @@ interface ComponentSummary {
 const PERSONAS = ["assistant", "analyst", "researcher", "writer", "coder", "translator", "reviewer"];
 const MODELS = ["deepseek-chat", "deepseek-reasoner", "gpt-4o", "claude-3"];
 
+const NL_EXAMPLES = [
+  "创建一个股票分析助手，能获取行情数据、计算 MACD/RSI 指标、分析市场情绪并生成报告",
+  "帮我写一个生物文献翻译 Agent，能查 PubMed，翻译论文并总结要点",
+  "一个代码审查助手，可以检查代码质量、运行测试并生成审查报告",
+  "数据分析 Agent，能搜索网络、读取文件、计算指标并生成图表",
+];
+
 export function AgentBuilder() {
   const [step, setStep] = useState(0);
   const [agentId, setAgentId] = useState<string | null>(null);
@@ -27,6 +35,10 @@ export function AgentBuilder() {
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishMsg, setPublishMsg] = useState<string | null>(null);
+  const [mode, setMode] = useState<"nl" | "form">("nl");
+  const [nlInput, setNlInput] = useState("");
+  const [nlLoading, setNlLoading] = useState(false);
+  const [editTab, setEditTab] = useState<"form" | "visual">("form");
   const [def, setDef] = useState<AgentDef>({
     name: "",
     persona: "assistant",
@@ -49,6 +61,22 @@ export function AgentBuilder() {
 
   const toggleArray = (arr: string[], item: string): string[] => {
     return arr.includes(item) ? arr.filter((x) => x !== item) : [...arr, item];
+  };
+
+  const handleNLGenerate = async () => {
+    if (!nlInput.trim()) return;
+    setNlLoading(true);
+    setError(null);
+    try {
+      const result = await invoke<string>("create_agent_from_description", { nl: nlInput.trim() });
+      const parsed: AgentDef = JSON.parse(result);
+      setDef(parsed);
+      setStep(1);
+    } catch (e: any) {
+      setError(e.toString());
+    } finally {
+      setNlLoading(false);
+    }
   };
 
   const buildFromNaturalLanguage = async (description: string) => {
@@ -99,66 +127,191 @@ export function AgentBuilder() {
     }
   };
 
+  const renderModeToggle = () => {
+    if (step !== 0) return null;
+    return (
+      <div className="mode-toggle" style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+        <button
+          className={mode === "nl" ? "active" : ""}
+          onClick={() => setMode("nl")}
+          style={{
+            flex: 1, padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)",
+            background: mode === "nl" ? "var(--accent)" : "var(--bg-secondary)",
+            color: mode === "nl" ? "#fff" : "var(--text-primary)", cursor: "pointer",
+          }}
+        >
+          自然语言描述
+        </button>
+        <button
+          className={mode === "form" ? "active" : ""}
+          onClick={() => setMode("form")}
+          style={{
+            flex: 1, padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)",
+            background: mode === "form" ? "var(--accent)" : "var(--bg-secondary)",
+            color: mode === "form" ? "#fff" : "var(--text-primary)", cursor: "pointer",
+          }}
+        >
+          手动编辑
+        </button>
+      </div>
+    );
+  };
+
+  const renderEditTabs = () => {
+    if (step !== 1) return null;
+    return (
+      <div className="mode-toggle" style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+        <button
+          className={editTab === "form" ? "active" : ""}
+          onClick={() => setEditTab("form")}
+          style={{
+            flex: 1, padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)",
+            background: editTab === "form" ? "var(--accent)" : "var(--bg-secondary)",
+            color: editTab === "form" ? "#fff" : "var(--text-primary)", cursor: "pointer",
+          }}
+        >
+          表单编辑
+        </button>
+        <button
+          className={editTab === "visual" ? "active" : ""}
+          onClick={() => setEditTab("visual")}
+          style={{
+            flex: 1, padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)",
+            background: editTab === "visual" ? "var(--accent)" : "var(--bg-secondary)",
+            color: editTab === "visual" ? "#fff" : "var(--text-primary)", cursor: "pointer",
+          }}
+        >
+          可视化编辑
+        </button>
+      </div>
+    );
+  };
+
   const renderStep = () => {
     switch (step) {
       case 0:
         return (
           <div className="studio-step">
-            <h3>Describe your Agent</h3>
-            <p>Tell me what you want the agent to do in natural language</p>
-            <input
-              type="text"
-              placeholder="e.g. A biology research agent"
-              value={def.name}
-              onChange={(e) => setDef({ ...def, name: e.target.value })}
-              onKeyDown={(e) => e.key === "Enter" && buildFromNaturalLanguage(def.name)}
-            />
-            <button onClick={() => buildFromNaturalLanguage(def.name)}>Build</button>
+            {renderModeToggle()}
+            {mode === "nl" ? (
+              <>
+                <h3>用自然语言描述你的 Agent</h3>
+                <p>输入一句话，AI 自动分析并生成 Agent 配置</p>
+                <textarea
+                  value={nlInput}
+                  onChange={(e) => setNlInput(e.target.value)}
+                  placeholder='例如："创建一个股票分析助手，能获取行情数据、计算技术指标并生成报告"'
+                  rows={5}
+                  style={{
+                    width: "100%", padding: "12px", borderRadius: "6px",
+                    border: "1px solid var(--border)", background: "var(--bg-secondary)",
+                    color: "var(--text-primary)", fontSize: "14px", resize: "vertical",
+                    fontFamily: "inherit",
+                  }}
+                />
+                <button
+                  onClick={handleNLGenerate}
+                  disabled={nlLoading || !nlInput.trim()}
+                  style={{ marginTop: "12px" }}
+                >
+                  {nlLoading ? "AI 分析中..." : "生成 Agent"}
+                </button>
+                <div style={{ marginTop: "16px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                  <p>示例：</p>
+                  {NL_EXAMPLES.map((ex, i) => (
+                    <div
+                      key={i}
+                      onClick={() => setNlInput(ex)}
+                      style={{
+                        cursor: "pointer", padding: "6px 10px", margin: "4px 0",
+                        borderRadius: "4px", background: "var(--bg-tertiary)",
+                        border: "1px solid var(--border)",
+                      }}
+                    >
+                      {ex}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <h3>Describe your Agent</h3>
+                <p>Tell me what you want the agent to do in natural language</p>
+                <input
+                  type="text"
+                  placeholder="e.g. A biology research agent"
+                  value={def.name}
+                  onChange={(e) => setDef({ ...def, name: e.target.value })}
+                  onKeyDown={(e) => e.key === "Enter" && buildFromNaturalLanguage(def.name)}
+                />
+                <button onClick={() => buildFromNaturalLanguage(def.name)}>Build</button>
+              </>
+            )}
+            {error && <div className="error-indicator">{error}</div>}
           </div>
         );
       case 1:
         return (
           <div className="studio-step">
-            <h3>Configure Persona & Model</h3>
-            <label>Persona:</label>
-            <select value={def.persona} onChange={(e) => setDef({ ...def, persona: e.target.value })}>
-              {PERSONAS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <label>Model:</label>
-            <select value={def.model} onChange={(e) => setDef({ ...def, model: e.target.value })}>
-              {MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <label>Tools:</label>
-            <div className="checkbox-group">
-              {tools.map((t) => (
-                <label key={t}>
-                  <input type="checkbox" checked={def.tools.includes(t)}
-                    onChange={() => setDef({ ...def, tools: toggleArray(def.tools, t) })} />
-                  {t}
-                </label>
-              ))}
-            </div>
-            <label>Knowledge:</label>
-            <div className="checkbox-group">
-              {knowledge.map((k) => (
-                <label key={k}>
-                  <input type="checkbox" checked={def.knowledge.includes(k)}
-                    onChange={() => setDef({ ...def, knowledge: toggleArray(def.knowledge, k) })} />
-                  {k}
-                </label>
-              ))}
-            </div>
-            <label>Skills:</label>
-            <div className="checkbox-group">
-              {skills.map((s) => (
-                <label key={s}>
-                  <input type="checkbox" checked={def.skills.includes(s)}
-                    onChange={() => setDef({ ...def, skills: toggleArray(def.skills, s) })} />
-                  {s}
-                </label>
-              ))}
-            </div>
-            <div className="step-buttons">
+            {renderEditTabs()}
+            {editTab === "form" ? (
+              <>
+                <h3>Configure Persona & Model</h3>
+                <label>Agent Name:</label>
+                <input
+                  type="text"
+                  value={def.name}
+                  onChange={(e) => setDef({ ...def, name: e.target.value })}
+                />
+                <label>Persona:</label>
+                <select value={def.persona} onChange={(e) => setDef({ ...def, persona: e.target.value })}>
+                  {PERSONAS.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <label>Model:</label>
+                <select value={def.model} onChange={(e) => setDef({ ...def, model: e.target.value })}>
+                  {MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <label>Tools:</label>
+                <div className="checkbox-group">
+                  {tools.map((t) => (
+                    <label key={t}>
+                      <input type="checkbox" checked={def.tools.includes(t)}
+                        onChange={() => setDef({ ...def, tools: toggleArray(def.tools, t) })} />
+                      {t}
+                    </label>
+                  ))}
+                </div>
+                <label>Knowledge:</label>
+                <div className="checkbox-group">
+                  {knowledge.map((k) => (
+                    <label key={k}>
+                      <input type="checkbox" checked={def.knowledge.includes(k)}
+                        onChange={() => setDef({ ...def, knowledge: toggleArray(def.knowledge, k) })} />
+                      {k}
+                    </label>
+                  ))}
+                </div>
+                <label>Skills:</label>
+                <div className="checkbox-group">
+                  {skills.map((s) => (
+                    <label key={s}>
+                      <input type="checkbox" checked={def.skills.includes(s)}
+                        onChange={() => setDef({ ...def, skills: toggleArray(def.skills, s) })} />
+                      {s}
+                    </label>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <h3>可视化节点编辑</h3>
+                <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px" }}>
+                  从左侧组件库拖拽组件到画布，连接端口构建 Agent
+                </p>
+                <NodeCanvas def={def} onDefChange={setDef} />
+              </>
+            )}
+            <div className="step-buttons" style={{ marginTop: "12px" }}>
               <button onClick={() => setStep(0)}>Back</button>
               <button onClick={handleBuild} disabled={building}>
                 {building ? "Building..." : "Build Agent"}

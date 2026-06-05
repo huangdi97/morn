@@ -4,7 +4,7 @@ use tauri::State;
 use morn::console::ConsoleBackend;
 use morn::core::assembler::AgentDef;
 use morn::core::storage::Storage;
-use morn::core::supervisor::Supervisor;
+use morn::core::supervisor::{NLAgentDef, Supervisor};
 use morn::org::audit::AuditLogger;
 use morn::org::permissions::PermissionChecker;
 use morn::org::team::{TeamManager, UserManager};
@@ -198,6 +198,16 @@ fn assemble_agent(
 }
 
 #[tauri::command]
+fn list_agent_templates(state: State<AppState>) -> Result<serde_json::Value, String> {
+    let manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let mgr = manager
+        .as_ref()
+        .ok_or_else(|| "StudioManager not initialized".to_string())?;
+    let templates = mgr.list_templates();
+    Ok(serde_json::to_value(templates).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
 fn test_component(
     id: String,
     input: String,
@@ -358,6 +368,25 @@ fn revoke_permission(
 }
 
 #[tauri::command]
+fn create_agent_from_description(nl: String, state: State<AppState>) -> Result<String, String> {
+    let api_key = std::env::var("MORN_API_KEY").map_err(|_| "MORN_API_KEY not set".to_string())?;
+    let chat_agent = morn::bridge::chat_agent::ChatAgent::new(
+        &api_key,
+        "https://api.deepseek.com",
+        "deepseek-chat",
+    );
+
+    let supervisor = state.supervisor.lock().map_err(|e| e.to_string())?;
+    let sup = supervisor
+        .as_ref()
+        .ok_or_else(|| "Supervisor not initialized.".to_string())?;
+
+    let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
+    let nl_def = sup.create_agent_from_nl(&nl, &chat_fn)?;
+    serde_json::to_string(&nl_def).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_audit_log(
     user_id: Option<String>,
     action_type: Option<String>,
@@ -433,6 +462,8 @@ pub fn run() {
             remove_member,
             grant_permission,
             revoke_permission,
+            create_agent_from_description,
+            list_agent_templates,
             get_audit_log,
         ])
         .run(tauri::generate_context!())
