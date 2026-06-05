@@ -1,4 +1,6 @@
-use crate::core::component::{Component, Data, HealthStatus, IOComponent, Port, PortDirection, SecureComponent, Permission};
+use crate::core::component::{
+    Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
+};
 
 #[derive(Debug, Clone)]
 pub enum CostTier {
@@ -17,7 +19,11 @@ pub struct ModelParameters {
 
 impl Default for ModelParameters {
     fn default() -> Self {
-        ModelParameters { temperature: 0.6, max_tokens: 4096, top_p: 0.9 }
+        ModelParameters {
+            temperature: 0.6,
+            max_tokens: 4096,
+            top_p: 0.9,
+        }
     }
 }
 
@@ -40,10 +46,15 @@ pub struct ModelComponent {
 
 impl ModelComponent {
     pub fn new(config: ModelConfig) -> Self {
-        ModelComponent { id: config.id.clone(), config }
+        ModelComponent {
+            id: config.id.clone(),
+            config,
+        }
     }
 
-    pub fn config(&self) -> &ModelConfig { &self.config }
+    pub fn config(&self) -> &ModelConfig {
+        &self.config
+    }
 
     pub fn chat(&self, _prompt: &str, _system: &str) -> Result<String, String> {
         let model = &self.config.model_name;
@@ -53,28 +64,58 @@ impl ModelComponent {
 }
 
 impl Component for ModelComponent {
-    fn id(&self) -> &str { &self.id }
-    fn type_name(&self) -> &str { "model" }
-    fn init(&mut self) -> Result<(), String> { Ok(()) }
-    fn run(&mut self) -> Result<(), String> { Ok(()) }
-    fn pause(&mut self) -> Result<(), String> { Ok(()) }
-    fn stop(&mut self) -> Result<(), String> { Ok(()) }
-    fn health_check(&self) -> HealthStatus { HealthStatus::Healthy }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn type_name(&self) -> &str {
+        "model"
+    }
+    fn init(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn run(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn pause(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn stop(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn health_check(&self) -> HealthStatus {
+        HealthStatus::Healthy
+    }
 }
 
 impl IOComponent for ModelComponent {
     fn ports(&self) -> Vec<Port> {
         vec![
-            Port { id: "input".into(), direction: PortDirection::Input, data_type: "text".into(), description: "prompt".into() },
-            Port { id: "output".into(), direction: PortDirection::Output, data_type: "text".into(), description: "response".into() },
+            Port {
+                id: "input".into(),
+                direction: PortDirection::Input,
+                data_type: "text".into(),
+                description: "prompt".into(),
+            },
+            Port {
+                id: "output".into(),
+                direction: PortDirection::Output,
+                data_type: "text".into(),
+                description: "response".into(),
+            },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> { Ok(()) }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> { Ok(None) }
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+        Ok(())
+    }
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+        Ok(None)
+    }
 }
 
 impl SecureComponent for ModelComponent {
-    fn required_permissions(&self) -> Vec<Permission> { vec![Permission::NetworkAccess] }
+    fn required_permissions(&self) -> Vec<Permission> {
+        vec![Permission::NetworkAccess]
+    }
 }
 
 pub fn create_default_models() -> Vec<ModelConfig> {
@@ -95,7 +136,11 @@ pub fn create_default_models() -> Vec<ModelConfig> {
             model_name: "deepseek-reasoner".into(),
             base_url: "https://api.deepseek.com".into(),
             api_key: String::new(),
-            parameters: ModelParameters { temperature: 0.3, max_tokens: 8192, top_p: 0.9 },
+            parameters: ModelParameters {
+                temperature: 0.3,
+                max_tokens: 8192,
+                top_p: 0.9,
+            },
             fallback: None,
             cost_tier: CostTier::Medium,
         },

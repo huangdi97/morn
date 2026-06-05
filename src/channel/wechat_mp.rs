@@ -8,11 +8,18 @@ pub struct WeChatMpChannel {
 
 impl WeChatMpChannel {
     pub fn new(app_id: &str, app_secret: &str) -> Self {
-        WeChatMpChannel { app_id: app_id.to_string(), app_secret: app_secret.to_string(), adapter_ref: false }
+        WeChatMpChannel {
+            app_id: app_id.to_string(),
+            app_secret: app_secret.to_string(),
+            adapter_ref: false,
+        }
     }
 
     pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {
-        println!("[WeChat MP] Sending message: {} (to user via template msg)", msg.content);
+        println!(
+            "[WeChat MP] Sending message: {} (to user via template msg)",
+            msg.content
+        );
         Ok(())
     }
 
@@ -26,6 +33,9 @@ impl WeChatMpChannel {
     }
 
     pub fn handle_event(&self, event_type: &str, payload: &str) -> Result<String, String> {
-        Ok(format!("[WeChat MP] handled event '{}': {}", event_type, payload))
+        Ok(format!(
+            "[WeChat MP] handled event '{}': {}",
+            event_type, payload
+        ))
     }
 }

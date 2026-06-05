@@ -24,31 +24,33 @@ impl StudioTester {
         StudioTester
     }
 
-    pub fn run_test(
-        &self,
-        component_type: &str,
-        _input: &Data,
-        _config: &str,
-    ) -> TestResult {
+    pub fn run_test(&self, component_type: &str, _input: &Data, _config: &str) -> TestResult {
         let mut steps = Vec::new();
         let mut total_duration = 0.0;
 
-        let (prompt_duration, persona_step) = if component_type == "persona" || component_type == "agent" {
-            let d = 0.02;
-            (d, TestStep {
-                name: "persona_injection".into(),
-                description: "Enhance system prompt with persona".into(),
-                duration_ms: d,
-                success: true,
-            })
-        } else {
-            (0.0, TestStep {
-                name: "persona_injection".into(),
-                description: "Persona injection (skipped)".into(),
-                duration_ms: 0.0,
-                success: true,
-            })
-        };
+        let (prompt_duration, persona_step) =
+            if component_type == "persona" || component_type == "agent" {
+                let d = 0.02;
+                (
+                    d,
+                    TestStep {
+                        name: "persona_injection".into(),
+                        description: "Enhance system prompt with persona".into(),
+                        duration_ms: d,
+                        success: true,
+                    },
+                )
+            } else {
+                (
+                    0.0,
+                    TestStep {
+                        name: "persona_injection".into(),
+                        description: "Persona injection (skipped)".into(),
+                        duration_ms: 0.0,
+                        success: true,
+                    },
+                )
+            };
         total_duration += prompt_duration;
         steps.push(persona_step);
 

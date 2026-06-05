@@ -1,6 +1,8 @@
+use crate::core::event_bus::{
+    SimpleEventBus, EVENT_SUPERVISOR_PLAN_CREATED, EVENT_TASK_COMPLETED, EVENT_TASK_FAILED,
+};
+use crate::core::storage::{DecisionRecord, Storage, TaskRecord};
 use serde_json::Value;
-use crate::core::event_bus::{SimpleEventBus, EVENT_SUPERVISOR_PLAN_CREATED, EVENT_TASK_COMPLETED, EVENT_TASK_FAILED};
-use crate::core::storage::{Storage, TaskRecord, DecisionRecord};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SubTaskDef {
@@ -113,35 +115,93 @@ impl Supervisor {
         }
     }
 
-    pub fn turn_count(&self) -> u64 { self.turn_count }
-    pub fn history(&self) -> &[TurnRecord] { &self.history }
-    pub fn mode(&self) -> &CooMode { &self.mode }
-    pub fn set_mode(&mut self, mode: CooMode) { self.mode = mode; }
+    pub fn turn_count(&self) -> u64 {
+        self.turn_count
+    }
+    pub fn history(&self) -> &[TurnRecord] {
+        &self.history
+    }
+    pub fn mode(&self) -> &CooMode {
+        &self.mode
+    }
+    pub fn set_mode(&mut self, mode: CooMode) {
+        self.mode = mode;
+    }
 
     pub fn decide_level(&self, text: &str) -> DecisionLevel {
         let text_lower = text.to_lowercase();
 
-        let simple_indicators = ["hello", "hi ", "thanks", "bye", "who are you", "what is your name", "good morning"];
-        if simple_indicators.iter().any(|s| text_lower.contains(s) || text_lower == s.trim()) {
+        let simple_indicators = [
+            "hello",
+            "hi ",
+            "thanks",
+            "bye",
+            "who are you",
+            "what is your name",
+            "good morning",
+        ];
+        if simple_indicators
+            .iter()
+            .any(|s| text_lower.contains(s) || text_lower == s.trim())
+        {
             return DecisionLevel::L1DirectAnswer;
         }
 
-        let tool_indicators = ["search", "look up", "find ", "calculate", "compute", "convert", "translate", "what time", "what's the time"];
+        let tool_indicators = [
+            "search",
+            "look up",
+            "find ",
+            "calculate",
+            "compute",
+            "convert",
+            "translate",
+            "what time",
+            "what's the time",
+        ];
         if tool_indicators.iter().any(|s| text_lower.contains(s)) {
             return DecisionLevel::L2SingleTool;
         }
 
-        let studio_indicators = ["create an agent", "create a agent", "build an agent", "make an agent", "design a agent", "customize", "configure", "create workflow"];
-        if studio_indicators.iter().any(|s| text_lower.contains(s) || text_lower.starts_with(s.trim())) {
+        let studio_indicators = [
+            "create an agent",
+            "create a agent",
+            "build an agent",
+            "make an agent",
+            "design a agent",
+            "customize",
+            "configure",
+            "create workflow",
+        ];
+        if studio_indicators
+            .iter()
+            .any(|s| text_lower.contains(s) || text_lower.starts_with(s.trim()))
+        {
             return DecisionLevel::L6JumpToStudio;
         }
 
-        let workflow_indicators = ["report", "analysis", "research", "investigate", "compare", "plan", "strategy", "create a"];
+        let workflow_indicators = [
+            "report",
+            "analysis",
+            "research",
+            "investigate",
+            "compare",
+            "plan",
+            "strategy",
+            "create a",
+        ];
         if workflow_indicators.iter().any(|s| text_lower.contains(s)) {
             return DecisionLevel::L5Workflow;
         }
 
-        let team_indicators = ["complex", "multi-step", "multiple", "various", "comprehensive", "full", "end-to-end"];
+        let team_indicators = [
+            "complex",
+            "multi-step",
+            "multiple",
+            "various",
+            "comprehensive",
+            "full",
+            "end-to-end",
+        ];
         if team_indicators.iter().any(|s| text_lower.contains(s)) {
             return DecisionLevel::L4Team;
         }
@@ -150,7 +210,9 @@ impl Supervisor {
     }
 
     pub fn build_context(&self, current_input: &str) -> String {
-        let mut context = String::from("[System]\nYou are Morn, a helpful AI assistant.\n\n[Conversation History]\n");
+        let mut context = String::from(
+            "[System]\nYou are Morn, a helpful AI assistant.\n\n[Conversation History]\n",
+        );
 
         let start = if self.history.len() > self.max_history {
             self.history.len() - self.max_history
@@ -159,11 +221,18 @@ impl Supervisor {
         };
 
         for turn in &self.history[start..] {
-            let role = if turn.role == "user" { "User" } else { "Assistant" };
+            let role = if turn.role == "user" {
+                "User"
+            } else {
+                "Assistant"
+            };
             context.push_str(&format!("{}: {}\n", role, turn.content));
         }
 
-        context.push_str(&format!("\n[Current]\nUser: {}\nAssistant:\n", current_input));
+        context.push_str(&format!(
+            "\n[Current]\nUser: {}\nAssistant:\n",
+            current_input
+        ));
         context
     }
 
@@ -344,34 +413,58 @@ mod tests {
     #[test]
     fn test_decide_level_simple() {
         let supervisor = Supervisor::new(None, None);
-        assert_eq!(supervisor.decide_level("hello"), DecisionLevel::L1DirectAnswer);
-        assert_eq!(supervisor.decide_level("thanks"), DecisionLevel::L1DirectAnswer);
+        assert_eq!(
+            supervisor.decide_level("hello"),
+            DecisionLevel::L1DirectAnswer
+        );
+        assert_eq!(
+            supervisor.decide_level("thanks"),
+            DecisionLevel::L1DirectAnswer
+        );
     }
 
     #[test]
     fn test_decide_level_tool() {
         let supervisor = Supervisor::new(None, None);
-        assert_eq!(supervisor.decide_level("search for AI news"), DecisionLevel::L2SingleTool);
-        assert_eq!(supervisor.decide_level("calculate 2+2"), DecisionLevel::L2SingleTool);
+        assert_eq!(
+            supervisor.decide_level("search for AI news"),
+            DecisionLevel::L2SingleTool
+        );
+        assert_eq!(
+            supervisor.decide_level("calculate 2+2"),
+            DecisionLevel::L2SingleTool
+        );
     }
 
     #[test]
     fn test_decide_level_workflow() {
         let supervisor = Supervisor::new(None, None);
-        assert_eq!(supervisor.decide_level("create a report"), DecisionLevel::L5Workflow);
-        assert_eq!(supervisor.decide_level("analysis"), DecisionLevel::L5Workflow);
+        assert_eq!(
+            supervisor.decide_level("create a report"),
+            DecisionLevel::L5Workflow
+        );
+        assert_eq!(
+            supervisor.decide_level("analysis"),
+            DecisionLevel::L5Workflow
+        );
     }
 
     #[test]
     fn test_decide_level_studio() {
         let supervisor = Supervisor::new(None, None);
-        assert_eq!(supervisor.decide_level("create an agent"), DecisionLevel::L6JumpToStudio);
+        assert_eq!(
+            supervisor.decide_level("create an agent"),
+            DecisionLevel::L6JumpToStudio
+        );
     }
 
     #[test]
     fn test_decide_level_default() {
         let supervisor = Supervisor::new(None, None);
-        assert_eq!(supervisor.decide_level("tell me about quantum physics"), DecisionLevel::L3SingleAgent);
+        assert_eq!(
+            supervisor.decide_level("tell me about quantum physics"),
+            DecisionLevel::L3SingleAgent
+        );
     }
 
     #[test]

@@ -59,19 +59,20 @@ impl Governance {
         Governance {
             security,
             exceptions: vec![],
-            api_keys: vec![
-                ApiKeyInfo {
-                    id: "key-1".into(),
-                    name: "DeepSeek Production".into(),
-                    provider: "deepseek".into(),
-                    masked_key: "sk-****-abcd".into(),
-                    created_at: chrono::Utc::now().to_rfc3339(),
-                    last_used: chrono::Utc::now().to_rfc3339(),
-                },
-            ],
-            bindings: vec![
-                ChannelBinding { channel: "cli".into(), webhook_url: "builtin".into(), enabled: true, last_active: chrono::Utc::now().to_rfc3339() },
-            ],
+            api_keys: vec![ApiKeyInfo {
+                id: "key-1".into(),
+                name: "DeepSeek Production".into(),
+                provider: "deepseek".into(),
+                masked_key: "sk-****-abcd".into(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+                last_used: chrono::Utc::now().to_rfc3339(),
+            }],
+            bindings: vec![ChannelBinding {
+                channel: "cli".into(),
+                webhook_url: "builtin".into(),
+                enabled: true,
+                last_active: chrono::Utc::now().to_rfc3339(),
+            }],
             trust_threshold: 50.0,
             approval_queue: vec![],
         }
@@ -108,20 +109,34 @@ impl Governance {
     }
 
     pub fn approve_item(&mut self, id: &str) -> Result<(), String> {
-        let idx = self.approval_queue.iter().position(|a| a.id == id).ok_or("Approval item not found")?;
+        let idx = self
+            .approval_queue
+            .iter()
+            .position(|a| a.id == id)
+            .ok_or("Approval item not found")?;
         self.approval_queue.remove(idx);
         Ok(())
     }
 
     pub fn reject_item(&mut self, id: &str) -> Result<(), String> {
-        let idx = self.approval_queue.iter().position(|a| a.id == id).ok_or("Approval item not found")?;
+        let idx = self
+            .approval_queue
+            .iter()
+            .position(|a| a.id == id)
+            .ok_or("Approval item not found")?;
         self.approval_queue.remove(idx);
         Ok(())
     }
 
     pub fn list_policies(&self) -> Vec<String> {
-        self.security.as_ref().map(|s| {
-            s.list_policies().iter().map(|p| format!("{} [{}]", p.name, p.level.as_str())).collect()
-        }).unwrap_or_default()
+        self.security
+            .as_ref()
+            .map(|s| {
+                s.list_policies()
+                    .iter()
+                    .map(|p| format!("{} [{}]", p.name, p.level.as_str()))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 }

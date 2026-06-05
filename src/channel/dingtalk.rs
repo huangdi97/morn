@@ -6,7 +6,9 @@ pub struct DingTalkChannel {
 
 impl DingTalkChannel {
     pub fn new(webhook_url: &str) -> Self {
-        DingTalkChannel { webhook_url: webhook_url.to_string() }
+        DingTalkChannel {
+            webhook_url: webhook_url.to_string(),
+        }
     }
 
     pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {

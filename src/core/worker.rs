@@ -67,12 +67,20 @@ pub struct CpuWorker {
 
 impl CpuWorker {
     pub fn new(id: &str, pool: WorkerPool) -> Self {
-        CpuWorker { id: id.to_string(), pool }
+        CpuWorker {
+            id: id.to_string(),
+            pool,
+        }
     }
 
-    pub fn id(&self) -> &str { &self.id }
+    pub fn id(&self) -> &str {
+        &self.id
+    }
 
-    pub fn execute<F>(&self, task: F) where F: FnOnce() + Send + 'static {
+    pub fn execute<F>(&self, task: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
         if !self.pool.is_running() {
             return;
         }

@@ -35,7 +35,11 @@ impl Registry {
         registry.register_defaults();
 
         if let Some(ref bus) = registry.event_bus {
-            bus.publish_event(EVENT_SYSTEM_READY, "registry", serde_json::json!({"status": "ready"}));
+            bus.publish_event(
+                EVENT_SYSTEM_READY,
+                "registry",
+                serde_json::json!({"status": "ready"}),
+            );
         }
 
         registry
@@ -46,7 +50,11 @@ impl Registry {
             id: "chat-agent".to_string(),
             name: "Chat Agent".to_string(),
             domain: "general".to_string(),
-            actions: vec!["chat".to_string(), "analyze".to_string(), "report".to_string()],
+            actions: vec![
+                "chat".to_string(),
+                "analyze".to_string(),
+                "report".to_string(),
+            ],
             description: "General purpose chat agent powered by LLM".to_string(),
             trust_score: 70.0,
             total_calls: 0,
@@ -124,7 +132,8 @@ impl Registry {
                 latency_ms
             };
 
-            cap.trust_score = 70.0 * 0.3 + execution_success * 30.0 + latency_score * 20.0 + 50.0 * 0.2;
+            cap.trust_score =
+                70.0 * 0.3 + execution_success * 30.0 + latency_score * 20.0 + 50.0 * 0.2;
         }
     }
 }

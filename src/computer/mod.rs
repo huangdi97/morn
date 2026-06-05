@@ -1,9 +1,9 @@
-pub mod fs_ops;
 pub mod app_ops;
-pub mod sys_ops;
-pub mod desktop_ops;
 pub mod browser_ops;
+pub mod desktop_ops;
+pub mod fs_ops;
 pub mod perception;
+pub mod sys_ops;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum SecurityLevel {

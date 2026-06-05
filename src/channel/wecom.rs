@@ -6,7 +6,9 @@ pub struct WeComChannel {
 
 impl WeComChannel {
     pub fn new(webhook_url: &str) -> Self {
-        WeComChannel { webhook_url: webhook_url.to_string() }
+        WeComChannel {
+            webhook_url: webhook_url.to_string(),
+        }
     }
 
     pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {

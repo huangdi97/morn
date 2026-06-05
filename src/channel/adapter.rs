@@ -32,7 +32,10 @@ pub struct ChannelAdapter {
 
 impl ChannelAdapter {
     pub fn new(supervisor: Option<Supervisor>) -> Self {
-        ChannelAdapter { supervisor, chat_fn: None }
+        ChannelAdapter {
+            supervisor,
+            chat_fn: None,
+        }
     }
 
     pub fn with_chat_fn(mut self, chat_fn: ChatFn) -> Self {

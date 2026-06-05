@@ -1,5 +1,7 @@
-use crate::core::component::{Component, Data, HealthStatus, IOComponent, Port, PortDirection, SecureComponent, Permission};
 use crate::component::tool::Tool;
+use crate::core::component::{
+    Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
+};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -46,43 +48,83 @@ impl WebResearchSkill {
                 llm_prompt: Some("Summarize the following search results concisely:".into()),
             },
         ];
-        WebResearchSkill { id: "skill-web-research".into(), name: "Web Research".into(), steps }
+        WebResearchSkill {
+            id: "skill-web-research".into(),
+            name: "Web Research".into(),
+            steps,
+        }
     }
 }
 
 impl Component for WebResearchSkill {
-    fn id(&self) -> &str { &self.id }
-    fn type_name(&self) -> &str { "skill" }
-    fn init(&mut self) -> Result<(), String> { Ok(()) }
-    fn run(&mut self) -> Result<(), String> { Ok(()) }
-    fn pause(&mut self) -> Result<(), String> { Ok(()) }
-    fn stop(&mut self) -> Result<(), String> { Ok(()) }
-    fn health_check(&self) -> HealthStatus { HealthStatus::Healthy }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn type_name(&self) -> &str {
+        "skill"
+    }
+    fn init(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn run(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn pause(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn stop(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn health_check(&self) -> HealthStatus {
+        HealthStatus::Healthy
+    }
 }
 
 impl IOComponent for WebResearchSkill {
     fn ports(&self) -> Vec<Port> {
         vec![
-            Port { id: "input".into(), direction: PortDirection::Input, data_type: "text".into(), description: "research topic".into() },
-            Port { id: "output".into(), direction: PortDirection::Output, data_type: "text".into(), description: "research summary".into() },
+            Port {
+                id: "input".into(),
+                direction: PortDirection::Input,
+                data_type: "text".into(),
+                description: "research topic".into(),
+            },
+            Port {
+                id: "output".into(),
+                direction: PortDirection::Output,
+                data_type: "text".into(),
+                description: "research summary".into(),
+            },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> { Ok(()) }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> { Ok(None) }
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+        Ok(())
+    }
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+        Ok(None)
+    }
 }
 
 impl SecureComponent for WebResearchSkill {
-    fn required_permissions(&self) -> Vec<Permission> { vec![Permission::NetworkAccess] }
+    fn required_permissions(&self) -> Vec<Permission> {
+        vec![Permission::NetworkAccess]
+    }
 }
 
 impl Skill for WebResearchSkill {
-    fn steps(&self) -> Vec<SkillStep> { self.steps.clone() }
+    fn steps(&self) -> Vec<SkillStep> {
+        self.steps.clone()
+    }
     fn execute(&mut self, input: Data) -> Result<Data, String> {
         let topic = input.content.as_str().unwrap_or("").to_string();
         let mut search_tool = crate::component::tool::get_tool_by_name("web_search")
             .ok_or("web_search tool not found")?;
         let search_result = search_tool.execute(Data::text(&topic))?;
-        let summary = format!("[web_research] summary for '{}': {}", topic, search_result.content.as_str().unwrap_or(""));
+        let summary = format!(
+            "[web_research] summary for '{}': {}",
+            topic,
+            search_result.content.as_str().unwrap_or("")
+        );
         Ok(Data::text(&summary))
     }
 }
@@ -124,40 +166,79 @@ impl DataAnalysisSkill {
                 llm_prompt: Some("Format the analysis into a clear report:".into()),
             },
         ];
-        DataAnalysisSkill { id: "skill-data-analysis".into(), name: "Data Analysis".into(), steps }
+        DataAnalysisSkill {
+            id: "skill-data-analysis".into(),
+            name: "Data Analysis".into(),
+            steps,
+        }
     }
 }
 
 impl Component for DataAnalysisSkill {
-    fn id(&self) -> &str { &self.id }
-    fn type_name(&self) -> &str { "skill" }
-    fn init(&mut self) -> Result<(), String> { Ok(()) }
-    fn run(&mut self) -> Result<(), String> { Ok(()) }
-    fn pause(&mut self) -> Result<(), String> { Ok(()) }
-    fn stop(&mut self) -> Result<(), String> { Ok(()) }
-    fn health_check(&self) -> HealthStatus { HealthStatus::Healthy }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn type_name(&self) -> &str {
+        "skill"
+    }
+    fn init(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn run(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn pause(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn stop(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn health_check(&self) -> HealthStatus {
+        HealthStatus::Healthy
+    }
 }
 
 impl IOComponent for DataAnalysisSkill {
     fn ports(&self) -> Vec<Port> {
         vec![
-            Port { id: "input".into(), direction: PortDirection::Input, data_type: "text".into(), description: "file path".into() },
-            Port { id: "output".into(), direction: PortDirection::Output, data_type: "text".into(), description: "analysis report".into() },
+            Port {
+                id: "input".into(),
+                direction: PortDirection::Input,
+                data_type: "text".into(),
+                description: "file path".into(),
+            },
+            Port {
+                id: "output".into(),
+                direction: PortDirection::Output,
+                data_type: "text".into(),
+                description: "analysis report".into(),
+            },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> { Ok(()) }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> { Ok(None) }
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+        Ok(())
+    }
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+        Ok(None)
+    }
 }
 
 impl SecureComponent for DataAnalysisSkill {
-    fn required_permissions(&self) -> Vec<Permission> { vec![Permission::ReadFile] }
+    fn required_permissions(&self) -> Vec<Permission> {
+        vec![Permission::ReadFile]
+    }
 }
 
 impl Skill for DataAnalysisSkill {
-    fn steps(&self) -> Vec<SkillStep> { self.steps.clone() }
+    fn steps(&self) -> Vec<SkillStep> {
+        self.steps.clone()
+    }
     fn execute(&mut self, input: Data) -> Result<Data, String> {
         let path = input.content.as_str().unwrap_or("").to_string();
-        Ok(Data::text(&format!("[data_analysis] analysis of '{}' complete", path)))
+        Ok(Data::text(&format!(
+            "[data_analysis] analysis of '{}' complete",
+            path
+        )))
     }
 }
 
@@ -169,40 +250,79 @@ pub struct ReportGenSkill {
 
 impl ReportGenSkill {
     pub fn new() -> Self {
-        ReportGenSkill { id: "skill-report-gen".into(), name: "Report Generation".into(), steps: vec![] }
+        ReportGenSkill {
+            id: "skill-report-gen".into(),
+            name: "Report Generation".into(),
+            steps: vec![],
+        }
     }
 }
 
 impl Component for ReportGenSkill {
-    fn id(&self) -> &str { &self.id }
-    fn type_name(&self) -> &str { "skill" }
-    fn init(&mut self) -> Result<(), String> { Ok(()) }
-    fn run(&mut self) -> Result<(), String> { Ok(()) }
-    fn pause(&mut self) -> Result<(), String> { Ok(()) }
-    fn stop(&mut self) -> Result<(), String> { Ok(()) }
-    fn health_check(&self) -> HealthStatus { HealthStatus::Healthy }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn type_name(&self) -> &str {
+        "skill"
+    }
+    fn init(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn run(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn pause(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn stop(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn health_check(&self) -> HealthStatus {
+        HealthStatus::Healthy
+    }
 }
 
 impl IOComponent for ReportGenSkill {
     fn ports(&self) -> Vec<Port> {
         vec![
-            Port { id: "input".into(), direction: PortDirection::Input, data_type: "text".into(), description: "report topic".into() },
-            Port { id: "output".into(), direction: PortDirection::Output, data_type: "text".into(), description: "generated report".into() },
+            Port {
+                id: "input".into(),
+                direction: PortDirection::Input,
+                data_type: "text".into(),
+                description: "report topic".into(),
+            },
+            Port {
+                id: "output".into(),
+                direction: PortDirection::Output,
+                data_type: "text".into(),
+                description: "generated report".into(),
+            },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> { Ok(()) }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> { Ok(None) }
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+        Ok(())
+    }
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+        Ok(None)
+    }
 }
 
 impl SecureComponent for ReportGenSkill {
-    fn required_permissions(&self) -> Vec<Permission> { vec![Permission::NetworkAccess] }
+    fn required_permissions(&self) -> Vec<Permission> {
+        vec![Permission::NetworkAccess]
+    }
 }
 
 impl Skill for ReportGenSkill {
-    fn steps(&self) -> Vec<SkillStep> { vec![] }
+    fn steps(&self) -> Vec<SkillStep> {
+        vec![]
+    }
     fn execute(&mut self, input: Data) -> Result<Data, String> {
         let topic = input.content.as_str().unwrap_or("").to_string();
-        Ok(Data::text(&format!("[report_gen] report on '{}' generated", topic)))
+        Ok(Data::text(&format!(
+            "[report_gen] report on '{}' generated",
+            topic
+        )))
     }
 }
 
@@ -214,40 +334,79 @@ pub struct CodeReviewSkill {
 
 impl CodeReviewSkill {
     pub fn new() -> Self {
-        CodeReviewSkill { id: "skill-code-review".into(), name: "Code Review".into(), steps: vec![] }
+        CodeReviewSkill {
+            id: "skill-code-review".into(),
+            name: "Code Review".into(),
+            steps: vec![],
+        }
     }
 }
 
 impl Component for CodeReviewSkill {
-    fn id(&self) -> &str { &self.id }
-    fn type_name(&self) -> &str { "skill" }
-    fn init(&mut self) -> Result<(), String> { Ok(()) }
-    fn run(&mut self) -> Result<(), String> { Ok(()) }
-    fn pause(&mut self) -> Result<(), String> { Ok(()) }
-    fn stop(&mut self) -> Result<(), String> { Ok(()) }
-    fn health_check(&self) -> HealthStatus { HealthStatus::Healthy }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn type_name(&self) -> &str {
+        "skill"
+    }
+    fn init(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn run(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn pause(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn stop(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn health_check(&self) -> HealthStatus {
+        HealthStatus::Healthy
+    }
 }
 
 impl IOComponent for CodeReviewSkill {
     fn ports(&self) -> Vec<Port> {
         vec![
-            Port { id: "input".into(), direction: PortDirection::Input, data_type: "text".into(), description: "file path".into() },
-            Port { id: "output".into(), direction: PortDirection::Output, data_type: "text".into(), description: "review result".into() },
+            Port {
+                id: "input".into(),
+                direction: PortDirection::Input,
+                data_type: "text".into(),
+                description: "file path".into(),
+            },
+            Port {
+                id: "output".into(),
+                direction: PortDirection::Output,
+                data_type: "text".into(),
+                description: "review result".into(),
+            },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> { Ok(()) }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> { Ok(None) }
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+        Ok(())
+    }
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+        Ok(None)
+    }
 }
 
 impl SecureComponent for CodeReviewSkill {
-    fn required_permissions(&self) -> Vec<Permission> { vec![Permission::ReadFile] }
+    fn required_permissions(&self) -> Vec<Permission> {
+        vec![Permission::ReadFile]
+    }
 }
 
 impl Skill for CodeReviewSkill {
-    fn steps(&self) -> Vec<SkillStep> { vec![] }
+    fn steps(&self) -> Vec<SkillStep> {
+        vec![]
+    }
     fn execute(&mut self, input: Data) -> Result<Data, String> {
         let path = input.content.as_str().unwrap_or("").to_string();
-        Ok(Data::text(&format!("[code_review] review of '{}' complete", path)))
+        Ok(Data::text(&format!(
+            "[code_review] review of '{}' complete",
+            path
+        )))
     }
 }
 

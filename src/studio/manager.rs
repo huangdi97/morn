@@ -48,7 +48,11 @@ impl StudioManager {
         storage: Option<Storage>,
         assembler: Option<crate::core::assembler::AgentAssembler>,
     ) -> Self {
-        StudioManager { registry, storage, assembler }
+        StudioManager {
+            registry,
+            storage,
+            assembler,
+        }
     }
 
     pub fn list_components(&self, type_filter: Option<&str>) -> Vec<ComponentSummary> {
@@ -132,7 +136,11 @@ impl StudioManager {
         Ok(())
     }
 
-    pub fn test_component(&self, _id: &str, _input: crate::core::component::Data) -> Result<crate::studio::tester::TestResult, String> {
+    pub fn test_component(
+        &self,
+        _id: &str,
+        _input: crate::core::component::Data,
+    ) -> Result<crate::studio::tester::TestResult, String> {
         Ok(crate::studio::tester::TestResult {
             steps: vec![],
             total_duration_ms: 0.0,

@@ -38,9 +38,11 @@ fn main() {
             let supervisor = Supervisor::new(storage.clone(), None);
             let _assembler = AgentAssembler::new(Some(registry.lock().unwrap().clone()));
 
-            let chat_fn = Arc::new(move |prompt: &str, system: &str| -> Result<String, String> {
-                chat_agent.chat(prompt, system)
-            });
+            let chat_fn = Arc::new(
+                move |prompt: &str, system: &str| -> Result<String, String> {
+                    chat_agent.chat(prompt, system)
+                },
+            );
 
             run_cli(supervisor, chat_fn, security);
         }
@@ -58,7 +60,11 @@ fn main() {
     }
 }
 
-fn run_cli(supervisor: Supervisor, chat_fn: Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>, _security: Arc<Mutex<SecurityGuard>>) {
+fn run_cli(
+    supervisor: Supervisor,
+    chat_fn: Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>,
+    _security: Arc<Mutex<SecurityGuard>>,
+) {
     let mut adapter = ChannelAdapter::new(Some(supervisor));
     cli::run_repl(&mut adapter, chat_fn);
 }

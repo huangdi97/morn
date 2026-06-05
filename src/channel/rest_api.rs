@@ -7,7 +7,10 @@ pub struct RestApiServer {
 
 impl RestApiServer {
     pub fn new(adapter: Option<ChannelAdapter>) -> Self {
-        RestApiServer { adapter, turn_count: 0 }
+        RestApiServer {
+            adapter,
+            turn_count: 0,
+        }
     }
 
     pub fn chat(&mut self, text: &str) -> Result<String, String> {

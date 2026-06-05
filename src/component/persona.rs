@@ -1,4 +1,6 @@
-use crate::core::component::{Component, Data, HealthStatus, IOComponent, Port, PortDirection, SecureComponent, Permission};
+use crate::core::component::{
+    Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
+};
 
 #[derive(Debug, Clone)]
 pub struct PersonaParameters {
@@ -10,7 +12,12 @@ pub struct PersonaParameters {
 
 impl Default for PersonaParameters {
     fn default() -> Self {
-        PersonaParameters { temperature: 0.6, style: "professional".into(), verbosity: 0.5, proactiveness: 0.3 }
+        PersonaParameters {
+            temperature: 0.6,
+            style: "professional".into(),
+            verbosity: 0.5,
+            proactiveness: 0.3,
+        }
     }
 }
 
@@ -96,28 +103,58 @@ impl Persona {
 }
 
 impl Component for Persona {
-    fn id(&self) -> &str { &self.id }
-    fn type_name(&self) -> &str { "persona" }
-    fn init(&mut self) -> Result<(), String> { Ok(()) }
-    fn run(&mut self) -> Result<(), String> { Ok(()) }
-    fn pause(&mut self) -> Result<(), String> { Ok(()) }
-    fn stop(&mut self) -> Result<(), String> { Ok(()) }
-    fn health_check(&self) -> HealthStatus { HealthStatus::Healthy }
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn type_name(&self) -> &str {
+        "persona"
+    }
+    fn init(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn run(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn pause(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn stop(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn health_check(&self) -> HealthStatus {
+        HealthStatus::Healthy
+    }
 }
 
 impl IOComponent for Persona {
     fn ports(&self) -> Vec<Port> {
         vec![
-            Port { id: "input".into(), direction: PortDirection::Input, data_type: "text".into(), description: "user input".into() },
-            Port { id: "output".into(), direction: PortDirection::Output, data_type: "text".into(), description: "persona-styled output".into() },
+            Port {
+                id: "input".into(),
+                direction: PortDirection::Input,
+                data_type: "text".into(),
+                description: "user input".into(),
+            },
+            Port {
+                id: "output".into(),
+                direction: PortDirection::Output,
+                data_type: "text".into(),
+                description: "persona-styled output".into(),
+            },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> { Ok(()) }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> { Ok(None) }
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+        Ok(())
+    }
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+        Ok(None)
+    }
 }
 
 impl SecureComponent for Persona {
-    fn required_permissions(&self) -> Vec<Permission> { vec![] }
+    fn required_permissions(&self) -> Vec<Permission> {
+        vec![]
+    }
 }
 
 pub fn create_analyst_persona() -> Persona {
@@ -132,12 +169,22 @@ pub fn create_analyst_persona() -> Persona {
         decision_framework: vec![
             "Gather data → Analyze → Form hypothesis → Validate → Conclude".into(),
         ],
-        anti_patterns: vec!["Making decisions without data".into(), "Confirmation bias".into()],
-        parameters: PersonaParameters { temperature: 0.3, style: "professional".into(), verbosity: 0.6, proactiveness: 0.4 },
+        anti_patterns: vec![
+            "Making decisions without data".into(),
+            "Confirmation bias".into(),
+        ],
+        parameters: PersonaParameters {
+            temperature: 0.3,
+            style: "professional".into(),
+            verbosity: 0.6,
+            proactiveness: 0.4,
+        },
         prompt_layers: PromptLayers {
             l1_core_identity: "You are an Analyst — data-driven, precise, and objective.".into(),
             l2_skill_instructions: None,
-            l3_format_template: Some("Present findings with data tables and clear conclusions.".into()),
+            l3_format_template: Some(
+                "Present findings with data tables and clear conclusions.".into(),
+            ),
             l4_constraints: Some("Always cite data sources when making claims.".into()),
             l5_conversation_style: Some("Communicate in a professional, analytical tone.".into()),
         },
@@ -156,10 +203,19 @@ pub fn create_researcher_persona() -> Persona {
         ],
         decision_framework: vec!["Question → Search → Cross-verify → Synthesize → Report".into()],
         anti_patterns: vec!["Single source reliance".into(), "Unverified claims".into()],
-        parameters: PersonaParameters { temperature: 0.4, style: "detailed".into(), verbosity: 0.7, proactiveness: 0.5 },
+        parameters: PersonaParameters {
+            temperature: 0.4,
+            style: "detailed".into(),
+            verbosity: 0.7,
+            proactiveness: 0.5,
+        },
         prompt_layers: PromptLayers {
-            l1_core_identity: "You are a Researcher — rigorous, thorough, and evidence-based.".into(),
-            l2_skill_instructions: Some("When researching, always consult multiple sources and indicate confidence levels.".into()),
+            l1_core_identity: "You are a Researcher — rigorous, thorough, and evidence-based."
+                .into(),
+            l2_skill_instructions: Some(
+                "When researching, always consult multiple sources and indicate confidence levels."
+                    .into(),
+            ),
             l3_format_template: None,
             l4_constraints: Some("Do not speculate beyond available evidence.".into()),
             l5_conversation_style: Some("Detailed and methodical in explanations.".into()),
@@ -178,14 +234,26 @@ pub fn create_writer_persona() -> Persona {
             "Precise word choice".into(),
         ],
         decision_framework: vec!["Outline → Draft → Refine → Polish".into()],
-        anti_patterns: vec!["Passive voice overuse".into(), "Jargon without explanation".into()],
-        parameters: PersonaParameters { temperature: 0.7, style: "professional".into(), verbosity: 0.5, proactiveness: 0.3 },
+        anti_patterns: vec![
+            "Passive voice overuse".into(),
+            "Jargon without explanation".into(),
+        ],
+        parameters: PersonaParameters {
+            temperature: 0.7,
+            style: "professional".into(),
+            verbosity: 0.5,
+            proactiveness: 0.3,
+        },
         prompt_layers: PromptLayers {
             l1_core_identity: "You are a Writer — expressive, structured, and engaging.".into(),
             l2_skill_instructions: None,
-            l3_format_template: Some("Structure output with clear sections and logical flow.".into()),
+            l3_format_template: Some(
+                "Structure output with clear sections and logical flow.".into(),
+            ),
             l4_constraints: None,
-            l5_conversation_style: Some("Write in a clear, engaging style appropriate for the audience.".into()),
+            l5_conversation_style: Some(
+                "Write in a clear, engaging style appropriate for the audience.".into(),
+            ),
         },
         communication_style: "professional".into(),
     }
@@ -200,15 +268,31 @@ pub fn create_coder_persona() -> Persona {
             "Test before commit".into(),
             "Best practices and patterns".into(),
         ],
-        decision_framework: vec!["Understand requirements → Design → Implement → Test → Review".into()],
-        anti_patterns: vec!["Premature optimization".into(), "Copy-paste without understanding".into()],
-        parameters: PersonaParameters { temperature: 0.2, style: "professional".into(), verbosity: 0.4, proactiveness: 0.6 },
+        decision_framework: vec![
+            "Understand requirements → Design → Implement → Test → Review".into(),
+        ],
+        anti_patterns: vec![
+            "Premature optimization".into(),
+            "Copy-paste without understanding".into(),
+        ],
+        parameters: PersonaParameters {
+            temperature: 0.2,
+            style: "professional".into(),
+            verbosity: 0.4,
+            proactiveness: 0.6,
+        },
         prompt_layers: PromptLayers {
             l1_core_identity: "You are a Coder — logical, precise, and pragmatic.".into(),
-            l2_skill_instructions: Some("Always provide code with proper error handling and documentation.".into()),
-            l3_format_template: Some("Present code in well-formatted blocks with language annotation.".into()),
+            l2_skill_instructions: Some(
+                "Always provide code with proper error handling and documentation.".into(),
+            ),
+            l3_format_template: Some(
+                "Present code in well-formatted blocks with language annotation.".into(),
+            ),
             l4_constraints: Some("Do not suggest unsafe code without warnings.".into()),
-            l5_conversation_style: Some("Technical but accessible, explaining rationale behind code choices.".into()),
+            l5_conversation_style: Some(
+                "Technical but accessible, explaining rationale behind code choices.".into(),
+            ),
         },
         communication_style: "professional".into(),
     }
@@ -224,10 +308,19 @@ pub fn create_assistant_persona() -> Persona {
             "Clear and concise".into(),
         ],
         decision_framework: vec!["Listen → Understand → Respond → Confirm".into()],
-        anti_patterns: vec!["Assuming user knowledge level".into(), "Overwhelming with information".into()],
-        parameters: PersonaParameters { temperature: 0.6, style: "professional".into(), verbosity: 0.4, proactiveness: 0.5 },
+        anti_patterns: vec![
+            "Assuming user knowledge level".into(),
+            "Overwhelming with information".into(),
+        ],
+        parameters: PersonaParameters {
+            temperature: 0.6,
+            style: "professional".into(),
+            verbosity: 0.4,
+            proactiveness: 0.5,
+        },
         prompt_layers: PromptLayers {
-            l1_core_identity: "You are a helpful AI Assistant — friendly, adaptable, and clear.".into(),
+            l1_core_identity: "You are a helpful AI Assistant — friendly, adaptable, and clear."
+                .into(),
             l2_skill_instructions: None,
             l3_format_template: None,
             l4_constraints: None,
@@ -271,13 +364,22 @@ pub fn create_reviewer_persona() -> Persona {
         ],
         decision_framework: vec!["Read → Identify → Suggest → Prioritize".into()],
         anti_patterns: vec!["Vague criticism".into(), "Personal attacks".into()],
-        parameters: PersonaParameters { temperature: 0.4, style: "professional".into(), verbosity: 0.6, proactiveness: 0.4 },
+        parameters: PersonaParameters {
+            temperature: 0.4,
+            style: "professional".into(),
+            verbosity: 0.6,
+            proactiveness: 0.4,
+        },
         prompt_layers: PromptLayers {
             l1_core_identity: "You are a Reviewer — thorough, constructive, and fair.".into(),
-            l2_skill_instructions: Some("Always start with what works well before suggesting improvements.".into()),
+            l2_skill_instructions: Some(
+                "Always start with what works well before suggesting improvements.".into(),
+            ),
             l3_format_template: Some("Structure: Positive → Issues → Suggestions → Summary".into()),
             l4_constraints: Some("Be specific — point to exact lines or sections.".into()),
-            l5_conversation_style: Some("Professional and encouraging, never harsh or dismissive.".into()),
+            l5_conversation_style: Some(
+                "Professional and encouraging, never harsh or dismissive.".into(),
+            ),
         },
         communication_style: "professional".into(),
     }

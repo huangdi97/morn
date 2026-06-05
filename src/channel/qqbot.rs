@@ -7,11 +7,17 @@ pub struct QqBotChannel {
 
 impl QqBotChannel {
     pub fn new(bot_id: &str, token: &str) -> Self {
-        QqBotChannel { bot_id: bot_id.to_string(), token: token.to_string() }
+        QqBotChannel {
+            bot_id: bot_id.to_string(),
+            token: token.to_string(),
+        }
     }
 
     pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {
-        println!("[QQ Bot] Sending message: {} (via QQ guild/group)", msg.content);
+        println!(
+            "[QQ Bot] Sending message: {} (via QQ guild/group)",
+            msg.content
+        );
         Ok(())
     }
 

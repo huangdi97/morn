@@ -2,6 +2,8 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
+use crate::market::{License, Listing, Transaction};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentRecord {
     pub id: String,
@@ -254,8 +256,12 @@ impl Storage {
             "INSERT INTO tasks (id, user_input, plan_json, status, created_at, completed_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
-                task.id, task.user_input, task.plan_json,
-                task.status, task.created_at, task.completed_at
+                task.id,
+                task.user_input,
+                task.plan_json,
+                task.status,
+                task.created_at,
+                task.completed_at
             ],
         )
         .map_err(|e| e.to_string())?;

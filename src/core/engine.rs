@@ -1,7 +1,9 @@
-use std::collections::{HashMap, VecDeque};
-use crate::core::event_bus::{SimpleEventBus, EVENT_TASK_COMPLETED, EVENT_TASK_FAILED, EVENT_SUPERVISOR_PLAN_EXECUTING};
+use crate::core::event_bus::{
+    SimpleEventBus, EVENT_SUPERVISOR_PLAN_EXECUTING, EVENT_TASK_COMPLETED, EVENT_TASK_FAILED,
+};
 use crate::core::storage::Storage;
 use crate::core::supervisor::{SubTaskDef, SubTaskResult, TaskPlan, TaskResult};
+use std::collections::{HashMap, VecDeque};
 
 pub struct TaskEngine {
     storage: Option<Storage>,
@@ -92,7 +94,10 @@ impl TaskEngine {
         }
     }
 
-    pub fn compute_topological_order(&self, subtasks: &[SubTaskDef]) -> Result<Vec<Vec<SubTaskDef>>, String> {
+    pub fn compute_topological_order(
+        &self,
+        subtasks: &[SubTaskDef],
+    ) -> Result<Vec<Vec<SubTaskDef>>, String> {
         let mut in_degree: HashMap<String, usize> = HashMap::new();
         let mut adj: HashMap<String, Vec<String>> = HashMap::new();
         let mut subtask_map: HashMap<String, &SubTaskDef> = HashMap::new();
@@ -237,7 +242,8 @@ impl TaskEngine {
             let _ = storage.update_task_status(&plan.task_id, "completed");
         }
 
-        let summary = subtask_results.iter()
+        let summary = subtask_results
+            .iter()
             .filter(|r| r.success)
             .map(|r| r.output.clone())
             .collect::<Vec<_>>()
@@ -309,16 +315,25 @@ mod tests {
         let engine = TaskEngine::new(None, None);
         let subtasks = vec![
             SubTaskDef {
-                id: "a".into(), agent_id: "1".into(), action: "x".into(),
-                params: json!({}), depends_on: vec![],
+                id: "a".into(),
+                agent_id: "1".into(),
+                action: "x".into(),
+                params: json!({}),
+                depends_on: vec![],
             },
             SubTaskDef {
-                id: "b".into(), agent_id: "1".into(), action: "y".into(),
-                params: json!({}), depends_on: vec!["a".into()],
+                id: "b".into(),
+                agent_id: "1".into(),
+                action: "y".into(),
+                params: json!({}),
+                depends_on: vec!["a".into()],
             },
             SubTaskDef {
-                id: "c".into(), agent_id: "1".into(), action: "z".into(),
-                params: json!({}), depends_on: vec!["a".into()],
+                id: "c".into(),
+                agent_id: "1".into(),
+                action: "z".into(),
+                params: json!({}),
+                depends_on: vec!["a".into()],
             },
         ];
         let levels = engine.compute_topological_order(&subtasks).unwrap();
@@ -333,12 +348,18 @@ mod tests {
         let engine = TaskEngine::new(None, None);
         let subtasks = vec![
             SubTaskDef {
-                id: "a".into(), agent_id: "1".into(), action: "x".into(),
-                params: json!({}), depends_on: vec!["b".into()],
+                id: "a".into(),
+                agent_id: "1".into(),
+                action: "x".into(),
+                params: json!({}),
+                depends_on: vec!["b".into()],
             },
             SubTaskDef {
-                id: "b".into(), agent_id: "1".into(), action: "y".into(),
-                params: json!({}), depends_on: vec!["a".into()],
+                id: "b".into(),
+                agent_id: "1".into(),
+                action: "y".into(),
+                params: json!({}),
+                depends_on: vec!["a".into()],
             },
         ];
         assert!(engine.compute_topological_order(&subtasks).is_err());
@@ -352,12 +373,18 @@ mod tests {
             user_input: "test".into(),
             subtasks: vec![
                 SubTaskDef {
-                    id: "s1".into(), agent_id: "1".into(), action: "search".into(),
-                    params: json!({"q": "ai"}), depends_on: vec![],
+                    id: "s1".into(),
+                    agent_id: "1".into(),
+                    action: "search".into(),
+                    params: json!({"q": "ai"}),
+                    depends_on: vec![],
                 },
                 SubTaskDef {
-                    id: "s2".into(), agent_id: "1".into(), action: "summarize".into(),
-                    params: json!({"text": "results"}), depends_on: vec!["s1".into()],
+                    id: "s2".into(),
+                    agent_id: "1".into(),
+                    action: "summarize".into(),
+                    params: json!({"text": "results"}),
+                    depends_on: vec!["s1".into()],
                 },
             ],
             estimated_secs: 10,

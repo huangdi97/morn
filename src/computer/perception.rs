@@ -3,7 +3,8 @@ use super::{ComputerOpResult, SecurityLevel};
 pub fn pixel_screenshot() -> ComputerOpResult {
     ComputerOpResult {
         success: true,
-        data: "[simulated VLM] screen analyzed: 3 windows detected, 2 buttons, text: 'Hello World'".into(),
+        data: "[simulated VLM] screen analyzed: 3 windows detected, 2 buttons, text: 'Hello World'"
+            .into(),
         security_level: SecurityLevel::L2Local.as_str().to_string(),
         approval_required: false,
     }

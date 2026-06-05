@@ -7,11 +7,17 @@ pub struct TelegramChannel {
 
 impl TelegramChannel {
     pub fn new(bot_token: &str, chat_id: &str) -> Self {
-        TelegramChannel { bot_token: bot_token.to_string(), chat_id: chat_id.to_string() }
+        TelegramChannel {
+            bot_token: bot_token.to_string(),
+            chat_id: chat_id.to_string(),
+        }
     }
 
     pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {
-        println!("[Telegram] Sending message: {} (to chat {})", msg.content, self.chat_id);
+        println!(
+            "[Telegram] Sending message: {} (to chat {})",
+            msg.content, self.chat_id
+        );
         Ok(())
     }
 

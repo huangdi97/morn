@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
 use crate::core::supervisor::Supervisor;
-use crate::core::event_bus::SimpleEventBus;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum CollaborationMode {
@@ -68,8 +68,17 @@ pub struct Orchestrator {
 }
 
 impl Orchestrator {
-    pub fn new(registry: Option<Registry>, supervisor: Option<Supervisor>, event_bus: Option<SimpleEventBus>) -> Self {
-        Orchestrator { registry, supervisor, event_bus, teams: HashMap::new() }
+    pub fn new(
+        registry: Option<Registry>,
+        supervisor: Option<Supervisor>,
+        event_bus: Option<SimpleEventBus>,
+    ) -> Self {
+        Orchestrator {
+            registry,
+            supervisor,
+            event_bus,
+            teams: HashMap::new(),
+        }
     }
 
     pub fn create_team(&mut self, def: TeamDef) -> Result<String, String> {
@@ -79,7 +88,11 @@ impl Orchestrator {
         }
         self.teams.insert(id.clone(), def);
         if let Some(ref bus) = self.event_bus {
-            bus.publish_event("orchestrator.team.created", "orchestrator", serde_json::json!({"team_id": id}));
+            bus.publish_event(
+                "orchestrator.team.created",
+                "orchestrator",
+                serde_json::json!({"team_id": id}),
+            );
         }
         Ok(id)
     }
@@ -93,11 +106,17 @@ impl Orchestrator {
     }
 
     pub fn delete_team(&mut self, id: &str) -> Result<(), String> {
-        self.teams.remove(id).ok_or_else(|| format!("Team '{}' not found", id)).map(|_| ())
+        self.teams
+            .remove(id)
+            .ok_or_else(|| format!("Team '{}' not found", id))
+            .map(|_| ())
     }
 
     pub fn run_team(&self, team_id: &str, input: &str) -> Result<TeamResult, String> {
-        let team = self.teams.get(team_id).ok_or_else(|| format!("Team '{}' not found", team_id))?;
+        let team = self
+            .teams
+            .get(team_id)
+            .ok_or_else(|| format!("Team '{}' not found", team_id))?;
 
         let outputs = match team.mode {
             CollaborationMode::Chain => self.run_chain(&team.members, input)?,
@@ -145,7 +164,11 @@ impl Orchestrator {
         Ok(outputs)
     }
 
-    fn run_manager_worker(&self, members: &[String], input: &str) -> Result<Vec<TeamMemberOutput>, String> {
+    fn run_manager_worker(
+        &self,
+        members: &[String],
+        input: &str,
+    ) -> Result<Vec<TeamMemberOutput>, String> {
         if members.is_empty() {
             return Err("No members".to_string());
         }
@@ -155,13 +178,18 @@ impl Orchestrator {
         outputs.push(mgr);
 
         for worker in &members[1..] {
-            let result = self.simulate_agent_call(worker, &format!("{} (from {})", input, manager))?;
+            let result =
+                self.simulate_agent_call(worker, &format!("{} (from {})", input, manager))?;
             outputs.push(result);
         }
         Ok(outputs)
     }
 
-    fn run_broadcast(&self, members: &[String], input: &str) -> Result<Vec<TeamMemberOutput>, String> {
+    fn run_broadcast(
+        &self,
+        members: &[String],
+        input: &str,
+    ) -> Result<Vec<TeamMemberOutput>, String> {
         let mut outputs = Vec::new();
         for member in members {
             let result = self.simulate_agent_call(member, &format!("[BROADCAST] {}", input))?;
@@ -182,7 +210,11 @@ impl Orchestrator {
         Ok(outputs)
     }
 
-    fn run_routing(&self, members: &[String], input: &str) -> Result<Vec<TeamMemberOutput>, String> {
+    fn run_routing(
+        &self,
+        members: &[String],
+        input: &str,
+    ) -> Result<Vec<TeamMemberOutput>, String> {
         if members.is_empty() {
             return Err("No members for routing".to_string());
         }
@@ -192,20 +224,35 @@ impl Orchestrator {
         Ok(vec![result])
     }
 
-    fn run_agent_as_tool(&self, members: &[String], input: &str) -> Result<Vec<TeamMemberOutput>, String> {
+    fn run_agent_as_tool(
+        &self,
+        members: &[String],
+        input: &str,
+    ) -> Result<Vec<TeamMemberOutput>, String> {
         let mut outputs = Vec::new();
-        let primary = if members.is_empty() { return Err("No members".to_string()); } else { &members[0] };
+        let primary = if members.is_empty() {
+            return Err("No members".to_string());
+        } else {
+            &members[0]
+        };
         let primary_result = self.simulate_agent_call(primary, input)?;
         outputs.push(primary_result);
 
         for tool_agent in &members[1..] {
-            let result = self.simulate_agent_call(tool_agent, &format!("[TOOL] {} called by {}", input, primary))?;
+            let result = self.simulate_agent_call(
+                tool_agent,
+                &format!("[TOOL] {} called by {}", input, primary),
+            )?;
             outputs.push(result);
         }
         Ok(outputs)
     }
 
-    fn run_blackboard(&self, members: &[String], input: &str) -> Result<Vec<TeamMemberOutput>, String> {
+    fn run_blackboard(
+        &self,
+        members: &[String],
+        input: &str,
+    ) -> Result<Vec<TeamMemberOutput>, String> {
         let mut board = format!("[Blackboard] Initial: {}\n", input);
         let mut outputs = Vec::new();
         for member in members {
@@ -216,22 +263,41 @@ impl Orchestrator {
         Ok(outputs)
     }
 
-    fn compute_consensus(&self, outputs: &[TeamMemberOutput], mechanism: &ConsensusMechanism) -> String {
+    fn compute_consensus(
+        &self,
+        outputs: &[TeamMemberOutput],
+        mechanism: &ConsensusMechanism,
+    ) -> String {
         match mechanism {
-            ConsensusMechanism::CeoDecides => {
-                outputs.first().map(|o| o.output.clone()).unwrap_or_default()
-            }
+            ConsensusMechanism::CeoDecides => outputs
+                .first()
+                .map(|o| o.output.clone())
+                .unwrap_or_default(),
             ConsensusMechanism::Vote => {
-                let best = outputs.iter().max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal));
+                let best = outputs.iter().max_by(|a, b| {
+                    a.confidence
+                        .partial_cmp(&b.confidence)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
                 best.map(|o| o.output.clone()).unwrap_or_default()
             }
             ConsensusMechanism::MungerVeto => {
-                let worst = outputs.iter().min_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal));
-                worst.map(|o| format!("[VETO] {}", o.output)).unwrap_or_default()
+                let worst = outputs.iter().min_by(|a, b| {
+                    a.confidence
+                        .partial_cmp(&b.confidence)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+                worst
+                    .map(|o| format!("[VETO] {}", o.output))
+                    .unwrap_or_default()
             }
             ConsensusMechanism::AutoSynthesis => {
                 let combined: Vec<String> = outputs.iter().map(|o| o.output.clone()).collect();
-                format!("[Synthesis of {} opinions] {}", outputs.len(), combined.join(" | "))
+                format!(
+                    "[Synthesis of {} opinions] {}",
+                    outputs.len(),
+                    combined.join(" | ")
+                )
             }
         }
     }
@@ -306,15 +372,18 @@ mod tests {
     #[test]
     fn test_list_teams() {
         let mut orch = Orchestrator::new(None, None, None);
-        orch.create_team(create_test_team("t1", CollaborationMode::Chain)).unwrap();
-        orch.create_team(create_test_team("t2", CollaborationMode::Broadcast)).unwrap();
+        orch.create_team(create_test_team("t1", CollaborationMode::Chain))
+            .unwrap();
+        orch.create_team(create_test_team("t2", CollaborationMode::Broadcast))
+            .unwrap();
         assert_eq!(orch.list_teams().len(), 2);
     }
 
     #[test]
     fn test_delete_team() {
         let mut orch = Orchestrator::new(None, None, None);
-        orch.create_team(create_test_team("t1", CollaborationMode::Chain)).unwrap();
+        orch.create_team(create_test_team("t1", CollaborationMode::Chain))
+            .unwrap();
         orch.delete_team("t1").unwrap();
         assert!(orch.get_team("t1").is_none());
     }
@@ -345,7 +414,9 @@ mod tests {
                 consensus: mechanism,
             };
             orch.create_team(team).unwrap();
-            let result = orch.run_team(&format!("team-{}", mode_name), "test").unwrap();
+            let result = orch
+                .run_team(&format!("team-{}", mode_name), "test")
+                .unwrap();
             assert!(!result.consensus_output.is_empty());
         }
     }

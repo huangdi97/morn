@@ -109,8 +109,10 @@ impl ChatAgent {
                         continue;
                     }
 
-                    let chat_response: ChatResponse =
-                        response.json().await.map_err(|e| format!("JSON parse error: {}", e))?;
+                    let chat_response: ChatResponse = response
+                        .json()
+                        .await
+                        .map_err(|e| format!("JSON parse error: {}", e))?;
 
                     let content = chat_response
                         .choices

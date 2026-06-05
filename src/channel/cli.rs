@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
-pub fn run_repl(adapter: &mut ChannelAdapter, chat_fn: Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>) {
+pub fn run_repl(
+    adapter: &mut ChannelAdapter,
+    chat_fn: Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>,
+) {
     adapter.set_chat_fn(chat_fn);
 
     println!();

@@ -1,11 +1,11 @@
 pub mod cost;
 pub mod governance;
 
+use crate::core::dual_llm::DualLlmGuard;
+use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 use crate::core::supervisor::Supervisor;
-use crate::core::event_bus::SimpleEventBus;
-use crate::core::dual_llm::DualLlmGuard;
 use crate::market::Marketplace;
 
 pub struct ConsoleBackend {
@@ -48,12 +48,28 @@ impl ConsoleBackend {
         dual_llm: Option<DualLlmGuard>,
         marketplace: Option<Marketplace>,
     ) -> Self {
-        ConsoleBackend { registry, storage, supervisor, event_bus, dual_llm, marketplace }
+        ConsoleBackend {
+            registry,
+            storage,
+            supervisor,
+            event_bus,
+            dual_llm,
+            marketplace,
+        }
     }
 
     pub fn get_dashboard(&self) -> DashboardData {
-        let task_count = self.storage.as_ref().and_then(|s| s.list_tasks().ok()).map(|t| t.len() as u64).unwrap_or(0);
-        let agent_count = self.registry.as_ref().map(|r| r.list_all().len()).unwrap_or(0);
+        let task_count = self
+            .storage
+            .as_ref()
+            .and_then(|s| s.list_tasks().ok())
+            .map(|t| t.len() as u64)
+            .unwrap_or(0);
+        let agent_count = self
+            .registry
+            .as_ref()
+            .map(|r| r.list_all().len())
+            .unwrap_or(0);
 
         DashboardData {
             total_tasks: task_count,

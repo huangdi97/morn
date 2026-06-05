@@ -27,7 +27,9 @@ fn send_message(text: String, state: State<AppState>) -> Result<String, String> 
         .ok_or_else(|| "Supervisor not initialized.".to_string())?;
 
     let response = runtime.block_on(async {
-        chat_agent.chat_async(&text, "You are Morn, a helpful AI assistant.").await
+        chat_agent
+            .chat_async(&text, "You are Morn, a helpful AI assistant.")
+            .await
     })?;
 
     sup.record_turn("user", &text);
@@ -75,7 +77,11 @@ pub fn run() {
             supervisor: Mutex::new(supervisor),
             turn_count: Mutex::new(0),
         })
-        .invoke_handler(tauri::generate_handler![send_message, get_status, clear_history])
+        .invoke_handler(tauri::generate_handler![
+            send_message,
+            get_status,
+            clear_history
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
