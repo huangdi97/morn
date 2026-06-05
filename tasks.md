@@ -1,211 +1,111 @@
-# Morn 剩余五方向 — warning清理 + 前端完善 + 三渠道做真 + A2A + 跨设备同步
+# Morn 代码完善：测试补全 + 代码质量修复
 
-## 核心准则
-14条核心准则 + 低耦合3条 + 执行规则（每任务 cargo build && cargo test，git push 到 main）
+## 执行规则
 
----
+1. 修改前确认当前源码状态
+2. 改完立即 `cargo test` 验证不破坏现有测试
+3. 改完立即 `cargo build` 确认 0 warning
+4. 改完立即 `cargo fmt --check` 确认格式合规
+5. 最终运行 `cargo test` + `cargo build` + `cargo fmt --check` + `web/npm run build` 全量验证
 
-## 前置阅读
-现有代码已完成 Tauri 前后端接线 + 14 个前端页面，需评估 UI 质量和完整度。
-现有 Telegram/SMTP/REST API 已做真，钉钉/飞书/企维持追加。
+## 14 条核心准则编程原则
 
----
+**准则 1: Think Before Coding** — 理解全貌再动手，不要边写边想
+**准则 2: Readability Over Cleverness** — 代码是写给人看的
+**准则 3: Single Responsibility** — 每个函数/模块只做一件事
+**准则 4: Fail Fast** — 错误尽早暴露，不要吞错误
+**准则 5: Test-Driven Habit** — 改完代码后第一时间跑测试验证
+**准则 6: Don't Repeat Yourself** — 重复代码抽成函数
+**准则 7: Composition Over Inheritance** — 组合优于继承
+**准则 8: YAGNI** — 不要超前实现未要求的功能
+**准则 9: Least Astonishment** — 最小惊喜原则，接口行为要直观
+**准则 10: No Silent Failures** — 所有错误都要被处理或传播
+**准则 11: Prefer Standard Library** — 标准库够用时别引入第三方依赖
+**准则 12: Small Commits** — 每完成一个独立改动就提交
+**准则 13: Document Why, Not What** — 注释解释"为什么"，不解释"是什么"
+**准则 14: Keep Dependencies Minimal** — 只引入真正需要的 crate
 
-## 阶段一：清理 46 个 warning（耗时小，收益大）
+## 低耦合原则
 
-### 任务1: 自动修复可修 warning
-```bash
-cd ~/morn-desktop && cargo fix --allow-dirty 2>&1 | tail -5
-```
-然后用 `cargo build 2>&1 | grep "warning:" | wc -l` 计数剩余。
-
-### 任务2: 手工修剩余 warning
-逐一处理剩余的 unused variable / dead_code：
-- `supervisor.rs` — unused import `EVENT_TASK_FAILED`
-- `assembler.rs` — unused imports Knowledge/Memory/Skill/Tool
-- `tool.rs` — `name` 字段标记 `#[allow(dead_code)]` 或加 `_` 前缀
-- `channel/wecom.rs`, `dingtalk.rs`, `feishu.rs` — `msg` 参数加 `_` 前缀
-- 其余类似模式
-
-原则：不删字段（未来要用），加 `#[allow(dead_code)]` 或 `_` 前缀。
-
----
-
-## 阶段二：三渠道做真（钉钉/飞书/企微）
-
-三个渠道都支持 webhook 模式发送消息，无需 bot token，只需 webhook URL。
-
-### 任务3: 钉钉做真
-改造 `src/channel/dingtalk.rs`：
-
-**发送消息：**
-- 读取 `DINGTALK_WEBHOOK_URL` 环境变量
-- POST JSON 到钉钉 webhook URL
-- 钉钉 webhook 格式：`{"msgtype": "text", "text": {"content": "消息内容"}}`
-- 使用 reqwest 的 blocking 模式（已添加依赖）
-- 错误处理：连接超时、HTTP 非 200、JSON 解析错误
-
-### 任务4: 飞书做真
-改造 `src/channel/feishu.rs`：
-
-**发送消息：**
-- 读取 `FEISHU_WEBHOOK_URL` 环境变量
-- POST JSON 到飞书 webhook URL
-- 飞书 webhook 格式：`{"msg_type": "text", "content": {"text": "消息内容"}}`
-- 使用 reqwest blocking
-- 错误处理同上
-
-### 任务5: 企微做真
-改造 `src/channel/wecom.rs`：
-
-**发送消息：**
-- 读取 `WECOM_WEBHOOK_URL` 环境变量
-- POST JSON 到企业微信 webhook URL
-- 企微 webhook 格式：`{"msgtype": "text", "text": {"content": "消息内容"}}`
-- 使用 reqwest blocking
-- 错误处理同上
-
-### 任务6: 测试
-为三个渠道各写一个单元测试，验证 HTTP 请求构造正确（不实际发送，使用 mock 或仅构造请求体验证）。
+1. **模块间只通过公开接口通信** — 不要跨模块直接访问内部结构体字段
+2. **测试独立于实现细节** — 测试公共 API 而非私有函数（除非是纯工具函数）
+3. **新测试模块互相独立** — 每个 `#[cfg(test)] mod tests` 只测试本模块功能
 
 ---
 
-## 阶段三：前端 UI 完善
+## Phase 1: Clippy Warning 修复（3 个）
 
-现有 14 个 TSX 文件已有完整页面 + Tauri 调用，重点是补齐功能、美化样式。
+### 任务 1.1: 修复 println 空字符串
 
-### 任务7: 工作台聊天完善
-改造 `web/src/App.tsx`：
-- 添加聊天记录的持久化（LocalStorage 或 Tauri invoke 存到 SQLite）
-- 添加消息时间戳显示
-- 添加打字中状态指示器
-- 添加/clear 命令的前端清空
-- 主题切换（浅色/深色 toggle）
-
-### 任务8: 创作台完善
-改造 `web/src/studio/ComponentEditor.tsx` + `AgentBuilder.tsx`：
-
-ComponentEditor：
-- 从 `list_components` 加载已有组件列表并显示在侧边栏
-- 编辑已有组件（调用 `get_component` + `update_component`）
-- 保存后刷新列表
-- 删除组件（调用 `delete_component`）
-
-AgentBuilder：
-- 从 `list_components` 加载可用工具/知识/技能下拉列表
-- 组装后展示 Agent ID 和组件清单
-- 发布到工作台按钮
-
-### 任务9: 管理台完善
-改造 `web/src/console/` 下所有文件：
-- Dashboard：展示真实数据（组件数、Agent 数、用户数、团队数）
-- SystemInfo：从 `get_system_status` 加载实时信息
-- Topology：从 `get_component_topology` 加载
-- CostCenter：从 `get_system_status` 加载成本数据
-- Governance：显示策略列表
-- Security：显示安全策略
-- Marketplace：从市场加载商品列表
-
-### 任务10: 前端样式统一
-改造 `web/src/App.css`：
-- 统一所有页面的暗色主题样式（卡片、表格、按钮、输入框）
-- 响应式布局（适配不同窗口大小）
-- 动画过渡效果
-- 滚动条美化
-
-### 任务11: 编译验证
-```bash
-cd ~/morn-desktop/web && npm install && npx tsc --noEmit 2>&1
-```
-
----
-
-## 阶段四：A2A 协议（Agent-to-Agent）
-
-A2A 让不同机器上的 Morn Agent 能互相发现、通信、协作。
-
-### 任务12: A2A 数据模型新建 `src/bridge/a2a.rs`
+**文件:** `src/main.rs:53`
 
 ```rust
-pub struct AgentCard {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub version: String,
-    pub capabilities: Vec<String>,
-    pub endpoint: String,
-    pub public_key: String,
-}
-pub enum A2AMessage {
-    TaskAssign { task_id: String, input: String, max_tokens: u32 },
-    TaskStatus { task_id: String, status: String, progress: f64 },
-    TaskResult { task_id: String, output: String, success: bool },
-    AgentDiscovery { query: String },
-    AgentList { agents: Vec<AgentCard> },
-    Heartbeat,
-    Error { code: u32, message: String },
-}
-pub struct A2AProtocol;
-impl A2AProtocol {
-    pub fn serialize(msg: &A2AMessage) -> Result<String, String>;
-    pub fn deserialize(data: &str) -> Result<A2AMessage, String>;
-    pub fn send(endpoint: &str, msg: &A2AMessage) -> Result<A2AMessage, String>;
-}
+println!("");  // ❌ clippy 警告：空字符串
 ```
 
-### 任务13: A2A 发现服务
-新建 `src/bridge/a2a_discovery.rs`：
-- 局域网 mDNS 广播发现其它 Morn 实例
-- Agent 能力列表交换
-- 定时心跳检查
+改为:
 
-### 任务14: A2A 调度集成
-改造 `src/core/orchestrator.rs`：
-- 当任务需要远程 Agent 时，通过 A2A 发送 TaskAssign
-- 轮询 TaskStatus
-- 接收 TaskResult
-- 远程 Agent 作为团队的成员参与协作
-
----
-
-## 阶段五：跨设备同步
-
-### 任务15: 同步数据模型
-在 `src/core/storage.rs` 新增表：
-- `sync_events` — id, entity_type, entity_id, action, data_json, timestamp, device_id, synced
-- `devices` — id, name, last_seen, public_key
-
-### 任务16: 同步引擎
-新建 `src/bridge/sync.rs`：
-- `SyncEngine` — 管理同步队列
-- `push_changes()` — 将本地变更推送到远程
-- `pull_changes()` — 从远程拉取变更
-- `resolve_conflicts()` — 简单冲突解决（last-write-wins）
-
-### 任务17: 同步集成
-- Storage 写入时自动产生 sync event
-- COO Supervisor 执行完任务后触发同步
-- 同步服务器 URL 通过 `SYNC_SERVER_URL` 环境变量配置
-
----
-
-## 最终验证
-
-### 任务18: 全量编译与测试
-```bash
-cd ~/morn-desktop
-# 计数 warning
-cargo build 2>&1 | grep "warning:" | wc -l
-# 全量测试
-cargo test 2>&1 | grep "test result"
-# TypeScript 检查
-cd web && npx tsc --noEmit 2>&1 | tail -5
+```rust
+println!();    // ✅ 直接打印空行
 ```
 
-### 任务19: Git 提交
+### 任务 1.2: 修复复杂类型
+
+**文件:** `src/main.rs:66`
+
+冗余闭包 `|s| Marketplace::new(s)` → 直接 `Marketplace::new`
+
+### 任务 1.3: 修复冗余闭包
+
+同上，`chat_fn` 字段的类型过于复杂 → 用 `type` 别名简化
+
+## Phase 2: a2a_discovery.rs 补测试
+
+### 任务 2.1: 添加 peer 注册与查询测试
+
+测试 `register_agent()` 后能通过设备名查到 agent。
+
+### 任务 2.2: 添加 duplicate 去重测试
+
+同一个 agent 注册两次，`discover_peers()` 应返回 1 条。
+
+### 任务 2.3: 添加 serialize/deserialize 测试
+
+A2AMessage 的 JSON 序列化/反序列化往返测试。
+
+### 任务 2.4: 添加 task assignment 测试
+
+构造 A2AMessage::TaskAssignment，验证其 JSON 结构和字段完整性。
+
+## Phase 3: 大模块补测试
+
+### 任务 3.1: component/tool.rs 补测试
+
+- test_tool_registry: 注册/查询 tool
+- test_tool_execution_basic: 简单 tool 执行
+- test_tool_error_handling: tool 失败时返回错误
+
+### 任务 3.2: component/skill.rs 补测试
+
+- test_skill_load: 加载 skill 定义
+- test_skill_execute: 执行 skill
+- test_skill_invalid: 无效 skill 返回错误
+
+### 任务 3.3: component/persona.rs 补测试
+
+- test_persona_create: 构造 persona
+- test_persona_default: 默认 persona 属性
+- test_persona_to_system_prompt: 系统提示生成
+
+## 验证
+
+最终全量检查：
+
 ```bash
 cd ~/morn-desktop
-git add -A
-git commit -m "feat: clean warnings + frontend polish + real channels + A2A + sync"
-git push origin main
+cargo build 2>&1 | grep -E "^(warning|error)" | wc -l   # 应为 0
+cargo clippy 2>&1 | grep "warning:" | wc -l              # 应为 0
+cargo test 2>&1 | grep "test result"                     # 全部通过
+cargo fmt --check                                         # 无 diff
+cd web && npm run build                                    # 前端构建通过
 ```

@@ -679,3 +679,49 @@ pub fn get_tool_by_name(name: &str) -> Option<Box<dyn Tool>> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tool_registry() {
+        for name in &[
+            "web_search",
+            "read_file",
+            "write_file",
+            "exec_python",
+            "get_time",
+            "calc",
+            "send_msg",
+            "http_request",
+        ] {
+            let tool = get_tool_by_name(name);
+            assert!(tool.is_some(), "tool {} should exist", name);
+        }
+        assert!(get_tool_by_name("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_tool_execution_basic() {
+        let mut tool = WebSearchTool::new();
+        let result = tool.execute(Data::text("rust language")).unwrap();
+        assert!(result.content.as_str().unwrap().contains("web_search"));
+        assert!(result.content.as_str().unwrap().contains("rust language"));
+
+        let mut calc = CalcTool::new();
+        let result = calc.execute(Data::text("2+2")).unwrap();
+        assert!(result.content.as_str().unwrap().contains("calc"));
+        assert!(result.content.as_str().unwrap().contains("2+2"));
+    }
+
+    #[test]
+    fn test_tool_error_handling() {
+        let unknown = get_tool_by_name("unknown_tool");
+        assert!(unknown.is_none());
+
+        let mut tool = WriteFileTool::new();
+        let result = tool.send("invalid", Data::text("test"));
+        assert!(result.is_err());
+    }
+}

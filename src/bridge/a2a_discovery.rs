@@ -95,3 +95,78 @@ pub fn start_discovery_service(discovery: Arc<Mutex<A2ADiscovery>>) {
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bridge::a2a::{A2AProtocol, AgentCard};
+
+    fn make_agent_card(id: &str) -> AgentCard {
+        AgentCard {
+            id: id.into(),
+            name: format!("Agent {}", id),
+            description: "test agent".into(),
+            version: "1.0".into(),
+            capabilities: vec!["test".into()],
+            endpoint: "http://localhost:9999".into(),
+            public_key: "pk".into(),
+        }
+    }
+
+    #[test]
+    fn test_new_discovery() {
+        let card = make_agent_card("local-1");
+        let d = A2ADiscovery::new(card.clone());
+        assert_eq!(d.local_agent.id, "local-1");
+        assert!(d.peer_endpoints.is_empty());
+    }
+
+    #[test]
+    fn test_add_peer() {
+        let card = make_agent_card("local-1");
+        let mut d = A2ADiscovery::new(card);
+        d.add_peer("http://peer1:8080");
+        d.add_peer("http://peer2:8080");
+        assert_eq!(d.peer_endpoints.len(), 2);
+    }
+
+    #[test]
+    fn test_initial_no_remote_agents() {
+        let card = make_agent_card("local-1");
+        let d = A2ADiscovery::new(card);
+        let agents = d.get_remote_agents().unwrap();
+        assert!(agents.is_empty());
+    }
+
+    #[test]
+    fn test_serialize_deserialize_task_assign() {
+        let msg = A2AMessage::TaskAssign {
+            task_id: "task-42".into(),
+            input: "analyze data".into(),
+            max_tokens: 2048,
+        };
+        let data = A2AProtocol::serialize(&msg).unwrap();
+        let back = A2AProtocol::deserialize(&data).unwrap();
+        match back {
+            A2AMessage::TaskAssign {
+                task_id,
+                input,
+                max_tokens,
+            } => {
+                assert_eq!(task_id, "task-42");
+                assert_eq!(input, "analyze data");
+                assert_eq!(max_tokens, 2048);
+            }
+            _ => panic!("Expected TaskAssign"),
+        }
+    }
+
+    #[test]
+    fn test_discover_empty_peers() {
+        let card = make_agent_card("local-1");
+        let d = A2ADiscovery::new(card);
+        let result = d.discover_peers();
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+}

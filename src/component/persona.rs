@@ -409,3 +409,43 @@ pub fn create_default_personas() -> Vec<Persona> {
         create_reviewer_persona(),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_persona_create() {
+        let p = Persona::new("test-1", "TestBot");
+        assert_eq!(p.id, "test-1");
+        assert_eq!(p.name, "TestBot");
+        assert!(p.core_principles.is_empty());
+        assert!(p.anti_patterns.is_empty());
+    }
+
+    #[test]
+    fn test_persona_default() {
+        let params = PersonaParameters::default();
+        assert_eq!(params.temperature, 0.6);
+        assert_eq!(params.style, "professional");
+        assert_eq!(params.verbosity, 0.5);
+        assert_eq!(params.proactiveness, 0.3);
+
+        let layers = PromptLayers::default();
+        assert_eq!(layers.l1_core_identity, "You are a helpful AI assistant.");
+        assert!(layers.l2_skill_instructions.is_none());
+    }
+
+    #[test]
+    fn test_persona_to_system_prompt() {
+        let persona = create_analyst_persona();
+        let prompt = persona.build_system_prompt();
+        assert!(prompt.contains("Analyst"));
+        assert!(prompt.contains("data-driven"));
+
+        let coder = create_coder_persona();
+        let coder_prompt = coder.build_system_prompt();
+        assert!(coder_prompt.contains("Coder"));
+        assert!(coder_prompt.contains("error handling"));
+    }
+}
