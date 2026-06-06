@@ -74,7 +74,12 @@ impl Visualization3D {
         }
     }
 
-    pub fn add_node(&mut self, kind: NodeKind, label: &str, metadata: HashMap<String, Value>) -> String {
+    pub fn add_node(
+        &mut self,
+        kind: NodeKind,
+        label: &str,
+        metadata: HashMap<String, Value>,
+    ) -> String {
         let id = uuid::Uuid::new_v4().to_string();
         self.graph.nodes.push(GraphNode {
             id: id.clone(),
@@ -109,7 +114,9 @@ impl Visualization3D {
 
     pub fn remove_node(&mut self, node_id: &str) {
         self.graph.nodes.retain(|n| n.id != node_id);
-        self.graph.edges.retain(|e| e.source != node_id && e.target != node_id);
+        self.graph
+            .edges
+            .retain(|e| e.source != node_id && e.target != node_id);
     }
 
     pub fn remove_edge(&mut self, edge_id: &str) {

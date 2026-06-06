@@ -130,9 +130,7 @@ async fn chat_handler(
     }
 }
 
-async fn tools_list_handler(
-    State(state): State<Arc<ApiState>>,
-) -> Json<Vec<ToolInfo>> {
+async fn tools_list_handler(State(state): State<Arc<ApiState>>) -> Json<Vec<ToolInfo>> {
     let registry = state.registry.lock().await;
     let caps = registry.list_all();
 
@@ -151,9 +149,8 @@ async fn tool_execute_handler(
     Path(name): Path<String>,
     Json(req): Json<ToolExecuteRequest>,
 ) -> Result<Json<ToolExecuteResponse>, Json<Value>> {
-    let mut tool = get_tool_by_name(&name).ok_or_else(|| {
-        Json(serde_json::json!({"error": format!("Unknown tool: {}", name)}))
-    })?;
+    let mut tool = get_tool_by_name(&name)
+        .ok_or_else(|| Json(serde_json::json!({"error": format!("Unknown tool: {}", name)})))?;
 
     let input = Data {
         content: req.input,
@@ -174,11 +171,11 @@ async fn workflows_list_handler() -> Json<Vec<WorkflowInfo>> {
     Json(workflows)
 }
 
-async fn workflow_get_handler(
-    Path(id): Path<String>,
-) -> Result<Json<WorkflowInfo>, Json<Value>> {
+async fn workflow_get_handler(Path(id): Path<String>) -> Result<Json<WorkflowInfo>, Json<Value>> {
     match WorkflowTemplate::get_by_id(&id) {
         Some(template) => Ok(Json(WorkflowInfo::from(&template))),
-        None => Err(Json(serde_json::json!({"error": format!("Workflow not found: {}", id)}))),
+        None => Err(Json(
+            serde_json::json!({"error": format!("Workflow not found: {}", id)}),
+        )),
     }
 }

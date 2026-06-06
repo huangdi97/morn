@@ -82,12 +82,11 @@ impl CodeToolExecutor {
 
         let file_name = format!("code_tool_{}.{}", Uuid::new_v4(), ext);
         let temp_dir = std::env::temp_dir().join("morn_code_tool");
-        fs::create_dir_all(&temp_dir)
-            .map_err(|e| format!("failed to create temp dir: {}", e))?;
+        fs::create_dir_all(&temp_dir).map_err(|e| format!("failed to create temp dir: {}", e))?;
         let file_path = temp_dir.join(&file_name);
 
-        let mut file =
-            fs::File::create(&file_path).map_err(|e| format!("failed to create temp file: {}", e))?;
+        let mut file = fs::File::create(&file_path)
+            .map_err(|e| format!("failed to create temp file: {}", e))?;
         file.write_all(code.as_bytes())
             .map_err(|e| format!("failed to write code to temp file: {}", e))?;
         drop(file);
@@ -104,7 +103,11 @@ impl CodeToolExecutor {
         result
     }
 
-    fn run_with_limits(&self, interpreter: &str, file_path: &PathBuf) -> Result<CodeToolResult, String> {
+    fn run_with_limits(
+        &self,
+        interpreter: &str,
+        file_path: &PathBuf,
+    ) -> Result<CodeToolResult, String> {
         let mem_limit_kb = self.max_memory_mb * 1024;
 
         let output = Command::new("timeout")
@@ -155,7 +158,9 @@ mod tests {
     #[test]
     fn test_python_execution() {
         let executor = CodeToolExecutor::new();
-        let result = executor.execute("print('hello from code_tool')", "python").unwrap();
+        let result = executor
+            .execute("print('hello from code_tool')", "python")
+            .unwrap();
         assert!(result.stdout.contains("hello from code_tool"));
         assert_eq!(result.exit_code, 0);
         assert!(!result.timed_out);
@@ -181,7 +186,9 @@ mod tests {
     #[test]
     fn test_stderr_capture() {
         let executor = CodeToolExecutor::new();
-        let result = executor.execute("import sys; sys.stderr.write('error msg')", "py").unwrap();
+        let result = executor
+            .execute("import sys; sys.stderr.write('error msg')", "py")
+            .unwrap();
         assert!(result.stderr.contains("error msg"));
     }
 

@@ -78,11 +78,16 @@ impl IdentityBridge {
             });
 
         identity.bound_users.push(user.clone());
-        self.channel_to_identity.insert(user, identity_id.to_string());
+        self.channel_to_identity
+            .insert(user, identity_id.to_string());
         Ok(())
     }
 
-    pub fn resolve(&self, channel: &ChannelKind, channel_user_id: &str) -> Option<&UnifiedIdentity> {
+    pub fn resolve(
+        &self,
+        channel: &ChannelKind,
+        channel_user_id: &str,
+    ) -> Option<&UnifiedIdentity> {
         let user = ChannelUser {
             channel: channel.clone(),
             channel_user_id: channel_user_id.to_string(),
@@ -137,9 +142,7 @@ impl IdentityBridge {
             .identity_store
             .get_mut(identity_id)
             .ok_or_else(|| format!("Identity {} not found", identity_id))?;
-        identity
-            .metadata
-            .insert(key.to_string(), value.to_string());
+        identity.metadata.insert(key.to_string(), value.to_string());
         Ok(())
     }
 
@@ -184,9 +187,7 @@ mod tests {
     #[test]
     fn test_bind_and_resolve() {
         let bridge = setup_bridge();
-        let identity = bridge
-            .resolve(&ChannelKind::Telegram, "tg_123")
-            .unwrap();
+        let identity = bridge.resolve(&ChannelKind::Telegram, "tg_123").unwrap();
         assert_eq!(identity.identity_id, "user_1");
         assert_eq!(identity.display_name, "Alice");
     }
@@ -216,9 +217,7 @@ mod tests {
     #[test]
     fn test_unbind() {
         let mut bridge = setup_bridge();
-        bridge
-            .unbind(&ChannelKind::Telegram, "tg_123")
-            .unwrap();
+        bridge.unbind(&ChannelKind::Telegram, "tg_123").unwrap();
         assert!(bridge.resolve(&ChannelKind::Telegram, "tg_123").is_none());
         let identity = bridge.get_identity("user_1").unwrap();
         assert_eq!(identity.bound_users.len(), 1);
@@ -230,9 +229,7 @@ mod tests {
         bridge
             .bind("user_x", "X", ChannelKind::Telegram, "tg_x")
             .unwrap();
-        bridge
-            .unbind(&ChannelKind::Telegram, "tg_x")
-            .unwrap();
+        bridge.unbind(&ChannelKind::Telegram, "tg_x").unwrap();
         assert!(bridge.get_identity("user_x").is_none());
     }
 
@@ -253,14 +250,9 @@ mod tests {
     #[test]
     fn test_set_metadata() {
         let mut bridge = setup_bridge();
-        bridge
-            .set_metadata("user_1", "role", "admin")
-            .unwrap();
+        bridge.set_metadata("user_1", "role", "admin").unwrap();
         let identity = bridge.get_identity("user_1").unwrap();
-        assert_eq!(
-            identity.metadata.get("role").unwrap(),
-            "admin"
-        );
+        assert_eq!(identity.metadata.get("role").unwrap(), "admin");
     }
 
     #[test]

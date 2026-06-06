@@ -109,7 +109,11 @@ impl SearchIndex {
 
     pub fn all(&self) -> Vec<&SearchItem> {
         let mut items: Vec<_> = self.items.values().collect();
-        items.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        items.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         items
     }
 
@@ -117,11 +121,12 @@ impl SearchIndex {
         self.categories
             .get(category)
             .map(|ids| {
-                let mut items: Vec<_> = ids
-                    .iter()
-                    .filter_map(|id| self.items.get(id))
-                    .collect();
-                items.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                let mut items: Vec<_> = ids.iter().filter_map(|id| self.items.get(id)).collect();
+                items.sort_by(|a, b| {
+                    b.score
+                        .partial_cmp(&a.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
                 items
             })
             .unwrap_or_default()
@@ -558,14 +563,8 @@ mod tests {
     #[test]
     fn test_search_index_all_sorted_by_score() {
         let mut index = SearchIndex::new();
-        index.add(
-            SearchItem::new("a", "A", "desc", SearchCategory::App)
-                .with_score(0.5),
-        );
-        index.add(
-            SearchItem::new("b", "B", "desc", SearchCategory::App)
-                .with_score(1.0),
-        );
+        index.add(SearchItem::new("a", "A", "desc", SearchCategory::App).with_score(0.5));
+        index.add(SearchItem::new("b", "B", "desc", SearchCategory::App).with_score(1.0));
         let all = index.all();
         assert_eq!(all[0].id, "b");
         assert_eq!(all[1].id, "a");

@@ -130,8 +130,9 @@ impl PersonalityEngine {
             Mood::Serious | Mood::Empathetic => -0.1,
             Mood::Frustrated => -0.2,
         };
-        let temp_adjustment = (openness_factor + extraversion_factor + neuroticism_factor + mood_factor)
-            .clamp(-temp_range, temp_range);
+        let temp_adjustment =
+            (openness_factor + extraversion_factor + neuroticism_factor + mood_factor)
+                .clamp(-temp_range, temp_range);
         let temperature = (temp_base + temp_adjustment).clamp(0.0, 1.0);
 
         let consc_factor = self.profile.traits.conscientiousness * 0.3;

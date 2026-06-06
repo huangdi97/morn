@@ -88,7 +88,8 @@ impl LongTaskEngine {
             0.0
         };
         self.task.updated_at = chrono::Utc::now().to_rfc3339();
-        self.last_heartbeat.store(chrono::Utc::now().timestamp(), Ordering::Relaxed);
+        self.last_heartbeat
+            .store(chrono::Utc::now().timestamp(), Ordering::Relaxed);
         Ok(())
     }
 
@@ -120,7 +121,8 @@ impl LongTaskEngine {
             0.0
         };
         self.task.updated_at = chrono::Utc::now().to_rfc3339();
-        self.last_heartbeat.store(chrono::Utc::now().timestamp(), Ordering::Relaxed);
+        self.last_heartbeat
+            .store(chrono::Utc::now().timestamp(), Ordering::Relaxed);
     }
 
     pub fn pause(&self) {
@@ -153,7 +155,8 @@ impl LongTaskEngine {
         self.task.progress_pct = 100.0;
         self.task.status = TaskStatus::Completed;
         self.task.updated_at = chrono::Utc::now().to_rfc3339();
-        self.last_heartbeat.store(chrono::Utc::now().timestamp(), Ordering::Relaxed);
+        self.last_heartbeat
+            .store(chrono::Utc::now().timestamp(), Ordering::Relaxed);
     }
 
     pub fn set_checkpoint(&mut self, data: Value) {

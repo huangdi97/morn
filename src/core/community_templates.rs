@@ -97,7 +97,10 @@ impl CommunityTemplateRegistry {
         Ok(installed)
     }
 
-    pub fn check_updates(&mut self, url: Option<&str>) -> Result<Vec<(String, String, String)>, String> {
+    pub fn check_updates(
+        &mut self,
+        url: Option<&str>,
+    ) -> Result<Vec<(String, String, String)>, String> {
         let fetch_url = url.unwrap_or(&self.registry_url).to_string();
 
         let remote = self.fetch_registry(Some(&fetch_url))?;
@@ -106,11 +109,7 @@ impl CommunityTemplateRegistry {
         for t in &remote {
             if let Some(local) = self.installed.get(&t.id) {
                 if local.version != t.version {
-                    updates.push((
-                        t.id.clone(),
-                        local.version.clone(),
-                        t.version.clone(),
-                    ));
+                    updates.push((t.id.clone(), local.version.clone(), t.version.clone()));
                 }
             }
         }
