@@ -521,9 +521,9 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&show, &quit])?;
 
             TrayIconBuilder::new()
-                .icon(tauri::image::Image::new_owned(include_bytes!(
+                .icon(tauri::image::Image::from_bytes(include_bytes!(
                     "../icons/tray-icon.png"
-                ))?)
+                )).expect("failed to load tray icon"))
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
