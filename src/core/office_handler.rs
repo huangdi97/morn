@@ -39,11 +39,7 @@ impl OfficeHandler {
         title: &str,
         body: &str,
     ) -> Result<Vec<u8>, String> {
-        let cache_key = format!(
-            "slide_{}_{}",
-            template.id,
-            uuid::Uuid::new_v4()
-        );
+        let cache_key = format!("slide_{}_{}", template.id, uuid::Uuid::new_v4());
 
         let content_type = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -61,8 +57,18 @@ impl OfficeHandler {
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
 </Relationships>"#;
 
-        let escaped_title = title.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('\'', "&apos;").replace('"', "&quot;");
-        let escaped_body = body.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('\'', "&apos;").replace('"', "&quot;");
+        let escaped_title = title
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('\'', "&apos;")
+            .replace('"', "&quot;");
+        let escaped_body = body
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('\'', "&apos;")
+            .replace('"', "&quot;");
 
         let slide_xml = format!(
             r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -128,55 +134,85 @@ impl OfficeHandler {
             let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut buffer));
             let opts: zip::write::SimpleFileOptions = Default::default();
             let file_opts = opts;
-            zip.add_directory("_rels/", file_opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/", file_opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/_rels/", file_opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slides/", file_opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slides/_rels/", file_opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slideMasters/", file_opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slideMasters/_rels/", file_opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slideLayouts/", file_opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slideLayouts/_rels/", file_opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/theme/", file_opts).map_err(|e| e.to_string())?;
-            zip.add_directory("docProps/", file_opts).map_err(|e| e.to_string())?;
+            zip.add_directory("_rels/", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/_rels/", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slides/", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slides/_rels/", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slideMasters/", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slideMasters/_rels/", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slideLayouts/", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slideLayouts/_rels/", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/theme/", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("docProps/", file_opts)
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("[Content_Types].xml", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(content_type.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("[Content_Types].xml", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(content_type.as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("_rels/.rels", file_opts).map_err(|e| e.to_string())?;
+            zip.start_file("_rels/.rels", file_opts)
+                .map_err(|e| e.to_string())?;
             zip.write_all(rels.as_bytes()).map_err(|e| e.to_string())?;
 
-            zip.start_file("ppt/presentation.xml", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(presentation_xml.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/presentation.xml", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(presentation_xml.as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("ppt/_rels/presentation.xml.rels", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(presentation_rels.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/_rels/presentation.xml.rels", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(presentation_rels.as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("ppt/slides/slide1.xml", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(slide_xml.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/slides/slide1.xml", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(slide_xml.as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("ppt/slideMasters/slideMaster1.xml", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(slide_master_xml.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/slideMasters/slideMaster1.xml", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(slide_master_xml.as_bytes())
+                .map_err(|e| e.to_string())?;
 
             let master_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
 </Relationships>"#;
-            zip.start_file("ppt/slideMasters/_rels/slideMaster1.xml.rels", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(master_rels.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/slideMasters/_rels/slideMaster1.xml.rels", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(master_rels.as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("ppt/slideLayouts/slideLayout1.xml", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(slide_layout_xml.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/slideLayouts/slideLayout1.xml", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(slide_layout_xml.as_bytes())
+                .map_err(|e| e.to_string())?;
 
             let layout_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
 </Relationships>"#;
-            zip.start_file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(layout_rels.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(layout_rels.as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("ppt/theme/theme1.xml", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(theme_xml.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/theme/theme1.xml", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(theme_xml.as_bytes())
+                .map_err(|e| e.to_string())?;
 
             let core_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/">
@@ -185,8 +221,10 @@ impl OfficeHandler {
 <dcterms:created xsi:type="dcterms:W3CDTF">2025-01-01T00:00:00Z</dcterms:created>
 <dcterms:modified xsi:type="dcterms:W3CDTF">2025-01-01T00:00:00Z</dcterms:modified>
 </cp:coreProperties>"#;
-            zip.start_file("docProps/core.xml", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(core_xml.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("docProps/core.xml", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(core_xml.as_bytes())
+                .map_err(|e| e.to_string())?;
 
             let app_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
@@ -194,8 +232,10 @@ impl OfficeHandler {
 <SlideCount>1</SlideCount>
 <TotalTime>0</TotalTime>
 </Properties>"#;
-            zip.start_file("docProps/app.xml", file_opts).map_err(|e| e.to_string())?;
-            zip.write_all(app_xml.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("docProps/app.xml", file_opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(app_xml.as_bytes())
+                .map_err(|e| e.to_string())?;
 
             zip.finish().map_err(|e| e.to_string())?;
         }
@@ -227,11 +267,7 @@ impl OfficeHandler {
             return Err("At least one slide is required".into());
         }
 
-        let slide_data = self.create_slide_from_template(
-            &template,
-            &slides[0].0,
-            &slides[0].1,
-        )?;
+        let slide_data = self.create_slide_from_template(&template, &slides[0].0, &slides[0].1)?;
 
         if slides.len() == 1 {
             let path = Path::new(output_path);
@@ -272,9 +308,11 @@ impl OfficeHandler {
         }
         content_types.push_str("\n</Types>");
 
-        let mut presentation_rels = String::from(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        let mut presentation_rels = String::from(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>"#);
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>"#,
+        );
 
         for i in 0..slides.len() {
             presentation_rels.push_str(&format!(
@@ -309,33 +347,61 @@ impl OfficeHandler {
         {
             let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut combined));
             let opts: zip::write::SimpleFileOptions = Default::default();
-            zip.add_directory("_rels/", opts).map_err(|e| e.to_string())?;
+            zip.add_directory("_rels/", opts)
+                .map_err(|e| e.to_string())?;
             zip.add_directory("ppt/", opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/_rels/", opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slides/", opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slides/_rels/", opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slideMasters/", opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slideMasters/_rels/", opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slideLayouts/", opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/slideLayouts/_rels/", opts).map_err(|e| e.to_string())?;
-            zip.add_directory("ppt/theme/", opts).map_err(|e| e.to_string())?;
-            zip.add_directory("docProps/", opts).map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/_rels/", opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slides/", opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slides/_rels/", opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slideMasters/", opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slideMasters/_rels/", opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slideLayouts/", opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/slideLayouts/_rels/", opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("ppt/theme/", opts)
+                .map_err(|e| e.to_string())?;
+            zip.add_directory("docProps/", opts)
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("[Content_Types].xml", opts).map_err(|e| e.to_string())?;
-            zip.write_all(content_types.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("[Content_Types].xml", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(content_types.as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("_rels/.rels", opts).map_err(|e| e.to_string())?;
-            zip.write_all(rels_xml().as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("_rels/.rels", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(rels_xml().as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("ppt/presentation.xml", opts).map_err(|e| e.to_string())?;
-            zip.write_all(presentation_xml.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/presentation.xml", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(presentation_xml.as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("ppt/_rels/presentation.xml.rels", opts).map_err(|e| e.to_string())?;
-            zip.write_all(presentation_rels.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/_rels/presentation.xml.rels", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(presentation_rels.as_bytes())
+                .map_err(|e| e.to_string())?;
 
             for (i, (title, body)) in slides.iter().enumerate() {
-                let escaped_title = title.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('\'', "&apos;").replace('"', "&quot;");
-                let escaped_body = body.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('\'', "&apos;").replace('"', "&quot;");
+                let escaped_title = title
+                    .replace('&', "&amp;")
+                    .replace('<', "&lt;")
+                    .replace('>', "&gt;")
+                    .replace('\'', "&apos;")
+                    .replace('"', "&quot;");
+                let escaped_body = body
+                    .replace('&', "&amp;")
+                    .replace('<', "&lt;")
+                    .replace('>', "&gt;")
+                    .replace('\'', "&apos;")
+                    .replace('"', "&quot;");
 
                 let slide_xml = format!(
                     r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -361,32 +427,44 @@ impl OfficeHandler {
                     escaped_title, escaped_body
                 );
 
-                zip.start_file(&format!("ppt/slides/slide{}.xml", i + 1), opts).map_err(|e| e.to_string())?;
-                zip.write_all(slide_xml.as_bytes()).map_err(|e| e.to_string())?;
+                zip.start_file(&format!("ppt/slides/slide{}.xml", i + 1), opts)
+                    .map_err(|e| e.to_string())?;
+                zip.write_all(slide_xml.as_bytes())
+                    .map_err(|e| e.to_string())?;
             }
 
-            zip.start_file("ppt/slideMasters/slideMaster1.xml", opts).map_err(|e| e.to_string())?;
-            zip.write_all(slide_master().as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/slideMasters/slideMaster1.xml", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(slide_master().as_bytes())
+                .map_err(|e| e.to_string())?;
 
             let master_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
 </Relationships>"#;
-            zip.start_file("ppt/slideMasters/_rels/slideMaster1.xml.rels", opts).map_err(|e| e.to_string())?;
-            zip.write_all(master_rels.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/slideMasters/_rels/slideMaster1.xml.rels", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(master_rels.as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("ppt/slideLayouts/slideLayout1.xml", opts).map_err(|e| e.to_string())?;
-            zip.write_all(slide_layout().as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/slideLayouts/slideLayout1.xml", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(slide_layout().as_bytes())
+                .map_err(|e| e.to_string())?;
 
             let layout_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
 </Relationships>"#;
-            zip.start_file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", opts).map_err(|e| e.to_string())?;
-            zip.write_all(layout_rels.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(layout_rels.as_bytes())
+                .map_err(|e| e.to_string())?;
 
-            zip.start_file("ppt/theme/theme1.xml", opts).map_err(|e| e.to_string())?;
-            zip.write_all(theme().as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("ppt/theme/theme1.xml", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(theme().as_bytes())
+                .map_err(|e| e.to_string())?;
 
             let core_xml = format!(
                 r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -399,8 +477,10 @@ impl OfficeHandler {
                 chrono::Utc::now().format("%Y-%m-%d"),
                 chrono::Utc::now().format("%Y-%m-%d")
             );
-            zip.start_file("docProps/core.xml", opts).map_err(|e| e.to_string())?;
-            zip.write_all(core_xml.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("docProps/core.xml", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(core_xml.as_bytes())
+                .map_err(|e| e.to_string())?;
 
             let app_xml = format!(
                 r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -411,8 +491,10 @@ impl OfficeHandler {
 </Properties>"#,
                 slides.len()
             );
-            zip.start_file("docProps/app.xml", opts).map_err(|e| e.to_string())?;
-            zip.write_all(app_xml.as_bytes()).map_err(|e| e.to_string())?;
+            zip.start_file("docProps/app.xml", opts)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(app_xml.as_bytes())
+                .map_err(|e| e.to_string())?;
 
             zip.finish().map_err(|e| e.to_string())?;
         }
@@ -435,7 +517,11 @@ impl OfficeHandler {
         Ok(combined)
     }
 
-    pub fn export_to_csv(&self, data: &[Vec<String>], output_path: &str) -> Result<Vec<u8>, String> {
+    pub fn export_to_csv(
+        &self,
+        data: &[Vec<String>],
+        output_path: &str,
+    ) -> Result<Vec<u8>, String> {
         let mut buffer = Vec::new();
         {
             let mut writer = csv::Writer::from_writer(std::io::Cursor::new(&mut buffer));
@@ -483,20 +569,22 @@ impl OfficeHandler {
             .set_font_color(Color::White);
 
         for (col, header) in headers.iter().enumerate() {
-            sheet.write_string_with_format(0, col as u16, *header, &header_format)
+            sheet
+                .write_string_with_format(0, col as u16, *header, &header_format)
                 .map_err(|e| e.to_string())?;
         }
 
         let cell_format = Format::new();
         for (row_idx, row) in rows.iter().enumerate() {
             for (col_idx, value) in row.iter().enumerate() {
-                sheet.write_string_with_format(
-                    (row_idx + 1) as u32,
-                    col_idx as u16,
-                    *value,
-                    &cell_format,
-                )
-                .map_err(|e| e.to_string())?;
+                sheet
+                    .write_string_with_format(
+                        (row_idx + 1) as u32,
+                        col_idx as u16,
+                        *value,
+                        &cell_format,
+                    )
+                    .map_err(|e| e.to_string())?;
             }
         }
 
@@ -593,10 +681,8 @@ mod tests {
         let handler = OfficeHandler::new();
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test.pptx");
-        let result = handler.export_to_pptx(
-            &[("Title".into(), "Body".into())],
-            path.to_str().unwrap(),
-        );
+        let result =
+            handler.export_to_pptx(&[("Title".into(), "Body".into())], path.to_str().unwrap());
         assert!(result.is_ok());
         assert!(path.exists());
     }
@@ -652,7 +738,9 @@ mod tests {
             title: String::new(),
             body: String::new(),
         };
-        handler.create_slide_from_template(&template, "Cached", "Slide").unwrap();
+        handler
+            .create_slide_from_template(&template, "Cached", "Slide")
+            .unwrap();
         assert_eq!(handler.cache_size().unwrap(), 1);
 
         let count = handler.clear_cache().unwrap();

@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
 use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CardStatus {
@@ -175,12 +175,18 @@ impl KanbanBoard {
     }
 
     pub fn move_card(&mut self, task_id: &str, status: CardStatus) -> Result<(), String> {
-        let card = self.cards.get_mut(task_id).ok_or_else(|| format!("Card '{}' not found", task_id))?;
+        let card = self
+            .cards
+            .get_mut(task_id)
+            .ok_or_else(|| format!("Card '{}' not found", task_id))?;
         card.move_to(status)
     }
 
     pub fn assign_card(&mut self, task_id: &str, agent_id: String) -> Result<(), String> {
-        let card = self.cards.get_mut(task_id).ok_or_else(|| format!("Card '{}' not found", task_id))?;
+        let card = self
+            .cards
+            .get_mut(task_id)
+            .ok_or_else(|| format!("Card '{}' not found", task_id))?;
         card.assign(agent_id);
         Ok(())
     }
@@ -190,7 +196,10 @@ impl KanbanBoard {
     }
 
     pub fn cards_by_agent(&self, agent_id: &str) -> Vec<&KanbanCard> {
-        self.cards.values().filter(|c| c.agent_id.as_deref() == Some(agent_id)).collect()
+        self.cards
+            .values()
+            .filter(|c| c.agent_id.as_deref() == Some(agent_id))
+            .collect()
     }
 
     pub fn cards_sorted_by_priority(&self) -> Vec<&KanbanCard> {
@@ -212,7 +221,10 @@ impl KanbanBoard {
     }
 
     pub fn agent_ids(&self) -> HashSet<String> {
-        self.cards.values().filter_map(|c| c.agent_id.clone()).collect()
+        self.cards
+            .values()
+            .filter_map(|c| c.agent_id.clone())
+            .collect()
     }
 
     pub fn status_counts(&self) -> HashMap<CardStatus, usize> {
@@ -238,10 +250,16 @@ mod tests {
         assert_eq!(todo.transitions(), vec![CardStatus::InProgress]);
 
         let in_progress = CardStatus::InProgress;
-        assert_eq!(in_progress.transitions(), vec![CardStatus::Review, CardStatus::Todo]);
+        assert_eq!(
+            in_progress.transitions(),
+            vec![CardStatus::Review, CardStatus::Todo]
+        );
 
         let review = CardStatus::Review;
-        assert_eq!(review.transitions(), vec![CardStatus::Done, CardStatus::InProgress]);
+        assert_eq!(
+            review.transitions(),
+            vec![CardStatus::Done, CardStatus::InProgress]
+        );
 
         let done = CardStatus::Done;
         assert_eq!(done.transitions(), vec![CardStatus::Todo]);
@@ -283,7 +301,10 @@ mod tests {
         let mut board = KanbanBoard::new("test");
         board.add_card(KanbanCard::new("task-1".to_string(), "Test".to_string()));
         assert!(board.move_card("task-1", CardStatus::InProgress).is_ok());
-        assert_eq!(board.get_card("task-1").unwrap().status, CardStatus::InProgress);
+        assert_eq!(
+            board.get_card("task-1").unwrap().status,
+            CardStatus::InProgress
+        );
     }
 
     #[test]
@@ -333,14 +354,24 @@ mod tests {
 
     #[test]
     fn test_card_status_str_roundtrip() {
-        for status in &[CardStatus::Todo, CardStatus::InProgress, CardStatus::Review, CardStatus::Done] {
+        for status in &[
+            CardStatus::Todo,
+            CardStatus::InProgress,
+            CardStatus::Review,
+            CardStatus::Done,
+        ] {
             assert_eq!(CardStatus::from_str(status.as_str()), *status);
         }
     }
 
     #[test]
     fn test_priority_str_roundtrip() {
-        for priority in &[Priority::Low, Priority::Medium, Priority::High, Priority::Critical] {
+        for priority in &[
+            Priority::Low,
+            Priority::Medium,
+            Priority::High,
+            Priority::Critical,
+        ] {
             assert_eq!(Priority::from_str(priority.as_str()), *priority);
         }
     }
@@ -366,6 +397,9 @@ mod tests {
         let mut board = KanbanBoard::new("test");
         board.add_card(KanbanCard::new("task-1".to_string(), "T1".to_string()));
         assert!(board.assign_card("task-1", "agent-x".to_string()).is_ok());
-        assert_eq!(board.get_card("task-1").unwrap().agent_id.as_deref(), Some("agent-x"));
+        assert_eq!(
+            board.get_card("task-1").unwrap().agent_id.as_deref(),
+            Some("agent-x")
+        );
     }
 }

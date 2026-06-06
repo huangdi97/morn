@@ -84,7 +84,10 @@ impl VisualAgent {
         ])
     }
 
-    pub async fn detect_text_fields(&self, _screenshot: &[u8]) -> Result<Vec<DetectedTextField>, String> {
+    pub async fn detect_text_fields(
+        &self,
+        _screenshot: &[u8],
+    ) -> Result<Vec<DetectedTextField>, String> {
         Ok(vec![
             DetectedTextField {
                 label: "Search".to_string(),
@@ -154,7 +157,10 @@ impl VisualAgent {
     pub async fn type_at(&self, coord: &ScreenCoord, text: &str) -> Result<(), String> {
         let center_x = coord.x + coord.width / 2.0;
         let center_y = coord.y + coord.height / 2.0;
-        println!("[VisualAgent] Typing '{}' at ({}, {})", text, center_x, center_y);
+        println!(
+            "[VisualAgent] Typing '{}' at ({}, {})",
+            text, center_x, center_y
+        );
         Ok(())
     }
 
@@ -162,7 +168,11 @@ impl VisualAgent {
         self.click_at(&button.bounding_box).await
     }
 
-    pub async fn fill_text_field(&self, field: &DetectedTextField, text: &str) -> Result<(), String> {
+    pub async fn fill_text_field(
+        &self,
+        field: &DetectedTextField,
+        text: &str,
+    ) -> Result<(), String> {
         self.click_at(&field.bounding_box).await?;
         self.type_at(&field.bounding_box, text).await
     }
@@ -245,6 +255,9 @@ mod tests {
     async fn test_fill_text_field() {
         let agent = VisualAgent::new();
         let fields = agent.detect_text_fields(&[]).await.unwrap();
-        assert!(agent.fill_text_field(&fields[0], "test input").await.is_ok());
+        assert!(agent
+            .fill_text_field(&fields[0], "test input")
+            .await
+            .is_ok());
     }
 }

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use crate::core::registry::Registry;
 use crate::core::trust_scorer::TrustScorer;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgentInstance {
@@ -79,9 +79,17 @@ impl AgentPool {
         self
     }
 
-    pub fn register_agent(&mut self, id: &str, name: &str, agent_type: &str) -> Result<String, String> {
+    pub fn register_agent(
+        &mut self,
+        id: &str,
+        name: &str,
+        agent_type: &str,
+    ) -> Result<String, String> {
         if self.agents.len() >= self.config.max_agents {
-            return Err(format!("Pool max agents ({}) reached", self.config.max_agents));
+            return Err(format!(
+                "Pool max agents ({}) reached",
+                self.config.max_agents
+            ));
         }
         if self.agents.contains_key(id) {
             return Err(format!("Agent '{}' already registered in pool", id));
@@ -104,7 +112,10 @@ impl AgentPool {
     }
 
     pub fn unregister_agent(&mut self, id: &str) -> Result<(), String> {
-        self.agents.remove(id).ok_or_else(|| format!("Agent '{}' not found", id)).map(|_| ())
+        self.agents
+            .remove(id)
+            .ok_or_else(|| format!("Agent '{}' not found", id))
+            .map(|_| ())
     }
 
     pub fn get_agent(&self, id: &str) -> Option<&AgentInstance> {
@@ -116,11 +127,17 @@ impl AgentPool {
     }
 
     pub fn list_agents_by_type(&self, agent_type: &str) -> Vec<&AgentInstance> {
-        self.agents.values().filter(|a| a.agent_type == agent_type).collect()
+        self.agents
+            .values()
+            .filter(|a| a.agent_type == agent_type)
+            .collect()
     }
 
     pub fn list_idle_agents(&self) -> Vec<&AgentInstance> {
-        self.agents.values().filter(|a| a.status == "idle").collect()
+        self.agents
+            .values()
+            .filter(|a| a.status == "idle")
+            .collect()
     }
 
     pub fn submit_task(&mut self, task: AgentTask) -> Result<String, String> {
@@ -218,7 +235,11 @@ impl AgentPool {
             busy_agents: busy,
             queued_tasks: self.tasks.len(),
             max_agents: self.config.max_agents,
-            memory_used_mb: self.agents.values().map(|a| a.resource_usage.memory_mb).sum(),
+            memory_used_mb: self
+                .agents
+                .values()
+                .map(|a| a.resource_usage.memory_mb)
+                .sum(),
         }
     }
 }
@@ -240,7 +261,8 @@ mod tests {
     #[test]
     fn test_register_agent() {
         let mut pool = AgentPool::new(PoolConfig::default());
-        pool.register_agent("agent-1", "TestAgent", "worker").unwrap();
+        pool.register_agent("agent-1", "TestAgent", "worker")
+            .unwrap();
         assert_eq!(pool.list_agents().len(), 1);
     }
 
@@ -263,14 +285,16 @@ mod tests {
     fn test_submit_and_execute() {
         let mut pool = AgentPool::new(PoolConfig::default());
         pool.register_agent("agent-1", "A", "worker").unwrap();
-        let id = pool.submit_task(AgentTask {
-            id: "task-1".into(),
-            agent_id: "agent-1".into(),
-            input: "hello".into(),
-            priority: 1,
-            status: "pending".into(),
-            result: None,
-        }).unwrap();
+        let id = pool
+            .submit_task(AgentTask {
+                id: "task-1".into(),
+                agent_id: "agent-1".into(),
+                input: "hello".into(),
+                priority: 1,
+                status: "pending".into(),
+                result: None,
+            })
+            .unwrap();
         assert_eq!(id, "task-1");
         let results = pool.execute_all();
         assert_eq!(results.len(), 1);
@@ -283,8 +307,22 @@ mod tests {
         pool.register_agent("agent-1", "A", "worker").unwrap();
         pool.register_agent("agent-2", "B", "worker").unwrap();
         let tasks = vec![
-            AgentTask { id: "t1".into(), agent_id: "agent-1".into(), input: "a".into(), priority: 1, status: "pending".into(), result: None },
-            AgentTask { id: "t2".into(), agent_id: "agent-2".into(), input: "b".into(), priority: 1, status: "pending".into(), result: None },
+            AgentTask {
+                id: "t1".into(),
+                agent_id: "agent-1".into(),
+                input: "a".into(),
+                priority: 1,
+                status: "pending".into(),
+                result: None,
+            },
+            AgentTask {
+                id: "t2".into(),
+                agent_id: "agent-2".into(),
+                input: "b".into(),
+                priority: 1,
+                status: "pending".into(),
+                result: None,
+            },
         ];
         let results = pool.execute_parallel(tasks);
         assert_eq!(results.len(), 2);
@@ -305,8 +343,22 @@ mod tests {
     fn test_merge_results() {
         let pool = AgentPool::new(PoolConfig::default());
         let results = vec![
-            AgentTask { id: "t1".into(), agent_id: "a1".into(), input: "x".into(), priority: 1, status: "completed".into(), result: Some("ok1".into()) },
-            AgentTask { id: "t2".into(), agent_id: "a2".into(), input: "y".into(), priority: 1, status: "failed".into(), result: Some("error".into()) },
+            AgentTask {
+                id: "t1".into(),
+                agent_id: "a1".into(),
+                input: "x".into(),
+                priority: 1,
+                status: "completed".into(),
+                result: Some("ok1".into()),
+            },
+            AgentTask {
+                id: "t2".into(),
+                agent_id: "a2".into(),
+                input: "y".into(),
+                priority: 1,
+                status: "failed".into(),
+                result: Some("error".into()),
+            },
         ];
         let merged = pool.merge_results(&results);
         assert!(merged.contains("1/2 succeeded"));
@@ -323,7 +375,10 @@ mod tests {
 
     #[test]
     fn test_max_agents() {
-        let mut pool = AgentPool::new(PoolConfig { max_agents: 2, ..Default::default() });
+        let mut pool = AgentPool::new(PoolConfig {
+            max_agents: 2,
+            ..Default::default()
+        });
         pool.register_agent("a1", "A", "worker").unwrap();
         pool.register_agent("a2", "B", "worker").unwrap();
         assert!(pool.register_agent("a3", "C", "worker").is_err());
@@ -332,9 +387,15 @@ mod tests {
     #[test]
     fn test_submit_nonexistent_agent() {
         let mut pool = AgentPool::new(PoolConfig::default());
-        assert!(pool.submit_task(AgentTask {
-            id: "t1".into(), agent_id: "ghost".into(), input: "x".into(),
-            priority: 1, status: "pending".into(), result: None,
-        }).is_err());
+        assert!(pool
+            .submit_task(AgentTask {
+                id: "t1".into(),
+                agent_id: "ghost".into(),
+                input: "x".into(),
+                priority: 1,
+                status: "pending".into(),
+                result: None,
+            })
+            .is_err());
     }
 }

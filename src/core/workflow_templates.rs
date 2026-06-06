@@ -357,7 +357,11 @@ tags:
     fn test_all_templates_have_nodes() {
         for t in WorkflowTemplateStore::builtin_templates() {
             let nodes = t.nodes.as_array().unwrap();
-            assert!(!nodes.is_empty(), "Template '{}' has no nodes", t.workflow_id);
+            assert!(
+                !nodes.is_empty(),
+                "Template '{}' has no nodes",
+                t.workflow_id
+            );
         }
     }
 

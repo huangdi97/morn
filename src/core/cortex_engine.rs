@@ -102,7 +102,10 @@ impl CortexEngine {
     }
 
     pub fn mcp_plugins(&self) -> Vec<MCPMarketPlugin> {
-        self.mcp_plugins.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.mcp_plugins
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     pub fn mcp_market(&self, registry_url: Option<&str>) -> Result<Vec<MCPMarketPlugin>, String> {

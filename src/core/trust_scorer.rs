@@ -30,7 +30,12 @@ impl TrustScorer {
         }
     }
 
-    pub fn calculate(output_quality: f64, success_rate: f64, avg_latency_ms: f64, user_feedback: f64) -> f64 {
+    pub fn calculate(
+        output_quality: f64,
+        success_rate: f64,
+        avg_latency_ms: f64,
+        user_feedback: f64,
+    ) -> f64 {
         let latency_score = if avg_latency_ms > 0.0 {
             (1000.0 / avg_latency_ms).min(1.0)
         } else {
@@ -39,7 +44,14 @@ impl TrustScorer {
         output_quality * 0.3 + success_rate * 0.3 + latency_score * 0.2 + user_feedback * 0.2
     }
 
-    pub fn record(&mut self, agent_id: &str, output_quality: f64, success_rate: f64, avg_latency_ms: f64, user_feedback: f64) -> f64 {
+    pub fn record(
+        &mut self,
+        agent_id: &str,
+        output_quality: f64,
+        success_rate: f64,
+        avg_latency_ms: f64,
+        user_feedback: f64,
+    ) -> f64 {
         let overall = Self::calculate(output_quality, success_rate, avg_latency_ms, user_feedback);
         let entry = ScoreEntry {
             agent_id: agent_id.to_string(),
@@ -50,7 +62,10 @@ impl TrustScorer {
             overall,
             recorded_at: chrono::Utc::now().timestamp(),
         };
-        self.scores.entry(agent_id.to_string()).or_default().push(entry);
+        self.scores
+            .entry(agent_id.to_string())
+            .or_default()
+            .push(entry);
         overall
     }
 
@@ -76,33 +91,47 @@ impl TrustScorer {
     }
 
     pub fn get_all_scores(&self) -> Vec<(&str, f64)> {
-        self.scores.iter().filter_map(|(id, entries)| {
-            if entries.is_empty() {
-                return None;
-            }
-            let sum: f64 = entries.iter().map(|e| e.overall).sum();
-            Some((id.as_str(), sum / entries.len() as f64))
-        }).collect()
+        self.scores
+            .iter()
+            .filter_map(|(id, entries)| {
+                if entries.is_empty() {
+                    return None;
+                }
+                let sum: f64 = entries.iter().map(|e| e.overall).sum();
+                Some((id.as_str(), sum / entries.len() as f64))
+            })
+            .collect()
     }
 
     pub fn get_history(&self, agent_id: &str) -> Vec<&ScoreEntry> {
-        self.scores.get(agent_id).map(|v| v.iter().collect()).unwrap_or_default()
+        self.scores
+            .get(agent_id)
+            .map(|v| v.iter().collect())
+            .unwrap_or_default()
     }
 
     pub fn get_rankings(&self) -> Vec<AgentRanking> {
-        let mut rankings: Vec<AgentRanking> = self.scores.iter().filter_map(|(id, entries)| {
-            if entries.is_empty() {
-                return None;
-            }
-            let sum: f64 = entries.iter().map(|e| e.overall).sum();
-            Some(AgentRanking {
-                agent_id: id.clone(),
-                agent_name: id.clone(),
-                overall_score: sum / entries.len() as f64,
-                total_evaluations: entries.len() as u64,
+        let mut rankings: Vec<AgentRanking> = self
+            .scores
+            .iter()
+            .filter_map(|(id, entries)| {
+                if entries.is_empty() {
+                    return None;
+                }
+                let sum: f64 = entries.iter().map(|e| e.overall).sum();
+                Some(AgentRanking {
+                    agent_id: id.clone(),
+                    agent_name: id.clone(),
+                    overall_score: sum / entries.len() as f64,
+                    total_evaluations: entries.len() as u64,
+                })
             })
-        }).collect();
-        rankings.sort_by(|a, b| b.overall_score.partial_cmp(&a.overall_score).unwrap_or(std::cmp::Ordering::Equal));
+            .collect();
+        rankings.sort_by(|a, b| {
+            b.overall_score
+                .partial_cmp(&a.overall_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         rankings
     }
 

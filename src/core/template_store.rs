@@ -112,9 +112,7 @@ impl TemplateStore {
     }
 
     pub fn get_version(&self, id: &str) -> Option<&str> {
-        self.templates
-            .get(id)
-            .map(|t| t.current_version.as_str())
+        self.templates.get(id).map(|t| t.current_version.as_str())
     }
 
     pub fn has_update(&self, id: &str, remote_version: &str) -> Result<bool, String> {
@@ -177,14 +175,8 @@ impl TemplateStore {
 }
 
 fn compare_versions(a: &str, b: &str) -> std::cmp::Ordering {
-    let a_parts: Vec<u64> = a
-        .split('.')
-        .filter_map(|s| s.parse::<u64>().ok())
-        .collect();
-    let b_parts: Vec<u64> = b
-        .split('.')
-        .filter_map(|s| s.parse::<u64>().ok())
-        .collect();
+    let a_parts: Vec<u64> = a.split('.').filter_map(|s| s.parse::<u64>().ok()).collect();
+    let b_parts: Vec<u64> = b.split('.').filter_map(|s| s.parse::<u64>().ok()).collect();
 
     for i in 0..a_parts.len().max(b_parts.len()) {
         let a_v = a_parts.get(i).copied().unwrap_or(0);
@@ -247,7 +239,9 @@ mod tests {
     #[test]
     fn test_uninstall_template() {
         let mut store = TemplateStore::new();
-        store.install(sample_manifest("to-remove", "1.0.0")).unwrap();
+        store
+            .install(sample_manifest("to-remove", "1.0.0"))
+            .unwrap();
         let removed = store.uninstall("to-remove");
         assert!(removed.is_ok());
         assert!(store.is_empty());
@@ -305,7 +299,9 @@ mod tests {
         let mut m = sample_manifest("tagged-flow", "1.0.0");
         m.tags = vec!["important".into(), "featured".into()];
         store.install(m).unwrap();
-        store.install(sample_manifest("plain-flow", "1.0.0")).unwrap();
+        store
+            .install(sample_manifest("plain-flow", "1.0.0"))
+            .unwrap();
 
         assert_eq!(store.list_by_tag("important").len(), 1);
         assert_eq!(store.list_by_tag("nonexistent").len(), 0);
@@ -314,7 +310,9 @@ mod tests {
     #[test]
     fn test_is_installed() {
         let mut store = TemplateStore::new();
-        store.install(sample_manifest("installed", "1.0.0")).unwrap();
+        store
+            .install(sample_manifest("installed", "1.0.0"))
+            .unwrap();
         assert!(store.is_installed("installed"));
         assert!(!store.is_installed("missing"));
     }
@@ -330,7 +328,9 @@ mod tests {
     #[test]
     fn test_update_existing() {
         let mut store = TemplateStore::new();
-        store.install(sample_manifest("updatable", "1.0.0")).unwrap();
+        store
+            .install(sample_manifest("updatable", "1.0.0"))
+            .unwrap();
 
         let mut updated = sample_manifest("updatable", "2.0.0");
         updated.description = "Updated description".into();
@@ -347,7 +347,10 @@ mod tests {
 
     #[test]
     fn test_compare_versions_equal() {
-        assert_eq!(compare_versions("1.0.0", "1.0.0"), std::cmp::Ordering::Equal);
+        assert_eq!(
+            compare_versions("1.0.0", "1.0.0"),
+            std::cmp::Ordering::Equal
+        );
     }
 
     #[test]
@@ -357,7 +360,10 @@ mod tests {
 
     #[test]
     fn test_compare_versions_greater() {
-        assert_eq!(compare_versions("3.0.0", "2.0.0"), std::cmp::Ordering::Greater);
+        assert_eq!(
+            compare_versions("3.0.0", "2.0.0"),
+            std::cmp::Ordering::Greater
+        );
     }
 
     #[test]
