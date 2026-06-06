@@ -14,9 +14,9 @@ pub struct AgentTemplate {
     pub tools: Vec<String>,
     pub knowledge: Vec<String>,
     pub skills: Vec<String>,
+    pub version: String,
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Capability {
     pub id: String,
@@ -32,14 +32,14 @@ pub struct Capability {
     pub owner_id: Option<String>,
     pub team_id: Option<String>,
     pub daily_quota: u64,
+    pub version: String,
 }
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct Registry {
     capabilities: HashMap<String, Capability>,
     templates: HashMap<String, AgentTemplate>,
-    storage: Option<Storage>,
+    _storage: Option<Storage>,
     event_bus: Option<SimpleEventBus>,
 }
 
@@ -48,7 +48,7 @@ impl Registry {
         let mut registry = Registry {
             capabilities: HashMap::new(),
             templates: HashMap::new(),
-            storage,
+            _storage: storage,
             event_bus,
         };
 
@@ -84,6 +84,7 @@ impl Registry {
             owner_id: None,
             team_id: None,
             daily_quota: 0,
+            version: "0.1.0".to_string(),
         };
         self.capabilities
             .insert(default_cap.id.clone(), default_cap);
@@ -99,6 +100,7 @@ impl Registry {
                 tools: vec!["web_search".into(), "read_file".into()],
                 knowledge: vec!["docs".into(), "data_sources".into()],
                 skills: vec!["summarization".into(), "report_generation".into()],
+                version: "0.1.0".to_string(),
             },
             AgentTemplate {
                 id: "data-analyst".into(),
@@ -116,6 +118,7 @@ impl Registry {
                 ],
                 knowledge: vec!["docs".into(), "data_sources".into()],
                 skills: vec!["report_generation".into()],
+                version: "0.1.0".to_string(),
             },
             AgentTemplate {
                 id: "writing-assistant".into(),
@@ -133,6 +136,7 @@ impl Registry {
                     "style".into(),
                     "proofread".into(),
                 ],
+                version: "0.1.0".to_string(),
             },
             AgentTemplate {
                 id: "coding-helper".into(),
@@ -153,6 +157,7 @@ impl Registry {
                     "format".into(),
                     "test".into(),
                 ],
+                version: "0.1.0".to_string(),
             },
             AgentTemplate {
                 id: "translation-agent".into(),
@@ -164,6 +169,7 @@ impl Registry {
                 tools: vec!["web_search".into(), "read_file".into()],
                 knowledge: vec!["glossary".into()],
                 skills: vec!["translation".into(), "proofread".into()],
+                version: "0.1.0".to_string(),
             },
             AgentTemplate {
                 id: "general-assistant".into(),
@@ -180,6 +186,7 @@ impl Registry {
                 ],
                 knowledge: vec!["docs".into()],
                 skills: vec![],
+                version: "0.1.0".to_string(),
             },
         ];
 
@@ -290,5 +297,135 @@ impl Registry {
 
     pub fn get_template(&self, id: &str) -> Option<&AgentTemplate> {
         self.templates.get(id)
+    }
+
+    pub fn get_version(&self, id: &str) -> Option<&str> {
+        self.capabilities.get(id).map(|c| c.version.as_str())
+    }
+
+    pub fn list_by_version(&self, version: &str) -> Vec<&Capability> {
+        self.capabilities
+            .values()
+            .filter(|c| c.version == version)
+            .collect()
+    }
+
+    pub fn check_conflict(&self, id: &str, version: &str) -> bool {
+        self.capabilities
+            .get(id)
+            .map(|c| c.version != version)
+            .unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_cap(id: &str, domain: &str) -> Capability {
+        Capability {
+            id: id.to_string(),
+            name: format!("cap-{}", id),
+            domain: domain.to_string(),
+            actions: vec!["act".to_string()],
+            description: String::new(),
+            trust_score: 50.0,
+            total_calls: 0,
+            success_calls: 0,
+            avg_latency_ms: 0.0,
+            visibility: "public".to_string(),
+            owner_id: None,
+            team_id: None,
+            daily_quota: 0,
+            version: "0.1.0".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_register_and_get() {
+        let mut reg = Registry::new(None, None);
+        let cap = make_cap("test-cap-1", "test-domain");
+        reg.register(cap);
+        let got = reg.get("test-cap-1");
+        assert!(got.is_some());
+        assert_eq!(got.unwrap().domain, "test-domain");
+    }
+
+    #[test]
+    fn test_unregister_returns_none() {
+        let mut reg = Registry::new(None, None);
+        let cap = make_cap("test-cap-2", "other");
+        reg.register(cap);
+        assert!(reg.get("test-cap-2").is_some());
+
+        let removed = reg.unregister("test-cap-2");
+        assert!(removed.is_some());
+        assert!(reg.get("test-cap-2").is_none());
+    }
+
+    #[test]
+    fn test_list_all() {
+        let mut reg = Registry::new(None, None);
+        let initial_count = reg.list_all().len();
+
+        reg.register(make_cap("extra-1", "x"));
+        reg.register(make_cap("extra-2", "y"));
+
+        assert_eq!(reg.list_all().len(), initial_count + 2);
+    }
+
+    #[test]
+    fn test_duplicate_register_overwrites() {
+        let mut reg = Registry::new(None, None);
+        let cap_a = make_cap("dup-key", "domain-a");
+        reg.register(cap_a);
+
+        let cap_b = make_cap("dup-key", "domain-b");
+        reg.register(cap_b);
+
+        let got = reg.get("dup-key").unwrap();
+        assert_eq!(got.domain, "domain-b");
+    }
+
+    #[test]
+    fn test_get_version() {
+        let mut reg = Registry::new(None, None);
+        let mut cap = make_cap("ver-cap", "v-domain");
+        cap.version = "2.0.0".to_string();
+        reg.register(cap);
+
+        assert_eq!(reg.get_version("ver-cap"), Some("2.0.0"));
+        assert_eq!(reg.get_version("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_list_by_version() {
+        let mut reg = Registry::new(None, None);
+        let mut cap1 = make_cap("v1", "d1");
+        cap1.version = "1.0.0".to_string();
+        let mut cap2 = make_cap("v2", "d2");
+        cap2.version = "1.0.0".to_string();
+        let mut cap3 = make_cap("v3", "d3");
+        cap3.version = "2.0.0".to_string();
+
+        reg.register(cap1);
+        reg.register(cap2);
+        reg.register(cap3);
+
+        assert_eq!(reg.list_by_version("1.0.0").len(), 2);
+        assert_eq!(reg.list_by_version("2.0.0").len(), 1);
+        assert_eq!(reg.list_by_version("3.0.0").len(), 0);
+    }
+
+    #[test]
+    fn test_check_conflict() {
+        let mut reg = Registry::new(None, None);
+        let mut cap = make_cap("conflict-cap", "d");
+        cap.version = "1.5.0".to_string();
+        reg.register(cap);
+
+        assert!(!reg.check_conflict("conflict-cap", "1.5.0"));
+        assert!(reg.check_conflict("conflict-cap", "2.0.0"));
+        assert!(!reg.check_conflict("no-such-cap", "1.0.0"));
     }
 }

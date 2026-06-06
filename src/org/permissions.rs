@@ -9,7 +9,7 @@ pub enum PermissionLevel {
 }
 
 impl PermissionLevel {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_from_str(s: &str) -> Option<Self> {
         match s {
             "read" => Some(PermissionLevel::Read),
             "use" => Some(PermissionLevel::Use),
@@ -59,7 +59,7 @@ impl PermissionChecker {
         let perm = self.storage.get_agent_permission(target, user_id)?;
         match perm {
             Some(p) => {
-                let granted = PermissionLevel::from_str(&p.permission)
+                let granted = PermissionLevel::parse_from_str(&p.permission)
                     .ok_or_else(|| format!("Invalid permission level: {}", p.permission))?;
                 Ok(granted >= required_level)
             }
@@ -69,7 +69,7 @@ impl PermissionChecker {
                     let team_perms = self.storage.list_agent_permissions(target)?;
                     for tp in team_perms {
                         if tp.team_id.as_deref() == Some(&team.id) {
-                            if let Some(level) = PermissionLevel::from_str(&tp.permission) {
+                            if let Some(level) = PermissionLevel::parse_from_str(&tp.permission) {
                                 if level >= required_level {
                                     return Ok(true);
                                 }

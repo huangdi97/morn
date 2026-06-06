@@ -271,3 +271,82 @@ $shell.Windows() | ForEach-Object {{ if ($_.Document.Title -like '*{}*') {{ $_.V
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mouse_move_simulated() {
+        if !cfg!(target_os = "windows") {
+            let result = mouse_move(100, 200);
+            assert!(result.success);
+            assert!(result.data.contains("100"));
+            assert!(result.data.contains("200"));
+        }
+    }
+
+    #[test]
+    fn test_mouse_click_simulated() {
+        if !cfg!(target_os = "windows") {
+            let result = mouse_click("left");
+            assert!(result.success);
+            assert!(result.data.contains("left"));
+        }
+    }
+
+    #[test]
+    fn test_keyboard_type_simulated() {
+        if !cfg!(target_os = "windows") {
+            let result = keyboard_type("hello world");
+            assert!(result.success);
+            assert!(result.data.contains("hello world"));
+        }
+    }
+
+    #[test]
+    fn test_keyboard_hotkey_simulated() {
+        if !cfg!(target_os = "windows") {
+            let result = keyboard_hotkey(&["Ctrl", "C"]);
+            assert!(result.success);
+            assert!(result.data.contains("Ctrl+C"));
+        }
+    }
+
+    #[test]
+    fn test_clipboard_copy_simulated() {
+        if !cfg!(target_os = "windows") {
+            let result = clipboard_copy("test data");
+            assert!(result.success);
+            assert!(result.data.contains("test data"));
+        }
+    }
+
+    #[test]
+    fn test_clipboard_paste_simulated() {
+        if !cfg!(target_os = "windows") {
+            let result = clipboard_paste();
+            assert!(result.success);
+            assert!(result.data.contains("[simulated]"));
+        }
+    }
+
+    #[test]
+    fn test_screenshot_simulated() {
+        if !cfg!(target_os = "windows") {
+            let result = screenshot();
+            assert!(result.success);
+            assert!(result.data.contains("[simulated]"));
+            assert!(result.approval_required);
+        }
+    }
+
+    #[test]
+    fn test_window_switch_simulated() {
+        if !cfg!(target_os = "windows") {
+            let result = window_switch("Terminal");
+            assert!(result.success);
+            assert!(result.data.contains("Terminal"));
+        }
+    }
+}

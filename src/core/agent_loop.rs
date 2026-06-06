@@ -42,7 +42,7 @@ pub struct AgentLoop {
     phase: AgentPhase,
     checkpoint: Arc<CheckpointManager>,
     approval: Arc<ApprovalManager>,
-    event_bus: Option<Arc<EventBus>>,
+    _event_bus: Option<Arc<EventBus>>,
     session_id: String,
 }
 
@@ -51,13 +51,13 @@ impl AgentLoop {
         session_id: &str,
         checkpoint: Arc<CheckpointManager>,
         approval: Arc<ApprovalManager>,
-        event_bus: Option<Arc<EventBus>>,
+        _event_bus: Option<Arc<EventBus>>,
     ) -> Self {
         AgentLoop {
             phase: AgentPhase::Plan,
             checkpoint,
             approval,
-            event_bus,
+            _event_bus,
             session_id: session_id.to_string(),
         }
     }

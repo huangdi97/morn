@@ -127,3 +127,74 @@ pub fn compress(source: &str, dest: &str) -> ComputerOpResult {
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_read_nonexistent_file() {
+        let result = read("/tmp/nonexistent_file_xyz.txt");
+        assert!(!result.success);
+        assert!(result.data.contains("Error reading file"));
+    }
+
+    #[test]
+    fn test_write_and_read_temp_file() {
+        let path = "/tmp/morn_test_write.txt";
+        let write_result = write(path, "hello world");
+        assert!(write_result.success);
+        assert!(write_result.data.contains("11 bytes"));
+
+        let read_result = read(path);
+        assert!(read_result.success);
+        assert_eq!(read_result.data, "hello world");
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_move_nonexistent_file() {
+        let result = r#move("/tmp/nonexistent_src", "/tmp/nonexistent_dst");
+        assert!(!result.success);
+    }
+
+    #[test]
+    fn test_delete_nonexistent_file() {
+        let result = delete("/tmp/nonexistent_del_file");
+        assert!(!result.success);
+    }
+
+    #[test]
+    fn test_search_empty_directory() {
+        let dir = "/tmp/morn_test_search";
+        let _ = std::fs::create_dir_all(dir);
+        let result = search("foo", dir);
+        assert!(result.success);
+        let files: Vec<String> = serde_json::from_str(&result.data).unwrap();
+        assert!(files.is_empty());
+        let _ = std::fs::remove_dir(dir);
+    }
+
+    #[test]
+    fn test_search_finds_matching_file() {
+        let dir = "/tmp/morn_test_search2";
+        let _ = std::fs::create_dir_all(dir);
+        let _ = std::fs::write(format!("{}/test_foo.txt", dir), "data");
+        let _ = std::fs::write(format!("{}/bar.txt", dir), "data");
+
+        let result = search("foo", dir);
+        assert!(result.success);
+        let files: Vec<String> = serde_json::from_str(&result.data).unwrap();
+        assert_eq!(files.len(), 1);
+        assert!(files[0].contains("foo"));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_compress_fails_without_tar() {
+        let result = compress("/nonexistent/path", "/tmp/out.tar.gz");
+        assert!(!result.success);
+    }
+}

@@ -427,7 +427,7 @@ impl OfficeHandler {
                     escaped_title, escaped_body
                 );
 
-                zip.start_file(&format!("ppt/slides/slide{}.xml", i + 1), opts)
+                zip.start_file(format!("ppt/slides/slide{}.xml", i + 1), opts)
                     .map_err(|e| e.to_string())?;
                 zip.write_all(slide_xml.as_bytes())
                     .map_err(|e| e.to_string())?;

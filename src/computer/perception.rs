@@ -115,3 +115,44 @@ fn base64_encode(data: &[u8]) -> String {
     }
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_base64_encode_empty() {
+        assert_eq!(base64_encode(b""), "");
+    }
+
+    #[test]
+    fn test_base64_encode_hello() {
+        assert_eq!(base64_encode(b"Hello"), "SGVsbG8=");
+    }
+
+    #[test]
+    fn test_base64_encode_standard() {
+        assert_eq!(base64_encode(b"Hello, World!"), "SGVsbG8sIFdvcmxkIQ==");
+    }
+
+    #[test]
+    fn test_base64_encode_binary() {
+        let data = vec![0x00, 0x01, 0x02, 0x03];
+        let encoded = base64_encode(&data);
+        assert!(!encoded.is_empty());
+    }
+
+    #[test]
+    fn test_accessibility_tree_returns_simulated() {
+        let result = accessibility_tree();
+        assert!(result.success);
+        assert!(result.data.contains("[simulated a11y]"));
+    }
+
+    #[test]
+    fn test_ocr_simulated_for_nonexistent_file() {
+        let result = ocr("/tmp/nonexistent_ocr_image.png");
+        assert!(result.success);
+        assert!(result.data.contains("[simulated OCR]"));
+    }
+}

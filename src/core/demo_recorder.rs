@@ -121,3 +121,149 @@ impl Default for DemoRecorder {
         DemoRecorder::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_is_not_recording() {
+        let recorder = DemoRecorder::new();
+        assert!(!recorder.is_recording());
+        assert_eq!(recorder.action_count(), 0);
+        assert!(!recorder.has_next());
+    }
+
+    #[test]
+    fn test_start_recording_clears_actions() {
+        let mut recorder = DemoRecorder::new();
+        recorder.start_recording();
+        recorder.record("click", "#btn", Some("data".into()));
+        assert_eq!(recorder.action_count(), 1);
+
+        recorder.start_recording();
+        assert_eq!(recorder.action_count(), 0);
+        assert!(recorder.is_recording());
+    }
+
+    #[test]
+    fn test_stop_recording() {
+        let mut recorder = DemoRecorder::new();
+        recorder.start_recording();
+        assert!(recorder.is_recording());
+        recorder.stop_recording();
+        assert!(!recorder.is_recording());
+    }
+
+    #[test]
+    fn test_record_ignored_when_not_recording() {
+        let mut recorder = DemoRecorder::new();
+        recorder.record("click", "#btn", Some("data".into()));
+        assert_eq!(recorder.action_count(), 0);
+    }
+
+    #[test]
+    fn test_record_action_when_recording() {
+        let mut recorder = DemoRecorder::new();
+        recorder.start_recording();
+        let action = UserAction::new("click", "#btn", Some("data".into()));
+        recorder.record_action(action);
+        assert_eq!(recorder.action_count(), 1);
+    }
+
+    #[test]
+    fn test_record_convenience_method() {
+        let mut recorder = DemoRecorder::new();
+        recorder.start_recording();
+        recorder.record("type", "#input", Some("hello".into()));
+        recorder.record("click", "#submit", None);
+        assert_eq!(recorder.action_count(), 2);
+    }
+
+    #[test]
+    fn test_actions_returns_slice() {
+        let mut recorder = DemoRecorder::new();
+        recorder.start_recording();
+        recorder.record("click", "#btn", None);
+        let actions = recorder.actions();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].action_type, "click");
+    }
+
+    #[test]
+    fn test_clear() {
+        let mut recorder = DemoRecorder::new();
+        recorder.start_recording();
+        recorder.record("click", "#btn", None);
+        recorder.clear();
+        assert_eq!(recorder.action_count(), 0);
+        assert_eq!(recorder.current_replay_index(), 0);
+    }
+
+    #[test]
+    fn test_replay_lifecycle() {
+        let mut recorder = DemoRecorder::new();
+        recorder.start_recording();
+        recorder.record("click", "#btn", None);
+        recorder.record("type", "#input", Some("text".into()));
+        recorder.stop_recording();
+
+        recorder.start_replay();
+        assert!(recorder.has_next());
+
+        let first = recorder.next_action().unwrap();
+        assert_eq!(first.action_type, "click");
+
+        let second = recorder.next_action().unwrap();
+        assert_eq!(second.action_type, "type");
+
+        assert!(!recorder.has_next());
+        assert!(recorder.next_action().is_none());
+    }
+
+    #[test]
+    fn test_reset_replay() {
+        let mut recorder = DemoRecorder::new();
+        recorder.start_recording();
+        recorder.record("click", "#btn", None);
+        recorder.stop_recording();
+
+        recorder.start_replay();
+        recorder.next_action();
+        assert_eq!(recorder.current_replay_index(), 1);
+
+        recorder.reset_replay();
+        assert_eq!(recorder.current_replay_index(), 0);
+    }
+
+    #[test]
+    fn test_set_replay_speed_clamps_low() {
+        let mut recorder = DemoRecorder::new();
+        recorder.set_replay_speed(0.01);
+        assert!((recorder.replay_speed() - 0.1).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_set_replay_speed_normal() {
+        let mut recorder = DemoRecorder::new();
+        recorder.set_replay_speed(2.0);
+        assert!((recorder.replay_speed() - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_total_actions() {
+        let mut recorder = DemoRecorder::new();
+        recorder.start_recording();
+        recorder.record("a", "t1", None);
+        recorder.record("b", "t2", None);
+        recorder.record("c", "t3", None);
+        assert_eq!(recorder.total_actions(), 3);
+        assert_eq!(recorder.action_count(), recorder.total_actions());
+    }
+
+    #[test]
+    fn test_default_trait() {
+        let recorder = DemoRecorder::default();
+        assert!(!recorder.is_recording());
+    }
+}

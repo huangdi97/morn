@@ -23,6 +23,12 @@ pub struct TrustScorer {
     scores: HashMap<String, Vec<ScoreEntry>>,
 }
 
+impl Default for TrustScorer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TrustScorer {
     pub fn new() -> Self {
         TrustScorer {

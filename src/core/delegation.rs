@@ -79,7 +79,7 @@ impl DelegationManager {
                     Some(d) => cap.domain == *d,
                     None => true,
                 };
-                let action_match = cap.actions.iter().any(|a| *a == task.action);
+                let action_match = cap.actions.contains(&task.action);
                 let tool_match = if task.required_tools.is_empty() {
                     false
                 } else {
@@ -148,6 +148,7 @@ mod tests {
             owner_id: None,
             team_id: None,
             daily_quota: 0,
+            version: "0.1.0".to_string(),
         });
         reg.register(Capability {
             id: "test-researcher".into(),
@@ -163,6 +164,7 @@ mod tests {
             owner_id: None,
             team_id: None,
             daily_quota: 0,
+            version: "0.1.0".to_string(),
         });
     }
 

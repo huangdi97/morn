@@ -1,15 +1,17 @@
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 
-#[allow(dead_code)]
 pub struct StudioPublisher {
-    registry: Option<Registry>,
+    _registry: Option<Registry>,
     storage: Option<Storage>,
 }
 
 impl StudioPublisher {
     pub fn new(registry: Option<Registry>, storage: Option<Storage>) -> Self {
-        StudioPublisher { registry, storage }
+        StudioPublisher {
+            _registry: registry,
+            storage,
+        }
     }
 
     pub fn publish_agent(&self, agent_id: &str) -> Result<(), String> {
