@@ -14,14 +14,15 @@ pub struct AgentDef {
     pub memory: Option<String>,
 }
 
-#[allow(dead_code)]
 pub struct AgentAssembler {
-    registry: Option<Registry>,
+    _registry: Option<Registry>,
 }
 
 impl AgentAssembler {
     pub fn new(registry: Option<Registry>) -> Self {
-        AgentAssembler { registry }
+        AgentAssembler {
+            _registry: registry,
+        }
     }
 
     pub fn assemble(&self, def: AgentDef) -> Result<Box<dyn Component>, String> {
@@ -30,10 +31,9 @@ impl AgentAssembler {
         let _persona = def.persona;
         let _model = def.model;
 
-        #[allow(dead_code)]
         struct AssembledAgent {
             id: String,
-            name: String,
+            _name: String,
         }
 
         impl Component for AssembledAgent {
@@ -100,7 +100,7 @@ impl AgentAssembler {
 
         Ok(Box::new(AssembledAgent {
             id: agent_id,
-            name: _agent_name,
+            _name: _agent_name,
         }))
     }
 
@@ -180,5 +180,117 @@ impl AgentAssembler {
             skills: vec![],
             memory: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::component::model::{CostTier, ModelConfig, ModelParameters};
+    use crate::component::persona::Persona;
+
+    fn make_def(id: &str) -> AgentDef {
+        AgentDef {
+            id: id.to_string(),
+            name: format!("agent-{}", id),
+            persona: Persona::new("assistant", "Assistant"),
+            model: ModelConfig {
+                id: "model-test".into(),
+                provider: "test".into(),
+                model_name: "test-model".into(),
+                base_url: "http://localhost".into(),
+                api_key: String::new(),
+                parameters: ModelParameters::default(),
+                fallback: None,
+                cost_tier: CostTier::Low,
+            },
+            tools: vec!["web_search".into()],
+            knowledge: vec![],
+            skills: vec![],
+            memory: None,
+        }
+    }
+
+    #[test]
+    fn test_assemble_creates_agent() {
+        let assembler = AgentAssembler::new(None);
+        let def = make_def("test-agent-1");
+        let result = assembler.assemble(def);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_assembled_agent_implements_component() {
+        let assembler = AgentAssembler::new(None);
+        let def = make_def("test-agent-2");
+        let mut agent = assembler.assemble(def).unwrap();
+
+        assert_eq!(agent.id(), "test-agent-2");
+        assert_eq!(agent.type_name(), "agent");
+        assert!(agent.init().is_ok());
+        assert!(agent.run().is_ok());
+        assert!(agent.pause().is_ok());
+        assert!(agent.stop().is_ok());
+        assert_eq!(
+            agent.health_check(),
+            crate::core::component::HealthStatus::Healthy
+        );
+    }
+
+    #[test]
+    fn test_natural_language_build_researcher() {
+        let def = AgentAssembler::natural_language_build("biology research project").unwrap();
+        assert!(def.id.starts_with("agent-"));
+        assert!(def.tools.contains(&"web_search".to_string()));
+    }
+
+    #[test]
+    fn test_natural_language_build_coder() {
+        let def = AgentAssembler::natural_language_build("develop a python program").unwrap();
+        assert_eq!(def.persona.id, "preset-coder");
+        assert!(!def.tools.is_empty());
+    }
+
+    #[test]
+    fn test_natural_language_build_analyst() {
+        let def = AgentAssembler::natural_language_build("analyze data and make charts").unwrap();
+        assert_eq!(def.persona.id, "preset-analyst");
+    }
+
+    #[test]
+    fn test_natural_language_build_default() {
+        let def = AgentAssembler::natural_language_build("hello world").unwrap();
+        assert_eq!(def.persona.id, "preset-assistant");
+    }
+
+    #[test]
+    fn test_assemble_with_full_features() {
+        let assembler = AgentAssembler::new(None);
+        let def = AgentDef {
+            id: "full-agent".into(),
+            name: "Full Agent".into(),
+            persona: Persona::new("researcher", "Researcher"),
+            model: ModelConfig {
+                id: "model-researcher".into(),
+                provider: "deepseek".into(),
+                model_name: "deepseek-chat".into(),
+                base_url: "https://api.deepseek.com".into(),
+                api_key: "sk-test".into(),
+                parameters: ModelParameters {
+                    temperature: 0.3,
+                    max_tokens: 4096,
+                    top_p: 0.9,
+                },
+                fallback: None,
+                cost_tier: CostTier::Medium,
+            },
+            tools: vec!["web_search".into(), "read_file".into(), "write_file".into()],
+            knowledge: vec!["docs".into()],
+            skills: vec!["summarization".into()],
+            memory: Some("previous conversation context".into()),
+        };
+        let mut agent = assembler.assemble(def).unwrap();
+        assert_eq!(agent.id(), "full-agent");
+        assert!(agent.init().is_ok());
     }
 }

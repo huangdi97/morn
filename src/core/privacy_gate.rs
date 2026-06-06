@@ -16,7 +16,7 @@ impl DataSensitivity {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse_from_str(s: &str) -> Self {
         match s {
             "critical" => DataSensitivity::Critical,
             "private" => DataSensitivity::Private,
@@ -35,6 +35,12 @@ pub struct PrivacyRule {
 
 pub struct PrivacyGate {
     rules: Vec<PrivacyRule>,
+}
+
+impl Default for PrivacyGate {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PrivacyGate {
@@ -247,9 +253,12 @@ mod tests {
     #[test]
     fn test_sensitivity_roundtrip() {
         assert_eq!(
-            DataSensitivity::from_str("critical"),
+            DataSensitivity::parse_from_str("critical"),
             DataSensitivity::Critical
         );
-        assert_eq!(DataSensitivity::from_str("public"), DataSensitivity::Public);
+        assert_eq!(
+            DataSensitivity::parse_from_str("public"),
+            DataSensitivity::Public
+        );
     }
 }

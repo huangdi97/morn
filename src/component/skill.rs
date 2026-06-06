@@ -26,6 +26,12 @@ pub struct WebResearchSkill {
     steps: Vec<SkillStep>,
 }
 
+impl Default for WebResearchSkill {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WebResearchSkill {
     pub fn new() -> Self {
         let steps = vec![
@@ -134,6 +140,12 @@ pub struct DataAnalysisSkill {
     id: String,
     name: String,
     steps: Vec<SkillStep>,
+}
+
+impl Default for DataAnalysisSkill {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DataAnalysisSkill {
@@ -250,6 +262,12 @@ pub struct ReportGenSkill {
     steps: Vec<SkillStep>,
 }
 
+impl Default for ReportGenSkill {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ReportGenSkill {
     pub fn new() -> Self {
         ReportGenSkill {
@@ -333,6 +351,12 @@ pub struct CodeReviewSkill {
     id: String,
     name: String,
     steps: Vec<SkillStep>,
+}
+
+impl Default for CodeReviewSkill {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CodeReviewSkill {

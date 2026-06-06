@@ -21,7 +21,7 @@ impl ApprovalLevel {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse_from_str(s: &str) -> Self {
         match s {
             "critical" => ApprovalLevel::Critical,
             "high" => ApprovalLevel::High,

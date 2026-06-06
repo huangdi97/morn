@@ -157,12 +157,4 @@ Morn 三个工作台共享同一套底层系统：
 | 协议 | MCP (Model Context Protocol) |
 | 前端组件 | reactflow (节点编辑器) |
 
-## 构建状态
 
-| 指标 | 数值 |
-|------|------|
-| cargo build | 0 errors, 3 minor warnings |
-| cargo test | 417 passed, 0 failed |
-| npm run build | 0 errors |
-| 总代码量 | ~13,000+ 行 Rust |
-| 前端代码 | ~2,000+ 行 TypeScript/React |

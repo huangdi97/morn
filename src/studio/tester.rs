@@ -89,6 +89,12 @@ impl TestRunner {
 
 pub struct StudioTester;
 
+impl Default for StudioTester {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StudioTester {
     pub fn new() -> Self {
         StudioTester

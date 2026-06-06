@@ -75,6 +75,12 @@ pub struct TrustEvaluator {
     history: Vec<ScoreRecord>,
 }
 
+impl Default for TrustEvaluator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TrustEvaluator {
     pub fn new() -> Self {
         TrustEvaluator {

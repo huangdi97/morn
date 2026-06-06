@@ -19,7 +19,7 @@ impl CardStatus {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse_from_str(s: &str) -> Self {
         match s {
             "in_progress" => CardStatus::InProgress,
             "review" => CardStatus::Review,
@@ -56,7 +56,7 @@ impl Priority {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse_from_str(s: &str) -> Self {
         match s {
             "critical" => Priority::Critical,
             "high" => Priority::High,
@@ -360,7 +360,7 @@ mod tests {
             CardStatus::Review,
             CardStatus::Done,
         ] {
-            assert_eq!(CardStatus::from_str(status.as_str()), *status);
+            assert_eq!(CardStatus::parse_from_str(status.as_str()), *status);
         }
     }
 
@@ -372,7 +372,7 @@ mod tests {
             Priority::High,
             Priority::Critical,
         ] {
-            assert_eq!(Priority::from_str(priority.as_str()), *priority);
+            assert_eq!(Priority::parse_from_str(priority.as_str()), *priority);
         }
     }
 

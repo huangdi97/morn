@@ -1,3 +1,11 @@
+//! DAG 执行引擎——负责基于拓扑排序的任务编排与并行调度。
+//!
+//! 核心职责:
+//! - 接收 TaskPlan，按依赖关系（depends_on）计算拓扑序
+//! - 按层级顺序执行子任务，同层支持并行（当前为串行 runner）
+//! - 支持重试机制与执行记录持久化
+//! - 通过 EventBus 发布计划执行/任务完成/失败等事件
+
 use crate::core::event_bus::{
     SimpleEventBus, EVENT_SUPERVISOR_PLAN_EXECUTING, EVENT_TASK_COMPLETED, EVENT_TASK_FAILED,
 };
@@ -11,10 +19,12 @@ pub struct TaskEngine {
 }
 
 impl TaskEngine {
+    /// 创建 TaskEngine 实例。
     pub fn new(storage: Option<Storage>, event_bus: Option<SimpleEventBus>) -> Self {
         TaskEngine { storage, event_bus }
     }
 
+    /// 执行完整的任务计划（线性模式）。
     pub fn run_plan(
         &self,
         plan: &TaskPlan,
@@ -51,6 +61,7 @@ impl TaskEngine {
         Ok(result)
     }
 
+    /// 记录子任务执行结果到存储。
     pub fn record_execution(
         &self,
         _plan: &TaskPlan,
@@ -94,6 +105,7 @@ impl TaskEngine {
         }
     }
 
+    /// 计算子任务的拓扑排序，返回按依赖层级分组的列表。
     pub fn compute_topological_order(
         &self,
         subtasks: &[SubTaskDef],
@@ -159,6 +171,7 @@ impl TaskEngine {
         Ok(levels)
     }
 
+    /// 以 DAG 模式执行任务计划，支持重试和超时。
     pub fn run_dag_plan(
         &self,
         plan: &TaskPlan,

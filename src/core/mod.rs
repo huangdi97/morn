@@ -20,6 +20,7 @@ pub mod long_task_engine;
 pub mod mcp;
 pub mod oauth;
 pub mod office_handler;
+pub mod onboarding;
 pub mod orchestrator;
 pub mod personality_engine;
 pub mod privacy_gate;

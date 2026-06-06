@@ -12,6 +12,12 @@ pub struct WebSearchTool {
     name: String,
 }
 
+impl Default for WebSearchTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WebSearchTool {
     pub fn new() -> Self {
         WebSearchTool {
@@ -96,6 +102,12 @@ pub struct ReadFileTool {
     name: String,
 }
 
+impl Default for ReadFileTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ReadFileTool {
     pub fn new() -> Self {
         ReadFileTool {
@@ -177,6 +189,12 @@ pub struct WriteFileTool {
     name: String,
 }
 
+impl Default for WriteFileTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WriteFileTool {
     pub fn new() -> Self {
         WriteFileTool {
@@ -255,6 +273,12 @@ impl Tool for WriteFileTool {
 pub struct ExecPythonTool {
     id: String,
     name: String,
+}
+
+impl Default for ExecPythonTool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ExecPythonTool {
@@ -341,6 +365,12 @@ pub struct GetTimeTool {
     name: String,
 }
 
+impl Default for GetTimeTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GetTimeTool {
     pub fn new() -> Self {
         GetTimeTool {
@@ -414,6 +444,12 @@ impl Tool for GetTimeTool {
 pub struct CalcTool {
     id: String,
     name: String,
+}
+
+impl Default for CalcTool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CalcTool {
@@ -497,6 +533,12 @@ pub struct SendMsgTool {
     name: String,
 }
 
+impl Default for SendMsgTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SendMsgTool {
     pub fn new() -> Self {
         SendMsgTool {
@@ -576,6 +618,12 @@ impl Tool for SendMsgTool {
 pub struct HttpRequestTool {
     id: String,
     name: String,
+}
+
+impl Default for HttpRequestTool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HttpRequestTool {

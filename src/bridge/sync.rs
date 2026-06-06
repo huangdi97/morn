@@ -6,8 +6,7 @@ pub struct SyncEngine {
     storage: Option<Arc<Mutex<Storage>>>,
     device_id: String,
     sync_server_url: Option<String>,
-    #[allow(dead_code)]
-    running: bool,
+    _running: bool,
 }
 
 impl SyncEngine {
@@ -16,7 +15,7 @@ impl SyncEngine {
             storage: None,
             device_id: device_id.to_string(),
             sync_server_url,
-            running: false,
+            _running: false,
         }
     }
 
@@ -44,7 +43,7 @@ impl SyncEngine {
                 .build()
                 .map_err(|e| format!("Sync push HTTP client error: {}", e))?;
             let resp = client
-                .post(&format!("{}/sync/push", server_url))
+                .post(format!("{}/sync/push", server_url))
                 .json(&payload)
                 .send()
                 .map_err(|e| format!("Sync push error: {}", e))?;
@@ -70,7 +69,7 @@ impl SyncEngine {
             .build()
             .map_err(|e| format!("Sync pull HTTP client error: {}", e))?;
         let resp = client
-            .get(&format!(
+            .get(format!(
                 "{}/sync/pull?device_id={}",
                 server_url, self.device_id
             ))

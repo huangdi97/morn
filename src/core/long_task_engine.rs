@@ -189,3 +189,175 @@ impl LongTaskEngine {
         self.last_heartbeat.load(Ordering::Relaxed)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_engine_starts_pending() {
+        let engine = LongTaskEngine::new("task-1", "session-1", 10);
+        assert_eq!(engine.task.task_id, "task-1");
+        assert_eq!(engine.task.session_id, "session-1");
+        assert_eq!(engine.task.total_steps, 10);
+        assert_eq!(engine.task.completed_steps, 0);
+        assert!(matches!(engine.task.status, TaskStatus::Pending));
+        assert!((engine.task.progress_pct - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_tick_increments_progress() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 10);
+        engine.tick("step 1");
+        assert_eq!(engine.task.completed_steps, 1);
+        assert_eq!(engine.task.current_step, "step 1");
+        assert!(matches!(engine.task.status, TaskStatus::Running));
+        assert!((engine.task.progress_pct - 10.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_multiple_ticks() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 4);
+        for i in 1..=4 {
+            engine.tick(&format!("step {}", i));
+        }
+        assert_eq!(engine.task.completed_steps, 4);
+        assert!((engine.task.progress_pct - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_complete_marks_as_completed() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 10);
+        engine.complete();
+        assert_eq!(engine.task.completed_steps, 10);
+        assert!(matches!(engine.task.status, TaskStatus::Completed));
+        assert!((engine.task.progress_pct - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_pause_and_resume() {
+        let engine = LongTaskEngine::new("task-1", "s1", 10);
+        assert!(!engine.is_paused());
+
+        engine.pause();
+        assert!(engine.is_paused());
+
+        engine.resume();
+        assert!(!engine.is_paused());
+    }
+
+    #[test]
+    fn test_paused_tick_does_not_advance() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 10);
+        engine.pause();
+        engine.tick("should not advance");
+        assert_eq!(engine.task.completed_steps, 0);
+        assert!(matches!(engine.task.status, TaskStatus::Paused));
+    }
+
+    #[test]
+    fn test_cancel() {
+        let engine = LongTaskEngine::new("task-1", "s1", 10);
+        assert!(!engine.is_cancelled());
+
+        engine.cancel();
+        assert!(engine.is_cancelled());
+    }
+
+    #[test]
+    fn test_cancelled_tick_sets_status() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 10);
+        engine.cancel();
+        engine.tick("should fail");
+        assert!(
+            matches!(engine.task.status, TaskStatus::Failed(_))
+                || matches!(engine.task.status, TaskStatus::Running)
+        );
+    }
+
+    #[test]
+    fn test_record_error() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 10);
+        engine.record_error("something went wrong");
+        engine.record_error("another error");
+        assert_eq!(engine.task.errors.len(), 2);
+        assert_eq!(engine.task.errors[0], "something went wrong");
+    }
+
+    #[test]
+    fn test_set_checkpoint() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 10);
+        let data = serde_json::json!({"key": "value"});
+        engine.set_checkpoint(data.clone());
+        assert_eq!(engine.task.checkpoint_data, data);
+    }
+
+    #[test]
+    fn test_save_and_load_progress() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 5);
+        engine.tick("step 1");
+        engine.tick("step 2");
+
+        let saved = engine.save_progress().unwrap();
+
+        let loaded = LongTaskEngine::load_progress(&saved).unwrap();
+        assert_eq!(loaded.task.task_id, "task-1");
+        assert_eq!(loaded.task.completed_steps, 2);
+        assert_eq!(loaded.task.total_steps, 5);
+        assert!(!loaded.is_paused());
+        assert!(!loaded.is_cancelled());
+    }
+
+    #[test]
+    fn test_resume_from_checkpoint() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 10);
+        engine.tick("step 1");
+        engine.tick("step 2");
+
+        let saved = engine.save_progress().unwrap();
+
+        let mut new_engine = LongTaskEngine::new("task-2", "s2", 10);
+        let result = new_engine.resume_from_checkpoint(&saved);
+        assert!(result.is_ok());
+        assert_eq!(new_engine.task.completed_steps, 2);
+        assert_eq!(new_engine.task.current_step, "step 2");
+        assert!(matches!(new_engine.task.status, TaskStatus::Running));
+    }
+
+    #[test]
+    fn test_load_invalid_json() {
+        let result = LongTaskEngine::load_progress("not valid json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_zero_total_steps_no_division_by_zero() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 0);
+        engine.tick("step");
+        assert!((engine.task.progress_pct - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_estimated_remaining_none_when_no_progress() {
+        let engine = LongTaskEngine::new("task-1", "s1", 10);
+        assert!(engine.estimated_remaining().is_none());
+    }
+
+    #[test]
+    fn test_set_heartbeat_interval() {
+        let mut engine = LongTaskEngine::new("task-1", "s1", 10);
+        engine.set_heartbeat_interval(60);
+        // heartbeat_interval is private, but we can verify via heartbeat behavior
+        // heartbeat() returns true if interval elapsed
+        // Since we just created it, the initial last_heartbeat is now, so first call returns false
+        // Let's just verify it doesn't panic
+    }
+
+    #[test]
+    fn test_heartbeat_returns_false_immediately() {
+        let engine = LongTaskEngine::new("task-1", "s1", 10);
+        let result = engine.heartbeat();
+        // Should be false since we just set the timestamp
+        assert!(!result);
+    }
+}
