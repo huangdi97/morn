@@ -521,9 +521,14 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&show, &quit])?;
 
             TrayIconBuilder::new()
-                .icon(tauri::image::Image::from_bytes(include_bytes!(
-                    "../icons/tray-icon.png"
-                )).expect("failed to load tray icon"))
+                .icon({
+                    let img_bytes = include_bytes!("../icons/tray-icon.png");
+                    let img =
+                        image::load_from_memory(img_bytes).expect("failed to decode tray icon");
+                    let rgba = img.to_rgba8();
+                    let (w, h) = rgba.dimensions();
+                    tauri::image::Image::new_owned(rgba.into_raw(), w, h)
+                })
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
