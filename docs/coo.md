@@ -1,67 +1,98 @@
-# COO Supervisor 文档
+# Morn COO 主管系统
 
-## COO 是什么
-
-COO（Chief Operating Officer）是 Morn 的主管大脑，负责理解用户意图、制定执行计划、调度资源、记录决策日志。核心逻辑在 `src/core/supervisor.rs`。
+> COO (Chief Operating Officer) — 任务拆解、执行调度、学习进化
 
 ## 6 级决策树
 
-`Supervisor::decide_level()` 按优先级依次匹配关键词：
+COO 根据输入难度进行 6 级决策：
 
-| 级别 | 名称 | 触发关键词 | 成本 |
-|------|------|------------|------|
-| L1 | DirectAnswer | hello, hi, thanks, bye, who are you | ¥0.001 / 0.5s |
-| L2 | SingleTool | search, look up, find, calculate, convert, translate | ¥0.003 / 1s |
-| L3 | SingleAgent | 默认级别（以上均不匹配时） | ¥0.02 / 5s |
-| L4 | Team | complex, multi-step, multiple, comprehensive, full | ¥0.05 / 15s |
-| L5 | Workflow | report, analysis, research, investigate, plan, strategy | ¥0.03 / 10s |
-| L6 | JumpToStudio | create an agent, build an agent, configure, customize | variable |
+| 级别 | 判定条件 | 行为 |
+|------|---------|------|
+| L1 | 简单问答（<3秒） | 直接回答，不需要工具 |
+| L2 | 需工具调用 | 路由到合适组件，自动调用 |
+| L3 | 需拆解子任务 | 拆解为 DAG 子任务，顺序/并行调度 |
+| L4 | 需多 Agent 协作 | 组建 Agent 团队，分配角色 |
+| L5 | 需人工审批 | 暂停执行，等待 HITL 审批 |
+| L6 | 超长任务（13h+） | 启动 LongTaskEngine，断点续传 |
 
-每个级别有对应的 `cost_tier()` 返回估算开销描述。
+## COO 学习机制 (Learn from Feedback)
 
-## CooMode
+COO 通过两种方式持续进化：
 
-`src/core/supervisor.rs::CooMode` 枚举三种运行模式：
+### 决策规则学习
+每次决策后记录：
+1. 用户反馈（positive/negative）
+2. 决策路径（输入→拆解→执行→结果）
+3. 关键词提取（中文停用词过滤）
+4. 规则持久化到 SQLite
 
-| 模式 | 含义 |
+### 实时模式切换
+
+| 模式 | 行为 |
 |------|------|
-| `Active` | 默认模式，计划自动执行，不要求审批 |
-| `Safe` | 安全模式，执行前输出计划预览并要求确认 |
-| `Auto` | 自动模式 |
+| active | 自动执行，无需确认 |
+| safe | 关键操作需审批 (HITL) |
+| auto | 根据上下文智能切换 |
 
-通过 CLI 命令 `/mode active|safe|auto` 切换。
-
-## 工作流引擎
-
-`src/core/workflow.rs` 定义了 `WorkflowTemplate` 和 `WorkflowStep`，包含 16 种 `WorkflowAction`：
-
-LLMCall、ToolCall、AgentCall、TeamCall、SubWorkflow、CodeExec、KnowledgeQuery、HumanApproval、HumanInput、Notification、Condition、Loop、Wait、Fork、Join
-
-8 个内建工作流模板：
-
-| ID | 名称 | 类别 | 步骤数 |
-|----|------|------|--------|
-| workflow-task-execution | Task Execution | general | 6 |
-| workflow-deep-analysis | Deep Analysis | research | 4 |
-| workflow-news-monitor | News Monitor | monitoring | 5 |
-| workflow-report-gen | Report Generation | reporting | 6 |
-| workflow-code-delivery | Code Delivery | development | 7 |
-| workflow-product-launch | Product Launch | product | 6 |
-| workflow-decision-eval | Decision Evaluation | strategy | 6 |
-| workflow-scheduled-inspection | Scheduled Inspection | operations | 4 |
-
-## 信任评分机制
-
-`src/core/trust_evaluator.rs` 的四层评估模型：
+## 三阶段 Agent (Triphase Agent)
 
 ```
-overall = output_quality * 0.3 + trace_score * 0.3
-        + component_quality * 0.2 + user_feedback * 0.2
+[Plan]      ─→  [Implement]     ─→  [Review]
+  │                │                  │
+  ├ 分析输入       ├ 执行步骤         ├ 验证结果
+  ├ 拆解步骤       ├ 调用工具         ├ 检查质量
+  ├ 评估资源       ├ 处理中间结果     ├ 建议改进
+  └ 输出计划       └ 输出执行日志     └ 输出审查报告
 ```
 
-- **OutputQuality** — 内容相关性、格式合规性、完整性
-- **TraceQuality** — 调用链完整性、错误率、重试次数
-- **ComponentQuality** — 初始化成功率、正常运行时间、资源效率
-- **DriftQuality** — 近期性能趋势漂移检测
+每个阶段可独立配置人格和模型。
 
-`Registry::update_trust_score()` 同步更新注册中心的能力信任分。
+## HITL 审批 (Human-in-the-Loop)
+
+关键操作需要人工审批：
+
+| 操作类型 | 审批要求 |
+|---------|---------|
+| 文件系统修改 | 需审批 |
+| 系统配置变更 | 需审批 |
+| 网络请求 | 需通知 |
+| 普通对话 | 自由执行 |
+
+审批流程：暂停 → 通知用户 → 等待 → 继续/中止/修改。
+
+## 超长任务引擎 (LongTaskEngine)
+
+支持 13 小时以上的长时间运行任务：
+
+| 功能 | 描述 |
+|------|------|
+| 进度持久化 | save_progress / load_progress |
+| 断点续传 | resume_from_checkpoint |
+| 心跳检测 | heartbeat (定时确认活性) |
+| 最终一致性 | 失败可重试，保证任务最终完成 |
+
+## 主管-专家调度 (Orchestrator)
+
+```
+主管 Agent ─┬─ 专家 Agent 1 (数据分析)
+            ├─ 专家 Agent 2 (代码生成)
+            ├─ 专家 Agent 3 (报告撰写)
+            └─ 专家 Agent N (...)
+```
+
+动态调度策略：
+1. 主管接收任务 → 分析需求
+2. 从专家池匹配最合适的 Agent
+3. 派发子任务 → 收集结果
+4. 合并输出 → 返回给用户
+
+## 共识机制 (Consensus)
+
+多 Agent 协作时通过共识文件接力达成一致：
+
+| 轮次 | 行为 |
+|------|------|
+| 1 | 各 Agent 独立输出分析 |
+| 2 | 读取其他 Agent 的输出，调整立场 |
+| 3 | 合并共识，输出最终结果 |
+| N | 循环直至达成多数一致 |

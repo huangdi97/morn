@@ -1,75 +1,125 @@
-# 开发指南
+# Morn 开发者指南
 
-## 项目结构详解
+> 构建 · 测试 · 贡献 · 项目结构
 
-| 目录 | 职责 |
-|------|------|
-| `src/main.rs` | 入口，解析 `MORN_API_KEY`，初始化组件，启动 CLI REPL |
-| `src/lib.rs` | 模块声明（8 个模块） |
-| `src/core/` | 内核：COO 主管、注册中心、存储、执行引擎、安全、事件总线等 |
-| `src/component/` | 六类原子组件（Tool / Knowledge / Skill / Persona / Memory / Model） |
-| `src/bridge/` | LLM API 适配器（ChatAgent） |
-| `src/channel/` | 渠道适配（CLI、Telegram、企微、钉钉、飞书等 12 个渠道） |
-| `src/studio/` | 创作台后端（Manager、Publisher、Tester） |
-| `src/console/` | 管理台后端（Dashboard、Cost、Governance） |
-| `src/computer/` | 电脑操控（桌面 / 文件 / 浏览器 / 应用 / 系统 / 感知） |
-| `src/market/` | 市场（Marketplace、Listing、Transaction、License） |
-| `src-tauri/` | Tauri 桌面入口 |
-| `web/` | React 前端（工作台、创作台、管理台） |
+## 开发环境
 
-## 开发流程
+| 工具 | 版本要求 |
+|------|---------|
+| Rust | 1.75+ (推荐 stable) |
+| Node.js | 18+ |
+| npm | 9+ |
+| Tauri CLI | v2 (通过 cargo install) |
+
+## 快速开始
 
 ```bash
-# 1. 修改代码
-# 2. 编译检查
+# 克隆
+git clone https://github.com/huangdi97/morn.git
+cd morn-desktop
+
+# 构建库
 cargo build
 
-# 3. 运行测试
+# 运行测试
 cargo test
 
-# 4. 代码格式化
-cargo fmt
+# 构建前端
+cd web && npm install && npm run build
 
-# 5. Clippy 检查
-cargo clippy --all-targets -- -D warnings
+# CLI 启动
+MORN_API_KEY=sk-xxx cargo run
 ```
 
-## 测试体系
+## 项目结构
 
-`cargo test` 执行所有测试，包含：
-
-- **单元测试** — 每个核心模块底部有 `#[cfg(test)] mod tests` 块
-- **集成测试**（计划中）
-
-主要测试覆盖：
-- `supervisor` — 决策树匹配、上下文构建、turn 记录
-- `engine` — DAG 调度、拓扑排序、循环依赖检测
-- `storage` — 7 张表的 CRUD 操作
-- `trust_evaluator` — 信任评分公式、四层评估
-- `security` — 安全策略检查、拦截/审批/通知
-- `dual_llm` — 6 个检查点、日志记录
-- `orchestrator` — 7 种协作模式、4 种共识机制
-- `workflow` — 8 个内建模板
-- `marketplace` — 上架、购买、评分、搜索、安装
-
-## Rustdoc
-
-所有 `pub` 项应包含文档注释：
-
-```rust
-/// 做什么
-///
-/// 参数说明
-/// 返回值说明
-/// 何时 panic
-pub fn my_function() -> Result<(), String> { }
+```
+morn-desktop/
+├── src/                          # Rust 核心库
+│   ├── main.rs                   # CLI 入口
+│   ├── lib.rs                    # 模块声明
+│   ├── core/                     # 内核 (30+ 模块)
+│   │   ├── supervisor.rs         # COO 主管
+│   │   ├── registry.rs           # 组件注册中心
+│   │   ├── storage.rs            # SQLite 存储
+│   │   ├── event_bus.rs          # 事件总线
+│   │   ├── security.rs           # 安全体系
+│   │   └── ... (25+ 更多)
+│   ├── component/                # 6 类原子组件
+│   ├── bridge/                   # LLM API 适配器
+│   ├── channel/                  # 多渠道适配器
+│   ├── studio/                   # 创作台后端
+│   ├── console/                  # 管理台后端
+│   ├── api/                      # REST API
+│   ├── computer/                 # 电脑操控
+│   └── market/                   # 组件市场
+├── src-tauri/                    # Tauri 桌面入口
+│   ├── src/lib.rs                # 28 个 Tauri 命令
+│   ├── src/main.rs               # Windows 入口
+│   ├── tauri.conf.json           # 桌面配置
+│   └── icons/                    # 应用图标
+├── web/                          # React + TypeScript 前端
+│   └── src/
+│       ├── App.tsx               # 工作台聊天界面
+│       ├── studio/               # 创作台 UI
+│       ├── dashboard/            # 仪表盘
+│       ├── console/              # 管理台 UI
+│       └── store/                # Bot 商店
+├── docs/                         # 文档
+├── DESIGN.md                     # 设计总纲 (本地)
+└── Cargo.toml                    # 工作区配置
 ```
 
-生成文档：`cargo doc --no-deps --open`
+## 构建命令
 
-## 代码风格
+| 命令 | 说明 |
+|------|------|
+| `cargo build` | 构建调试版本 |
+| `cargo build --release` | 构建发布版本 |
+| `cargo test` | 运行全部测试 (417 tests) |
+| `cargo fmt` | 格式化代码 |
+| `cargo clippy` | 静态分析 |
+| `cd web && npm run build` | 构建前端 |
+| `cargo tauri build` | 构建桌面安装包 |
 
-- 使用 `cargo fmt` 自动格式化
-- Clippy 配置无 warning（`cargo clippy --all-targets -- -D warnings`）
-- 命名：`PascalCase`（类型 / Trait）、`snake_case`（函数 / 变量）、`SCREAMING_SNAKE_CASE`（常量）
-- 避免 `unwrap()`，优先 `?` 或模式匹配
+## 添加新模块
+
+1. 在 `src/core/` 下创建 `.rs` 文件
+2. 在 `src/lib.rs` 的模块声明中添加
+3. 实现核心功能 + 单元测试
+4. 运行 `cargo build && cargo test`
+5. 运行 `cargo fmt` 格式化代码
+
+## 测试
+
+| 测试类型 | 数量 | 运行方式 |
+|---------|------|---------|
+| 单元测试 | 417+ | `cargo test` |
+| 前端类型检查 | - | `cd web && tsc --noEmit` |
+| 前端构建 | - | `cd web && npm run build` |
+| 格式检查 | - | `cargo fmt --check` |
+
+## CI/CD
+
+GitHub Actions 自动运行：
+
+| Job | Runner | 内容 |
+|-----|--------|------|
+| build-and-test | ubuntu-latest | cargo build + cargo test + cargo fmt |
+| build-tauri | windows-latest | npm build + cargo tauri build → NSIS/MSI |
+
+## 贡献指南
+
+1. Fork 仓库
+2. 创建特性分支 (`git checkout -b feature/xxx`)
+3. 提交改动 (`git commit -m "feat: xxx"`)
+4. 推送到分支 (`git push origin feature/xxx`)
+5. 创建 Pull Request
+
+### 代码风格
+- Rust: `cargo fmt` 自动格式化
+- TypeScript: Prettier 标准配置
+- Commit: Conventional Commits (feat/fix/docs/chore)
+
+### 许可
+MIT License — 参见仓库 LICENSE 文件。

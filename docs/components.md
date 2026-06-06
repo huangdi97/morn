@@ -1,96 +1,133 @@
-# 组件体系文档
+# Morn 组件体系
 
-## Component Trait 定义
-
-`src/core/component.rs` 定义了组件系统的三个核心 Trait：
-
-```rust
-pub trait Component: Send {
-    fn id(&self) -> &str;
-    fn type_name(&self) -> &str;
-    fn init(&mut self) -> Result<(), String>;
-    fn run(&mut self) -> Result<(), String>;
-    fn pause(&mut self) -> Result<(), String>;
-    fn stop(&mut self) -> Result<(), String>;
-    fn health_check(&self) -> HealthStatus;
-}
-
-pub trait IOComponent: Component {
-    fn ports(&self) -> Vec<Port>;
-    fn send(&mut self, port: &str, data: Data) -> Result<(), String>;
-    fn recv(&mut self, port: &str) -> Result<Option<Data>, String>;
-}
-
-pub trait SecureComponent: Component {
-    fn required_permissions(&self) -> Vec<Permission>;
-}
-```
+> 六类原子组件 → Agent → 多 Agent 团队 → 工作流
 
 ## 六类原子组件
 
-`src/component/` 目录下 6 个文件对应 6 种组件：
-
-| 组件 | 文件 | 说明 |
-|------|------|------|
-| Tool | `tool.rs` | 外部工具（搜索、计算、API 调用） |
-| Knowledge | `knowledge.rs` | 知识库检索 |
-| Skill | `skill.rs` | 复合技能 |
-| Persona | `persona.rs` | 角色人格定义 |
-| Memory | `memory.rs` | 记忆存储 |
-| Model | `model.rs` | 模型配置（provider / model_name / parameters） |
-
-另有 `ComponentType` 枚举额外包含 `Agent` 和 `Pipeline` 两种复合类型。
-
-## Port 和 Data 模型
+### 1. Tool（工具）
+外部能力适配器。每个 Tool 有唯一 ID、名称、输入输出 schema。
 
 ```rust
-pub struct Port {
-    pub id: String,
-    pub direction: PortDirection,  // Input / Output / Bidirectional
-    pub data_type: String,
-    pub description: String,
-}
-
-pub struct Data {
-    pub content: Value,     // serde_json::Value
-    pub mime_type: String,  // text/plain, application/json, ...
-}
-```
-
-`Data` 提供便捷构造方法：
-- `Data::text("...")` — 纯文本数据
-- `Data::json(value)` — JSON 数据
-- `Data::new(content, mime_type)` — 自定义数据
-
-## AgentAssembler（组装器）
-
-`src/core/assembler.rs` 的 `AgentAssembler` 负责将组件组装为 Agent：
-
-```rust
-pub struct AgentDef {
+pub struct Tool {
     pub id: String,
     pub name: String,
-    pub persona: Persona,
-    pub model: ModelConfig,
-    pub tools: Vec<String>,
-    pub knowledge: Vec<String>,
-    pub skills: Vec<String>,
-    pub memory: Option<String>,
+    pub description: String,
+    pub input_schema: Value,
+    pub output_schema: Value,
 }
 ```
 
-- `assemble(def)` — 根据 AgentDef 构造一个实现了 Component + IOComponent + SecureComponent 的 Agent
-- `natural_language_build(description)` — 自然语言描述自动生成 AgentDef（通过关键词匹配选择 Persona 和 Tools）
+内置工具：文件系统、浏览器控制、应用管理、桌面操作、系统管理、感知模块。
 
-## 组件生命周期
+### 2. Knowledge（知识）
+知识库检索模块。支持向量检索和关键词检索。
 
+| 类型 | 存储 | 检索方式 |
+|------|------|---------|
+| 本地文件 | SQLite + FTS5 | 关键词 + 语义 |
+| 远程 API | REST 端点 | API 查询 |
+
+### 3. Skill（技能）
+标准化的能力描述文件 (SKILL.md)。通过 SkillLoader 自治发现。
+
+| 字段 | 说明 |
+|------|------|
+| name | 技能名称 |
+| description | 描述 |
+| trigger | 触发条件 |
+| steps | 执行步骤 |
+| tools | 依赖工具 |
+| models | 推荐模型 |
+
+### 4. Persona（人格）
+Agent 的个性模板。52 个预置人格。
+
+```rust
+pub struct Persona {
+    pub name: String,
+    pub role: String,
+    pub tone: String,
+    pub expertise: Vec<String>,
+    pub principles: Vec<String>,
+    pub decision_framework: Vec<String>,
+}
 ```
-init → run → pause → stop
-        ↑______________|
+
+**预设模板（52 个）：**
+
+| 类别 | 模板 |
+|------|------|
+| 通用 | 助理、助手、导师 |
+| 技术 | 软件工程师、QA 工程师、运维工程师、数据工程师、安全工程师 |
+| 分析 | 数据分析师、市场分析师、量化分析师、研究员 |
+| 创意 | 作家、编剧、翻译、UI 设计师、视频剪辑师 |
+| 管理 | 产品经理、项目经理、团队主管、HR |
+| 行业 | 医生、律师、金融顾问、教育专家 |
+| 更多 | 共 52 个预置人格 |
+
+### 5. Memory（记忆）
+三层记忆架构：
+
+| 层 | 存储 | 生命周期 | API |
+|----|------|---------|-----|
+| Working | 当前会话 | 会话结束清除 | save/load/clear |
+| Episodic | SQLite | 永久 + 压缩 | store/recall/prune |
+| Semantic | SQLite | 永久 + 融合 | infer/update/merge |
+
+自编辑记忆 (`memory_self_edit.rs`) 支持修正、压缩、合并旧记忆。
+
+### 6. Model（模型）
+LLM 模型配置。支持任意 OpenAI 兼容 API。
+
+```rust
+pub struct ModelConfig {
+    pub provider: String,    // "deepseek", "openai", "custom"
+    pub model_name: String,  // "deepseek-chat", "gpt-4"
+    pub base_url: String,
+    pub api_key: String,
+    pub parameters: ModelParameters,
+    pub fallback: Option<String>,
+}
 ```
 
-- **init** — 初始化资源，返回 Ok(()) 或 Err
-- **run** — 开始运行
-- **pause** — 暂停运行
-- **stop** — 停止并释放资源
-- **health_check** — 返回 Healthy / Degraded(msg) / Unhealthy(msg)
+## Agent 组装
+
+组件 → Agent 的组装过程：
+
+1. 选择人格 (Persona)
+2. 选择模型 (Model)
+3. 装配工具集 (Tools)
+4. 绑定知识库 (Knowledge)
+5. 加载技能 (Skills)
+6. 配置记忆 (Memory)
+
+```rust
+AgentDef {
+    id, name,
+    persona, model,
+    tools: Vec<String>,
+    knowledge: Vec<String>,
+    skills: Vec<String>,
+    memory: Option<MemoryConfig>,
+}
+```
+
+## 变量系统 (VariableStore)
+
+工作流变量系统。支持：
+
+| 操作 | 描述 |
+|------|------|
+| set | 设置变量 |
+| get | 读取变量 |
+| resolve | 模板解析（`{{var}}` → 值） |
+| scope | 变量作用域管理 |
+
+## 工作流模板
+
+预置 5 个模板：
+1. 数据处理管道
+2. 多角度分析
+3. 报告生成
+4. 定时监控
+5. Agent 团队协作

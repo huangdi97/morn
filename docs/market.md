@@ -1,81 +1,98 @@
-# 市场文档
+# Morn 市场生态
 
-## Marketplace 是什么
+> 组件市场 · 模板商店 · 模板市场 · 搜索启动器
 
-`src/market/marketplace.rs::Marketplace` 是组件 / Agent / 工作流的分发市场。支持商品搜索、上架、购买、许可证管理、评分。
+## 组件市场 (Marketplace)
 
-## Listing（上架商品）
+组件和 Agent 的发布、搜索、安装平台。
+
+### 数据结构
 
 ```rust
-pub struct Listing {
+pub struct ComponentListing {
     pub id: String,
-    pub item_type: String,  // tool / knowledge / skill / persona / agent / workflow
     pub name: String,
-    pub description: String,
-    pub price: f64,
+    pub component_type: String,
     pub author: String,
+    pub version: String,
+    pub description: String,
     pub rating: f64,
     pub downloads: u64,
-    pub created_at: String,
+    pub license: String,
 }
 ```
 
-系统内置 6 个 Listing：
+### 功能
 
-| 名称 | 类型 | 价格 | 作者 |
-|------|------|------|------|
-| Web Search Pro | tool | ¥0.001 | Morn Labs |
-| Stock Market Data | knowledge | ¥0.01 | Morn Labs |
-| Deep Research Skill | skill | ¥0.01 | Morn Labs |
-| Financial Analyst | persona | ¥0.00 | Morn Labs |
-| Research Agent | agent | ¥0.05 | Morn Labs |
-| Weekly Report Generator | workflow | ¥0.03 | Morn Labs |
-
-主要 API：
-
-| 方法 | 功能 |
+| 功能 | 描述 |
 |------|------|
-| `list(filter)` | 列出商品，可选按类型过滤 |
-| `get(id)` | 获取单个商品 |
-| `search(query)` | 按名称 / 描述 / 标签搜索 |
-| `publish(listing)` | 上架新商品 |
-| `purchase(listing_id, user_id)` | 购买，返回 License |
-| `install(listing_id, user_id)` | 安装已购买商品 |
-| `rate(listing_id, user_id, score, review)` | 评分 |
+| 发布组件 | publish_agent / publish_component |
+| 浏览列表 | 按类型/评分/下载量排序 |
+| 下载安装 | 一键安装到本地 Registry |
+| 版本管理 | 版本号 + 更新检查 |
+| 评分系统 | 用户评分 + 自动信任评分 |
 
-## Transaction（交易）
+## 工作流模板商店 (WorkflowTemplateStore)
 
-`Transaction` 记录每次购买的详情：
+预置工作流模板：
+
+| 模板 | 用途 |
+|------|------|
+| 数据处理管道 | 采集→清洗→分析→输出 |
+| 多角度分析 | 同一数据多个 Agent 独立分析→汇总 |
+| 报告自动生成 | 数据采集→图表→排版→导出 |
+| 定时监控告警 | 轮询→阈值判断→通知 |
+| Agent 团队协作 | 主管拆任务→工人执行→结果合并 |
 
 ```rust
-pub struct Transaction {
+pub struct WorkflowTemplate {
     pub id: String,
-    pub listing_id: String,
-    pub buyer: String,
-    pub amount: f64,
-    pub timestamp: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub steps: Vec<WorkflowStep>,
+    pub variables: Vec<TemplateVariable>,
 }
 ```
 
-## License（许可证管理）
+## 社区模板市场 (CommunityTemplateRegistry)
 
-购买后生成 `License`，可直接调用 `install` 验证：
+从远程仓库拉取模板：
+
+| 功能 | 描述 |
+|------|------|
+| fetch_registry | 从远程拉取模板列表 |
+| install_templates | 批量安装模板 |
+| check_updates | 检查本地模板更新 |
+| 远程源 | 可配置的 URL 端点 |
+
+## Cortex 推理引擎
+
+MCP 协议兼容的模型和技能仓库：
 
 ```rust
-pub struct License {
-    pub id: String,
-    pub listing_id: String,
-    pub user_id: String,
-    pub granted_at: String,
-    pub expires_at: Option<String>,  // 免费商品无过期
+pub fn mcp_market() -> Vec<MarketItem> {
+    // 从社区仓库更新可用模型/技能列表
 }
 ```
 
-## 评分与下载
+| 类型 | 来源 |
+|------|------|
+| LLM 模型 | MCP 社区仓库 |
+| 推理技能 | 社区贡献的推理链 |
+| 工具适配器 | 社区贡献的工具包装 |
 
-评分采用加权平均算法：
+## 搜索启动器 (SearchLauncher)
+
+系统级快速搜索入口（Alt+Space）：
 
 ```rust
-listing.rating = (rating * downloads + score) / (downloads + 1);
-listing.downloads += 1;
+pub struct SearchIndex {
+    pub apps: Vec<AppEntry>,
+    pub files: Vec<FileEntry>,
+    pub commands: Vec<CommandEntry>,
+    pub agent_skills: Vec<SkillEntry>,
+}
 ```
+
+搜索结果排序：模糊匹配 → 最近使用 → 评分。
