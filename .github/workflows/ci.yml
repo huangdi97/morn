@@ -48,20 +48,18 @@ jobs:
         run: npm ci
         working-directory: ./web
 
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2"
+
       - name: Build frontend
         run: npm run build
         working-directory: ./web
 
       - name: Build Tauri desktop app + NSIS
-        uses: tauri-apps/tauri-action@v2
+        run: cargo tauri build --bundles nsis,msi
+        working-directory: ./src-tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          projectPath: ./src-tauri
-          bundleIdentifier: com.morn.desktop
-          args: --bundles nsis,msi
 
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
