@@ -521,7 +521,7 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&show, &quit])?;
 
             TrayIconBuilder::new()
-                .icon(tauri::image::Image::from_bytes(include_bytes!(
+                .icon(tauri::image::Image::from_ref(include_bytes!(
                     "../icons/tray-icon.png"
                 ))?)
                 .menu(&menu)
