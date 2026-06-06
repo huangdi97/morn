@@ -1,5 +1,5 @@
 use crate::core::event_bus::{SimpleEventBus, EVENT_SUPERVISOR_PLAN_CREATED, EVENT_TASK_COMPLETED};
-use crate::core::storage::{DecisionRecord, Storage, TaskRecord};
+use crate::core::storage::{DecisionRecord, DecisionRule, Storage, TaskRecord};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -113,6 +113,11 @@ pub struct Supervisor {
     user_id: Option<String>,
     user_teams: Vec<String>,
 }
+
+const STOP_WORDS: &[&str] = &[
+    "的", "了", "是", "在", "有", "和", "就", "不", "人", "都", "一", "个", "上", "也", "很", "到",
+    "说", "要", "去", "你", "会", "着", "没有", "看", "好", "自己", "这", "他", "她", "它",
+];
 
 impl Supervisor {
     pub fn new(storage: Option<Storage>, event_bus: Option<SimpleEventBus>) -> Self {
@@ -463,6 +468,94 @@ Select tools, knowledge, and skills that best match the user's described use cas
                 e, cleaned
             )
         })
+    }
+
+    pub fn decide_with_rules(&self, text: &str) -> (DecisionLevel, String) {
+        if let Some(ref storage) = self.storage {
+            let user_id = self.user_id.as_deref().unwrap_or("default");
+            let keywords = Self::extract_keywords(text);
+            for kw in &keywords {
+                let rules = storage.get_decision_rules(user_id, kw).unwrap_or_default();
+                if let Some(rule) = rules.first() {
+                    if let Some(ref storage) = self.storage {
+                        let _ = storage.increment_rule_hit(rule.id.unwrap_or(0));
+                    }
+                    if rule.auto_execute {
+                        return (
+                            DecisionLevel::L1DirectAnswer,
+                            format!("Rule auto-execute matched keyword '{}'", kw),
+                        );
+                    }
+                    let level = match rule.level.as_str() {
+                        "direct_answer" => DecisionLevel::L1DirectAnswer,
+                        "single_tool" => DecisionLevel::L2SingleTool,
+                        "single_agent" => DecisionLevel::L3SingleAgent,
+                        "team" => DecisionLevel::L4Team,
+                        "workflow" => DecisionLevel::L5Workflow,
+                        "jump_studio" => DecisionLevel::L6JumpToStudio,
+                        _ => DecisionLevel::L3SingleAgent,
+                    };
+                    return (
+                        level,
+                        format!("Rule matched keyword '{}' with level {}", kw, rule.level),
+                    );
+                }
+            }
+        }
+        self.decide(text)
+    }
+
+    pub fn learn_from_feedback(&mut self, user_input: &str, approved: bool) -> Result<(), String> {
+        let user_id = self.user_id.as_deref().unwrap_or("default").to_string();
+        let keywords = Self::extract_keywords(user_input);
+        if keywords.is_empty() {
+            return Ok(());
+        }
+        let keyword = keywords[0].clone();
+        let level = self.decide_level(user_input).as_str().to_string();
+
+        if let Some(ref storage) = self.storage {
+            let existing = storage
+                .get_decision_rules(&user_id, &keyword)
+                .unwrap_or_default();
+            if let Some(rule) = existing.first() {
+                let change = if approved { -10.0 } else { 15.0 };
+                if let Some(rule_id) = rule.id {
+                    storage.adjust_rule_threshold(rule_id, change)?;
+                }
+            } else {
+                let rule = DecisionRule {
+                    id: None,
+                    user_id: user_id.clone(),
+                    keyword: keyword.clone(),
+                    level,
+                    trust_threshold: if approved { 50.0 } else { 75.0 },
+                    auto_execute: approved,
+                    source: "learned".to_string(),
+                    hit_count: 1,
+                    last_used_at: Some(chrono::Utc::now().to_rfc3339()),
+                    created_at: None,
+                };
+                storage.upsert_decision_rule(&rule)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn extract_keywords(text: &str) -> Vec<String> {
+        let text_lower = text.to_lowercase();
+        let raw: Vec<&str> = text_lower.split_whitespace().collect();
+        let mut keywords: Vec<String> = Vec::new();
+        let stop_set: std::collections::HashSet<&str> = STOP_WORDS.iter().copied().collect();
+        for word in raw {
+            let cleaned: String = word.chars().filter(|c| c.is_alphanumeric()).collect();
+            if !cleaned.is_empty() && !stop_set.contains(cleaned.as_str()) && cleaned.len() >= 2 {
+                keywords.push(cleaned);
+            }
+        }
+        keywords.sort();
+        keywords.dedup();
+        keywords
     }
 
     pub fn clear_history(&mut self) {

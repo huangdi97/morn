@@ -7,6 +7,12 @@ name = "morn"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "z"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -19,3 +25,10 @@ dirs = "5"
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder"] }
 axum = { version = "0.7", features = ["json"] }
 tower = "0.4"
+serde_yaml = "0.9"
+csv = "1"
+rust_xlsxwriter = "0.95"
+zip = "2"
+
+[dev-dependencies]
+tempfile = "3"

@@ -154,6 +154,20 @@ pub struct DeviceRecord {
     pub public_key: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecisionRule {
+    pub id: Option<i64>,
+    pub user_id: String,
+    pub keyword: String,
+    pub level: String,
+    pub trust_threshold: f64,
+    pub auto_execute: bool,
+    pub source: String,
+    pub hit_count: i64,
+    pub last_used_at: Option<String>,
+    pub created_at: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct Storage {
     conn: Arc<Mutex<Connection>>,
@@ -291,6 +305,73 @@ impl Storage {
             CREATE TABLE IF NOT EXISTS devices (
                 id TEXT PRIMARY KEY, name TEXT NOT NULL,
                 last_seen TEXT NOT NULL, public_key TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS decision_rules (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id         TEXT NOT NULL DEFAULT 'default',
+                keyword         TEXT NOT NULL,
+                level           TEXT NOT NULL,
+                trust_threshold REAL DEFAULT 60.0,
+                auto_execute    INTEGER DEFAULT 0,
+                source          TEXT DEFAULT 'learned',
+                hit_count       INTEGER DEFAULT 0,
+                last_used_at    TEXT,
+                created_at      TEXT DEFAULT (datetime('now')),
+                UNIQUE(user_id, keyword)
+            );
+
+            CREATE TABLE IF NOT EXISTS checkpoints (
+                id              TEXT PRIMARY KEY,
+                session_id      TEXT NOT NULL,
+                step_index      INTEGER NOT NULL,
+                step_name       TEXT NOT NULL DEFAULT '',
+                state_json      TEXT NOT NULL,
+                metadata_json   TEXT DEFAULT '{}',
+                parent_id       TEXT,
+                created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS approval_requests (
+                id              TEXT PRIMARY KEY,
+                action          TEXT NOT NULL,
+                level           TEXT NOT NULL,
+                status          TEXT NOT NULL DEFAULT 'pending',
+                context_json    TEXT,
+                requested_by    TEXT,
+                responded_at    TEXT,
+                response        TEXT,
+                created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS oauth_tokens (
+                id              TEXT PRIMARY KEY,
+                provider        TEXT NOT NULL,
+                user_id         TEXT NOT NULL,
+                access_token    TEXT NOT NULL,
+                refresh_token   TEXT,
+                expires_at      TEXT,
+                scope           TEXT,
+                created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(provider, user_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS privacy_rules (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern         TEXT NOT NULL,
+                sensitivity     TEXT NOT NULL DEFAULT 'public',
+                action          TEXT NOT NULL DEFAULT 'allow',
+                created_at      TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS sessions (
+                id              TEXT PRIMARY KEY,
+                user_id         TEXT NOT NULL DEFAULT 'default',
+                agent_id        TEXT,
+                status          TEXT DEFAULT 'active',
+                context_json    TEXT DEFAULT '{}',
+                created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at      TEXT
             );
             ",
         )
@@ -1236,6 +1317,81 @@ impl Storage {
         Ok(())
     }
 
+    // Decision Rules CRUD
+    pub fn get_decision_rules(
+        &self,
+        user_id: &str,
+        keyword: &str,
+    ) -> Result<Vec<DecisionRule>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, user_id, keyword, level, trust_threshold, auto_execute, source, hit_count, last_used_at, created_at FROM decision_rules WHERE user_id = ?1 AND keyword = ?2")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![user_id, keyword], |row| {
+                let auto_execute_int: i32 = row.get(5)?;
+                Ok(DecisionRule {
+                    id: Some(row.get(0)?),
+                    user_id: row.get(1)?,
+                    keyword: row.get(2)?,
+                    level: row.get(3)?,
+                    trust_threshold: row.get(4)?,
+                    auto_execute: auto_execute_int != 0,
+                    source: row.get(6)?,
+                    hit_count: row.get(7)?,
+                    last_used_at: row.get(8)?,
+                    created_at: row.get(9)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        let mut rules = Vec::new();
+        for row in rows {
+            rules.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(rules)
+    }
+
+    pub fn upsert_decision_rule(&self, rule: &DecisionRule) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO decision_rules (user_id, keyword, level, trust_threshold, auto_execute, source, hit_count, last_used_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(user_id, keyword) DO UPDATE SET
+                level = COALESCE(?3, level),
+                trust_threshold = COALESCE(?4, trust_threshold),
+                auto_execute = COALESCE(?5, auto_execute),
+                source = COALESCE(?6, source),
+                hit_count = COALESCE(?7, hit_count),
+                last_used_at = COALESCE(?8, last_used_at)",
+            params![
+                rule.user_id, rule.keyword, rule.level, rule.trust_threshold,
+                rule.auto_execute, rule.source, rule.hit_count, rule.last_used_at
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn increment_rule_hit(&self, rule_id: i64) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE decision_rules SET hit_count = hit_count + 1, last_used_at = ?1 WHERE id = ?2",
+            params![chrono::Utc::now().to_rfc3339(), rule_id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn adjust_rule_threshold(&self, rule_id: i64, change: f64) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE decision_rules SET trust_threshold = MAX(0.0, MIN(100.0, trust_threshold + ?1)) WHERE id = ?2",
+            params![change, rule_id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     // Audit Log CRUD
     pub fn insert_audit_log(&self, log: &AuditLogRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
@@ -1276,6 +1432,351 @@ impl Storage {
             logs.push(row.map_err(|e| e.to_string())?);
         }
         Ok(logs)
+    }
+
+    // Checkpoints CRUD
+    pub fn save_checkpoint(
+        &self,
+        id: &str,
+        session_id: &str,
+        step_index: i32,
+        step_name: &str,
+        state_json: &str,
+        metadata_json: &str,
+        parent_id: Option<&str>,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO checkpoints (id, session_id, step_index, step_name, state_json, metadata_json, parent_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                id, session_id, step_index, step_name, state_json, metadata_json,
+                parent_id, chrono::Utc::now().to_rfc3339()
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn load_latest_checkpoint(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<(String, String, i32, String, String, String, Option<String>)>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, session_id, step_index, step_name, state_json, metadata_json, parent_id FROM checkpoints WHERE session_id = ?1 ORDER BY step_index DESC LIMIT 1")
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt.query(params![session_id]).map_err(|e| e.to_string())?;
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            Ok(Some((
+                row.get(0).map_err(|e| e.to_string())?,
+                row.get(1).map_err(|e| e.to_string())?,
+                row.get(2).map_err(|e| e.to_string())?,
+                row.get(3).map_err(|e| e.to_string())?,
+                row.get(4).map_err(|e| e.to_string())?,
+                row.get(5).map_err(|e| e.to_string())?,
+                row.get(6).map_err(|e| e.to_string())?,
+            )))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn list_checkpoints(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<(String, i32, String, String)>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, step_index, step_name, created_at FROM checkpoints WHERE session_id = ?1 ORDER BY step_index ASC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![session_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i32>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+        let mut checkpoints = Vec::new();
+        for row in rows {
+            checkpoints.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(checkpoints)
+    }
+
+    pub fn fork_checkpoint(
+        &self,
+        cp_id: &str,
+        new_id: &str,
+        new_session_id: &str,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO checkpoints (id, session_id, step_index, step_name, state_json, metadata_json, parent_id, created_at)
+             SELECT ?1, ?2, step_index, step_name, state_json, metadata_json, parent_id, ?3 FROM checkpoints WHERE id = ?4",
+            params![new_id, new_session_id, chrono::Utc::now().to_rfc3339(), cp_id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    // Approval requests CRUD
+    pub fn save_approval_request(
+        &self,
+        id: &str,
+        action: &str,
+        level: &str,
+        context_json: Option<&str>,
+        requested_by: Option<&str>,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO approval_requests (id, action, level, status, context_json, requested_by, created_at)
+             VALUES (?1, ?2, ?3, 'pending', ?4, ?5, ?6)",
+            params![
+                id, action, level, context_json, requested_by,
+                chrono::Utc::now().to_rfc3339()
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn update_approval_response(
+        &self,
+        id: &str,
+        status: &str,
+        response: Option<&str>,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE approval_requests SET status = ?1, response = ?2, responded_at = ?3 WHERE id = ?4",
+            params![status, response, chrono::Utc::now().to_rfc3339(), id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn get_approval_request(
+        &self,
+        id: &str,
+    ) -> Result<
+        Option<(
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )>,
+        String,
+    > {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, action, level, status, context_json, requested_by, responded_at, response FROM approval_requests WHERE id = ?1")
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            Ok(Some((
+                row.get(0).map_err(|e| e.to_string())?,
+                row.get(1).map_err(|e| e.to_string())?,
+                row.get(2).map_err(|e| e.to_string())?,
+                row.get(3).map_err(|e| e.to_string())?,
+                row.get(4).map_err(|e| e.to_string())?,
+                row.get(5).map_err(|e| e.to_string())?,
+                row.get(6).map_err(|e| e.to_string())?,
+                row.get(7).map_err(|e| e.to_string())?,
+            )))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn list_pending_approvals(&self) -> Result<Vec<String>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id FROM approval_requests WHERE status = 'pending' ORDER BY created_at ASC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        let mut ids = Vec::new();
+        for row in rows {
+            ids.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(ids)
+    }
+
+    // OAuth tokens CRUD
+    pub fn save_oauth_token(
+        &self,
+        id: &str,
+        provider: &str,
+        user_id: &str,
+        access_token: &str,
+        refresh_token: Option<&str>,
+        expires_at: Option<&str>,
+        scope: Option<&str>,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO oauth_tokens (id, provider, user_id, access_token, refresh_token, expires_at, scope, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                id, provider, user_id, access_token, refresh_token, expires_at, scope,
+                chrono::Utc::now().to_rfc3339()
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn get_oauth_token(
+        &self,
+        provider: &str,
+        user_id: &str,
+    ) -> Result<
+        Option<(
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )>,
+        String,
+    > {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, provider, user_id, access_token, refresh_token, expires_at, scope FROM oauth_tokens WHERE provider = ?1 AND user_id = ?2")
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query(params![provider, user_id])
+            .map_err(|e| e.to_string())?;
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            Ok(Some((
+                row.get(0).map_err(|e| e.to_string())?,
+                row.get(1).map_err(|e| e.to_string())?,
+                row.get(2).map_err(|e| e.to_string())?,
+                row.get(3).map_err(|e| e.to_string())?,
+                row.get(4).map_err(|e| e.to_string())?,
+                row.get(5).map_err(|e| e.to_string())?,
+                row.get(6).map_err(|e| e.to_string())?,
+            )))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn delete_oauth_token(&self, provider: &str, user_id: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "DELETE FROM oauth_tokens WHERE provider = ?1 AND user_id = ?2",
+            params![provider, user_id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    // Privacy rules CRUD
+    pub fn save_privacy_rule(
+        &self,
+        pattern: &str,
+        sensitivity: &str,
+        action: &str,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO privacy_rules (pattern, sensitivity, action) VALUES (?1, ?2, ?3)",
+            params![pattern, sensitivity, action],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn list_privacy_rules(&self) -> Result<Vec<(i64, String, String, String)>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, pattern, sensitivity, action FROM privacy_rules")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+        let mut rules = Vec::new();
+        for row in rows {
+            rules.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(rules)
+    }
+
+    // Sessions CRUD
+    pub fn save_session(
+        &self,
+        id: &str,
+        user_id: &str,
+        agent_id: Option<&str>,
+        context_json: &str,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO sessions (id, user_id, agent_id, status, context_json, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?5)",
+            params![
+                id, user_id, agent_id, context_json,
+                chrono::Utc::now().to_rfc3339()
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn get_session(
+        &self,
+        id: &str,
+    ) -> Result<Option<(String, String, Option<String>, String, String)>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, user_id, agent_id, context_json, status FROM sessions WHERE id = ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            Ok(Some((
+                row.get(0).map_err(|e| e.to_string())?,
+                row.get(1).map_err(|e| e.to_string())?,
+                row.get(2).map_err(|e| e.to_string())?,
+                row.get(3).map_err(|e| e.to_string())?,
+                row.get(4).map_err(|e| e.to_string())?,
+            )))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn update_session_context(&self, id: &str, context_json: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE sessions SET context_json = ?1, updated_at = ?2 WHERE id = ?3",
+            params![context_json, chrono::Utc::now().to_rfc3339(), id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
     }
 }
 

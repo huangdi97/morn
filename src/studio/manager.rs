@@ -145,16 +145,25 @@ impl StudioManager {
 
     pub fn test_component(
         &self,
-        _id: &str,
-        _input: crate::core::component::Data,
+        id: &str,
+        input: crate::core::component::Data,
+        component_type: Option<&str>,
     ) -> Result<crate::studio::tester::TestResult, String> {
-        Ok(crate::studio::tester::TestResult {
-            steps: vec![],
-            total_duration_ms: 0.0,
-            total_tokens: 0,
-            total_cost: 0.0,
-            output: "test output".into(),
-        })
+        let tester = crate::studio::tester::StudioTester::new();
+        let ctype = component_type.unwrap_or("agent");
+        let config = "";
+        Ok(tester.run_test(ctype, id, &input, config))
+    }
+
+    pub fn rerun_component_step(
+        &self,
+        component_type: &str,
+        component_id: &str,
+        step_index: usize,
+        new_input: &str,
+    ) -> Result<crate::studio::tester::TestStep, String> {
+        let tester = crate::studio::tester::StudioTester::new();
+        Ok(tester.rerun_step(component_type, component_id, step_index, new_input))
     }
 
     pub fn assemble_agent(&self, def: crate::core::assembler::AgentDef) -> Result<String, String> {
