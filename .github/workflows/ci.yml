@@ -48,8 +48,10 @@ jobs:
         run: npm ci
         working-directory: ./web
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2"
+      - name: Install Tauri CLI (precompiled)
+        run: |
+          cargo install cargo-binstall 2>/dev/null || true
+          cargo binstall --no-confirm tauri-cli --version "^2" 2>/dev/null || cargo install tauri-cli --version "^2"
 
       - name: Build frontend
         run: npm run build
