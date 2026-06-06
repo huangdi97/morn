@@ -11,8 +11,9 @@ import CostCenter from "./console/CostCenter";
 import Governance from "./console/Governance";
 import Security from "./console/Security";
 import Marketplace from "./console/Marketplace";
+import BotStore from "./store/BotStore";
 
-type View = "workbench" | "studio" | "console";
+type View = "workbench" | "studio" | "console" | "store";
 
 interface Message {
   role: "user" | "assistant";
@@ -228,10 +229,12 @@ function App() {
       <nav className="main-tabs">
         <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")}>Workbench</button>
         <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")}>Studio</button>
+        <button className={view === "store" ? "active" : ""} onClick={() => setView("store")}>Store</button>
         <button className={view === "console" ? "active" : ""} onClick={() => setView("console")}>Console</button>
       </nav>
       {view === "workbench" && renderWorkbench()}
       {view === "studio" && renderStudio()}
+      {view === "store" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}
       {view === "console" && renderConsole()}
     </div>
   );

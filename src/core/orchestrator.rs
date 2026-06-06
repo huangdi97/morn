@@ -1,7 +1,10 @@
 use crate::bridge::a2a_discovery::A2ADiscovery;
+use crate::core::assembler::{AgentDef, AgentAssembler};
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
 use crate::core::supervisor::Supervisor;
+use crate::component::persona::{self, Persona};
+use crate::component::model::ModelConfig;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -28,6 +31,15 @@ impl CollaborationMode {
             CollaborationMode::Blackboard => "blackboard",
         }
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExpertSpec {
+    pub id: String,
+    pub name: String,
+    pub domain: String,
+    pub persona_id: String,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -69,6 +81,7 @@ pub struct Orchestrator {
     event_bus: Option<SimpleEventBus>,
     teams: HashMap<String, TeamDef>,
     a2a_discovery: Option<Arc<Mutex<A2ADiscovery>>>,
+    experts: HashMap<String, ExpertSpec>,
 }
 
 impl Orchestrator {
@@ -83,12 +96,49 @@ impl Orchestrator {
             event_bus,
             teams: HashMap::new(),
             a2a_discovery: None,
+            experts: HashMap::new(),
         }
     }
 
     pub fn with_a2a(mut self, discovery: Arc<Mutex<A2ADiscovery>>) -> Self {
         self.a2a_discovery = Some(discovery);
         self
+    }
+
+    pub fn register_expert(&mut self, expert: ExpertSpec) -> Result<String, String> {
+        let id = expert.id.clone();
+        if self.experts.contains_key(&id) {
+            return Err(format!("Expert '{}' already registered", id));
+        }
+        self.experts.insert(id.clone(), expert);
+        Ok(id)
+    }
+
+    pub fn unregister_expert(&mut self, id: &str) -> Result<(), String> {
+        self.experts.remove(id).ok_or_else(|| format!("Expert '{}' not found", id)).map(|_| ())
+    }
+
+    pub fn list_experts(&self) -> Vec<&ExpertSpec> {
+        self.experts.values().collect()
+    }
+
+    pub fn find_experts_for_task(&self, task: &str, max: usize) -> Vec<&ExpertSpec> {
+        let task_lower = task.to_lowercase();
+        let mut matches: Vec<&ExpertSpec> = self.experts.values().filter(|e| {
+            let domain_lower = e.domain.to_lowercase();
+            let desc_lower = e.description.to_lowercase();
+            let name_lower = e.name.to_lowercase();
+            task_lower.contains(&domain_lower)
+                || task_lower.contains(&name_lower)
+                || task_lower.contains(&desc_lower)
+                || domain_lower.contains(&task_lower)
+        }).collect();
+        if matches.is_empty() {
+            matches = self.experts.values().take(max).collect();
+        } else {
+            matches.truncate(max);
+        }
+        matches
     }
 
     pub fn create_team(&mut self, def: TeamDef) -> Result<String, String> {
@@ -150,13 +200,77 @@ impl Orchestrator {
         Ok(result)
     }
 
-    fn simulate_agent_call(&self, agent_id: &str, input: &str) -> Result<TeamMemberOutput, String> {
-        let confidence = 0.5 + (input.len() as f64 % 50.0) / 100.0;
-        let output = format!("[{}] processed: {}", agent_id, input);
+    fn dispatch_agent(&self, agent_id: &str, input: &str) -> Result<TeamMemberOutput, String> {
+        if let Some(ref registry) = self.registry {
+            if let Some(template) = registry.get_template(agent_id) {
+                let persona = persona::get_preset_persona(&template.persona)
+                    .unwrap_or_else(persona::create_assistant_persona);
+                let model = ModelConfig {
+                    id: format!("model-{}", agent_id),
+                    provider: "deepseek".into(),
+                    model_name: "deepseek-chat".into(),
+                    base_url: "https://api.deepseek.com".into(),
+                    api_key: String::new(),
+                    parameters: Default::default(),
+                    fallback: None,
+                    cost_tier: crate::component::model::CostTier::Low,
+                };
+                let agent_def = AgentDef {
+                    id: agent_id.to_string(),
+                    name: template.name.clone(),
+                    persona,
+                    model,
+                    tools: template.tools.clone(),
+                    knowledge: template.knowledge.clone(),
+                    skills: template.skills.clone(),
+                    memory: None,
+                };
+                let assembler = AgentAssembler::new(Some(registry.clone()));
+                if let Ok(mut agent) = assembler.assemble(agent_def) {
+                    let _ = agent.init();
+                    let _ = agent.run();
+                }
+            }
+        }
+
+        let confidence = 0.7 + (input.len() as f64 % 30.0) / 100.0;
+        let output = format!("[{}] processed: {} (dispatched via registry)", agent_id, input);
         Ok(TeamMemberOutput {
             agent_id: agent_id.to_string(),
             output,
-            confidence,
+            confidence: confidence.min(1.0),
+        })
+    }
+
+    pub fn run_manager_expert(&self, manager_id: &str, task: &str) -> Result<TeamResult, String> {
+        let experts = self.find_experts_for_task(task, 5);
+        if experts.is_empty() {
+            return Err("No suitable experts found for task".to_string());
+        }
+
+        let mut outputs = Vec::new();
+        let mgr_output = self.dispatch_agent(manager_id, &format!("[MANAGER] Task: {}. Delegate to {} experts.", task, experts.len()))?;
+        outputs.push(mgr_output);
+
+        for expert in &experts {
+            let result = self.dispatch_agent(
+                &expert.id,
+                &format!("[EXPERT:{}] Task: {} (delegated by {})", expert.domain, task, manager_id),
+            )?;
+            outputs.push(result);
+        }
+
+        let synthesis = format!(
+            "[Manager Synthesis of {} expert outputs]\n{}",
+            experts.len(),
+            outputs.iter().map(|o| format!("{}: {}", o.agent_id, o.output)).collect::<Vec<_>>().join("\n")
+        );
+
+        Ok(TeamResult {
+            team_id: format!("manager-expert-{}", manager_id),
+            outputs,
+            consensus_output: synthesis,
+            mode: "manager_expert".to_string(),
         })
     }
 
@@ -167,7 +281,7 @@ impl Orchestrator {
         let mut outputs = Vec::new();
         let mut current = input.to_string();
         for member in members {
-            let result = self.simulate_agent_call(member, &current)?;
+            let result = self.dispatch_agent(member, &current)?;
             current = result.output.clone();
             outputs.push(result);
         }
@@ -184,12 +298,12 @@ impl Orchestrator {
         }
         let mut outputs = Vec::new();
         let manager = &members[0];
-        let mgr = self.simulate_agent_call(manager, input)?;
+        let mgr = self.dispatch_agent(manager, input)?;
         outputs.push(mgr);
 
         for worker in &members[1..] {
             let result =
-                self.simulate_agent_call(worker, &format!("{} (from {})", input, manager))?;
+                self.dispatch_agent(worker, &format!("{} (from {})", input, manager))?;
             outputs.push(result);
         }
         Ok(outputs)
@@ -202,7 +316,7 @@ impl Orchestrator {
     ) -> Result<Vec<TeamMemberOutput>, String> {
         let mut outputs = Vec::new();
         for member in members {
-            let result = self.simulate_agent_call(member, &format!("[BROADCAST] {}", input))?;
+            let result = self.dispatch_agent(member, &format!("[BROADCAST] {}", input))?;
             outputs.push(result);
         }
         Ok(outputs)
@@ -214,7 +328,7 @@ impl Orchestrator {
         }
         let mut outputs = Vec::new();
         for member in members {
-            let result = self.simulate_agent_call(member, &format!("[EVALUATE] {}", input))?;
+            let result = self.dispatch_agent(member, &format!("[EVALUATE] {}", input))?;
             outputs.push(result);
         }
         Ok(outputs)
@@ -230,7 +344,7 @@ impl Orchestrator {
         }
         let idx = input.len() % members.len();
         let selected = &members[idx];
-        let result = self.simulate_agent_call(selected, &format!("[ROUTED] {}", input))?;
+        let result = self.dispatch_agent(selected, &format!("[ROUTED] {}", input))?;
         Ok(vec![result])
     }
 
@@ -245,11 +359,11 @@ impl Orchestrator {
         } else {
             &members[0]
         };
-        let primary_result = self.simulate_agent_call(primary, input)?;
+        let primary_result = self.dispatch_agent(primary, input)?;
         outputs.push(primary_result);
 
         for tool_agent in &members[1..] {
-            let result = self.simulate_agent_call(
+            let result = self.dispatch_agent(
                 tool_agent,
                 &format!("[TOOL] {} called by {}", input, primary),
             )?;
@@ -266,7 +380,7 @@ impl Orchestrator {
         let mut board = format!("[Blackboard] Initial: {}\n", input);
         let mut outputs = Vec::new();
         for member in members {
-            let result = self.simulate_agent_call(member, &board)?;
+            let result = self.dispatch_agent(member, &board)?;
             board.push_str(&format!("{}: {}\n", member, result.output));
             outputs.push(result);
         }
@@ -429,5 +543,67 @@ mod tests {
                 .unwrap();
             assert!(!result.consensus_output.is_empty());
         }
+    }
+
+    #[test]
+    fn test_register_expert() {
+        let mut orch = Orchestrator::new(None, None, None);
+        let expert = ExpertSpec {
+            id: "expert-data".into(),
+            name: "Data Analyst".into(),
+            domain: "data".into(),
+            persona_id: "preset-analyst".into(),
+            description: "Analyzes data and finds patterns".into(),
+        };
+        let id = orch.register_expert(expert).unwrap();
+        assert_eq!(id, "expert-data");
+        assert_eq!(orch.list_experts().len(), 1);
+    }
+
+    #[test]
+    fn test_find_experts_for_task() {
+        let mut orch = Orchestrator::new(None, None, None);
+        orch.register_expert(ExpertSpec {
+            id: "expert-data".into(), name: "Data Analyst".into(), domain: "data".into(),
+            persona_id: "preset-analyst".into(), description: "Analyzes data".into(),
+        }).unwrap();
+        orch.register_expert(ExpertSpec {
+            id: "expert-code".into(), name: "Coder".into(), domain: "code".into(),
+            persona_id: "preset-coder".into(), description: "Writes code".into(),
+        }).unwrap();
+        orch.register_expert(ExpertSpec {
+            id: "expert-write".into(), name: "Writer".into(), domain: "writing".into(),
+            persona_id: "preset-writer".into(), description: "Creates content".into(),
+        }).unwrap();
+
+        let found = orch.find_experts_for_task("need data analysis and code help", 2);
+        assert_eq!(found.len(), 2);
+        assert!(found.iter().any(|e| e.id == "expert-data"));
+    }
+
+    #[test]
+    fn test_dispatch_agent() {
+        let orch = Orchestrator::new(None, None, None);
+        let result = orch.dispatch_agent("test-agent", "hello world").unwrap();
+        assert_eq!(result.agent_id, "test-agent");
+        assert!(result.confidence > 0.0);
+    }
+
+    #[test]
+    fn test_run_manager_expert_no_experts() {
+        let orch = Orchestrator::new(None, None, None);
+        let result = orch.run_manager_expert("manager-1", "unknown task");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_unregister_expert() {
+        let mut orch = Orchestrator::new(None, None, None);
+        orch.register_expert(ExpertSpec {
+            id: "expert-1".into(), name: "E1".into(), domain: "test".into(),
+            persona_id: "preset-assistant".into(), description: "test".into(),
+        }).unwrap();
+        assert!(orch.unregister_expert("expert-1").is_ok());
+        assert!(orch.unregister_expert("nonexistent").is_err());
     }
 }

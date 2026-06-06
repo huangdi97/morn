@@ -18,8 +18,25 @@ interface ComponentSummary {
   status: string;
 }
 
-const PERSONAS = ["assistant", "analyst", "researcher", "writer", "coder", "translator", "reviewer"];
+interface PresetInfo {
+  id: string;
+  name: string;
+  description: string;
+}
+
+const PERSONAS = ["assistant", "analyst", "researcher", "writer", "coder", "translator", "reviewer", "cs_agent"];
 const MODELS = ["deepseek-chat", "deepseek-reasoner", "gpt-4o", "claude-3"];
+
+const PRESET_TO_PERSONA: Record<string, string> = {
+  "preset-analyst": "analyst",
+  "preset-researcher": "researcher",
+  "preset-writer": "writer",
+  "preset-coder": "coder",
+  "preset-translator": "translator",
+  "preset-assistant": "assistant",
+  "preset-reviewer": "reviewer",
+  "preset-cs-agent": "cs_agent",
+};
 
 const NL_EXAMPLES = [
   "创建一个股票分析助手，能获取行情数据、计算 MACD/RSI 指标、分析市场情绪并生成报告",
@@ -50,6 +67,7 @@ export function AgentBuilder() {
   const [tools, setTools] = useState<string[]>([]);
   const [knowledge, setKnowledge] = useState<string[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
+  const [presets, setPresets] = useState<PresetInfo[]>([]);
 
   useEffect(() => {
     invoke<ComponentSummary[]>("list_components", { typeFilter: null }).then((list) => {
@@ -57,6 +75,7 @@ export function AgentBuilder() {
       setKnowledge(list.filter((c) => c.component_type === "knowledge").map((c) => c.id));
       setSkills(list.filter((c) => c.component_type === "skill").map((c) => c.id));
     }).catch(() => {});
+    invoke<PresetInfo[]>("list_preset_personas").then(setPresets).catch(() => {});
   }, []);
 
   const toggleArray = (arr: string[], item: string): string[] => {
@@ -90,6 +109,16 @@ export function AgentBuilder() {
       : ["web_search", "read_file"];
     setDef({ ...def, name: description, persona, tools: selectedTools });
     setStep(1);
+  };
+
+  const handlePresetSelect = async (presetId: string) => {
+    try {
+      const persona = await invoke<any>("get_preset_persona", { name: presetId });
+      const simpleName = PRESET_TO_PERSONA[presetId] || "assistant";
+      setDef({ ...def, name: persona.name, persona: simpleName });
+    } catch (e: any) {
+      setError(e.toString());
+    }
   };
 
   const handleBuild = async () => {
@@ -301,6 +330,30 @@ export function AgentBuilder() {
                     </label>
                   ))}
                 </div>
+                {presets.length > 0 && (
+                  <div className="template-selector" style={{ marginTop: "16px" }}>
+                    <h4 style={{ marginBottom: "8px", fontSize: "14px", color: "var(--text-secondary)" }}>预置人格模板</h4>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+                      {presets.map((p) => (
+                        <div
+                          key={p.id}
+                          onClick={() => handlePresetSelect(p.id)}
+                          style={{
+                            cursor: "pointer", padding: "10px", borderRadius: "6px",
+                            border: "1px solid var(--border)", background: "var(--bg-tertiary)",
+                            transition: "border-color 0.2s",
+                          }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = ""; }}
+                          className="preset-template-card"
+                        >
+                          <strong style={{ fontSize: "13px", display: "block", marginBottom: "4px" }}>{p.name}</strong>
+                          <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>{p.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <>

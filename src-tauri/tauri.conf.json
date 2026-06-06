@@ -26,7 +26,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["msi", "nsis"],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "installerHeaderIcon": "icons/icon.ico",
+        "installMode": "currentUser",
+        "displayLanguageTags": ["zh-CN", "en-US"],
+        "languages": ["SimpChinese", "English"],
+        "headerImage": "icons/32x32.png",
+        "sidebarImage": "icons/128x128.png"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -34,5 +45,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "dialog": true,
+      "endpoints": ["https://github.com/huangdi97/morn/releases/latest/download/update.json"],
+      "pubkey": ""
+    }
   }
 }

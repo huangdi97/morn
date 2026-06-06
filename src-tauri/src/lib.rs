@@ -208,6 +208,7 @@ fn assemble_agent(
         "coder" => morn::component::persona::create_coder_persona(),
         "translator" => morn::component::persona::create_translator_persona(),
         "reviewer" => morn::component::persona::create_reviewer_persona(),
+        "cs_agent" => morn::component::persona::create_cs_agent_persona(),
         _ => morn::component::persona::create_assistant_persona(),
     };
 
@@ -250,6 +251,7 @@ fn list_agent_templates(state: State<AppState>) -> Result<serde_json::Value, Str
 fn test_component(
     id: String,
     input: String,
+    component_type: Option<String>,
     state: State<AppState>,
 ) -> Result<serde_json::Value, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
@@ -257,8 +259,35 @@ fn test_component(
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
     let data = morn::core::component::Data::text(&input);
-    let result = mgr.test_component(&id, data)?;
+    let result = mgr.test_component(&id, data, component_type.as_deref())?;
     Ok(serde_json::to_value(result).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
+fn test_component_rerun(
+    id: String,
+    component_type: String,
+    step_index: usize,
+    new_input: String,
+    state: State<AppState>,
+) -> Result<serde_json::Value, String> {
+    let manager = state.manager.lock().map_err(|e| e.to_string())?;
+    let mgr = manager
+        .as_ref()
+        .ok_or_else(|| "StudioManager not initialized".to_string())?;
+    let step = mgr.rerun_component_step(&component_type, &id, step_index, &new_input)?;
+    Ok(serde_json::to_value(step).map_err(|e| e.to_string())?)
+}
+
+#[tauri::command]
+fn list_component_types() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::json!({"type": "agent", "label": "Agent", "icon": "🤖"}),
+        serde_json::json!({"type": "tool", "label": "Tool", "icon": "🔧"}),
+        serde_json::json!({"type": "workflow", "label": "Workflow", "icon": "⚙️"}),
+        serde_json::json!({"type": "knowledge", "label": "Knowledge", "icon": "📚"}),
+        serde_json::json!({"type": "persona", "label": "Persona", "icon": "🧑"}),
+    ]
 }
 
 #[tauri::command]
@@ -445,6 +474,19 @@ fn get_audit_log(
     Ok(serde_json::to_value(logs).map_err(|e| e.to_string())?)
 }
 
+#[tauri::command]
+fn get_preset_persona(name: String) -> Result<serde_json::Value, String> {
+    match morn::component::persona::get_preset_persona(&name) {
+        Some(persona) => serde_json::to_value(persona).map_err(|e| e.to_string()),
+        None => Err(format!("Preset persona '{}' not found", name)),
+    }
+}
+
+#[tauri::command]
+fn list_preset_personas() -> Vec<std::collections::HashMap<String, String>> {
+    morn::component::persona::list_preset_personas()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let api_key = std::env::var("MORN_API_KEY").ok();
@@ -470,6 +512,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             setup_autostart(app);
 
@@ -541,6 +584,8 @@ pub fn run() {
             delete_component,
             assemble_agent,
             test_component,
+            test_component_rerun,
+            list_component_types,
             publish_component,
             get_system_status,
             get_component_topology,
@@ -555,6 +600,8 @@ pub fn run() {
             create_agent_from_description,
             list_agent_templates,
             get_audit_log,
+            get_preset_persona,
+            list_preset_personas,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
