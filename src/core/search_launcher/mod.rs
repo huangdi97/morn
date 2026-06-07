@@ -1,5 +1,11 @@
 use std::collections::HashMap;
 
+mod cache;
+mod local;
+mod web;
+
+pub use cache::SearchIndex;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum SearchCategory {
     App,
@@ -65,120 +71,6 @@ impl SearchItem {
 }
 
 #[derive(Debug, Clone)]
-pub struct SearchIndex {
-    items: HashMap<String, SearchItem>,
-    categories: HashMap<SearchCategory, Vec<String>>,
-}
-
-impl SearchIndex {
-    pub fn new() -> Self {
-        SearchIndex {
-            items: HashMap::new(),
-            categories: HashMap::new(),
-        }
-    }
-
-    pub fn add(&mut self, item: SearchItem) {
-        let id = item.id.clone();
-        let category = item.category.clone();
-        self.categories
-            .entry(category)
-            .or_default()
-            .push(id.clone());
-        self.items.insert(id, item);
-    }
-
-    pub fn remove(&mut self, id: &str) -> Option<SearchItem> {
-        if let Some(item) = self.items.remove(id) {
-            if let Some(ids) = self.categories.get_mut(&item.category) {
-                ids.retain(|i| i != id);
-            }
-            Some(item)
-        } else {
-            None
-        }
-    }
-
-    pub fn get(&self, id: &str) -> Option<&SearchItem> {
-        self.items.get(id)
-    }
-
-    pub fn count(&self) -> usize {
-        self.items.len()
-    }
-
-    pub fn all(&self) -> Vec<&SearchItem> {
-        let mut items: Vec<_> = self.items.values().collect();
-        items.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        items
-    }
-
-    pub fn by_category(&self, category: &SearchCategory) -> Vec<&SearchItem> {
-        self.categories
-            .get(category)
-            .map(|ids| {
-                let mut items: Vec<_> = ids.iter().filter_map(|id| self.items.get(id)).collect();
-                items.sort_by(|a, b| {
-                    b.score
-                        .partial_cmp(&a.score)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-                items
-            })
-            .unwrap_or_default()
-    }
-}
-
-impl Default for SearchIndex {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-fn fuzzy_match(query: &str, target: &str) -> bool {
-    let query = query.to_lowercase();
-    let target = target.to_lowercase();
-    if query.is_empty() {
-        return true;
-    }
-    if query.len() > target.len() {
-        return false;
-    }
-
-    let mut qi = query.chars().peekable();
-    for tc in target.chars() {
-        if let Some(&qc) = qi.peek() {
-            if tc == qc {
-                qi.next();
-            }
-        }
-    }
-    qi.next().is_none()
-}
-
-fn score_match(query: &str, target: &str) -> f64 {
-    let query = query.to_lowercase();
-    let target = target.to_lowercase();
-    if target == query {
-        return 1.0;
-    }
-    if target.starts_with(&query) {
-        return 0.9;
-    }
-    if target.contains(&query) {
-        return 0.7;
-    }
-    if fuzzy_match(&query, &target) {
-        return 0.5;
-    }
-    0.0
-}
-
-#[derive(Debug, Clone)]
 pub struct SearchLauncher {
     index: SearchIndex,
     enabled: bool,
@@ -231,143 +123,12 @@ impl SearchLauncher {
     pub fn index_mut(&mut self) -> &mut SearchIndex {
         &mut self.index
     }
-
-    pub fn search(&self, query: &str) -> Vec<(f64, &SearchItem)> {
-        if query.is_empty() {
-            return self
-                .index
-                .all()
-                .into_iter()
-                .map(|item| (item.score, item))
-                .collect();
-        }
-
-        let mut results: Vec<(f64, &SearchItem)> = self
-            .index
-            .all()
-            .into_iter()
-            .filter_map(|item| {
-                let mut best = 0.0_f64;
-
-                let s = score_match(query, &item.name);
-                if s > best {
-                    best = s;
-                }
-
-                let s = score_match(query, &item.description);
-                if s > best {
-                    best = s;
-                }
-
-                for kw in &item.keywords {
-                    let s = score_match(query, kw);
-                    if s > best {
-                        best = s;
-                    }
-                }
-
-                if best > 0.0 {
-                    Some((best * item.score.max(0.1), item))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        results
-    }
-
-    pub fn search_by_category(
-        &self,
-        query: &str,
-        category: &SearchCategory,
-    ) -> Vec<(f64, &SearchItem)> {
-        let items = self.index.by_category(category);
-        if query.is_empty() {
-            return items.into_iter().map(|item| (item.score, item)).collect();
-        }
-
-        let mut results: Vec<(f64, &SearchItem)> = items
-            .into_iter()
-            .filter_map(|item| {
-                let mut best = 0.0_f64;
-
-                let s = score_match(query, &item.name);
-                if s > best {
-                    best = s;
-                }
-
-                let s = score_match(query, &item.description);
-                if s > best {
-                    best = s;
-                }
-
-                for kw in &item.keywords {
-                    let s = score_match(query, kw);
-                    if s > best {
-                        best = s;
-                    }
-                }
-
-                if best > 0.0 {
-                    Some((best * item.score.max(0.1), item))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        results
-    }
-
-    pub fn register_app(
-        &mut self,
-        id: impl Into<String>,
-        name: impl Into<String>,
-        description: impl Into<String>,
-    ) {
-        let item = SearchItem::new(id, name, description, SearchCategory::App);
-        self.index.add(item);
-    }
-
-    pub fn register_file(
-        &mut self,
-        id: impl Into<String>,
-        name: impl Into<String>,
-        description: impl Into<String>,
-        path: impl Into<String>,
-    ) {
-        let item = SearchItem::new(id, name, description, SearchCategory::File)
-            .with_metadata("path", path);
-        self.index.add(item);
-    }
-
-    pub fn register_command(
-        &mut self,
-        id: impl Into<String>,
-        name: impl Into<String>,
-        description: impl Into<String>,
-    ) {
-        let item = SearchItem::new(id, name, description, SearchCategory::Command);
-        self.index.add(item);
-    }
-
-    pub fn register_agent_skill(
-        &mut self,
-        id: impl Into<String>,
-        name: impl Into<String>,
-        description: impl Into<String>,
-    ) {
-        let item = SearchItem::new(id, name, description, SearchCategory::AgentSkill);
-        self.index.add(item);
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::local::{fuzzy_match, score_match};
 
     #[test]
     fn test_fuzzy_match_exact() {
