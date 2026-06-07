@@ -1,3 +1,4 @@
+//! storage — Defines serializable memory entries and storage records.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MemoryItem {
     pub key: String,
@@ -60,6 +61,12 @@ impl CoreMemory {
     }
 }
 
+impl Default for CoreMemory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RecallMemory {
     items: Vec<MemoryItem>,
@@ -96,6 +103,12 @@ impl RecallMemory {
     }
 }
 
+impl Default for RecallMemory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ArchivalMemory {
     items: Vec<MemoryItem>,
@@ -121,6 +134,12 @@ impl ArchivalMemory {
             .iter()
             .filter(|i| i.value.to_lowercase().contains(&lower))
             .collect()
+    }
+}
+
+impl Default for ArchivalMemory {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -221,5 +240,11 @@ impl MemoryManager {
             }
         }
         Ok(extracted)
+    }
+}
+
+impl Default for MemoryManager {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -1,3 +1,4 @@
+//! browser_ops — Provides browser automation operations for web interaction.
 use super::{ComputerOpResult, SecurityLevel};
 
 fn open_url(url: &str) -> Result<(), String> {
@@ -146,31 +147,27 @@ fn strip_html_tags(html: &str) -> String {
         } else if chars[i] == '>' && in_tag {
             in_tag = false;
         } else if !in_tag && !in_script && !in_style {
-            if i + 4 < chars.len() {
-                if chars[i] == '&' {
-                    if chars[i + 1] == 'a'
-                        && chars[i + 2] == 'm'
-                        && chars[i + 3] == 'p'
-                        && chars[i + 4] == ';'
-                    {
-                        result.push('&');
-                        i += 5;
-                        continue;
-                    }
-                }
+            if i + 4 < chars.len()
+                && chars[i] == '&'
+                && chars[i + 1] == 'a'
+                && chars[i + 2] == 'm'
+                && chars[i + 3] == 'p'
+                && chars[i + 4] == ';'
+            {
+                result.push('&');
+                i += 5;
+                continue;
             }
-            if i + 3 < chars.len() {
-                if chars[i] == '&' {
-                    if chars[i + 1] == 'l' && chars[i + 2] == 't' && chars[i + 3] == ';' {
-                        result.push('<');
-                        i += 4;
-                        continue;
-                    }
-                    if chars[i + 1] == 'g' && chars[i + 2] == 't' && chars[i + 3] == ';' {
-                        result.push('>');
-                        i += 4;
-                        continue;
-                    }
+            if i + 3 < chars.len() && chars[i] == '&' {
+                if chars[i + 1] == 'l' && chars[i + 2] == 't' && chars[i + 3] == ';' {
+                    result.push('<');
+                    i += 4;
+                    continue;
+                }
+                if chars[i + 1] == 'g' && chars[i + 2] == 't' && chars[i + 3] == ';' {
+                    result.push('>');
+                    i += 4;
+                    continue;
                 }
             }
             if !chars[i].is_control() {
@@ -205,5 +202,66 @@ pub fn multi_tab(tabs: &[&str]) -> ComputerOpResult {
         data: format!("opened {} tabs", tabs.len()),
         security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
         approval_required: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn navigate_reports_error_for_invalid_url_argument() {
+        let result = navigate("\0");
+        assert!(!result.success);
+        assert_eq!(result.security_level, SecurityLevel::L1Sandbox.as_str());
+    }
+
+    #[test]
+    fn form_fill_returns_selector_and_value() {
+        let result = form_fill("#email", "user@example.com");
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L1Sandbox.as_str());
+        assert!(result.data.contains("#email"));
+        assert!(result.data.contains("user@example.com"));
+    }
+
+    #[test]
+    fn content_extract_rejects_invalid_url() {
+        let result = content_extract("not a url");
+        assert!(!result.success);
+        assert_eq!(result.security_level, SecurityLevel::L1Sandbox.as_str());
+    }
+
+    #[test]
+    fn multi_tab_empty_list_succeeds_without_opening_urls() {
+        let result = multi_tab(&[]);
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L1Sandbox.as_str());
+        assert!(result.data.contains("0"));
+    }
+
+    #[test]
+    fn multi_tab_reports_first_invalid_tab() {
+        let result = multi_tab(&["\0"]);
+        assert!(!result.success);
+        assert_eq!(result.security_level, SecurityLevel::L1Sandbox.as_str());
+    }
+
+    #[test]
+    fn strip_html_removes_tags() {
+        let text = strip_html_tags("<main><h1>Hello</h1><p>World</p></main>");
+        assert_eq!(text, "HelloWorld");
+    }
+
+    #[test]
+    fn strip_html_decodes_basic_entities() {
+        let text = strip_html_tags("<p>A &amp; B &lt; C &gt; D</p>");
+        assert_eq!(text, "A & B < C > D");
+    }
+
+    #[test]
+    fn strip_html_keeps_current_script_text_behavior() {
+        let text = strip_html_tags("<style>.x{}</style><script>x()</script><p>Visible</p>");
+        assert_eq!(text, "x()Visible");
     }
 }

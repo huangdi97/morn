@@ -4,7 +4,7 @@
 
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：微信小程序通道真实接入 */
 pub struct MiniProgramChannel {
     app_id: String,
     app_secret: String,

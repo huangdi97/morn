@@ -1,3 +1,4 @@
+//! identity_bridge — Links local identities with external accounts and providers.
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -163,6 +164,12 @@ impl IdentityBridge {
                 (c, identity)
             })
             .collect()
+    }
+}
+
+impl Default for IdentityBridge {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

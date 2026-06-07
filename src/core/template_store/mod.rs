@@ -1,12 +1,8 @@
+//! template_store — Manages workflow template manifests across local and remote stores.
 use std::collections::HashMap;
 
 mod local;
 mod remote;
-
-#[allow(unused_imports)]
-pub use local::*;
-#[allow(unused_imports)]
-pub use remote::*;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TemplateVersion {

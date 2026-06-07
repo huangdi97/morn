@@ -1,3 +1,4 @@
+//! privacy_gate — Evaluates privacy rules before data is shared or processed.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum DataSensitivity {
     Public,
@@ -16,13 +17,18 @@ impl DataSensitivity {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_str_value(s: &str) -> Self {
         match s {
             "critical" => DataSensitivity::Critical,
             "private" => DataSensitivity::Private,
             "internal" => DataSensitivity::Internal,
             _ => DataSensitivity::Public,
         }
+    }
+
+    #[allow(clippy::should_implement_trait)] /* 预留：兼容旧调用入口 */
+    pub fn from_str(s: &str) -> Self {
+        Self::from_str_value(s)
     }
 }
 
@@ -156,6 +162,12 @@ impl PrivacyGate {
     }
 }
 
+impl Default for PrivacyGate {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PrivacyCheckResult {
     pub allowed: bool,
@@ -247,9 +259,12 @@ mod tests {
     #[test]
     fn test_sensitivity_roundtrip() {
         assert_eq!(
-            DataSensitivity::from_str("critical"),
+            DataSensitivity::from_str_value("critical"),
             DataSensitivity::Critical
         );
-        assert_eq!(DataSensitivity::from_str("public"), DataSensitivity::Public);
+        assert_eq!(
+            DataSensitivity::from_str_value("public"),
+            DataSensitivity::Public
+        );
     }
 }

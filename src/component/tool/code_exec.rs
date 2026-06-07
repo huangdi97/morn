@@ -1,9 +1,10 @@
+//! code_exec — Provides a tool for running code execution tasks.
 use super::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：内置 Python 执行工具注册入口 */
 pub struct ExecPythonTool {
     id: String,
     name: String,
@@ -15,6 +16,12 @@ impl ExecPythonTool {
             id: "tool-exec-python".into(),
             name: "Exec Python".into(),
         }
+    }
+}
+
+impl Default for ExecPythonTool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

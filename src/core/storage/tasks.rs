@@ -1,8 +1,57 @@
+//! tasks — Persists task records, workflow state, and checkpoints.
 use rusqlite::params;
+use serde::{Deserialize, Serialize};
 
-use super::{DecisionRecord, ExecutionRecord, Storage, SubtaskRecord, TaskRecord};
+use super::Storage;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskRecord {
+    pub id: String,
+    pub user_input: String,
+    pub plan_json: String,
+    pub status: String,
+    pub created_at: String,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubtaskRecord {
+    pub id: String,
+    pub task_id: String,
+    pub agent_id: String,
+    pub action: String,
+    pub params_json: String,
+    pub status: String,
+    pub result_json: Option<String>,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecutionRecord {
+    pub id: String,
+    pub agent_id: String,
+    pub task_id: String,
+    pub action: String,
+    pub status: String,
+    pub latency_ms: Option<i64>,
+    pub error_msg: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecisionRecord {
+    pub id: String,
+    pub task_id: String,
+    pub decision_level: String,
+    pub action: String,
+    pub context_json: Option<String>,
+    pub approved: bool,
+    pub created_at: String,
+}
 
 impl Storage {
+    /// Inserts a task record and returns success when the row is stored.
     pub fn insert_task(&self, task: &TaskRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -21,6 +70,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Fetches a task by id and returns `None` when no row exists.
     pub fn get_task(&self, id: &str) -> Result<Option<TaskRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -41,6 +91,7 @@ impl Storage {
         }
     }
 
+    /// Lists task records ordered by newest creation time first.
     pub fn list_tasks(&self) -> Result<Vec<TaskRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -65,6 +116,7 @@ impl Storage {
         Ok(tasks)
     }
 
+    /// Updates a task status by id and sets completion time for terminal statuses.
     pub fn update_task_status(&self, id: &str, status: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let completed_at = if status == "completed" || status == "failed" {
@@ -81,6 +133,7 @@ impl Storage {
     }
 
     // Subtasks CRUD
+    /// Inserts a subtask record and returns success when the row is stored.
     pub fn insert_subtask(&self, subtask: &SubtaskRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -96,6 +149,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Lists subtasks for a task id and returns the matching records.
     pub fn list_subtasks(&self, task_id: &str) -> Result<Vec<SubtaskRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -123,6 +177,7 @@ impl Storage {
         Ok(subtasks)
     }
 
+    /// Updates a subtask status and optional result JSON by subtask id.
     pub fn update_subtask_status(
         &self,
         id: &str,
@@ -144,6 +199,7 @@ impl Storage {
     }
 
     // Executions CRUD
+    /// Inserts an execution record and returns success when the row is stored.
     pub fn insert_execution(&self, exec: &ExecutionRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -158,6 +214,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Lists execution records associated with a task id.
     pub fn list_executions(&self, task_id: &str) -> Result<Vec<ExecutionRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -185,6 +242,7 @@ impl Storage {
     }
 
     // Decisions CRUD
+    /// Inserts a decision record and returns success when the row is stored.
     pub fn insert_decision(&self, decision: &DecisionRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -199,6 +257,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Lists decision records associated with a task id.
     pub fn list_decisions(&self, task_id: &str) -> Result<Vec<DecisionRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -222,5 +281,113 @@ impl Storage {
             decisions.push(row.map_err(|e| e.to_string())?);
         }
         Ok(decisions)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_task() -> TaskRecord {
+        TaskRecord {
+            id: "task-test-1".to_string(),
+            user_input: "hello".to_string(),
+            plan_json: "{}".to_string(),
+            status: "pending".to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            completed_at: None,
+        }
+    }
+
+    fn storage_with_task() -> Storage {
+        let storage = Storage::new_in_memory().unwrap();
+        storage.insert_task(&test_task()).unwrap();
+        storage
+    }
+
+    #[test]
+    fn task_insert_get_list_update() {
+        let storage = storage_with_task();
+
+        assert_eq!(
+            storage.get_task("task-test-1").unwrap().unwrap().user_input,
+            "hello"
+        );
+        assert_eq!(storage.list_tasks().unwrap().len(), 1);
+
+        storage.update_task_status("task-test-1", "completed").unwrap();
+        let updated = storage.get_task("task-test-1").unwrap().unwrap();
+        assert_eq!(updated.status, "completed");
+        assert!(updated.completed_at.is_some());
+    }
+
+    #[test]
+    fn subtask_insert_list_update() {
+        let storage = storage_with_task();
+        storage
+            .insert_subtask(&SubtaskRecord {
+                id: "subtask-test-1".to_string(),
+                task_id: "task-test-1".to_string(),
+                agent_id: "agent-test-1".to_string(),
+                action: "chat".to_string(),
+                params_json: "{}".to_string(),
+                status: "pending".to_string(),
+                result_json: None,
+                started_at: None,
+                finished_at: None,
+            })
+            .unwrap();
+
+        assert_eq!(storage.list_subtasks("task-test-1").unwrap().len(), 1);
+
+        storage
+            .update_subtask_status("subtask-test-1", "completed", Some("{}"))
+            .unwrap();
+        let updated = storage.list_subtasks("task-test-1").unwrap();
+        assert_eq!(updated[0].status, "completed");
+        assert_eq!(updated[0].result_json.as_deref(), Some("{}"));
+    }
+
+    #[test]
+    fn execution_insert_and_list() {
+        let storage = storage_with_task();
+        storage
+            .insert_execution(&ExecutionRecord {
+                id: "exec-test-1".to_string(),
+                agent_id: "agent-test-1".to_string(),
+                task_id: "task-test-1".to_string(),
+                action: "chat".to_string(),
+                status: "completed".to_string(),
+                latency_ms: Some(42),
+                error_msg: None,
+                created_at: chrono::Utc::now().to_rfc3339(),
+            })
+            .unwrap();
+
+        let executions = storage.list_executions("task-test-1").unwrap();
+        assert_eq!(executions.len(), 1);
+        assert_eq!(executions[0].id, "exec-test-1");
+        assert_eq!(executions[0].latency_ms, Some(42));
+    }
+
+    #[test]
+    fn decision_insert_and_list() {
+        let storage = storage_with_task();
+        storage
+            .insert_decision(&DecisionRecord {
+                id: "decision-test-1".to_string(),
+                task_id: "task-test-1".to_string(),
+                decision_level: "direct_answer".to_string(),
+                action: "chat".to_string(),
+                context_json: Some("{}".to_string()),
+                approved: true,
+                created_at: chrono::Utc::now().to_rfc3339(),
+            })
+            .unwrap();
+
+        let decisions = storage.list_decisions("task-test-1").unwrap();
+        assert_eq!(decisions.len(), 1);
+        assert_eq!(decisions[0].action, "chat");
+        assert!(decisions[0].approved);
     }
 }

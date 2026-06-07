@@ -1,3 +1,4 @@
+//! long_task_engine — Runs long-lived tasks with progress tracking and resumable state.
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;

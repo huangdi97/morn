@@ -1,6 +1,9 @@
+//! sessions — Persists conversation sessions and their message history.
 use rusqlite::params;
 
-use super::{SessionRow, Storage};
+use super::Storage;
+
+pub type SessionRow = (String, String, Option<String>, String, String);
 
 impl Storage {
     pub fn save_session(
@@ -75,5 +78,36 @@ impl Storage {
             sessions.push(row.map_err(|e| e.to_string())?);
         }
         Ok(sessions)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn session_save_get_list_update() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .save_session(
+                "session-test-1",
+                "user-test-1",
+                Some("agent-test-1"),
+                r#"{"step":1}"#,
+            )
+            .unwrap();
+
+        let session = storage.get_session("session-test-1").unwrap().unwrap();
+        assert_eq!(session.1, "user-test-1");
+        assert_eq!(session.2.as_deref(), Some("agent-test-1"));
+        assert_eq!(storage.list_sessions().unwrap().len(), 1);
+
+        storage
+            .update_session_context("session-test-1", r#"{"step":2}"#)
+            .unwrap();
+        assert_eq!(
+            storage.get_session("session-test-1").unwrap().unwrap().3,
+            r#"{"step":2}"#
+        );
     }
 }

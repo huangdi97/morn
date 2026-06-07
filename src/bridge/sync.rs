@@ -1,3 +1,4 @@
+//! sync — Coordinates device sync records and cross-instance state events.
 use crate::core::storage::{DeviceRecord, Storage, SyncEventRecord};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -6,8 +7,7 @@ pub struct SyncEngine {
     storage: Option<Arc<Mutex<Storage>>>,
     device_id: String,
     sync_server_url: Option<String>,
-    #[allow(dead_code)]
-    running: bool,
+    #[allow(dead_code)] /* 预留：后台同步循环状态 */ running: bool,
 }
 
 impl SyncEngine {
@@ -44,7 +44,7 @@ impl SyncEngine {
                 .build()
                 .map_err(|e| format!("Sync push HTTP client error: {}", e))?;
             let resp = client
-                .post(&format!("{}/sync/push", server_url))
+                .post(format!("{}/sync/push", server_url))
                 .json(&payload)
                 .send()
                 .map_err(|e| format!("Sync push error: {}", e))?;
@@ -70,7 +70,7 @@ impl SyncEngine {
             .build()
             .map_err(|e| format!("Sync pull HTTP client error: {}", e))?;
         let resp = client
-            .get(&format!(
+            .get(format!(
                 "{}/sync/pull?device_id={}",
                 server_url, self.device_id
             ))

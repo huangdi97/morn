@@ -1,3 +1,4 @@
+//! delegation — Delegates tasks to suitable agents and tracks delegated work.
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -79,7 +80,7 @@ impl DelegationManager {
                     Some(d) => cap.domain == *d,
                     None => true,
                 };
-                let action_match = cap.actions.iter().any(|a| *a == task.action);
+                let action_match = cap.actions.contains(&task.action);
                 let tool_match = if task.required_tools.is_empty() {
                     false
                 } else {
@@ -125,13 +126,6 @@ impl DelegationManager {
 mod tests {
     use super::*;
     use crate::core::registry::{Capability, Registry};
-
-    fn test_registry() -> Arc<Registry> {
-        let storage = crate::core::storage::Storage::new_in_memory().unwrap();
-        let bus = crate::core::event_bus::SimpleEventBus::new();
-        let reg = Registry::new(Some(storage), Some(bus));
-        Arc::new(reg)
-    }
 
     fn make_cap(reg: &mut Registry) {
         reg.register(Capability {

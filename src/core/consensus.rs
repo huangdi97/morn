@@ -1,3 +1,4 @@
+//! consensus — Aggregates multiple agent outputs into consensus decisions.
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -177,7 +178,6 @@ impl ConsensusManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     fn create_test_manager() -> ConsensusManager {
         let dir = std::env::temp_dir().join(format!("consensus_test_{}", uuid::Uuid::new_v4()));

@@ -1,12 +1,8 @@
+//! community_templates — Manages community-provided workflow template registries.
 use std::collections::HashMap;
 
 mod fetch;
 mod store;
-
-#[allow(unused_imports)]
-pub use fetch::*;
-#[allow(unused_imports)]
-pub use store::*;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RemoteTemplate {

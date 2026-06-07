@@ -1,3 +1,4 @@
+//! visual_grounding — Maps visual observations to screen coordinates and UI targets.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ScreenCoord {
     pub x: f64,
@@ -117,6 +118,12 @@ impl VisualGrounding {
             },
         ];
         Ok(elements)
+    }
+}
+
+impl Default for VisualGrounding {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

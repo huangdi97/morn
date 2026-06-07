@@ -1,0 +1,125 @@
+//! data_analysis — Defines the built-in skill for data analysis workflows.
+use crate::component::skill::{Skill, SkillStep};
+use crate::core::component::{
+    Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
+};
+
+#[allow(dead_code)] /* 预留：内置 Data Analysis skill 注册入口 */
+pub struct DataAnalysisSkill {
+    id: String,
+    name: String,
+    steps: Vec<SkillStep>,
+}
+
+impl DataAnalysisSkill {
+    pub fn new() -> Self {
+        let steps = vec![
+            SkillStep {
+                step_id: "read".into(),
+                tool_id: "read_file".into(),
+                input_mapping: [("path".into(), "input.path".into())].into(),
+                output_mapping: [("data".into(), "raw_data".into())].into(),
+                depends_on: vec![],
+                llm_step: false,
+                llm_prompt: None,
+            },
+            SkillStep {
+                step_id: "analyze".into(),
+                tool_id: "calc".into(),
+                input_mapping: [("expression".into(), "raw_data".into())].into(),
+                output_mapping: [("result".into(), "analysis".into())].into(),
+                depends_on: vec!["read".into()],
+                llm_step: true,
+                llm_prompt: Some("Analyze the following data and provide insights:".into()),
+            },
+            SkillStep {
+                step_id: "format".into(),
+                tool_id: "".into(),
+                input_mapping: [("text".into(), "analysis".into())].into(),
+                output_mapping: [("report".into(), "output".into())].into(),
+                depends_on: vec!["analyze".into()],
+                llm_step: true,
+                llm_prompt: Some("Format the analysis into a clear report:".into()),
+            },
+        ];
+        DataAnalysisSkill {
+            id: "skill-data-analysis".into(),
+            name: "Data Analysis".into(),
+            steps,
+        }
+    }
+}
+
+impl Default for DataAnalysisSkill {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Component for DataAnalysisSkill {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn type_name(&self) -> &str {
+        "skill"
+    }
+    fn init(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn run(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn pause(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn stop(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+    fn health_check(&self) -> HealthStatus {
+        HealthStatus::Healthy
+    }
+}
+
+impl IOComponent for DataAnalysisSkill {
+    fn ports(&self) -> Vec<Port> {
+        vec![
+            Port {
+                id: "input".into(),
+                direction: PortDirection::Input,
+                data_type: "text".into(),
+                description: "file path".into(),
+            },
+            Port {
+                id: "output".into(),
+                direction: PortDirection::Output,
+                data_type: "text".into(),
+                description: "analysis report".into(),
+            },
+        ]
+    }
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+        Ok(())
+    }
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+        Ok(None)
+    }
+}
+
+impl SecureComponent for DataAnalysisSkill {
+    fn required_permissions(&self) -> Vec<Permission> {
+        vec![Permission::ReadFile]
+    }
+}
+
+impl Skill for DataAnalysisSkill {
+    fn steps(&self) -> Vec<SkillStep> {
+        self.steps.clone()
+    }
+    fn execute(&mut self, input: Data) -> Result<Data, String> {
+        let path = input.content.as_str().unwrap_or("").to_string();
+        Ok(Data::text(&format!(
+            "[data_analysis] analysis of '{}' complete",
+            path
+        )))
+    }
+}

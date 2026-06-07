@@ -1,7 +1,7 @@
 # Morn
 
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
-[![build](https://img.shields.io/badge/tests-417_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
+[![build](https://img.shields.io/badge/tests-469_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > **你的桌面 AI 创作系统** — From一个人的工位开始
@@ -17,8 +17,8 @@ Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对
 | 项目 | 状态 |
 |------|------|
 | Phase 0–9（75 项功能） | ✅ **全部实现** |
-| cargo build 编译 | 0 errors, 3 minor warnings |
-| cargo test 测试 | **417 passed**, 0 failed |
+| cargo build 编译 | 0 errors, 0 warnings |
+| cargo test 测试 | **469 passed**, 0 failed |
 | Tauri NSIS 安装器 | ✅ 配置就绪（中英文） |
 | 自动更新 (updater) | ✅ GitHub Releases 端点配置 |
 | 设计文档 | 1529 行，71 竞品深度调研 |
@@ -50,8 +50,9 @@ Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对
 | **记忆系统** | 三层记忆(Working/Episodic/Semantic) + 自编辑记忆 |
 | **平台功能** | REST API、看板调度、Code-as-Tool、搜索启动器、模板商店 |
 | **认知智能** | PikoSoul 性格引擎、认知录制、信任评分、共识协作 |
-| **高级能力** | 视觉GUI操控、跨渠道身份统一、3D 可视化、超长任务引擎 |
+| **高级能力** | 跨渠道身份统一、3D 可视化、超长任务引擎 |
 | **工具生态** | MCP 协议、Office 处理(PPT/Excel)、Cortex推理引擎、社区模板市场 |
+| **电脑操控** | 视觉 GUI 操控、窗口管理、鼠标键盘模拟、截图 OCR |
 
 ## 快速开始
 
@@ -101,17 +102,18 @@ morn-desktop/
 │   ├── main.rs                   # CLI 入口
 │   ├── lib.rs                    # 模块声明
 │   ├── core/                     # 内核 (30+ 模块)
-│   │   ├── supervisor.rs         # COO 主管（6 级决策树）
+│   │   ├── supervisor/           # COO 主管决策树 (types, decision, execution)
 │   │   ├── registry.rs           # 能力注册中心
-│   │   ├── storage.rs            # SQLite 存储（12+ 表）
+│   │   ├── storage/              # SQLite 存储 (agents, governance, market,
+│   │   │                         #   oauth, sessions, settings, sync, tasks, users)
 │   │   ├── event_bus.rs          # 事件总线
 │   │   ├── security.rs           # 四层安全宪法
 │   │   ├── orchestrator.rs       # 多 Agent 团队编排
-│   │   ├── workflow.rs           # 工作流引擎
+│   │   ├── workflow/             # 工作流引擎 (runner, storage, templates/)
 │   │   ├── mcp.rs                # MCP 协议通信
 │   │   ├── hitl.rs               # Human-in-the-Loop 审批
 │   │   ├── checkpoint.rs         # 任务持久化
-│   │   ├── agent_pool.rs         # Agent 集群管理
+│   │   ├── agent_pool/           # Agent 集群管理
 │   │   ├── consensus.rs          # 共识协作机制
 │   │   └── ... (20+ 更多模块)
 │   ├── component/                # 6 类原子组件

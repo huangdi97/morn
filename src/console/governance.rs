@@ -1,3 +1,4 @@
+//! governance — Provides console commands for governance and security controls.
 use crate::core::security::SecurityGuard;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

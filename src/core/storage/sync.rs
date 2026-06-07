@@ -1,6 +1,28 @@
+//! sync — Persists device sync metadata and synchronization events.
 use rusqlite::params;
+use serde::{Deserialize, Serialize};
 
-use super::{DeviceRecord, Storage, SyncEventRecord};
+use super::Storage;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncEventRecord {
+    pub id: String,
+    pub entity_type: String,
+    pub entity_id: String,
+    pub action: String,
+    pub data_json: String,
+    pub timestamp: String,
+    pub device_id: String,
+    pub synced: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceRecord {
+    pub id: String,
+    pub name: String,
+    pub last_seen: String,
+    pub public_key: String,
+}
 
 impl Storage {
     pub fn insert_sync_event(&self, event: &SyncEventRecord) -> Result<(), String> {
@@ -100,5 +122,61 @@ impl Storage {
         conn.execute("DELETE FROM devices WHERE id = ?1", params![id])
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sync_event_insert_list_update_delete() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .insert_sync_event(&SyncEventRecord {
+                id: "sync-test-1".to_string(),
+                entity_type: "task".to_string(),
+                entity_id: "task-test-1".to_string(),
+                action: "create".to_string(),
+                data_json: "{}".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                device_id: "device-test-1".to_string(),
+                synced: false,
+            })
+            .unwrap();
+
+        assert_eq!(storage.list_unsynced_events().unwrap().len(), 1);
+        assert_eq!(storage.list_unsynced_events().unwrap()[0].id, "sync-test-1");
+
+        storage.mark_event_synced("sync-test-1").unwrap();
+        assert!(storage.list_unsynced_events().unwrap().is_empty());
+
+        storage.clear_synced_events().unwrap();
+        assert_eq!(sync_event_count(&storage), 0);
+    }
+
+    #[test]
+    fn device_upsert_list_delete() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .upsert_device(&DeviceRecord {
+                id: "device-test-1".to_string(),
+                name: "Laptop".to_string(),
+                last_seen: chrono::Utc::now().to_rfc3339(),
+                public_key: "public-key".to_string(),
+            })
+            .unwrap();
+
+        assert_eq!(storage.list_devices().unwrap().len(), 1);
+        assert_eq!(storage.list_devices().unwrap()[0].name, "Laptop");
+
+        storage.delete_device("device-test-1").unwrap();
+        assert!(storage.list_devices().unwrap().is_empty());
+    }
+
+    fn sync_event_count(storage: &Storage) -> i64 {
+        let conn = storage.conn.lock().unwrap();
+        conn.query_row("SELECT COUNT(*) FROM sync_events", [], |row| row.get(0))
+            .unwrap()
     }
 }

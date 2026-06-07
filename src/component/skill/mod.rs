@@ -1,3 +1,4 @@
+//! skill — Defines executable skills and their component integration.
 use crate::core::component::{Data, IOComponent};
 use std::collections::HashMap;
 

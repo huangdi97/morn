@@ -1,3 +1,4 @@
+//! builtins — Defines built-in workflow template catalog entries.
 use super::WorkflowTemplateEntry;
 
 pub(super) fn builtin_templates() -> Vec<WorkflowTemplateEntry> {

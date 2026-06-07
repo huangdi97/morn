@@ -1,3 +1,4 @@
+//! market — Persists marketplace listings and install records.
 use rusqlite::params;
 
 use super::Storage;
@@ -152,4 +153,74 @@ fn listing_from_row(row: &rusqlite::Row) -> Result<Listing, String> {
         downloads: row.get(7).map_err(|e| e.to_string())?,
         created_at: row.get(8).map_err(|e| e.to_string())?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_listing() -> Listing {
+        Listing {
+            id: "listing-test-1".to_string(),
+            item_type: "tool".to_string(),
+            name: "Test Tool".to_string(),
+            description: "A test listing".to_string(),
+            price: 1.5,
+            author: "tester".to_string(),
+            rating: 4.0,
+            downloads: 10,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    #[test]
+    fn listing_save_get_list_update_delete() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage.save_listing(&test_listing()).unwrap();
+
+        assert_eq!(
+            storage.get_listing("listing-test-1").unwrap().unwrap().name,
+            "Test Tool"
+        );
+        assert_eq!(storage.list_listings(Some("tool")).unwrap().len(), 1);
+
+        storage
+            .update_listing_rating("listing-test-1", 4.5, 11)
+            .unwrap();
+        let updated = storage.get_listing("listing-test-1").unwrap().unwrap();
+        assert_eq!(updated.rating, 4.5);
+        assert_eq!(updated.downloads, 11);
+
+        storage.delete_listing("listing-test-1").unwrap();
+        assert!(storage.get_listing("listing-test-1").unwrap().is_none());
+    }
+
+    #[test]
+    fn transaction_and_license_save_and_list() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage.save_listing(&test_listing()).unwrap();
+        storage
+            .save_transaction(&Transaction {
+                id: "tx-test-1".to_string(),
+                listing_id: "listing-test-1".to_string(),
+                buyer: "user-test-1".to_string(),
+                amount: 1.5,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            })
+            .unwrap();
+        storage
+            .save_license(&License {
+                id: "license-test-1".to_string(),
+                listing_id: "listing-test-1".to_string(),
+                user_id: "user-test-1".to_string(),
+                granted_at: chrono::Utc::now().to_rfc3339(),
+                expires_at: None,
+            })
+            .unwrap();
+
+        let licenses = storage.get_user_licenses("user-test-1").unwrap();
+        assert_eq!(licenses.len(), 1);
+        assert_eq!(licenses[0].listing_id, "listing-test-1");
+        assert!(storage.get_user_licenses("missing").unwrap().is_empty());
+    }
 }

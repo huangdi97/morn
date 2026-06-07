@@ -1,3 +1,4 @@
+//! team — Manages organization teams, members, and user records.
 use crate::core::storage::{Storage, TeamMemberRecord, TeamRecord, UserRecord};
 
 pub struct TeamManager {
@@ -147,7 +148,7 @@ impl UserManager {
             ));
         }
 
-        if let Some(_) = self.storage.get_user_by_username(username)? {
+        if self.storage.get_user_by_username(username)?.is_some() {
             return Err(format!("Username '{}' already exists", username));
         }
 

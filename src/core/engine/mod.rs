@@ -1,3 +1,4 @@
+//! engine — Defines task execution engines and workflow execution primitives.
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::storage::Storage;
 

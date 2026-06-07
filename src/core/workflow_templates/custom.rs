@@ -1,3 +1,4 @@
+//! custom — Loads and saves custom workflow template catalog entries.
 use std::path::Path;
 
 use super::{WorkflowTemplateEntry, WorkflowTemplateStore};

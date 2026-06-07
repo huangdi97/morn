@@ -1,3 +1,4 @@
+//! dag — Executes task engines over directed acyclic workflow graphs.
 use super::TaskEngine;
 use crate::core::supervisor::SubTaskDef;
 use std::collections::{HashMap, VecDeque};

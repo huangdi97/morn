@@ -1,3 +1,4 @@
+//! kanban — Manages kanban boards, cards, columns, and workflow status.
 use std::collections::{HashMap, HashSet};
 
 mod cards;
@@ -223,7 +224,7 @@ mod tests {
             CardStatus::Review,
             CardStatus::Done,
         ] {
-            assert_eq!(CardStatus::from_str(status.as_str()), *status);
+            assert_eq!(CardStatus::from_str_value(status.as_str()), *status);
         }
     }
 
@@ -235,7 +236,7 @@ mod tests {
             Priority::High,
             Priority::Critical,
         ] {
-            assert_eq!(Priority::from_str(priority.as_str()), *priority);
+            assert_eq!(Priority::from_str_value(priority.as_str()), *priority);
         }
     }
 

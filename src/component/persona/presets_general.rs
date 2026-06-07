@@ -1,3 +1,4 @@
+//! presets_general — Provides general-purpose persona presets for everyday assistance.
 use super::{Persona, PersonaParameters, PromptLayers};
 
 pub fn preset_translator() -> Persona {

@@ -1,3 +1,4 @@
+//! model — Defines model configuration and model invocation components.
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };

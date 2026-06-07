@@ -1,9 +1,10 @@
+//! a2a_discovery — Discovers peer agents and exchanges A2A agent cards.
 use crate::bridge::a2a::{A2AMessage, A2AProtocol, AgentCard};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：A2A peer discovery 后台循环 */
 pub struct A2ADiscovery {
     local_agent: AgentCard,
     remote_agents: Arc<Mutex<HashMap<String, AgentCard>>>,

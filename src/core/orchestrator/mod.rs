@@ -1,16 +1,33 @@
+//! orchestrator — Coordinates multi-agent teams, routing modes, and shared execution.
 use crate::bridge::a2a_discovery::A2ADiscovery;
-use crate::component::model::ModelConfig;
-use crate::component::persona::{self, Persona};
-use crate::core::assembler::{AgentAssembler, AgentDef};
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
 use crate::core::supervisor::Supervisor;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+mod blackboard;
 mod broadcast;
 mod chain;
 mod manager_worker;
+mod routing;
+mod tools;
+mod voting;
+
+#[allow(unused_imports)]
+pub use blackboard::*;
+#[allow(unused_imports)]
+pub use broadcast::*;
+#[allow(unused_imports)]
+pub use chain::*;
+#[allow(unused_imports)]
+pub use manager_worker::*;
+#[allow(unused_imports)]
+pub use routing::*;
+#[allow(unused_imports)]
+pub use tools::*;
+#[allow(unused_imports)]
+pub use voting::*;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum CollaborationMode {
@@ -24,6 +41,7 @@ pub enum CollaborationMode {
 }
 
 impl CollaborationMode {
+    /// Returns the stable string identifier for this collaboration mode.
     pub fn as_str(&self) -> &'static str {
         match self {
             CollaborationMode::Chain => "chain",
@@ -78,7 +96,7 @@ pub struct TeamMemberOutput {
     pub confidence: f64,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：多 agent 编排器运行态暂未全部接入 */
 pub struct Orchestrator {
     registry: Option<Registry>,
     supervisor: Option<Supervisor>,
@@ -89,6 +107,7 @@ pub struct Orchestrator {
 }
 
 impl Orchestrator {
+    /// Creates an orchestrator with optional registry, supervisor, and event bus integrations.
     pub fn new(
         registry: Option<Registry>,
         supervisor: Option<Supervisor>,
@@ -104,11 +123,13 @@ impl Orchestrator {
         }
     }
 
+    /// Attaches A2A discovery to the orchestrator and returns the updated instance.
     pub fn with_a2a(mut self, discovery: Arc<Mutex<A2ADiscovery>>) -> Self {
         self.a2a_discovery = Some(discovery);
         self
     }
 
+    /// Registers an expert specification and returns its id on success.
     pub fn register_expert(&mut self, expert: ExpertSpec) -> Result<String, String> {
         let id = expert.id.clone();
         if self.experts.contains_key(&id) {
@@ -118,6 +139,7 @@ impl Orchestrator {
         Ok(id)
     }
 
+    /// Removes an expert by id and returns an error if it is not registered.
     pub fn unregister_expert(&mut self, id: &str) -> Result<(), String> {
         self.experts
             .remove(id)
@@ -125,33 +147,12 @@ impl Orchestrator {
             .map(|_| ())
     }
 
+    /// Returns references to all registered experts.
     pub fn list_experts(&self) -> Vec<&ExpertSpec> {
         self.experts.values().collect()
     }
 
-    pub fn find_experts_for_task(&self, task: &str, max: usize) -> Vec<&ExpertSpec> {
-        let task_lower = task.to_lowercase();
-        let mut matches: Vec<&ExpertSpec> = self
-            .experts
-            .values()
-            .filter(|e| {
-                let domain_lower = e.domain.to_lowercase();
-                let desc_lower = e.description.to_lowercase();
-                let name_lower = e.name.to_lowercase();
-                task_lower.contains(&domain_lower)
-                    || task_lower.contains(&name_lower)
-                    || task_lower.contains(&desc_lower)
-                    || domain_lower.contains(&task_lower)
-            })
-            .collect();
-        if matches.is_empty() {
-            matches = self.experts.values().take(max).collect();
-        } else {
-            matches.truncate(max);
-        }
-        matches
-    }
-
+    /// Creates a team definition and returns its id when no duplicate exists.
     pub fn create_team(&mut self, def: TeamDef) -> Result<String, String> {
         let id = def.id.clone();
         if self.teams.contains_key(&id) {
@@ -168,14 +169,17 @@ impl Orchestrator {
         Ok(id)
     }
 
+    /// Looks up a team by id and returns it when found.
     pub fn get_team(&self, id: &str) -> Option<&TeamDef> {
         self.teams.get(id)
     }
 
+    /// Returns references to all registered teams.
     pub fn list_teams(&self) -> Vec<&TeamDef> {
         self.teams.values().collect()
     }
 
+    /// Deletes a team by id and returns an error if it does not exist.
     pub fn delete_team(&mut self, id: &str) -> Result<(), String> {
         self.teams
             .remove(id)
@@ -183,6 +187,7 @@ impl Orchestrator {
             .map(|_| ())
     }
 
+    /// Runs a team against input text and returns member outputs plus the consensus result.
     pub fn run_team(&self, team_id: &str, input: &str) -> Result<TeamResult, String> {
         let team = self
             .teams
@@ -209,51 +214,6 @@ impl Orchestrator {
         };
 
         Ok(result)
-    }
-
-    fn dispatch_agent(&self, agent_id: &str, input: &str) -> Result<TeamMemberOutput, String> {
-        if let Some(ref registry) = self.registry {
-            if let Some(template) = registry.get_template(agent_id) {
-                let persona = persona::get_preset_persona(&template.persona)
-                    .unwrap_or_else(persona::create_assistant_persona);
-                let model = ModelConfig {
-                    id: format!("model-{}", agent_id),
-                    provider: "deepseek".into(),
-                    model_name: "deepseek-chat".into(),
-                    base_url: "https://api.deepseek.com".into(),
-                    api_key: String::new(),
-                    parameters: Default::default(),
-                    fallback: None,
-                    cost_tier: crate::component::model::CostTier::Low,
-                };
-                let agent_def = AgentDef {
-                    id: agent_id.to_string(),
-                    name: template.name.clone(),
-                    persona,
-                    model,
-                    tools: template.tools.clone(),
-                    knowledge: template.knowledge.clone(),
-                    skills: template.skills.clone(),
-                    memory: None,
-                };
-                let assembler = AgentAssembler::new(Some(registry.clone()));
-                if let Ok(mut agent) = assembler.assemble(agent_def) {
-                    let _ = agent.init();
-                    let _ = agent.run();
-                }
-            }
-        }
-
-        let confidence = 0.7 + (input.len() as f64 % 30.0) / 100.0;
-        let output = format!(
-            "[{}] processed: {} (dispatched via registry)",
-            agent_id, input
-        );
-        Ok(TeamMemberOutput {
-            agent_id: agent_id.to_string(),
-            output,
-            confidence: confidence.min(1.0),
-        })
     }
 
     fn compute_consensus(

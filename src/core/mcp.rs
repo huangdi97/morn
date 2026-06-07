@@ -1,3 +1,4 @@
+//! mcp — Provides Model Context Protocol server and tool integration support.
 use std::sync::{Arc, Mutex};
 
 use crate::core::registry::Registry;
@@ -47,6 +48,7 @@ pub struct MCPClient {
 }
 
 impl MCPClient {
+    /// Creates an MCP client backed by a shared registry.
     pub fn new(registry: Arc<Mutex<Registry>>) -> Self {
         MCPClient {
             http_client: reqwest::blocking::Client::new(),
@@ -55,6 +57,7 @@ impl MCPClient {
         }
     }
 
+    /// Calls a registered MCP tool with request parameters and returns the server response.
     pub fn call_tool(&self, request: MCPRequest) -> Result<MCPResponse, MCPError> {
         for server in &self.servers {
             if server.tools.iter().any(|t| t.name == request.tool) {
@@ -81,6 +84,7 @@ impl MCPClient {
         )))
     }
 
+    /// Requests the tool list from an MCP server URL and returns decoded tool metadata.
     pub fn list_tools(&self, server_url: &str) -> Result<Vec<MCPTool>, MCPError> {
         let url = format!("{}/list_tools", server_url.trim_end_matches('/'));
         let resp = self
@@ -94,6 +98,7 @@ impl MCPClient {
         Ok(tools)
     }
 
+    /// Registers or replaces an MCP server definition with its advertised tools.
     pub fn register_server(
         &mut self,
         name: &str,
@@ -110,6 +115,7 @@ impl MCPClient {
         Ok(())
     }
 
+    /// Exports registry capabilities as MCP tool metadata.
     pub fn export_registry_as_mcp(&self) -> Vec<MCPTool> {
         let registry = self.registry.lock().unwrap();
         registry

@@ -1,3 +1,4 @@
+//! sop_template — Defines standard operating procedure templates for repeatable workflows.
 use serde_json::Value;
 use std::path::Path;
 

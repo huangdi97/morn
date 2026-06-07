@@ -1,3 +1,4 @@
+//! search_launcher — Provides launcher search across local, cached, and web sources.
 use std::collections::HashMap;
 
 mod cache;
@@ -127,8 +128,8 @@ impl SearchLauncher {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::local::{fuzzy_match, score_match};
+    use super::*;
 
     #[test]
     fn test_fuzzy_match_exact() {

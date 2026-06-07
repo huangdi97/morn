@@ -1,3 +1,4 @@
+//! executor — Runs task engine steps and emits execution results.
 use super::TaskEngine;
 use crate::core::event_bus::{
     EVENT_SUPERVISOR_PLAN_EXECUTING, EVENT_TASK_COMPLETED, EVENT_TASK_FAILED,

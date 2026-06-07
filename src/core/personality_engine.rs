@@ -1,3 +1,4 @@
+//! personality_engine — Applies persona traits and behavioral settings to agent output.
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,9 +22,10 @@ impl Default for OCEANTraits {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum Mood {
     Cheerful,
+    #[default]
     Neutral,
     Serious,
     Frustrated,
@@ -33,14 +35,9 @@ pub enum Mood {
     Energetic,
 }
 
-impl Default for Mood {
-    fn default() -> Self {
-        Mood::Neutral
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum CommunicationStyle {
+    #[default]
     Casual,
     Formal,
     Playful,
@@ -48,12 +45,6 @@ pub enum CommunicationStyle {
     Encouraging,
     Direct,
     Storyteller,
-}
-
-impl Default for CommunicationStyle {
-    fn default() -> Self {
-        CommunicationStyle::Casual
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,24 +64,14 @@ impl Default for LLMParameters {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PersonalityProfile {
     pub traits: OCEANTraits,
     pub mood: Mood,
     pub communication_style: CommunicationStyle,
 }
 
-impl Default for PersonalityProfile {
-    fn default() -> Self {
-        PersonalityProfile {
-            traits: OCEANTraits::default(),
-            mood: Mood::default(),
-            communication_style: CommunicationStyle::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PersonalityEngine {
     profile: PersonalityProfile,
 }
@@ -149,13 +130,5 @@ impl PersonalityEngine {
     pub fn adjust_temperature(&self, base: f64) -> f64 {
         let params = self.derive_llm_parameters();
         (base + params.temperature - 0.5).clamp(0.0, 1.0)
-    }
-}
-
-impl Default for PersonalityEngine {
-    fn default() -> Self {
-        PersonalityEngine {
-            profile: PersonalityProfile::default(),
-        }
     }
 }

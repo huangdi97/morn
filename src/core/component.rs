@@ -1,3 +1,4 @@
+//! component — Defines shared component traits, data values, and execution context.
 use serde_json::Value;
 use std::fmt;
 

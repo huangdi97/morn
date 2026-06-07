@@ -1,13 +1,9 @@
+//! workflow_templates — Manages built-in and custom workflow template catalog entries.
 use serde_json::Value;
 use std::collections::HashMap;
 
 mod builtins;
 mod custom;
-
-#[allow(unused_imports)]
-pub use builtins::*;
-#[allow(unused_imports)]
-pub use custom::*;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WorkflowTemplateEntry {

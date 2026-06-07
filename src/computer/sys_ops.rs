@@ -1,3 +1,4 @@
+//! sys_ops — Provides system-level operations for shell and process control.
 use super::{ComputerOpResult, SecurityLevel};
 
 pub fn set_wallpaper(path: &str) -> ComputerOpResult {
@@ -258,5 +259,71 @@ pub fn sleep() -> ComputerOpResult {
         data: "[simulated] system sleep".into(),
         security_level: SecurityLevel::L3System.as_str().to_string(),
         approval_required: true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_wallpaper_returns_local_result() {
+        let result = set_wallpaper("/tmp/wallpaper.png");
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L2Local.as_str());
+        assert!(result.data.contains("/tmp/wallpaper.png"));
+    }
+
+    #[test]
+    fn get_volume_returns_sandbox_result() {
+        let result = get_volume();
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L1Sandbox.as_str());
+        assert!(result.data.contains("volume"));
+    }
+
+    #[test]
+    fn set_volume_caps_level_at_100() {
+        let result = set_volume(150);
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L1Sandbox.as_str());
+        assert!(result.data.contains("100%"));
+    }
+
+    #[test]
+    fn network_status_returns_json_like_data() {
+        let result = network_status();
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L1Sandbox.as_str());
+        assert!(result.data.contains("status"));
+    }
+
+    #[test]
+    fn power_status_returns_sandbox_result() {
+        let result = power_status();
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L1Sandbox.as_str());
+    }
+
+    #[test]
+    fn shutdown_requires_system_approval() {
+        let result = shutdown(30);
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L3System.as_str());
+        assert!(result.approval_required);
+        assert!(result.data.contains("30"));
+    }
+
+    #[test]
+    fn sleep_requires_system_approval() {
+        let result = sleep();
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L3System.as_str());
+        assert!(result.approval_required);
+    }
+
+    #[test]
+    fn system_power_operations_use_distinct_messages() {
+        assert_ne!(shutdown(1).data, sleep().data);
     }
 }

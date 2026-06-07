@@ -1,3 +1,4 @@
+//! worker — Runs background worker tasks and dispatches queued work.
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -6,7 +7,7 @@ pub struct WorkerPool {
     running: Arc<Mutex<bool>>,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：工作线程句柄生命周期管理 */
 struct WorkerHandle {
     channel_id: String,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -58,6 +59,12 @@ impl WorkerPool {
 
     pub fn is_running(&self) -> bool {
         self.running.lock().map(|r| *r).unwrap_or(false)
+    }
+}
+
+impl Default for WorkerPool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

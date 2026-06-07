@@ -1,3 +1,4 @@
+//! perception — Provides screen and environment perception for computer operations.
 use super::{ComputerOpResult, SecurityLevel};
 
 pub fn pixel_screenshot() -> ComputerOpResult {
@@ -114,4 +115,48 @@ fn base64_encode(data: &[u8]) -> String {
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pixel_screenshot_returns_local_result() {
+        let result = pixel_screenshot();
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L2Local.as_str());
+        assert!(!result.data.is_empty());
+    }
+
+    #[test]
+    fn accessibility_tree_returns_simulated_tree() {
+        let result = accessibility_tree();
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L2Local.as_str());
+        assert!(result.data.contains("root"));
+    }
+
+    #[test]
+    fn ocr_missing_file_uses_simulated_result() {
+        let result = ocr("/tmp/morn_missing_ocr_input.png");
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L2Local.as_str());
+        assert!(result.data.contains("OCR") || !result.data.is_empty());
+    }
+
+    #[test]
+    fn base64_encodes_three_byte_chunk() {
+        assert_eq!(base64_encode(b"Man"), "TWFu");
+    }
+
+    #[test]
+    fn base64_encodes_one_byte_padding() {
+        assert_eq!(base64_encode(b"M"), "TQ==");
+    }
+
+    #[test]
+    fn base64_encodes_two_byte_padding() {
+        assert_eq!(base64_encode(b"Ma"), "TWE=");
+    }
 }

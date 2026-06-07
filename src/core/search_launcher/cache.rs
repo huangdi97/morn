@@ -1,3 +1,4 @@
+//! cache — Stores cached launcher search items for fast retrieval.
 use super::{SearchCategory, SearchItem};
 use std::collections::HashMap;
 

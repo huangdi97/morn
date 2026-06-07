@@ -1,3 +1,4 @@
+//! agent_loop — Runs iterative agent turns with approvals, tools, and event streaming.
 use crate::core::approval::{ApprovalLevel, ApprovalManager, ApprovalStatus};
 use crate::core::checkpoint::{Checkpoint, CheckpointManager};
 use crate::core::event_stream::EventBus;
@@ -42,6 +43,7 @@ pub struct AgentLoop {
     phase: AgentPhase,
     checkpoint: Arc<CheckpointManager>,
     approval: Arc<ApprovalManager>,
+    #[allow(dead_code)] /* 预留：后续 agent loop 事件流发布功能 */
     event_bus: Option<Arc<EventBus>>,
     session_id: String,
 }

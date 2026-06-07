@@ -1,3 +1,4 @@
+//! repo_map — Builds repository maps for code understanding and navigation.
 use std::collections::HashMap;
 use std::path::Path;
 

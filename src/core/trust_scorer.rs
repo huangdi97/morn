@@ -1,3 +1,4 @@
+//! trust_scorer — Scores agents and actions using trust-related metrics.
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -137,6 +138,12 @@ impl TrustScorer {
 
     pub fn clear(&mut self) {
         self.scores.clear();
+    }
+}
+
+impl Default for TrustScorer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

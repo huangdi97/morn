@@ -1,3 +1,4 @@
+//! rest_api — Provides a channel adapter backed by REST-style message handling.
 use std::sync::{Arc, Mutex};
 
 use axum::extract::State;

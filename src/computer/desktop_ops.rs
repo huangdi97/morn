@@ -1,3 +1,4 @@
+//! desktop_ops — Provides desktop automation operations for windows and input.
 use super::{ComputerOpResult, SecurityLevel};
 
 fn run_ps(command: &str) -> Result<String, String> {
@@ -269,5 +270,77 @@ $shell.Windows() | ForEach-Object {{ if ($_.Document.Title -like '*{}*') {{ $_.V
             security_level: SecurityLevel::L2Local.as_str().to_string(),
             approval_required: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_level(result: &ComputerOpResult, level: SecurityLevel) {
+        assert_eq!(result.security_level, level.as_str());
+    }
+
+    #[test]
+    fn mouse_move_returns_local_result() {
+        let result = mouse_move(10, 20);
+        assert_level(&result, SecurityLevel::L2Local);
+        assert!(result.data.contains("10"));
+        assert!(result.data.contains("20"));
+    }
+
+    #[test]
+    fn mouse_click_defaults_to_local_control() {
+        let result = mouse_click("left");
+        assert_level(&result, SecurityLevel::L2Local);
+        assert!(result.data.contains("left"));
+    }
+
+    #[test]
+    fn mouse_click_accepts_right_button() {
+        let result = mouse_click("right");
+        assert_level(&result, SecurityLevel::L2Local);
+        assert!(result.data.contains("right"));
+    }
+
+    #[test]
+    fn keyboard_type_returns_typed_text() {
+        let result = keyboard_type("hello");
+        assert_level(&result, SecurityLevel::L2Local);
+        assert!(result.data.contains("hello"));
+    }
+
+    #[test]
+    fn keyboard_hotkey_joins_keys() {
+        let result = keyboard_hotkey(&["ctrl", "shift", "p"]);
+        assert_level(&result, SecurityLevel::L2Local);
+        assert!(result.data.contains("ctrl+shift+p"));
+    }
+
+    #[test]
+    fn clipboard_copy_is_sandbox_level() {
+        let result = clipboard_copy("clip");
+        assert_level(&result, SecurityLevel::L1Sandbox);
+        assert!(result.data.contains("clip"));
+    }
+
+    #[test]
+    fn clipboard_paste_is_sandbox_level() {
+        let result = clipboard_paste();
+        assert_level(&result, SecurityLevel::L1Sandbox);
+    }
+
+    #[test]
+    fn screenshot_requires_approval() {
+        let result = screenshot();
+        assert_level(&result, SecurityLevel::L2Local);
+        assert!(result.approval_required || !result.success);
+    }
+
+    #[test]
+    fn window_switch_returns_requested_title() {
+        let result = window_switch("Terminal");
+        assert_level(&result, SecurityLevel::L2Local);
+        assert!(result.data.contains("Terminal"));
     }
 }

@@ -1,7 +1,8 @@
+//! publisher — Publishes studio capabilities into registries and marketplaces.
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：Studio 发布流程聚合入口 */
 pub struct StudioPublisher {
     registry: Option<Registry>,
     storage: Option<Storage>,

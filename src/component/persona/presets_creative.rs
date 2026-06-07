@@ -1,3 +1,4 @@
+//! presets_creative — Provides creative persona presets for writing and design work.
 use super::{Persona, PersonaParameters, PromptLayers};
 
 pub fn preset_writer() -> Persona {

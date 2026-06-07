@@ -1,3 +1,4 @@
+//! remote — Retrieves workflow templates and manifests from remote stores.
 use super::{TemplateManifest, TemplateStore};
 
 impl TemplateStore {
