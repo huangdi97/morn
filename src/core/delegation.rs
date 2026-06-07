@@ -136,6 +136,7 @@ mod tests {
     fn make_cap(reg: &mut Registry) {
         reg.register(Capability {
             id: "test-analyst".into(),
+            version: "0.1.0".into(),
             name: "Test Analyst".into(),
             domain: "analysis".into(),
             actions: vec!["analyze".into(), "report".into()],
@@ -151,6 +152,7 @@ mod tests {
         });
         reg.register(Capability {
             id: "test-researcher".into(),
+            version: "0.1.0".into(),
             name: "Test Researcher".into(),
             domain: "research".into(),
             actions: vec!["search".into(), "analyze".into()],

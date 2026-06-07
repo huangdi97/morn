@@ -150,6 +150,7 @@ impl SkillLoader {
         for manifest in &manifests {
             let cap = crate::core::registry::Capability {
                 id: format!("skill-{}", manifest.id),
+                version: manifest.version.clone(),
                 name: manifest.name.clone(),
                 domain: "skill".to_string(),
                 actions: manifest.tools.clone(),

@@ -235,6 +235,7 @@ impl Marketplace {
             .ok_or("Listing not found")?;
         let cap = Capability {
             id: format!("market-{}", listing.id),
+            version: "0.1.0".to_string(),
             name: listing.name,
             domain: listing.item_type,
             actions: vec![listing.id.clone()],

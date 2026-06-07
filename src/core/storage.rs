@@ -173,6 +173,28 @@ pub struct Storage {
     conn: Arc<Mutex<Connection>>,
 }
 
+type CheckpointRow = (String, String, i32, String, String, String, Option<String>);
+type ApprovalRequestRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+type OAuthTokenRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+type SessionRow = (String, String, Option<String>, String, String);
+
 impl Storage {
     pub fn new(path: &str) -> Result<Self, String> {
         let conn = Connection::open(path).map_err(|e| e.to_string())?;
@@ -372,6 +394,11 @@ impl Storage {
                 context_json    TEXT DEFAULT '{}',
                 created_at      TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at      TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS settings (
+                key             TEXT PRIMARY KEY,
+                value           TEXT NOT NULL
             );
             ",
         )
@@ -1461,7 +1488,7 @@ impl Storage {
     pub fn load_latest_checkpoint(
         &self,
         session_id: &str,
-    ) -> Result<Option<(String, String, i32, String, String, String, Option<String>)>, String> {
+    ) -> Result<Option<CheckpointRow>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare("SELECT id, session_id, step_index, step_name, state_json, metadata_json, parent_id FROM checkpoints WHERE session_id = ?1 ORDER BY step_index DESC LIMIT 1")
@@ -1560,22 +1587,7 @@ impl Storage {
         Ok(())
     }
 
-    pub fn get_approval_request(
-        &self,
-        id: &str,
-    ) -> Result<
-        Option<(
-            String,
-            String,
-            String,
-            String,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-        )>,
-        String,
-    > {
+    pub fn get_approval_request(&self, id: &str) -> Result<Option<ApprovalRequestRow>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare("SELECT id, action, level, status, context_json, requested_by, responded_at, response FROM approval_requests WHERE id = ?1")
@@ -1642,18 +1654,7 @@ impl Storage {
         &self,
         provider: &str,
         user_id: &str,
-    ) -> Result<
-        Option<(
-            String,
-            String,
-            String,
-            String,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-        )>,
-        String,
-    > {
+    ) -> Result<Option<OAuthTokenRow>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare("SELECT id, provider, user_id, access_token, refresh_token, expires_at, scope FROM oauth_tokens WHERE provider = ?1 AND user_id = ?2")
@@ -1745,10 +1746,7 @@ impl Storage {
         Ok(())
     }
 
-    pub fn get_session(
-        &self,
-        id: &str,
-    ) -> Result<Option<(String, String, Option<String>, String, String)>, String> {
+    pub fn get_session(&self, id: &str) -> Result<Option<SessionRow>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare(
@@ -1777,6 +1775,29 @@ impl Storage {
         )
         .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    pub fn list_sessions(&self) -> Result<Vec<SessionRow>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, user_id, agent_id, context_json, status FROM sessions ORDER BY created_at DESC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(sessions)
     }
 }
 
