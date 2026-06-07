@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 
 use uuid::Uuid;
@@ -106,7 +106,7 @@ impl CodeToolExecutor {
     fn run_with_limits(
         &self,
         interpreter: &str,
-        file_path: &Path,
+        file_path: &PathBuf,
     ) -> Result<CodeToolResult, String> {
         let mem_limit_kb = self.max_memory_mb * 1024;
 

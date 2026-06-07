@@ -17,12 +17,6 @@ pub struct UIElement {
 
 pub struct VisualGrounding;
 
-impl Default for VisualGrounding {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl VisualGrounding {
     pub fn new() -> Self {
         VisualGrounding

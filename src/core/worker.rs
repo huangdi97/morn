@@ -12,12 +12,6 @@ struct WorkerHandle {
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
-impl Default for WorkerPool {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl WorkerPool {
     pub fn new() -> Self {
         WorkerPool {

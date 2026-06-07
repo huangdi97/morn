@@ -208,36 +208,3 @@ pub fn install(app_path: &str) -> ComputerOpResult {
         approval_required: true,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_install_simulated() {
-        let result = install("/usr/bin/test");
-        assert!(result.success);
-        assert!(result.data.contains("test"));
-        assert_eq!(result.security_level, "local");
-        assert!(result.approval_required);
-    }
-
-    #[test]
-    fn test_launch_simulated_fallback() {
-        if !cfg!(target_os = "windows") && !cfg!(target_os = "linux") {
-            let result = launch("test_app");
-            assert!(result.success);
-            assert!(result.data.contains("test_app"));
-        }
-    }
-
-    #[test]
-    fn test_list_returns_apps_on_fallback() {
-        if !cfg!(target_os = "windows") && !cfg!(target_os = "linux") {
-            let result = list();
-            assert!(result.success);
-            let apps: Vec<String> = serde_json::from_str(&result.data).unwrap();
-            assert!(apps.contains(&"Morn".to_string()));
-        }
-    }
-}

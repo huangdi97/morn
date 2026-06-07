@@ -37,12 +37,6 @@ pub struct EventBus {
     storage: Option<Box<dyn EventStorage>>,
 }
 
-impl Default for EventBus {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl EventBus {
     pub fn new() -> Self {
         EventBus {
@@ -96,12 +90,6 @@ pub struct EventBusBuilder {
     storage: Option<Box<dyn EventStorage>>,
 }
 
-impl Default for EventBusBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl EventBusBuilder {
     pub fn new() -> Self {
         EventBusBuilder {
@@ -130,12 +118,6 @@ impl EventBusBuilder {
 
 pub struct InMemoryEventStorage {
     events: std::sync::Mutex<Vec<AgentEvent>>,
-}
-
-impl Default for InMemoryEventStorage {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl InMemoryEventStorage {

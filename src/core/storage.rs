@@ -173,28 +173,6 @@ pub struct Storage {
     conn: Arc<Mutex<Connection>>,
 }
 
-type CheckpointRow = (String, String, i32, String, String, String, Option<String>);
-type ApprovalRequestRow = (
-    String,
-    String,
-    String,
-    String,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
-type OAuthTokenRow = (
-    String,
-    String,
-    String,
-    String,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
-type SessionRow = (String, String, Option<String>, String, String);
-
 impl Storage {
     pub fn new(path: &str) -> Result<Self, String> {
         let conn = Connection::open(path).map_err(|e| e.to_string())?;
@@ -394,11 +372,6 @@ impl Storage {
                 context_json    TEXT DEFAULT '{}',
                 created_at      TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at      TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS settings (
-                key             TEXT PRIMARY KEY,
-                value           TEXT NOT NULL
             );
             ",
         )
@@ -1488,7 +1461,7 @@ impl Storage {
     pub fn load_latest_checkpoint(
         &self,
         session_id: &str,
-    ) -> Result<Option<CheckpointRow>, String> {
+    ) -> Result<Option<(String, String, i32, String, String, String, Option<String>)>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare("SELECT id, session_id, step_index, step_name, state_json, metadata_json, parent_id FROM checkpoints WHERE session_id = ?1 ORDER BY step_index DESC LIMIT 1")
@@ -1587,7 +1560,22 @@ impl Storage {
         Ok(())
     }
 
-    pub fn get_approval_request(&self, id: &str) -> Result<Option<ApprovalRequestRow>, String> {
+    pub fn get_approval_request(
+        &self,
+        id: &str,
+    ) -> Result<
+        Option<(
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )>,
+        String,
+    > {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare("SELECT id, action, level, status, context_json, requested_by, responded_at, response FROM approval_requests WHERE id = ?1")
@@ -1654,7 +1642,18 @@ impl Storage {
         &self,
         provider: &str,
         user_id: &str,
-    ) -> Result<Option<OAuthTokenRow>, String> {
+    ) -> Result<
+        Option<(
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )>,
+        String,
+    > {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare("SELECT id, provider, user_id, access_token, refresh_token, expires_at, scope FROM oauth_tokens WHERE provider = ?1 AND user_id = ?2")
@@ -1746,7 +1745,10 @@ impl Storage {
         Ok(())
     }
 
-    pub fn get_session(&self, id: &str) -> Result<Option<SessionRow>, String> {
+    pub fn get_session(
+        &self,
+        id: &str,
+    ) -> Result<Option<(String, String, Option<String>, String, String)>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare(
@@ -1775,30 +1777,6 @@ impl Storage {
         )
         .map_err(|e| e.to_string())?;
         Ok(())
-    }
-
-    pub fn set_setting(&self, key: &str, value: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
-            params![key, value],
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-
-    pub fn get_setting(&self, key: &str) -> Result<Option<String>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        let mut stmt = conn
-            .prepare("SELECT value FROM settings WHERE key = ?1")
-            .map_err(|e| e.to_string())?;
-        let mut rows = stmt.query(params![key]).map_err(|e| e.to_string())?;
-        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
-            let value: String = row.get(0).map_err(|e| e.to_string())?;
-            Ok(Some(value))
-        } else {
-            Ok(None)
-        }
     }
 }
 

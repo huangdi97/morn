@@ -59,9 +59,10 @@ pub enum InjectionRisk {
     High(String),
 }
 
+#[allow(dead_code)]
 pub struct DualLlmGuard {
-    _primary: Option<ChatAgent>,
-    _secondary: Option<ChatAgent>,
+    primary: Option<ChatAgent>,
+    secondary: Option<ChatAgent>,
     checkpoints: Vec<Checkpoint>,
     enabled: bool,
     log: Vec<DualLlmLog>,
@@ -79,8 +80,8 @@ pub struct DualLlmLog {
 impl DualLlmGuard {
     pub fn new(primary: Option<ChatAgent>, secondary: Option<ChatAgent>) -> Self {
         DualLlmGuard {
-            _primary: primary,
-            _secondary: secondary,
+            primary,
+            secondary,
             checkpoints: Checkpoint::order(),
             enabled: true,
             log: Vec::new(),

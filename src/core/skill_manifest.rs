@@ -162,7 +162,6 @@ impl SkillLoader {
                 owner_id: None,
                 team_id: None,
                 daily_quota: 0,
-                version: "0.1.0".to_string(),
             };
             registry.register(cap);
             loaded.push(manifest.id.clone());

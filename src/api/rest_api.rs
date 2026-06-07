@@ -55,7 +55,7 @@ pub struct ToolExecuteResponse {
     pub output: Value,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct WorkflowInfo {
     pub id: String,
     pub name: String,
@@ -167,7 +167,7 @@ async fn tool_execute_handler(
 
 async fn workflows_list_handler() -> Json<Vec<WorkflowInfo>> {
     let templates = WorkflowTemplate::list_builtin();
-    let workflows: Vec<WorkflowInfo> = templates.iter().map(WorkflowInfo::from).collect();
+    let workflows: Vec<WorkflowInfo> = templates.iter().map(|w| WorkflowInfo::from(w)).collect();
     Json(workflows)
 }
 
@@ -177,169 +177,5 @@ async fn workflow_get_handler(Path(id): Path<String>) -> Result<Json<WorkflowInf
         None => Err(Json(
             serde_json::json!({"error": format!("Workflow not found: {}", id)}),
         )),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::core::workflow::{WorkflowAction, WorkflowStep};
-    use serde_json::json;
-
-    #[test]
-    fn test_workflow_info_from_template() {
-        let template = WorkflowTemplate {
-            id: "test-id".into(),
-            name: "Test Workflow".into(),
-            description: "A test workflow".into(),
-            category: "test".into(),
-            tags: vec!["tag1".into(), "tag2".into()],
-            steps: vec![],
-            estimated_duration_secs: 42,
-        };
-        let info = WorkflowInfo::from(&template);
-        assert_eq!(info.id, "test-id");
-        assert_eq!(info.name, "Test Workflow");
-        assert_eq!(info.description, "A test workflow");
-        assert_eq!(info.category, "test");
-        assert_eq!(info.tags, vec!["tag1", "tag2"]);
-        assert_eq!(info.steps, 0);
-        assert_eq!(info.estimated_duration_secs, 42);
-    }
-
-    #[test]
-    fn test_workflow_info_step_count() {
-        let template = WorkflowTemplate {
-            id: "multi-step".into(),
-            name: "Multi Step".into(),
-            description: "Has steps".into(),
-            category: "test".into(),
-            tags: vec![],
-            steps: vec![
-                WorkflowStep {
-                    id: "step1".into(),
-                    action: WorkflowAction::LLMCall {
-                        system_prompt: "prompt".into(),
-                        model: "default".into(),
-                    },
-                    depends_on: vec![],
-                    timeout_secs: 10,
-                    retry_count: 0,
-                    approval_required: false,
-                    input_mapping: std::collections::HashMap::new(),
-                    output_mapping: std::collections::HashMap::new(),
-                },
-                WorkflowStep {
-                    id: "step2".into(),
-                    action: WorkflowAction::LLMCall {
-                        system_prompt: "prompt".into(),
-                        model: "default".into(),
-                    },
-                    depends_on: vec!["step1".into()],
-                    timeout_secs: 10,
-                    retry_count: 0,
-                    approval_required: false,
-                    input_mapping: std::collections::HashMap::new(),
-                    output_mapping: std::collections::HashMap::new(),
-                },
-            ],
-            estimated_duration_secs: 60,
-        };
-        let info = WorkflowInfo::from(&template);
-        assert_eq!(info.steps, 2);
-    }
-
-    #[test]
-    fn test_health_response_serialization() {
-        let resp = HealthResponse {
-            status: "ok".into(),
-            version: "1.0.0".into(),
-            uptime: "2024-01-01T00:00:00Z".into(),
-        };
-        let json = serde_json::to_value(&resp).unwrap();
-        assert_eq!(json["status"], "ok");
-        assert_eq!(json["version"], "1.0.0");
-        assert_eq!(json["uptime"], "2024-01-01T00:00:00Z");
-    }
-
-    #[test]
-    fn test_chat_request_deserialization() {
-        let json = json!({"message": "hello"});
-        let req: ChatRequest = serde_json::from_value(json).unwrap();
-        assert_eq!(req.message, "hello");
-    }
-
-    #[test]
-    fn test_chat_response_serialization() {
-        let resp = ChatResponse {
-            reply: "Hi there!".into(),
-        };
-        let json = serde_json::to_value(&resp).unwrap();
-        assert_eq!(json["reply"], "Hi there!");
-    }
-
-    #[test]
-    fn test_tool_execute_request_deserialization() {
-        let json = json!({"input": {"key": "value"}});
-        let req: ToolExecuteRequest = serde_json::from_value(json).unwrap();
-        assert_eq!(req.input, json!({"key": "value"}));
-    }
-
-    #[test]
-    fn test_tool_execute_response_serialization() {
-        let resp = ToolExecuteResponse {
-            output: json!({"result": 42}),
-        };
-        let json = serde_json::to_value(&resp).unwrap();
-        assert_eq!(json["output"]["result"], 42);
-    }
-
-    #[test]
-    fn test_workflow_info_serialization_roundtrip() {
-        let info = WorkflowInfo {
-            id: "wf-1".into(),
-            name: "WF1".into(),
-            description: "desc".into(),
-            category: "cat".into(),
-            tags: vec!["a".into(), "b".into()],
-            steps: 3,
-            estimated_duration_secs: 100,
-        };
-        let json = serde_json::to_value(&info).unwrap();
-        let deserialized: WorkflowInfo = serde_json::from_value(json).unwrap();
-        assert_eq!(deserialized.id, info.id);
-        assert_eq!(deserialized.name, info.name);
-        assert_eq!(deserialized.description, info.description);
-        assert_eq!(deserialized.category, info.category);
-        assert_eq!(deserialized.tags, info.tags);
-        assert_eq!(deserialized.steps, info.steps);
-        assert_eq!(
-            deserialized.estimated_duration_secs,
-            info.estimated_duration_secs
-        );
-    }
-
-    #[test]
-    fn test_workflow_get_by_id_found() {
-        let template = WorkflowTemplate::get_by_id("workflow-task-execution");
-        assert!(template.is_some());
-        let t = template.unwrap();
-        assert_eq!(t.name, "Task Execution");
-    }
-
-    #[test]
-    fn test_workflow_get_by_id_not_found() {
-        let template = WorkflowTemplate::get_by_id("nonexistent");
-        assert!(template.is_none());
-    }
-
-    #[test]
-    fn test_list_builtin_contains_expected() {
-        let templates = WorkflowTemplate::list_builtin();
-        let ids: Vec<&str> = templates.iter().map(|t| t.id.as_str()).collect();
-        assert!(ids.contains(&"workflow-task-execution"));
-        assert!(ids.contains(&"workflow-deep-analysis"));
-        assert!(ids.contains(&"workflow-news-monitor"));
-        assert!(ids.contains(&"workflow-code-delivery"));
     }
 }

@@ -1,14 +1,5 @@
-//! 四层安全宪法——守卫智能体动作的安全分级机制。
-//!
-//! 安全级别（L1→L4 逐层放宽）：
-//! - L1HardBlocked: 硬拦截，属于危险操作（如格式化磁盘、删除系统文件）
-//! - L2NeedApproval: 需审批，高风险操作需用户确认（如执行 shell、写工作区外文件）
-//! - L3NeedNotify: 需通知，操作执行时发送通知（如读工作区外文件、访问未注册域名）
-//! - L4Free: 自由执行，低风险操作（如聊天、搜索、读工作区内文件）
-//!
-//! Dual-LLM 集成: 策略匹配由 SecurityGuard 的规则引擎完成，不依赖 LLM 判定。
-
 use serde_json::Value;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum SecurityLevel {
     L1HardBlocked,
@@ -18,7 +9,6 @@ pub enum SecurityLevel {
 }
 
 impl SecurityLevel {
-    /// 将安全级别转为字符串标识。
     pub fn as_str(&self) -> &'static str {
         match self {
             SecurityLevel::L1HardBlocked => "L1HardBlocked",
@@ -44,7 +34,6 @@ pub struct SecurityGuard {
 }
 
 impl SecurityGuard {
-    /// 创建 SecurityGuard 实例，内置默认安全策略。
     pub fn new() -> Self {
         let policies = vec![
             SecurityPolicy {
@@ -121,7 +110,6 @@ impl SecurityGuard {
         }
     }
 
-    /// 检查动作的安全级别。
     pub fn check(&self, action: &str, _params: &Value) -> SecurityLevel {
         for policy in &self.policies {
             if action.contains(&policy.pattern) || policy.pattern.contains(action) {
@@ -131,7 +119,6 @@ impl SecurityGuard {
         SecurityLevel::L4Free
     }
 
-    /// 判断动作是否允许执行，不允许时返回错误信息。
     pub fn is_allowed(&self, action: &str, params: &Value) -> Result<(), String> {
         let level = self.check(action, params);
         match level {
@@ -176,27 +163,22 @@ impl SecurityGuard {
         }
     }
 
-    /// 按名称查找安全策略。
     pub fn get_policy(&self, name: &str) -> Option<&SecurityPolicy> {
         self.policies.iter().find(|p| p.name == name)
     }
 
-    /// 列出所有安全策略。
     pub fn list_policies(&self) -> &[SecurityPolicy] {
         &self.policies
     }
 
-    /// 添加自定义安全策略。
     pub fn add_policy(&mut self, policy: SecurityPolicy) {
         self.policies.push(policy);
     }
 
-    /// 启用/禁用硬拦截（L1HardBlocked + L2NeedApproval）。
     pub fn set_block_enabled(&mut self, enabled: bool) {
         self.block_enabled = enabled;
     }
 
-    /// 启用/禁用通知（L3NeedNotify）。
     pub fn set_notify_enabled(&mut self, enabled: bool) {
         self.notify_enabled = enabled;
     }

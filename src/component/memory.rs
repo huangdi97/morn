@@ -16,12 +16,6 @@ pub struct SqliteMemory {
     data: HashMap<String, HashMap<String, String>>,
 }
 
-impl Default for SqliteMemory {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl SqliteMemory {
     pub fn new() -> Self {
         SqliteMemory {
@@ -130,12 +124,6 @@ pub struct CoreMemory {
     items: Vec<MemoryItem>,
 }
 
-impl Default for CoreMemory {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl CoreMemory {
     pub fn new() -> Self {
         CoreMemory { items: Vec::new() }
@@ -190,12 +178,6 @@ pub struct RecallMemory {
     items: Vec<MemoryItem>,
 }
 
-impl Default for RecallMemory {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl RecallMemory {
     pub fn new() -> Self {
         RecallMemory { items: Vec::new() }
@@ -230,12 +212,6 @@ impl RecallMemory {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ArchivalMemory {
     items: Vec<MemoryItem>,
-}
-
-impl Default for ArchivalMemory {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl ArchivalMemory {
@@ -278,12 +254,6 @@ pub struct MemoryManager {
     core: CoreMemory,
     recall: RecallMemory,
     archival: ArchivalMemory,
-}
-
-impl Default for MemoryManager {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl MemoryManager {
