@@ -40,12 +40,6 @@ pub struct IdentityBridge {
     identity_store: HashMap<String, UnifiedIdentity>,
 }
 
-impl Default for IdentityBridge {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl IdentityBridge {
     pub fn new() -> Self {
         IdentityBridge {

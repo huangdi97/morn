@@ -147,7 +147,7 @@ impl UserManager {
             ));
         }
 
-        if self.storage.get_user_by_username(username)?.is_some() {
+        if let Some(_) = self.storage.get_user_by_username(username)? {
             return Err(format!("Username '{}' already exists", username));
         }
 

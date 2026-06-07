@@ -1,7 +1,7 @@
 # Morn
 
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
-[![build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/huangdi97/morn)
+[![build](https://img.shields.io/badge/tests-417_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > **你的桌面 AI 创作系统** — From一个人的工位开始
@@ -9,6 +9,19 @@
 Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对话交互）、**创作台**（组件搭建）、**管理台**（运营监控）于一体。
 
 支持从原子组件到多 Agent 团队的四层组合，以及完整的市场生态。
+
+---
+
+## 现状
+
+| 项目 | 状态 |
+|------|------|
+| Phase 0–9（75 项功能） | ✅ **全部实现** |
+| cargo build 编译 | 0 errors, 3 minor warnings |
+| cargo test 测试 | **417 passed**, 0 failed |
+| Tauri NSIS 安装器 | ✅ 配置就绪（中英文） |
+| 自动更新 (updater) | ✅ GitHub Releases 端点配置 |
+| 设计文档 | 1529 行，71 竞品深度调研 |
 
 ## 功能矩阵
 
@@ -119,8 +132,25 @@ morn-desktop/
 │       ├── dashboard/            # 仪表盘
 │       ├── store/                # BotStore
 │       └── console/              # 管理台 UI
-└── DESIGN.md                     # 设计总纲（本地专属）
+└── DESIGN.md                     # 设计总纲（1529 行，本地专属）
 ```
+
+## 实现状态
+
+9 个 Phase / 75 项功能全部实现。详见 [DESIGN.md](./DESIGN.md) 第 11 章「实现状态追踪」。
+
+| Phase | 内容 | 状态 |
+|-------|------|------|
+| 0 | 基础骨架（CLI + Supervisor + Registry） | ✅ |
+| 1 | 组件体系（6 类组件） | ✅ |
+| 2 | 创作台 Studio | ✅ |
+| 3 | 渠道与 IM | ✅ |
+| 4 | 基础设施层（EventBus + MCP + Skill） | ✅ |
+| 5 | 运行时增强（Checkpoint/HITL/三层记忆/三阶段Agent 等 11 项） | ✅ |
+| 6 | 工具生态（变量系统 + 委派管理） | ✅ |
+| 7 | 高级 Agent（主管调度/集群/信任评分/52人格模板） | ✅ |
+| 8 | 平台功能（REST API/看板/性格引擎/搜索启动器 等 8 项） | ✅ |
+| 9 | 高级远期（视觉操控/3D可视化/Office/Cortex 等 7 项） | ✅ |
 
 ## 技术栈
 

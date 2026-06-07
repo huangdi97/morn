@@ -25,14 +25,12 @@ pub struct WorkflowEdge {
 }
 
 pub struct WorkflowBuilder {
-    _registry: Arc<Registry>,
+    registry: Arc<Registry>,
 }
 
 impl WorkflowBuilder {
     pub fn new(registry: Arc<Registry>) -> Self {
-        WorkflowBuilder {
-            _registry: registry,
-        }
+        WorkflowBuilder { registry }
     }
 
     pub async fn nl_to_workflow(&self, description: &str) -> Result<WorkflowPlan, String> {

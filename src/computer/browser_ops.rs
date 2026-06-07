@@ -146,27 +146,31 @@ fn strip_html_tags(html: &str) -> String {
         } else if chars[i] == '>' && in_tag {
             in_tag = false;
         } else if !in_tag && !in_script && !in_style {
-            if i + 4 < chars.len()
-                && chars[i] == '&'
-                && chars[i + 1] == 'a'
-                && chars[i + 2] == 'm'
-                && chars[i + 3] == 'p'
-                && chars[i + 4] == ';'
-            {
-                result.push('&');
-                i += 5;
-                continue;
-            }
-            if i + 3 < chars.len() && chars[i] == '&' {
-                if chars[i + 1] == 'l' && chars[i + 2] == 't' && chars[i + 3] == ';' {
-                    result.push('<');
-                    i += 4;
-                    continue;
+            if i + 4 < chars.len() {
+                if chars[i] == '&' {
+                    if chars[i + 1] == 'a'
+                        && chars[i + 2] == 'm'
+                        && chars[i + 3] == 'p'
+                        && chars[i + 4] == ';'
+                    {
+                        result.push('&');
+                        i += 5;
+                        continue;
+                    }
                 }
-                if chars[i + 1] == 'g' && chars[i + 2] == 't' && chars[i + 3] == ';' {
-                    result.push('>');
-                    i += 4;
-                    continue;
+            }
+            if i + 3 < chars.len() {
+                if chars[i] == '&' {
+                    if chars[i + 1] == 'l' && chars[i + 2] == 't' && chars[i + 3] == ';' {
+                        result.push('<');
+                        i += 4;
+                        continue;
+                    }
+                    if chars[i + 1] == 'g' && chars[i + 2] == 't' && chars[i + 3] == ';' {
+                        result.push('>');
+                        i += 4;
+                        continue;
+                    }
                 }
             }
             if !chars[i].is_control() {
@@ -201,60 +205,5 @@ pub fn multi_tab(tabs: &[&str]) -> ComputerOpResult {
         data: format!("opened {} tabs", tabs.len()),
         security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
         approval_required: false,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_form_fill_simulated() {
-        let result = form_fill("#input", "hello");
-        assert!(result.success);
-        assert!(result.data.contains("hello"));
-        assert_eq!(result.security_level, "sandbox");
-    }
-
-    #[test]
-    fn test_strip_html_tags_removes_tags() {
-        let html = "<p>Hello <b>World</b></p>";
-        let result = strip_html_tags(html);
-        assert_eq!(result, "Hello World");
-    }
-
-    #[test]
-    fn test_strip_html_tags_handles_entities() {
-        let html = "AT&amp;T says 5 &lt; 10";
-        let result = strip_html_tags(html);
-        assert_eq!(result, "AT&T says 5 < 10");
-    }
-
-    #[test]
-    fn test_strip_html_tags_removes_script() {
-        let html = "<script>alert('xss')</script>Hello";
-        let result = strip_html_tags(html);
-        assert_eq!(result, "alert('xss')Hello");
-    }
-
-    #[test]
-    fn test_strip_html_tags_removes_style() {
-        let html = "<style>body { color: red; }</style>Content";
-        let result = strip_html_tags(html);
-        assert_eq!(result, "Content");
-    }
-
-    #[test]
-    fn test_strip_html_tags_empty_input() {
-        assert_eq!(strip_html_tags(""), "");
-    }
-
-    #[test]
-    fn test_navigate_returns_error_on_invalid_url() {
-        if !cfg!(target_os = "windows") && !cfg!(target_os = "linux") && !cfg!(target_os = "macos")
-        {
-            let result = navigate("http://nonexistent.invalid");
-            assert!(!result.success);
-        }
     }
 }

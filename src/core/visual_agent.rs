@@ -37,12 +37,6 @@ pub struct DetectionResult {
 
 pub struct VisualAgent;
 
-impl Default for VisualAgent {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl VisualAgent {
     pub fn new() -> Self {
         VisualAgent

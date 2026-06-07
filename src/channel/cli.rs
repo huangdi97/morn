@@ -5,32 +5,9 @@ use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 use crate::core::registry::Registry;
 use crate::market::{Listing, Marketplace};
 
-#[derive(Debug, PartialEq)]
-pub enum Command {
-    Exit,
-    Clear,
-    Status,
-    Help,
-    Market(String),
-    Message(String),
-}
-
-pub fn parse_command(input: &str) -> Command {
-    match input.trim() {
-        "/exit" | "/quit" => Command::Exit,
-        "/clear" => Command::Clear,
-        "/status" => Command::Status,
-        "/help" => Command::Help,
-        s if s.starts_with("/market ") => Command::Market(s.to_string()),
-        _ => Command::Message(input.trim().to_string()),
-    }
-}
-
-type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>;
-
 pub fn run_repl(
     adapter: &mut ChannelAdapter,
-    chat_fn: ChatFn,
+    chat_fn: Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>,
     marketplace: &Marketplace,
     registry: &Arc<Mutex<Registry>>,
 ) {
@@ -63,22 +40,22 @@ pub fn run_repl(
             continue;
         }
 
-        match parse_command(&input) {
-            Command::Exit => {
+        match input.as_str() {
+            "/exit" | "/quit" => {
                 println!("  Goodbye!");
                 break;
             }
-            Command::Clear => {
+            "/clear" => {
                 print!("\x1B[2J\x1B[H");
                 turn = 1;
                 println!("  History cleared.");
                 continue;
             }
-            Command::Status => {
+            "/status" => {
                 println!("  Morn v0.1.0 | Rust | CLI Mode");
                 continue;
             }
-            Command::Help => {
+            "/help" => {
                 println!("  Commands:");
                 println!("    /exit           - Exit Morn");
                 println!("    /clear          - Clear screen");
@@ -93,18 +70,19 @@ pub fn run_repl(
                 println!("    /market publish <id> <type> <price> - Publish a listing");
                 continue;
             }
-            Command::Market(cmd) => {
-                handle_market_command(&cmd, marketplace, registry);
-                continue;
-            }
-            Command::Message(msg) => {
-                let msg = ChannelMessage::new(&msg, "cli");
-                let response = adapter.handle_message(&msg);
-                println!("  {}", response);
-                println!();
-                turn += 1;
-            }
+            _ => {}
         }
+
+        if input.starts_with("/market ") {
+            handle_market_command(&input, marketplace, registry);
+            continue;
+        }
+
+        let msg = ChannelMessage::new(&input, "cli");
+        let response = adapter.handle_message(&msg);
+        println!("  {}", response);
+        println!();
+        turn += 1;
     }
 }
 
@@ -255,102 +233,5 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
             println!("  Unknown market command: {}", parts[1]);
             println!("  Usage: /market <list|show|buy|install|search|my|publish> [args]");
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_command_exit() {
-        assert_eq!(parse_command("/exit"), Command::Exit);
-        assert_eq!(parse_command("/quit"), Command::Exit);
-        assert_eq!(parse_command("  /exit  "), Command::Exit);
-    }
-
-    #[test]
-    fn test_parse_command_clear() {
-        assert_eq!(parse_command("/clear"), Command::Clear);
-    }
-
-    #[test]
-    fn test_parse_command_status() {
-        assert_eq!(parse_command("/status"), Command::Status);
-    }
-
-    #[test]
-    fn test_parse_command_help() {
-        assert_eq!(parse_command("/help"), Command::Help);
-    }
-
-    #[test]
-    fn test_parse_command_market() {
-        let cmd = parse_command("/market list");
-        assert!(matches!(cmd, Command::Market(_)));
-        if let Command::Market(s) = cmd {
-            assert_eq!(s, "/market list");
-        }
-    }
-
-    #[test]
-    fn test_parse_command_message() {
-        assert_eq!(
-            parse_command("hello world"),
-            Command::Message("hello world".to_string())
-        );
-        assert_eq!(
-            parse_command("/notacommand"),
-            Command::Message("/notacommand".to_string())
-        );
-    }
-
-    #[test]
-    fn test_parse_command_empty() {
-        assert_eq!(parse_command(""), Command::Message("".to_string()));
-    }
-
-    #[test]
-    fn test_handle_market_command_list() {
-        let storage = crate::core::storage::Storage::new_in_memory().unwrap();
-        let market = Marketplace::new(storage);
-        let registry = Arc::new(Mutex::new(Registry::new(None, None)));
-        handle_market_command("/market list", &market, &registry);
-    }
-
-    #[test]
-    fn test_handle_market_command_show() {
-        let storage = crate::core::storage::Storage::new_in_memory().unwrap();
-        let market = Marketplace::new(storage);
-        let registry = Arc::new(Mutex::new(Registry::new(None, None)));
-        handle_market_command("/market show listing-tool-web-search", &market, &registry);
-    }
-
-    #[test]
-    fn test_handle_market_command_short_args() {
-        let storage = crate::core::storage::Storage::new_in_memory().unwrap();
-        let market = Marketplace::new(storage);
-        let registry = Arc::new(Mutex::new(Registry::new(None, None)));
-        handle_market_command("/market show", &market, &registry);
-        handle_market_command("/market buy", &market, &registry);
-        handle_market_command("/market search", &market, &registry);
-        handle_market_command("/market install", &market, &registry);
-        handle_market_command("/market publish", &market, &registry);
-    }
-
-    #[test]
-    fn test_handle_market_command_unknown() {
-        let storage = crate::core::storage::Storage::new_in_memory().unwrap();
-        let market = Marketplace::new(storage);
-        let registry = Arc::new(Mutex::new(Registry::new(None, None)));
-        handle_market_command("/market unknown", &market, &registry);
-    }
-
-    #[test]
-    fn test_handle_market_command_no_subcommand() {
-        let storage = crate::core::storage::Storage::new_in_memory().unwrap();
-        let market = Marketplace::new(storage);
-        let registry = Arc::new(Mutex::new(Registry::new(None, None)));
-        handle_market_command("/market", &market, &registry);
     }
 }

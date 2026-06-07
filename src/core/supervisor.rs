@@ -1,15 +1,3 @@
-//! COO 主管模块——负责用户意图的6级决策路由与任务拆解。
-//!
-//! 决策树结构（L1→L4 按复杂度递增，L5/L6 为特殊分支）：
-//! - L1DirectAnswer: 简单问候/知识查询，直接回复
-//! - L2SingleTool: 单工具操作，如搜索/计算/翻译
-//! - L3SingleAgent: 单智能体分析任务
-//! - L4Team: 多维度复杂任务，需多智能体协作
-//! - L5Workflow: 标准化工作流，如生成报告/调研
-//! - L6JumpToStudio: 用户意图涉及创建/修改组件，跳转工作室
-//!
-//! 核心职责: 接收用户输入 → 决策路由 → 生成 TaskPlan → 调度执行 → 记录反馈
-
 use crate::core::event_bus::{SimpleEventBus, EVENT_SUPERVISOR_PLAN_CREATED, EVENT_TASK_COMPLETED};
 use crate::core::storage::{DecisionRecord, DecisionRule, Storage, TaskRecord};
 use serde::{Deserialize, Serialize};
@@ -75,7 +63,6 @@ pub enum DecisionLevel {
 }
 
 impl DecisionLevel {
-    /// 将决策级别转为字符串标识。
     pub fn as_str(&self) -> &'static str {
         match self {
             DecisionLevel::L1DirectAnswer => "direct_answer",
@@ -87,7 +74,6 @@ impl DecisionLevel {
         }
     }
 
-    /// 返回该决策级别的预估费用与耗时区间。
     pub fn cost_tier(&self) -> &'static str {
         match self {
             DecisionLevel::L1DirectAnswer => "¥0.001/0.5s",
@@ -108,7 +94,6 @@ pub enum CooMode {
 }
 
 impl CooMode {
-    /// 返回 CooMode 的字符串标识。
     pub fn as_str(&self) -> &'static str {
         match self {
             CooMode::Active => "active",
@@ -135,7 +120,6 @@ const STOP_WORDS: &[&str] = &[
 ];
 
 impl Supervisor {
-    /// 创建 Supervisor 实例。
     pub fn new(storage: Option<Storage>, event_bus: Option<SimpleEventBus>) -> Self {
         Supervisor {
             storage,
@@ -149,47 +133,38 @@ impl Supervisor {
         }
     }
 
-    /// 设置用户身份，返回自身（链式调用）。
     pub fn with_user(mut self, user_id: &str, teams: &[String]) -> Self {
         self.user_id = Some(user_id.to_string());
         self.user_teams = teams.to_vec();
         self
     }
 
-    /// 设置当前用户身份。
     pub fn set_user(&mut self, user_id: &str, teams: &[String]) {
         self.user_id = Some(user_id.to_string());
         self.user_teams = teams.to_vec();
     }
 
-    /// 返回当前用户 ID。
     pub fn user_id(&self) -> Option<&str> {
         self.user_id.as_deref()
     }
 
-    /// 返回当前用户所属团队列表。
     pub fn user_teams(&self) -> &[String] {
         &self.user_teams
     }
 
-    /// 返回已处理的会话轮数。
     pub fn turn_count(&self) -> u64 {
         self.turn_count
     }
-    /// 返回会话历史记录。
     pub fn history(&self) -> &[TurnRecord] {
         &self.history
     }
-    /// 返回当前运行模式。
     pub fn mode(&self) -> &CooMode {
         &self.mode
     }
-    /// 设置运行模式（Active/Safe/Auto）。
     pub fn set_mode(&mut self, mode: CooMode) {
         self.mode = mode;
     }
 
-    /// 列出当前用户可用的智能体能力。
     pub fn list_available_agents<'a>(
         &self,
         registry: &'a crate::core::registry::Registry,
@@ -197,7 +172,6 @@ impl Supervisor {
         registry.list_available(self.user_id.as_deref(), &self.user_teams)
     }
 
-    /// 根据文本内容初步判定决策级别。
     pub fn decide_level(&self, text: &str) -> DecisionLevel {
         let text_lower = text.to_lowercase();
 
@@ -279,7 +253,6 @@ impl Supervisor {
         DecisionLevel::L3SingleAgent
     }
 
-    /// 构建包含历史上下文的提示词。
     pub fn build_context(&self, current_input: &str) -> String {
         let mut context = String::from(
             "[System]\nYou are Morn, a helpful AI assistant.\n\n[Conversation History]\n",
@@ -307,7 +280,6 @@ impl Supervisor {
         context
     }
 
-    /// 记录一条会话轮次。
     pub fn record_turn(&mut self, role: &str, content: &str) {
         self.history.push(TurnRecord {
             role: role.to_string(),
@@ -318,7 +290,6 @@ impl Supervisor {
         }
     }
 
-    /// 判定决策级别并给出理由。
     pub fn decide(&self, text: &str) -> (DecisionLevel, String) {
         let level = self.decide_level(text);
         let reasoning = match level {
@@ -332,7 +303,6 @@ impl Supervisor {
         (level, reasoning)
     }
 
-    /// 执行任务计划，包含事件发布、存储记录、安全模式审批。
     pub fn execute_plan(
         &mut self,
         plan: &TaskPlan,
@@ -421,7 +391,6 @@ impl Supervisor {
         Ok(result)
     }
 
-    /// 执行一次聊天：自动判定级别、生成计划、执行并返回结果。
     pub fn execute_chat(
         &mut self,
         input: &str,
@@ -455,7 +424,6 @@ impl Supervisor {
         Ok(result.summary)
     }
 
-    /// 根据自然语言描述创建智能体定义。
     pub fn create_agent_from_nl(
         &self,
         nl: &str,
@@ -502,7 +470,6 @@ Select tools, knowledge, and skills that best match the user's described use cas
         })
     }
 
-    /// 基于已存储的规则表判定决策级别。
     pub fn decide_with_rules(&self, text: &str) -> (DecisionLevel, String) {
         if let Some(ref storage) = self.storage {
             let user_id = self.user_id.as_deref().unwrap_or("default");
@@ -538,7 +505,6 @@ Select tools, knowledge, and skills that best match the user's described use cas
         self.decide(text)
     }
 
-    /// 从用户反馈中学习，更新或创建决策规则。
     pub fn learn_from_feedback(&mut self, user_input: &str, approved: bool) -> Result<(), String> {
         let user_id = self.user_id.as_deref().unwrap_or("default").to_string();
         let keywords = Self::extract_keywords(user_input);
@@ -592,7 +558,6 @@ Select tools, knowledge, and skills that best match the user's described use cas
         keywords
     }
 
-    /// 清空会话历史和轮次计数。
     pub fn clear_history(&mut self) {
         self.history.clear();
         self.turn_count = 0;

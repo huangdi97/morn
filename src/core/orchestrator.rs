@@ -1,6 +1,6 @@
 use crate::bridge::a2a_discovery::A2ADiscovery;
 use crate::component::model::ModelConfig;
-use crate::component::persona;
+use crate::component::persona::{self, Persona};
 use crate::core::assembler::{AgentAssembler, AgentDef};
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
@@ -74,9 +74,10 @@ pub struct TeamMemberOutput {
     pub confidence: f64,
 }
 
+#[allow(dead_code)]
 pub struct Orchestrator {
     registry: Option<Registry>,
-    _supervisor: Option<Supervisor>,
+    supervisor: Option<Supervisor>,
     event_bus: Option<SimpleEventBus>,
     teams: HashMap<String, TeamDef>,
     a2a_discovery: Option<Arc<Mutex<A2ADiscovery>>>,
@@ -91,7 +92,7 @@ impl Orchestrator {
     ) -> Self {
         Orchestrator {
             registry,
-            _supervisor: supervisor,
+            supervisor,
             event_bus,
             teams: HashMap::new(),
             a2a_discovery: None,
