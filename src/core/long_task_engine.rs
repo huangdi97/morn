@@ -190,3 +190,94 @@ impl LongTaskEngine {
         self.last_heartbeat.load(Ordering::Relaxed)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_engine_starts_pending_with_empty_progress() {
+        let engine = LongTaskEngine::new("task-1", "session-1", 4);
+
+        assert_eq!(engine.task.task_id, "task-1");
+        assert_eq!(engine.task.session_id, "session-1");
+        assert_eq!(engine.task.total_steps, 4);
+        assert_eq!(engine.task.completed_steps, 0);
+        assert_eq!(engine.task.progress_pct, 0.0);
+        assert!(matches!(engine.task.status, TaskStatus::Pending));
+        assert!(!engine.is_paused());
+        assert!(!engine.is_cancelled());
+    }
+
+    #[test]
+    fn tick_pause_resume_and_complete_update_task_state() {
+        let mut engine = LongTaskEngine::new("task-1", "session-1", 4);
+
+        engine.tick("load");
+        assert_eq!(engine.task.completed_steps, 1);
+        assert_eq!(engine.task.current_step, "load");
+        assert_eq!(engine.task.progress_pct, 25.0);
+        assert!(matches!(engine.task.status, TaskStatus::Running));
+        assert!(engine.estimated_remaining().is_some());
+
+        engine.pause();
+        engine.tick("paused-step");
+        assert!(engine.is_paused());
+        assert_eq!(engine.task.completed_steps, 1);
+        assert!(matches!(engine.task.status, TaskStatus::Paused));
+
+        engine.resume();
+        engine.tick("process");
+        assert!(!engine.is_paused());
+        assert_eq!(engine.task.completed_steps, 2);
+        assert_eq!(engine.task.progress_pct, 50.0);
+
+        engine.complete();
+        assert_eq!(engine.task.completed_steps, 4);
+        assert_eq!(engine.task.progress_pct, 100.0);
+        assert!(matches!(engine.task.status, TaskStatus::Completed));
+    }
+
+    #[test]
+    fn progress_serializes_loads_and_resumes_from_checkpoint() {
+        let mut engine = LongTaskEngine::new("task-1", "session-1", 4);
+        engine.set_checkpoint(serde_json::json!({"cursor": 2}));
+        engine.tick("read");
+        engine.record_error("transient");
+
+        let saved = engine.save_progress().unwrap();
+        let loaded = LongTaskEngine::load_progress(&saved).unwrap();
+
+        assert_eq!(loaded.task.task_id, "task-1");
+        assert_eq!(loaded.task.completed_steps, 1);
+        assert_eq!(
+            loaded.task.checkpoint_data,
+            serde_json::json!({"cursor": 2})
+        );
+        assert_eq!(loaded.task.errors, vec!["transient"]);
+
+        let mut resumed = LongTaskEngine::new("task-2", "session-2", 4);
+        resumed.resume_from_checkpoint(&saved).unwrap();
+
+        assert_eq!(resumed.task.completed_steps, 1);
+        assert_eq!(resumed.task.current_step, "read");
+        assert_eq!(resumed.task.progress_pct, 25.0);
+        assert_eq!(
+            resumed.task.checkpoint_data,
+            serde_json::json!({"cursor": 2})
+        );
+        assert!(matches!(resumed.task.status, TaskStatus::Running));
+    }
+
+    #[test]
+    fn heartbeat_and_cancel_flags_are_observable() {
+        let mut engine = LongTaskEngine::new("task-1", "session-1", 1);
+
+        engine.set_heartbeat_interval(0);
+        assert!(engine.heartbeat());
+        assert!(engine.last_heartbeat_at() > 0);
+
+        engine.cancel();
+        assert!(engine.is_cancelled());
+    }
+}

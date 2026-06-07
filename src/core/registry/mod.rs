@@ -15,6 +15,7 @@ pub use version::{compare_versions, AgentTemplate};
 pub struct Registry {
     capabilities: HashMap<String, Capability>,
     templates: HashMap<String, AgentTemplate>,
+    version_history: HashMap<String, Vec<(String, i64)>>,
     _storage: Option<Storage>,
     event_bus: Option<SimpleEventBus>,
 }
@@ -25,6 +26,7 @@ impl Registry {
         let mut registry = Registry {
             capabilities: HashMap::new(),
             templates: HashMap::new(),
+            version_history: HashMap::new(),
             _storage: storage,
             event_bus,
         };
@@ -44,12 +46,23 @@ impl Registry {
 
     fn register_defaults(&mut self) {
         let default_cap = Capability::default_chat_agent();
+        self.record_version_history(&default_cap);
         self.capabilities
             .insert(default_cap.id.clone(), default_cap);
 
         for template in version::default_templates() {
             self.templates.insert(template.id.clone(), template);
         }
+    }
+
+    fn record_version_history(&mut self, capability: &Capability) {
+        self.version_history
+            .entry(capability.id.clone())
+            .or_default()
+            .push((
+                capability.version.clone(),
+                chrono::Utc::now().timestamp_millis(),
+            ));
     }
 
     /// Registers or replaces a capability and emits a registry event when an event bus is configured.
@@ -61,12 +74,49 @@ impl Registry {
                 serde_json::json!({"action": "register", "capability_id": capability.id}),
             );
         }
+        self.record_version_history(&capability);
         self.capabilities.insert(capability.id.clone(), capability);
+    }
+
+    /// Registers a new dynamic capability or returns an error when the id already exists.
+    pub fn register_dynamic(&mut self, capability: Capability) -> Result<(), String> {
+        if let Some(existing) = self.capabilities.get(&capability.id) {
+            return Err(format!(
+                "capability '{}' already registered with version '{}' and name '{}'",
+                existing.id, existing.version, existing.name
+            ));
+        }
+
+        if let Some(ref bus) = self.event_bus {
+            bus.publish_event(
+                "registry.capability.registered",
+                "registry",
+                serde_json::json!({
+                    "capability_id": capability.id,
+                    "version": capability.version,
+                }),
+            );
+        }
+
+        self.record_version_history(&capability);
+        self.capabilities.insert(capability.id.clone(), capability);
+        Ok(())
     }
 
     /// Removes a capability by id and returns it when it existed.
     pub fn unregister(&mut self, id: &str) -> Option<Capability> {
-        self.capabilities.remove(id)
+        let removed = self.capabilities.remove(id);
+        if removed.is_some() {
+            self.version_history.remove(id);
+            if let Some(ref bus) = self.event_bus {
+                bus.publish_event(
+                    "registry.capability.unregistered",
+                    "registry",
+                    serde_json::json!({"capability_id": id}),
+                );
+            }
+        }
+        removed
     }
 
     /// Finds all capabilities in the given domain and returns references to them.
@@ -222,5 +272,52 @@ mod tests {
         assert!(registry.check_conflict("cap-1", "0.2.0"));
         assert!(!registry.check_conflict("cap-1", "0.1.0"));
         assert!(!registry.check_conflict("missing", "0.1.0"));
+    }
+
+    #[test]
+    fn test_register_dynamic_creates_new_capability() {
+        let mut registry = Registry::new(None, None);
+
+        let result =
+            registry.register_dynamic(make_cap("dynamic-cap", "0.1.0", "general", vec!["chat"]));
+
+        assert!(result.is_ok());
+        assert!(registry.get("dynamic-cap").is_some());
+    }
+
+    #[test]
+    fn test_register_dynamic_returns_error_on_duplicate() {
+        let mut registry = Registry::new(None, None);
+        registry.register(make_cap("cap-1", "0.1.0", "general", vec!["chat"]));
+
+        let result = registry.register_dynamic(make_cap("cap-1", "0.2.0", "general", vec!["chat"]));
+
+        assert!(result.is_err());
+        let err = result.expect_err("expected duplicate registration to fail");
+        assert!(err.contains("cap-1"));
+        assert!(err.contains("0.1.0"));
+    }
+
+    #[test]
+    fn test_version_history_is_recorded_correctly() {
+        let mut registry = Registry::new(None, None);
+        registry.register(make_cap("cap-1", "0.1.0", "general", vec!["chat"]));
+        registry.register(make_cap("cap-1", "0.2.0", "general", vec!["chat"]));
+
+        assert_eq!(
+            registry.get_version_history("cap-1"),
+            vec!["0.1.0", "0.2.0"]
+        );
+    }
+
+    #[test]
+    fn test_unregister_removes_version_history() {
+        let mut registry = Registry::new(None, None);
+        registry.register(make_cap("cap-1", "0.1.0", "general", vec!["chat"]));
+        assert_eq!(registry.get_version_history("cap-1"), vec!["0.1.0"]);
+
+        registry.unregister("cap-1");
+
+        assert!(registry.get_version_history("cap-1").is_empty());
     }
 }

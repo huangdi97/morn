@@ -1,9 +1,11 @@
 //! memory — Defines memory components used to persist conversational context.
 use crate::core::component::IOComponent;
 
+pub mod mdrm;
 mod simple;
 mod storage;
 
+pub use mdrm::{CausalChain, Entity as MdrEntity, MDRMGraph, Relation as MdrRelation};
 pub use simple::{create_default_memory, SqliteMemory};
 pub use storage::{
     ArchivalMemory, ConversationMessage, CoreMemory, MemoryChange, MemoryItem, MemoryManager,

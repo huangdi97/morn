@@ -1,5 +1,7 @@
 //! registry — Registers built-in and custom skills for lookup and execution.
-use super::{CodeReviewSkill, DataAnalysisSkill, ReportGenSkill, Skill, WebResearchSkill};
+use super::{
+    CodeReviewSkill, DataAnalysisSkill, ReportGenSkill, SelfEvolutionSkill, Skill, WebResearchSkill,
+};
 
 pub fn create_default_skills() -> Vec<Box<dyn Skill>> {
     vec![
@@ -7,5 +9,6 @@ pub fn create_default_skills() -> Vec<Box<dyn Skill>> {
         Box::new(DataAnalysisSkill::new()),
         Box::new(ReportGenSkill::new()),
         Box::new(CodeReviewSkill::new()),
+        Box::new(SelfEvolutionSkill::new()),
     ]
 }

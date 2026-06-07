@@ -95,3 +95,60 @@ impl CpuWorker {
         std::thread::spawn(task);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    #[test]
+    fn worker_pool_lifecycle_tracks_assigned_workers() {
+        let mut pool = WorkerPool::new();
+
+        assert!(!pool.is_running());
+        assert_eq!(pool.worker_count(), 0);
+
+        pool.start().unwrap();
+        assert!(pool.is_running());
+
+        pool.assign("channel-a").unwrap();
+        pool.assign("channel-b").unwrap();
+        assert_eq!(pool.worker_count(), 2);
+
+        pool.remove("channel-a").unwrap();
+        assert_eq!(pool.worker_count(), 1);
+
+        pool.shutdown().unwrap();
+        assert!(!pool.is_running());
+        assert_eq!(pool.worker_count(), 0);
+    }
+
+    #[test]
+    fn cpu_worker_executes_only_when_pool_is_running() {
+        let stopped_worker = CpuWorker::new("stopped", WorkerPool::new());
+        let (stopped_tx, stopped_rx) = mpsc::channel();
+
+        stopped_worker.execute(move || {
+            stopped_tx.send(()).unwrap();
+        });
+
+        assert_eq!(stopped_worker.id(), "stopped");
+        assert!(stopped_rx.recv_timeout(Duration::from_millis(50)).is_err());
+
+        let mut pool = WorkerPool::new();
+        pool.start().unwrap();
+        let running_worker = CpuWorker::new("running", pool);
+        let (running_tx, running_rx) = mpsc::channel();
+
+        running_worker.execute(move || {
+            running_tx.send("done").unwrap();
+        });
+
+        assert_eq!(running_worker.id(), "running");
+        assert_eq!(
+            running_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            "done"
+        );
+    }
+}

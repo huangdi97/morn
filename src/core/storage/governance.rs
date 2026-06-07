@@ -519,12 +519,18 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(storage.list_pending_approvals().unwrap(), vec!["approval-test-1"]);
+        assert_eq!(
+            storage.list_pending_approvals().unwrap(),
+            vec!["approval-test-1"]
+        );
 
         storage
             .update_approval_response("approval-test-1", "approved", Some("ok"))
             .unwrap();
-        let approval = storage.get_approval_request("approval-test-1").unwrap().unwrap();
+        let approval = storage
+            .get_approval_request("approval-test-1")
+            .unwrap()
+            .unwrap();
         assert_eq!(approval.3, "approved");
         assert_eq!(approval.7.as_deref(), Some("ok"));
     }
