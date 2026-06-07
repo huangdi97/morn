@@ -1,5 +1,13 @@
 use std::collections::HashMap;
 
+mod fetch;
+mod store;
+
+#[allow(unused_imports)]
+pub use fetch::*;
+#[allow(unused_imports)]
+pub use store::*;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RemoteTemplate {
     pub id: String,
@@ -48,127 +56,12 @@ impl CommunityTemplateRegistry {
         self.registry_url = url;
     }
 
-    pub fn fetch_registry(&mut self, url: Option<&str>) -> Result<Vec<RemoteTemplate>, String> {
-        let fetch_url = url.unwrap_or(&self.registry_url);
-
-        let response = reqwest::blocking::get(fetch_url)
-            .map_err(|e| format!("Failed to fetch registry from '{}': {}", fetch_url, e))?;
-
-        if !response.status().is_success() {
-            return Err(format!(
-                "Registry returned HTTP {} from '{}'",
-                response.status(),
-                fetch_url
-            ));
-        }
-
-        let templates: Vec<RemoteTemplate> = response
-            .json()
-            .map_err(|e| format!("Failed to parse registry response: {}", e))?;
-
-        for t in &templates {
-            self.cache.insert(t.id.clone(), t.clone());
-        }
-
-        Ok(templates)
-    }
-
-    pub fn install_templates(&mut self, ids: &[String]) -> Result<Vec<String>, String> {
-        if self.cache.is_empty() {
-            self.fetch_registry(None)?;
-        }
-
-        let mut installed = Vec::new();
-        for id in ids {
-            if self.installed.contains_key(id) {
-                return Err(format!("Template '{}' is already installed", id));
-            }
-
-            let template = self
-                .cache
-                .get(id)
-                .ok_or_else(|| format!("Template '{}' not found in registry", id))?
-                .clone();
-
-            self.installed.insert(id.clone(), template);
-            installed.push(id.clone());
-        }
-
-        Ok(installed)
-    }
-
-    pub fn check_updates(
-        &mut self,
-        url: Option<&str>,
-    ) -> Result<Vec<(String, String, String)>, String> {
-        let fetch_url = url.unwrap_or(&self.registry_url).to_string();
-
-        let remote = self.fetch_registry(Some(&fetch_url))?;
-
-        let mut updates = Vec::new();
-        for t in &remote {
-            if let Some(local) = self.installed.get(&t.id) {
-                if local.version != t.version {
-                    updates.push((t.id.clone(), local.version.clone(), t.version.clone()));
-                }
-            }
-        }
-
-        Ok(updates)
-    }
-
-    pub fn uninstall(&mut self, id: &str) -> Result<RemoteTemplate, String> {
-        self.installed
-            .remove(id)
-            .ok_or_else(|| format!("Template '{}' is not installed", id))
-    }
-
-    pub fn is_installed(&self, id: &str) -> bool {
-        self.installed.contains_key(id)
-    }
-
-    pub fn list_installed(&self) -> Vec<&RemoteTemplate> {
-        let mut list: Vec<_> = self.installed.values().collect();
-        list.sort_by(|a, b| a.name.cmp(&b.name));
-        list
-    }
-
-    pub fn list_cached(&self) -> Vec<&RemoteTemplate> {
-        let mut list: Vec<_> = self.cache.values().collect();
-        list.sort_by(|a, b| a.name.cmp(&b.name));
-        list
-    }
-
-    pub fn search(&self, query: &str) -> Vec<&RemoteTemplate> {
-        let q = query.to_lowercase();
-        self.cache
-            .values()
-            .filter(|t| {
-                t.name.to_lowercase().contains(&q)
-                    || t.description.to_lowercase().contains(&q)
-                    || t.tags.iter().any(|tag| tag.to_lowercase().contains(&q))
-            })
-            .collect()
-    }
-
     pub fn installed_count(&self) -> usize {
         self.installed.len()
     }
 
     pub fn cached_count(&self) -> usize {
         self.cache.len()
-    }
-
-    pub fn add_registry(&mut self, registry: RegistryInfo) {
-        self.registries.push(registry);
-    }
-
-    pub fn list_registries(&self) -> &[RegistryInfo] {
-        &self.registries
-    }
-
-    pub fn clear_cache(&mut self) {
-        self.cache.clear();
     }
 }
 
