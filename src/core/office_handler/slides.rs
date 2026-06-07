@@ -1,3 +1,5 @@
+//! slides — Generates and manipulates presentation slide decks.
+use super::slides_helper::*;
 use super::{CacheEntry, OfficeHandler, SlideTemplate};
 use std::io::Write;
 use std::path::Path;
@@ -10,94 +12,14 @@ impl OfficeHandler {
         body: &str,
     ) -> Result<Vec<u8>, String> {
         let cache_key = format!("slide_{}_{}", template.id, uuid::Uuid::new_v4());
-
-        let content_type = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-<Default Extension="xml" ContentType="application/xml"/>
-<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
-<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
-<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
-<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
-<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
-</Types>"#;
-
-        let rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
-</Relationships>"#;
-
-        let escaped_title = title
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('\'', "&apos;")
-            .replace('"', "&quot;");
-        let escaped_body = body
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('\'', "&apos;")
-            .replace('"', "&quot;");
-
-        let slide_xml = format!(
-            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-<p:cSld>
-<p:spTree>
-<p:nvGrpSpPr><p:nvGrpSpPrPr/><p:nvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
-<p:grpSpPr/>
-<p:sp>
-<p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
-<p:spPr><a:xfrm><a:off x="457200" y="457200"/><a:ext cx="8229600" cy="1371600"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>
-<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr sz="4400" b="1"/><a:t>{}</a:t></a:r></a:p></p:txBody>
-</p:sp>
-<p:sp>
-<p:nvSpPr><p:cNvPr id="3" name="Body"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
-<p:spPr><a:xfrm><a:off x="457200" y="1828800"/><a:ext cx="8229600" cy="5029200"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>
-<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr sz="2800"/><a:t>{}</a:t></a:r></a:p></p:txBody>
-</p:sp>
-</p:spTree>
-</p:cSld>
-<p:sldPr/>
-</p:sld>"#,
-            escaped_title, escaped_body
-        );
-
-        let presentation_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>
-<p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst>
-<p:sldSz cx="9144000" cy="6858000"/>
-<p:notesSz cx="6858000" cy="9144000"/>
-</p:presentation>"#;
-
-        let presentation_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
-<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
-</Relationships>"#;
-
-        let slide_master_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-<p:cSld><p:spTree><p:nvGrpSpPr><p:nvGrpSpPrPr/><p:nvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld>
-<p:sldMasterPr/>
-</p:sldMaster>"#;
-
-        let slide_layout_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-<p:cSld><p:spTree><p:nvGrpSpPr><p:nvGrpSpPrPr/><p:nvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld>
-<p:sldLayoutPr/>
-</p:sldLayout>"#;
-
-        let theme_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Default">
-<a:themeElements>
-<a:clrScheme name="Default"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme>
-<a:fontScheme name="Default"><a:majorFont><a:latin typeface="Calibri Light"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>
-<a:fmtScheme name="Default"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"/></a:gs><a:gs pos="50000"><a:schemeClr val="phClr"/></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"/></a:gs></a:gsLst></a:gradFill></a:fillStyleLst><a:lnStyleLst><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"/></a:gs><a:gs pos="40000"><a:schemeClr val="phClr"/></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"/></a:gs></a:gsLst></a:gradFill></a:bgFillStyleLst></a:fmtScheme>
-</a:themeElements>
-</a:theme>"#;
+        let content_type = single_slide_content_types();
+        let rels = rels_xml();
+        let slide_xml = slide(title, body);
+        let presentation_xml = single_slide_presentation();
+        let presentation_rels = single_slide_presentation_rels();
+        let slide_master_xml = slide_master();
+        let slide_layout_xml = slide_layout();
+        let theme_xml = theme();
 
         let mut buffer = Vec::new();
         {
@@ -156,10 +78,7 @@ impl OfficeHandler {
             zip.write_all(slide_master_xml.as_bytes())
                 .map_err(|e| e.to_string())?;
 
-            let master_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
-</Relationships>"#;
+            let master_rels = slide_master_rels();
             zip.start_file("ppt/slideMasters/_rels/slideMaster1.xml.rels", file_opts)
                 .map_err(|e| e.to_string())?;
             zip.write_all(master_rels.as_bytes())
@@ -170,10 +89,7 @@ impl OfficeHandler {
             zip.write_all(slide_layout_xml.as_bytes())
                 .map_err(|e| e.to_string())?;
 
-            let layout_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
-</Relationships>"#;
+            let layout_rels = slide_layout_rels();
             zip.start_file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", file_opts)
                 .map_err(|e| e.to_string())?;
             zip.write_all(layout_rels.as_bytes())
@@ -184,24 +100,13 @@ impl OfficeHandler {
             zip.write_all(theme_xml.as_bytes())
                 .map_err(|e| e.to_string())?;
 
-            let core_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/">
-<dc:creator>Morn OfficeHandler</dc:creator>
-<cp:lastModifiedBy>Morn OfficeHandler</cp:lastModifiedBy>
-<dcterms:created xsi:type="dcterms:W3CDTF">2025-01-01T00:00:00Z</dcterms:created>
-<dcterms:modified xsi:type="dcterms:W3CDTF">2025-01-01T00:00:00Z</dcterms:modified>
-</cp:coreProperties>"#;
+            let core_xml = core_properties("2025-01-01");
             zip.start_file("docProps/core.xml", file_opts)
                 .map_err(|e| e.to_string())?;
             zip.write_all(core_xml.as_bytes())
                 .map_err(|e| e.to_string())?;
 
-            let app_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-<Application>Morn OfficeHandler</Application>
-<SlideCount>1</SlideCount>
-<TotalTime>0</TotalTime>
-</Properties>"#;
+            let app_xml = app_properties(1);
             zip.start_file("docProps/app.xml", file_opts)
                 .map_err(|e| e.to_string())?;
             zip.write_all(app_xml.as_bytes())
@@ -259,60 +164,9 @@ impl OfficeHandler {
         }
 
         let mut combined = Vec::new();
-
-        let content_type = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-<Default Extension="xml" ContentType="application/xml"/>
-<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
-<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
-<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
-<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>"#;
-
-        let mut content_types = content_type.to_string();
-        for i in 0..slides.len() {
-            content_types.push_str(&format!(
-                r#"<Override PartName="/ppt/slides/slide{}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>"#,
-                i + 1
-            ));
-        }
-        content_types.push_str("\n</Types>");
-
-        let mut presentation_rels = String::from(
-            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>"#,
-        );
-
-        for i in 0..slides.len() {
-            presentation_rels.push_str(&format!(
-                r#"<Relationship Id="rId{}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide{}.xml"/>"#,
-                i + 2,
-                i + 1
-            ));
-        }
-        presentation_rels.push_str("\n</Relationships>");
-
-        let mut slide_ids = String::new();
-        let offset: u32 = 256;
-        for i in 0..slides.len() {
-            slide_ids.push_str(&format!(
-                r#"<p:sldId id="{}" r:id="rId{}"/>"#,
-                offset + i as u32,
-                i + 2
-            ));
-        }
-
-        let presentation_xml = format!(
-            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>
-<p:sldIdLst>{}</p:sldIdLst>
-<p:sldSz cx="9144000" cy="6858000"/>
-<p:notesSz cx="6858000" cy="9144000"/>
-</p:presentation>"#,
-            slide_ids
-        );
+        let content_types = multi_slide_content_types(slides.len());
+        let presentation_rels = presentation_rels(slides.len());
+        let presentation_xml = presentation(slides.len());
 
         {
             let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut combined));
@@ -360,44 +214,9 @@ impl OfficeHandler {
                 .map_err(|e| e.to_string())?;
 
             for (i, (title, body)) in slides.iter().enumerate() {
-                let escaped_title = title
-                    .replace('&', "&amp;")
-                    .replace('<', "&lt;")
-                    .replace('>', "&gt;")
-                    .replace('\'', "&apos;")
-                    .replace('"', "&quot;");
-                let escaped_body = body
-                    .replace('&', "&amp;")
-                    .replace('<', "&lt;")
-                    .replace('>', "&gt;")
-                    .replace('\'', "&apos;")
-                    .replace('"', "&quot;");
+                let slide_xml = slide(title, body);
 
-                let slide_xml = format!(
-                    r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-<p:cSld>
-<p:spTree>
-<p:nvGrpSpPr><p:nvGrpSpPrPr/><p:nvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
-<p:grpSpPr/>
-<p:sp>
-<p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
-<p:spPr><a:xfrm><a:off x="457200" y="457200"/><a:ext cx="8229600" cy="1371600"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>
-<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr sz="4400" b="1"/><a:t>{}</a:t></a:r></a:p></p:txBody>
-</p:sp>
-<p:sp>
-<p:nvSpPr><p:cNvPr id="3" name="Body"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
-<p:spPr><a:xfrm><a:off x="457200" y="1828800"/><a:ext cx="8229600" cy="5029200"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>
-<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr sz="2800"/><a:t>{}</a:t></a:r></a:p></p:txBody>
-</p:sp>
-</p:spTree>
-</p:cSld>
-<p:sldPr/>
-</p:sld>"#,
-                    escaped_title, escaped_body
-                );
-
-                zip.start_file(&format!("ppt/slides/slide{}.xml", i + 1), opts)
+                zip.start_file(format!("ppt/slides/slide{}.xml", i + 1), opts)
                     .map_err(|e| e.to_string())?;
                 zip.write_all(slide_xml.as_bytes())
                     .map_err(|e| e.to_string())?;
@@ -408,10 +227,7 @@ impl OfficeHandler {
             zip.write_all(slide_master().as_bytes())
                 .map_err(|e| e.to_string())?;
 
-            let master_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
-</Relationships>"#;
+            let master_rels = slide_master_rels();
             zip.start_file("ppt/slideMasters/_rels/slideMaster1.xml.rels", opts)
                 .map_err(|e| e.to_string())?;
             zip.write_all(master_rels.as_bytes())
@@ -422,10 +238,7 @@ impl OfficeHandler {
             zip.write_all(slide_layout().as_bytes())
                 .map_err(|e| e.to_string())?;
 
-            let layout_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
-</Relationships>"#;
+            let layout_rels = slide_layout_rels();
             zip.start_file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", opts)
                 .map_err(|e| e.to_string())?;
             zip.write_all(layout_rels.as_bytes())
@@ -436,31 +249,14 @@ impl OfficeHandler {
             zip.write_all(theme().as_bytes())
                 .map_err(|e| e.to_string())?;
 
-            let core_xml = format!(
-                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/">
-<dc:creator>Morn OfficeHandler</dc:creator>
-<cp:lastModifiedBy>Morn OfficeHandler</cp:lastModifiedBy>
-<dcterms:created xsi:type="dcterms:W3CDTF">{}T00:00:00Z</dcterms:created>
-<dcterms:modified xsi:type="dcterms:W3CDTF">{}T00:00:00Z</dcterms:modified>
-</cp:coreProperties>"#,
-                chrono::Utc::now().format("%Y-%m-%d"),
-                chrono::Utc::now().format("%Y-%m-%d")
-            );
+            let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+            let core_xml = core_properties(&date);
             zip.start_file("docProps/core.xml", opts)
                 .map_err(|e| e.to_string())?;
             zip.write_all(core_xml.as_bytes())
                 .map_err(|e| e.to_string())?;
 
-            let app_xml = format!(
-                r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-<Application>Morn OfficeHandler</Application>
-<SlideCount>{}</SlideCount>
-<TotalTime>0</TotalTime>
-</Properties>"#,
-                slides.len()
-            );
+            let app_xml = app_properties(slides.len());
             zip.start_file("docProps/app.xml", opts)
                 .map_err(|e| e.to_string())?;
             zip.write_all(app_xml.as_bytes())
@@ -486,38 +282,4 @@ impl OfficeHandler {
 
         Ok(combined)
     }
-}
-
-fn rels_xml() -> String {
-    r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
-</Relationships>"#.to_string()
-}
-
-fn slide_master() -> String {
-    r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-<p:cSld><p:spTree><p:nvGrpSpPr><p:nvGrpSpPrPr/><p:nvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld>
-<p:sldMasterPr/>
-</p:sldMaster>"#.to_string()
-}
-
-fn slide_layout() -> String {
-    r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-<p:cSld><p:spTree><p:nvGrpSpPr><p:nvGrpSpPrPr/><p:nvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld>
-<p:sldLayoutPr/>
-</p:sldLayout>"#.to_string()
-}
-
-fn theme() -> String {
-    r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Default">
-<a:themeElements>
-<a:clrScheme name="Default"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme>
-<a:fontScheme name="Default"><a:majorFont><a:latin typeface="Calibri Light"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>
-<a:fmtScheme name="Default"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"/></a:gs><a:gs pos="50000"><a:schemeClr val="phClr"/></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"/></a:gs></a:gsLst></a:gradFill></a:fillStyleLst><a:lnStyleLst><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"/></a:gs><a:gs pos="40000"><a:schemeClr val="phClr"/></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"/></a:gs></a:gsLst></a:gradFill></a:bgFillStyleLst></a:fmtScheme>
-</a:themeElements>
-</a:theme>"#.to_string()
 }

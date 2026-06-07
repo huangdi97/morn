@@ -1,3 +1,4 @@
+//! a2a — Defines Agent-to-Agent protocol messages and transport helpers.
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

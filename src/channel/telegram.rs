@@ -1,3 +1,4 @@
+//! telegram — Adapts Telegram messages into the shared channel interface.
 use crate::channel::adapter::ChannelMessage;
 
 pub struct TelegramChannel {

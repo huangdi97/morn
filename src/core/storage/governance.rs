@@ -1,8 +1,58 @@
+//! governance — Persists governance policies, audit settings, and enforcement records.
 use rusqlite::params;
+use serde::{Deserialize, Serialize};
 
-use super::{ApprovalRequestRow, AuditLogRecord, CheckpointRow, DecisionRule, Storage};
+use super::Storage;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditLogRecord {
+    pub id: String,
+    pub user_id: String,
+    pub action: String,
+    pub target_type: String,
+    pub target_id: String,
+    pub details_json: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecisionRule {
+    pub id: Option<i64>,
+    pub user_id: String,
+    pub keyword: String,
+    pub level: String,
+    pub trust_threshold: f64,
+    pub auto_execute: bool,
+    pub source: String,
+    pub hit_count: i64,
+    pub last_used_at: Option<String>,
+    pub created_at: Option<String>,
+}
+
+pub type CheckpointRow = (String, String, i32, String, String, String, Option<String>);
+pub type ApprovalRequestRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+pub struct SaveCheckpointArgs<'a> {
+    pub id: &'a str,
+    pub session_id: &'a str,
+    pub step_index: i32,
+    pub step_name: &'a str,
+    pub state_json: &'a str,
+    pub metadata_json: &'a str,
+    pub parent_id: Option<&'a str>,
+}
 
 impl Storage {
+    /// Fetches decision rules for a user and keyword, returning all matching records.
     pub fn get_decision_rules(
         &self,
         user_id: &str,
@@ -36,6 +86,7 @@ impl Storage {
         Ok(rules)
     }
 
+    /// Inserts or updates a decision rule keyed by user id and keyword.
     pub fn upsert_decision_rule(&self, rule: &DecisionRule) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -57,6 +108,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Increments a decision rule hit count and updates its last-used timestamp.
     pub fn increment_rule_hit(&self, rule_id: i64) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -67,6 +119,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Adjusts a decision rule trust threshold by `change`, clamped to the 0-100 range.
     pub fn adjust_rule_threshold(&self, rule_id: i64, change: f64) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -78,6 +131,7 @@ impl Storage {
     }
 
     // Audit Log CRUD
+    /// Inserts an audit log record and returns success when the row is stored.
     pub fn insert_audit_log(&self, log: &AuditLogRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -89,6 +143,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Queries audit logs by optional user and action filters, limited to the requested count.
     pub fn query_audit_log(
         &self,
         user_id: Option<&str>,
@@ -120,6 +175,29 @@ impl Storage {
     }
 
     // Checkpoints CRUD
+    /// Saves a checkpoint using grouped arguments and returns success when the row is stored.
+    pub fn save_checkpoint_args(&self, args: SaveCheckpointArgs<'_>) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO checkpoints (id, session_id, step_index, step_name, state_json, metadata_json, parent_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                args.id,
+                args.session_id,
+                args.step_index,
+                args.step_name,
+                args.state_json,
+                args.metadata_json,
+                args.parent_id,
+                chrono::Utc::now().to_rfc3339()
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)] /* 预留：兼容既有 Storage API */
+    /// Saves a checkpoint from individual fields and returns success when the row is stored.
     pub fn save_checkpoint(
         &self,
         id: &str,
@@ -130,19 +208,18 @@ impl Storage {
         metadata_json: &str,
         parent_id: Option<&str>,
     ) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute(
-            "INSERT INTO checkpoints (id, session_id, step_index, step_name, state_json, metadata_json, parent_id, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
-                id, session_id, step_index, step_name, state_json, metadata_json,
-                parent_id, chrono::Utc::now().to_rfc3339()
-            ],
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(())
+        self.save_checkpoint_args(SaveCheckpointArgs {
+            id,
+            session_id,
+            step_index,
+            step_name,
+            state_json,
+            metadata_json,
+            parent_id,
+        })
     }
 
+    /// Loads the latest checkpoint row for a session id, returning `None` when no checkpoint exists.
     pub fn load_latest_checkpoint(
         &self,
         session_id: &str,
@@ -167,6 +244,7 @@ impl Storage {
         }
     }
 
+    /// Lists checkpoint summaries for a session ordered by step index.
     pub fn list_checkpoints(
         &self,
         session_id: &str,
@@ -192,6 +270,7 @@ impl Storage {
         Ok(checkpoints)
     }
 
+    /// Forks a checkpoint into a new id and session id, preserving the stored checkpoint state.
     pub fn fork_checkpoint(
         &self,
         cp_id: &str,
@@ -209,6 +288,7 @@ impl Storage {
     }
 
     // Approval requests CRUD
+    /// Saves a pending approval request with action, level, context, and requester metadata.
     pub fn save_approval_request(
         &self,
         id: &str,
@@ -230,6 +310,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Updates an approval request response status and optional response payload.
     pub fn update_approval_response(
         &self,
         id: &str,
@@ -245,6 +326,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Fetches an approval request by id and returns `None` when no row exists.
     pub fn get_approval_request(&self, id: &str) -> Result<Option<ApprovalRequestRow>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -267,6 +349,7 @@ impl Storage {
         }
     }
 
+    /// Lists ids for pending approval requests ordered by oldest request first.
     pub fn list_pending_approvals(&self) -> Result<Vec<String>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -285,6 +368,7 @@ impl Storage {
     }
 
     // Privacy rules CRUD
+    /// Saves a privacy rule pattern with sensitivity and action fields.
     pub fn save_privacy_rule(
         &self,
         pattern: &str,
@@ -300,6 +384,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Lists privacy rules as id, pattern, sensitivity, and action tuples.
     pub fn list_privacy_rules(&self) -> Result<Vec<(i64, String, String, String)>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -333,4 +418,127 @@ fn map_audit_row(row: &rusqlite::Row) -> rusqlite::Result<AuditLogRecord> {
         details_json: row.get(5)?,
         created_at: row.get(6)?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decision_rule_upsert_get_and_update() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .upsert_decision_rule(&DecisionRule {
+                id: None,
+                user_id: "user-test-1".to_string(),
+                keyword: "deploy".to_string(),
+                level: "L4".to_string(),
+                trust_threshold: 60.0,
+                auto_execute: false,
+                source: "test".to_string(),
+                hit_count: 0,
+                last_used_at: None,
+                created_at: None,
+            })
+            .unwrap();
+
+        let rule = storage
+            .get_decision_rules("user-test-1", "deploy")
+            .unwrap()
+            .remove(0);
+        assert_eq!(rule.level, "L4");
+        assert_eq!(rule.hit_count, 0);
+
+        let id = rule.id.unwrap();
+        storage.increment_rule_hit(id).unwrap();
+        storage.adjust_rule_threshold(id, 5.0).unwrap();
+        let updated = storage.get_decision_rules("user-test-1", "deploy").unwrap();
+        assert_eq!(updated[0].hit_count, 1);
+        assert_eq!(updated[0].trust_threshold, 65.0);
+    }
+
+    #[test]
+    fn audit_log_insert_and_query() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .insert_audit_log(&AuditLogRecord {
+                id: "audit-test-1".to_string(),
+                user_id: "user-test-1".to_string(),
+                action: "create".to_string(),
+                target_type: "task".to_string(),
+                target_id: "task-test-1".to_string(),
+                details_json: Some("{}".to_string()),
+                created_at: chrono::Utc::now().to_rfc3339(),
+            })
+            .unwrap();
+
+        let logs = storage
+            .query_audit_log(Some("user-test-1"), Some("create"), 10)
+            .unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].target_id, "task-test-1");
+        assert_eq!(logs[0].details_json.as_deref(), Some("{}"));
+    }
+
+    #[test]
+    fn checkpoint_save_load_list_and_fork() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .save_checkpoint("cp-test-1", "session-test-1", 1, "step", "{}", "{}", None)
+            .unwrap();
+
+        assert_eq!(
+            storage
+                .load_latest_checkpoint("session-test-1")
+                .unwrap()
+                .unwrap()
+                .0,
+            "cp-test-1"
+        );
+        assert_eq!(storage.list_checkpoints("session-test-1").unwrap().len(), 1);
+
+        storage
+            .fork_checkpoint("cp-test-1", "cp-test-2", "session-test-2")
+            .unwrap();
+        assert!(storage
+            .load_latest_checkpoint("session-test-2")
+            .unwrap()
+            .is_some());
+    }
+
+    #[test]
+    fn approval_request_save_list_update_get() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .save_approval_request(
+                "approval-test-1",
+                "delete",
+                "L5",
+                Some("{}"),
+                Some("user-test-1"),
+            )
+            .unwrap();
+
+        assert_eq!(storage.list_pending_approvals().unwrap(), vec!["approval-test-1"]);
+
+        storage
+            .update_approval_response("approval-test-1", "approved", Some("ok"))
+            .unwrap();
+        let approval = storage.get_approval_request("approval-test-1").unwrap().unwrap();
+        assert_eq!(approval.3, "approved");
+        assert_eq!(approval.7.as_deref(), Some("ok"));
+    }
+
+    #[test]
+    fn privacy_rule_save_and_list() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .save_privacy_rule("secret", "private", "redact")
+            .unwrap();
+
+        let rules = storage.list_privacy_rules().unwrap();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].1, "secret");
+        assert_eq!(rules[0].3, "redact");
+    }
 }

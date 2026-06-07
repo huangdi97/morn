@@ -1,3 +1,4 @@
+//! security — Enforces security policies and validates sensitive operations.
 use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -9,6 +10,7 @@ pub enum SecurityLevel {
 }
 
 impl SecurityLevel {
+    /// Returns the stable string identifier for this security level.
     pub fn as_str(&self) -> &'static str {
         match self {
             SecurityLevel::L1HardBlocked => "L1HardBlocked",
@@ -34,6 +36,7 @@ pub struct SecurityGuard {
 }
 
 impl SecurityGuard {
+    /// Creates a security guard with the default policy set enabled.
     pub fn new() -> Self {
         let policies = vec![
             SecurityPolicy {
@@ -110,6 +113,7 @@ impl SecurityGuard {
         }
     }
 
+    /// Checks an action and parameters against policies, returning the required security level.
     pub fn check(&self, action: &str, _params: &Value) -> SecurityLevel {
         for policy in &self.policies {
             if action.contains(&policy.pattern) || policy.pattern.contains(action) {
@@ -119,6 +123,7 @@ impl SecurityGuard {
         SecurityLevel::L4Free
     }
 
+    /// Validates whether an action is allowed and returns an error for blocked or approval-required actions.
     pub fn is_allowed(&self, action: &str, params: &Value) -> Result<(), String> {
         let level = self.check(action, params);
         match level {
@@ -163,24 +168,35 @@ impl SecurityGuard {
         }
     }
 
+    /// Looks up a security policy by name and returns it when found.
     pub fn get_policy(&self, name: &str) -> Option<&SecurityPolicy> {
         self.policies.iter().find(|p| p.name == name)
     }
 
+    /// Returns the configured security policy list.
     pub fn list_policies(&self) -> &[SecurityPolicy] {
         &self.policies
     }
 
+    /// Adds a security policy to the active policy list.
     pub fn add_policy(&mut self, policy: SecurityPolicy) {
         self.policies.push(policy);
     }
 
+    /// Enables or disables blocking for hard-blocked and approval-required actions.
     pub fn set_block_enabled(&mut self, enabled: bool) {
         self.block_enabled = enabled;
     }
 
+    /// Enables or disables notifications for notify-level actions.
     pub fn set_notify_enabled(&mut self, enabled: bool) {
         self.notify_enabled = enabled;
+    }
+}
+
+impl Default for SecurityGuard {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -1,3 +1,4 @@
+//! memory — Defines memory components used to persist conversational context.
 use crate::core::component::IOComponent;
 
 mod simple;

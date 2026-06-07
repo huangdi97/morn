@@ -1,8 +1,50 @@
+//! oauth — Persists OAuth tokens and provider authorization metadata.
 use rusqlite::params;
 
-use super::{OAuthTokenRow, Storage};
+use super::Storage;
+
+pub type OAuthTokenRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+pub struct SaveOAuthTokenArgs<'a> {
+    pub id: &'a str,
+    pub provider: &'a str,
+    pub user_id: &'a str,
+    pub access_token: &'a str,
+    pub refresh_token: Option<&'a str>,
+    pub expires_at: Option<&'a str>,
+    pub scope: Option<&'a str>,
+}
 
 impl Storage {
+    pub fn save_oauth_token_args(&self, args: SaveOAuthTokenArgs<'_>) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO oauth_tokens (id, provider, user_id, access_token, refresh_token, expires_at, scope, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                args.id,
+                args.provider,
+                args.user_id,
+                args.access_token,
+                args.refresh_token,
+                args.expires_at,
+                args.scope,
+                chrono::Utc::now().to_rfc3339()
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)] /* 预留：兼容既有 Storage API */
     pub fn save_oauth_token(
         &self,
         id: &str,
@@ -13,17 +55,15 @@ impl Storage {
         expires_at: Option<&str>,
         scope: Option<&str>,
     ) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute(
-            "INSERT OR REPLACE INTO oauth_tokens (id, provider, user_id, access_token, refresh_token, expires_at, scope, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
-                id, provider, user_id, access_token, refresh_token, expires_at, scope,
-                chrono::Utc::now().to_rfc3339()
-            ],
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(())
+        self.save_oauth_token_args(SaveOAuthTokenArgs {
+            id,
+            provider,
+            user_id,
+            access_token,
+            refresh_token,
+            expires_at,
+            scope,
+        })
     }
 
     pub fn get_oauth_token(
@@ -61,5 +101,68 @@ impl Storage {
         )
         .map_err(|e| e.to_string())?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oauth_token_save_get_list_update_delete() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .save_oauth_token(
+                "oauth-test-1",
+                "github",
+                "user-test-1",
+                "access-1",
+                Some("refresh-1"),
+                None,
+                Some("repo"),
+            )
+            .unwrap();
+
+        assert_eq!(
+            storage
+                .get_oauth_token("github", "user-test-1")
+                .unwrap()
+                .unwrap()
+                .3,
+            "access-1"
+        );
+        assert_eq!(token_count(&storage), 1);
+
+        storage
+            .save_oauth_token(
+                "oauth-test-2",
+                "github",
+                "user-test-1",
+                "access-2",
+                None,
+                None,
+                Some("read"),
+            )
+            .unwrap();
+        assert_eq!(
+            storage
+                .get_oauth_token("github", "user-test-1")
+                .unwrap()
+                .unwrap()
+                .3,
+            "access-2"
+        );
+
+        storage.delete_oauth_token("github", "user-test-1").unwrap();
+        assert!(storage
+            .get_oauth_token("github", "user-test-1")
+            .unwrap()
+            .is_none());
+    }
+
+    fn token_count(storage: &Storage) -> i64 {
+        let conn = storage.conn.lock().unwrap();
+        conn.query_row("SELECT COUNT(*) FROM oauth_tokens", [], |row| row.get(0))
+            .unwrap()
     }
 }

@@ -1,200 +1,11 @@
+//! storage — Provides SQLite-backed persistence for agents, tasks, settings, and sync data.
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-
-#[cfg(test)]
-use crate::market::{License, Listing, Transaction};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserRecord {
-    pub id: String,
-    pub username: String,
-    pub display_name: String,
-    pub role: String,
-    pub created_at: String,
-    pub last_login: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TeamRecord {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub owner_id: String,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TeamMemberRecord {
-    pub id: String,
-    pub team_id: String,
-    pub user_id: String,
-    pub role: String,
-    pub joined_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentPermissionRecord {
-    pub id: String,
-    pub agent_id: String,
-    pub user_id: String,
-    pub team_id: Option<String>,
-    pub permission: String,
-    pub granted_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuditLogRecord {
-    pub id: String,
-    pub user_id: String,
-    pub action: String,
-    pub target_type: String,
-    pub target_id: String,
-    pub details_json: Option<String>,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentRecord {
-    pub id: String,
-    pub name: String,
-    pub component_type: String,
-    pub config_json: Option<String>,
-    pub status: String,
-    pub trust_score: f64,
-    pub created_at: String,
-    pub updated_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CapabilityRecord {
-    pub id: String,
-    pub agent_id: String,
-    pub name: String,
-    pub domain: Option<String>,
-    pub actions: String,
-    pub description: Option<String>,
-    pub trust_score: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskRecord {
-    pub id: String,
-    pub user_input: String,
-    pub plan_json: String,
-    pub status: String,
-    pub created_at: String,
-    pub completed_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubtaskRecord {
-    pub id: String,
-    pub task_id: String,
-    pub agent_id: String,
-    pub action: String,
-    pub params_json: String,
-    pub status: String,
-    pub result_json: Option<String>,
-    pub started_at: Option<String>,
-    pub finished_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExecutionRecord {
-    pub id: String,
-    pub agent_id: String,
-    pub task_id: String,
-    pub action: String,
-    pub status: String,
-    pub latency_ms: Option<i64>,
-    pub error_msg: Option<String>,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DecisionRecord {
-    pub id: String,
-    pub task_id: String,
-    pub decision_level: String,
-    pub action: String,
-    pub context_json: Option<String>,
-    pub approved: bool,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BindingRecord {
-    pub id: String,
-    pub source_agent_id: String,
-    pub target_agent_id: String,
-    pub source_port: Option<String>,
-    pub target_port: Option<String>,
-    pub binding_type: String,
-    pub config_json: Option<String>,
-    pub created_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SyncEventRecord {
-    pub id: String,
-    pub entity_type: String,
-    pub entity_id: String,
-    pub action: String,
-    pub data_json: String,
-    pub timestamp: String,
-    pub device_id: String,
-    pub synced: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeviceRecord {
-    pub id: String,
-    pub name: String,
-    pub last_seen: String,
-    pub public_key: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DecisionRule {
-    pub id: Option<i64>,
-    pub user_id: String,
-    pub keyword: String,
-    pub level: String,
-    pub trust_threshold: f64,
-    pub auto_execute: bool,
-    pub source: String,
-    pub hit_count: i64,
-    pub last_used_at: Option<String>,
-    pub created_at: Option<String>,
-}
 
 #[derive(Clone)]
 pub struct Storage {
     conn: Arc<Mutex<Connection>>,
 }
-
-type CheckpointRow = (String, String, i32, String, String, String, Option<String>);
-type ApprovalRequestRow = (
-    String,
-    String,
-    String,
-    String,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
-type OAuthTokenRow = (
-    String,
-    String,
-    String,
-    String,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
-type SessionRow = (String, String, Option<String>, String, String);
 
 mod agents;
 mod governance;
@@ -206,7 +17,16 @@ mod sync;
 mod tasks;
 mod users;
 
+pub use agents::*;
+pub use governance::*;
+pub use oauth::*;
+pub use sessions::*;
+pub use sync::*;
+pub use tasks::*;
+pub use users::*;
+
 impl Storage {
+    /// Opens or creates a SQLite database at `path` and returns initialized storage.
     pub fn new(path: &str) -> Result<Self, String> {
         let conn = Connection::open(path).map_err(|e| e.to_string())?;
         let storage = Storage {
@@ -216,6 +36,7 @@ impl Storage {
         Ok(storage)
     }
 
+    /// Creates an in-memory SQLite database and returns initialized storage for tests or ephemeral use.
     pub fn new_in_memory() -> Result<Self, String> {
         let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
         let storage = Storage {
@@ -421,6 +242,7 @@ impl Storage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::market::{License, Listing, Transaction};
 
     #[test]
     fn test_storage_crud() {

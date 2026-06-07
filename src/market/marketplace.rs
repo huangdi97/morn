@@ -1,3 +1,4 @@
+//! marketplace — Lists, installs, and manages marketplace capabilities.
 use crate::core::registry::{Capability, Registry};
 use crate::core::storage::Storage;
 

@@ -1,3 +1,4 @@
+//! agent_pool — Manages pooled agent instances and task assignment.
 use crate::core::registry::Registry;
 use crate::core::trust_scorer::TrustScorer;
 use std::collections::HashMap;

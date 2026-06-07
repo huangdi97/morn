@@ -1,3 +1,4 @@
+//! approval — Manages approval requests, responses, and policy decisions.
 use crate::core::event_stream::{EventBus, EVENT_APPROVAL_REQUESTED, EVENT_APPROVAL_RESPONDED};
 use crate::core::storage::Storage;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,6 +13,7 @@ pub enum ApprovalLevel {
 }
 
 impl ApprovalLevel {
+    /// Returns the stable string identifier for this approval level.
     pub fn as_str(&self) -> &'static str {
         match self {
             ApprovalLevel::Low => "low",
@@ -21,13 +23,20 @@ impl ApprovalLevel {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    /// Parses an approval level string and returns the matching level, defaulting to low.
+    pub fn from_str_value(s: &str) -> Self {
         match s {
             "critical" => ApprovalLevel::Critical,
             "high" => ApprovalLevel::High,
             "medium" => ApprovalLevel::Medium,
             _ => ApprovalLevel::Low,
         }
+    }
+
+    #[allow(clippy::should_implement_trait)] /* 预留：兼容旧调用入口 */
+    /// Parses an approval level string through the legacy helper entry point.
+    pub fn from_str(s: &str) -> Self {
+        Self::from_str_value(s)
     }
 }
 
@@ -58,10 +67,12 @@ pub struct ApprovalManager {
 }
 
 impl ApprovalManager {
+    /// Creates an approval manager backed by shared storage and an optional event bus.
     pub fn new(storage: Arc<Storage>, event_bus: Option<Arc<EventBus>>) -> Self {
         ApprovalManager { storage, event_bus }
     }
 
+    /// Creates a pending approval request for an action and returns the request record.
     pub fn request(
         &self,
         action: &str,
@@ -108,6 +119,7 @@ impl ApprovalManager {
         Ok(request)
     }
 
+    /// Records a non-pending response for an approval request id.
     pub fn respond(&self, id: &str, status: ApprovalStatus) -> Result<(), String> {
         let (status_str, response_text) = match &status {
             ApprovalStatus::Approved => ("approved", None),
@@ -134,6 +146,7 @@ impl ApprovalManager {
         Ok(())
     }
 
+    /// Waits for an approval response until timeout and returns the final approval status.
     pub async fn wait_for_approval(
         &self,
         id: &str,
@@ -172,6 +185,7 @@ impl ApprovalManager {
         Err("Approval wait interrupted".to_string())
     }
 
+    /// Scores action text for approval risk and returns a value between low and high risk ranges.
     pub fn assess_risk(&self, action: &str) -> f64 {
         let high_risk_keywords = [
             "资金",
@@ -213,6 +227,7 @@ impl ApprovalManager {
         0.15
     }
 
+    /// Lists ids for pending approval requests.
     pub fn list_pending(&self) -> Result<Vec<String>, String> {
         self.storage.list_pending_approvals()
     }

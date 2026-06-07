@@ -1,3 +1,4 @@
+//! local — Searches local apps, files, and commands for the launcher.
 use super::{SearchCategory, SearchItem, SearchLauncher};
 
 pub(super) fn fuzzy_match(query: &str, target: &str) -> bool {

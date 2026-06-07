@@ -1,9 +1,10 @@
+//! file_ops — Provides tools for reading, writing, and managing files.
 use super::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：内置读文件工具注册入口 */
 pub struct ReadFileTool {
     id: String,
     name: String,
@@ -15,6 +16,12 @@ impl ReadFileTool {
             id: "tool-read-file".into(),
             name: "Read File".into(),
         }
+    }
+}
+
+impl Default for ReadFileTool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -84,7 +91,7 @@ impl Tool for ReadFileTool {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：内置写文件工具注册入口 */
 pub struct WriteFileTool {
     id: String,
     name: String,
@@ -96,6 +103,12 @@ impl WriteFileTool {
             id: "tool-write-file".into(),
             name: "Write File".into(),
         }
+    }
+}
+
+impl Default for WriteFileTool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

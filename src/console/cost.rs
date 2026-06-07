@@ -1,3 +1,4 @@
+//! cost — Defines console-facing cost tracking and reporting data.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CostReport {
     pub total_cost: f64,

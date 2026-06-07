@@ -1,3 +1,4 @@
+//! cortex_engine — Coordinates high-level cognitive processing across agents and tasks.
 use std::collections::HashMap;
 use std::sync::Mutex;
 

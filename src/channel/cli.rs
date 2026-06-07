@@ -1,3 +1,4 @@
+//! cli — Provides a command-line channel for interactive message handling.
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 
@@ -5,9 +6,11 @@ use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 use crate::core::registry::Registry;
 use crate::market::{Listing, Marketplace};
 
+type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>;
+
 pub fn run_repl(
     adapter: &mut ChannelAdapter,
-    chat_fn: Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>,
+    chat_fn: ChatFn,
     marketplace: &Marketplace,
     registry: &Arc<Mutex<Registry>>,
 ) {

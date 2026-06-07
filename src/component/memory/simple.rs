@@ -1,10 +1,11 @@
+//! simple — Provides an in-memory implementation of the memory component.
 use super::Memory;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
 use std::collections::HashMap;
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：SQLite 持久化 memory 组件 */
 pub struct SqliteMemory {
     id: String,
     name: String,
@@ -18,6 +19,12 @@ impl SqliteMemory {
             name: "SQLite Memory".into(),
             data: HashMap::new(),
         }
+    }
+}
+
+impl Default for SqliteMemory {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -1,3 +1,4 @@
+//! knowledge — Implements a knowledge component for storing and querying facts.
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
@@ -15,7 +16,7 @@ pub trait Knowledge: IOComponent {
     fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), String>;
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：静态知识组件注册入口 */
 pub struct StaticKnowledge {
     id: String,
     name: String,
@@ -109,7 +110,7 @@ impl Knowledge for StaticKnowledge {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：文件知识组件注册入口 */
 pub struct FileKnowledge {
     id: String,
     name: String,
@@ -205,7 +206,7 @@ impl Knowledge for FileKnowledge {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：SQLite 知识组件注册入口 */
 pub struct SqliteKnowledge {
     id: String,
     name: String,

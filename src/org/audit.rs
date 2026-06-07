@@ -1,3 +1,4 @@
+//! audit — Records and queries organization audit log entries.
 use crate::core::storage::{AuditLogRecord, Storage};
 
 pub struct AuditLogger {

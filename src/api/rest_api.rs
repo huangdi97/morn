@@ -1,3 +1,4 @@
+//! rest_api — Serves HTTP endpoints for agent, workflow, and system operations.
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
@@ -167,7 +168,7 @@ async fn tool_execute_handler(
 
 async fn workflows_list_handler() -> Json<Vec<WorkflowInfo>> {
     let templates = WorkflowTemplate::list_builtin();
-    let workflows: Vec<WorkflowInfo> = templates.iter().map(|w| WorkflowInfo::from(w)).collect();
+    let workflows: Vec<WorkflowInfo> = templates.iter().map(WorkflowInfo::from).collect();
     Json(workflows)
 }
 
@@ -177,5 +178,28 @@ async fn workflow_get_handler(Path(id): Path<String>) -> Result<Json<WorkflowInf
         None => Err(Json(
             serde_json::json!({"error": format!("Workflow not found: {}", id)}),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_state_can_be_created() {
+        let state = ApiState {
+            supervisor: Arc::new(Mutex::new(Supervisor::new(None, None))),
+            registry: Arc::new(Mutex::new(Registry::new(None, None))),
+            chat_fn: Arc::new(|_, _| Ok("ok".to_string())),
+        };
+
+        assert_eq!(Arc::strong_count(&state.supervisor), 1);
+        assert_eq!(Arc::strong_count(&state.registry), 1);
+        assert!((state.chat_fn)("hello", "context").is_ok());
+    }
+
+    #[test]
+    fn router_can_be_created() {
+        let _router: Router = Router::new();
     }
 }

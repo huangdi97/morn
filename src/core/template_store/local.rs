@@ -1,3 +1,4 @@
+//! local — Loads and manages workflow templates from local storage.
 use super::{compare_versions, TemplateManifest, TemplateStore};
 
 impl TemplateStore {

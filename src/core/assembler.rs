@@ -1,3 +1,4 @@
+//! assembler — Builds agents from persona, model, skill, and tool components.
 use crate::component::model::ModelConfig;
 use crate::component::persona::Persona;
 use crate::core::component::Component;
@@ -14,7 +15,7 @@ pub struct AgentDef {
     pub memory: Option<String>,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：agent 装配器 registry 注入 */
 pub struct AgentAssembler {
     registry: Option<Registry>,
 }
@@ -30,7 +31,7 @@ impl AgentAssembler {
         let _persona = def.persona;
         let _model = def.model;
 
-        #[allow(dead_code)]
+        #[allow(dead_code)] /* 预留：装配后的轻量 agent 占位实现 */
         struct AssembledAgent {
             id: String,
             name: String,

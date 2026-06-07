@@ -1,3 +1,4 @@
+//! web — Searches web sources for launcher suggestions and results.
 use super::{SearchCategory, SearchItem, SearchLauncher};
 
 impl SearchLauncher {

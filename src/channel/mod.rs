@@ -1,3 +1,4 @@
+//! channel — Exposes communication channels for users and external platforms.
 pub mod adapter;
 pub mod cli;
 pub mod desktop;

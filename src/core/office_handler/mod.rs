@@ -1,3 +1,4 @@
+//! office_handler — Reads, writes, and caches office document formats.
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -26,7 +27,10 @@ impl Default for OfficeHandler {
 
 pub mod documents;
 pub mod slides;
+pub mod slides_helper;
 pub mod spreadsheets;
+
+pub use slides_helper::*;
 
 impl OfficeHandler {
     pub fn new() -> Self {

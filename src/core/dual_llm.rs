@@ -1,3 +1,4 @@
+//! dual_llm — Routes work between paired language models for collaborative reasoning.
 use crate::bridge::chat_agent::ChatAgent;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -11,6 +12,7 @@ pub enum Checkpoint {
 }
 
 impl Checkpoint {
+    /// Returns the stable string identifier for this checkpoint.
     pub fn as_str(&self) -> &'static str {
         match self {
             Checkpoint::Auth => "authentication",
@@ -22,6 +24,7 @@ impl Checkpoint {
         }
     }
 
+    /// Returns the default checkpoint execution order.
     pub fn order() -> Vec<Checkpoint> {
         vec![
             Checkpoint::Auth,
@@ -42,10 +45,12 @@ pub enum CheckResult {
 }
 
 impl CheckResult {
+    /// Returns true when this result blocks execution.
     pub fn is_blocked(&self) -> bool {
         matches!(self, CheckResult::Block(_))
     }
 
+    /// Returns true when this result flags input without blocking it.
     pub fn is_flagged(&self) -> bool {
         matches!(self, CheckResult::Flag(_))
     }
@@ -59,7 +64,7 @@ pub enum InjectionRisk {
     High(String),
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：双 LLM 安全校验运行态 */
 pub struct DualLlmGuard {
     primary: Option<ChatAgent>,
     secondary: Option<ChatAgent>,
@@ -78,6 +83,7 @@ pub struct DualLlmLog {
 }
 
 impl DualLlmGuard {
+    /// Creates a dual-LLM guard with optional primary and secondary agents.
     pub fn new(primary: Option<ChatAgent>, secondary: Option<ChatAgent>) -> Self {
         DualLlmGuard {
             primary,
@@ -88,18 +94,22 @@ impl DualLlmGuard {
         }
     }
 
+    /// Enables or disables guard inspection.
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
 
+    /// Returns whether guard inspection is currently enabled.
     pub fn is_enabled(&self) -> bool {
         self.enabled
     }
 
+    /// Returns the configured checkpoint sequence.
     pub fn checkpoints(&self) -> &[Checkpoint] {
         &self.checkpoints
     }
 
+    /// Inspects input and parameters through guard checkpoints and returns the final check result.
     pub fn inspect(&mut self, input: &str, params: &serde_json::Value) -> CheckResult {
         if !self.enabled {
             return CheckResult::Pass;
@@ -229,10 +239,12 @@ impl DualLlmGuard {
         CheckResult::Pass
     }
 
+    /// Returns the accumulated inspection log entries.
     pub fn get_log(&self) -> &[DualLlmLog] {
         &self.log
     }
 
+    /// Clears all accumulated inspection log entries.
     pub fn clear_log(&mut self) {
         self.log.clear();
     }

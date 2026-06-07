@@ -1,3 +1,4 @@
+//! fetch — Retrieves community template registries from remote sources.
 use super::{CommunityTemplateRegistry, RemoteTemplate};
 
 impl CommunityTemplateRegistry {

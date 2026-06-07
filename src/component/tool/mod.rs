@@ -1,3 +1,4 @@
+//! tool — Defines executable tools and their component integration.
 use crate::core::component::{Data, IOComponent};
 
 pub trait Tool: IOComponent {

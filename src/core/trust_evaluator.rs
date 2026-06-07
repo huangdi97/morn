@@ -1,3 +1,4 @@
+//! trust_evaluator — Evaluates trust signals and risk levels for agent actions.
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
@@ -154,6 +155,12 @@ impl TrustEvaluator {
 
     pub fn clear_history(&mut self) {
         self.history.clear();
+    }
+}
+
+impl Default for TrustEvaluator {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

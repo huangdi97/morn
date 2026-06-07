@@ -1,3 +1,4 @@
+//! sandbox — Runs studio tests in isolated sandboxed execution contexts.
 use std::time::Instant;
 
 use super::{StudioTester, TestRunner, TestStep};

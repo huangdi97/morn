@@ -1,3 +1,4 @@
+//! columns — Defines kanban columns and their status ordering.
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -18,13 +19,18 @@ impl CardStatus {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_str_value(s: &str) -> Self {
         match s {
             "in_progress" => CardStatus::InProgress,
             "review" => CardStatus::Review,
             "done" => CardStatus::Done,
             _ => CardStatus::Todo,
         }
+    }
+
+    #[allow(clippy::should_implement_trait)] /* 预留：兼容旧调用入口 */
+    pub fn from_str(s: &str) -> Self {
+        Self::from_str_value(s)
     }
 
     pub fn transitions(&self) -> Vec<CardStatus> {
@@ -55,13 +61,18 @@ impl Priority {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_str_value(s: &str) -> Self {
         match s {
             "critical" => Priority::Critical,
             "high" => Priority::High,
             "medium" => Priority::Medium,
             _ => Priority::Low,
         }
+    }
+
+    #[allow(clippy::should_implement_trait)] /* 预留：兼容旧调用入口 */
+    pub fn from_str(s: &str) -> Self {
+        Self::from_str_value(s)
     }
 
     pub fn rank(&self) -> u8 {

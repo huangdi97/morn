@@ -1,3 +1,4 @@
+//! selector — Selects suitable pooled agents for incoming tasks.
 use super::{AgentInstance, AgentPool};
 
 impl AgentPool {

@@ -1,9 +1,10 @@
+//! builtins — Registers built-in tools for search, files, and code execution.
 use super::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：内置时间工具注册入口 */
 pub struct GetTimeTool {
     id: String,
     name: String,
@@ -15,6 +16,12 @@ impl GetTimeTool {
             id: "tool-get-time".into(),
             name: "Get Time".into(),
         }
+    }
+}
+
+impl Default for GetTimeTool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -78,7 +85,7 @@ impl Tool for GetTimeTool {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：内置计算工具注册入口 */
 pub struct CalcTool {
     id: String,
     name: String,
@@ -90,6 +97,12 @@ impl CalcTool {
             id: "tool-calc".into(),
             name: "Calculator".into(),
         }
+    }
+}
+
+impl Default for CalcTool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -159,7 +172,7 @@ impl Tool for CalcTool {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：内置消息发送工具注册入口 */
 pub struct SendMsgTool {
     id: String,
     name: String,
@@ -171,6 +184,12 @@ impl SendMsgTool {
             id: "tool-send-msg".into(),
             name: "Send Message".into(),
         }
+    }
+}
+
+impl Default for SendMsgTool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -240,7 +259,7 @@ impl Tool for SendMsgTool {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：内置 HTTP 请求工具注册入口 */
 pub struct HttpRequestTool {
     id: String,
     name: String,
@@ -252,6 +271,12 @@ impl HttpRequestTool {
             id: "tool-http-request".into(),
             name: "HTTP Request".into(),
         }
+    }
+}
+
+impl Default for HttpRequestTool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

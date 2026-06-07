@@ -1,3 +1,4 @@
+//! app_ops — Provides computer operations for launching and controlling applications.
 use super::{ComputerOpResult, SecurityLevel};
 
 pub fn launch(app_name: &str) -> ComputerOpResult {
@@ -206,5 +207,40 @@ pub fn install(app_path: &str) -> ComputerOpResult {
         data: format!("[simulated] installed: {}", app_path),
         security_level: SecurityLevel::L2Local.as_str().to_string(),
         approval_required: true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn launch_invalid_name_returns_local_result() {
+        let result = launch("\0");
+        assert_eq!(result.security_level, SecurityLevel::L2Local.as_str());
+        assert!(result.data.contains("launch"));
+    }
+
+    #[test]
+    fn close_invalid_name_returns_system_result() {
+        let result = close("\0");
+        assert_eq!(result.security_level, SecurityLevel::L3System.as_str());
+        assert!(result.data.contains("close"));
+    }
+
+    #[test]
+    fn list_returns_sandbox_result() {
+        let result = list();
+        assert_eq!(result.security_level, SecurityLevel::L1Sandbox.as_str());
+        assert!(!result.data.is_empty() || !result.success);
+    }
+
+    #[test]
+    fn install_requires_approval() {
+        let result = install("/tmp/app.pkg");
+        assert!(result.success);
+        assert_eq!(result.security_level, SecurityLevel::L2Local.as_str());
+        assert!(result.approval_required);
+        assert!(result.data.contains("/tmp/app.pkg"));
     }
 }

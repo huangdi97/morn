@@ -1,8 +1,49 @@
+//! users — Persists users, teams, permissions, and audit log data.
 use rusqlite::params;
+use serde::{Deserialize, Serialize};
 
-use super::{AgentPermissionRecord, Storage, TeamMemberRecord, TeamRecord, UserRecord};
+use super::Storage;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserRecord {
+    pub id: String,
+    pub username: String,
+    pub display_name: String,
+    pub role: String,
+    pub created_at: String,
+    pub last_login: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamRecord {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub owner_id: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamMemberRecord {
+    pub id: String,
+    pub team_id: String,
+    pub user_id: String,
+    pub role: String,
+    pub joined_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentPermissionRecord {
+    pub id: String,
+    pub agent_id: String,
+    pub user_id: String,
+    pub team_id: Option<String>,
+    pub permission: String,
+    pub granted_at: String,
+}
 
 impl Storage {
+    /// Inserts a user record and returns success when the row is stored.
     pub fn insert_user(&self, user: &UserRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -21,6 +62,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Fetches a user by id and returns `None` when no row exists.
     pub fn get_user(&self, id: &str) -> Result<Option<UserRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -41,6 +83,7 @@ impl Storage {
         }
     }
 
+    /// Fetches a user by username and returns `None` when no row exists.
     pub fn get_user_by_username(&self, username: &str) -> Result<Option<UserRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -61,6 +104,7 @@ impl Storage {
         }
     }
 
+    /// Lists user records ordered by newest creation time first.
     pub fn list_users(&self) -> Result<Vec<UserRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -85,6 +129,7 @@ impl Storage {
         Ok(users)
     }
 
+    /// Updates a user's last-login timestamp by id.
     pub fn update_user_login(&self, id: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -95,6 +140,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Deletes a user by id and returns success when the delete statement completes.
     pub fn delete_user(&self, id: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute("DELETE FROM users WHERE id = ?1", params![id])
@@ -103,6 +149,7 @@ impl Storage {
     }
 
     // Teams CRUD
+    /// Inserts a team record and returns success when the row is stored.
     pub fn insert_team(&self, team: &TeamRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -120,6 +167,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Fetches a team by id and returns `None` when no row exists.
     pub fn get_team(&self, id: &str) -> Result<Option<TeamRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -139,6 +187,7 @@ impl Storage {
         }
     }
 
+    /// Lists team records ordered by newest creation time first.
     pub fn list_teams(&self) -> Result<Vec<TeamRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -162,6 +211,7 @@ impl Storage {
         Ok(teams)
     }
 
+    /// Lists teams joined by the given user id.
     pub fn list_teams_for_user(&self, user_id: &str) -> Result<Vec<TeamRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -191,6 +241,7 @@ impl Storage {
         Ok(teams)
     }
 
+    /// Updates a team's owner id and returns success when the row is updated.
     pub fn update_team_owner(&self, id: &str, new_owner_id: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -201,6 +252,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Deletes a team by id and returns success when the delete statement completes.
     pub fn delete_team(&self, id: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute("DELETE FROM teams WHERE id = ?1", params![id])
@@ -209,6 +261,7 @@ impl Storage {
     }
 
     // Team Members CRUD
+    /// Inserts a team membership record and returns success when the row is stored.
     pub fn insert_team_member(&self, member: &TeamMemberRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -226,6 +279,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Lists membership records for a team id.
     pub fn list_team_members(&self, team_id: &str) -> Result<Vec<TeamMemberRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -251,6 +305,7 @@ impl Storage {
         Ok(members)
     }
 
+    /// Removes a user from a team and returns success when the delete statement completes.
     pub fn remove_team_member(&self, team_id: &str, user_id: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -261,6 +316,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Updates a user's role in a team and returns success when the row is updated.
     pub fn update_team_member_role(
         &self,
         team_id: &str,
@@ -277,6 +333,7 @@ impl Storage {
     }
 
     // Agent Permissions CRUD
+    /// Inserts an agent permission record and returns success when the row is stored.
     pub fn insert_agent_permission(&self, perm: &AgentPermissionRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -295,6 +352,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Fetches a user's permission for an agent and returns `None` when no row exists.
     pub fn get_agent_permission(
         &self,
         agent_id: &str,
@@ -321,6 +379,7 @@ impl Storage {
         }
     }
 
+    /// Lists all permission records for an agent id.
     pub fn list_agent_permissions(
         &self,
         agent_id: &str,
@@ -348,6 +407,7 @@ impl Storage {
         Ok(perms)
     }
 
+    /// Deletes an agent permission by permission id.
     pub fn delete_agent_permission(&self, id: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute("DELETE FROM agent_permissions WHERE id = ?1", params![id])
@@ -355,6 +415,7 @@ impl Storage {
         Ok(())
     }
 
+    /// Deletes all permissions for a user on an agent and returns success when complete.
     pub fn delete_agent_permissions_for_user(
         &self,
         agent_id: &str,

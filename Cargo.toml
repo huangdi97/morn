@@ -23,8 +23,8 @@ tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5"
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder"] }
-axum = { version = "0.7", features = ["json"] }
-tower = "0.4"
+axum = { version = "0.8", features = ["json"] }
+tower = "0.5"
 serde_yaml = "0.9"
 csv = "1"
 rust_xlsxwriter = "0.95"

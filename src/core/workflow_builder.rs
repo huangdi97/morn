@@ -1,3 +1,4 @@
+//! workflow_builder — Builds executable workflows from registered capabilities and tasks.
 use crate::core::registry::Registry;
 use crate::core::workflow::{WorkflowAction, WorkflowStep, WorkflowTemplate};
 use std::collections::HashMap;
@@ -25,6 +26,7 @@ pub struct WorkflowEdge {
 }
 
 pub struct WorkflowBuilder {
+    #[allow(dead_code)] /* 预留：后续按 registry 校验 workflow action/tool */
     registry: Arc<Registry>,
 }
 

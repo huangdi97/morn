@@ -1,3 +1,4 @@
+//! chat_agent — Adapts chat model calls into the bridge agent interface.
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 

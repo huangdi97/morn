@@ -1,9 +1,10 @@
+//! web_search — Provides a tool for web search requests.
 use super::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：内置 Web 搜索工具注册入口 */
 pub struct WebSearchTool {
     id: String,
     name: String,
@@ -15,6 +16,12 @@ impl WebSearchTool {
             id: "tool-web-search".into(),
             name: "Web Search".into(),
         }
+    }
+}
+
+impl Default for WebSearchTool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

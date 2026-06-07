@@ -1,3 +1,4 @@
+//! permissions — Manages organization permission grants for agents and users.
 use crate::core::storage::{AgentPermissionRecord, Storage};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -9,7 +10,7 @@ pub enum PermissionLevel {
 }
 
 impl PermissionLevel {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_str_value(s: &str) -> Option<Self> {
         match s {
             "read" => Some(PermissionLevel::Read),
             "use" => Some(PermissionLevel::Use),
@@ -17,6 +18,11 @@ impl PermissionLevel {
             "admin" => Some(PermissionLevel::Admin),
             _ => None,
         }
+    }
+
+    #[allow(clippy::should_implement_trait)] /* 预留：兼容旧调用入口 */
+    pub fn from_str(s: &str) -> Option<Self> {
+        Self::from_str_value(s)
     }
 
     pub fn as_str(&self) -> &'static str {
@@ -59,7 +65,7 @@ impl PermissionChecker {
         let perm = self.storage.get_agent_permission(target, user_id)?;
         match perm {
             Some(p) => {
-                let granted = PermissionLevel::from_str(&p.permission)
+                let granted = PermissionLevel::from_str_value(&p.permission)
                     .ok_or_else(|| format!("Invalid permission level: {}", p.permission))?;
                 Ok(granted >= required_level)
             }
@@ -69,7 +75,7 @@ impl PermissionChecker {
                     let team_perms = self.storage.list_agent_permissions(target)?;
                     for tp in team_perms {
                         if tp.team_id.as_deref() == Some(&team.id) {
-                            if let Some(level) = PermissionLevel::from_str(&tp.permission) {
+                            if let Some(level) = PermissionLevel::from_str_value(&tp.permission) {
                                 if level >= required_level {
                                     return Ok(true);
                                 }

@@ -1,3 +1,4 @@
+//! visual_agent — Drives agents that interpret screens and perform visual actions.
 use crate::core::visual_grounding::ScreenCoord;
 use std::collections::HashMap;
 
@@ -175,6 +176,12 @@ impl VisualAgent {
     ) -> Result<(), String> {
         self.click_at(&field.bounding_box).await?;
         self.type_at(&field.bounding_box, text).await
+    }
+}
+
+impl Default for VisualAgent {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

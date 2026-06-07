@@ -1,3 +1,4 @@
+//! console — Exposes console modules for governance and cost visibility.
 pub mod cost;
 pub mod governance;
 
@@ -168,4 +169,28 @@ pub struct AuditEntry {
     pub decision_level: String,
     pub approved: bool,
     pub created_at: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_creates_backend_with_defaults() {
+        let backend = ConsoleBackend::new(None, None, None, None, None, None);
+
+        assert!(backend.registry.is_none());
+        assert!(backend.storage.is_none());
+        assert_eq!(backend.get_dashboard().total_tasks, 0);
+    }
+
+    #[test]
+    fn backend_fields_are_accessible() {
+        let backend = ConsoleBackend::new(None, None, None, None, None, None);
+
+        assert!(backend.supervisor.is_none());
+        assert!(backend.event_bus.is_none());
+        assert!(backend.dual_llm.is_none());
+        assert!(backend.marketplace.is_none());
+    }
 }

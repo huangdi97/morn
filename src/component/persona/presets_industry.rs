@@ -1,3 +1,4 @@
+//! presets_industry — Provides industry-focused persona presets for domain-specific work.
 use super::{Persona, PersonaParameters, PromptLayers};
 
 pub fn preset_researcher() -> Persona {

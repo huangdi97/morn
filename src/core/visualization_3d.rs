@@ -1,3 +1,4 @@
+//! visualization_3d — Builds 3D visualization data for workflows and agent state.
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -219,7 +220,7 @@ impl Visualization3D {
                 y: rand_pos(),
                 z: rand_pos(),
             });
-            let vel = node.velocity.get_or_insert_with(|| Velocity {
+            let vel = node.velocity.get_or_insert(Velocity {
                 vx: 0.0,
                 vy: 0.0,
                 vz: 0.0,

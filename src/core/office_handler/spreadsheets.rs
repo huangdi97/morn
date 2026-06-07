@@ -1,3 +1,4 @@
+//! spreadsheets — Handles spreadsheet import, export, and cached workbook state.
 use super::{CacheEntry, OfficeHandler};
 use std::path::Path;
 

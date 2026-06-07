@@ -1,4 +1,5 @@
-use crate::core::storage::Storage;
+//! oauth — Manages OAuth token persistence and provider authorization state.
+use crate::core::storage::{SaveOAuthTokenArgs, Storage};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -114,15 +115,15 @@ impl OAuthManager {
         };
 
         let token_id = uuid::Uuid::new_v4().to_string();
-        self.storage.save_oauth_token(
-            &token_id,
+        self.storage.save_oauth_token_args(SaveOAuthTokenArgs {
+            id: &token_id,
             provider,
-            "default",
-            &token.access_token,
-            token.refresh_token.as_deref(),
-            token.expires_at.as_deref(),
-            token.scope.as_deref(),
-        )?;
+            user_id: "default",
+            access_token: &token.access_token,
+            refresh_token: token.refresh_token.as_deref(),
+            expires_at: token.expires_at.as_deref(),
+            scope: token.scope.as_deref(),
+        })?;
 
         Ok(token)
     }

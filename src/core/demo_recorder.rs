@@ -1,3 +1,4 @@
+//! demo_recorder — Records demonstrations and interaction traces for later replay.
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

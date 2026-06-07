@@ -1,3 +1,4 @@
+//! manager_worker — Runs manager-worker orchestration and aggregates team results.
 use super::{Orchestrator, TeamMemberOutput, TeamResult};
 
 impl Orchestrator {

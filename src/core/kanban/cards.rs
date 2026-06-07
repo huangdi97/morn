@@ -1,3 +1,4 @@
+//! cards — Defines kanban cards and card-level ordering behavior.
 use super::{CardStatus, Priority};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

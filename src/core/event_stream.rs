@@ -1,3 +1,4 @@
+//! event_stream — Streams structured runtime events to observers and clients.
 use serde_json::Value;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -85,6 +86,12 @@ impl EventBus {
     }
 }
 
+impl Default for EventBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct EventBusBuilder {
     consumers: Vec<Box<dyn EventConsumer>>,
     storage: Option<Box<dyn EventStorage>>,
@@ -116,6 +123,12 @@ impl EventBusBuilder {
     }
 }
 
+impl Default for EventBusBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct InMemoryEventStorage {
     events: std::sync::Mutex<Vec<AgentEvent>>,
 }
@@ -125,6 +138,12 @@ impl InMemoryEventStorage {
         InMemoryEventStorage {
             events: std::sync::Mutex::new(Vec::new()),
         }
+    }
+}
+
+impl Default for InMemoryEventStorage {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

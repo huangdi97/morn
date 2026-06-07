@@ -1,4 +1,5 @@
-use crate::core::storage::Storage;
+//! checkpoint — Saves and restores execution checkpoints for resumable tasks.
+use crate::core::storage::{SaveCheckpointArgs, Storage};
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -28,22 +29,27 @@ pub struct CheckpointManager {
 }
 
 impl CheckpointManager {
+    /// Creates a checkpoint manager backed by shared storage.
     pub fn new(storage: Arc<Storage>) -> Self {
         CheckpointManager { storage }
     }
 
+    /// Saves a checkpoint and serializes its state and metadata to storage.
     pub fn save(&self, cp: &Checkpoint) -> Result<(), String> {
-        self.storage.save_checkpoint(
-            &cp.id,
-            &cp.session_id,
-            cp.step_index,
-            &cp.step_name,
-            &serde_json::to_string(&cp.state).map_err(|e| e.to_string())?,
-            &serde_json::to_string(&cp.metadata).map_err(|e| e.to_string())?,
-            cp.parent_id.as_deref(),
-        )
+        let state_json = serde_json::to_string(&cp.state).map_err(|e| e.to_string())?;
+        let metadata_json = serde_json::to_string(&cp.metadata).map_err(|e| e.to_string())?;
+        self.storage.save_checkpoint_args(SaveCheckpointArgs {
+            id: &cp.id,
+            session_id: &cp.session_id,
+            step_index: cp.step_index,
+            step_name: &cp.step_name,
+            state_json: &state_json,
+            metadata_json: &metadata_json,
+            parent_id: cp.parent_id.as_deref(),
+        })
     }
 
+    /// Loads the latest checkpoint for a session id and deserializes its stored JSON fields.
     pub fn load_latest(&self, session_id: &str) -> Result<Option<Checkpoint>, String> {
         let row = self.storage.load_latest_checkpoint(session_id)?;
         match row {
@@ -66,6 +72,7 @@ impl CheckpointManager {
         }
     }
 
+    /// Lists checkpoint summaries for a session id.
     pub fn list(&self, session_id: &str) -> Result<Vec<Checkpoint>, String> {
         let rows = self.storage.list_checkpoints(session_id)?;
         let mut checkpoints = Vec::new();
@@ -84,12 +91,14 @@ impl CheckpointManager {
         Ok(checkpoints)
     }
 
+    /// Restores an agent state from a checkpoint's serialized state value.
     pub fn restore(&self, cp: &Checkpoint) -> Result<AgentState, String> {
         let state: AgentState =
             serde_json::from_value(cp.state.clone()).map_err(|e| e.to_string())?;
         Ok(state)
     }
 
+    /// Forks a checkpoint into a new session id and returns the latest checkpoint for that session.
     pub fn fork(&self, cp_id: &str, new_session_id: &str) -> Result<Checkpoint, String> {
         let new_id = uuid::Uuid::new_v4().to_string();
         self.storage

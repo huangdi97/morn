@@ -1,3 +1,4 @@
+//! skill_manifest — Parses and represents skill manifest metadata.
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};

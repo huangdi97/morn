@@ -1,9 +1,10 @@
+//! workflow — Defines workflow actions, steps, templates, and execution helpers.
 use serde_json::Value;
 use std::collections::HashMap;
 
 pub mod runner;
 pub mod storage;
-mod templates;
+pub mod templates;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum VarType {

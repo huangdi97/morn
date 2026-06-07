@@ -1,3 +1,4 @@
+//! smtp — Sends and receives channel messages through email transport.
 use crate::channel::adapter::ChannelMessage;
 
 pub struct SmtpChannel {

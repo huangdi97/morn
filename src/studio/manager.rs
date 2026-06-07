@@ -1,8 +1,9 @@
+//! manager — Manages studio projects and registered capabilities.
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 
 #[derive(Debug, Clone, serde::Serialize)]
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：Studio 列表摘要 API 输出 */
 pub struct ComponentSummary {
     pub id: String,
     pub name: String,
@@ -35,7 +36,7 @@ pub struct UpdateComponentDef {
     pub status: Option<String>,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] /* 预留：Studio 组件管理聚合入口 */
 pub struct StudioManager {
     registry: Option<Registry>,
     storage: Option<Storage>,

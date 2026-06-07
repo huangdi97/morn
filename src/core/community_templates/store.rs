@@ -1,3 +1,4 @@
+//! store — Stores and queries community template registry metadata.
 use super::{CommunityTemplateRegistry, RegistryInfo, RemoteTemplate};
 
 impl CommunityTemplateRegistry {

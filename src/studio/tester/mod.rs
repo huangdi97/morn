@@ -1,3 +1,4 @@
+//! tester — Provides studio test execution and result collection.
 use std::sync::Arc;
 
 use crate::core::component::Data;
@@ -6,11 +7,6 @@ use crate::core::storage::Storage;
 
 mod reports;
 mod sandbox;
-
-#[allow(unused_imports)]
-pub use reports::*;
-#[allow(unused_imports)]
-pub use sandbox::*;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TestStep {
@@ -38,10 +34,8 @@ pub struct TestResult {
 }
 
 pub struct TestRunner {
-    #[allow(dead_code)]
-    registry: Arc<Registry>,
-    #[allow(dead_code)]
-    storage: Arc<Storage>,
+    #[allow(dead_code)] /* 预留：测试运行时 registry 注入 */ registry: Arc<Registry>,
+    #[allow(dead_code)] /* 预留：测试结果落库 */ storage: Arc<Storage>,
 }
 
 impl TestRunner {
@@ -128,6 +122,12 @@ impl StudioTester {
             total_cost,
             output: final_output,
         }
+    }
+}
+
+impl Default for StudioTester {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

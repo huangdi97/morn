@@ -1,3 +1,4 @@
+//! reports — Builds studio test reports from executed test results.
 use super::{StudioTester, TestResult};
 
 impl StudioTester {
