@@ -8,6 +8,10 @@ use crate::core::supervisor::Supervisor;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+mod broadcast;
+mod chain;
+mod manager_worker;
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum CollaborationMode {
     Chain,
@@ -250,164 +254,6 @@ impl Orchestrator {
             output,
             confidence: confidence.min(1.0),
         })
-    }
-
-    pub fn run_manager_expert(&self, manager_id: &str, task: &str) -> Result<TeamResult, String> {
-        let experts = self.find_experts_for_task(task, 5);
-        if experts.is_empty() {
-            return Err("No suitable experts found for task".to_string());
-        }
-
-        let mut outputs = Vec::new();
-        let mgr_output = self.dispatch_agent(
-            manager_id,
-            &format!(
-                "[MANAGER] Task: {}. Delegate to {} experts.",
-                task,
-                experts.len()
-            ),
-        )?;
-        outputs.push(mgr_output);
-
-        for expert in &experts {
-            let result = self.dispatch_agent(
-                &expert.id,
-                &format!(
-                    "[EXPERT:{}] Task: {} (delegated by {})",
-                    expert.domain, task, manager_id
-                ),
-            )?;
-            outputs.push(result);
-        }
-
-        let synthesis = format!(
-            "[Manager Synthesis of {} expert outputs]\n{}",
-            experts.len(),
-            outputs
-                .iter()
-                .map(|o| format!("{}: {}", o.agent_id, o.output))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
-
-        Ok(TeamResult {
-            team_id: format!("manager-expert-{}", manager_id),
-            outputs,
-            consensus_output: synthesis,
-            mode: "manager_expert".to_string(),
-        })
-    }
-
-    fn run_chain(&self, members: &[String], input: &str) -> Result<Vec<TeamMemberOutput>, String> {
-        if members.is_empty() {
-            return Err("No members in chain".to_string());
-        }
-        let mut outputs = Vec::new();
-        let mut current = input.to_string();
-        for member in members {
-            let result = self.dispatch_agent(member, &current)?;
-            current = result.output.clone();
-            outputs.push(result);
-        }
-        Ok(outputs)
-    }
-
-    fn run_manager_worker(
-        &self,
-        members: &[String],
-        input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
-        if members.is_empty() {
-            return Err("No members".to_string());
-        }
-        let mut outputs = Vec::new();
-        let manager = &members[0];
-        let mgr = self.dispatch_agent(manager, input)?;
-        outputs.push(mgr);
-
-        for worker in &members[1..] {
-            let result = self.dispatch_agent(worker, &format!("{} (from {})", input, manager))?;
-            outputs.push(result);
-        }
-        Ok(outputs)
-    }
-
-    fn run_broadcast(
-        &self,
-        members: &[String],
-        input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
-        let mut outputs = Vec::new();
-        for member in members {
-            let result = self.dispatch_agent(member, &format!("[BROADCAST] {}", input))?;
-            outputs.push(result);
-        }
-        Ok(outputs)
-    }
-
-    fn run_voting(&self, members: &[String], input: &str) -> Result<Vec<TeamMemberOutput>, String> {
-        if members.len() < 3 {
-            return Err("Voting mode requires at least 3 members".to_string());
-        }
-        let mut outputs = Vec::new();
-        for member in members {
-            let result = self.dispatch_agent(member, &format!("[EVALUATE] {}", input))?;
-            outputs.push(result);
-        }
-        Ok(outputs)
-    }
-
-    fn run_routing(
-        &self,
-        members: &[String],
-        input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
-        if members.is_empty() {
-            return Err("No members for routing".to_string());
-        }
-        let idx = input.len() % members.len();
-        let selected = &members[idx];
-        let result = self.dispatch_agent(selected, &format!("[ROUTED] {}", input))?;
-        Ok(vec![result])
-    }
-
-    fn run_agent_as_tool(
-        &self,
-        members: &[String],
-        input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
-        let mut outputs = Vec::new();
-        let primary = if members.is_empty() {
-            return Err("No members".to_string());
-        } else {
-            &members[0]
-        };
-        let primary_result = self.dispatch_agent(primary, input)?;
-        outputs.push(primary_result);
-
-        for tool_agent in &members[1..] {
-            let result = self.dispatch_agent(
-                tool_agent,
-                &format!("[TOOL] {} called by {}", input, primary),
-            )?;
-            outputs.push(result);
-        }
-        Ok(outputs)
-    }
-
-    fn run_blackboard(
-        &self,
-        members: &[String],
-        input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
-        let mut board = format!("[Blackboard] Initial: {}\n", input);
-        let mut outputs = Vec::new();
-        for member in members {
-            let result = self.dispatch_agent(member, &board)?;
-            board.push_str(&format!("{}: {}\n", member, result.output));
-            outputs.push(result);
-        }
-        Ok(outputs)
     }
 
     fn compute_consensus(
