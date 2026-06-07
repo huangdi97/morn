@@ -1,5 +1,13 @@
 use std::collections::HashMap;
 
+mod local;
+mod remote;
+
+#[allow(unused_imports)]
+pub use local::*;
+#[allow(unused_imports)]
+pub use remote::*;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TemplateVersion {
     pub version: String,
@@ -38,139 +46,6 @@ impl TemplateStore {
         TemplateStore {
             templates: HashMap::new(),
         }
-    }
-
-    pub fn install(&mut self, manifest: TemplateManifest) -> Result<(), String> {
-        if self.templates.contains_key(&manifest.id) {
-            return Err(format!(
-                "Template '{}' is already installed (version {}). Uninstall first or use update.",
-                manifest.id, manifest.current_version
-            ));
-        }
-        self.templates.insert(manifest.id.clone(), manifest);
-        Ok(())
-    }
-
-    pub fn uninstall(&mut self, id: &str) -> Result<TemplateManifest, String> {
-        self.templates
-            .remove(id)
-            .ok_or_else(|| format!("Template '{}' is not installed", id))
-    }
-
-    pub fn update(&mut self, manifest: TemplateManifest) -> Result<(), String> {
-        let id = manifest.id.clone();
-        if !self.templates.contains_key(&id) {
-            return Err(format!(
-                "Template '{}' is not installed. Use install() first.",
-                id
-            ));
-        }
-        self.templates.insert(id, manifest);
-        Ok(())
-    }
-
-    pub fn get(&self, id: &str) -> Option<&TemplateManifest> {
-        self.templates.get(id)
-    }
-
-    pub fn list(&self) -> Vec<&TemplateManifest> {
-        let mut list: Vec<_> = self.templates.values().collect();
-        list.sort_by(|a, b| a.name.cmp(&b.name));
-        list
-    }
-
-    pub fn list_by_category(&self, category: &str) -> Vec<&TemplateManifest> {
-        let mut list: Vec<_> = self
-            .templates
-            .values()
-            .filter(|t| t.category == category)
-            .collect();
-        list.sort_by(|a, b| a.name.cmp(&b.name));
-        list
-    }
-
-    pub fn list_by_tag(&self, tag: &str) -> Vec<&TemplateManifest> {
-        let mut list: Vec<_> = self
-            .templates
-            .values()
-            .filter(|t| t.tags.iter().any(|t| t == tag))
-            .collect();
-        list.sort_by(|a, b| a.name.cmp(&b.name));
-        list
-    }
-
-    pub fn is_installed(&self, id: &str) -> bool {
-        self.templates.contains_key(id)
-    }
-
-    pub fn count(&self) -> usize {
-        self.templates.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.templates.is_empty()
-    }
-
-    pub fn get_version(&self, id: &str) -> Option<&str> {
-        self.templates.get(id).map(|t| t.current_version.as_str())
-    }
-
-    pub fn has_update(&self, id: &str, remote_version: &str) -> Result<bool, String> {
-        let local = self
-            .templates
-            .get(id)
-            .ok_or_else(|| format!("Template '{}' not found", id))?;
-        Ok(compare_versions(&local.current_version, remote_version).is_lt())
-    }
-
-    pub fn fetch_remote_registry(url: &str) -> Result<Vec<TemplateManifest>, String> {
-        let response = reqwest::blocking::get(url)
-            .map_err(|e| format!("Failed to fetch registry from '{}': {}", url, e))?;
-        if !response.status().is_success() {
-            return Err(format!(
-                "Registry returned HTTP {} from '{}'",
-                response.status(),
-                url
-            ));
-        }
-        let manifests: Vec<TemplateManifest> = response
-            .json()
-            .map_err(|e| format!("Failed to parse registry response: {}", e))?;
-        Ok(manifests)
-    }
-
-    pub fn install_from_registry(&mut self, url: &str, template_id: &str) -> Result<(), String> {
-        let manifests = Self::fetch_remote_registry(url)?;
-        let manifest = manifests
-            .into_iter()
-            .find(|m| m.id == template_id)
-            .ok_or_else(|| format!("Template '{}' not found in registry '{}'", template_id, url))?;
-        self.install(manifest)
-    }
-
-    pub fn update_from_registry(&mut self, url: &str, template_id: &str) -> Result<(), String> {
-        let manifests = Self::fetch_remote_registry(url)?;
-        let manifest = manifests
-            .into_iter()
-            .find(|m| m.id == template_id)
-            .ok_or_else(|| format!("Template '{}' not found in registry '{}'", template_id, url))?;
-        self.update(manifest)
-    }
-
-    pub fn bulk_install_from_registry(&mut self, url: &str) -> Result<Vec<String>, String> {
-        let manifests = Self::fetch_remote_registry(url)?;
-        let mut installed = Vec::new();
-        for manifest in manifests {
-            let id = manifest.id.clone();
-            if !self.is_installed(&id) {
-                if let Err(e) = self.install(manifest) {
-                    eprintln!("[TemplateStore] Skipped '{}': {}", id, e);
-                } else {
-                    installed.push(id);
-                }
-            }
-        }
-        Ok(installed)
     }
 }
 
