@@ -203,7 +203,9 @@ mod tests {
         );
         assert_eq!(storage.list_agents().unwrap().len(), 1);
 
-        storage.update_agent_status("agent-test-1", "inactive").unwrap();
+        storage
+            .update_agent_status("agent-test-1", "inactive")
+            .unwrap();
         assert_eq!(
             storage.get_agent("agent-test-1").unwrap().unwrap().status,
             "inactive"

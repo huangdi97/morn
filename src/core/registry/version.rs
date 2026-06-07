@@ -170,6 +170,19 @@ impl Registry {
             .or_else(|| self.templates.get(id).map(|t| t.version.as_str()))
     }
 
+    /// Returns recorded capability versions in chronological registration order.
+    pub fn get_version_history(&self, id: &str) -> Vec<&str> {
+        self.version_history
+            .get(id)
+            .map(|versions| {
+                versions
+                    .iter()
+                    .map(|(version, _timestamp)| version.as_str())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Returns references to all built-in agent templates.
     pub fn list_templates(&self) -> Vec<&AgentTemplate> {
         self.templates.values().collect()

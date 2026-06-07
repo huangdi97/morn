@@ -2,9 +2,12 @@
 mod code_review;
 mod data_analysis;
 mod report_generation;
+#[path = "../self_evolution.rs"]
+mod self_evolution;
 mod web_research;
 
 pub use code_review::CodeReviewSkill;
 pub use data_analysis::DataAnalysisSkill;
 pub use report_generation::ReportGenSkill;
+pub use self_evolution::SelfEvolutionSkill;
 pub use web_research::WebResearchSkill;

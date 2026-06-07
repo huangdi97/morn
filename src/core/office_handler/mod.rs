@@ -25,7 +25,6 @@ impl Default for OfficeHandler {
     }
 }
 
-pub mod documents;
 pub mod slides;
 pub mod slides_helper;
 pub mod spreadsheets;

@@ -5,7 +5,9 @@ use std::collections::HashMap;
 mod builtins;
 mod registry;
 
-pub use builtins::{CodeReviewSkill, DataAnalysisSkill, ReportGenSkill, WebResearchSkill};
+pub use builtins::{
+    CodeReviewSkill, DataAnalysisSkill, ReportGenSkill, SelfEvolutionSkill, WebResearchSkill,
+};
 pub use registry::create_default_skills;
 
 #[derive(Debug, Clone)]
@@ -31,7 +33,7 @@ mod tests {
     #[test]
     fn test_skill_load() {
         let skills = create_default_skills();
-        assert_eq!(skills.len(), 4);
+        assert_eq!(skills.len(), 5);
 
         let research = WebResearchSkill::new();
         assert_eq!(research.id, "skill-web-research");

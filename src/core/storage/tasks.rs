@@ -315,7 +315,9 @@ mod tests {
         );
         assert_eq!(storage.list_tasks().unwrap().len(), 1);
 
-        storage.update_task_status("task-test-1", "completed").unwrap();
+        storage
+            .update_task_status("task-test-1", "completed")
+            .unwrap();
         let updated = storage.get_task("task-test-1").unwrap().unwrap();
         assert_eq!(updated.status, "completed");
         assert!(updated.completed_at.is_some());
