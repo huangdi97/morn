@@ -183,3 +183,90 @@ impl AgentAssembler {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::component::model::{CostTier, ModelParameters};
+
+    fn model_config() -> ModelConfig {
+        ModelConfig {
+            id: "model-test".to_string(),
+            provider: "local".to_string(),
+            model_name: "test-model".to_string(),
+            base_url: "http://localhost".to_string(),
+            api_key: String::new(),
+            parameters: ModelParameters::default(),
+            fallback: None,
+            cost_tier: CostTier::Low,
+        }
+    }
+
+    fn agent_def(id: &str, name: &str) -> AgentDef {
+        AgentDef {
+            id: id.to_string(),
+            name: name.to_string(),
+            persona: Persona::new("persona-test", "Test Persona"),
+            model: model_config(),
+            tools: vec!["web_search".to_string()],
+            knowledge: vec![],
+            skills: vec!["summarization".to_string()],
+            memory: None,
+        }
+    }
+
+    #[test]
+    fn assembles_single_agent_component() {
+        let assembler = AgentAssembler::new(None);
+
+        let component = assembler
+            .assemble(agent_def("agent-1", "Agent One"))
+            .unwrap();
+
+        assert_eq!(component.id(), "agent-1");
+        assert_eq!(component.type_name(), "agent");
+        assert_eq!(
+            component.health_check(),
+            crate::core::component::HealthStatus::Healthy
+        );
+    }
+
+    #[test]
+    fn assembles_multiple_agent_defs_for_team_like_use() {
+        let assembler = AgentAssembler::new(None);
+        let analyst = assembler
+            .assemble(agent_def("agent-analyst", "Analyst"))
+            .unwrap();
+        let writer = assembler
+            .assemble(agent_def("agent-writer", "Writer"))
+            .unwrap();
+
+        let team = [analyst.id().to_string(), writer.id().to_string()];
+
+        assert_eq!(
+            team,
+            ["agent-analyst".to_string(), "agent-writer".to_string()]
+        );
+    }
+
+    #[test]
+    fn natural_language_build_validates_basic_config() {
+        let def =
+            AgentAssembler::natural_language_build("build a code review agent that can read files")
+                .unwrap();
+
+        assert!(def.id.starts_with("agent-"));
+        assert_eq!(def.persona.id, "persona-coder");
+        assert_eq!(def.model.model_name, "deepseek-chat");
+        assert!(def.tools.contains(&"read_file".to_string()));
+    }
+
+    #[test]
+    fn natural_language_build_defaults_missing_config() {
+        let def = AgentAssembler::natural_language_build("").unwrap();
+
+        assert_eq!(def.persona.id, "persona-assistant");
+        assert!(def.tools.contains(&"web_search".to_string()));
+        assert!(def.tools.contains(&"read_file".to_string()));
+    }
+}

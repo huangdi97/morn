@@ -141,3 +141,67 @@ impl Governance {
             .unwrap_or_default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn exception(id: &str) -> PolicyException {
+        PolicyException {
+            id: id.into(),
+            policy_name: "external_network".into(),
+            reason: "test".into(),
+            expires_at: "2099-01-01T00:00:00Z".into(),
+            created_by: "tester".into(),
+        }
+    }
+
+    #[test]
+    fn get_config_includes_default_permissions_display() {
+        let governance = Governance::new(None);
+
+        let config = governance.get_config();
+
+        assert_eq!(config.api_keys.len(), 1);
+        assert_eq!(config.channel_bindings.len(), 1);
+        assert_eq!(config.channel_bindings[0].channel, "cli");
+    }
+
+    #[test]
+    fn add_and_remove_exception_updates_config() {
+        let mut governance = Governance::new(None);
+
+        governance.add_exception(exception("ex-1"));
+        assert_eq!(governance.get_config().policy_exceptions.len(), 1);
+
+        governance.remove_exception("ex-1");
+        assert!(governance.get_config().policy_exceptions.is_empty());
+    }
+
+    #[test]
+    fn trust_threshold_is_clamped_to_valid_range() {
+        let mut governance = Governance::new(None);
+
+        governance.set_trust_threshold(150.0);
+        assert_eq!(governance.get_config().trust_threshold, 100.0);
+
+        governance.set_trust_threshold(-10.0);
+        assert_eq!(governance.get_config().trust_threshold, 0.0);
+    }
+
+    #[test]
+    fn api_key_removal_updates_permission_view() {
+        let mut governance = Governance::new(None);
+
+        governance.remove_api_key("key-1");
+
+        assert!(governance.get_config().api_keys.is_empty());
+    }
+
+    #[test]
+    fn list_policies_without_security_is_empty() {
+        let governance = Governance::new(None);
+
+        assert!(governance.list_policies().is_empty());
+    }
+}

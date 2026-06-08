@@ -398,3 +398,50 @@ pub fn preset_research_assistant() -> Persona {
         communication_style: "professional".into(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_valid_preset(persona: &Persona) {
+        assert!(!persona.prompt_layers.l1_core_identity.is_empty());
+        assert!((0.0..=2.0).contains(&persona.parameters.temperature));
+        assert!((0.0..=1.0).contains(&persona.parameters.verbosity));
+        assert!((0.0..=1.0).contains(&persona.parameters.proactiveness));
+    }
+
+    #[test]
+    fn researcher_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_researcher();
+        assert_eq!(persona.name, "研究员");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn investment_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_investment();
+        assert_eq!(persona.name, "投资分析师");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn medical_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_medical();
+        assert_eq!(persona.name, "医疗顾问");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn project_manager_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_pm();
+        assert_eq!(persona.name, "项目经理");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn research_assistant_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_research_assistant();
+        assert_eq!(persona.name, "科研助手");
+        assert_valid_preset(&persona);
+    }
+}

@@ -1,3 +1,5 @@
+//! Morn CLI entry point — REPL, ASCII banner, and protocol selection.
+
 use std::env;
 use std::sync::{Arc, Mutex};
 
@@ -37,7 +39,12 @@ fn main() {
             println!("[Morn] ChatAgent initialized (DeepSeek)");
 
             let supervisor = Supervisor::new(storage.clone(), None);
-            let _assembler = AgentAssembler::new(Some(registry.lock().unwrap().clone()));
+            let _assembler = AgentAssembler::new(Some(
+                registry
+                    .lock()
+                    .expect("registry mutex poisoned during assembler initialization")
+                    .clone(),
+            ));
 
             let chat_fn = Arc::new(
                 move |prompt: &str, system: &str| -> Result<String, String> {

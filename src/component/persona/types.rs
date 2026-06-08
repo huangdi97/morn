@@ -7,6 +7,15 @@ pub struct PersonaParameters {
     pub proactiveness: f64,
 }
 
+pub type PersonaRef = String;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CompositePersona {
+    pub primary: PersonaRef,
+    pub secondary: Option<PersonaRef>,
+    pub blend_ratio: f32,
+}
+
 impl Default for PersonaParameters {
     fn default() -> Self {
         PersonaParameters {

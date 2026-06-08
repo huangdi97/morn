@@ -69,3 +69,85 @@ impl TaskEngine {
         Ok(levels)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::engine::TaskEngine;
+    use serde_json::json;
+
+    fn subtask(id: &str, depends_on: Vec<&str>) -> SubTaskDef {
+        SubTaskDef {
+            id: id.to_string(),
+            agent_id: "agent-test".to_string(),
+            action: "run".to_string(),
+            params: json!({}),
+            depends_on: depends_on.into_iter().map(str::to_string).collect(),
+        }
+    }
+
+    #[test]
+    fn topological_order_accepts_empty_dag() {
+        let engine = TaskEngine::new(None, None);
+
+        let levels = engine.compute_topological_order(&[]).unwrap();
+
+        assert!(levels.is_empty());
+    }
+
+    #[test]
+    fn topological_order_places_single_node_in_one_level() {
+        let engine = TaskEngine::new(None, None);
+        let tasks = vec![subtask("a", vec![])];
+
+        let levels = engine.compute_topological_order(&tasks).unwrap();
+
+        assert_eq!(levels.len(), 1);
+        assert_eq!(levels[0][0].id, "a");
+    }
+
+    #[test]
+    fn topological_order_keeps_linear_chain_order() {
+        let engine = TaskEngine::new(None, None);
+        let tasks = vec![
+            subtask("a", vec![]),
+            subtask("b", vec!["a"]),
+            subtask("c", vec!["b"]),
+        ];
+
+        let levels = engine.compute_topological_order(&tasks).unwrap();
+
+        assert_eq!(levels.len(), 3);
+        assert_eq!(levels[0][0].id, "a");
+        assert_eq!(levels[1][0].id, "b");
+        assert_eq!(levels[2][0].id, "c");
+    }
+
+    #[test]
+    fn topological_order_groups_independent_dependents() {
+        let engine = TaskEngine::new(None, None);
+        let tasks = vec![
+            subtask("root", vec![]),
+            subtask("left", vec!["root"]),
+            subtask("right", vec!["root"]),
+        ];
+
+        let levels = engine.compute_topological_order(&tasks).unwrap();
+        let second_level: Vec<&str> = levels[1].iter().map(|task| task.id.as_str()).collect();
+
+        assert_eq!(levels.len(), 2);
+        assert_eq!(levels[0][0].id, "root");
+        assert!(second_level.contains(&"left"));
+        assert!(second_level.contains(&"right"));
+    }
+
+    #[test]
+    fn topological_order_rejects_cycle() {
+        let engine = TaskEngine::new(None, None);
+        let tasks = vec![subtask("a", vec!["b"]), subtask("b", vec!["a"])];
+
+        let err = engine.compute_topological_order(&tasks).unwrap_err();
+
+        assert!(err.contains("Circular dependency"));
+    }
+}

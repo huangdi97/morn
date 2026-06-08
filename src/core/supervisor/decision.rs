@@ -89,6 +89,41 @@ impl Supervisor {
         DecisionLevel::L3SingleAgent
     }
 
+    /// Classifies input with recent outcome and task complexity hints, adjusting obvious over/under-routing.
+    pub fn decide_level_with_context(
+        &self,
+        text: &str,
+        recent_success: Option<bool>,
+        task_complexity: Option<u8>,
+    ) -> DecisionLevel {
+        let base_level = self.decide_level(text);
+        let adjusted_level = match task_complexity {
+            Some(complexity) if complexity <= 2 && is_advanced_level(&base_level) => {
+                DecisionLevel::L2SingleTool
+            }
+            Some(complexity) if complexity >= 8 && is_low_level(&base_level) => {
+                if complexity >= 9 {
+                    DecisionLevel::L4Team
+                } else {
+                    DecisionLevel::L3SingleAgent
+                }
+            }
+            _ => base_level,
+        };
+
+        if let Some(engine) = &self.learning_engine {
+            let success = recent_success.unwrap_or(true);
+            let _ = engine.ingest_decision(text, adjusted_level.as_str(), success);
+            if recent_success == Some(false) {
+                if let Some(keyword) = Self::extract_keywords(text).first() {
+                    let _ = engine.auto_adjust(keyword, 0.0);
+                }
+            }
+        }
+
+        adjusted_level
+    }
+
     /// Classifies input text and returns both the decision level and a short reasoning string.
     pub fn decide(&self, text: &str) -> (DecisionLevel, String) {
         let level = self.decide_level(text);
@@ -105,6 +140,13 @@ impl Supervisor {
 
     /// Applies stored decision rules for the input text and falls back to heuristic classification.
     pub fn decide_with_rules(&self, text: &str) -> (DecisionLevel, String) {
+        if let Some(override_) = self.decision_override() {
+            return (
+                override_.level.clone(),
+                format!("Decision override applied: {}", override_.level.as_str()),
+            );
+        }
+
         if let Some(ref storage) = self.storage {
             let user_id = self.user_id.as_deref().unwrap_or("default");
             let keywords = Self::extract_keywords(text);
@@ -153,5 +195,129 @@ impl Supervisor {
         keywords.sort();
         keywords.dedup();
         keywords
+    }
+}
+
+fn is_advanced_level(level: &DecisionLevel) -> bool {
+    matches!(
+        level,
+        DecisionLevel::L4Team | DecisionLevel::L5Workflow | DecisionLevel::L6JumpToStudio
+    )
+}
+
+fn is_low_level(level: &DecisionLevel) -> bool {
+    matches!(
+        level,
+        DecisionLevel::L1DirectAnswer | DecisionLevel::L2SingleTool
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::supervisor::OverrideScope;
+
+    #[test]
+    fn decide_level_classifies_direct_answer() {
+        let supervisor = Supervisor::new(None, None);
+
+        let level = supervisor.decide_level("hello");
+
+        assert_eq!(level, DecisionLevel::L1DirectAnswer);
+    }
+
+    #[test]
+    fn decide_level_classifies_single_tool() {
+        let supervisor = Supervisor::new(None, None);
+
+        let level = supervisor.decide_level("please search the web");
+
+        assert_eq!(level, DecisionLevel::L2SingleTool);
+    }
+
+    #[test]
+    fn decide_level_uses_default_single_agent() {
+        let supervisor = Supervisor::new(None, None);
+
+        let level = supervisor.decide_level("explain this design");
+
+        assert_eq!(level, DecisionLevel::L3SingleAgent);
+    }
+
+    #[test]
+    fn decide_returns_reason_for_workflow() {
+        let supervisor = Supervisor::new(None, None);
+
+        let (level, reason) = supervisor.decide("create a research report");
+
+        assert_eq!(level, DecisionLevel::L2SingleTool);
+        assert!(reason.contains("tool"));
+    }
+
+    #[test]
+    fn decide_with_rules_without_storage_falls_back_to_heuristics() {
+        let supervisor = Supervisor::new(None, None);
+
+        let (level, reason) = supervisor.decide_with_rules("calculate 1 + 1");
+
+        assert_eq!(level, DecisionLevel::L2SingleTool);
+        assert_eq!(reason, "Single tool operation needed");
+    }
+
+    #[test]
+    fn decide_with_rules_prefers_session_override() {
+        let mut supervisor = Supervisor::new(None, None);
+        supervisor.override_decision(DecisionLevel::L5Workflow, OverrideScope::Session);
+
+        let (level, reason) = supervisor.decide_with_rules("hello");
+
+        assert_eq!(level, DecisionLevel::L5Workflow);
+        assert!(reason.contains("override"));
+    }
+
+    #[test]
+    fn extract_keywords_filters_stop_words_and_duplicates() {
+        let keywords = Supervisor::extract_keywords("hello hello 的 deploy!");
+
+        assert_eq!(keywords, vec!["deploy".to_string(), "hello".to_string()]);
+    }
+
+    #[test]
+    fn decide_level_with_context_downgrades_simple_advanced_task() {
+        let supervisor = Supervisor::new(None, None);
+
+        let level = supervisor.decide_level_with_context("create a report", Some(true), Some(1));
+
+        assert_eq!(level, DecisionLevel::L2SingleTool);
+    }
+
+    #[test]
+    fn decide_level_with_context_upgrades_complex_low_task() {
+        let supervisor = Supervisor::new(None, None);
+
+        let level = supervisor.decide_level_with_context("hello", Some(true), Some(9));
+
+        assert_eq!(level, DecisionLevel::L4Team);
+    }
+
+    #[test]
+    fn decide_level_with_context_keeps_mid_complexity_base() {
+        let supervisor = Supervisor::new(None, None);
+
+        let level = supervisor.decide_level_with_context("explain this design", None, Some(5));
+
+        assert_eq!(level, DecisionLevel::L3SingleAgent);
+    }
+
+    #[test]
+    fn decide_level_with_context_records_learning_outcome() {
+        let storage = crate::core::storage::Storage::new_in_memory().unwrap();
+        let supervisor = Supervisor::new(Some(storage.clone()), None);
+
+        let level = supervisor.decide_level_with_context("hello deploy", Some(true), Some(9));
+
+        assert_eq!(level, DecisionLevel::L4Team);
+        let rules = storage.get_decision_rules("default", "deploy").unwrap();
+        assert_eq!(rules[0].level, "team");
     }
 }

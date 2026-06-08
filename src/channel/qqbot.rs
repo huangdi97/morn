@@ -118,4 +118,11 @@ mod tests {
         let result = channel.send(&msg);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_qqbot_server_without_adapter_routes_event() {
+        let mut server = QqBotServer::new(None);
+        let result = server.handle_event("hello");
+        assert_eq!(result.as_deref(), Ok("No adapter configured"));
+    }
 }

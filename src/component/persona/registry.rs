@@ -156,3 +156,55 @@ pub fn get_preset_persona(name: &str) -> Option<Persona> {
         _ => None,
     }
 }
+
+pub fn compose(id1: &str, id2: &str, ratio: f32) -> Result<Persona, String> {
+    let primary = lookup_persona(id1).ok_or_else(|| format!("Persona not found: {}", id1))?;
+    let secondary = lookup_persona(id2).ok_or_else(|| format!("Persona not found: {}", id2))?;
+    let primary_weight = ratio.clamp(0.0, 1.0) as f64;
+    let secondary_weight = 1.0 - primary_weight;
+
+    let mut composed = primary.clone();
+    composed.id = format!("composite-{}-{}", primary.id, secondary.id);
+    composed.name = format!("{} + {}", primary.name, secondary.name);
+    composed.parameters.temperature = weighted(
+        primary.parameters.temperature,
+        secondary.parameters.temperature,
+        primary_weight,
+        secondary_weight,
+    );
+    composed.parameters.verbosity = weighted(
+        primary.parameters.verbosity,
+        secondary.parameters.verbosity,
+        primary_weight,
+        secondary_weight,
+    );
+    composed.parameters.proactiveness = weighted(
+        primary.parameters.proactiveness,
+        secondary.parameters.proactiveness,
+        primary_weight,
+        secondary_weight,
+    );
+    composed.core_principles = merge_unique(&primary.core_principles, &secondary.core_principles);
+    composed.decision_framework =
+        merge_unique(&primary.decision_framework, &secondary.decision_framework);
+    composed.anti_patterns = merge_unique(&primary.anti_patterns, &secondary.anti_patterns);
+    Ok(composed)
+}
+
+fn lookup_persona(id: &str) -> Option<Persona> {
+    get_preset_persona(id).or_else(|| get_persona(id))
+}
+
+fn weighted(primary: f64, secondary: f64, primary_weight: f64, secondary_weight: f64) -> f64 {
+    primary * primary_weight + secondary * secondary_weight
+}
+
+fn merge_unique(primary: &[String], secondary: &[String]) -> Vec<String> {
+    let mut merged = Vec::new();
+    for value in primary.iter().chain(secondary.iter()) {
+        if !merged.contains(value) {
+            merged.push(value.clone());
+        }
+    }
+    merged
+}

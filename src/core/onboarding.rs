@@ -1,3 +1,5 @@
+//! First-run onboarding wizard and setup flow.
+
 use serde_yaml::Value;
 use std::fs;
 use std::path::PathBuf;

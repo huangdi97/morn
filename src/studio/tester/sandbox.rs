@@ -49,6 +49,45 @@ impl TestRunner {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_and_measure_returns_success_step_and_output() {
+        let (step, value) =
+            TestRunner::run_and_measure("sandbox", "start", || -> Result<String, String> {
+                Ok("ready".into())
+            });
+
+        assert!(step.success);
+        assert_eq!(value, "ready");
+        assert_eq!(step.name, "sandbox");
+        assert_eq!(step.output_preview, Some("\"ready\"".into()));
+    }
+
+    #[test]
+    fn run_and_measure_returns_default_output_on_error() {
+        let (step, value) =
+            TestRunner::run_and_measure("sandbox", "cleanup", || -> Result<Vec<String>, String> {
+                Err("denied".into())
+            });
+
+        assert!(!step.success);
+        assert!(step.description.contains("denied"));
+        assert!(value.is_empty());
+    }
+
+    #[test]
+    fn rerun_step_uses_new_input_for_knowledge_step() {
+        let step = StudioTester::new().rerun_step("agent", "agent-1", 1, "new query");
+
+        assert_eq!(step.name, "knowledge_retrieval");
+        assert_eq!(step.input_preview, Some("new query".into()));
+        assert!(step.success);
+    }
+}
+
 impl StudioTester {
     pub(super) fn measure_persona_injection() -> (TestStep, ()) {
         let start = Instant::now();

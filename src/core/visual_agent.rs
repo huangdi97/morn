@@ -151,16 +151,18 @@ impl VisualAgent {
     pub async fn click_at(&self, coord: &ScreenCoord) -> Result<(), String> {
         let center_x = coord.x + coord.width / 2.0;
         let center_y = coord.y + coord.height / 2.0;
-        println!("[VisualAgent] Clicking at ({}, {})", center_x, center_y);
+        tracing::info!("[VisualAgent] Clicking at ({}, {})", center_x, center_y);
         Ok(())
     }
 
     pub async fn type_at(&self, coord: &ScreenCoord, text: &str) -> Result<(), String> {
         let center_x = coord.x + coord.width / 2.0;
         let center_y = coord.y + coord.height / 2.0;
-        println!(
+        tracing::info!(
             "[VisualAgent] Typing '{}' at ({}, {})",
-            text, center_x, center_y
+            text,
+            center_x,
+            center_y
         );
         Ok(())
     }

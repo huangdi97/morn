@@ -1,4 +1,11 @@
 //! data_flow_log — Records outbound data movement from the local machine.
+use std::sync::{Mutex, OnceLock};
+
+use crate::core::event_bus::{
+    Event, SimpleEventBus, EVENT_AGENT_CREATED, EVENT_AGENT_DESTROYED, EVENT_CHANNEL_CONNECTED,
+    EVENT_CHANNEL_DISCONNECTED, EVENT_SYSTEM_READY, EVENT_SYSTEM_SHUTDOWN,
+    EVENT_WORKFLOW_COMPLETED, EVENT_WORKFLOW_FAILED, EVENT_WORKFLOW_STARTED,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataFlowEntry {
@@ -75,6 +82,45 @@ impl DataFlowLogger {
     }
 }
 
+static LIFECYCLE_LOGGER: OnceLock<Mutex<DataFlowLogger>> = OnceLock::new();
+
+pub fn lifecycle_logger() -> &'static Mutex<DataFlowLogger> {
+    LIFECYCLE_LOGGER.get_or_init(|| Mutex::new(DataFlowLogger::new(1_000)))
+}
+
+pub fn subscribe_lifecycle_events(bus: &mut SimpleEventBus) {
+    for event_type in lifecycle_event_types() {
+        bus.subscribe(event_type, record_lifecycle_event);
+    }
+}
+
+pub fn record_lifecycle_event(event: Event) {
+    if let Ok(mut logger) = lifecycle_logger().lock() {
+        let target = format!("event:{}", event.event_type);
+        let data_type = event
+            .data
+            .get("data_type")
+            .and_then(|value| value.as_str())
+            .unwrap_or("lifecycle_event");
+        let size = event.data.to_string().len() as u64;
+        logger.log_access(&target, data_type, size, "system");
+    }
+}
+
+fn lifecycle_event_types() -> [&'static str; 9] {
+    [
+        EVENT_SYSTEM_READY,
+        EVENT_SYSTEM_SHUTDOWN,
+        EVENT_AGENT_CREATED,
+        EVENT_AGENT_DESTROYED,
+        EVENT_WORKFLOW_STARTED,
+        EVENT_WORKFLOW_COMPLETED,
+        EVENT_WORKFLOW_FAILED,
+        EVENT_CHANNEL_CONNECTED,
+        EVENT_CHANNEL_DISCONNECTED,
+    ]
+}
+
 fn is_user_revocable(authorization: &str) -> bool {
     !matches!(
         authorization.trim().to_lowercase().as_str(),
@@ -111,5 +157,48 @@ mod tests {
         assert_eq!(by_target.len(), 2);
         assert!(!by_target[0].user_revocable);
         assert_eq!(logger.get_stats(), (2, 50));
+    }
+
+    #[test]
+    fn test_zero_capacity_discards_entries() {
+        let mut logger = DataFlowLogger::new(0);
+        let entry = logger.log_access("api.example.com", "prompt", 10, "mandatory");
+        assert!(!entry.user_revocable);
+        assert!(logger.get_recent(10).is_empty());
+        assert_eq!(logger.get_stats(), (0, 0));
+    }
+
+    #[test]
+    fn test_lifecycle_subscriber_records_event() {
+        let mut bus = SimpleEventBus::new();
+        subscribe_lifecycle_events(&mut bus);
+        let before = lifecycle_logger().lock().unwrap().get_stats().0;
+
+        bus.publish_event(
+            EVENT_WORKFLOW_STARTED,
+            "test",
+            serde_json::json!({"task_id": "task-1"}),
+        );
+
+        let logger = lifecycle_logger().lock().unwrap();
+        assert_eq!(logger.get_stats().0, before + 1);
+        assert_eq!(
+            logger.get_recent(1)[0].target,
+            "event:workflow.started".to_string()
+        );
+    }
+
+    #[test]
+    fn test_lifecycle_event_data_type_can_be_overridden() {
+        record_lifecycle_event(Event::new(
+            EVENT_CHANNEL_CONNECTED,
+            "test",
+            serde_json::json!({"data_type": "channel_event"}),
+        ));
+
+        let entry = lifecycle_logger().lock().unwrap().get_recent(1)[0].clone();
+        assert_eq!(entry.target, "event:channel.connected");
+        assert_eq!(entry.data_type, "channel_event");
+        assert!(!entry.user_revocable);
     }
 }

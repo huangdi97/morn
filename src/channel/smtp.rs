@@ -108,4 +108,16 @@ mod tests {
         let result = channel.send_report("to@test.com", "Test", "Body");
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_smtp_send_uses_metadata_defaults_path() {
+        let channel = SmtpChannel::new("invalid.local", 25, "user", "pass", "from@test.com");
+        let msg = ChannelMessage {
+            content: "Body".into(),
+            source: "smtp".into(),
+            timestamp: 0,
+            metadata: serde_json::json!({"to": "to@test.com", "subject": "Subject"}),
+        };
+        assert!(channel.send(&msg).is_err());
+    }
 }

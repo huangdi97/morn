@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 
-use crate::core::supervisor::Supervisor;
+use crate::core::supervisor::{Mode, Supervisor};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelMessage {
@@ -61,7 +61,57 @@ impl ChannelAdapter {
         }
     }
 
+    pub fn set_supervisor_mode(&mut self, mode: Mode) -> Result<(), String> {
+        match self.supervisor.as_mut() {
+            Some(supervisor) => {
+                supervisor.set_mode(mode);
+                Ok(())
+            }
+            None => Err("Supervisor not initialized. Please set MORN_API_KEY.".to_string()),
+        }
+    }
+
+    pub fn supervisor_mode(&self) -> Option<&Mode> {
+        self.supervisor
+            .as_ref()
+            .map(|supervisor| supervisor.get_mode())
+    }
+
     pub fn format_response(text: &str, _source: &str) -> String {
         text.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn message_new_sets_core_fields() {
+        let msg = ChannelMessage::new("hello", "cli");
+        assert_eq!(msg.content, "hello");
+        assert_eq!(msg.source, "cli");
+        assert!(msg.timestamp > 0);
+        assert!(msg.metadata.is_object());
+    }
+
+    #[test]
+    fn adapter_without_supervisor_reports_lifecycle_state() {
+        let mut adapter = ChannelAdapter::new(None);
+        let response = adapter.handle_message(&ChannelMessage::new("ping", "test"));
+        assert!(response.contains("Supervisor not initialized"));
+    }
+
+    #[test]
+    fn supervisor_mode_requires_supervisor() {
+        let mut adapter = ChannelAdapter::new(None);
+        let result = adapter.set_supervisor_mode(Mode::Safe);
+        assert!(result.is_err());
+        assert!(adapter.supervisor_mode().is_none());
+    }
+
+    #[test]
+    fn format_response_preserves_message_text() {
+        assert_eq!(ChannelAdapter::format_response("ok", "cli"), "ok");
     }
 }

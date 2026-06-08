@@ -61,6 +61,16 @@ pub struct ApprovalRequest {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct WorkflowApproval {
+    pub workflow_id: String,
+    pub step_id: String,
+    pub action: String,
+    pub status: ApprovalStatus,
+    pub assigned_to: Option<String>,
+    pub comment: Option<String>,
+}
+
 pub struct ApprovalManager {
     storage: Arc<Storage>,
     event_bus: Option<Arc<EventBus>>,

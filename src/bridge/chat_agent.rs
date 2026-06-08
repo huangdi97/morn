@@ -1,6 +1,7 @@
 //! chat_agent — Adapts chat model calls into the bridge agent interface.
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tracing;
 
 use crate::core::event_bus::{SimpleEventBus, EVENT_CHAT_AGENT_RESPONSE};
 
@@ -141,7 +142,7 @@ impl ChatAgent {
                 Err(e) => {
                     last_error = format!("Request error: {}", e);
                     if attempt < 2 {
-                        eprintln!("[ChatAgent] Retry {}/3 after error: {}", attempt + 1, e);
+                        tracing::info!("[ChatAgent] Retry {}/3 after error: {}", attempt + 1, e);
                     }
                 }
             }

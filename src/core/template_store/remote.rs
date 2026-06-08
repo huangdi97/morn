@@ -1,5 +1,6 @@
 //! remote — Retrieves workflow templates and manifests from remote stores.
 use super::{TemplateManifest, TemplateStore};
+use tracing;
 
 impl TemplateStore {
     pub fn fetch_remote_registry(url: &str) -> Result<Vec<TemplateManifest>, String> {
@@ -43,7 +44,7 @@ impl TemplateStore {
             let id = manifest.id.clone();
             if !self.is_installed(&id) {
                 if let Err(e) = self.install(manifest) {
-                    eprintln!("[TemplateStore] Skipped '{}': {}", id, e);
+                    tracing::info!("[TemplateStore] Skipped '{}': {}", id, e);
                 } else {
                     installed.push(id);
                 }

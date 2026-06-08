@@ -30,3 +30,60 @@ impl StudioPublisher {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::storage::{AgentRecord, Storage};
+
+    fn storage_with_agent(status: &str) -> Storage {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .insert_agent(&AgentRecord {
+                id: "agent-1".into(),
+                name: "Publishable".into(),
+                component_type: "agent".into(),
+                config_json: None,
+                status: status.into(),
+                trust_score: 70.0,
+                created_at: chrono::Utc::now().to_rfc3339(),
+                updated_at: None,
+            })
+            .unwrap();
+        storage
+    }
+
+    #[test]
+    fn publish_agent_marks_agent_active() {
+        let storage = storage_with_agent("inactive");
+        let publisher = StudioPublisher::new(None, Some(storage.clone()));
+
+        publisher.publish_agent("agent-1").unwrap();
+
+        assert_eq!(
+            storage.get_agent("agent-1").unwrap().unwrap().status,
+            "active"
+        );
+    }
+
+    #[test]
+    fn unpublish_agent_marks_agent_inactive() {
+        let storage = storage_with_agent("active");
+        let publisher = StudioPublisher::new(None, Some(storage.clone()));
+
+        publisher.unpublish_agent("agent-1").unwrap();
+
+        assert_eq!(
+            storage.get_agent("agent-1").unwrap().unwrap().status,
+            "inactive"
+        );
+    }
+
+    #[test]
+    fn publishing_without_storage_is_noop() {
+        let publisher = StudioPublisher::new(None, None);
+
+        assert!(publisher.publish_agent("missing").is_ok());
+        assert!(publisher.unpublish_agent("missing").is_ok());
+    }
+}

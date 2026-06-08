@@ -165,4 +165,32 @@ mod tests {
         let invalid = get_preset_persona("nonexistent");
         assert!(invalid.is_none());
     }
+
+    #[test]
+    fn test_compose_persona_blends_parameters() {
+        let composed = compose("preset-analyst", "preset-writer", 0.75).unwrap();
+        let analyst = get_preset_persona("preset-analyst").unwrap();
+        let writer = get_preset_persona("preset-writer").unwrap();
+        let expected = analyst.parameters.temperature * 0.75 + writer.parameters.temperature * 0.25;
+
+        assert_eq!(composed.parameters.temperature, expected);
+        assert!(composed.id.starts_with("composite-"));
+        assert!(composed.core_principles.len() >= analyst.core_principles.len());
+        assert_eq!(
+            composed.prompt_layers.l1_core_identity,
+            analyst.prompt_layers.l1_core_identity
+        );
+    }
+
+    #[test]
+    fn test_composite_persona_type_accepts_refs() {
+        let composite = CompositePersona {
+            primary: "preset-analyst".to_string(),
+            secondary: Some("preset-writer".to_string()),
+            blend_ratio: 0.6,
+        };
+
+        assert_eq!(composite.primary, "preset-analyst");
+        assert_eq!(composite.blend_ratio, 0.6);
+    }
 }

@@ -194,3 +194,103 @@ impl StudioManager {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::component::Data;
+    use crate::core::storage::Storage;
+
+    fn manager_with_storage() -> StudioManager {
+        StudioManager::new(None, Some(Storage::new_in_memory().unwrap()), None)
+    }
+
+    #[test]
+    fn create_component_stores_inactive_agent() {
+        let manager = manager_with_storage();
+
+        let id = manager
+            .create_component(CreateComponentDef {
+                name: "Workspace Agent".into(),
+                component_type: "agent".into(),
+                config_json: Some(r#"{"space":"studio"}"#.into()),
+            })
+            .unwrap();
+
+        let detail = manager.get_component(&id).unwrap();
+        assert_eq!(detail.name, "Workspace Agent");
+        assert_eq!(detail.component_type, "agent");
+        assert_eq!(detail.status, "inactive");
+        assert_eq!(detail.config_json, Some(r#"{"space":"studio"}"#.into()));
+    }
+
+    #[test]
+    fn list_components_filters_by_type() {
+        let manager = manager_with_storage();
+        manager
+            .create_component(CreateComponentDef {
+                name: "Agent".into(),
+                component_type: "agent".into(),
+                config_json: None,
+            })
+            .unwrap();
+        manager
+            .create_component(CreateComponentDef {
+                name: "Tool".into(),
+                component_type: "tool".into(),
+                config_json: None,
+            })
+            .unwrap();
+
+        let tools = manager.list_components(Some("tool"));
+
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].component_type, "tool");
+    }
+
+    #[test]
+    fn update_component_changes_status() {
+        let manager = manager_with_storage();
+        let id = manager
+            .create_component(CreateComponentDef {
+                name: "Session Agent".into(),
+                component_type: "agent".into(),
+                config_json: None,
+            })
+            .unwrap();
+
+        manager
+            .update_component(
+                &id,
+                UpdateComponentDef {
+                    name: Some("Renamed".into()),
+                    config_json: Some(r#"{"session":"active"}"#.into()),
+                    status: Some("active".into()),
+                },
+            )
+            .unwrap();
+
+        let detail = manager.get_component(&id).unwrap();
+        assert_eq!(detail.status, "active");
+    }
+
+    #[test]
+    fn missing_component_returns_error() {
+        let manager = manager_with_storage();
+
+        let err = manager.get_component("missing").unwrap_err();
+
+        assert!(err.contains("Component missing not found"));
+    }
+
+    #[test]
+    fn test_component_runs_studio_tester() {
+        let manager = StudioManager::new(None, None, None);
+        let result = manager
+            .test_component("agent-1", Data::text("hello"), Some("agent"))
+            .unwrap();
+
+        assert!(!result.steps.is_empty());
+        assert!(result.output.contains("LLM response"));
+    }
+}

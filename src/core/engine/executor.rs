@@ -195,3 +195,110 @@ impl TaskEngine {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::engine::TaskEngine;
+    use serde_json::json;
+
+    fn plan_with_subtasks(subtasks: Vec<SubTaskDef>) -> TaskPlan {
+        TaskPlan {
+            task_id: "task-test".to_string(),
+            user_input: "test input".to_string(),
+            subtasks,
+            estimated_secs: 1,
+            decision_level: "single_agent".to_string(),
+        }
+    }
+
+    fn subtask(id: &str, depends_on: Vec<&str>) -> SubTaskDef {
+        SubTaskDef {
+            id: id.to_string(),
+            agent_id: "agent-test".to_string(),
+            action: "run".to_string(),
+            params: json!({}),
+            depends_on: depends_on.into_iter().map(str::to_string).collect(),
+        }
+    }
+
+    #[test]
+    fn run_plan_executes_empty_plan() {
+        let engine = TaskEngine::new(None, None);
+        let plan = plan_with_subtasks(vec![]);
+        let mut execute_fn = |p: &TaskPlan| {
+            Ok(TaskResult {
+                task_id: p.task_id.clone(),
+                subtask_results: vec![],
+                summary: "empty".to_string(),
+            })
+        };
+
+        let result = engine.run_plan(&plan, &mut execute_fn).unwrap();
+
+        assert_eq!(result.task_id, "task-test");
+        assert!(result.subtask_results.is_empty());
+        assert_eq!(result.summary, "empty");
+    }
+
+    #[test]
+    fn run_plan_executes_single_task_plan() {
+        let engine = TaskEngine::new(None, None);
+        let plan = plan_with_subtasks(vec![subtask("main", vec![])]);
+        let mut execute_fn = |p: &TaskPlan| {
+            Ok(TaskResult {
+                task_id: p.task_id.clone(),
+                subtask_results: vec![SubTaskResult {
+                    id: "main".to_string(),
+                    success: true,
+                    output: "done".to_string(),
+                    error: None,
+                }],
+                summary: "done".to_string(),
+            })
+        };
+
+        let result = engine.run_plan(&plan, &mut execute_fn).unwrap();
+
+        assert_eq!(result.subtask_results.len(), 1);
+        assert_eq!(result.summary, "done");
+    }
+
+    #[test]
+    fn run_plan_propagates_task_failure() {
+        let engine = TaskEngine::new(None, None);
+        let plan = plan_with_subtasks(vec![subtask("main", vec![])]);
+        let mut execute_fn = |_p: &TaskPlan| Err("boom".to_string());
+
+        let err = engine.run_plan(&plan, &mut execute_fn).unwrap_err();
+
+        assert_eq!(err, "boom");
+    }
+
+    #[test]
+    fn run_dag_plan_marks_failed_subtask() {
+        let engine = TaskEngine::new(None, None);
+        let plan = plan_with_subtasks(vec![subtask("main", vec![])]);
+        let execute = |_subtask: &SubTaskDef| Err("failed".to_string());
+
+        let result = engine.run_dag_plan(&plan, &execute, None, Some(0)).unwrap();
+
+        assert_eq!(result.subtask_results.len(), 1);
+        assert!(!result.subtask_results[0].success);
+        assert_eq!(result.subtask_results[0].error.as_deref(), Some("failed"));
+    }
+
+    #[test]
+    fn run_dag_plan_accepts_timeout_argument() {
+        let engine = TaskEngine::new(None, None);
+        let plan = plan_with_subtasks(vec![subtask("main", vec![])]);
+        let execute = |subtask: &SubTaskDef| Ok(format!("{} ok", subtask.id));
+
+        let result = engine
+            .run_dag_plan(&plan, &execute, Some(1), Some(0))
+            .unwrap();
+
+        assert_eq!(result.summary, "main ok");
+        assert!(result.subtask_results[0].success);
+    }
+}

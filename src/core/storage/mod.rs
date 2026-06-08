@@ -8,6 +8,7 @@ pub struct Storage {
 }
 
 mod agents;
+mod decision_rules;
 mod governance;
 mod market;
 mod oauth;

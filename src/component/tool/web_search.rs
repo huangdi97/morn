@@ -93,3 +93,42 @@ impl Tool for WebSearchTool {
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_web_search_tool_has_expected_component_metadata() {
+        let tool = WebSearchTool::new();
+        assert_eq!(tool.id(), "tool-web-search");
+        assert_eq!(tool.type_name(), "tool");
+        assert_eq!(tool.health_check(), HealthStatus::Healthy);
+    }
+
+    #[test]
+    fn web_search_tool_exposes_text_input_and_output_ports() {
+        let tool = WebSearchTool::new();
+        let ports = tool.ports();
+        assert_eq!(ports.len(), 2);
+        assert_eq!(ports[0].id, "input");
+        assert_eq!(ports[0].direction, PortDirection::Input);
+        assert_eq!(ports[1].id, "output");
+        assert_eq!(ports[1].direction, PortDirection::Output);
+    }
+
+    #[test]
+    fn web_search_tool_requires_network_permission() {
+        let tool = WebSearchTool::new();
+        assert_eq!(tool.required_permissions(), vec![Permission::NetworkAccess]);
+    }
+
+    #[test]
+    fn execute_includes_query_in_simulated_results() {
+        let mut tool = WebSearchTool::new();
+        let result = tool.execute(Data::text("rust traits")).unwrap();
+        let text = result.content.as_str().unwrap();
+        assert!(text.contains("[web_search]"));
+        assert!(text.contains("rust traits"));
+    }
+}

@@ -1,6 +1,13 @@
 //! sys_ops — Provides system-level operations for shell and process control.
 use super::{ComputerOpResult, SecurityLevel};
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct NetworkConfig {
+    pub status: String,
+    pub ssid: Option<String>,
+    pub proxy: Option<String>,
+}
+
 pub fn set_wallpaper(path: &str) -> ComputerOpResult {
     ComputerOpResult {
         success: true,
@@ -262,6 +269,47 @@ pub fn sleep() -> ComputerOpResult {
     }
 }
 
+pub fn get_network_config() -> Result<NetworkConfig, String> {
+    let status = network_status();
+    if !status.success {
+        return Err(status.data);
+    }
+
+    let data: serde_json::Value =
+        serde_json::from_str(&status.data).map_err(|e| format!("network status json: {}", e))?;
+    Ok(NetworkConfig {
+        status: data
+            .get("status")
+            .and_then(|value| value.as_str())
+            .unwrap_or("unknown")
+            .to_string(),
+        ssid: data
+            .get("ssid")
+            .and_then(|value| value.as_str())
+            .filter(|ssid| !ssid.is_empty())
+            .map(|ssid| ssid.to_string()),
+        proxy: std::env::var("HTTPS_PROXY")
+            .ok()
+            .or_else(|| std::env::var("HTTP_PROXY").ok()),
+    })
+}
+
+pub fn set_proxy(url: &str) -> Result<(), String> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Err("proxy url is empty".to_string());
+    }
+    if !(trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("socks5://"))
+    {
+        return Err("proxy url must start with http://, https://, or socks5://".to_string());
+    }
+
+    tracing::info!("simulated proxy update to '{}'", trimmed);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,5 +373,24 @@ mod tests {
     #[test]
     fn system_power_operations_use_distinct_messages() {
         assert_ne!(shutdown(1).data, sleep().data);
+    }
+
+    #[test]
+    fn get_network_config_returns_status() {
+        let config = get_network_config().unwrap();
+
+        assert!(!config.status.is_empty());
+    }
+
+    #[test]
+    fn set_proxy_rejects_invalid_url() {
+        let err = set_proxy("localhost:8080").unwrap_err();
+
+        assert!(err.contains("must start"));
+    }
+
+    #[test]
+    fn set_proxy_accepts_http_url() {
+        assert!(set_proxy("http://127.0.0.1:8080").is_ok());
     }
 }

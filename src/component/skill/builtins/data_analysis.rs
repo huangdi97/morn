@@ -123,3 +123,38 @@ impl Skill for DataAnalysisSkill {
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn data_analysis_skill_has_expected_metadata_and_permissions() {
+        let skill = DataAnalysisSkill::new();
+        assert_eq!(skill.id(), "skill-data-analysis");
+        assert_eq!(skill.type_name(), "skill");
+        assert_eq!(skill.health_check(), HealthStatus::Healthy);
+        assert_eq!(skill.required_permissions(), vec![Permission::ReadFile]);
+    }
+
+    #[test]
+    fn data_analysis_steps_preserve_pipeline_order() {
+        let skill = DataAnalysisSkill::new();
+        let steps = skill.steps();
+        assert_eq!(steps.len(), 3);
+        assert_eq!(steps[0].step_id, "read");
+        assert_eq!(steps[1].depends_on, vec!["read"]);
+        assert_eq!(steps[2].depends_on, vec!["analyze"]);
+        assert!(steps[1].llm_step);
+        assert!(steps[2].llm_prompt.is_some());
+    }
+
+    #[test]
+    fn data_analysis_execute_includes_requested_path() {
+        let mut skill = DataAnalysisSkill::new();
+        let result = skill.execute(Data::text("data.csv")).unwrap();
+        let text = result.content.as_str().unwrap();
+        assert!(text.contains("[data_analysis]"));
+        assert!(text.contains("data.csv"));
+    }
+}

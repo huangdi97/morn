@@ -1,3 +1,5 @@
+//! QR code scanning and device binding for session pairing.
+
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use uuid::Uuid;

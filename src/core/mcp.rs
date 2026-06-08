@@ -117,7 +117,10 @@ impl MCPClient {
 
     /// Exports registry capabilities as MCP tool metadata.
     pub fn export_registry_as_mcp(&self) -> Vec<MCPTool> {
-        let registry = self.registry.lock().unwrap();
+        let registry = self
+            .registry
+            .lock()
+            .expect("registry mutex poisoned while exporting MCP tools");
         registry
             .list_all()
             .iter()

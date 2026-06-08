@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tracing;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SkillManifest {
@@ -61,7 +62,7 @@ impl SkillLoader {
                                 manifests.push(manifest);
                             }
                             Err(e) => {
-                                eprintln!(
+                                tracing::info!(
                                     "[SkillLoader] Warning: failed to parse {:?}: {}",
                                     skill_file, e
                                 );
