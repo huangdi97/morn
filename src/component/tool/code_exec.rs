@@ -93,3 +93,43 @@ impl Tool for ExecPythonTool {
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_exec_python_tool_has_expected_component_metadata() {
+        let tool = ExecPythonTool::new();
+        assert_eq!(tool.id(), "tool-exec-python");
+        assert_eq!(tool.type_name(), "tool");
+        assert_eq!(tool.health_check(), HealthStatus::Healthy);
+    }
+
+    #[test]
+    fn exec_python_tool_exposes_text_input_and_output_ports() {
+        let tool = ExecPythonTool::new();
+        let ports = tool.ports();
+        assert_eq!(ports.len(), 2);
+        assert_eq!(ports[0].id, "input");
+        assert_eq!(ports[0].direction, PortDirection::Input);
+        assert_eq!(ports[1].id, "output");
+        assert_eq!(ports[1].direction, PortDirection::Output);
+    }
+
+    #[test]
+    fn exec_python_tool_requires_shell_permission() {
+        let tool = ExecPythonTool::new();
+        assert_eq!(tool.required_permissions(), vec![Permission::ExecuteShell]);
+    }
+
+    #[test]
+    fn execute_reports_script_line_count() {
+        let mut tool = ExecPythonTool::new();
+        let result = tool.execute(Data::text("print(1)\nprint(2)")).unwrap();
+        assert_eq!(
+            result.content.as_str().unwrap(),
+            "[exec_python] executed: 2 lines"
+        );
+    }
+}

@@ -1,5 +1,6 @@
 //! channel — Exposes communication channels for users and external platforms.
 pub mod adapter;
+pub mod browser_ext;
 pub mod cli;
 pub mod desktop;
 pub mod dingtalk;

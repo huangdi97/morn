@@ -94,3 +94,35 @@ impl Skill for ReportGenSkill {
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn report_generation_skill_has_expected_metadata_and_no_steps() {
+        let skill = ReportGenSkill::new();
+        assert_eq!(skill.id(), "skill-report-gen");
+        assert_eq!(skill.type_name(), "skill");
+        assert_eq!(skill.health_check(), HealthStatus::Healthy);
+        assert!(skill.steps().is_empty());
+    }
+
+    #[test]
+    fn report_generation_skill_requires_network_permission() {
+        let skill = ReportGenSkill::new();
+        assert_eq!(
+            skill.required_permissions(),
+            vec![Permission::NetworkAccess]
+        );
+    }
+
+    #[test]
+    fn report_generation_execute_includes_topic() {
+        let mut skill = ReportGenSkill::new();
+        let result = skill.execute(Data::text("quarterly metrics")).unwrap();
+        let text = result.content.as_str().unwrap();
+        assert!(text.contains("[report_gen]"));
+        assert!(text.contains("quarterly metrics"));
+    }
+}

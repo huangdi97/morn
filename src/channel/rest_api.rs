@@ -1,14 +1,20 @@
 //! rest_api — Provides a channel adapter backed by REST-style message handling.
 use std::sync::{Arc, Mutex};
 
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::response::Json;
 use axum::routing::{get, post};
 use axum::Router;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::Mutex as AsyncMutex;
 
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
+use crate::component::tool::get_tool_by_name;
+use crate::core::component::Data;
+use crate::core::registry::Registry;
+use crate::core::supervisor::Supervisor;
+use crate::core::workflow::WorkflowTemplate;
 
 #[derive(Clone)]
 pub struct RestApiState {
@@ -21,12 +27,12 @@ pub struct ChatRequest {
     pub text: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct ChatResponse {
     pub reply: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct StatusResponse {
     pub version: String,
     pub turn_count: u64,
@@ -148,4 +154,271 @@ async fn clear_handler(State(state): State<RestApiState>) -> Result<Json<Value>,
         *turn = 0;
     }
     Ok(Json(serde_json::json!({"success": true})))
+}
+
+type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>;
+
+pub struct ApiState {
+    pub supervisor: Arc<AsyncMutex<Supervisor>>,
+    pub registry: Arc<AsyncMutex<Registry>>,
+    pub chat_fn: ChatFn,
+}
+
+#[derive(Deserialize)]
+pub struct ApiChatRequest {
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApiChatResponse {
+    pub reply: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApiHealthResponse {
+    pub status: String,
+    pub version: String,
+    pub uptime: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApiToolInfo {
+    pub name: String,
+    pub description: String,
+}
+
+#[derive(Deserialize)]
+pub struct ApiToolExecuteRequest {
+    pub input: Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApiToolExecuteResponse {
+    pub output: Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApiWorkflowInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub tags: Vec<String>,
+    pub steps: usize,
+    pub estimated_duration_secs: u64,
+}
+
+impl From<&WorkflowTemplate> for ApiWorkflowInfo {
+    fn from(w: &WorkflowTemplate) -> Self {
+        ApiWorkflowInfo {
+            id: w.id.clone(),
+            name: w.name.clone(),
+            description: w.description.clone(),
+            category: w.category.clone(),
+            tags: w.tags.clone(),
+            steps: w.steps.len(),
+            estimated_duration_secs: w.estimated_duration_secs,
+        }
+    }
+}
+
+pub async fn serve(state: ApiState) -> Result<(), String> {
+    let port = std::env::var("API_PORT")
+        .unwrap_or_else(|_| "3000".to_string())
+        .parse::<u16>()
+        .map_err(|e| format!("Invalid API_PORT: {}", e))?;
+
+    let app = Router::new()
+        .route("/health", get(api_health_handler))
+        .route("/chat", post(api_chat_handler))
+        .route("/ws", get(crate::channel::browser_ext::ws_handler))
+        .route("/tools", get(api_tools_list_handler))
+        .route("/tools/{name}/execute", post(api_tool_execute_handler))
+        .route("/workflows", get(api_workflows_list_handler))
+        .route("/workflows/{id}", get(api_workflow_get_handler))
+        .with_state(Arc::new(state));
+
+    let addr = format!("0.0.0.0:{}", port);
+    println!("[REST API] Server starting on {}", addr);
+
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
+
+    axum::serve(listener, app)
+        .await
+        .map_err(|e| format!("Server error: {}", e))?;
+
+    Ok(())
+}
+
+async fn api_health_handler() -> Json<ApiHealthResponse> {
+    Json(ApiHealthResponse {
+        status: "ok".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        uptime: chrono::Utc::now().to_rfc3339(),
+    })
+}
+
+async fn api_chat_handler(
+    State(state): State<Arc<ApiState>>,
+    Json(req): Json<ApiChatRequest>,
+) -> Result<Json<ApiChatResponse>, Json<Value>> {
+    let mut supervisor = state.supervisor.lock().await;
+    let chat_fn = state.chat_fn.clone();
+
+    match supervisor.execute_chat(&req.message, &*chat_fn) {
+        Ok(reply) => Ok(Json(ApiChatResponse { reply })),
+        Err(e) => Err(Json(serde_json::json!({"error": e}))),
+    }
+}
+
+async fn api_tools_list_handler(State(state): State<Arc<ApiState>>) -> Json<Vec<ApiToolInfo>> {
+    let registry = state.registry.lock().await;
+    let caps = registry.list_all();
+
+    let tools: Vec<ApiToolInfo> = caps
+        .iter()
+        .map(|c| ApiToolInfo {
+            name: c.id.clone(),
+            description: c.description.clone(),
+        })
+        .collect();
+
+    Json(tools)
+}
+
+async fn api_tool_execute_handler(
+    Path(name): Path<String>,
+    Json(req): Json<ApiToolExecuteRequest>,
+) -> Result<Json<ApiToolExecuteResponse>, Json<Value>> {
+    let mut tool = get_tool_by_name(&name)
+        .ok_or_else(|| Json(serde_json::json!({"error": format!("Unknown tool: {}", name)})))?;
+
+    let input = Data {
+        content: req.input,
+        mime_type: "application/json".to_string(),
+    };
+
+    match tool.execute(input) {
+        Ok(output) => Ok(Json(ApiToolExecuteResponse {
+            output: output.content,
+        })),
+        Err(e) => Err(Json(serde_json::json!({"error": e}))),
+    }
+}
+
+async fn api_workflows_list_handler() -> Json<Vec<ApiWorkflowInfo>> {
+    let templates = WorkflowTemplate::list_builtin();
+    let workflows: Vec<ApiWorkflowInfo> = templates.iter().map(ApiWorkflowInfo::from).collect();
+    Json(workflows)
+}
+
+async fn api_workflow_get_handler(
+    Path(id): Path<String>,
+) -> Result<Json<ApiWorkflowInfo>, Json<Value>> {
+    match WorkflowTemplate::get_by_id(&id) {
+        Some(template) => Ok(Json(ApiWorkflowInfo::from(&template))),
+        None => Err(Json(
+            serde_json::json!({"error": format!("Workflow not found: {}", id)}),
+        )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_state_can_be_created() {
+        let state = ApiState {
+            supervisor: Arc::new(tokio::sync::Mutex::new(Supervisor::new(None, None))),
+            registry: Arc::new(tokio::sync::Mutex::new(Registry::new(None, None))),
+            chat_fn: Arc::new(|_, _| Ok("ok".to_string())),
+        };
+
+        assert_eq!(Arc::strong_count(&state.supervisor), 1);
+        assert_eq!(Arc::strong_count(&state.registry), 1);
+        assert!((state.chat_fn)("hello", "context").is_ok());
+    }
+
+    #[test]
+    fn router_can_be_created() {
+        let _router: Router = Router::new();
+    }
+
+    fn api_state() -> Arc<ApiState> {
+        Arc::new(ApiState {
+            supervisor: Arc::new(tokio::sync::Mutex::new(Supervisor::new(None, None))),
+            registry: Arc::new(tokio::sync::Mutex::new(Registry::new(None, None))),
+            chat_fn: Arc::new(|_, _| Ok("ok".to_string())),
+        })
+    }
+
+    #[test]
+    fn api_routes_can_be_registered() {
+        let state = api_state();
+
+        let _router: Router = Router::new()
+            .route("/health", get(api_health_handler))
+            .route("/chat", post(api_chat_handler))
+            .route("/tools", get(api_tools_list_handler))
+            .route("/tools/{name}/execute", post(api_tool_execute_handler))
+            .route("/workflows", get(api_workflows_list_handler))
+            .route("/workflows/{id}", get(api_workflow_get_handler))
+            .with_state(state);
+    }
+
+    #[tokio::test]
+    async fn workflow_path_parameter_is_parsed() {
+        let response = api_workflow_get_handler(Path("workflow-code-delivery".to_string()))
+            .await
+            .unwrap();
+
+        assert_eq!(response.id, "workflow-code-delivery");
+        assert_eq!(response.steps, 7);
+    }
+
+    #[tokio::test]
+    async fn tool_execute_returns_error_response_for_unknown_tool() {
+        let err = api_tool_execute_handler(
+            Path("missing-tool".to_string()),
+            Json(ApiToolExecuteRequest {
+                input: serde_json::json!({}),
+            }),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err["error"].as_str().unwrap().contains("Unknown tool"));
+    }
+
+    #[tokio::test]
+    async fn health_handler_returns_ok_status() {
+        let response = api_health_handler().await;
+
+        assert_eq!(response.status, "ok");
+        assert_eq!(response.version, env!("CARGO_PKG_VERSION"));
+        assert!(!response.uptime.is_empty());
+    }
+
+    #[tokio::test]
+    async fn chat_handler_returns_error_response_when_supervisor_fails() {
+        let state = Arc::new(ApiState {
+            supervisor: Arc::new(tokio::sync::Mutex::new(Supervisor::new(None, None))),
+            registry: Arc::new(tokio::sync::Mutex::new(Registry::new(None, None))),
+            chat_fn: Arc::new(|_, _| Err("chat failed".to_string())),
+        });
+
+        let err = api_chat_handler(
+            State(state),
+            Json(ApiChatRequest {
+                message: "hello".to_string(),
+            }),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(err["error"], "chat failed");
+    }
 }

@@ -87,20 +87,77 @@ impl DecisionLevel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum CooMode {
-    Active,
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum Mode {
+    Proactive,
     Safe,
-    Auto,
+    Automated,
 }
 
-impl CooMode {
+impl Mode {
     /// Returns the stable string identifier for this COO mode.
     pub fn as_str(&self) -> &'static str {
         match self {
-            CooMode::Active => "active",
-            CooMode::Safe => "safe",
-            CooMode::Auto => "auto",
+            Mode::Proactive => "proactive",
+            Mode::Safe => "safe",
+            Mode::Automated => "automated",
         }
+    }
+
+    /// Parses CLI/user-facing mode names into the internal mode enum.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_lowercase().as_str() {
+            "active" | "proactive" => Some(Mode::Proactive),
+            "safe" => Some(Mode::Safe),
+            "auto" | "automated" => Some(Mode::Automated),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum OverrideScope {
+    NextTurn,
+    Session,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DecisionOverride {
+    pub level: DecisionLevel,
+    pub scope: OverrideScope,
+}
+
+impl DecisionOverride {
+    /// Parses an inline decision-level prefix and returns the override plus cleaned input.
+    pub fn parse_prefixed(input: &str) -> Option<(Self, String)> {
+        let trimmed = input.trim_start();
+        let specs = [
+            ("L1:", DecisionLevel::L1DirectAnswer),
+            ("L2:", DecisionLevel::L2SingleTool),
+            ("L3:", DecisionLevel::L3SingleAgent),
+            ("L4:", DecisionLevel::L4Team),
+            ("L5:", DecisionLevel::L5Workflow),
+            ("L6:", DecisionLevel::L6JumpToStudio),
+            ("#level1", DecisionLevel::L1DirectAnswer),
+            ("#level2", DecisionLevel::L2SingleTool),
+            ("#level3", DecisionLevel::L3SingleAgent),
+            ("#level4", DecisionLevel::L4Team),
+            ("#level5", DecisionLevel::L5Workflow),
+            ("#level6", DecisionLevel::L6JumpToStudio),
+        ];
+
+        for (prefix, level) in specs {
+            if let Some(rest) = trimmed.strip_prefix(prefix) {
+                return Some((
+                    DecisionOverride {
+                        level,
+                        scope: OverrideScope::NextTurn,
+                    },
+                    rest.trim_start_matches([':', ' ', '\t']).to_string(),
+                ));
+            }
+        }
+
+        None
     }
 }

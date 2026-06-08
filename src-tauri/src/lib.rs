@@ -8,6 +8,7 @@ use morn::console::ConsoleBackend;
 use morn::core::assembler::AgentDef;
 use morn::core::storage::Storage;
 use morn::core::supervisor::{NLAgentDef, Supervisor};
+use morn::market::Marketplace;
 use morn::org::audit::AuditLogger;
 use morn::org::permissions::PermissionChecker;
 use morn::org::team::{TeamManager, UserManager};
@@ -487,6 +488,20 @@ fn list_preset_personas() -> Vec<std::collections::HashMap<String, String>> {
     morn::component::persona::list_preset_personas()
 }
 
+#[tauri::command]
+fn get_market_listings(
+    type_filter: Option<String>,
+    state: State<AppState>,
+) -> Result<serde_json::Value, String> {
+    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+    let s = storage
+        .as_ref()
+        .ok_or_else(|| "Storage not initialized".to_string())?;
+    let marketplace = Marketplace::new(s.clone());
+    let listings = marketplace.list(type_filter.as_deref());
+    serde_json::to_value(listings).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let api_key = std::env::var("MORN_API_KEY").ok();
@@ -607,6 +622,7 @@ pub fn run() {
             get_audit_log,
             get_preset_persona,
             list_preset_personas,
+            get_market_listings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

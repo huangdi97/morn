@@ -370,3 +370,50 @@ pub fn preset_negotiator() -> Persona {
         communication_style: "professional".into(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_valid_preset(persona: &Persona) {
+        assert!(!persona.prompt_layers.l1_core_identity.is_empty());
+        assert!((0.0..=2.0).contains(&persona.parameters.temperature));
+        assert!((0.0..=1.0).contains(&persona.parameters.verbosity));
+        assert!((0.0..=1.0).contains(&persona.parameters.proactiveness));
+    }
+
+    #[test]
+    fn writer_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_writer();
+        assert_eq!(persona.name, "写作者");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn marketing_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_marketing();
+        assert_eq!(persona.name, "营销策划");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn ui_designer_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_ui_designer();
+        assert_eq!(persona.name, "UI 设计师");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn tech_writer_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_tech_writer();
+        assert_eq!(persona.name, "技术文档工程师");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn negotiator_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_negotiator();
+        assert_eq!(persona.name, "谈判专家");
+        assert_valid_preset(&persona);
+    }
+}

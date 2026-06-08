@@ -374,3 +374,50 @@ pub fn preset_social_assistant() -> Persona {
         communication_style: "friendly".into(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_valid_preset(persona: &Persona) {
+        assert!(!persona.prompt_layers.l1_core_identity.is_empty());
+        assert!((0.0..=2.0).contains(&persona.parameters.temperature));
+        assert!((0.0..=1.0).contains(&persona.parameters.verbosity));
+        assert!((0.0..=1.0).contains(&persona.parameters.proactiveness));
+    }
+
+    #[test]
+    fn translator_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_translator();
+        assert_eq!(persona.name, "翻译官");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn assistant_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_assistant();
+        assert_eq!(persona.name, "系统管家");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn reviewer_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_reviewer();
+        assert_eq!(persona.name, "审查员");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn career_coach_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_career_coach();
+        assert_eq!(persona.name, "职业规划师");
+        assert_valid_preset(&persona);
+    }
+
+    #[test]
+    fn social_assistant_preset_has_expected_name_and_valid_parameters() {
+        let persona = preset_social_assistant();
+        assert_eq!(persona.name, "社交助手");
+        assert_valid_preset(&persona);
+    }
+}

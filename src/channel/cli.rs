@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 use crate::core::registry::Registry;
+use crate::core::supervisor::Mode;
 use crate::market::{Listing, Marketplace};
 
 type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>;
@@ -22,7 +23,7 @@ pub fn run_repl(
     println!("  ║   Your AI Desktop Assistant   ║");
     println!("  ╚═══════════════════════════════╝");
     println!();
-    println!("  Commands: /exit  /clear  /status  /help  /market");
+    println!("  Commands: /exit  /clear  /status  /help  /mode  /market");
     println!();
 
     let mut turn: u64 = 1;
@@ -56,6 +57,9 @@ pub fn run_repl(
             }
             "/status" => {
                 println!("  Morn v0.1.0 | Rust | CLI Mode");
+                if let Some(mode) = adapter.supervisor_mode() {
+                    println!("  COO mode: {}", mode.as_str());
+                }
                 continue;
             }
             "/help" => {
@@ -64,6 +68,7 @@ pub fn run_repl(
                 println!("    /clear          - Clear screen");
                 println!("    /status         - Show status");
                 println!("    /help           - Show this help");
+                println!("    /mode <name>    - Set COO mode: proactive, safe, automated");
                 println!("    /market list    - List market listings");
                 println!("    /market show <id> - Show listing details");
                 println!("    /market buy <id> - Purchase a listing");
@@ -76,6 +81,11 @@ pub fn run_repl(
             _ => {}
         }
 
+        if input.starts_with("/mode") {
+            handle_mode_command(&input, adapter);
+            continue;
+        }
+
         if input.starts_with("/market ") {
             handle_market_command(&input, marketplace, registry);
             continue;
@@ -86,6 +96,31 @@ pub fn run_repl(
         println!("  {}", response);
         println!();
         turn += 1;
+    }
+}
+
+fn handle_mode_command(input: &str, adapter: &mut ChannelAdapter) {
+    let parts: Vec<&str> = input.split_whitespace().collect();
+    if parts.len() == 1 {
+        match adapter.supervisor_mode() {
+            Some(mode) => println!("  COO mode: {}", mode.as_str()),
+            None => println!("  Supervisor not initialized. Please set MORN_API_KEY."),
+        }
+        return;
+    }
+
+    match Mode::parse(parts[1]) {
+        Some(mode) => match adapter.set_supervisor_mode(mode) {
+            Ok(()) => {
+                let current = adapter
+                    .supervisor_mode()
+                    .map(|mode| mode.as_str())
+                    .unwrap_or("unknown");
+                println!("  COO mode set to {}.", current);
+            }
+            Err(e) => println!("  {}", e),
+        },
+        None => println!("  Usage: /mode <proactive|safe|automated>"),
     }
 }
 
@@ -160,7 +195,9 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
             };
             match market.install(id, "cli-user") {
                 Ok(()) => {
-                    let mut reg = registry.lock().unwrap();
+                    let mut reg = registry
+                        .lock()
+                        .expect("registry mutex poisoned during CLI market install");
                     match market.install_to_registry(id, &mut reg) {
                         Ok(()) => println!("  Installed and registered successfully."),
                         Err(e) => println!("  Install failed: {}", e),
@@ -236,5 +273,45 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
             println!("  Unknown market command: {}", parts[1]);
             println!("  Usage: /market <list|show|buy|install|search|my|publish> [args]");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::storage::Storage;
+
+    fn market_and_registry() -> (Marketplace, Arc<Mutex<Registry>>) {
+        let storage = Storage::new_in_memory().expect("in-memory storage should initialize");
+        let registry = Arc::new(Mutex::new(Registry::new(Some(storage.clone()), None)));
+        (Marketplace::new(storage), registry)
+    }
+
+    #[test]
+    fn mode_command_without_arg_is_status_only() {
+        let mut adapter = ChannelAdapter::new(None);
+        handle_mode_command("/mode", &mut adapter);
+        assert!(adapter.supervisor_mode().is_none());
+    }
+
+    #[test]
+    fn mode_command_rejects_unknown_mode() {
+        let mut adapter = ChannelAdapter::new(None);
+        handle_mode_command("/mode invalid", &mut adapter);
+        assert!(adapter.supervisor_mode().is_none());
+    }
+
+    #[test]
+    fn market_command_accepts_list_and_show_forms() {
+        let (market, registry) = market_and_registry();
+        handle_market_command("/market list", &market, &registry);
+        handle_market_command("/market show listing-tool-web-search", &market, &registry);
+    }
+
+    #[test]
+    fn market_command_handles_missing_args() {
+        let (market, registry) = market_and_registry();
+        handle_market_command("/market", &market, &registry);
+        handle_market_command("/market show", &market, &registry);
     }
 }

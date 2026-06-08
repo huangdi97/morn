@@ -161,6 +161,12 @@ impl AgentLoop {
             session_id: self.session_id.clone(),
         })
     }
+
+    pub fn parse_decision_override(
+        message: &str,
+    ) -> Option<(crate::core::supervisor::DecisionOverride, String)> {
+        crate::core::supervisor::DecisionOverride::parse_prefixed(message)
+    }
 }
 
 #[cfg(test)]
@@ -206,5 +212,16 @@ mod tests {
         approve
             .respond(&request.id, ApprovalStatus::Approved)
             .unwrap();
+    }
+
+    #[test]
+    fn test_parse_decision_override_from_user_message() {
+        let parsed = AgentLoop::parse_decision_override("#level3 run this").unwrap();
+
+        assert_eq!(
+            parsed.0.level,
+            crate::core::supervisor::DecisionLevel::L3SingleAgent
+        );
+        assert_eq!(parsed.1, "run this");
     }
 }

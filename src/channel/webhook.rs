@@ -27,3 +27,30 @@ impl WebhookReceiver {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn receiver_without_adapter_returns_status() {
+        let mut receiver = WebhookReceiver::new(None);
+        let result = receiver.handle_event("push", "{}");
+        assert_eq!(result.as_deref(), Ok("No adapter configured"));
+    }
+
+    #[test]
+    fn handle_event_accepts_event_type_and_payload() {
+        let mut receiver = WebhookReceiver::new(None);
+        let result = receiver.handle_event("deploy", "{\"ok\":true}");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn receiver_can_be_constructed_for_replay_protection_path() {
+        let mut receiver = WebhookReceiver::new(None);
+        let first = receiver.handle_event("signed", "nonce-1");
+        let second = receiver.handle_event("signed", "nonce-1");
+        assert_eq!(first, second);
+    }
+}

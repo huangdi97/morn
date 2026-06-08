@@ -1,5 +1,6 @@
 //! security — Enforces security policies and validates sensitive operations.
 use serde_json::Value;
+use tracing;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SecurityLevel {
@@ -134,7 +135,7 @@ impl SecurityGuard {
                         action
                     ))
                 } else {
-                    eprintln!(
+                    tracing::info!(
                         "[SECURITY] Action '{}' is hard-blocked (bypass enabled)",
                         action
                     );
@@ -148,7 +149,7 @@ impl SecurityGuard {
                         action
                     ))
                 } else {
-                    eprintln!(
+                    tracing::info!(
                         "[SECURITY] Action '{}' requires approval (bypass enabled)",
                         action
                     );
@@ -157,7 +158,7 @@ impl SecurityGuard {
             }
             SecurityLevel::L3NeedNotify => {
                 if self.notify_enabled {
-                    eprintln!(
+                    tracing::info!(
                         "[SECURITY NOTIFY] Action '{}' executed with notification",
                         action
                     );

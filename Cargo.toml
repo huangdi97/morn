@@ -23,12 +23,14 @@ tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5"
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder"] }
-axum = { version = "0.8", features = ["json"] }
+axum = { version = "0.8", features = ["json", "ws"] }
+futures-util = "0.3"
 tower = "0.5"
 serde_yaml = "0.9"
 csv = "1"
 rust_xlsxwriter = "0.95"
 zip = "2"
+tracing = "0.1"
 
 [dev-dependencies]
 tempfile = "3"

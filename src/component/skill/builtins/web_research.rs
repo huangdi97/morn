@@ -119,3 +119,42 @@ impl Skill for WebResearchSkill {
         Ok(Data::text(&summary))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn web_research_skill_has_expected_metadata_and_permissions() {
+        let skill = WebResearchSkill::new();
+        assert_eq!(skill.id(), "skill-web-research");
+        assert_eq!(skill.type_name(), "skill");
+        assert_eq!(skill.health_check(), HealthStatus::Healthy);
+        assert_eq!(
+            skill.required_permissions(),
+            vec![Permission::NetworkAccess]
+        );
+    }
+
+    #[test]
+    fn web_research_steps_preserve_search_then_summarize_flow() {
+        let skill = WebResearchSkill::new();
+        let steps = skill.steps();
+        assert_eq!(steps.len(), 2);
+        assert_eq!(steps[0].step_id, "search");
+        assert_eq!(steps[0].tool_id, "web_search");
+        assert!(steps[0].depends_on.is_empty());
+        assert_eq!(steps[1].depends_on, vec!["search"]);
+        assert!(steps[1].llm_step);
+    }
+
+    #[test]
+    fn web_research_execute_includes_topic_and_search_result() {
+        let mut skill = WebResearchSkill::new();
+        let result = skill.execute(Data::text("local first ai")).unwrap();
+        let text = result.content.as_str().unwrap();
+        assert!(text.contains("[web_research]"));
+        assert!(text.contains("local first ai"));
+        assert!(text.contains("[web_search]"));
+    }
+}

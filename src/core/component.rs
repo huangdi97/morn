@@ -120,3 +120,81 @@ impl ComponentType {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestComponent {
+        status: HealthStatus,
+        running: bool,
+    }
+
+    impl Component for TestComponent {
+        fn id(&self) -> &str {
+            "test-component"
+        }
+
+        fn type_name(&self) -> &str {
+            "test"
+        }
+
+        fn init(&mut self) -> Result<(), String> {
+            self.status = HealthStatus::Healthy;
+            Ok(())
+        }
+
+        fn run(&mut self) -> Result<(), String> {
+            self.running = true;
+            Ok(())
+        }
+
+        fn pause(&mut self) -> Result<(), String> {
+            self.running = false;
+            Ok(())
+        }
+
+        fn stop(&mut self) -> Result<(), String> {
+            self.running = false;
+            Ok(())
+        }
+
+        fn health_check(&self) -> HealthStatus {
+            self.status.clone()
+        }
+    }
+
+    #[test]
+    fn component_lifecycle_updates_state() {
+        let mut component = TestComponent {
+            status: HealthStatus::Degraded("booting".into()),
+            running: false,
+        };
+        assert!(component.init().is_ok());
+        assert!(component.run().is_ok());
+        assert!(component.running);
+        assert!(component.pause().is_ok());
+        assert!(!component.running);
+    }
+
+    #[test]
+    fn health_status_display_is_stable() {
+        assert_eq!(HealthStatus::Healthy.to_string(), "healthy");
+        assert_eq!(
+            HealthStatus::Unhealthy("down".into()).to_string(),
+            "unhealthy: down"
+        );
+    }
+
+    #[test]
+    fn data_constructors_set_mime_types() {
+        assert_eq!(Data::text("hello").mime_type, "text/plain");
+        assert_eq!(Data::json(serde_json::json!({"ok": true})).mime_type, "application/json");
+    }
+
+    #[test]
+    fn component_type_names_are_lowercase() {
+        assert_eq!(ComponentType::Tool.as_str(), "tool");
+        assert_eq!(ComponentType::Pipeline.as_str(), "pipeline");
+    }
+}

@@ -176,3 +176,65 @@ impl Tool for WriteFileTool {
         Ok(Data::text("[write_file] written successfully"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_file_tool_has_expected_component_metadata() {
+        let tool = ReadFileTool::new();
+        assert_eq!(tool.id(), "tool-read-file");
+        assert_eq!(tool.type_name(), "tool");
+        assert_eq!(tool.health_check(), HealthStatus::Healthy);
+    }
+
+    #[test]
+    fn write_file_tool_has_expected_component_metadata() {
+        let tool = WriteFileTool::new();
+        assert_eq!(tool.id(), "tool-write-file");
+        assert_eq!(tool.type_name(), "tool");
+        assert_eq!(tool.health_check(), HealthStatus::Healthy);
+    }
+
+    #[test]
+    fn file_tools_expose_text_input_and_output_ports() {
+        for ports in [ReadFileTool::new().ports(), WriteFileTool::new().ports()] {
+            assert_eq!(ports.len(), 2);
+            assert_eq!(ports[0].id, "input");
+            assert_eq!(ports[0].direction, PortDirection::Input);
+            assert_eq!(ports[1].id, "output");
+            assert_eq!(ports[1].direction, PortDirection::Output);
+        }
+    }
+
+    #[test]
+    fn file_tools_require_file_permissions() {
+        assert_eq!(
+            ReadFileTool::new().required_permissions(),
+            vec![Permission::ReadFile]
+        );
+        assert_eq!(
+            WriteFileTool::new().required_permissions(),
+            vec![Permission::WriteFile]
+        );
+    }
+
+    #[test]
+    fn file_tools_execute_with_simulated_results() {
+        let mut read_tool = ReadFileTool::new();
+        let read_result = read_tool.execute(Data::text("/tmp/example.txt")).unwrap();
+        assert!(read_result
+            .content
+            .as_str()
+            .unwrap()
+            .contains("/tmp/example.txt"));
+
+        let mut write_tool = WriteFileTool::new();
+        let write_result = write_tool.execute(Data::text("ignored")).unwrap();
+        assert_eq!(
+            write_result.content.as_str().unwrap(),
+            "[write_file] written successfully"
+        );
+    }
+}

@@ -1,6 +1,8 @@
 //! dual_llm — Routes work between paired language models for collaborative reasoning.
 use crate::bridge::chat_agent::ChatAgent;
 
+pub type LlmJudgeFn = Box<dyn Fn() -> Result<String, String> + Send + Sync>;
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Checkpoint {
     Auth,
@@ -68,6 +70,8 @@ pub enum InjectionRisk {
 pub struct DualLlmGuard {
     primary: Option<ChatAgent>,
     secondary: Option<ChatAgent>,
+    primary_llm: Option<LlmJudgeFn>,
+    secondary_llm: Option<LlmJudgeFn>,
     checkpoints: Vec<Checkpoint>,
     enabled: bool,
     log: Vec<DualLlmLog>,
@@ -88,6 +92,21 @@ impl DualLlmGuard {
         DualLlmGuard {
             primary,
             secondary,
+            primary_llm: None,
+            secondary_llm: None,
+            checkpoints: Checkpoint::order(),
+            enabled: true,
+            log: Vec::new(),
+        }
+    }
+
+    /// Creates a guard with injectable primary and secondary LLM judgment functions.
+    pub fn with_llm_checks(primary_llm: LlmJudgeFn, secondary_llm: LlmJudgeFn) -> Self {
+        DualLlmGuard {
+            primary: None,
+            secondary: None,
+            primary_llm: Some(primary_llm),
+            secondary_llm: Some(secondary_llm),
             checkpoints: Checkpoint::order(),
             enabled: true,
             log: Vec::new(),
@@ -111,30 +130,45 @@ impl DualLlmGuard {
 
     /// Inspects input and parameters through guard checkpoints and returns the final check result.
     pub fn inspect(&mut self, input: &str, params: &serde_json::Value) -> CheckResult {
+        self.check(input, params)
+    }
+
+    /// Runs primary judgment first and asks the secondary LLM only when the primary path is suspicious.
+    pub fn check(&mut self, input: &str, params: &serde_json::Value) -> CheckResult {
         if !self.enabled {
             return CheckResult::Pass;
         }
 
         let mut all_results = Vec::new();
+        if let Some(primary_result) = self.run_primary_llm_check() {
+            let suspicious = primary_result.is_blocked() || primary_result.is_flagged();
+            all_results.push(primary_result);
+            if suspicious {
+                let secondary_result = self.run_secondary_check(input);
+                let secondary_suspicious =
+                    secondary_result.is_blocked() || secondary_result.is_flagged();
+                all_results.push(secondary_result);
+                if secondary_suspicious {
+                    return self.finish_check(
+                        input,
+                        all_results,
+                        InjectionRisk::High("primary and secondary LLM judgments matched".into()),
+                    );
+                }
+            }
+        }
 
         for checkpoint in &self.checkpoints {
             let result = self.run_checkpoint(checkpoint, input, params);
+            let blocked = result.is_blocked();
             all_results.push(result);
-            if all_results.last().unwrap().is_blocked() {
+            if blocked {
                 break;
             }
         }
 
         let blocked = all_results.iter().any(|r| r.is_blocked());
         let flagged = all_results.iter().any(|r| r.is_flagged());
-
-        let risk = if blocked {
-            "high"
-        } else if flagged {
-            "medium"
-        } else {
-            "none"
-        };
 
         let risk_level = if blocked {
             InjectionRisk::High(input.to_string())
@@ -149,8 +183,22 @@ impl DualLlmGuard {
             InjectionRisk::None
         };
 
-        let allowed = !matches!(risk_level, InjectionRisk::High(_));
+        self.finish_check(input, all_results, risk_level)
+    }
 
+    fn finish_check(
+        &mut self,
+        input: &str,
+        all_results: Vec<CheckResult>,
+        risk_level: InjectionRisk,
+    ) -> CheckResult {
+        let allowed = !matches!(risk_level, InjectionRisk::High(_));
+        let risk = match risk_level {
+            InjectionRisk::High(_) => "high",
+            InjectionRisk::Medium(_) => "medium",
+            InjectionRisk::Low(_) => "low",
+            InjectionRisk::None => "none",
+        };
         self.log.push(DualLlmLog {
             timestamp: chrono::Utc::now().to_rfc3339(),
             input_preview: input.chars().take(100).collect(),
@@ -165,6 +213,12 @@ impl DualLlmGuard {
             InjectionRisk::Low(msg) => CheckResult::Flag(msg),
             InjectionRisk::None => CheckResult::Pass,
         }
+    }
+
+    fn run_primary_llm_check(&self) -> Option<CheckResult> {
+        self.primary_llm
+            .as_ref()
+            .map(|judge| Self::parse_llm_judgment(judge()))
     }
 
     fn run_checkpoint(
@@ -236,7 +290,34 @@ impl DualLlmGuard {
     }
 
     fn run_secondary_check(&self, _input: &str) -> CheckResult {
-        CheckResult::Pass
+        self.secondary_llm
+            .as_ref()
+            .map(|judge| Self::parse_llm_judgment(judge()))
+            .unwrap_or(CheckResult::Pass)
+    }
+
+    fn parse_llm_judgment(result: Result<String, String>) -> CheckResult {
+        match result {
+            Ok(text) => {
+                let lower = text.trim().to_lowercase();
+                if lower == "block"
+                    || lower == "suspicious"
+                    || lower.starts_with("block")
+                    || lower.starts_with("suspicious")
+                {
+                    CheckResult::Block(text)
+                } else if lower == "flag"
+                    || lower == "review"
+                    || lower.starts_with("flag")
+                    || lower.starts_with("review")
+                {
+                    CheckResult::Flag(text)
+                } else {
+                    CheckResult::Pass
+                }
+            }
+            Err(err) => CheckResult::Flag(format!("LLM judgment failed: {}", err)),
+        }
     }
 
     /// Returns the accumulated inspection log entries.
@@ -329,5 +410,27 @@ mod tests {
         guard.inspect("test", &serde_json::json!({}));
         guard.clear_log();
         assert!(guard.get_log().is_empty());
+    }
+
+    #[test]
+    fn test_secondary_llm_confirms_primary_suspicion() {
+        let mut guard = DualLlmGuard::with_llm_checks(
+            Box::new(|| Ok("suspicious".to_string())),
+            Box::new(|| Ok("suspicious".to_string())),
+        );
+        let result = guard.check("hello", &serde_json::json!({}));
+        assert!(result.is_blocked());
+        assert_eq!(guard.get_log().len(), 1);
+    }
+
+    #[test]
+    fn test_secondary_llm_can_downgrade_flagged_heuristic() {
+        let mut guard = DualLlmGuard::with_llm_checks(
+            Box::new(|| Ok("not_suspicious".to_string())),
+            Box::new(|| Ok("not_suspicious".to_string())),
+        );
+        let result = guard.check("my api_key is 12345", &serde_json::json!({}));
+        assert!(result.is_flagged());
+        assert!(!result.is_blocked());
     }
 }

@@ -1,4 +1,5 @@
-pub mod api;
+//! Morn — A local-first, multi-agent AI operating system.
+
 pub mod bridge;
 pub mod channel;
 pub mod component;

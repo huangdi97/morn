@@ -1,6 +1,12 @@
 //! desktop_ops — Provides desktop automation operations for windows and input.
 use super::{ComputerOpResult, SecurityLevel};
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Resolution {
+    pub width: u32,
+    pub height: u32,
+}
+
 fn run_ps(command: &str) -> Result<String, String> {
     let output = std::process::Command::new("powershell.exe")
         .args(["-Command", command])
@@ -273,6 +279,44 @@ $shell.Windows() | ForEach-Object {{ if ($_.Document.Title -like '*{}*') {{ $_.V
     }
 }
 
+pub fn get_screen_resolution() -> Result<Resolution, String> {
+    if cfg!(target_os = "windows") {
+        let output = run_ps(
+            "Add-Type -AssemblyName System.Windows.Forms; $b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; Write-Output \"$($b.Width)x$($b.Height)\"",
+        )?;
+        return parse_resolution(&output).ok_or_else(|| "failed to parse resolution".to_string());
+    }
+
+    if cfg!(target_os = "linux") {
+        let output = std::process::Command::new("sh")
+            .args([
+                "-c",
+                "xrandr --current 2>/dev/null | sed -n 's/.*current \\([0-9]*\\) x \\([0-9]*\\).*/\\1x\\2/p' | head -1",
+            ])
+            .output();
+        if let Ok(output) = output {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(resolution) = parse_resolution(&stdout) {
+                return Ok(resolution);
+            }
+        }
+    }
+
+    Ok(Resolution {
+        width: 1920,
+        height: 1080,
+    })
+}
+
+fn parse_resolution(value: &str) -> Option<Resolution> {
+    let trimmed = value.trim();
+    let (width, height) = trimmed.split_once('x')?;
+    Some(Resolution {
+        width: width.trim().parse().ok()?,
+        height: height.trim().parse().ok()?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,5 +386,21 @@ mod tests {
         let result = window_switch("Terminal");
         assert_level(&result, SecurityLevel::L2Local);
         assert!(result.data.contains("Terminal"));
+    }
+
+    #[test]
+    fn get_screen_resolution_returns_positive_size() {
+        let resolution = get_screen_resolution().unwrap();
+
+        assert!(resolution.width > 0);
+        assert!(resolution.height > 0);
+    }
+
+    #[test]
+    fn parse_resolution_accepts_width_by_height() {
+        let resolution = parse_resolution("1280x720").unwrap();
+
+        assert_eq!(resolution.width, 1280);
+        assert_eq!(resolution.height, 720);
     }
 }

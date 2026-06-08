@@ -19,3 +19,27 @@ impl DesktopChannel {
         "Desktop channel is handled via Tauri commands in src-tauri/"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_creates_desktop_channel() {
+        let channel = DesktopChannel::new();
+        assert!(channel.placeholder().contains("Tauri"));
+    }
+
+    #[test]
+    fn default_matches_new_placeholder() {
+        let new_channel = DesktopChannel::new();
+        let default_channel = DesktopChannel;
+        assert_eq!(new_channel.placeholder(), default_channel.placeholder());
+    }
+
+    #[test]
+    fn placeholder_mentions_channel_owner() {
+        let channel = DesktopChannel::default();
+        assert!(channel.placeholder().contains("src-tauri"));
+    }
+}

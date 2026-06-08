@@ -94,3 +94,32 @@ impl Skill for CodeReviewSkill {
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn code_review_skill_has_expected_metadata_and_no_steps() {
+        let skill = CodeReviewSkill::new();
+        assert_eq!(skill.id(), "skill-code-review");
+        assert_eq!(skill.type_name(), "skill");
+        assert_eq!(skill.health_check(), HealthStatus::Healthy);
+        assert!(skill.steps().is_empty());
+    }
+
+    #[test]
+    fn code_review_skill_requires_read_file_permission() {
+        let skill = CodeReviewSkill::new();
+        assert_eq!(skill.required_permissions(), vec![Permission::ReadFile]);
+    }
+
+    #[test]
+    fn code_review_execute_includes_requested_path() {
+        let mut skill = CodeReviewSkill::new();
+        let result = skill.execute(Data::text("src/lib.rs")).unwrap();
+        let text = result.content.as_str().unwrap();
+        assert!(text.contains("[code_review]"));
+        assert!(text.contains("src/lib.rs"));
+    }
+}

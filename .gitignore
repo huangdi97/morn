@@ -10,3 +10,7 @@ tasks.md
 competitors_full_list.md
 fix_*.md
 p0-*.md
+tasks-*.md
+.hermes/
+browser-extension/
+GAP_ANALYSIS.md

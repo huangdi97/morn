@@ -2,7 +2,13 @@
 use serde_json::Value;
 use std::collections::HashMap;
 
+mod engine;
+#[cfg(test)]
+mod engine_tests;
 pub mod templates;
+
+pub use crate::core::thread_pool::TaskDef;
+pub use engine::{ControlFlowNode, WorkflowEngine};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum VarType {

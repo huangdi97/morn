@@ -25,7 +25,7 @@ export default function Marketplace() {
   const [tab, setTab] = useState("all");
 
   useEffect(() => {
-    invoke<Listing[]>("get_marketplace_listings").then(setListings).catch(() => {
+    invoke<Listing[]>("get_market_listings", { typeFilter: null }).then(setListings).catch(() => {
       setListings(hardcodedListings);
     });
   }, []);

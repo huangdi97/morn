@@ -78,3 +78,93 @@ pub const EVENT_TASK_COMPLETED: &str = "supervisor.task.completed";
 pub const EVENT_TASK_FAILED: &str = "supervisor.task.failed";
 pub const EVENT_CHAT_AGENT_RESPONSE: &str = "chat_agent.response";
 pub const EVENT_SYSTEM_READY: &str = "system.ready";
+pub const EVENT_SYSTEM_SHUTDOWN: &str = "system.shutdown";
+pub const EVENT_AGENT_CREATED: &str = "agent.created";
+pub const EVENT_AGENT_DESTROYED: &str = "agent.destroyed";
+pub const EVENT_WORKFLOW_STARTED: &str = "workflow.started";
+pub const EVENT_WORKFLOW_COMPLETED: &str = "workflow.completed";
+pub const EVENT_WORKFLOW_FAILED: &str = "workflow.failed";
+pub const EVENT_CHANNEL_CONNECTED: &str = "channel.connected";
+pub const EVENT_CHANNEL_DISCONNECTED: &str = "channel.disconnected";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static HANDLER_ONE_CALLS: AtomicUsize = AtomicUsize::new(0);
+    static HANDLER_TWO_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+    fn handler_one(event: Event) {
+        assert_eq!(event.source, "test");
+        HANDLER_ONE_CALLS.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn handler_two(_event: Event) {
+        HANDLER_TWO_CALLS.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn reset_calls() {
+        HANDLER_ONE_CALLS.store(0, Ordering::SeqCst);
+        HANDLER_TWO_CALLS.store(0, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn subscribes_handler_to_event_type() {
+        reset_calls();
+        let mut bus = SimpleEventBus::new();
+
+        bus.subscribe("test.event", handler_one);
+        bus.publish_event("test.event", "test", serde_json::json!({"ok": true}));
+
+        assert_eq!(HANDLER_ONE_CALLS.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn publishes_only_matching_event_type() {
+        reset_calls();
+        let mut bus = SimpleEventBus::new();
+
+        bus.subscribe("test.event", handler_one);
+        bus.publish_event("other.event", "test", serde_json::json!({}));
+
+        assert_eq!(HANDLER_ONE_CALLS.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn unsubscribes_handler_from_event_type() {
+        reset_calls();
+        let mut bus = SimpleEventBus::new();
+
+        bus.subscribe("test.event", handler_one);
+        bus.unsubscribe("test.event", handler_one);
+        bus.publish_event("test.event", "test", serde_json::json!({}));
+
+        assert_eq!(HANDLER_ONE_CALLS.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn publishes_to_multiple_subscribers() {
+        reset_calls();
+        let mut bus = SimpleEventBus::new();
+
+        bus.subscribe("test.event", handler_one);
+        bus.subscribe("test.event", handler_two);
+        bus.publish_event("test.event", "test", serde_json::json!({"value": 1}));
+
+        assert_eq!(HANDLER_ONE_CALLS.load(Ordering::SeqCst), 1);
+        assert_eq!(HANDLER_TWO_CALLS.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn lifecycle_event_names_are_stable() {
+        assert_eq!(EVENT_SYSTEM_SHUTDOWN, "system.shutdown");
+        assert_eq!(EVENT_AGENT_CREATED, "agent.created");
+        assert_eq!(EVENT_AGENT_DESTROYED, "agent.destroyed");
+        assert_eq!(EVENT_WORKFLOW_STARTED, "workflow.started");
+        assert_eq!(EVENT_WORKFLOW_COMPLETED, "workflow.completed");
+        assert_eq!(EVENT_WORKFLOW_FAILED, "workflow.failed");
+        assert_eq!(EVENT_CHANNEL_CONNECTED, "channel.connected");
+        assert_eq!(EVENT_CHANNEL_DISCONNECTED, "channel.disconnected");
+    }
+}
