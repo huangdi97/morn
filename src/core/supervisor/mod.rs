@@ -14,7 +14,9 @@ pub use guided_builder::*;
 pub use learning::*;
 pub use types::*;
 
+use crate::core::agent_pool::{AgentPool, PoolConfig};
 use crate::core::approval::WorkflowApproval;
+pub(crate) use crate::core::dual_llm::{DualLlmGuard, DualLlmLog};
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::memory::{MemoryHub, MemoryOrchestrator};
 use crate::core::orchestrator::TeamDef;
@@ -44,6 +46,7 @@ pub struct Supervisor {
     memory_orchestrator: Option<MemoryOrchestrator>,
     pub audit_log: AuditLog,
     trust_scorer: Option<TrustScorer>,
+    agent_pool: AgentPool,
     _planner: Option<Planner>,
     _scheduler: Option<Scheduler>,
 }
@@ -71,6 +74,7 @@ impl Supervisor {
             memory_orchestrator: Some(MemoryOrchestrator::new(MemoryHub::new())),
             audit_log: AuditLog::new(),
             trust_scorer: Some(TrustScorer::new()),
+            agent_pool: AgentPool::new(PoolConfig::default()),
             _planner: None,
             _scheduler: None,
         }
@@ -115,6 +119,10 @@ impl Supervisor {
     /// Returns the shared task pool used by workflow execution paths.
     pub fn task_pool(&self) -> &TaskPool {
         &self.task_pool
+    }
+
+    pub fn agent_pool(&self) -> &AgentPool {
+        &self.agent_pool
     }
 
     /// Sets the COO execution mode that controls approval and automation behavior.

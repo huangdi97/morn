@@ -103,6 +103,37 @@ impl PaymentGateway {
     }
 }
 
+/// 激活订阅 — Activates a subscription plan through the given payment gateway
+///
+/// 使用提供的 PaymentGateway 实现创建支付，返回支付 URL。
+pub fn activate_subscription(
+    plan: &crate::market::gateway::SubscriptionPlan,
+    gateway: &impl crate::market::gateway::PaymentGateway,
+) -> Result<crate::market::gateway::PaymentUrl, String> {
+    let (amount, currency) = match plan {
+        crate::market::gateway::SubscriptionPlan::Free => {
+            return Ok(crate::market::gateway::PaymentUrl {
+                url: String::new(),
+                payment_id: String::new(),
+            });
+        }
+        crate::market::gateway::SubscriptionPlan::Starter { amount, currency } => {
+            (*amount, currency.as_str())
+        }
+        crate::market::gateway::SubscriptionPlan::Pro {
+            amount, currency, ..
+        } => (*amount, currency.as_str()),
+        crate::market::gateway::SubscriptionPlan::Enterprise {
+            amount, currency, ..
+        } => (*amount, currency.as_str()),
+    };
+
+    let description = format!("Subscription: {:?}", plan);
+    gateway
+        .create_payment(amount, currency, &description)
+        .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,7 +194,10 @@ mod tests {
         };
         assert_eq!(order.status.as_str(), "pending");
         // simulate transition
-        let completed = Order { status: OrderStatus::Completed, ..order };
+        let completed = Order {
+            status: OrderStatus::Completed,
+            ..order
+        };
         assert_eq!(completed.status.as_str(), "completed");
     }
 

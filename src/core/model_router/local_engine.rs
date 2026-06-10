@@ -1,9 +1,11 @@
 //! local_engine — Scans and manages local GGUF models for on-device inference.
 
+#[derive(Debug, Clone)]
 pub struct LocalEngine {
     pub models: Vec<LocalModel>,
 }
 
+#[derive(Debug, Clone)]
 pub struct LocalModel {
     pub path: String,
     pub name: String,
@@ -21,9 +23,13 @@ impl LocalEngine {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.extension().is_some_and(|e| e == "gguf") {
-                    let name = path.file_stem().unwrap().to_string_lossy().to_string();
-                    let size =
-                        std::fs::metadata(&path).map(|m| m.len() / 1_048_576).unwrap_or(0);
+                    let name = path
+                        .file_stem()
+                        .map(|stem| stem.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    let size = std::fs::metadata(&path)
+                        .map(|m| m.len() / 1_048_576)
+                        .unwrap_or(0);
                     models.push(LocalModel {
                         path: path.to_string_lossy().to_string(),
                         name,
@@ -33,6 +39,23 @@ impl LocalEngine {
             }
         }
         Ok(models)
+    }
+
+    pub fn supports_inference(&self) -> bool {
+        !self.models.is_empty()
+    }
+
+    pub fn inference(&self, prompt: &str) -> Result<String, String> {
+        let model = self.models.first().ok_or("No local model found")?;
+        let output = std::process::Command::new("llama-cli")
+            .args(["-m", &model.path, "-p", prompt, "-n", "256"])
+            .output()
+            .map_err(|e| format!("llama-cli not found: {}", e))?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
     }
 }
 

@@ -60,3 +60,25 @@ pub struct NodeTemplate {
     pub inputs: Vec<&'static str>,
     pub outputs: Vec<&'static str>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_node_type_variants() {
+        let variants = vec![
+            NodeType::HttpRequest,
+            NodeType::LLMCall,
+            NodeType::Condition,
+            NodeType::Loop,
+            NodeType::Transform,
+            NodeType::Merge,
+            NodeType::Split,
+            NodeType::Code,
+            NodeType::Trigger,
+            NodeType::Wait,
+            NodeType::Switch,
+        ];
+        assert_eq!(variants.len(), 11);
+    }
+}

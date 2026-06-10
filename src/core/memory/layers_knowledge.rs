@@ -52,9 +52,10 @@ impl MemoryLayer for SemanticMemory {
     }
 
     fn store(&mut self, key: &str, mut record: MemoryRecord) -> Result<(), String> {
-        record
-            .metadata
-            .insert("fact_type".to_string(), Value::String("factual".to_string()));
+        record.metadata.insert(
+            "fact_type".to_string(),
+            Value::String("factual".to_string()),
+        );
         self.facts.insert(key.to_string(), record);
         Ok(())
     }
@@ -87,8 +88,7 @@ impl MemoryLayer for SemanticMemory {
             .values()
             .filter(|r| {
                 r.key.to_lowercase().contains(&q)
-                    || r
-                        .content
+                    || r.content
                         .as_str()
                         .map(|s| s.to_lowercase().contains(&q))
                         .unwrap_or(false)
@@ -181,7 +181,11 @@ impl GraphMemory {
             }
             if let Some(node) = self.nodes.get(&current) {
                 visited.push(node);
-                for edge in self.edges.iter().filter(|e| e.from == current && e.relation == relation) {
+                for edge in self
+                    .edges
+                    .iter()
+                    .filter(|e| e.from == current && e.relation == relation)
+                {
                     queue.push_back((edge.to.clone(), depth + 1));
                 }
             }
@@ -219,10 +223,15 @@ impl MemoryLayer for GraphMemory {
 
     fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, String> {
         Ok(self.nodes.get(key).map(|n| {
-            MemoryRecord::new(&n.id, Value::String(n.label.clone()))
-                .with_metadata("properties", Value::Object(
-                    n.properties.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
-                ))
+            MemoryRecord::new(&n.id, Value::String(n.label.clone())).with_metadata(
+                "properties",
+                Value::Object(
+                    n.properties
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
+                ),
+            )
         }))
     }
 

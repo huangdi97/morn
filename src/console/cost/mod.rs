@@ -1,9 +1,9 @@
 //! cost — Defines console-facing cost tracking and reporting data.
 
-pub mod report;
 pub mod budget;
+pub mod report;
 
-pub use report::{CostReport, CostBreakdown, DailyCost, MonthlyCost};
+pub use report::{CostBreakdown, CostReport, DailyCost, MonthlyCost};
 
 /// 成本中心 — 管理预算、通知和成本汇总。
 /// Cost center managing budget, notifications, and cost aggregation.

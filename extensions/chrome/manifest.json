@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Morn AI Assistant",
+  "version": "1.0",
+  "description": "AI-powered browsing assistant powered by Morn",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "host_permissions": ["http://localhost:*/*", "ws://localhost:*/*"],
+  "action": { "default_popup": "popup.html", "default_title": "Morn" },
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["content.js"],
+    "run_at": "document_end"
+  }]
+}

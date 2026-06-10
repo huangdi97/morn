@@ -39,8 +39,7 @@ impl Sandbox {
         config.wasm_multi_memory(false);
         config.wasm_bulk_memory(true);
 
-        let engine = Engine::new(&config)
-            .map_err(|e| SandboxError::Compile(e.to_string()))?;
+        let engine = Engine::new(&config).map_err(|e| SandboxError::Compile(e.to_string()))?;
 
         Ok(Sandbox { engine })
     }
@@ -53,7 +52,8 @@ impl Sandbox {
         let elapsed = start.elapsed().as_millis() as u64;
         if elapsed > MAX_EXECUTION_MS {
             return Err(SandboxError::ResourceLimit(format!(
-                "Execution timed out: {}ms (max {}ms)", elapsed, MAX_EXECUTION_MS
+                "Execution timed out: {}ms (max {}ms)",
+                elapsed, MAX_EXECUTION_MS
             )));
         }
         result
@@ -75,7 +75,8 @@ impl Sandbox {
         let data = SandboxData { limits };
         let mut store = Store::new(&self.engine, data);
         store.limiter(|state| &mut state.limits);
-        store.set_fuel(MAX_FUEL)
+        store
+            .set_fuel(MAX_FUEL)
             .map_err(|e| SandboxError::ResourceLimit(e.to_string()))?;
 
         let linker = Linker::new(&self.engine);
@@ -83,19 +84,25 @@ impl Sandbox {
             .instantiate(&mut store, &module)
             .map_err(|e| SandboxError::Execute(e.to_string()))?;
 
-        let fuel_remaining = store.get_fuel()
+        let fuel_remaining = store
+            .get_fuel()
             .map_err(|e| SandboxError::ResourceLimit(e.to_string()))?;
         let fuel_consumed = MAX_FUEL - fuel_remaining;
 
         let elapsed_ms = start.elapsed().as_millis();
         if elapsed_ms as u64 > MAX_EXECUTION_MS {
             return Err(SandboxError::ResourceLimit(format!(
-                "Execution timed out after {}ms", elapsed_ms
+                "Execution timed out after {}ms",
+                elapsed_ms
             )));
         }
 
-        Ok(format!("executed | fuel: {} | time: {}ms | mem_max: {}MB",
-            fuel_consumed, elapsed_ms, MAX_MEMORY_BYTES / (1024 * 1024)))
+        Ok(format!(
+            "executed | fuel: {} | time: {}ms | mem_max: {}MB",
+            fuel_consumed,
+            elapsed_ms,
+            MAX_MEMORY_BYTES / (1024 * 1024)
+        ))
     }
 }
 

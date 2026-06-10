@@ -4,11 +4,11 @@ use std::collections::HashMap;
 
 mod builtins;
 mod registry;
+pub mod self_evolution;
 
-pub use builtins::{
-    CodeReviewSkill, DataAnalysisSkill, ReportGenSkill, SelfEvolutionSkill, WebResearchSkill,
-};
+pub use builtins::{CodeReviewSkill, DataAnalysisSkill, ReportGenSkill, WebResearchSkill};
 pub use registry::create_default_skills;
+pub use self_evolution::SelfEvolutionSkill;
 
 #[derive(Debug, Clone)]
 pub struct SkillStep {

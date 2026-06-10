@@ -72,11 +72,7 @@ pub struct A2AEnvelope {
 }
 
 impl A2AEnvelope {
-    pub fn direct(
-        message: A2AMessage,
-        sender_id: &str,
-        recipient_id: &str,
-    ) -> Self {
+    pub fn direct(message: A2AMessage, sender_id: &str, recipient_id: &str) -> Self {
         A2AEnvelope {
             message,
             sender_id: sender_id.to_string(),

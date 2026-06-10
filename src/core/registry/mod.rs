@@ -1,5 +1,7 @@
 //! registry — Stores agent capability registrations and lookup indexes.
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 use crate::core::event_bus::{SimpleEventBus, EVENT_CHAT_AGENT_RESPONSE, EVENT_SYSTEM_READY};
 use crate::core::storage::Storage;
@@ -156,6 +158,38 @@ impl Registry {
     /// Looks up a capability by id and returns a mutable reference when found.
     pub fn get_mut(&mut self, id: &str) -> Option<&mut Capability> {
         self.capabilities.get_mut(id)
+    }
+
+    /// Hot-loads capability JSON files from a directory and replaces existing ids.
+    pub fn watch_directory<P: AsRef<Path>>(&mut self, directory: P) -> Result<Vec<String>, String> {
+        let directory = directory.as_ref();
+        if !directory.exists() {
+            return Err(format!("registry directory {:?} does not exist", directory));
+        }
+        if !directory.is_dir() {
+            return Err(format!("registry path {:?} is not a directory", directory));
+        }
+
+        let mut loaded = Vec::new();
+        let entries = fs::read_dir(directory)
+            .map_err(|e| format!("Cannot read registry directory {:?}: {}", directory, e))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Registry directory entry error: {}", e))?;
+            let path = entry.path();
+            if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+                continue;
+            }
+
+            let content = fs::read_to_string(&path)
+                .map_err(|e| format!("Cannot read registry file {:?}: {}", path, e))?;
+            let capability: Capability = serde_json::from_str(&content)
+                .map_err(|e| format!("Cannot parse registry file {:?}: {}", path, e))?;
+            let id = capability.id.clone();
+            self.register(capability);
+            loaded.push(id);
+        }
+
+        Ok(loaded)
     }
 }
 
@@ -319,5 +353,56 @@ mod tests {
         registry.unregister("cap-1");
 
         assert!(registry.get_version_history("cap-1").is_empty());
+    }
+
+    #[test]
+    fn test_watch_directory_loads_capability_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let cap = make_cap("hot-cap", "0.1.0", "automation", vec!["run"]);
+        std::fs::write(
+            dir.path().join("hot-cap.json"),
+            serde_json::to_string(&cap).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("notes.txt"), "ignored").unwrap();
+
+        let mut registry = Registry::new(None, None);
+        let loaded = registry.watch_directory(dir.path()).unwrap();
+
+        assert_eq!(loaded, vec!["hot-cap"]);
+        assert_eq!(
+            registry.get("hot-cap").map(|c| c.domain.as_str()),
+            Some("automation")
+        );
+    }
+
+    #[test]
+    fn test_watch_directory_reloads_existing_capability() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("hot-cap.json"),
+            serde_json::to_string(&make_cap("hot-cap", "0.1.0", "automation", vec!["run"]))
+                .unwrap(),
+        )
+        .unwrap();
+
+        let mut registry = Registry::new(None, None);
+        registry.watch_directory(dir.path()).unwrap();
+
+        std::fs::write(
+            dir.path().join("hot-cap.json"),
+            serde_json::to_string(&make_cap("hot-cap", "0.2.0", "research", vec!["search"]))
+                .unwrap(),
+        )
+        .unwrap();
+        let loaded = registry.watch_directory(dir.path()).unwrap();
+
+        assert_eq!(loaded, vec!["hot-cap"]);
+        assert_eq!(registry.get_version("hot-cap"), Some("0.2.0"));
+        assert_eq!(registry.find_by_action("search").len(), 1);
+        assert_eq!(
+            registry.get_version_history("hot-cap"),
+            vec!["0.1.0", "0.2.0"]
+        );
     }
 }

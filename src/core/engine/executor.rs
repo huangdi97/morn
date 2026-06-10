@@ -209,6 +209,7 @@ mod tests {
             subtasks,
             estimated_secs: 1,
             decision_level: "single_agent".to_string(),
+            approval_required: false,
         }
     }
 

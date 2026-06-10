@@ -2,10 +2,10 @@ use crate::core::event_bus::{Event, SimpleEventBus};
 use std::collections::VecDeque;
 use std::time::SystemTime;
 
-pub mod triggers;
 pub mod handlers;
+pub mod triggers;
 
-pub use triggers::{TimedTrigger, EventTrigger};
+pub use triggers::{EventTrigger, TimedTrigger};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MaintenanceTask {
@@ -121,8 +121,8 @@ fn timestamp() -> String {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::OnceLock;
     use std::sync::Mutex;
+    use std::sync::OnceLock;
     use std::time::Duration;
 
     static EVENT_CALLS: AtomicUsize = AtomicUsize::new(0);
@@ -130,8 +130,12 @@ mod tests {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
     }
-    fn reset() { EVENT_CALLS.store(0, Ordering::SeqCst); }
-    fn handler(_e: Event) { EVENT_CALLS.fetch_add(1, Ordering::SeqCst); }
+    fn reset() {
+        EVENT_CALLS.store(0, Ordering::SeqCst);
+    }
+    fn handler(_e: Event) {
+        EVENT_CALLS.fetch_add(1, Ordering::SeqCst);
+    }
 
     #[test]
     fn test_new_auto_hands_has_default_triggers() {
@@ -249,8 +253,12 @@ mod tests {
         ah.enqueue(MaintenanceTask::LogRotation);
         ah.enqueue(MaintenanceTask::HealthCheck);
         let results = ah.run();
-        let health_idx = results.iter().position(|(t, _)| *t == MaintenanceTask::HealthCheck);
-        let log_idx = results.iter().position(|(t, _)| *t == MaintenanceTask::LogRotation);
+        let health_idx = results
+            .iter()
+            .position(|(t, _)| *t == MaintenanceTask::HealthCheck);
+        let log_idx = results
+            .iter()
+            .position(|(t, _)| *t == MaintenanceTask::LogRotation);
         assert!(health_idx.is_some());
         assert!(log_idx.is_some());
         assert!(health_idx.unwrap() < log_idx.unwrap());
@@ -281,7 +289,10 @@ mod tests {
     fn test_maintenance_task_label() {
         assert_eq!(MaintenanceTask::Inspection.label(), "inspection");
         assert_eq!(MaintenanceTask::GarbageCollection.label(), "gc");
-        assert_eq!(MaintenanceTask::MemoryCompaction.label(), "memory_compaction");
+        assert_eq!(
+            MaintenanceTask::MemoryCompaction.label(),
+            "memory_compaction"
+        );
         assert_eq!(MaintenanceTask::HealthCheck.label(), "health_check");
         assert_eq!(MaintenanceTask::CacheCleanup.label(), "cache_cleanup");
     }

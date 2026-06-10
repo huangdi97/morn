@@ -1,14 +1,16 @@
 //! execution — Supervises execution plans and emits task lifecycle events.
 mod dispatch;
+pub mod dual_llm;
+pub mod events;
 mod intent;
 pub mod planner;
 pub mod scheduler;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ExecutionTier {
-    Direct,       // <3s: no confirmation needed
-    Interactive,  // 3-30s: show plan -> confirm -> progress
-    Background,   // >30s: background -> notify on completion
+    Direct,      // <3s: no confirmation needed
+    Interactive, // 3-30s: show plan -> confirm -> progress
+    Background,  // >30s: background -> notify on completion
 }
 
 pub fn classify_execution_time(estimated_secs: u64) -> ExecutionTier {
@@ -102,6 +104,7 @@ mod tests {
             }],
             estimated_secs: 3,
             decision_level: decision_level.to_string(),
+            approval_required: false,
         }
     }
 
@@ -236,7 +239,10 @@ mod tests {
         let mut supervisor = Supervisor::new(None, Some(lifecycle_bus()));
 
         let err = supervisor
-            .execute_plan(&plan("single_tool"), &|_, _| Err("model failed".to_string()))
+            .execute_plan(
+                &plan("single_tool"),
+                &|_, _| Err("model failed".to_string()),
+            )
             .unwrap_err();
 
         assert_eq!(err, "model failed");

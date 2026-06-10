@@ -14,6 +14,15 @@ pub struct VectorKnowledge {
     _name: String,
     vectors: HashMap<String, Vec<f64>>,
     texts: HashMap<String, String>,
+    store: Option<sled::Db>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct PersistedVectorKnowledge {
+    id: String,
+    name: String,
+    vectors: HashMap<String, Vec<f64>>,
+    texts: HashMap<String, String>,
 }
 
 impl VectorKnowledge {
@@ -23,12 +32,60 @@ impl VectorKnowledge {
             _name: name.to_string(),
             vectors: HashMap::new(),
             texts: HashMap::new(),
+            store: None,
         }
     }
 
     pub fn add_document(&mut self, key: &str, text: &str, vector: Vec<f64>) {
         self.vectors.insert(key.to_string(), vector);
         self.texts.insert(key.to_string(), text.to_string());
+    }
+
+    /// Generates an embedding vector for the given text using a local embedding model (Ollama).
+    pub fn embed(text: &str) -> Result<Vec<f32>, String> {
+        let client = reqwest::blocking::Client::new();
+        let resp = client
+            .post("http://localhost:11434/api/embeddings")
+            .json(&serde_json::json!({"model": "nomic-embed-text", "prompt": text}))
+            .send()
+            .map_err(|e| format!("Embedding API call failed: {}", e))?;
+        let body: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+        let embedding: Vec<f32> =
+            serde_json::from_value(body["embedding"].clone()).map_err(|e| e.to_string())?;
+        Ok(embedding)
+    }
+
+    pub fn persist(&self, path: &str) -> Result<(), String> {
+        let db = sled::open(path).map_err(|e| e.to_string())?;
+        let snapshot = PersistedVectorKnowledge {
+            id: self.id.clone(),
+            name: self._name.clone(),
+            vectors: self.vectors.clone(),
+            texts: self.texts.clone(),
+        };
+        let val = bincode::serialize(&snapshot).map_err(|e| e.to_string())?;
+        db.insert(b"vector_knowledge", val)
+            .map_err(|e| e.to_string())?;
+        db.flush().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn load(path: &str) -> Result<Self, String> {
+        let db = sled::open(path).map_err(|e| e.to_string())?;
+        let val = db
+            .get(b"vector_knowledge")
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "No vector knowledge snapshot found".to_string())?;
+        let snapshot: PersistedVectorKnowledge =
+            bincode::deserialize(&val).map_err(|e| e.to_string())?;
+
+        Ok(VectorKnowledge {
+            id: snapshot.id,
+            _name: snapshot.name,
+            vectors: snapshot.vectors,
+            texts: snapshot.texts,
+            store: Some(db),
+        })
     }
 
     fn cosine_similarity(a: &[f64], b: &[f64]) -> f64 {
@@ -177,5 +234,60 @@ mod tests {
         let vk = VectorKnowledge::new("vec-2", "EmptyVectors");
         let results = vk.query("nonexistent").unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_embed_returns_vector() {
+        if std::env::var("RUN_OLLAMA_EMBED_TEST").as_deref() != Ok("1") {
+            tracing::warn!(
+                "skipping local Ollama embedding test; set RUN_OLLAMA_EMBED_TEST=1 and install nomic-embed-text to run it"
+            );
+            return;
+        }
+
+        let embedding = VectorKnowledge::embed("hello world").unwrap();
+        assert!(!embedding.is_empty());
+        assert!(embedding.iter().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn test_vector_knowledge_persist_load_round_trip_query() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vector-db");
+        let path = path.to_str().unwrap();
+
+        let mut vk = VectorKnowledge::new("vec-persist", "PersistVectors");
+        vk.add_document("doc1", "hello world", vec![1.0, 0.0, 0.0]);
+        vk.add_document("doc2", "goodbye world", vec![0.0, 1.0, 0.0]);
+        vk.add_document("doc3", "hello there", vec![1.0, 1.0, 0.0]);
+        vk.persist(path).unwrap();
+
+        let loaded = VectorKnowledge::load(path).unwrap();
+        let results = loaded.query("doc1").unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].key, "doc3");
+        assert!(loaded.store.is_some());
+    }
+
+    #[test]
+    fn test_vector_knowledge_persist_load_preserves_documents() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vector-db");
+        let path = path.to_str().unwrap();
+
+        let mut vk = VectorKnowledge::new("vec-roundtrip", "RoundTripVectors");
+        vk.add_document("doc-a", "alpha", vec![0.25, 0.5]);
+        vk.add_document("doc-b", "beta", vec![0.75, 1.0]);
+        vk.persist(path).unwrap();
+
+        let loaded = VectorKnowledge::load(path).unwrap();
+
+        assert_eq!(loaded.id, "vec-roundtrip");
+        assert_eq!(loaded._name, "RoundTripVectors");
+        assert_eq!(loaded.texts.get("doc-a"), Some(&"alpha".to_string()));
+        assert_eq!(loaded.texts.get("doc-b"), Some(&"beta".to_string()));
+        assert_eq!(loaded.vectors.get("doc-a"), Some(&vec![0.25, 0.5]));
+        assert_eq!(loaded.vectors.get("doc-b"), Some(&vec![0.75, 1.0]));
     }
 }

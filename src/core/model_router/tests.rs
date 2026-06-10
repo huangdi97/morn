@@ -25,7 +25,11 @@ fn test_provider_configs_accessible() {
 fn test_all_providers_have_models() {
     for p in providers::PROVIDERS {
         assert!(!p.models.is_empty(), "provider {} has no models", p.name);
-        assert!(!p.endpoint.is_empty() || p.name == "builtin", "provider {} has no endpoint", p.name);
+        assert!(
+            !p.endpoint.is_empty() || p.name == "builtin",
+            "provider {} has no endpoint",
+            p.name
+        );
     }
 }
 
@@ -65,7 +69,10 @@ fn test_local_only_returns_fallback_when_no_local() {
 fn test_hybrid_detects_complex() {
     let router = ModelRouter::new();
     let simple = router.select_model("hello", &["chat"]);
-    let complex = router.select_model("write a complex analysis of market trends and generate a report", &["chat"]);
+    let complex = router.select_model(
+        "write a complex analysis of market trends and generate a report",
+        &["chat"],
+    );
     assert!(simple.is_ok());
     assert!(complex.is_ok());
 }

@@ -39,9 +39,42 @@ pub fn navigate(url: &str) -> ComputerOpResult {
 }
 
 pub fn form_fill(selector: &str, value: &str) -> ComputerOpResult {
+    #[cfg(target_os = "linux")]
+    if let Ok(_) = std::process::Command::new("xdotool")
+        .args(["type", "--clearmodifiers", value])
+        .output()
+    {
+        return ComputerOpResult {
+            success: true,
+            data: serde_json::json!({"filled": selector, "value": value}).to_string(),
+            security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
+            approval_required: false,
+        };
+    }
+
+    #[cfg(target_os = "windows")]
+    if let Ok(_) = std::process::Command::new("powershell")
+        .args([
+            "-Command",
+            &format!(
+                "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('{}')",
+                value.replace('\'', "''")
+            ),
+        ])
+        .output()
+    {
+        return ComputerOpResult {
+            success: true,
+            data: serde_json::json!({"filled": selector, "value": value}).to_string(),
+            security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
+            approval_required: false,
+        };
+    }
+
     ComputerOpResult {
         success: true,
-        data: format!("[simulated] filled '{}' with '{}'", selector, value),
+        data: serde_json::json!({"filled": selector, "value": value, "simulated": true})
+            .to_string(),
         security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
         approval_required: false,
     }

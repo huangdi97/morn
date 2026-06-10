@@ -27,6 +27,8 @@ pub struct TaskPlan {
     pub subtasks: Vec<SubTaskDef>,
     pub estimated_secs: u64,
     pub decision_level: String,
+    #[serde(default)]
+    pub approval_required: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -62,9 +64,9 @@ pub enum DecisionLevel {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum DecisionTier {
-    Operational,   // 运营级: trust>60 + low risk → auto
-    Tactical,      // 战术级: suggest + CEO confirm
-    Strategic,     // 战略级: must CEO decide
+    Operational, // 运营级: trust>60 + low risk → auto
+    Tactical,    // 战术级: suggest + CEO confirm
+    Strategic,   // 战略级: must CEO decide
 }
 
 impl DecisionTier {
@@ -79,13 +81,25 @@ impl DecisionTier {
     pub fn from_decision_level(level: &DecisionLevel, trust_score: f64) -> Self {
         match level {
             DecisionLevel::L1DirectAnswer => {
-                if trust_score > 60.0 { DecisionTier::Operational } else { DecisionTier::Tactical }
+                if trust_score > 60.0 {
+                    DecisionTier::Operational
+                } else {
+                    DecisionTier::Tactical
+                }
             }
             DecisionLevel::L2SingleTool => {
-                if trust_score > 60.0 { DecisionTier::Operational } else { DecisionTier::Tactical }
+                if trust_score > 60.0 {
+                    DecisionTier::Operational
+                } else {
+                    DecisionTier::Tactical
+                }
             }
             DecisionLevel::L3SingleAgent => {
-                if trust_score > 70.0 { DecisionTier::Tactical } else { DecisionTier::Strategic }
+                if trust_score > 70.0 {
+                    DecisionTier::Tactical
+                } else {
+                    DecisionTier::Strategic
+                }
             }
             DecisionLevel::L4Team => DecisionTier::Strategic,
             DecisionLevel::L5Workflow => DecisionTier::Tactical,

@@ -162,6 +162,7 @@ impl CostCenter {
         }
     }
 
+    #[allow(dead_code)]
     fn generate_daily_trend(&self) -> Vec<DailyCost> {
         let mut trend = Vec::new();
         let now = chrono::Utc::now();
@@ -175,6 +176,7 @@ impl CostCenter {
         trend
     }
 
+    #[allow(dead_code)]
     fn generate_monthly_trend(&self) -> Vec<MonthlyCost> {
         let mut trend = Vec::new();
         let now = chrono::Utc::now();

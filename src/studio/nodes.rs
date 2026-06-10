@@ -2,7 +2,9 @@
 
 pub use super::executor::NodeExecutor;
 pub use super::registry::NodeRegistry;
-pub use super::types::{ExecutionResult, NodeDefinition, NodeEdge, NodeGraph, NodeTemplate, NodeType};
+pub use super::types::{
+    ExecutionResult, NodeDefinition, NodeEdge, NodeGraph, NodeTemplate, NodeType,
+};
 
 #[cfg(test)]
 mod tests {
@@ -87,7 +89,9 @@ mod tests {
     fn test_node_registry_has_20_templates() {
         let templates = NodeRegistry::all_templates();
         assert!(templates.len() >= 22);
-        assert!(templates.iter().any(|t| t.node_type == NodeType::HttpRequest));
+        assert!(templates
+            .iter()
+            .any(|t| t.node_type == NodeType::HttpRequest));
         assert!(templates.iter().any(|t| t.node_type == NodeType::LLMCall));
         assert!(templates.iter().any(|t| t.node_type == NodeType::Condition));
         assert!(templates.iter().any(|t| t.node_type == NodeType::Loop));
@@ -182,7 +186,10 @@ mod tests {
         };
         let result = NodeExecutor::execute_node(&node, HashMap::new());
         assert!(result.success);
-        assert!(result.output["code_preview"].as_str().unwrap_or("").contains("print"));
+        assert!(result.output["code_preview"]
+            .as_str()
+            .unwrap_or("")
+            .contains("print"));
     }
 
     #[test]

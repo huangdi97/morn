@@ -154,8 +154,7 @@ fn test_create_team_from_nl_llm_generated() {
             Ok(json_response.to_string())
         }
     };
-    let result =
-        supervisor.create_team_from_nl("something totally unique and custom", &chat_fn);
+    let result = supervisor.create_team_from_nl("something totally unique and custom", &chat_fn);
     assert!(result.is_ok());
     let team = result.unwrap();
     assert_eq!(team.id, "team-custom");
@@ -165,7 +164,9 @@ fn test_create_team_from_nl_llm_generated() {
 #[test]
 fn test_build_team_from_nl_uses_local_builder() {
     let supervisor = Supervisor::new(None, None);
-    let team = supervisor.build_team_from_nl("devops deploy monitor").unwrap();
+    let team = supervisor
+        .build_team_from_nl("devops deploy monitor")
+        .unwrap();
 
     assert_eq!(team.id, "preset-devops");
     assert_eq!(team.members.len(), 3);
@@ -175,8 +176,8 @@ fn test_build_team_from_nl_uses_local_builder() {
 fn test_modify_rule_from_nl_add() {
     let storage = Storage::new_in_memory().unwrap();
     let supervisor = Supervisor::new(Some(storage), None);
-    let result = supervisor
-        .modify_rule_from_nl("add | deploy | L4 | contains 'deploy' | require_approval");
+    let result =
+        supervisor.modify_rule_from_nl("add | deploy | L4 | contains 'deploy' | require_approval");
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), "Rule added");
 }

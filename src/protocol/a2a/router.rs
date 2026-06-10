@@ -18,8 +18,7 @@ impl A2ARouter {
     }
 
     pub fn register_agent(&mut self, capability: AgentCapability) {
-        self.agents
-            .insert(capability.agent_id.clone(), capability);
+        self.agents.insert(capability.agent_id.clone(), capability);
     }
 
     pub fn unregister_agent(&mut self, agent_id: &str) {
@@ -118,7 +117,9 @@ impl Default for A2ARouter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::a2a::protocol::{A2AMessage, AgentCapability, ContentType, TransportProtocol};
+    use crate::protocol::a2a::protocol::{
+        A2AMessage, AgentCapability, ContentType, TransportProtocol,
+    };
 
     fn setup_router() -> A2ARouter {
         let mut router = A2ARouter::new();
@@ -131,14 +132,22 @@ mod tests {
         });
         router.register_agent(AgentCapability {
             agent_id: "agent_bob".into(),
-            supported_content_types: vec![ContentType::Text, ContentType::Json, ContentType::Result],
+            supported_content_types: vec![
+                ContentType::Text,
+                ContentType::Json,
+                ContentType::Result,
+            ],
             transport: vec![TransportProtocol::HttpSse],
             endpoint: "http://bob.local:9002/sse".into(),
             is_available: true,
         });
         router.register_agent(AgentCapability {
             agent_id: "agent_charlie".into(),
-            supported_content_types: vec![ContentType::Text, ContentType::Task, ContentType::Result],
+            supported_content_types: vec![
+                ContentType::Text,
+                ContentType::Task,
+                ContentType::Result,
+            ],
             transport: vec![TransportProtocol::WebSocket, TransportProtocol::HttpSse],
             endpoint: "ws://charlie.local:9003".into(),
             is_available: true,
@@ -175,7 +184,9 @@ mod tests {
 
         let result = router.route(envelope).unwrap();
         assert_eq!(result.len(), 2);
-        assert!(result.iter().all(|e| e.recipient_id != Some("agent_alice".to_string())));
+        assert!(result
+            .iter()
+            .all(|e| e.recipient_id != Some("agent_alice".to_string())));
     }
 
     #[test]

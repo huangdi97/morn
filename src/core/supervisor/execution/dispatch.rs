@@ -1,17 +1,13 @@
 //! dispatch — Task execution, lifecycle events, and inline chat dispatch.
-use crate::core::event_bus::{
-    EVENT_AGENT_CREATED, EVENT_AGENT_DESTROYED, EVENT_SUPERVISOR_PLAN_CREATED,
-    EVENT_TASK_COMPLETED, EVENT_TASK_FAILED, EVENT_WORKFLOW_COMPLETED, EVENT_WORKFLOW_FAILED,
-    EVENT_WORKFLOW_STARTED,
-};
 use crate::core::storage::{DecisionRecord, TaskRecord};
 use tracing;
 
+use super::events::*;
+use super::{classify_execution_time, ExecutionTier};
 use crate::core::supervisor::{
     DecisionLevel, DecisionOverride, Mode, SubTaskDef, SubTaskResult, Supervisor, TaskPlan,
     TaskResult,
 };
-use super::{classify_execution_time, ExecutionTier};
 
 impl Supervisor {
     /// Executes a task plan with the provided chat function and returns the completed task result.
@@ -40,37 +36,12 @@ impl Supervisor {
                 "user_input": plan.user_input,
                 "mode": self.mode.as_str(),
                 "execution_tier": format!("{:?}", tier),
-            }).to_string(),
+            })
+            .to_string(),
         );
 
         if let Some(ref bus) = self.event_bus {
-            bus.publish_event(
-                EVENT_WORKFLOW_STARTED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "decision_level": plan.decision_level,
-                    "execution_tier": format!("{:?}", tier),
-                }),
-            );
-            bus.publish_event(
-                EVENT_SUPERVISOR_PLAN_CREATED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "user_input": plan.user_input,
-                    "decision_level": plan.decision_level,
-                    "mode": self.mode.as_str(),
-                }),
-            );
-            bus.publish_event(
-                EVENT_AGENT_CREATED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "agent_id": "chat-agent",
-                }),
-            );
+            publish_plan_started_events(bus, plan, &tier, &self.mode);
         }
 
         if let Some(ref storage) = self.storage {
@@ -122,31 +93,7 @@ impl Supervisor {
                     let _ = storage.update_task_status(&plan.task_id, "failed");
                 }
                 if let Some(ref bus) = self.event_bus {
-                    bus.publish_event(
-                        EVENT_TASK_FAILED,
-                        "supervisor",
-                        serde_json::json!({
-                            "task_id": plan.task_id,
-                            "error": err,
-                        }),
-                    );
-                    bus.publish_event(
-                        EVENT_AGENT_DESTROYED,
-                        "supervisor",
-                        serde_json::json!({
-                            "task_id": plan.task_id,
-                            "agent_id": "chat-agent",
-                            "status": "failed",
-                        }),
-                    );
-                    bus.publish_event(
-                        EVENT_WORKFLOW_FAILED,
-                        "supervisor",
-                        serde_json::json!({
-                            "task_id": plan.task_id,
-                            "error": err,
-                        }),
-                    );
+                    publish_plan_failed_events(bus, &plan.task_id, &err);
                 }
                 self.audit_log.append(
                     "supervisor",
@@ -154,7 +101,8 @@ impl Supervisor {
                     &serde_json::json!({
                         "task_id": plan.task_id,
                         "error": err,
-                    }).to_string(),
+                    })
+                    .to_string(),
                 );
                 return Err(err);
             }
@@ -179,31 +127,7 @@ impl Supervisor {
         }
 
         if let Some(ref bus) = self.event_bus {
-            bus.publish_event(
-                EVENT_TASK_COMPLETED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "summary": result.summary,
-                }),
-            );
-            bus.publish_event(
-                EVENT_AGENT_DESTROYED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "agent_id": "chat-agent",
-                    "status": "completed",
-                }),
-            );
-            bus.publish_event(
-                EVENT_WORKFLOW_COMPLETED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "summary": result.summary,
-                }),
-            );
+            publish_plan_completed_events(bus, &plan.task_id, &result.summary);
         }
 
         if let Some(engine) = &self.learning_engine {
@@ -237,7 +161,7 @@ impl Supervisor {
             None => self.decide_with_rules(&clean_input),
         };
 
-        let plan = TaskPlan {
+        let mut plan = TaskPlan {
             task_id: task_id.clone(),
             user_input: clean_input.clone(),
             subtasks: vec![SubTaskDef {
@@ -256,13 +180,19 @@ impl Supervisor {
                 DecisionLevel::L6JumpToStudio => 60,
             },
             decision_level: level.as_str().to_string(),
+            approval_required: false,
         };
+        self.apply_dual_llm_check(&mut plan, chat_fn);
 
         let result = self.execute_plan(&plan, chat_fn)?;
         Ok(result.summary)
     }
 
     pub(crate) fn requires_decision_point(&self, plan: &TaskPlan) -> bool {
+        if plan.approval_required {
+            return true;
+        }
+
         let high_level = matches!(
             plan.decision_level.as_str(),
             "team" | "workflow" | "jump_studio"
@@ -275,5 +205,68 @@ impl Supervisor {
                 || action.contains("payment")
         });
         high_level || high_risk_action
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::core::supervisor::{SubTaskDef, Supervisor, TaskPlan};
+
+    fn make_supervisor() -> Supervisor {
+        Supervisor::new(None, None)
+    }
+
+    #[test]
+    fn requires_decision_point_when_approval_required() {
+        let sup = make_supervisor();
+        let plan = TaskPlan {
+            task_id: "t1".into(),
+            user_input: "test".into(),
+            subtasks: vec![],
+            estimated_secs: 1,
+            decision_level: "direct".into(),
+            approval_required: true,
+        };
+        assert!(sup.requires_decision_point(&plan));
+    }
+
+    #[test]
+    fn requires_decision_point_false_when_no_approval_needed() {
+        let sup = make_supervisor();
+        let plan = TaskPlan {
+            task_id: "t2".into(),
+            user_input: "hello".into(),
+            subtasks: vec![SubTaskDef {
+                id: "main".into(),
+                agent_id: "agent".into(),
+                action: "chat".into(),
+                params: serde_json::json!({}),
+                depends_on: vec![],
+            }],
+            estimated_secs: 1,
+            decision_level: "direct".into(),
+            approval_required: false,
+        };
+        assert!(!sup.requires_decision_point(&plan));
+    }
+
+    #[test]
+    fn requires_decision_point_for_high_risk_action() {
+        let sup = make_supervisor();
+        let plan = TaskPlan {
+            task_id: "t3".into(),
+            user_input: "deploy now".into(),
+            subtasks: vec![SubTaskDef {
+                id: "main".into(),
+                agent_id: "deployer".into(),
+                action: "deploy".into(),
+                params: serde_json::json!({}),
+                depends_on: vec![],
+            }],
+            estimated_secs: 10,
+            decision_level: "single_agent".into(),
+            approval_required: false,
+        };
+        assert!(sup.requires_decision_point(&plan));
     }
 }

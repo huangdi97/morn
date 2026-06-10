@@ -37,6 +37,7 @@ mod tests {
             }],
             estimated_secs: 5,
             decision_level: "single_agent".to_string(),
+            approval_required: false,
         };
 
         let mut execute_fn = |_plan: &TaskPlan| -> Result<TaskResult, String> {
@@ -135,6 +136,7 @@ mod tests {
             ],
             estimated_secs: 10,
             decision_level: "single_agent".into(),
+            approval_required: false,
         };
 
         let execute = |sub: &SubTaskDef| -> Result<String, String> {

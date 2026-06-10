@@ -1,3 +1,4 @@
+//! a2a — Agent-to-Agent routing, discovery, and message envelopes.
 //! A2A (Agent-to-Agent) protocol for inter-agent communication.
 //!
 //! ## Protocol Design

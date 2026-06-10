@@ -189,7 +189,11 @@ impl SecurityGuard {
     }
 
     pub fn set_profile(&mut self, profile: SecurityProfile) {
-        if let Some(existing) = self.profiles.iter_mut().find(|p| p.agent_id == profile.agent_id) {
+        if let Some(existing) = self
+            .profiles
+            .iter_mut()
+            .find(|p| p.agent_id == profile.agent_id)
+        {
             *existing = profile;
         } else {
             self.profiles.push(profile);
@@ -209,10 +213,10 @@ impl Default for SecurityGuard {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde_json::json;
     use super::super::constitution::SecurityLevel;
     use super::super::profile::SecurityProfile;
+    use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_security_block() {
@@ -272,13 +276,17 @@ mod tests {
     #[test]
     fn test_access_other_process_memory_blocked() {
         let guard = SecurityGuard::new();
-        assert!(guard.is_allowed("access_other_process_memory", &json!({})).is_err());
+        assert!(guard
+            .is_allowed("access_other_process_memory", &json!({}))
+            .is_err());
     }
 
     #[test]
     fn test_sandbox_code_execution_requires_approval() {
         let guard = SecurityGuard::new();
-        assert!(guard.is_allowed("sandbox_code_execution", &json!({})).is_err());
+        assert!(guard
+            .is_allowed("sandbox_code_execution", &json!({}))
+            .is_err());
     }
 
     #[test]

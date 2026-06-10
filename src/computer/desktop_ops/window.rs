@@ -1,7 +1,7 @@
 //! Window management — switch, find, and focus windows via OS APIs or simulation.
 
-use super::{ComputerOpResult, SecurityLevel};
 use super::run_ps;
+use super::{ComputerOpResult, SecurityLevel};
 
 /// Switch focus to window with matching title.
 pub fn window_switch(title: &str) -> ComputerOpResult {

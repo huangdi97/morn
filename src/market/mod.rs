@@ -1,5 +1,10 @@
+//! market — Marketplace listings, billing, payments, and creator revenue.
 pub mod billing;
+pub mod gateway;
+pub mod gateway_mock;
+pub mod gateway_stripe;
 pub mod marketplace;
+pub mod revenue;
 
 pub use marketplace::License;
 pub use marketplace::Listing;

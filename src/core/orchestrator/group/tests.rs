@@ -19,8 +19,13 @@ fn test_agent_group_with_config() {
         timeout_secs: 600,
         ..GroupConfig::default()
     };
-    let group = AgentGroup::new("g1", vec!["a1".to_string()], CollaborationMode::Broadcast, "ws1")
-        .with_config(config);
+    let group = AgentGroup::new(
+        "g1",
+        vec!["a1".to_string()],
+        CollaborationMode::Broadcast,
+        "ws1",
+    )
+    .with_config(config);
     assert_eq!(group.config.max_concurrency, 2);
     assert_eq!(group.config.timeout_secs, 600);
 }
@@ -106,7 +111,11 @@ fn test_group_executor_execute_chain() {
     let mut executor = GroupExecutor::new();
     executor.register_group(AgentGroup::new(
         "g1",
-        vec!["agent-a".to_string(), "agent-b".to_string(), "agent-c".to_string()],
+        vec![
+            "agent-a".to_string(),
+            "agent-b".to_string(),
+            "agent-c".to_string(),
+        ],
         CollaborationMode::Chain,
         "ws1",
     ));

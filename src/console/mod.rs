@@ -2,14 +2,15 @@
 pub mod cost;
 pub mod governance;
 pub mod security;
+pub use crate::core::kanban;
 
+use self::security::SecurityView;
 use crate::core::dual_llm::DualLlmGuard;
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 use crate::core::supervisor::Supervisor;
 use crate::market::Marketplace;
-use self::security::SecurityView;
 
 /// 控制台后端 — 聚合注册表、存储、监督器、事件总线、双 LLM 和市场组件。
 /// Console backend aggregating registry, storage, supervisor, event bus, dual LLM, and marketplace.
@@ -134,13 +135,17 @@ impl ConsoleBackend {
         let content = std::fs::read_to_string("/proc/stat").ok()?;
         let line = content.lines().next()?;
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 5 { return None; }
+        if parts.len() < 5 {
+            return None;
+        }
         let user: u64 = parts[1].parse().ok()?;
         let nice: u64 = parts[2].parse().ok()?;
         let system: u64 = parts[3].parse().ok()?;
         let idle: u64 = parts[4].parse().ok()?;
         let total = user + nice + system + idle;
-        if total == 0 { return None; }
+        if total == 0 {
+            return None;
+        }
         let used = user + nice + system;
         Some((used as f64 / total as f64) * 100.0)
     }
@@ -157,7 +162,9 @@ impl ConsoleBackend {
                 avail_kb = val.split_whitespace().next()?.parse().ok()?;
             }
         }
-        if total_kb == 0 { return None; }
+        if total_kb == 0 {
+            return None;
+        }
         let used_mb = (total_kb - avail_kb) / 1024;
         let total_mb = total_kb / 1024;
         Some((used_mb, total_mb))
@@ -169,7 +176,8 @@ impl ConsoleBackend {
             let content = std::fs::read_to_string("/proc/mounts").ok()?;
             let cwd = std::env::current_dir().ok()?;
             let path = cwd.to_str()?;
-            let mount_point = content.lines()
+            let mount_point = content
+                .lines()
                 .filter_map(|line| {
                     let parts: Vec<&str> = line.split_whitespace().collect();
                     if parts.len() >= 2 && path.starts_with(parts[1]) {
@@ -182,7 +190,8 @@ impl ConsoleBackend {
             let df = std::process::Command::new("df")
                 .arg("-B1")
                 .arg(&mount_point)
-                .output().ok()?;
+                .output()
+                .ok()?;
             let output = String::from_utf8_lossy(&df.stdout);
             let line = output.lines().nth(1)?;
             let parts: Vec<&str> = line.split_whitespace().collect();
@@ -321,8 +330,9 @@ pub fn handle_security_command(input: &str, view: &SecurityView) -> String {
     let parts = input.split_whitespace().collect::<Vec<_>>();
     match parts.get(1).copied().unwrap_or("summary") {
         "summary" => view.render_summary(),
-        "incidents" => serde_json::to_string(&view.render_incidents())
-            .unwrap_or_else(|_| "[]".to_string()),
+        "incidents" => {
+            serde_json::to_string(&view.render_incidents()).unwrap_or_else(|_| "[]".to_string())
+        }
         "policies" => serde_json::to_string(&view.policies).unwrap_or_else(|_| "[]".to_string()),
         _ => "Usage: /security <summary|incidents|policies>".to_string(),
     }

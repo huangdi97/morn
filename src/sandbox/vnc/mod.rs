@@ -43,7 +43,12 @@ impl VncManager {
     }
 
     /// Create a new headless VNC session for an agent.
-    pub fn create_session(&self, agent_id: &str, width: u32, height: u32) -> Result<String, String> {
+    pub fn create_session(
+        &self,
+        agent_id: &str,
+        width: u32,
+        height: u32,
+    ) -> Result<String, String> {
         let session_id = format!("vnc-{}", uuid::Uuid::new_v4());
 
         let session = if self.can_start_xvfb() {
@@ -93,7 +98,13 @@ impl VncManager {
                 .unwrap_or(false)
     }
 
-    fn simulated_session(&self, session_id: &str, agent_id: &str, width: u32, height: u32) -> VncSession {
+    fn simulated_session(
+        &self,
+        session_id: &str,
+        agent_id: &str,
+        width: u32,
+        height: u32,
+    ) -> VncSession {
         VncSession {
             id: session_id.to_string(),
             agent_id: agent_id.to_string(),
@@ -107,12 +118,7 @@ impl VncManager {
     }
 
     /// Connect to a remote VNC server.
-    pub fn connect_remote(
-        &self,
-        agent_id: &str,
-        host: &str,
-        port: u16,
-    ) -> Result<String, String> {
+    pub fn connect_remote(&self, agent_id: &str, host: &str, port: u16) -> Result<String, String> {
         let session_id = format!("vnc-remote-{}", uuid::Uuid::new_v4());
 
         use std::net::TcpStream;
@@ -133,7 +139,10 @@ impl VncManager {
                 sessions.insert(session_id.clone(), session);
                 Ok(session_id)
             }
-            Err(e) => Err(format!("Failed to connect to VNC server at {}: {}", addr, e)),
+            Err(e) => Err(format!(
+                "Failed to connect to VNC server at {}: {}",
+                addr, e
+            )),
         }
     }
 
@@ -213,7 +222,13 @@ impl VncManager {
     }
 
     /// Send mouse click to a VNC session.
-    pub fn mouse_click(&self, session_id: &str, x: i32, y: i32, button: &str) -> Result<(), String> {
+    pub fn mouse_click(
+        &self,
+        session_id: &str,
+        x: i32,
+        y: i32,
+        button: &str,
+    ) -> Result<(), String> {
         let _session = self.get_session(session_id)?;
 
         if !cfg!(test) && cfg!(feature = "vnc-sandbox") && cfg!(target_os = "linux") {
@@ -225,7 +240,13 @@ impl VncManager {
             };
 
             std::process::Command::new("xdotool")
-                .args(["mousemove", "--display", display, &x.to_string(), &y.to_string()])
+                .args([
+                    "mousemove",
+                    "--display",
+                    display,
+                    &x.to_string(),
+                    &y.to_string(),
+                ])
                 .output()
                 .map_err(|e| format!("xdotool mousemove failed: {}", e))?;
 
@@ -250,10 +271,7 @@ impl VncManager {
 
     /// Get count of active sessions.
     pub fn active_count(&self) -> usize {
-        self.sessions
-            .lock()
-            .map(|s| s.len())
-            .unwrap_or(0)
+        self.sessions.lock().map(|s| s.len()).unwrap_or(0)
     }
 }
 

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde_json::Value;
+use std::collections::HashMap;
 
 use super::storage::{MemoryLayer, MemoryRecord};
 
@@ -29,7 +29,10 @@ impl LongTermExperience {
     }
 
     pub fn add_experience(&mut self, summary: &str, importance: f64) -> String {
-        let id = format!("lte_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
+        let id = format!(
+            "lte_{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        );
         let exp = Experience {
             id: id.clone(),
             summary: summary.to_string(),
@@ -79,10 +82,8 @@ impl LongTermExperience {
                 let removed = self.experiences.swap_remove(remove_idx);
                 self.index.remove(&removed.id);
                 if remove_idx < self.experiences.len() {
-                    self.index.insert(
-                        self.experiences[remove_idx].id.clone(),
-                        remove_idx,
-                    );
+                    self.index
+                        .insert(self.experiences[remove_idx].id.clone(), remove_idx);
                 }
             }
         }
@@ -99,11 +100,7 @@ impl MemoryLayer for LongTermExperience {
     }
 
     fn store(&mut self, _key: &str, record: MemoryRecord) -> Result<(), String> {
-        let summary = record
-            .content
-            .as_str()
-            .unwrap_or(&record.key)
-            .to_string();
+        let summary = record.content.as_str().unwrap_or(&record.key).to_string();
         let importance = record
             .metadata
             .get("importance")
@@ -120,9 +117,13 @@ impl MemoryLayer for LongTermExperience {
             .find(|e| e.id == key || e.summary == key)
             .map(|e| {
                 MemoryRecord::new(&e.id, Value::String(e.summary.clone()))
-                    .with_metadata("importance", Value::Number(
-                        serde_json::Number::from_f64(e.importance).unwrap_or(serde_json::Number::from(0)),
-                    ))
+                    .with_metadata(
+                        "importance",
+                        Value::Number(
+                            serde_json::Number::from_f64(e.importance)
+                                .unwrap_or(serde_json::Number::from(0)),
+                        ),
+                    )
                     .with_metadata("created_at", Value::Number(e.created_at.into()))
                     .with_metadata("access_count", Value::Number(e.access_count.into()))
             }))
@@ -150,15 +151,16 @@ impl MemoryLayer for LongTermExperience {
         let mut results: Vec<MemoryRecord> = self
             .experiences
             .iter()
-            .filter(|e| {
-                e.summary.to_lowercase().contains(&q)
-                    || e.id.to_lowercase().contains(&q)
-            })
+            .filter(|e| e.summary.to_lowercase().contains(&q) || e.id.to_lowercase().contains(&q))
             .map(|e| {
                 MemoryRecord::new(&e.id, Value::String(e.summary.clone()))
-                    .with_metadata("importance", Value::Number(
-                        serde_json::Number::from_f64(e.importance).unwrap_or(serde_json::Number::from(0)),
-                    ))
+                    .with_metadata(
+                        "importance",
+                        Value::Number(
+                            serde_json::Number::from_f64(e.importance)
+                                .unwrap_or(serde_json::Number::from(0)),
+                        ),
+                    )
                     .with_metadata("access_count", Value::Number(e.access_count.into()))
             })
             .collect();

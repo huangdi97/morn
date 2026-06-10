@@ -185,7 +185,10 @@ fn test_custom_executor() {
 
     let result = pipeline.execute_simple_chain(PipelineData::Text("data".to_string()));
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), PipelineData::Text("data_custom".to_string()));
+    assert_eq!(
+        result.unwrap(),
+        PipelineData::Text("data_custom".to_string())
+    );
 }
 
 #[test]

@@ -1,8 +1,10 @@
 //! model_router — Routes LLM requests to appropriate provider based on mode and capabilities.
-pub mod providers;
 pub mod local_engine;
+pub mod providers;
 
-#[derive(Debug, Clone, PartialEq)]
+use local_engine::LocalEngine;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RouterMode {
     CloudFirst,
     LocalOnly,
@@ -15,8 +17,11 @@ impl RouterMode {
             RouterMode::CloudFirst => Ok("cloud".to_string()),
             RouterMode::LocalOnly => Ok("local".to_string()),
             RouterMode::Hybrid => {
-                if request.len() < 100 { Ok("local".to_string()) }
-                else { Ok("cloud".to_string()) }
+                if request.len() < 100 {
+                    Ok("local".to_string())
+                } else {
+                    Ok("cloud".to_string())
+                }
             }
         }
     }
@@ -43,6 +48,7 @@ pub enum ModelType {
 #[derive(Debug, Clone)]
 pub struct ModelRouter {
     mode: RouterMode,
+    local_engine: LocalEngine,
     cloud_models: Vec<ModelSpec>,
     local_models: Vec<ModelSpec>,
     fallback_models: Vec<ModelSpec>,
@@ -54,6 +60,7 @@ impl ModelRouter {
     pub fn new() -> Self {
         let mut router = ModelRouter {
             mode: RouterMode::CloudFirst,
+            local_engine: LocalEngine::new(),
             cloud_models: Vec::new(),
             local_models: Vec::new(),
             fallback_models: Vec::new(),
@@ -122,7 +129,11 @@ impl ModelRouter {
                 name: "GPT-4o".to_string(),
                 provider: "openai".to_string(),
                 model_type: ModelType::Cloud,
-                capabilities: vec!["chat".to_string(), "vision".to_string(), "reasoning".to_string()],
+                capabilities: vec![
+                    "chat".to_string(),
+                    "vision".to_string(),
+                    "reasoning".to_string(),
+                ],
                 cost_per_1k_tokens: 0.01,
                 is_available: true,
             });
@@ -164,6 +175,20 @@ impl ModelRouter {
         self.mode = mode;
     }
 
+    pub fn route(&self, prompt: &str) -> Result<String, String> {
+        match self.mode {
+            RouterMode::CloudFirst => RouterMode::CloudFirst.route(prompt),
+            RouterMode::LocalOnly => self.local_engine.inference(prompt),
+            RouterMode::Hybrid => {
+                if prompt.len() < self.hybrid_threshold && self.local_engine.supports_inference() {
+                    self.local_engine.inference(prompt)
+                } else {
+                    RouterMode::CloudFirst.route(prompt)
+                }
+            }
+        }
+    }
+
     pub fn available_models(&self) -> Vec<&ModelSpec> {
         let mut models: Vec<&ModelSpec> = self
             .cloud_models
@@ -185,20 +210,17 @@ impl ModelRouter {
         }
     }
 
-    fn select_cloud(
-        &self,
-        _prompt: &str,
-        capabilities: &[&str],
-    ) -> Result<&ModelSpec, String> {
+    fn select_cloud(&self, _prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, String> {
         let candidates: Vec<&ModelSpec> = self
             .cloud_models
             .iter()
             .filter(|m| m.is_available && has_all_capabilities(m, capabilities))
             .collect();
-        if let Some(best) = candidates
-            .iter()
-            .min_by(|a, b| a.cost_per_1k_tokens.partial_cmp(&b.cost_per_1k_tokens).unwrap_or(std::cmp::Ordering::Equal))
-        {
+        if let Some(best) = candidates.iter().min_by(|a, b| {
+            a.cost_per_1k_tokens
+                .partial_cmp(&b.cost_per_1k_tokens)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }) {
             return Ok(best);
         }
         self.fallback_models
@@ -222,11 +244,7 @@ impl ModelRouter {
             .ok_or_else(|| "no local model available".to_string())
     }
 
-    fn select_hybrid(
-        &self,
-        prompt: &str,
-        capabilities: &[&str],
-    ) -> Result<&ModelSpec, String> {
+    fn select_hybrid(&self, prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, String> {
         let is_complex = prompt.len() > self.hybrid_threshold
             || prompt.contains("analyze")
             || prompt.contains("compare")
@@ -247,27 +265,21 @@ impl ModelRouter {
     pub fn discover_local_models(&mut self, gguf_dir: &str) -> Vec<String> {
         let mut found = Vec::new();
         if cfg!(feature = "local-llm") {
-            if let Ok(entries) = std::fs::read_dir(gguf_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.extension().map(|e| e == "gguf").unwrap_or(false) {
-                        let name = path
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or("unknown")
-                            .to_string();
-                        let id = format!("local_{}", name);
-                        self.local_models.push(ModelSpec {
-                            id: id.clone(),
-                            name: name.clone(),
-                            provider: "local".to_string(),
-                            model_type: ModelType::LocalGGUF,
-                            capabilities: vec!["chat".to_string(), "reasoning".to_string()],
-                            cost_per_1k_tokens: 0.0,
-                            is_available: true,
-                        });
-                        found.push(id);
-                    }
+            if let Ok(models) = LocalEngine::discover(gguf_dir) {
+                self.local_engine.models = models;
+                for model in &self.local_engine.models {
+                    let name = model.name.clone();
+                    let id = format!("local_{}", name);
+                    self.local_models.push(ModelSpec {
+                        id: id.clone(),
+                        name: name.clone(),
+                        provider: "local".to_string(),
+                        model_type: ModelType::LocalGGUF,
+                        capabilities: vec!["chat".to_string(), "reasoning".to_string()],
+                        cost_per_1k_tokens: 0.0,
+                        is_available: true,
+                    });
+                    found.push(id);
                 }
             }
             if !found.is_empty() {

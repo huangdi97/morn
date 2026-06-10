@@ -3,6 +3,7 @@
 //! Tauri mode is activated when launched via src-tauri.
 
 use std::env;
+use std::io::Read;
 use std::sync::{Arc, Mutex};
 
 use morn::channel::adapter::ChannelAdapter;
@@ -26,6 +27,28 @@ use morn::studio::manager::StudioManager;
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
+    if args.iter().any(|a| a == "--execute-task") {
+        let mut task_json = String::new();
+        std::io::stdin()
+            .read_to_string(&mut task_json)
+            .map_err(|e| e.to_string())?;
+        let task = serde_json::from_str::<serde_json::Value>(&task_json)
+            .unwrap_or_else(|_| serde_json::json!({ "raw": task_json }));
+        let result = serde_json::json!({
+            "success": true,
+            "task": task,
+        });
+        println!("{}", serde_json::to_string(&result).unwrap());
+        return Ok(());
+    }
+
+    if let Ok(exec_task) = std::env::var("EXECUTE_TASK") {
+        let mut child = morn::core::task_engine::child_process::ChildProcess::new();
+        let result = child.spawn(&exec_task, 300)?;
+        println!("{}", serde_json::to_string(&result).unwrap());
+        return Ok(());
+    }
+
     let is_cli_mode = args.iter().any(|a| a == "--cli");
 
     if !is_cli_mode {
@@ -57,12 +80,8 @@ fn main() -> Result<(), String> {
             println!("[Morn] ChatAgent initialized (DeepSeek)");
 
             let supervisor = Supervisor::new(storage.clone(), None);
-            let _assembler = AgentAssembler::new(Some(
-                registry
-                    .lock()
-                    .map_err(|e| e.to_string())?
-                    .clone(),
-            ));
+            let _assembler =
+                AgentAssembler::new(Some(registry.lock().map_err(|e| e.to_string())?.clone()));
 
             let chat_fn = Arc::new(
                 move |prompt: &str, system: &str| -> Result<String, String> {
@@ -102,7 +121,11 @@ fn run_cli(
     let _network = sys_ops::network_status();
     let _studio = StudioManager::new(None, None, None);
     let _computer = ComputerControl;
-    let _team_mgr = TeamManager::new(storage.clone().ok_or_else(|| "Storage required".to_string())?);
+    let _team_mgr = TeamManager::new(
+        storage
+            .clone()
+            .ok_or_else(|| "Storage required".to_string())?,
+    );
     let _a2a = A2ARouter::new();
     let _mcp_tool = adapter::port_to_mcp_tool("test", "test", &[]);
     let mut adapter = ChannelAdapter::new(Some(supervisor));

@@ -1,7 +1,7 @@
 //! Keyboard operations — typing, hotkeys, and clipboard management via OS APIs or simulation.
 
-use super::{ComputerOpResult, SecurityLevel};
 use super::run_ps;
+use super::{ComputerOpResult, SecurityLevel};
 
 /// Type text via keyboard. On Windows, uses SendKeys.
 pub fn keyboard_type(text: &str) -> ComputerOpResult {

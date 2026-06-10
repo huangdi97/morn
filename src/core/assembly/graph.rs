@@ -54,8 +54,11 @@ pub struct ConnectionValidator;
 impl ConnectionValidator {
     pub fn validate(graph: &ComponentGraph) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        let comp_map: HashMap<&str, &AtomicComponentDef> =
-            graph.components.iter().map(|c| (c.id.as_str(), c)).collect();
+        let comp_map: HashMap<&str, &AtomicComponentDef> = graph
+            .components
+            .iter()
+            .map(|c| (c.id.as_str(), c))
+            .collect();
 
         for conn in &graph.connections {
             let source = match comp_map.get(conn.source_id.as_str()) {
@@ -78,8 +81,8 @@ impl ConnectionValidator {
 
             let has_output = source.output_types.is_empty()
                 || source.output_types.iter().any(|t| t == output_type);
-            let has_input = target.input_types.is_empty()
-                || target.input_types.iter().any(|t| t == input_type);
+            let has_input =
+                target.input_types.is_empty() || target.input_types.iter().any(|t| t == input_type);
 
             if !has_output {
                 errors.push(format!(
@@ -238,6 +241,8 @@ impl ComponentRegistry {
     }
 
     pub fn get_component(id: &str) -> Option<AtomicComponentDef> {
-        Self::available_components().into_iter().find(|c| c.id == id)
+        Self::available_components()
+            .into_iter()
+            .find(|c| c.id == id)
     }
 }

@@ -64,7 +64,8 @@ impl SkillLoader {
                             Err(e) => {
                                 tracing::info!(
                                     "[SkillLoader] Warning: failed to parse {:?}: {}",
-                                    skill_file, e
+                                    skill_file,
+                                    e
                                 );
                             }
                         }

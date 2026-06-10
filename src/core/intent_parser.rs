@@ -56,29 +56,51 @@ Return JSON: {{"intent_type": "...", "confidence": 0.0, "entities": [], "target_
     pub fn parse(input: &str) -> Intent {
         let lower = input.to_lowercase();
 
-        let tool_keywords = ["search", "calculate", "look up", "find ", "convert", "translate"];
-        let studio_keywords = ["create an agent", "build an agent", "customize", "configure agent", "create workflow"];
-        let workflow_keywords = ["report", "analysis", "research", "compare", "plan", "strategy"];
-        let team_keywords = ["complex", "multi-step", "multiple agents", "team", "collaborate"];
+        let tool_keywords = [
+            "search",
+            "calculate",
+            "look up",
+            "find ",
+            "convert",
+            "translate",
+        ];
+        let studio_keywords = [
+            "create an agent",
+            "build an agent",
+            "customize",
+            "configure agent",
+            "create workflow",
+        ];
+        let workflow_keywords = [
+            "report", "analysis", "research", "compare", "plan", "strategy",
+        ];
+        let team_keywords = [
+            "complex",
+            "multi-step",
+            "multiple agents",
+            "team",
+            "collaborate",
+        ];
         let greet_keywords = ["hello", "hi", "thanks", "bye", "who are you"];
 
         let entities = Self::extract_entities(input);
 
-        let (intent_type, confidence, target_level) = if studio_keywords.iter().any(|k| lower.contains(k)) {
-            (IntentType::JumpToStudio, 0.9, "jump_studio")
-        } else if team_keywords.iter().any(|k| lower.contains(k)) {
-            (IntentType::TeamTask, 0.75, "team")
-        } else if workflow_keywords.iter().any(|k| lower.contains(k)) {
-            (IntentType::WorkflowTemplate, 0.8, "workflow")
-        } else if tool_keywords.iter().any(|k| lower.contains(k)) {
-            (IntentType::ToolCall, 0.85, "single_tool")
-        } else if greet_keywords.iter().any(|k| lower.contains(k)) {
-            (IntentType::DirectAnswer, 0.95, "direct_answer")
-        } else if !entities.is_empty() {
-            (IntentType::AgentTask, 0.7, "single_agent")
-        } else {
-            (IntentType::DirectAnswer, 0.5, "direct_answer")
-        };
+        let (intent_type, confidence, target_level) =
+            if studio_keywords.iter().any(|k| lower.contains(k)) {
+                (IntentType::JumpToStudio, 0.9, "jump_studio")
+            } else if team_keywords.iter().any(|k| lower.contains(k)) {
+                (IntentType::TeamTask, 0.75, "team")
+            } else if workflow_keywords.iter().any(|k| lower.contains(k)) {
+                (IntentType::WorkflowTemplate, 0.8, "workflow")
+            } else if tool_keywords.iter().any(|k| lower.contains(k)) {
+                (IntentType::ToolCall, 0.85, "single_tool")
+            } else if greet_keywords.iter().any(|k| lower.contains(k)) {
+                (IntentType::DirectAnswer, 0.95, "direct_answer")
+            } else if !entities.is_empty() {
+                (IntentType::AgentTask, 0.7, "single_agent")
+            } else {
+                (IntentType::DirectAnswer, 0.5, "direct_answer")
+            };
 
         Intent {
             intent_type,
@@ -92,7 +114,10 @@ Return JSON: {{"intent_type": "...", "confidence": 0.0, "entities": [], "target_
     fn extract_entities(input: &str) -> Vec<String> {
         let mut entities = Vec::new();
         let words: Vec<&str> = input.split_whitespace().collect();
-        let common_words = ["the", "a", "an", "is", "are", "was", "were", "in", "on", "at", "to", "for", "of", "with", "and", "or", "but"];
+        let common_words = [
+            "the", "a", "an", "is", "are", "was", "were", "in", "on", "at", "to", "for", "of",
+            "with", "and", "or", "but",
+        ];
         for chunk in words.windows(2) {
             if !common_words.contains(&chunk[0].to_lowercase().as_str())
                 && !common_words.contains(&chunk[1].to_lowercase().as_str())
@@ -108,7 +133,10 @@ Return JSON: {{"intent_type": "...", "confidence": 0.0, "entities": [], "target_
         let lower = input.to_lowercase();
         if lower.contains("用数据团队") || lower.contains("use data team") {
             Some(IntentType::TeamTask)
-        } else if lower.contains("直接说") || lower.contains("just answer") || lower.contains("直接回答") {
+        } else if lower.contains("直接说")
+            || lower.contains("just answer")
+            || lower.contains("直接回答")
+        {
             Some(IntentType::DirectAnswer)
         } else {
             None
@@ -220,7 +248,8 @@ mod tests {
 
     #[test]
     fn parse_entity_extraction_limits() {
-        let intent = IntentParser::parse("the quick brown fox jumps over the lazy dog near the river");
+        let intent =
+            IntentParser::parse("the quick brown fox jumps over the lazy dog near the river");
         assert!(intent.entities.len() <= 5);
     }
 
@@ -237,18 +266,14 @@ mod tests {
 
     #[test]
     fn parse_with_llm_invalid_json_falls_back_to_rule() {
-        let chat_fn = |_prompt: &str, _system: &str| {
-            Ok("not valid json".to_string())
-        };
+        let chat_fn = |_prompt: &str, _system: &str| Ok("not valid json".to_string());
         let intent = IntentParser::parse_with_llm("hello", &chat_fn);
         assert_eq!(intent.intent_type, IntentType::DirectAnswer);
     }
 
     #[test]
     fn parse_with_llm_error_falls_back_to_rule() {
-        let chat_fn = |_prompt: &str, _system: &str| {
-            Err("LLM unavailable".to_string())
-        };
+        let chat_fn = |_prompt: &str, _system: &str| Err("LLM unavailable".to_string());
         let intent = IntentParser::parse_with_llm("search for AI news", &chat_fn);
         assert_eq!(intent.intent_type, IntentType::ToolCall);
     }

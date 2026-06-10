@@ -86,9 +86,7 @@ impl Knowledge for StructuredKnowledge {
         let mut results = Vec::new();
         for (i, record) in self.records.iter().enumerate() {
             for (field, value) in record {
-                if field.to_lowercase().contains(&lower)
-                    || value.to_lowercase().contains(&lower)
-                {
+                if field.to_lowercase().contains(&lower) || value.to_lowercase().contains(&lower) {
                     results.push(KnowledgeItem {
                         key: format!("record[{}].{}", i, field),
                         value: value.clone(),
