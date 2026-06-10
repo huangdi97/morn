@@ -1,22 +1,29 @@
 //! supervisor — Oversees task execution decisions, plans, and risk controls.
+pub mod auto_hands;
 mod decision;
 mod execution;
 mod guided_builder;
 mod learning;
 mod rule_commands;
+mod team_builder;
 mod types;
 mod workflow_approvals;
 
+pub use auto_hands::*;
 pub use guided_builder::*;
 pub use learning::*;
 pub use types::*;
 
 use crate::core::approval::WorkflowApproval;
 use crate::core::event_bus::SimpleEventBus;
-use crate::core::orchestrator::team_presets;
-use crate::core::orchestrator::{CollaborationMode, ConsensusMechanism, TeamDef};
+use crate::core::memory::{MemoryHub, MemoryOrchestrator};
+use crate::core::orchestrator::TeamDef;
+use crate::core::security::AuditLog;
 use crate::core::storage::Storage;
+use crate::core::supervisor::execution::planner::Planner;
+use crate::core::supervisor::execution::scheduler::Scheduler;
 use crate::core::thread_pool::TaskPool;
+use crate::core::trust_scorer::scorer::TrustScorer;
 
 pub type ChatFn = dyn Fn(&str, &str) -> Result<String, String>;
 
@@ -34,6 +41,11 @@ pub struct Supervisor {
     learning_engine: Option<LearningEngine>,
     user_id: Option<String>,
     user_teams: Vec<String>,
+    memory_orchestrator: Option<MemoryOrchestrator>,
+    pub audit_log: AuditLog,
+    trust_scorer: Option<TrustScorer>,
+    _planner: Option<Planner>,
+    _scheduler: Option<Scheduler>,
 }
 
 impl Supervisor {
@@ -56,6 +68,11 @@ impl Supervisor {
             learning_engine,
             user_id: None,
             user_teams: Vec::new(),
+            memory_orchestrator: Some(MemoryOrchestrator::new(MemoryHub::new())),
+            audit_log: AuditLog::new(),
+            trust_scorer: Some(TrustScorer::new()),
+            _planner: None,
+            _scheduler: None,
         }
     }
 
@@ -92,11 +109,6 @@ impl Supervisor {
     }
     /// Returns the current COO execution mode.
     pub fn mode(&self) -> &Mode {
-        &self.mode
-    }
-
-    /// Returns the current COO execution mode.
-    pub fn get_mode(&self) -> &Mode {
         &self.mode
     }
 
@@ -195,77 +207,22 @@ impl Supervisor {
         self.turn_count = 0;
     }
 
-    /// Determines whether the user needs a single agent or a full team,
-    /// then creates a TeamDef via keyword matching on presets or LLM generation.
-    pub fn create_team_from_nl(&self, nl: &str, chat_fn: &ChatFn) -> Result<TeamDef, String> {
-        let system_prompt = "You are a team configuration assistant. Determine if the user needs a single agent or a multi-agent team. Reply with exactly one line: either 'SINGLE' or 'TEAM'.";
-        let response = chat_fn(nl, system_prompt)?;
-        let trimmed = response.trim().to_uppercase();
+    /// Returns a reference to the memory orchestrator if configured.
+    pub fn memory(&self) -> Option<&MemoryOrchestrator> {
+        self.memory_orchestrator.as_ref()
+    }
 
-        if trimmed.starts_with("SINGLE") {
-            return Err("Single agent sufficient, no team needed".to_string());
+    /// Returns a mutable reference to the memory orchestrator if configured.
+    pub fn memory_mut(&mut self) -> Option<&mut MemoryOrchestrator> {
+        self.memory_orchestrator.as_mut()
+    }
+
+    /// Queries all memory layers with the given context for decision support.
+    pub fn query_memory(&mut self, context: &str) -> Result<(), String> {
+        if let Some(ref mut mem) = self.memory_orchestrator {
+            mem.decide_with_memory(context)?;
         }
-
-        if let Some(preset) = team_presets::find_preset(nl) {
-            return Ok(preset);
-        }
-
-        let gen_prompt = format!(
-            r#"The user wants to form a team for this task:
-{}
-Generate a TeamDef JSON. Available collaboration modes: Chain, ManagerWorker, Broadcast, Voting, Routing, AgentAsTool, Blackboard.
-Available consensus mechanisms: Vote, CeoDecides, MungerVeto, AutoSynthesis.
-Return only valid JSON with fields: id, name, members (string array of agent IDs), mode, consensus.
-Example:
-{{"id":"team-custom","name":"Custom Team","members":["agent-a","agent-b"],"mode":"Chain","consensus":"CeoDecides"}}"#,
-            nl
-        );
-        let gen_response = chat_fn(&gen_prompt, "Only return valid JSON, no markdown.")?;
-        let cleaned = gen_response
-            .trim()
-            .trim_start_matches("```json")
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim();
-
-        #[derive(serde::Deserialize)]
-        struct GenTeamDef {
-            id: String,
-            name: String,
-            members: Vec<String>,
-            mode: String,
-            consensus: String,
-        }
-
-        let gen: GenTeamDef = serde_json::from_str(cleaned)
-            .map_err(|e| format!("Failed to parse LLM team response: {}. Raw: {}", e, cleaned))?;
-
-        let mode = match gen.mode.to_lowercase().as_str() {
-            "chain" => CollaborationMode::Chain,
-            "managerworker" | "manager_worker" => CollaborationMode::ManagerWorker,
-            "broadcast" => CollaborationMode::Broadcast,
-            "voting" => CollaborationMode::Voting,
-            "routing" => CollaborationMode::Routing,
-            "agentastool" | "agent_as_tool" => CollaborationMode::AgentAsTool,
-            "blackboard" => CollaborationMode::Blackboard,
-            _ => CollaborationMode::Chain,
-        };
-
-        let consensus = match gen.consensus.to_lowercase().as_str() {
-            "vote" => ConsensusMechanism::Vote,
-            "ceodecides" | "ceo_decides" => ConsensusMechanism::CeoDecides,
-            "mungerveto" | "munger_veto" => ConsensusMechanism::MungerVeto,
-            "autosynthesis" | "auto_synthesis" => ConsensusMechanism::AutoSynthesis,
-            _ => ConsensusMechanism::CeoDecides,
-        };
-
-        Ok(TeamDef {
-            id: gen.id,
-            name: gen.name,
-            members: gen.members,
-            mode,
-            consensus,
-        })
+        Ok(())
     }
 
     /// Builds a team from natural language using local keyword presets.
@@ -275,250 +232,5 @@ Example:
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_supervisor_build_context() {
-        let supervisor = Supervisor::new(None, None);
-        let context = supervisor.build_context("hello");
-        assert!(context.contains("You are Morn"));
-        assert!(context.contains("[Current]"));
-        assert!(context.contains("hello"));
-    }
-
-    #[test]
-    fn test_supervisor_record_and_context() {
-        let mut supervisor = Supervisor::new(None, None);
-        supervisor.record_turn("user", "hi");
-        supervisor.record_turn("assistant", "hello!");
-        let context = supervisor.build_context("how are you?");
-        assert!(context.contains("hi"));
-        assert!(context.contains("hello!"));
-        assert!(context.contains("how are you?"));
-    }
-
-    #[test]
-    fn test_decide_level_simple() {
-        let supervisor = Supervisor::new(None, None);
-        assert_eq!(
-            supervisor.decide_level("hello"),
-            DecisionLevel::L1DirectAnswer
-        );
-        assert_eq!(
-            supervisor.decide_level("thanks"),
-            DecisionLevel::L1DirectAnswer
-        );
-    }
-
-    #[test]
-    fn test_decide_level_tool() {
-        let supervisor = Supervisor::new(None, None);
-        assert_eq!(
-            supervisor.decide_level("search for AI news"),
-            DecisionLevel::L2SingleTool
-        );
-        assert_eq!(
-            supervisor.decide_level("calculate 2+2"),
-            DecisionLevel::L2SingleTool
-        );
-    }
-
-    #[test]
-    fn test_decide_level_workflow() {
-        let supervisor = Supervisor::new(None, None);
-        assert_eq!(
-            supervisor.decide_level("create a report"),
-            DecisionLevel::L5Workflow
-        );
-        assert_eq!(
-            supervisor.decide_level("analysis"),
-            DecisionLevel::L5Workflow
-        );
-    }
-
-    #[test]
-    fn test_decide_level_studio() {
-        let supervisor = Supervisor::new(None, None);
-        assert_eq!(
-            supervisor.decide_level("create an agent"),
-            DecisionLevel::L6JumpToStudio
-        );
-    }
-
-    #[test]
-    fn test_decide_level_default() {
-        let supervisor = Supervisor::new(None, None);
-        assert_eq!(
-            supervisor.decide_level("tell me about quantum physics"),
-            DecisionLevel::L3SingleAgent
-        );
-    }
-
-    #[test]
-    fn test_coo_mode() {
-        let mut supervisor = Supervisor::new(None, None);
-        assert_eq!(*supervisor.mode(), Mode::Proactive);
-        supervisor.set_mode(Mode::Safe);
-        assert_eq!(*supervisor.mode(), Mode::Safe);
-    }
-
-    #[test]
-    fn test_decision_override_is_recorded() {
-        let mut supervisor = Supervisor::new(None, None);
-        supervisor.override_decision(DecisionLevel::L4Team, OverrideScope::Session);
-
-        assert_eq!(
-            supervisor.decision_override().map(|o| &o.level),
-            Some(&DecisionLevel::L4Team)
-        );
-    }
-
-    #[test]
-    fn test_live_suggestion_uses_recent_user_turn_in_proactive_mode() {
-        let mut supervisor = Supervisor::new(None, None);
-        supervisor.record_turn("user", "please search docs");
-
-        assert_eq!(
-            supervisor.live_suggestion(),
-            Some(DecisionLevel::L2SingleTool)
-        );
-    }
-
-    #[test]
-    fn test_decide_reasoning() {
-        let supervisor = Supervisor::new(None, None);
-        let (level, _reasoning) = supervisor.decide("complex multi-step task");
-        assert_eq!(level, DecisionLevel::L4Team);
-    }
-
-    #[test]
-    fn test_create_team_from_nl_single_agent() {
-        let supervisor = Supervisor::new(None, None);
-        let chat_fn = |_prompt: &str, _system: &str| Ok("SINGLE".to_string());
-        let result = supervisor.create_team_from_nl("simple greeting", &chat_fn);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Single agent"));
-    }
-
-    #[test]
-    fn test_create_team_from_nl_preset_research() {
-        let supervisor = Supervisor::new(None, None);
-        let chat_fn = |_prompt: &str, _system: &str| Ok("TEAM".to_string());
-        let result = supervisor.create_team_from_nl("need research and analysis", &chat_fn);
-        assert!(result.is_ok());
-        let team = result.unwrap();
-        assert_eq!(team.name, "Research Team");
-    }
-
-    #[test]
-    fn test_create_team_from_nl_preset_code() {
-        let supervisor = Supervisor::new(None, None);
-        let chat_fn = |_prompt: &str, _system: &str| Ok("TEAM".to_string());
-        let result = supervisor.create_team_from_nl("build a web app", &chat_fn);
-        assert!(result.is_ok());
-        let team = result.unwrap();
-        assert_eq!(team.name, "Development Team");
-    }
-
-    #[test]
-    fn test_create_team_from_nl_llm_generated() {
-        let supervisor = Supervisor::new(None, None);
-        let json_response = r#"{"id":"team-custom","name":"Custom Team","members":["agent-a","agent-b"],"mode":"Chain","consensus":"CeoDecides"}"#;
-        let chat_fn = move |prompt: &str, _system: &str| {
-            if prompt.contains("SINGLE") || prompt.contains("TEAM") {
-                Ok("TEAM".to_string())
-            } else {
-                Ok(json_response.to_string())
-            }
-        };
-        let result =
-            supervisor.create_team_from_nl("something totally unique and custom", &chat_fn);
-        assert!(result.is_ok());
-        let team = result.unwrap();
-        assert_eq!(team.id, "team-custom");
-        assert_eq!(team.members.len(), 2);
-    }
-
-    #[test]
-    fn test_build_team_from_nl_uses_local_builder() {
-        let supervisor = Supervisor::new(None, None);
-        let team = supervisor.build_team_from_nl("devops deploy monitor").unwrap();
-
-        assert_eq!(team.id, "preset-devops");
-        assert_eq!(team.members.len(), 3);
-    }
-
-    #[test]
-    fn test_modify_rule_from_nl_add() {
-        let storage = Storage::new_in_memory().unwrap();
-        let supervisor = Supervisor::new(Some(storage), None);
-        let result = supervisor
-            .modify_rule_from_nl("add | deploy | L4 | contains 'deploy' | require_approval");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "Rule added");
-    }
-
-    #[test]
-    fn test_modify_rule_from_nl_list() {
-        let storage = Storage::new_in_memory().unwrap();
-        let supervisor = Supervisor::new(Some(storage), None);
-        supervisor
-            .modify_rule_from_nl("add | search | L2 | contains 'search' | auto_execute")
-            .unwrap();
-        let result = supervisor.modify_rule_from_nl("list all");
-        assert!(result.is_ok());
-        let json = result.unwrap();
-        assert!(json.contains("search"));
-    }
-
-    #[test]
-    fn test_modify_rule_from_nl_find() {
-        let storage = Storage::new_in_memory().unwrap();
-        let supervisor = Supervisor::new(Some(storage), None);
-        supervisor
-            .modify_rule_from_nl("add | search | L2 | contains 'search' | auto_execute")
-            .unwrap();
-        let result = supervisor.modify_rule_from_nl("find search");
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("L2"));
-    }
-
-    #[test]
-    fn test_modify_rule_from_nl_delete() {
-        let storage = Storage::new_in_memory().unwrap();
-        let supervisor = Supervisor::new(Some(storage), None);
-        supervisor
-            .modify_rule_from_nl("add | test | L1 | test | none")
-            .unwrap();
-        supervisor
-            .modify_rule_from_nl("add | test2 | L2 | test2 | none")
-            .unwrap();
-        let rules_before = supervisor.modify_rule_from_nl("list all").unwrap();
-        let rules: Vec<crate::core::decision_rules::DecisionRule> =
-            serde_json::from_str(&rules_before).unwrap();
-        assert_eq!(rules.len(), 2);
-        supervisor
-            .modify_rule_from_nl(&format!("delete {}", rules[0].id))
-            .unwrap();
-        let rules_after = supervisor.modify_rule_from_nl("list all").unwrap();
-        let remaining: Vec<crate::core::decision_rules::DecisionRule> =
-            serde_json::from_str(&rules_after).unwrap();
-        assert_eq!(remaining.len(), 1);
-    }
-
-    #[test]
-    fn test_modify_rule_from_nl_unknown() {
-        let storage = Storage::new_in_memory().unwrap();
-        let supervisor = Supervisor::new(Some(storage), None);
-        let result = supervisor.modify_rule_from_nl("unknown command");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_modify_rule_from_nl_no_storage() {
-        let supervisor = Supervisor::new(None, None);
-        let result = supervisor.modify_rule_from_nl("list all");
-        assert!(result.is_err());
-    }
-}
+#[path = "tests.rs"]
+mod tests;

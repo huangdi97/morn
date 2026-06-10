@@ -125,6 +125,52 @@ impl Storage {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    pub fn list_transactions(&self) -> Result<Vec<Transaction>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, listing_id, buyer, amount, timestamp FROM market_transactions ORDER BY timestamp DESC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(Transaction {
+                    id: row.get(0)?,
+                    listing_id: row.get(1)?,
+                    buyer: row.get(2)?,
+                    amount: row.get(3)?,
+                    timestamp: row.get(4)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        let mut txs = Vec::new();
+        for row in rows {
+            txs.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(txs)
+    }
+
+    pub fn list_transactions_by_buyer(&self, buyer: &str) -> Result<Vec<Transaction>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, listing_id, buyer, amount, timestamp FROM market_transactions WHERE buyer = ?1 ORDER BY timestamp DESC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![buyer], |row| {
+                Ok(Transaction {
+                    id: row.get(0)?,
+                    listing_id: row.get(1)?,
+                    buyer: row.get(2)?,
+                    amount: row.get(3)?,
+                    timestamp: row.get(4)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        let mut txs = Vec::new();
+        for row in rows {
+            txs.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(txs)
+    }
 }
 
 fn map_listing_row(row: &rusqlite::Row) -> rusqlite::Result<Listing> {

@@ -1,4 +1,3 @@
-//! types — Defines supervisor plans, decisions, and execution metadata.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -61,8 +60,41 @@ pub enum DecisionLevel {
     L6JumpToStudio,
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum DecisionTier {
+    Operational,   // 运营级: trust>60 + low risk → auto
+    Tactical,      // 战术级: suggest + CEO confirm
+    Strategic,     // 战略级: must CEO decide
+}
+
+impl DecisionTier {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DecisionTier::Operational => "operational",
+            DecisionTier::Tactical => "tactical",
+            DecisionTier::Strategic => "strategic",
+        }
+    }
+
+    pub fn from_decision_level(level: &DecisionLevel, trust_score: f64) -> Self {
+        match level {
+            DecisionLevel::L1DirectAnswer => {
+                if trust_score > 60.0 { DecisionTier::Operational } else { DecisionTier::Tactical }
+            }
+            DecisionLevel::L2SingleTool => {
+                if trust_score > 60.0 { DecisionTier::Operational } else { DecisionTier::Tactical }
+            }
+            DecisionLevel::L3SingleAgent => {
+                if trust_score > 70.0 { DecisionTier::Tactical } else { DecisionTier::Strategic }
+            }
+            DecisionLevel::L4Team => DecisionTier::Strategic,
+            DecisionLevel::L5Workflow => DecisionTier::Tactical,
+            DecisionLevel::L6JumpToStudio => DecisionTier::Strategic,
+        }
+    }
+}
+
 impl DecisionLevel {
-    /// Returns the stable string identifier for this decision level.
     pub fn as_str(&self) -> &'static str {
         match self {
             DecisionLevel::L1DirectAnswer => "direct_answer",
@@ -74,7 +106,6 @@ impl DecisionLevel {
         }
     }
 
-    /// Returns the approximate cost tier label associated with this decision level.
     pub fn cost_tier(&self) -> &'static str {
         match self {
             DecisionLevel::L1DirectAnswer => "¥0.001/0.5s",
@@ -95,7 +126,6 @@ pub enum Mode {
 }
 
 impl Mode {
-    /// Returns the stable string identifier for this COO mode.
     pub fn as_str(&self) -> &'static str {
         match self {
             Mode::Proactive => "proactive",
@@ -104,7 +134,6 @@ impl Mode {
         }
     }
 
-    /// Parses CLI/user-facing mode names into the internal mode enum.
     pub fn parse(value: &str) -> Option<Self> {
         match value.trim().to_lowercase().as_str() {
             "active" | "proactive" => Some(Mode::Proactive),
@@ -128,7 +157,6 @@ pub struct DecisionOverride {
 }
 
 impl DecisionOverride {
-    /// Parses an inline decision-level prefix and returns the override plus cleaned input.
     pub fn parse_prefixed(input: &str) -> Option<(Self, String)> {
         let trimmed = input.trim_start();
         let specs = [
@@ -159,5 +187,53 @@ impl DecisionOverride {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decision_tier_operational() {
+        let tier = DecisionTier::from_decision_level(&DecisionLevel::L1DirectAnswer, 80.0);
+        assert_eq!(tier, DecisionTier::Operational);
+    }
+
+    #[test]
+    fn test_decision_tier_tactical_low_trust() {
+        let tier = DecisionTier::from_decision_level(&DecisionLevel::L1DirectAnswer, 50.0);
+        assert_eq!(tier, DecisionTier::Tactical);
+    }
+
+    #[test]
+    fn test_decision_tier_strategic() {
+        let tier = DecisionTier::from_decision_level(&DecisionLevel::L4Team, 90.0);
+        assert_eq!(tier, DecisionTier::Strategic);
+    }
+
+    #[test]
+    fn test_decision_tier_tactical_for_single_agent() {
+        let tier = DecisionTier::from_decision_level(&DecisionLevel::L3SingleAgent, 75.0);
+        assert_eq!(tier, DecisionTier::Tactical);
+    }
+
+    #[test]
+    fn test_decision_tier_strategic_for_studio() {
+        let tier = DecisionTier::from_decision_level(&DecisionLevel::L6JumpToStudio, 100.0);
+        assert_eq!(tier, DecisionTier::Strategic);
+    }
+
+    #[test]
+    fn test_decision_tier_tactical_for_workflow() {
+        let tier = DecisionTier::from_decision_level(&DecisionLevel::L5Workflow, 0.0);
+        assert_eq!(tier, DecisionTier::Tactical);
+    }
+
+    #[test]
+    fn test_decision_tier_as_str() {
+        assert_eq!(DecisionTier::Operational.as_str(), "operational");
+        assert_eq!(DecisionTier::Tactical.as_str(), "tactical");
+        assert_eq!(DecisionTier::Strategic.as_str(), "strategic");
     }
 }

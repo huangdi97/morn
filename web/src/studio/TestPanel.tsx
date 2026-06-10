@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 interface TestStep {
@@ -38,9 +38,9 @@ export function TestPanel() {
   const [editingStep, setEditingStep] = useState<number | null>(null);
   const [editInput, setEditInput] = useState("");
 
-  useState(() => {
+  useEffect(() => {
     invoke<ComponentType[]>("list_component_types").then(setTypes).catch(() => {});
-  });
+  }, []);
 
   const runTest = async () => {
     if (!componentId.trim() || !input.trim()) return;

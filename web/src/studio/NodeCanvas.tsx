@@ -13,8 +13,11 @@ import ReactFlow, {
   Handle,
   Position,
   NodeProps,
+  MarkerType,
+  Edge,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import dagre from "dagre";
 
 interface AgentDef {
   name: string;
@@ -43,14 +46,50 @@ const NODE_LABELS: Record<string, string> = {
   agent: "Agent",
 };
 
-const PALETTE_ITEMS = [
-  { type: "persona", label: "Persona", color: NODE_COLORS.persona },
-  { type: "tool", label: "Tool", color: NODE_COLORS.tool },
-  { type: "knowledge", label: "Knowledge", color: NODE_COLORS.knowledge },
-  { type: "skill", label: "Skill", color: NODE_COLORS.skill },
-  { type: "model", label: "Model", color: NODE_COLORS.model },
-  { type: "agent", label: "Agent", color: NODE_COLORS.agent },
+const PALETTE_CATEGORIES = [
+  {
+    name: "基础组件",
+    items: [
+      { type: "agent", label: "Agent", color: NODE_COLORS.agent },
+      { type: "persona", label: "Persona", color: NODE_COLORS.persona },
+      { type: "model", label: "Model", color: NODE_COLORS.model },
+    ],
+  },
+  {
+    name: "功能组件",
+    items: [
+      { type: "tool", label: "Tool", color: NODE_COLORS.tool },
+      { type: "knowledge", label: "Knowledge", color: NODE_COLORS.knowledge },
+      { type: "skill", label: "Skill", color: NODE_COLORS.skill },
+    ],
+  },
 ];
+
+function getLayoutedElements(nodes: Node[], edges: Edge[], direction = "LR") {
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: direction, nodesep: 60, ranksep: 100, marginx: 40, marginy: 40 });
+
+  nodes.forEach((node) => {
+    g.setNode(node.id, { width: 180, height: 80 });
+  });
+  edges.forEach((edge) => {
+    g.setEdge(edge.source, edge.target);
+  });
+  dagre.layout(g);
+
+  const laidOutNodes = nodes.map((node) => {
+    const dagreNode = g.node(node.id);
+    return {
+      ...node,
+      position: {
+        x: dagreNode.x - 90,
+        y: dagreNode.y - 40,
+      },
+    };
+  });
+  return { nodes: laidOutNodes, edges };
+}
 
 function BaseNode({ data, selected }: NodeProps) {
   const color = NODE_COLORS[data.nodeType] || "#666";
@@ -194,9 +233,51 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  const pushHistory = useCallback((nds: Node[], eds: Edge[]) => {
+    setHistory((h) => {
+      const newHistory = h.slice(0, historyIndex + 1);
+      newHistory.push({ nodes: JSON.parse(JSON.stringify(nds)), edges: JSON.parse(JSON.stringify(eds)) });
+      if (newHistory.length > 50) newHistory.shift();
+      return newHistory;
+    });
+    setHistoryIndex((i) => Math.min(i + 1, 49));
+  }, [historyIndex]);
+
+  const undo = useCallback(() => {
+    if (historyIndex < 0) return;
+    const prev = history[historyIndex];
+    if (prev) {
+      setNodes(prev.nodes);
+      setEdges(prev.edges);
+      setHistoryIndex((i) => i - 1);
+    }
+  }, [history, historyIndex, setNodes, setEdges]);
+
+  const redo = useCallback(() => {
+    if (historyIndex + 1 >= history.length) return;
+    const next = history[historyIndex + 2];
+    if (next) {
+      setNodes(next.nodes);
+      setEdges(next.edges);
+      setHistoryIndex((i) => i + 1);
+    }
+  }, [history, historyIndex, setNodes, setEdges]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+    (params: Connection) => {
+      setEdges((eds) => {
+        const newEdge = {
+          ...params,
+          animated: true,
+          style: { stroke: "#58a6ff", strokeWidth: 2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: "#58a6ff" },
+        };
+        return addEdge(newEdge, eds);
+      });
+    },
     [setEdges],
   );
 
@@ -217,9 +298,12 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
         position,
         data: { nodeType: type, label: NODE_LABELS[type], name: `${NODE_LABELS[type]} ${nodes.length + 1}`, detail: "" },
       };
-      setNodes((nds) => [...nds, newNode]);
+      setNodes((nds) => {
+        pushHistory(nds, edges);
+        return [...nds, newNode];
+      });
     },
-    [nodes, setNodes],
+    [nodes, setNodes, pushHistory, edges],
   );
 
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -237,11 +321,12 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
 
   const deleteSelected = useCallback(() => {
     if (selectedNode) {
+      pushHistory(nodes, edges);
       setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
       setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
       setSelectedNode(null);
     }
-  }, [selectedNode, setNodes, setEdges]);
+  }, [selectedNode, setNodes, setEdges, pushHistory, nodes, edges]);
 
   const serializeToAgentDef = useCallback((): AgentDef => {
     const result: AgentDef = { name: "", persona: "assistant", model: "deepseek-chat", tools: [], knowledge: [], skills: [] };
@@ -282,51 +367,104 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
     event.dataTransfer.effectAllowed = "move";
   };
 
+  const autoLayout = useCallback(() => {
+    const { nodes: laidOut } = getLayoutedElements(nodes, edges);
+    pushHistory(nodes, edges);
+    setNodes(laidOut);
+  }, [nodes, edges, setNodes, pushHistory]);
+
+  const zoomIn = useCallback(() => {
+    const viewport = document.querySelector(".react-flow__viewport");
+    if (viewport) {
+      const transform = viewport.getAttribute("transform");
+      if (transform) {
+        const match = transform.match(/scale\(([\d.]+)\)/);
+        const scale = match ? parseFloat(match[1]) * 1.2 : 1.2;
+        viewport.setAttribute("transform", `translate(0,0) scale(${Math.min(scale, 3)})`);
+      }
+    }
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    const viewport = document.querySelector(".react-flow__viewport");
+    if (viewport) {
+      const transform = viewport.getAttribute("transform");
+      if (transform) {
+        const match = transform.match(/scale\(([\d.]+)\)/);
+        const scale = match ? parseFloat(match[1]) / 1.2 : 0.8;
+        viewport.setAttribute("transform", `translate(0,0) scale(${Math.max(scale, 0.2)})`);
+      }
+    }
+  }, []);
+
   return (
     <div style={{ display: "flex", height: "600px", gap: "12px" }}>
       <div
         style={{
-          width: "160px",
+          width: "200px",
           background: "#161b22",
           borderRadius: "8px",
           border: "1px solid #30363d",
           padding: "12px",
           flexShrink: 0,
+          overflowY: "auto",
         }}
       >
         <h4 style={{ color: "#e6edf3", margin: "0 0 12px 0", fontSize: "14px" }}>组件库</h4>
-        {PALETTE_ITEMS.map((item) => (
-          <div
-            key={item.type}
-            draggable
-            onDragStart={(e) => onDragStart(e, item.type)}
-            style={{
-              padding: "8px 10px",
-              marginBottom: "6px",
-              borderRadius: "6px",
-              background: "#1a1d23",
-              border: `1px solid ${item.color}44`,
-              cursor: "grab",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              color: "#e6edf3",
-              fontSize: "13px",
-            }}
-          >
-            <span
-              style={{
-                width: "10px",
-                height: "10px",
-                borderRadius: "50%",
-                background: item.color,
-                display: "inline-block",
-              }}
-            />
-            {item.label}
+        {PALETTE_CATEGORIES.map((cat) => (
+          <div key={cat.name} style={{ marginBottom: "12px" }}>
+            <div style={{ color: "#8b949e", fontSize: "11px", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              {cat.name}
+            </div>
+            {cat.items.map((item) => (
+              <div
+                key={item.type}
+                draggable
+                onDragStart={(e) => onDragStart(e, item.type)}
+                style={{
+                  padding: "8px 10px",
+                  marginBottom: "4px",
+                  borderRadius: "6px",
+                  background: "#1a1d23",
+                  border: `1px solid ${item.color}44`,
+                  cursor: "grab",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  color: "#e6edf3",
+                  fontSize: "13px",
+                }}
+              >
+                <span
+                  style={{
+                    width: "10px",
+                    height: "10px",
+                    borderRadius: "50%",
+                    background: item.color,
+                    display: "inline-block",
+                  }}
+                />
+                {item.label}
+              </div>
+            ))}
           </div>
         ))}
         <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "6px" }}>
+          <div style={{ display: "flex", gap: "4px" }}>
+            <button onClick={undo} disabled={historyIndex < 0} title="撤销" style={{ fontSize: "12px", padding: "4px 8px", flex: 1, opacity: historyIndex < 0 ? 0.5 : 1 }}>
+              ↩ 撤销
+            </button>
+            <button onClick={redo} disabled={historyIndex + 1 >= history.length} title="重做" style={{ fontSize: "12px", padding: "4px 8px", flex: 1, opacity: historyIndex + 1 >= history.length ? 0.5 : 1 }}>
+              ↪ 重做
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: "4px" }}>
+            <button onClick={autoLayout} title="自动排列" style={{ fontSize: "12px", padding: "4px 8px", flex: 1 }}>
+              ⊞ 自动排列
+            </button>
+            <button onClick={zoomIn} title="放大" style={{ fontSize: "12px", padding: "4px 8px" }}>＋</button>
+            <button onClick={zoomOut} title="缩小" style={{ fontSize: "12px", padding: "4px 8px" }}>－</button>
+          </div>
           <button onClick={exportDef} style={{ fontSize: "12px", padding: "6px" }}>
             导出为 AgentDef
           </button>

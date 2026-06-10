@@ -1,4 +1,3 @@
-//! sandbox — Runs studio tests in isolated sandboxed execution contexts.
 use std::time::Instant;
 
 use super::{StudioTester, TestRunner, TestStep};
@@ -91,7 +90,6 @@ mod tests {
 impl StudioTester {
     pub(super) fn measure_persona_injection() -> (TestStep, ()) {
         let start = Instant::now();
-        std::thread::sleep(std::time::Duration::from_secs_f64(0.02));
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let step = TestStep {
             name: "persona_injection".into(),
@@ -107,25 +105,24 @@ impl StudioTester {
     }
 
     pub(super) fn measure_knowledge_retrieval(
-        _knowledge_id: &str,
-        _query: &str,
+        knowledge_id: &str,
+        query: &str,
     ) -> (TestStep, String) {
         let start = Instant::now();
-        std::thread::sleep(std::time::Duration::from_secs_f64(0.15));
+        let result = format!("Knowledge retrieved for query: {}", query);
         let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
-        let result = format!("Knowledge retrieved for query: {}", _query);
         let step = TestStep {
             name: "knowledge_retrieval".into(),
             description: format!(
                 "Knowledge retrieval: {} ({:.2}s)",
-                _knowledge_id,
+                knowledge_id,
                 duration_ms / 1000.0
             ),
             duration_ms,
             success: true,
             tokens_used: None,
             cost: None,
-            input_preview: Some(_query.to_string()),
+            input_preview: Some(query.to_string()),
             output_preview: Some(result.clone()),
         };
         (step, result)
@@ -133,13 +130,12 @@ impl StudioTester {
 
     pub(super) fn measure_llm_call(model: &str, prompt: &str, tokens: u64) -> (TestStep, String) {
         let start = Instant::now();
-        std::thread::sleep(std::time::Duration::from_secs_f64(1.2));
-        let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let cost = tokens as f64 * 0.000002;
         let result = format!(
             "LLM response for prompt: {}",
             prompt.chars().take(50).collect::<String>()
         );
+        let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let step = TestStep {
             name: "llm_call".into(),
             description: format!(
@@ -160,9 +156,8 @@ impl StudioTester {
 
     pub(super) fn measure_tool_execution(tool_id: &str, params: &str) -> (TestStep, String) {
         let start = Instant::now();
-        std::thread::sleep(std::time::Duration::from_secs_f64(2.1));
-        let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let result = format!("Tool {} executed with params: {}", tool_id, params);
+        let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let step = TestStep {
             name: "tool_execution".into(),
             description: format!("Tool execution: {} ({:.2}s)", tool_id, duration_ms / 1000.0),
@@ -178,9 +173,8 @@ impl StudioTester {
 
     pub(super) fn measure_workflow_execution(workflow_id: &str, input: &str) -> (TestStep, String) {
         let start = Instant::now();
-        std::thread::sleep(std::time::Duration::from_secs_f64(3.0));
-        let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let result = format!("Workflow {} completed with input: {}", workflow_id, input);
+        let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
         let step = TestStep {
             name: "workflow_execution".into(),
             description: format!(

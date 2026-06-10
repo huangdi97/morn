@@ -104,7 +104,7 @@ mod tests {
         let view = view_with_logs();
         let summary = view.render_summary();
 
-        assert!(summary.contains("policies: 11"));
+        assert!(summary.contains("policies: 13"));
         assert!(summary.contains("blocked: 1"));
         assert!(summary.contains("suspicious: 1"));
     }

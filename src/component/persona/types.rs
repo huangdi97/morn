@@ -9,11 +9,133 @@ pub struct PersonaParameters {
 
 pub type PersonaRef = String;
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub enum MergeStrategy {
+    MajorityVote,
+    WeightedAverage,
+    Sequential,
+    Debate,
+}
+
+impl MergeStrategy {
+    pub fn label(&self) -> &'static str {
+        match self {
+            MergeStrategy::MajorityVote => "majority_vote",
+            MergeStrategy::WeightedAverage => "weighted_average",
+            MergeStrategy::Sequential => "sequential",
+            MergeStrategy::Debate => "debate",
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CompositePersona {
     pub primary: PersonaRef,
     pub secondary: Option<PersonaRef>,
     pub blend_ratio: f32,
+    pub persona_ids: Vec<String>,
+    pub merge_strategy: MergeStrategy,
+}
+
+impl Default for CompositePersona {
+    fn default() -> Self {
+        CompositePersona {
+            primary: String::new(),
+            secondary: None,
+            blend_ratio: 0.5,
+            persona_ids: Vec::new(),
+            merge_strategy: MergeStrategy::WeightedAverage,
+        }
+    }
+}
+
+impl CompositePersona {
+    pub fn new(persona_ids: Vec<String>, merge_strategy: MergeStrategy) -> Self {
+        let primary = persona_ids.first().cloned().unwrap_or_default();
+        let secondary = persona_ids.get(1).cloned();
+        CompositePersona {
+            primary,
+            secondary,
+            blend_ratio: 0.5,
+            persona_ids,
+            merge_strategy,
+        }
+    }
+}
+
+pub struct PersonaOutput {
+    pub persona_id: String,
+    pub response: String,
+    pub confidence: f64,
+}
+
+pub fn merge_responses(strategy: &MergeStrategy, outputs: &[PersonaOutput]) -> String {
+    match strategy {
+        MergeStrategy::MajorityVote => merge_majority_vote(outputs),
+        MergeStrategy::WeightedAverage => merge_weighted_average(outputs),
+        MergeStrategy::Sequential => merge_sequential(outputs),
+        MergeStrategy::Debate => merge_debate(outputs),
+    }
+}
+
+fn merge_majority_vote(outputs: &[PersonaOutput]) -> String {
+    if outputs.is_empty() {
+        return String::new();
+    }
+    let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for o in outputs {
+        *counts.entry(&o.response).or_insert(0) += 1;
+    }
+    counts
+        .into_iter()
+        .max_by_key(|&(_, count)| count)
+        .map(|(resp, _)| resp.to_string())
+        .unwrap_or_else(|| outputs[0].response.clone())
+}
+
+fn merge_weighted_average(outputs: &[PersonaOutput]) -> String {
+    if outputs.is_empty() {
+        return String::new();
+    }
+    let total_conf: f64 = outputs.iter().map(|o| o.confidence).sum();
+    if total_conf <= 0.0 {
+        return outputs
+            .iter()
+            .map(|o| o.response.clone())
+            .collect::<Vec<_>>()
+            .join("\n---\n");
+    }
+    let best = outputs
+        .iter()
+        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|o| o.response.clone())
+        .unwrap_or_default();
+    best
+}
+
+fn merge_sequential(outputs: &[PersonaOutput]) -> String {
+    outputs
+        .iter()
+        .map(|o| o.response.clone())
+        .collect::<Vec<_>>()
+        .join("\n---\n")
+}
+
+fn merge_debate(outputs: &[PersonaOutput]) -> String {
+    if outputs.is_empty() {
+        return String::new();
+    }
+    let mut debate = String::from("=== Debate Summary ===\n");
+    for (i, o) in outputs.iter().enumerate() {
+        debate.push_str(&format!(
+            "--- Participant {} ({}): confidence={:.2} ---\n{}\n",
+            i + 1,
+            o.persona_id,
+            o.confidence,
+            o.response
+        ));
+    }
+    debate
 }
 
 impl Default for PersonaParameters {

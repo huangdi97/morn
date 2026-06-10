@@ -10,6 +10,10 @@ impl WorkflowTemplate {
             description: "Multi-source research and deep analysis workflow".into(),
             category: "research".into(),
             tags: vec!["analysis".into(), "research".into(), "data".into()],
+            version: "1.0.0".into(),
+            created_at: 0,
+            updated_at: 0,
+            fork_from: None,
             estimated_duration_secs: 60,
             steps: vec![
                 WorkflowStep {
@@ -51,6 +55,10 @@ impl WorkflowTemplate {
             description: "Daily/weekly report generation with research and formatting".into(),
             category: "reporting".into(),
             tags: vec!["report".into(), "generate".into(), "daily".into()],
+            version: "1.0.0".into(),
+            created_at: 0,
+            updated_at: 0,
+            fork_from: None,
             estimated_duration_secs: 60,
             steps: vec![
                 WorkflowStep {
@@ -106,6 +114,10 @@ impl WorkflowTemplate {
             description: "Continuous news monitoring and alerting workflow".into(),
             category: "monitoring".into(),
             tags: vec!["news".into(), "monitor".into(), "alert".into()],
+            version: "1.0.0".into(),
+            created_at: 0,
+            updated_at: 0,
+            fork_from: None,
             estimated_duration_secs: 45,
             steps: vec![
                 WorkflowStep {

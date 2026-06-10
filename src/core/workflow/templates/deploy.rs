@@ -10,6 +10,10 @@ impl WorkflowTemplate {
             description: "Product launch planning and execution workflow".into(),
             category: "product".into(),
             tags: vec!["product".into(), "launch".into(), "go-to-market".into()],
+            version: "1.0.0".into(),
+            created_at: 0,
+            updated_at: 0,
+            fork_from: None,
             estimated_duration_secs: 90,
             steps: vec![
                 WorkflowStep {
@@ -103,6 +107,10 @@ impl WorkflowTemplate {
                 .into(),
             category: "general".into(),
             tags: vec!["task".into(), "execution".into(), "general".into()],
+            version: "1.0.0".into(),
+            created_at: 0,
+            updated_at: 0,
+            fork_from: None,
             estimated_duration_secs: 30,
             steps: vec![
                 WorkflowStep {

@@ -7,5 +7,8 @@ pub mod computer;
 pub mod console;
 pub mod core;
 pub mod market;
+pub mod mcp;
 pub mod org;
+pub mod protocol;
+pub mod sandbox;
 pub mod studio;

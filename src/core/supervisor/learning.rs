@@ -1,4 +1,3 @@
-//! learning — Adjusts supervisor decision rules from execution outcomes.
 use crate::core::storage::{DecisionRule, Storage};
 
 use super::DecisionLevel;
@@ -117,6 +116,94 @@ impl LearningEngine {
         }
         trends
     }
+
+    /// G23: handles "don't ask me in the future" patterns — lowers threshold for auto-approval
+    pub fn handle_dont_ask_pattern(&self, user_input: &str) -> Result<Option<String>, String> {
+        let lower = user_input.to_lowercase();
+        let is_dont_ask = lower.contains("以后不用问我")
+            || lower.contains("don't ask me")
+            || lower.contains("dont ask me")
+            || lower.contains("stop asking")
+            || lower.contains("自动执行")
+            || lower.contains("auto approve");
+        if !is_dont_ask {
+            return Ok(None);
+        }
+
+        let Some(storage) = &self.storage else {
+            return Ok(Some("No storage for learning".to_string()));
+        };
+
+        let keyword = extract_keyword(user_input).unwrap_or_default();
+        let existing = storage
+            .get_decision_rules("default", &keyword)
+            .unwrap_or_default();
+
+        if let Some(rule) = existing.first() {
+            if let Some(rule_id) = rule.id {
+                storage.adjust_rule_threshold(rule_id, -20.0)?;
+                storage.upsert_decision_rule(&DecisionRule {
+                    id: Some(rule_id),
+                    user_id: "default".to_string(),
+                    keyword: keyword.clone(),
+                    level: rule.level.clone(),
+                    trust_threshold: (rule.trust_threshold - 20.0).max(0.0),
+                    auto_execute: true,
+                    source: "learning_engine".to_string(),
+                    hit_count: rule.hit_count + 1,
+                    last_used_at: Some(chrono::Utc::now().to_rfc3339()),
+                    created_at: None,
+                })?;
+            }
+        } else {
+            storage.upsert_decision_rule(&DecisionRule {
+                id: None,
+                user_id: "default".to_string(),
+                keyword: keyword.clone(),
+                level: DecisionLevel::L2SingleTool.as_str().to_string(),
+                trust_threshold: 30.0,
+                auto_execute: true,
+                source: "learning_engine".to_string(),
+                hit_count: 1,
+                last_used_at: Some(chrono::Utc::now().to_rfc3339()),
+                created_at: None,
+            })?;
+        }
+
+        Ok(Some(format!("Auto-approved rule set for keyword '{}'", keyword)))
+    }
+
+    /// P5: Deep learning from user correction history for personalized decision preference
+    pub fn learn_from_correction_history(&self, corrections: &[(&str, bool)]) -> Result<usize, String> {
+        let Some(storage) = &self.storage else {
+            return Ok(0);
+        };
+        let mut updated = 0;
+        for (keyword, approved) in corrections {
+            let existing = storage.get_decision_rules("default", keyword).unwrap_or_default();
+            let change = if *approved { -5.0 } else { 10.0 };
+            if let Some(rule) = existing.first() {
+                if let Some(rule_id) = rule.id {
+                    let new_threshold = (rule.trust_threshold + change).clamp(0.0, 100.0);
+                    storage.adjust_rule_threshold(rule_id, change)?;
+                    storage.upsert_decision_rule(&DecisionRule {
+                        id: Some(rule_id),
+                        user_id: "default".to_string(),
+                        keyword: keyword.to_string(),
+                        level: rule.level.clone(),
+                        trust_threshold: new_threshold,
+                        auto_execute: new_threshold < 60.0,
+                        source: "deep_learning".to_string(),
+                        hit_count: rule.hit_count + 1,
+                        last_used_at: Some(chrono::Utc::now().to_rfc3339()),
+                        created_at: None,
+                    })?;
+                    updated += 1;
+                }
+            }
+        }
+        Ok(updated)
+    }
 }
 
 fn extract_keyword(user_input: &str) -> Option<String> {
@@ -197,5 +284,87 @@ mod tests {
         let trends = engine.trend_analysis();
 
         assert_eq!(trends, vec!["not enough learned decisions for trend analysis"]);
+    }
+
+    #[test]
+    fn handle_dont_ask_pattern_creates_auto_approve_rule() {
+        let storage = Storage::new_in_memory().unwrap();
+        let engine = LearningEngine::new(Some(storage.clone()), 50.0);
+
+        let result = engine.handle_dont_ask_pattern("以后不用问我 about reports").unwrap();
+
+        assert!(result.is_some());
+        let rules = storage.get_decision_rules("default", "about").unwrap();
+        assert_eq!(rules.len(), 1);
+        assert!(rules[0].auto_execute);
+        assert!(rules[0].trust_threshold < 50.0);
+    }
+
+    #[test]
+    fn handle_dont_ask_pattern_english() {
+        let storage = Storage::new_in_memory().unwrap();
+        let engine = LearningEngine::new(Some(storage.clone()), 50.0);
+
+        let result = engine.handle_dont_ask_pattern("don't ask me about deploy").unwrap();
+
+        assert!(result.is_some());
+        let rules = storage.get_decision_rules("default", "about").unwrap();
+        assert_eq!(rules.len(), 1);
+    }
+
+    #[test]
+    fn handle_dont_ask_pattern_no_match() {
+        let engine = LearningEngine::new(Some(Storage::new_in_memory().unwrap()), 50.0);
+        let result = engine.handle_dont_ask_pattern("normal question").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn ingest_decision_without_storage_is_noop() {
+        let engine = LearningEngine::new(None, 50.0);
+        assert!(engine.ingest_decision("deploy now", "workflow", true).is_ok());
+    }
+
+    #[test]
+    fn auto_adjust_skipped_when_ratio_above_threshold() {
+        let storage = Storage::new_in_memory().unwrap();
+        let engine = LearningEngine::new(Some(storage.clone()), 50.0);
+        engine.ingest_decision("search docs", "single_tool", true).unwrap();
+        engine.auto_adjust("docs", 0.8).unwrap();
+        let rules = storage.get_decision_rules("default", "docs").unwrap();
+        assert_eq!(rules[0].level, "single_tool");
+    }
+
+    #[test]
+    fn learn_from_correction_history_updates_multiple_keywords() {
+        let storage = Storage::new_in_memory().unwrap();
+        let engine = LearningEngine::new(Some(storage.clone()), 50.0);
+        engine.ingest_decision("deploy report", "single_agent", true).unwrap();
+        engine.ingest_decision("search tool", "single_tool", true).unwrap();
+
+        let corrections = &[("deploy", false), ("search", true)];
+        let updated = engine.learn_from_correction_history(corrections).unwrap();
+        assert_eq!(updated, 2);
+    }
+
+    #[test]
+    fn learn_from_correction_without_storage_returns_zero() {
+        let engine = LearningEngine::new(None, 50.0);
+        let updated = engine.learn_from_correction_history(&[("deploy", false)]).unwrap();
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn trend_analysis_no_storage() {
+        let engine = LearningEngine::new(None, 50.0);
+        let trends = engine.trend_analysis();
+        assert_eq!(trends, vec!["learning disabled: no storage"]);
+    }
+
+    #[test]
+    fn handle_dont_ask_no_storage() {
+        let engine = LearningEngine::new(None, 50.0);
+        let result = engine.handle_dont_ask_pattern("以后不用问我 about reports").unwrap();
+        assert_eq!(result, Some("No storage for learning".to_string()));
     }
 }

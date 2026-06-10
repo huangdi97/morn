@@ -1,4 +1,4 @@
-//! market — Exposes marketplace modules for capability discovery and installation.
+pub mod billing;
 pub mod marketplace;
 
 pub use marketplace::License;
@@ -62,7 +62,7 @@ mod tests {
     fn marketplace_initializes_builtin_listings() {
         let market = Marketplace::new(Storage::new_in_memory().unwrap());
 
-        assert_eq!(market.list(None).len(), 6);
+        assert_eq!(market.list(None).len(), 7);
     }
 
     #[test]

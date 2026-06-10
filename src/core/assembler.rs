@@ -1,9 +1,11 @@
 //! assembler — Builds agents from persona, model, skill, and tool components.
 use crate::component::model::ModelConfig;
 use crate::component::persona::Persona;
+use crate::core::assembly::AssemblyBuilder;
 use crate::core::component::Component;
 use crate::core::registry::Registry;
 
+#[derive(Debug, Clone)]
 pub struct AgentDef {
     pub id: String,
     pub name: String,
@@ -18,11 +20,15 @@ pub struct AgentDef {
 #[allow(dead_code)] /* 预留：agent 装配器 registry 注入 */
 pub struct AgentAssembler {
     registry: Option<Registry>,
+    assembly_builder: Option<AssemblyBuilder>,
 }
 
 impl AgentAssembler {
     pub fn new(registry: Option<Registry>) -> Self {
-        AgentAssembler { registry }
+        AgentAssembler {
+            registry,
+            assembly_builder: Some(AssemblyBuilder::new()),
+        }
     }
 
     pub fn assemble(&self, def: AgentDef) -> Result<Box<dyn Component>, String> {

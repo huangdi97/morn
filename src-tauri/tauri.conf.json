@@ -19,12 +19,12 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
+    "targets": ["nsis", "msi", "app", "dmg", "deb", "appimage", "apk", "ipa"],
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -45,6 +45,16 @@
       "dialog": true,
       "endpoints": ["https://github.com/huangdi97/morn/releases/latest/download/update.json"],
       "pubkey": ""
+    }
+  },
+  "mobile": {
+    "iOS": {
+      "developmentTeam": "",
+      "minimumSystemVersion": "15.0"
+    },
+    "android": {
+      "minSdkVersion": 26,
+      "targetSdkVersion": 34
     }
   }
 }
