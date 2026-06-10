@@ -152,6 +152,13 @@ impl Default for VariableStore {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum JoinCondition {
+    All,
+    Any,
+    NOf(u32),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum WorkflowAction {
     LLMCall {
         system_prompt: String,
@@ -207,6 +214,9 @@ pub enum WorkflowAction {
         branches: Vec<Vec<WorkflowStep>>,
     },
     Join,
+    PipelineExec {
+        pipeline_json: Value,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -230,6 +240,10 @@ pub struct WorkflowTemplate {
     pub estimated_duration_secs: u64,
     pub category: String,
     pub tags: Vec<String>,
+    pub version: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub fork_from: Option<String>,
 }
 
 #[cfg(test)]

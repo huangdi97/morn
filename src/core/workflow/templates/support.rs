@@ -10,6 +10,10 @@ impl WorkflowTemplate {
             description: "Multi-perspective decision evaluation for project proposals".into(),
             category: "strategy".into(),
             tags: vec!["decision".into(), "evaluation".into(), "strategy".into()],
+            version: "1.0.0".into(),
+            created_at: 0,
+            updated_at: 0,
+            fork_from: None,
             estimated_duration_secs: 75,
             steps: vec![
                 WorkflowStep {

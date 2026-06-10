@@ -147,7 +147,7 @@ export function AgentBuilder() {
     try {
       setPublishing(true);
       setPublishMsg(null);
-      await invoke("publish_agent", { agentId });
+      await invoke("publish_component", { id: agentId });
       setPublishMsg("Published to Workbench successfully");
     } catch (e: any) {
       setPublishMsg("Publish failed: " + e.toString());

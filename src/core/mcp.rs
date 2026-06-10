@@ -116,12 +116,12 @@ impl MCPClient {
     }
 
     /// Exports registry capabilities as MCP tool metadata.
-    pub fn export_registry_as_mcp(&self) -> Vec<MCPTool> {
+    pub fn export_registry_as_mcp(&self) -> Result<Vec<MCPTool>, String> {
         let registry = self
             .registry
             .lock()
-            .expect("registry mutex poisoned while exporting MCP tools");
-        registry
+            .map_err(|e| e.to_string())?;
+        Ok(registry
             .list_all()
             .iter()
             .map(|cap| MCPTool {
@@ -138,7 +138,7 @@ impl MCPClient {
                 }),
                 server_url: None,
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -153,7 +153,7 @@ mod tests {
         let event_bus = crate::core::event_bus::SimpleEventBus::new();
         let registry = Arc::new(Mutex::new(Registry::new(storage, Some(event_bus))));
         let client = MCPClient::new(registry);
-        let tools = client.export_registry_as_mcp();
+        let tools = client.export_registry_as_mcp().unwrap();
         assert!(!tools.is_empty(), "Should export at least one tool");
         assert!(tools.iter().any(|t| t.name == "Chat Agent"));
     }

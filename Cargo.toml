@@ -13,24 +13,58 @@ codegen-units = 1
 strip = true
 opt-level = "z"
 
+[features]
+default = ["full"]
+local-llm = []
+sandbox = ["wasmtime", "wat"]
+email = ["lettre"]
+server = ["axum", "tower", "futures-util"]
+office = ["csv", "rust_xlsxwriter", "zip", "serde_yaml"]
+channels-full = []
+providers-full = []
+desktop-real = []
+vnc-sandbox = []
+full = ["sandbox", "email", "server", "office", "channels-full", "providers-full", "desktop-real", "vnc-sandbox"]
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5"
-lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder"] }
-axum = { version = "0.8", features = ["json", "ws"] }
-futures-util = "0.3"
-tower = "0.5"
+tracing = "0.1"
+
+# optional: sandbox
+wasmtime = { version = "28", optional = true }
+wat = { version = "1", optional = true }
+
+# optional: email channel
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder"], optional = true }
+
+# optional: http server
+axum = { version = "0.8", features = ["json", "ws"], optional = true }
+tower = { version = "0.5", optional = true }
+futures-util = { version = "0.3", optional = true }
+
+# optional: office/file exports
+serde_yaml = { version = "0.9", optional = true }
+csv = { version = "1", optional = true }
+rust_xlsxwriter = { version = "0.95", optional = true }
+zip = { version = "2", optional = true }
+
+# always needed (small)
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+[dev-dependencies]
+tempfile = "3"
+wat = "1"
 serde_yaml = "0.9"
 csv = "1"
 rust_xlsxwriter = "0.95"
 zip = "2"
-tracing = "0.1"
-
-[dev-dependencies]
-tempfile = "3"
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder"] }
+axum = { version = "0.8", features = ["json", "ws"] }
+tower = "0.5"
+futures-util = "0.3"

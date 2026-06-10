@@ -1,334 +1,23 @@
 //! execution — Supervises execution plans and emits task lifecycle events.
-use crate::core::event_bus::{
-    EVENT_AGENT_CREATED, EVENT_AGENT_DESTROYED, EVENT_SUPERVISOR_PLAN_CREATED,
-    EVENT_TASK_COMPLETED, EVENT_TASK_FAILED, EVENT_WORKFLOW_COMPLETED, EVENT_WORKFLOW_FAILED,
-    EVENT_WORKFLOW_STARTED,
-};
-use crate::core::storage::{DecisionRecord, DecisionRule, TaskRecord};
-use tracing;
+mod dispatch;
+mod intent;
+pub mod planner;
+pub mod scheduler;
 
-use super::{
-    DecisionLevel, DecisionOverride, Mode, NLAgentDef, SubTaskDef, SubTaskResult, Supervisor,
-    TaskPlan, TaskResult,
-};
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum ExecutionTier {
+    Direct,       // <3s: no confirmation needed
+    Interactive,  // 3-30s: show plan -> confirm -> progress
+    Background,   // >30s: background -> notify on completion
+}
 
-impl Supervisor {
-    /// Executes a task plan with the provided chat function and returns the completed task result.
-    pub fn execute_plan(
-        &mut self,
-        plan: &TaskPlan,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    ) -> Result<TaskResult, String> {
-        self.turn_count += 1;
-
-        if let Some(ref bus) = self.event_bus {
-            bus.publish_event(
-                EVENT_WORKFLOW_STARTED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "decision_level": plan.decision_level,
-                }),
-            );
-            bus.publish_event(
-                EVENT_SUPERVISOR_PLAN_CREATED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "user_input": plan.user_input,
-                    "decision_level": plan.decision_level,
-                    "mode": self.mode.as_str(),
-                }),
-            );
-            bus.publish_event(
-                EVENT_AGENT_CREATED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "agent_id": "chat-agent",
-                }),
-            );
-        }
-
-        if let Some(ref storage) = self.storage {
-            let task_record = TaskRecord {
-                id: plan.task_id.clone(),
-                user_input: plan.user_input.clone(),
-                plan_json: serde_json::to_string(plan).unwrap_or_default(),
-                status: "executing".to_string(),
-                created_at: chrono::Utc::now().to_rfc3339(),
-                completed_at: None,
-            };
-            let _ = storage.insert_task(&task_record);
-
-            let decision = DecisionRecord {
-                id: format!("dec-{}", uuid::Uuid::new_v4()),
-                task_id: plan.task_id.clone(),
-                decision_level: plan.decision_level.clone(),
-                action: format!("execute with {} subtasks", plan.subtasks.len()),
-                context_json: Some(
-                    serde_json::json!({
-                        "mode": self.mode.as_str(),
-                        "estimated_secs": plan.estimated_secs,
-                        "decision_point": self.requires_decision_point(plan),
-                    })
-                    .to_string(),
-                ),
-                approved: self.mode == Mode::Automated
-                    || (self.mode == Mode::Proactive && !self.requires_decision_point(plan)),
-                created_at: chrono::Utc::now().to_rfc3339(),
-            };
-            let _ = storage.insert_decision(&decision);
-        }
-
-        if self.mode == Mode::Safe && self.requires_decision_point(plan) {
-            let preview = self.build_context(&plan.user_input);
-            tracing::info!("[COO Safe Mode] Plan requires approval:");
-            tracing::info!("  Level: {}", plan.decision_level);
-            tracing::info!("  Subtasks: {}", plan.subtasks.len());
-            tracing::info!("  Estimated: {}s", plan.estimated_secs);
-            tracing::info!("  Preview: {}...", &preview[..preview.len().min(200)]);
-        }
-
-        let context = self.build_context(&plan.user_input);
-
-        let response = match chat_fn(&context, "You are Morn, a helpful AI assistant.") {
-            Ok(response) => response,
-            Err(err) => {
-                if let Some(ref storage) = self.storage {
-                    let _ = storage.update_task_status(&plan.task_id, "failed");
-                }
-                if let Some(ref bus) = self.event_bus {
-                    bus.publish_event(
-                        EVENT_TASK_FAILED,
-                        "supervisor",
-                        serde_json::json!({
-                            "task_id": plan.task_id,
-                            "error": err,
-                        }),
-                    );
-                    bus.publish_event(
-                        EVENT_AGENT_DESTROYED,
-                        "supervisor",
-                        serde_json::json!({
-                            "task_id": plan.task_id,
-                            "agent_id": "chat-agent",
-                            "status": "failed",
-                        }),
-                    );
-                    bus.publish_event(
-                        EVENT_WORKFLOW_FAILED,
-                        "supervisor",
-                        serde_json::json!({
-                            "task_id": plan.task_id,
-                            "error": err,
-                        }),
-                    );
-                }
-                return Err(err);
-            }
-        };
-
-        self.record_turn("user", &plan.user_input);
-        self.record_turn("assistant", &response);
-
-        let result = TaskResult {
-            task_id: plan.task_id.clone(),
-            subtask_results: vec![SubTaskResult {
-                id: "main".to_string(),
-                success: true,
-                output: response.clone(),
-                error: None,
-            }],
-            summary: response.clone(),
-        };
-
-        if let Some(ref storage) = self.storage {
-            let _ = storage.update_task_status(&plan.task_id, "completed");
-        }
-
-        if let Some(ref bus) = self.event_bus {
-            bus.publish_event(
-                EVENT_TASK_COMPLETED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "summary": result.summary,
-                }),
-            );
-            bus.publish_event(
-                EVENT_AGENT_DESTROYED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "agent_id": "chat-agent",
-                    "status": "completed",
-                }),
-            );
-            bus.publish_event(
-                EVENT_WORKFLOW_COMPLETED,
-                "supervisor",
-                serde_json::json!({
-                    "task_id": plan.task_id,
-                    "summary": result.summary,
-                }),
-            );
-        }
-
-        if let Some(engine) = &self.learning_engine {
-            engine.ingest_decision(&plan.user_input, &plan.decision_level, true)?;
-        }
-
-        Ok(result)
-    }
-
-    /// Builds and executes a single-turn chat plan for the input, returning the response summary.
-    pub fn execute_chat(
-        &mut self,
-        input: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    ) -> Result<String, String> {
-        let task_id = format!("task-{}", uuid::Uuid::new_v4());
-        let (inline_override, clean_input) = match DecisionOverride::parse_prefixed(input) {
-            Some((override_, clean_input)) => (Some(override_), clean_input),
-            None => (None, input.to_string()),
-        };
-
-        if let Some(override_) = inline_override {
-            self.override_decision(override_.level, override_.scope);
-        }
-
-        let (level, _reasoning) = match self.take_next_turn_override() {
-            Some(override_) => (
-                override_.level,
-                "Decision override applied before automatic routing".to_string(),
-            ),
-            None => self.decide_with_rules(&clean_input),
-        };
-
-        let plan = TaskPlan {
-            task_id: task_id.clone(),
-            user_input: clean_input.clone(),
-            subtasks: vec![SubTaskDef {
-                id: "main".to_string(),
-                agent_id: "chat-agent".to_string(),
-                action: "chat".to_string(),
-                params: serde_json::json!({"input": clean_input}),
-                depends_on: vec![],
-            }],
-            estimated_secs: match level {
-                DecisionLevel::L1DirectAnswer => 1,
-                DecisionLevel::L2SingleTool => 3,
-                DecisionLevel::L3SingleAgent => 10,
-                DecisionLevel::L4Team => 30,
-                DecisionLevel::L5Workflow => 20,
-                DecisionLevel::L6JumpToStudio => 60,
-            },
-            decision_level: level.as_str().to_string(),
-        };
-
-        let result = self.execute_plan(&plan, chat_fn)?;
-        Ok(result.summary)
-    }
-
-    fn requires_decision_point(&self, plan: &TaskPlan) -> bool {
-        let high_level = matches!(
-            plan.decision_level.as_str(),
-            "team" | "workflow" | "jump_studio"
-        );
-        let high_risk_action = plan.subtasks.iter().any(|task| {
-            let action = task.action.to_lowercase();
-            action.contains("delete")
-                || action.contains("deploy")
-                || action.contains("publish")
-                || action.contains("payment")
-        });
-        high_level || high_risk_action
-    }
-
-    /// Converts a natural-language agent request into an agent definition using the provided chat function.
-    pub fn create_agent_from_nl(
-        &self,
-        nl: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    ) -> Result<NLAgentDef, String> {
-        let system_prompt = "You are an agent configuration assistant. Analyze the user's natural language description and return a JSON object with the agent definition. Only return valid JSON, no markdown, no explanation.";
-
-        let prompt = format!(
-            r#"User wants to create an agent. Analyze this description:
-{}
-Available personas: assistant, analyst, researcher, writer, coder, translator, reviewer
-Available models: deepseek-chat, deepseek-reasoner
-Available tools: web_search, read_file, write_file, exec_python, calc, get_time, get_kline, calc_macd, chart
-Available knowledge: docs, glossary, data_sources
-Available skills: summarization, translation, code_review, grammar_check, format, style, proofread, report_generation, debug, test
-
-Return a JSON object with exactly these fields (all strings or string arrays):
-{{
-  "name": "short agent name (2-5 words)",
-  "persona": "most appropriate persona from the list above",
-  "model": "deepseek-chat",
-  "tools": ["list", "of", "tool", "names"],
-  "knowledge": ["list", "of", "knowledge", "sources"],
-  "skills": ["list", "of", "skills"]
-}}
-Select tools, knowledge, and skills that best match the user's described use case."#,
-            nl
-        );
-
-        let response = chat_fn(&prompt, system_prompt)?;
-
-        let cleaned = response
-            .trim()
-            .trim_start_matches("```json")
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim();
-
-        serde_json::from_str::<NLAgentDef>(cleaned).map_err(|e| {
-            format!(
-                "Failed to parse LLM response as AgentDef: {}. Raw: {}",
-                e, cleaned
-            )
-        })
-    }
-
-    /// Learns a decision rule from user feedback and returns success when storage updates complete.
-    pub fn learn_from_feedback(&mut self, user_input: &str, approved: bool) -> Result<(), String> {
-        let user_id = self.user_id.as_deref().unwrap_or("default").to_string();
-        let keywords = Self::extract_keywords(user_input);
-        if keywords.is_empty() {
-            return Ok(());
-        }
-        let keyword = keywords[0].clone();
-        let level = self.decide_level(user_input).as_str().to_string();
-
-        if let Some(ref storage) = self.storage {
-            let existing = storage
-                .get_decision_rules(&user_id, &keyword)
-                .unwrap_or_default();
-            if let Some(rule) = existing.first() {
-                let change = if approved { -10.0 } else { 15.0 };
-                if let Some(rule_id) = rule.id {
-                    storage.adjust_rule_threshold(rule_id, change)?;
-                }
-            } else {
-                let rule = DecisionRule {
-                    id: None,
-                    user_id: user_id.clone(),
-                    keyword: keyword.clone(),
-                    level,
-                    trust_threshold: if approved { 50.0 } else { 75.0 },
-                    auto_execute: approved,
-                    source: "learned".to_string(),
-                    hit_count: 1,
-                    last_used_at: Some(chrono::Utc::now().to_rfc3339()),
-                    created_at: None,
-                };
-                storage.upsert_decision_rule(&rule)?;
-            }
-        }
-        Ok(())
+pub fn classify_execution_time(estimated_secs: u64) -> ExecutionTier {
+    if estimated_secs < 3 {
+        ExecutionTier::Direct
+    } else if estimated_secs <= 30 {
+        ExecutionTier::Interactive
+    } else {
+        ExecutionTier::Background
     }
 }
 
@@ -341,6 +30,8 @@ mod tests {
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Mutex, OnceLock};
+
+    use crate::core::supervisor::{Mode, SubTaskDef, Supervisor, TaskPlan};
 
     static WORKFLOW_STARTED_CALLS: AtomicUsize = AtomicUsize::new(0);
     static WORKFLOW_COMPLETED_CALLS: AtomicUsize = AtomicUsize::new(0);
@@ -555,5 +246,25 @@ mod tests {
         assert_eq!(TASK_FAILED_CALLS.load(Ordering::SeqCst), 1);
         assert_eq!(WORKFLOW_FAILED_CALLS.load(Ordering::SeqCst), 1);
         assert_eq!(WORKFLOW_COMPLETED_CALLS.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn classify_direct_tier_under_3s() {
+        assert_eq!(classify_execution_time(0), ExecutionTier::Direct);
+        assert_eq!(classify_execution_time(1), ExecutionTier::Direct);
+        assert_eq!(classify_execution_time(2), ExecutionTier::Direct);
+    }
+
+    #[test]
+    fn classify_interactive_tier_3_to_30s() {
+        assert_eq!(classify_execution_time(3), ExecutionTier::Interactive);
+        assert_eq!(classify_execution_time(15), ExecutionTier::Interactive);
+        assert_eq!(classify_execution_time(30), ExecutionTier::Interactive);
+    }
+
+    #[test]
+    fn classify_background_tier_over_30s() {
+        assert_eq!(classify_execution_time(31), ExecutionTier::Background);
+        assert_eq!(classify_execution_time(300), ExecutionTier::Background);
     }
 }

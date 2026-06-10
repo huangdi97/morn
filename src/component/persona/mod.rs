@@ -188,9 +188,96 @@ mod tests {
             primary: "preset-analyst".to_string(),
             secondary: Some("preset-writer".to_string()),
             blend_ratio: 0.6,
+            persona_ids: vec!["preset-analyst".to_string(), "preset-writer".to_string()],
+            merge_strategy: MergeStrategy::WeightedAverage,
         };
 
         assert_eq!(composite.primary, "preset-analyst");
         assert_eq!(composite.blend_ratio, 0.6);
+    }
+
+    #[test]
+    fn test_composite_persona_new() {
+        let c = CompositePersona::new(
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            MergeStrategy::MajorityVote,
+        );
+        assert_eq!(c.persona_ids.len(), 3);
+        assert_eq!(c.merge_strategy, MergeStrategy::MajorityVote);
+        assert_eq!(c.primary, "a");
+    }
+
+    #[test]
+    fn test_merge_majority_vote() {
+        let outputs = vec![
+            PersonaOutput { persona_id: "a".into(), response: "yes".into(), confidence: 0.8 },
+            PersonaOutput { persona_id: "b".into(), response: "yes".into(), confidence: 0.7 },
+            PersonaOutput { persona_id: "c".into(), response: "no".into(), confidence: 0.9 },
+        ];
+        let result = merge_responses(&MergeStrategy::MajorityVote, &outputs);
+        assert_eq!(result, "yes");
+    }
+
+    #[test]
+    fn test_merge_weighted_average() {
+        let outputs = vec![
+            PersonaOutput { persona_id: "a".into(), response: "answer a".into(), confidence: 0.9 },
+            PersonaOutput { persona_id: "b".into(), response: "answer b".into(), confidence: 0.3 },
+        ];
+        let result = merge_responses(&MergeStrategy::WeightedAverage, &outputs);
+        assert_eq!(result, "answer a");
+    }
+
+    #[test]
+    fn test_merge_sequential() {
+        let outputs = vec![
+            PersonaOutput { persona_id: "a".into(), response: "first".into(), confidence: 1.0 },
+            PersonaOutput { persona_id: "b".into(), response: "second".into(), confidence: 1.0 },
+        ];
+        let result = merge_responses(&MergeStrategy::Sequential, &outputs);
+        assert!(result.contains("first"));
+        assert!(result.contains("second"));
+    }
+
+    #[test]
+    fn test_merge_debate() {
+        let outputs = vec![
+            PersonaOutput { persona_id: "p1".into(), response: "arg1".into(), confidence: 0.8 },
+        ];
+        let result = merge_responses(&MergeStrategy::Debate, &outputs);
+        assert!(result.contains("Debate Summary"));
+        assert!(result.contains("p1"));
+    }
+
+    #[test]
+    fn test_merge_strategy_label() {
+        assert_eq!(MergeStrategy::MajorityVote.label(), "majority_vote");
+        assert_eq!(MergeStrategy::WeightedAverage.label(), "weighted_average");
+        assert_eq!(MergeStrategy::Sequential.label(), "sequential");
+        assert_eq!(MergeStrategy::Debate.label(), "debate");
+    }
+
+    #[test]
+    fn test_persona_output_struct() {
+        let o = PersonaOutput {
+            persona_id: "test-id".into(),
+            response: "test response".into(),
+            confidence: 0.75,
+        };
+        assert_eq!(o.confidence, 0.75);
+        assert_eq!(o.persona_id, "test-id");
+    }
+
+    #[test]
+    fn test_composite_persona_default() {
+        let c: CompositePersona = CompositePersona::default();
+        assert!(c.persona_ids.is_empty());
+        assert_eq!(c.merge_strategy, MergeStrategy::WeightedAverage);
+    }
+
+    #[test]
+    fn test_merge_empty_outputs() {
+        let result = merge_responses(&MergeStrategy::MajorityVote, &[]);
+        assert!(result.is_empty());
     }
 }

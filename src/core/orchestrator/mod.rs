@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex};
 mod blackboard;
 mod broadcast;
 mod chain;
+pub mod collaboration;
+pub mod group;
 mod helpers;
 mod manager_worker;
 mod routing;

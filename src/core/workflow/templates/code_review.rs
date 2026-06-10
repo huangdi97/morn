@@ -10,6 +10,10 @@ impl WorkflowTemplate {
             description: "End-to-end software development workflow".into(),
             category: "development".into(),
             tags: vec!["code".into(), "development".into(), "delivery".into()],
+            version: "1.0.0".into(),
+            created_at: 0,
+            updated_at: 0,
+            fork_from: None,
             estimated_duration_secs: 120,
             steps: vec![
                 WorkflowStep {
@@ -114,6 +118,10 @@ impl WorkflowTemplate {
             description: "Regular system health and performance inspection".into(),
             category: "operations".into(),
             tags: vec!["ops".into(), "inspection".into(), "health".into()],
+            version: "1.0.0".into(),
+            created_at: 0,
+            updated_at: 0,
+            fork_from: None,
             estimated_duration_secs: 30,
             steps: vec![
                 WorkflowStep {

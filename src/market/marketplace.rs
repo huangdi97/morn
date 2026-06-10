@@ -3,6 +3,31 @@ use crate::core::registry::{Capability, Registry};
 use crate::core::storage::Storage;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ListingType {
+    Tool,
+    Knowledge,
+    Skill,
+    Persona,
+    Agent,
+    Workflow,
+    TeamTemplate,
+}
+
+impl ListingType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ListingType::Tool => "tool",
+            ListingType::Knowledge => "knowledge",
+            ListingType::Skill => "skill",
+            ListingType::Persona => "persona",
+            ListingType::Agent => "agent",
+            ListingType::Workflow => "workflow",
+            ListingType::TeamTemplate => "team_template",
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Listing {
     pub id: String,
     pub item_type: String,
@@ -113,6 +138,17 @@ impl Marketplace {
                 downloads: 120,
                 created_at: now.clone(),
             },
+            Listing {
+                id: "listing-team-risk-control".into(),
+                item_type: ListingType::TeamTemplate.as_str().into(),
+                name: "Risk Control Team".into(),
+                description: "Pre-built risk control team with data, rule, analyst, and alert agents".into(),
+                price: 0.02,
+                author: "Morn Labs".into(),
+                rating: 4.0,
+                downloads: 75,
+                created_at: now.clone(),
+            },
         ];
         for listing in builtin {
             if self
@@ -217,8 +253,7 @@ impl Marketplace {
     }
 
     pub fn transactions(&self) -> Vec<Transaction> {
-        self.storage.list_listings(None).unwrap_or_default();
-        vec![]
+        self.storage.list_transactions().unwrap_or_default()
     }
 
     pub fn user_licenses(&self, user_id: &str) -> Vec<License> {
@@ -273,7 +308,7 @@ mod tests {
     fn test_list_marketplace() {
         let market = Marketplace::new(test_storage());
         let all = market.list(None);
-        assert_eq!(all.len(), 6);
+        assert_eq!(all.len(), 7);
     }
 
     #[test]
@@ -309,7 +344,7 @@ mod tests {
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         market.publish(listing).unwrap();
-        assert_eq!(market.list(None).len(), 7);
+        assert_eq!(market.list(None).len(), 8);
     }
 
     #[test]

@@ -14,6 +14,10 @@ pub fn get_presets() -> Vec<TeamPreset> {
             team: code_review_team(),
         },
         TeamPreset {
+            keywords: vec!["stock", "finance", "market", "trading", "stock research"],
+            team: stock_research_team(),
+        },
+        TeamPreset {
             keywords: vec!["research", "investigate", "deep dive", "literature review"],
             team: research_team(),
         },
@@ -31,6 +35,10 @@ pub fn get_presets() -> Vec<TeamPreset> {
                 "doc",
             ],
             team: content_team(),
+        },
+        TeamPreset {
+            keywords: vec!["observability", "surveillance", "health check"],
+            team: monitoring_team(),
         },
         TeamPreset {
             keywords: vec!["devops", "deploy", "monitor", "alert", "incident"],
@@ -86,6 +94,14 @@ pub fn get_presets() -> Vec<TeamPreset> {
                 mode: CollaborationMode::Voting,
                 consensus: ConsensusMechanism::MungerVeto,
             },
+        },
+        TeamPreset {
+            keywords: vec!["stock", "research", "finance", "market", "trading"],
+            team: stock_research_team(),
+        },
+        TeamPreset {
+            keywords: vec!["risk", "control", "compliance", "audit", "security"],
+            team: risk_control_team(),
         },
     ]
 }
@@ -180,6 +196,51 @@ pub fn management_team() -> TeamDef {
     }
 }
 
+pub fn stock_research_team() -> TeamDef {
+    TeamDef {
+        id: "preset-stock-research".into(),
+        name: "Stock Research Team".into(),
+        members: vec![
+            "data-agent".into(),
+            "search-agent".into(),
+            "fin-plot".into(),
+            "chat-agent".into(),
+        ],
+        mode: CollaborationMode::Chain,
+        consensus: ConsensusMechanism::AutoSynthesis,
+    }
+}
+
+pub fn risk_control_team() -> TeamDef {
+    TeamDef {
+        id: "preset-risk-control".into(),
+        name: "Risk Control Team".into(),
+        members: vec![
+            "data-agent".into(),
+            "rule-agent".into(),
+            "analyst-agent".into(),
+            "alert-agent".into(),
+        ],
+        mode: CollaborationMode::Voting,
+        consensus: ConsensusMechanism::MungerVeto,
+    }
+}
+
+pub fn monitoring_team() -> TeamDef {
+    TeamDef {
+        id: "preset-monitoring".into(),
+        name: "Monitoring Team".into(),
+        members: vec![
+            "timer-agent".into(),
+            "check-agent".into(),
+            "alert-agent".into(),
+            "report-agent".into(),
+        ],
+        mode: CollaborationMode::Broadcast,
+        consensus: ConsensusMechanism::AutoSynthesis,
+    }
+}
+
 pub fn find_preset(input: &str) -> Option<TeamDef> {
     let lower = input.to_lowercase();
     for preset in get_presets() {
@@ -239,5 +300,44 @@ mod tests {
     fn find_preset_matches_code_review_first() {
         let team = find_preset("please review code").unwrap();
         assert_eq!(team.id, "preset-code-review");
+    }
+
+    #[test]
+    fn stock_research_team_has_four_members() {
+        let team = stock_research_team();
+        assert_eq!(team.members.len(), 4);
+        assert_eq!(team.mode, CollaborationMode::Chain);
+    }
+
+    #[test]
+    fn risk_control_team_has_four_members() {
+        let team = risk_control_team();
+        assert_eq!(team.members.len(), 4);
+        assert_eq!(team.mode, CollaborationMode::Voting);
+    }
+
+    #[test]
+    fn monitoring_team_has_four_members() {
+        let team = monitoring_team();
+        assert_eq!(team.members.len(), 4);
+        assert_eq!(team.mode, CollaborationMode::Broadcast);
+    }
+
+    #[test]
+    fn find_preset_matches_stock_research() {
+        let team = find_preset("stock market research").unwrap();
+        assert_eq!(team.id, "preset-stock-research");
+    }
+
+    #[test]
+    fn find_preset_matches_risk_control() {
+        let team = find_preset("risk compliance").unwrap();
+        assert_eq!(team.id, "preset-risk-control");
+    }
+
+    #[test]
+    fn find_preset_matches_monitoring() {
+        let team = find_preset("observability check").unwrap();
+        assert_eq!(team.id, "preset-monitoring");
     }
 }

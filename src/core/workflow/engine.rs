@@ -1,7 +1,7 @@
 //! engine — Executes workflow control-flow nodes without replacing template storage.
 use crate::core::approval::{ApprovalStatus, WorkflowApproval};
 use crate::core::thread_pool::{TaskDef, TaskPool};
-use crate::core::workflow::{WorkflowAction, WorkflowTemplate};
+use crate::core::workflow::{JoinCondition, WorkflowAction, WorkflowTemplate};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -17,6 +17,15 @@ pub enum ControlFlowNode {
     Loop {
         max_iterations: u32,
         tasks: Vec<TaskDef>,
+    },
+    Switch {
+        expression: String,
+        cases: HashMap<String, Vec<TaskDef>>,
+        default: Option<Vec<TaskDef>>,
+    },
+    ForkJoin {
+        branches: Vec<Vec<TaskDef>>,
+        join_condition: JoinCondition,
     },
 }
 
@@ -116,6 +125,15 @@ impl WorkflowEngine {
                 }
                 Ok(executed)
             }
+            ControlFlowNode::Switch {
+                expression,
+                cases,
+                default,
+            } => self.execute_switch(workflow_id, expression, cases, default).await,
+            ControlFlowNode::ForkJoin {
+                branches,
+                join_condition,
+            } => self.execute_fork_join(workflow_id, branches, join_condition).await,
         }
     }
 
@@ -190,6 +208,91 @@ impl WorkflowEngine {
         Err(format!("Workflow step '{}' is pending approval", task.id))
     }
 
+    async fn execute_fork_join(
+        &mut self,
+        workflow_id: &str,
+        branches: &[Vec<TaskDef>],
+        join_condition: &JoinCondition,
+    ) -> Result<Vec<String>, String> {
+        let mut handles: Vec<(String, tokio::task::JoinHandle<Result<(), String>>)> = Vec::new();
+        for branch in branches {
+            for task in branch {
+                self.ensure_approval(workflow_id, task)?;
+                handles.push((task.id.clone(), self.task_pool.execute(task.clone())));
+            }
+        }
+
+        let mut results = Vec::new();
+        let mut errors = Vec::new();
+        for (task_id, handle) in handles {
+            match handle.await.map_err(|e| e.to_string())? {
+                Ok(()) => results.push(task_id),
+                Err(e) => errors.push((task_id, e)),
+            }
+        }
+
+        match join_condition {
+            JoinCondition::All => {
+                if let Some((id, e)) = errors.into_iter().next() {
+                    return Err(format!("ForkJoin branch task '{}' failed: {}", id, e));
+                }
+                Ok(results)
+            }
+            JoinCondition::Any => {
+                if results.is_empty() && !errors.is_empty() {
+                    let (id, e) = errors.into_iter().next().ok_or_else(|| "unexpected: errors vec was empty".to_string())?;
+                    return Err(format!("ForkJoin all branches failed, last error from '{}': {}", id, e));
+                }
+                Ok(results)
+            }
+            JoinCondition::NOf(n) => {
+                let needed = *n as usize;
+                if results.len() < needed {
+                    let errs: Vec<String> = errors.into_iter().map(|(id, e)| format!("{}: {}", id, e)).collect();
+                    return Err(format!(
+                        "ForkJoin needed {} successful branches, got {}: [{}]",
+                        needed,
+                        results.len(),
+                        errs.join(", ")
+                    ));
+                }
+                Ok(results)
+            }
+        }
+    }
+
+    async fn execute_switch(
+        &mut self,
+        workflow_id: &str,
+        expression: &str,
+        cases: &HashMap<String, Vec<TaskDef>>,
+        default: &Option<Vec<TaskDef>>,
+    ) -> Result<Vec<String>, String> {
+        let value = self.evaluate_expression(expression);
+        if let Some(tasks) = cases.get(&value) {
+            self.execute_tasks(workflow_id, tasks).await
+        } else if let Some(tasks) = default {
+            self.execute_tasks(workflow_id, tasks).await
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    fn evaluate_expression(&self, expression: &str) -> String {
+        let trimmed = expression.trim();
+        if let Some(key) = trimmed.strip_prefix("$context.") {
+            self.context
+                .get(key)
+                .map(|v| match v {
+                    Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                })
+                .unwrap_or_default()
+        } else {
+            trimmed.trim_matches('"').to_string()
+        }
+    }
+
     fn evaluate_condition(&self, condition: &str) -> bool {
         let parts: Vec<&str> = condition.split_whitespace().collect();
         if parts.len() != 3 {
@@ -244,6 +347,7 @@ impl WorkflowEngine {
             WorkflowAction::Wait { .. } => "wait",
             WorkflowAction::Fork { .. } => "fork",
             WorkflowAction::Join => "join",
+            WorkflowAction::PipelineExec { .. } => "pipeline_exec",
         }
         .to_string()
     }

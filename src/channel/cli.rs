@@ -195,9 +195,13 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
             };
             match market.install(id, "cli-user") {
                 Ok(()) => {
-                    let mut reg = registry
-                        .lock()
-                        .expect("registry mutex poisoned during CLI market install");
+                    let mut reg = match registry.lock() {
+                        Ok(guard) => guard,
+                        Err(e) => {
+                            println!("  Error: registry mutex poisoned: {}", e);
+                            return;
+                        }
+                    };
                     match market.install_to_registry(id, &mut reg) {
                         Ok(()) => println!("  Installed and registered successfully."),
                         Err(e) => println!("  Install failed: {}", e),

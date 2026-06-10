@@ -178,6 +178,10 @@ impl WorkflowBuilder {
             estimated_duration_secs: (step_count * 30) as u64,
             category: "generated".to_string(),
             tags: vec!["auto".to_string(), "generated".to_string()],
+            version: "1.0.0".into(),
+            created_at: 0,
+            updated_at: 0,
+            fork_from: None,
         })
     }
 }
