@@ -117,7 +117,10 @@ mod tests {
     #[test]
     fn data_constructors_set_mime_types() {
         assert_eq!(Data::text("hello").mime_type, "text/plain");
-        assert_eq!(Data::json(serde_json::json!({"ok": true})).mime_type, "application/json");
+        assert_eq!(
+            Data::json(serde_json::json!({"ok": true})).mime_type,
+            "application/json"
+        );
     }
 
     #[test]

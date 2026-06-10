@@ -133,7 +133,8 @@ mod tests {
 
     #[tokio::test]
     async fn parses_chat_as_reply() {
-        let response = handle_text_message(r#"{"type":"chat","text":"hello"}"#, &test_state()).await;
+        let response =
+            handle_text_message(r#"{"type":"chat","text":"hello"}"#, &test_state()).await;
         match response {
             BrowserExtResponse::Reply { text } => assert!(text.contains("reply")),
             other => panic!("unexpected response: {:?}", serde_json::to_string(&other)),

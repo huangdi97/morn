@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morn Composition Canvas</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #e0e0e0; overflow: hidden; height: 100vh; }
+
+/* Header */
+.header { height: 40px; background: #16213e; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid #0f3460; gap: 12px; }
+.header h1 { font-size: 14px; font-weight: 600; color: #e94560; letter-spacing: 0.5px; }
+.header .badge { font-size: 10px; background: #e94560; color: #fff; padding: 2px 8px; border-radius: 8px; }
+.header-spacer { flex:1; }
+.header button { font-size: 11px; padding: 4px 12px; border: 1px solid #0f3460; border-radius: 4px; background: #1a1a2e; color: #a0a0c0; cursor: pointer; }
+.header button:hover { background: #0f3460; color: #fff; }
+
+/* Layout */
+.app-layout { display: flex; height: calc(100vh - 40px); }
+
+/* Left sidebar */
+.sidebar { width: 220px; min-width: 220px; background: #16213e; border-right: 1px solid #0f3460; overflow-y: auto; padding: 8px; }
+.sidebar h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #e94560; margin: 12px 8px 6px; }
+.sidebar h3:first-child { margin-top: 4px; }
+.category-group { margin-bottom: 4px; }
+.draggable-node { padding: 6px 10px; margin: 2px 4px; border-radius: 6px; font-size: 12px; cursor: grab; background: #1a1a2e; border: 1px solid #0f3460; color: #c0c0e0; transition: all 0.15s; user-select: none; }
+.draggable-node:hover { background: #0f3460; border-color: #e94560; transform: translateX(2px); }
+.draggable-node .node-label { font-weight: 500; }
+.draggable-node .node-desc { font-size: 10px; color: #707090; margin-top: 1px; }
+.type-badge { display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 3px; margin-right: 6px; font-weight: 500; }
+.type-badge.network { background: #1b4332; color: #52b788; }
+.type-badge.ai { background: #240046; color: #b388ff; }
+.type-badge.flow { background: #3e1f00; color: #ffb74d; }
+.type-badge.data { background: #00296b; color: #64b5f6; }
+
+/* Canvas area */
+.canvas-wrapper { flex: 1; position: relative; overflow: hidden; background: #1a1a2e; background-image: radial-gradient(circle, #0f3460 1px, transparent 1px); background-size: 24px 24px; }
+.canvas-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+.canvas-svg .edge-path { fill: none; stroke: #e94560; stroke-width: 2; cursor: pointer; }
+.canvas-svg .edge-path:hover { stroke: #ff6b81; stroke-width: 3; }
+.canvas-svg .edge-arrow { fill: #e94560; }
+.canvas-svg .temp-edge { fill: none; stroke: #e94560; stroke-width: 2; stroke-dasharray: 6 3; }
+
+/* Node element */
+.node-el { position: absolute; min-width: 140px; background: #16213e; border: 1.5px solid #0f3460; border-radius: 8px; cursor: grab; user-select: none; z-index: 2; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: box-shadow 0.15s; }
+.node-el:hover { box-shadow: 0 4px 16px rgba(233,69,96,0.2); }
+.node-el.selected { border-color: #e94560; box-shadow: 0 0 0 2px rgba(233,69,96,0.3); }
+.node-el .node-header { padding: 6px 10px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #0f3460; }
+.node-el .node-header .node-title { font-size: 11px; font-weight: 500; color: #e0e0f0; }
+.node-el .node-header .del-btn { margin-left: auto; background: none; border: none; color: #707090; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+.node-el .node-header .del-btn:hover { color: #e94560; }
+.node-body { padding: 4px 8px 6px; display: flex; justify-content: space-between; min-height: 28px; }
+.port-group { display: flex; flex-direction: column; gap: 4px; }
+.port-group.right { align-items: flex-end; }
+.port { display: flex; align-items: center; gap: 4px; font-size: 9px; color: #8080a0; cursor: crosshair; padding: 1px 0; }
+.port.right { flex-direction: row-reverse; }
+.port-dot { width: 8px; height: 8px; border-radius: 50%; background: #0f3460; border: 2px solid #e94560; flex-shrink: 0; transition: all 0.15s; }
+.port-dot:hover { background: #e94560; transform: scale(1.3); }
+.port-label { white-space: nowrap; }
+
+/* Bottom panel */
+.bottom-panel { position: absolute; bottom: 0; left: 0; right: 0; height: 36px; background: #16213e; border-top: 1px solid #0f3460; display: flex; align-items: center; padding: 0 12px; gap: 8px; z-index: 10; }
+.bottom-panel label { font-size: 10px; color: #8080a0; }
+.bottom-panel textarea { display: none; }
+.bottom-panel button { font-size: 10px; padding: 3px 10px; border: 1px solid #0f3460; border-radius: 4px; background: #1a1a2e; color: #a0a0c0; cursor: pointer; }
+.bottom-panel button:hover { background: #0f3460; color: #fff; }
+.status-msg { font-size: 10px; color: #52b788; margin-left: auto; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } = React;
+
+// ─── Template Registry ───────────────────────────────────────────────────
+const CATEGORIES = ['Network', 'AI', 'Flow', 'Data'];
+const CAT_COLORS = { Network: 'network', AI: 'ai', Flow: 'flow', Data: 'data' };
+
+const TEMPLATES = [
+  { id: 'http-req',    label: 'HTTP Request',       type: 'HttpRequest', category: 'Network', desc: 'Make HTTP requests',  inputs: ['body'],       outputs: ['response'] },
+  { id: 'get-req',     label: 'GET Request',         type: 'HttpRequest', category: 'Network', desc: 'Simple GET request',  inputs: [],             outputs: ['response'] },
+  { id: 'post-req',    label: 'POST Request',        type: 'HttpRequest', category: 'Network', desc: 'POST to API',        inputs: ['body'],       outputs: ['response'] },
+  { id: 'graphql',     label: 'GraphQL Query',       type: 'HttpRequest', category: 'Network', desc: 'Execute GraphQL',    inputs: ['variables'],  outputs: ['response'] },
+  { id: 'llm-call',    label: 'LLM Call',            type: 'LLMCall',     category: 'AI',      desc: 'Send prompt to LLM', inputs: ['context'],   outputs: ['response'] },
+  { id: 'chat',        label: 'Chat Completion',     type: 'LLMCall',     category: 'AI',      desc: 'Chat completion',   inputs: ['context'],    outputs: ['response'] },
+  { id: 'code-gen',    label: 'Code Generator',      type: 'LLMCall',     category: 'AI',      desc: 'Generate code',    inputs: ['context'],    outputs: ['response'] },
+  { id: 'embed',       label: 'Embedding',           type: 'LLMCall',     category: 'AI',      desc: 'Text embeddings',  inputs: ['text'],       outputs: ['embedding'] },
+  { id: 'condition',   label: 'Condition',           type: 'Condition',   category: 'Flow',    desc: 'Branch on condition', inputs: ['value'],   outputs: ['true','false'] },
+  { id: 'ifelse',      label: 'If/Else',             type: 'Condition',   category: 'Flow',    desc: 'Standard if/else',  inputs: ['value'],      outputs: ['true','false'] },
+  { id: 'contains',    label: 'Contains Check',      type: 'Condition',   category: 'Flow',    desc: 'Substring check',   inputs: ['value'],      outputs: ['true','false'] },
+  { id: 'loop',        label: 'Loop',                type: 'Loop',        category: 'Flow',    desc: 'Iterate over items', inputs: ['items'],    outputs: ['iteration'] },
+  { id: 'foreach',     label: 'For Each',            type: 'Loop',        category: 'Flow',    desc: 'Loop over array',   inputs: ['items'],      outputs: ['iteration'] },
+  { id: 'switch-case', label: 'Switch Case',         type: 'Switch',      category: 'Flow',    desc: 'Multi-route switch', inputs: ['value'],    outputs: ['case_0','case_1','default'] },
+  { id: 'py-exec',     label: 'Python Execute',      type: 'Code',        category: 'Flow',    desc: 'Run Python code',   inputs: ['input'],      outputs: ['result','error'] },
+  { id: 'js-exec',     label: 'JS Execute',          type: 'Code',        category: 'Flow',    desc: 'Run JavaScript',    inputs: ['input'],      outputs: ['result','error'] },
+  { id: 'cron',        label: 'Cron Trigger',        type: 'Trigger',     category: 'Flow',    desc: 'Scheduled cron',    inputs: [],             outputs: ['trigger'] },
+  { id: 'webhook',     label: 'Webhook',             type: 'Trigger',     category: 'Flow',    desc: 'HTTP webhook',      inputs: [],             outputs: ['payload'] },
+  { id: 'manual',      label: 'Manual Trigger',      type: 'Trigger',     category: 'Flow',    desc: 'Manual button',     inputs: [],             outputs: ['start'] },
+  { id: 'timer-wait',  label: 'Timer Wait',          type: 'Wait',        category: 'Flow',    desc: 'Fixed duration',    inputs: ['input'],      outputs: ['output'] },
+  { id: 'cond-wait',   label: 'Condition Wait',      type: 'Wait',        category: 'Flow',    desc: 'Wait for condition', inputs: ['input'],    outputs: ['output','timeout'] },
+  { id: 'transform',   label: 'Transform',           type: 'Transform',   category: 'Data',    desc: 'Transform data',    inputs: ['data'],       outputs: ['transformed'] },
+  { id: 'json-parse',  label: 'JSON Parse',          type: 'Transform',   category: 'Data',    desc: 'Parse JSON string', inputs: ['data'],      outputs: ['transformed'] },
+  { id: 'base64',      label: 'Base64 Encode/Decode', type: 'Transform',  category: 'Data',    desc: 'Base64 encode',     inputs: ['data'],       outputs: ['transformed'] },
+  { id: 'merge',       label: 'Merge',               type: 'Merge',       category: 'Data',    desc: 'Merge streams',     inputs: ['source_a','source_b'], outputs: ['merged'] },
+  { id: 'arr-concat',  label: 'Array Concat',        type: 'Merge',       category: 'Data',    desc: 'Concatenate arrays', inputs: ['array_a','array_b'], outputs: ['merged'] },
+  { id: 'parallel-merge', label: 'Parallel Merge',   type: 'Merge',       category: 'Data',    desc: 'Aggregate branches', inputs: ['branch_a','branch_b'], outputs: ['merged'] },
+  { id: 'split',       label: 'Split',               type: 'Split',       category: 'Data',    desc: 'Split array',       inputs: ['data'],       outputs: ['item'] },
+  { id: 'split-text',  label: 'Split Text',          type: 'Split',       category: 'Data',    desc: 'Split by delimiter', inputs: ['data'],      outputs: ['item'] },
+];
+
+// ─── Utilities ───────────────────────────────────────────────────────────
+let _idCounter = 0;
+function uid() { return `n${++_idCounter}`; }
+function euid() { return `e${++_idCounter}`; }
+
+function getPortPosition(node, portName, side, scale) {
+  const margin = 0;
+  const headerH = 28;
+  const bodyTop = headerH + 4;
+  const ports = side === 'in' ? node.inputs : node.outputs;
+  const idx = ports.indexOf(portName);
+  if (idx < 0) return { x: node.x, y: node.y };
+  if (side === 'in') {
+    return { x: node.x, y: node.y + bodyTop + 4 + idx * 18 + 4 };
+  } else {
+    const w = node.width || 140;
+    return { x: node.x + w, y: node.y + bodyTop + 4 + idx * 18 + 4 };
+  }
+}
+
+function computeEdgePath(sx, sy, tx, ty) {
+  const dx = Math.abs(tx - sx);
+  const cp = Math.max(40, dx * 0.45);
+  return `M ${sx} ${sy} C ${sx + cp} ${sy}, ${tx - cp} ${ty}, ${tx} ${ty}`;
+}
+
+function snapToGrid(val) { return Math.round(val / 8) * 8; }
+
+// ─── App Component ──────────────────────────────────────────────────────
+function App() {
+  const [nodes, setNodes] = useState([]);
+  const [edges, setEdges] = useState([]);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [status, setStatus] = useState('Ready');
+  const [connecting, setConnecting] = useState(null); // {sourceNode, sourcePort, sx, sy} or null
+
+  const canvasRef = useRef(null);
+  const dropCounter = useRef(0);
+
+  // Drag from sidebar
+  const handleDragStart = useCallback((e, tmpl) => {
+    e.dataTransfer.setData('text/plain', JSON.stringify(tmpl));
+    e.dataTransfer.effectAllowed = 'copy';
+  }, []);
+
+  const handleCanvasDrop = useCallback((e) => {
+    e.preventDefault();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = snapToGrid(e.clientX - rect.left - 70);
+    const y = snapToGrid(e.clientY - rect.top - 30);
+    try {
+      const tmpl = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const node = {
+        id: uid(),
+        node_type: tmpl.type,
+        label: tmpl.label,
+        x, y,
+        width: 140,
+        inputs: [...tmpl.inputs],
+        outputs: [...tmpl.outputs],
+        category: tmpl.category,
+      };
+      setNodes(prev => [...prev, node]);
+      setStatus(`Added: ${tmpl.label}`);
+      dropCounter.current++;
+    } catch(_) {}
+  }, []);
+
+  const handleCanvasDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; };
+
+  // Delete node
+  const deleteNode = useCallback((nid) => {
+    setNodes(prev => prev.filter(n => n.id !== nid));
+    setEdges(prev => prev.filter(e => e.source !== nid && e.target !== nid));
+    setSelectedNode(prev => prev === nid ? null : prev);
+    setStatus('Node deleted');
+  }, []);
+
+  // Node dragging
+  const handleNodeMouseDown = useCallback((e, nid) => {
+    if (e.target.closest('.del-btn') || e.target.closest('.port-dot')) return;
+    e.stopPropagation();
+    setSelectedNode(nid);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const node = nodes.find(n => n.id === nid);
+    if (!node) return;
+    const offsetX = startX - node.x;
+    const offsetY = startY - node.y;
+
+    const onMove = (ev) => {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const nx = snapToGrid(ev.clientX - offsetX);
+      const ny = snapToGrid(ev.clientY - offsetY);
+      setNodes(prev => prev.map(n => n.id === nid ? { ...n, x: nx, y: ny } : n));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [nodes]);
+
+  // Canvas click deselect
+  const handleCanvasClick = useCallback((e) => {
+    if (e.target === canvasRef.current || e.target.classList.contains('canvas-wrapper')) {
+      setSelectedNode(null);
+    }
+  }, []);
+
+  // ─── Port connection logic ──────────────────────────────────────────
+  const handlePortMouseDown = useCallback((e, nid, portName, side) => {
+    e.stopPropagation();
+    const node = nodes.find(n => n.id === nid);
+    if (!node) return;
+    const pos = getPortPosition(node, portName, side, 1);
+    setConnecting({ sourceNode: nid, sourcePort: portName, sx: pos.x, sy: pos.y, side });
+  }, [nodes]);
+
+  const handlePortMouseUp = useCallback((e, nid, portName, side) => {
+    e.stopPropagation();
+    if (!connecting) return;
+    // Prevent self-connections and same-direction connections
+    if (nid === connecting.sourceNode) { setConnecting(null); return; }
+    if (side === connecting.side) { setConnecting(null); return; }
+
+    const sourceNode = nodes.find(n => n.id === connecting.sourceNode);
+    const targetNode = nodes.find(n => n.id === nid);
+    if (!sourceNode || !targetNode) { setConnecting(null); return; }
+
+    // Check for duplicate edges
+    const dup = edges.some(e =>
+      e.source === connecting.sourceNode && e.source_output === connecting.sourcePort &&
+      e.target === nid && e.target_input === portName
+    );
+    if (dup) { setStatus('Edge already exists'); setConnecting(null); return; }
+
+    const newEdge = {
+      id: euid(),
+      source: connecting.sourceNode,
+      source_output: connecting.sourcePort,
+      target: nid,
+      target_input: portName,
+    };
+    setEdges(prev => [...prev, newEdge]);
+    setStatus('Edge connected');
+    setConnecting(null);
+  }, [connecting, nodes, edges]);
+
+  // Cancel connection on canvas click
+  useEffect(() => {
+    if (!connecting) return;
+    const cancel = (e) => {
+      if (e.target.closest('.port')) return;
+      setConnecting(null);
+    };
+    document.addEventListener('mouseup', cancel);
+    return () => document.removeEventListener('mouseup', cancel);
+  }, [connecting]);
+
+  // Delete edge
+  const deleteEdge = useCallback((eid) => {
+    setEdges(prev => prev.filter(e => e.id !== eid));
+    setStatus('Edge deleted');
+  }, []);
+
+  // ─── Export / Import ────────────────────────────────────────────────
+  const exportJSON = useCallback(() => {
+    const graph = {
+      nodes: nodes.map(n => ({
+        id: n.id,
+        node_type: n.node_type,
+        label: n.label,
+        position: { x: n.x, y: n.y },
+        inputs: n.inputs,
+        outputs: n.outputs,
+        config: {},
+      })),
+      edges: edges.map(e => ({
+        id: e.id,
+        source: e.source,
+        source_output: e.source_output,
+        target: e.target,
+        target_input: e.target_input,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(graph, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'morn-graph.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus('Exported to morn-graph.json');
+  }, [nodes, edges]);
+
+  const importJSON = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const graph = JSON.parse(ev.target.result);
+          if (!graph.nodes || !graph.edges) { setStatus('Invalid format'); return; }
+          // Reset ID counter
+          _idCounter = 0;
+          const idMap = {};
+          const newNodes = graph.nodes.map(n => {
+            const newId = uid();
+            idMap[n.id] = newId;
+            return {
+              id: newId,
+              node_type: n.node_type,
+              label: n.label || n.node_type,
+              x: n.position?.x || 100,
+              y: n.position?.y || 100,
+              width: 140,
+              inputs: n.inputs || [],
+              outputs: n.outputs || [],
+              category: n.category || 'Flow',
+            };
+          });
+          const newEdges = graph.edges.map(e => ({
+            id: euid(),
+            source: idMap[e.source] || e.source,
+            source_output: e.source_output || '',
+            target: idMap[e.target] || e.target,
+            target_input: e.target_input || '',
+          }));
+          setNodes(newNodes);
+          setEdges(newEdges);
+          setSelectedNode(null);
+          setStatus(`Imported ${newNodes.length} nodes, ${newEdges.length} edges`);
+        } catch(err) {
+          setStatus('Import error: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, []);
+
+  const loadSample = useCallback(() => {
+    _idCounter = 0;
+    const n1 = { id: uid(), node_type: 'Trigger', label: 'Manual Trigger', x: 60, y: 220, width: 140, inputs: [], outputs: ['start'], category: 'Flow' };
+    const n2 = { id: uid(), node_type: 'LLMCall', label: 'LLM Call', x: 300, y: 200, width: 140, inputs: ['context'], outputs: ['response'], category: 'AI' };
+    const n3 = { id: uid(), node_type: 'Condition', label: 'Condition', x: 540, y: 200, width: 140, inputs: ['value'], outputs: ['true','false'], category: 'Flow' };
+    const n4 = { id: uid(), node_type: 'Transform', label: 'Transform', x: 300, y: 380, width: 140, inputs: ['data'], outputs: ['transformed'], category: 'Data' };
+    const newNodes = [n1, n2, n3, n4];
+    const newEdges = [
+      { id: euid(), source: n1.id, source_output: 'start', target: n2.id, target_input: 'context' },
+      { id: euid(), source: n2.id, source_output: 'response', target: n3.id, target_input: 'value' },
+      { id: euid(), source: n2.id, source_output: 'response', target: n4.id, target_input: 'data' },
+    ];
+    setNodes(newNodes);
+    setEdges(newEdges);
+    setStatus('Loaded sample graph');
+  }, []);
+
+  // ─── Edge path computation ──────────────────────────────────────────
+  const edgePaths = useMemo(() => {
+    return edges.map(edge => {
+      const src = nodes.find(n => n.id === edge.source);
+      const tgt = nodes.find(n => n.id === edge.target);
+      if (!src || !tgt) return null;
+      const sp = getPortPosition(src, edge.source_output, 'out', 1);
+      const tp = getPortPosition(tgt, edge.target_input, 'in', 1);
+      const path = computeEdgePath(sp.x, sp.y, tp.x, tp.y);
+      return { ...edge, path, sx: sp.x, sy: sp.y, tx: tp.x, ty: tp.y };
+    }).filter(Boolean);
+  }, [nodes, edges]);
+
+  // Temp connecting line
+  const tempLine = useMemo(() => {
+    if (!connecting) return null;
+    return { sx: connecting.sx, sy: connecting.sy };
+  }, [connecting]);
+
+  // ─── Render nodes ───────────────────────────────────────────────────
+  const nodeElements = nodes.map(node => {
+    const isSelected = selectedNode === node.id;
+    return (
+      <div key={node.id}
+        className={`node-el${isSelected ? ' selected' : ''}`}
+        style={{ left: node.x, top: node.y, width: node.width }}
+        onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
+      >
+        <div className="node-header">
+          <span className={`type-badge ${CAT_COLORS[node.category] || 'flow'}`}>{node.node_type}</span>
+          <span className="node-title">{node.label}</span>
+          <button className="del-btn" onClick={(e) => { e.stopPropagation(); deleteNode(node.id); }}>&times;</button>
+        </div>
+        <div className="node-body">
+          <div className="port-group">
+            {node.inputs.map(p => (
+              <div key={p} className="port"
+                onMouseDown={(e) => handlePortMouseDown(e, node.id, p, 'in')}
+                onMouseUp={(e) => handlePortMouseUp(e, node.id, p, 'in')}
+              >
+                <div className="port-dot"></div>
+                <span className="port-label">{p}</span>
+              </div>
+            ))}
+          </div>
+          <div className="port-group right">
+            {node.outputs.map(p => (
+              <div key={p} className="port right"
+                onMouseDown={(e) => handlePortMouseDown(e, node.id, p, 'out')}
+                onMouseUp={(e) => handlePortMouseUp(e, node.id, p, 'out')}
+              >
+                <div className="port-dot"></div>
+                <span className="port-label">{p}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  });
+
+  // ─── Edge SVG rendering ─────────────────────────────────────────────
+  const edgeElements = edgePaths.map(ep => {
+    // Arrow marker is defined in SVG defs
+    return (
+      <g key={ep.id}>
+        <path className="edge-path" d={ep.path} markerEnd="url(#arrowhead)"
+          onClick={(e) => { e.stopPropagation(); deleteEdge(ep.id); }}
+          title={`${ep.source} → ${ep.target}`}
+        />
+      </g>
+    );
+  });
+
+  // Temp edge
+  const tempEdgeEl = tempLine ? (
+    <TempEdgeLine sx={tempLine.sx} sy={tempLine.sy} canvasRef={canvasRef} />
+  ) : null;
+
+  return (
+    <div className="app-layout">
+      {/* Sidebar */}
+      <div className="sidebar">
+        <h3>Node Palette</h3>
+        {CATEGORIES.map(cat => (
+          <div key={cat} className="category-group">
+            <h3 style={{color: ['#52b788','#b388ff','#ffb74d','#64b5f6'][CATEGORIES.indexOf(cat)]}}>{cat}</h3>
+            {TEMPLATES.filter(t => t.category === cat).map(tmpl => (
+              <div key={tmpl.id} className="draggable-node"
+                draggable
+                onDragStart={(e) => handleDragStart(e, tmpl)}
+              >
+                <span className={`type-badge ${CAT_COLORS[cat]}`}>{tmpl.type}</span>
+                <span className="node-label">{tmpl.label}</span>
+                <div className="node-desc">{tmpl.desc}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Canvas */}
+      <div className="canvas-wrapper" ref={canvasRef}
+        onDrop={handleCanvasDrop}
+        onDragOver={handleCanvasDragOver}
+        onClick={handleCanvasClick}
+      >
+        <svg className="canvas-svg" width="100%" height="100%">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <polygon className="edge-arrow" points="0 0, 8 3, 0 6" />
+            </marker>
+          </defs>
+          {edgeElements}
+          {tempEdgeEl}
+        </svg>
+
+        {nodeElements}
+
+        {/* Bottom panel */}
+        <div className="bottom-panel">
+          <button onClick={loadSample}>Load Sample</button>
+          <button onClick={exportJSON} disabled={nodes.length === 0}>Export JSON</button>
+          <button onClick={importJSON}>Import JSON</button>
+          <span className="status-msg">{status}</span>
+          <label>{nodes.length} nodes, {edges.length} edges</label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Temp Edge Line Component ──────────────────────────────────────────
+function TempEdgeLine({ sx, sy, canvasRef }) {
+  const [tx, setTx] = useState(sx);
+  const [ty, setTy] = useState(sy);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      const rect = canvasRef.current.getBoundingClientRect();
+      setTx(e.clientX - rect.left);
+      setTy(e.clientY - rect.top);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      // Don't clear here; parent handles that
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => document.removeEventListener('mousemove', onMove);
+  }, [sx, sy, canvasRef]);
+
+  const path = computeEdgePath(sx, sy, tx, ty);
+  return <path className="temp-edge" d={path} />;
+}
+
+// ─── Mount ──────────────────────────────────────────────────────────────
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="header">
+        <h1>Morn</h1>
+        <span className="badge">Composition Canvas</span>
+        <div className="header-spacer"></div>
+        <span style={{ fontSize: 11, color: '#707090' }}>Drag nodes from palette → Connect ports → Export graph</span>
+      </div>
+      <App />
+    </div>
+  </React.StrictMode>
+);
+</script>
+</body>
+</html>

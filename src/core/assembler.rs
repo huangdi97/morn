@@ -17,6 +17,13 @@ pub struct AgentDef {
     pub memory: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub enum AfterBuildAction {
+    Save(AgentDef),
+    Modify(String, serde_json::Value),
+    Preview(AgentDef),
+}
+
 #[allow(dead_code)] /* 预留：agent 装配器 registry 注入 */
 pub struct AgentAssembler {
     registry: Option<Registry>,
@@ -111,7 +118,7 @@ impl AgentAssembler {
         }))
     }
 
-    pub fn natural_language_build(description: &str) -> Result<AgentDef, String> {
+    pub fn natural_language_build(description: &str) -> Result<AfterBuildAction, String> {
         let desc_lower = description.to_lowercase();
         let (persona, persona_id) = if desc_lower.contains("biology")
             || desc_lower.contains("research")
@@ -173,7 +180,7 @@ impl AgentAssembler {
             cost_tier: crate::component::model::CostTier::Low,
         };
 
-        Ok(AgentDef {
+        let def = AgentDef {
             id: format!("agent-{}", uuid::Uuid::new_v4()),
             name: description
                 .split(|c: char| !c.is_alphanumeric() && c != ' ')
@@ -186,8 +193,14 @@ impl AgentAssembler {
             knowledge: vec![],
             skills: vec![],
             memory: None,
-        })
+        };
+
+        Ok(after_build_choices(def))
     }
+}
+
+fn after_build_choices(def: AgentDef) -> AfterBuildAction {
+    AfterBuildAction::Preview(def)
 }
 
 #[cfg(test)]
@@ -218,6 +231,13 @@ mod tests {
             knowledge: vec![],
             skills: vec!["summarization".to_string()],
             memory: None,
+        }
+    }
+
+    fn preview_def(action: AfterBuildAction) -> AgentDef {
+        match action {
+            AfterBuildAction::Preview(def) => def,
+            _ => panic!("expected preview action"),
         }
     }
 
@@ -260,6 +280,7 @@ mod tests {
         let def =
             AgentAssembler::natural_language_build("build a code review agent that can read files")
                 .unwrap();
+        let def = preview_def(def);
 
         assert!(def.id.starts_with("agent-"));
         assert_eq!(def.persona.id, "persona-coder");
@@ -269,7 +290,7 @@ mod tests {
 
     #[test]
     fn natural_language_build_defaults_missing_config() {
-        let def = AgentAssembler::natural_language_build("").unwrap();
+        let def = preview_def(AgentAssembler::natural_language_build("").unwrap());
 
         assert_eq!(def.persona.id, "persona-assistant");
         assert!(def.tools.contains(&"web_search".to_string()));

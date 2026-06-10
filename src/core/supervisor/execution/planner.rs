@@ -21,6 +21,7 @@ impl Planner {
             subtasks: flat,
             estimated_secs,
             decision_level: String::new(),
+            approval_required: false,
         })
     }
 }

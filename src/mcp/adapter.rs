@@ -47,10 +47,22 @@ pub fn port_to_mcp_tool(name: &str, description: &str, ports: &[Port]) -> MCPToo
 /// with its type and description.
 pub fn mcp_tool_to_ports(tool: &MCPTool) -> Vec<Port> {
     let mut ports = Vec::new();
-    if let Some(props) = tool.input_schema.get("properties").and_then(|p| p.as_object()) {
+    if let Some(props) = tool
+        .input_schema
+        .get("properties")
+        .and_then(|p| p.as_object())
+    {
         for (key, val) in props {
-            let data_type = val.get("type").and_then(|t| t.as_str()).unwrap_or("string").to_string();
-            let description = val.get("description").and_then(|d| d.as_str()).unwrap_or("").to_string();
+            let data_type = val
+                .get("type")
+                .and_then(|t| t.as_str())
+                .unwrap_or("string")
+                .to_string();
+            let description = val
+                .get("description")
+                .and_then(|d| d.as_str())
+                .unwrap_or("")
+                .to_string();
             ports.push(Port {
                 id: key.clone(),
                 direction: crate::core::component::PortDirection::Input,
@@ -109,14 +121,12 @@ mod tests {
 
     #[test]
     fn test_port_to_mcp_roundtrip() {
-        let original = vec![
-            Port {
-                id: "input".into(),
-                direction: PortDirection::Input,
-                data_type: "text".into(),
-                description: "Input data".into(),
-            },
-        ];
+        let original = vec![Port {
+            id: "input".into(),
+            direction: PortDirection::Input,
+            data_type: "text".into(),
+            description: "Input data".into(),
+        }];
         let tool = port_to_mcp_tool("test", "Test tool", &original);
         let restored = mcp_tool_to_ports(&tool);
         assert_eq!(original.len(), restored.len());
@@ -125,18 +135,19 @@ mod tests {
 
     #[test]
     fn test_port_to_mcp_with_description() {
-        let ports = vec![
-            Port {
-                id: "code".into(),
-                direction: PortDirection::Input,
-                data_type: "string".into(),
-                description: "Source code input".into(),
-            },
-        ];
+        let ports = vec![Port {
+            id: "code".into(),
+            direction: PortDirection::Input,
+            data_type: "string".into(),
+            description: "Source code input".into(),
+        }];
         let tool = port_to_mcp_tool("code_analyzer", "Analyzes source code", &ports);
         assert_eq!(tool.name, "code_analyzer");
         assert_eq!(tool.description, "Analyzes source code");
-        assert_eq!(tool.input_schema["properties"]["code"]["description"], "Source code input");
+        assert_eq!(
+            tool.input_schema["properties"]["code"]["description"],
+            "Source code input"
+        );
     }
 
     #[test]

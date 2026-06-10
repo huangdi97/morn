@@ -1,11 +1,14 @@
 //! Pipeline module — provides a DAG-based data pipeline with typed nodes, connections, executors, and an agentless pipeline.
 
-mod nodes;
-mod executor;
 pub mod agentless;
+mod executor;
+mod nodes;
+pub mod transformer;
 
 #[cfg(test)]
 mod tests;
 
-pub use nodes::*;
 pub use executor::*;
+pub use nodes::*;
+
+pub type PipelineTask = crate::core::workflow::WorkflowStep;

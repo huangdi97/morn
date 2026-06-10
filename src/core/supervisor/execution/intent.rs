@@ -16,38 +16,86 @@ impl Supervisor {
     ) -> Result<NLAgentDef, String> {
         let system_prompt = "You are an agent configuration assistant. Analyze the user's natural language description and return a JSON object with the agent definition. Only return valid JSON, no markdown, no explanation.";
 
-        let (persona_list, model_list, tool_list, knowledge_list, skill_list) = if let Some(reg) = registry {
-            let templates = reg.list_templates();
-            let personas: Vec<&str> = templates.iter().map(|t| t.persona.as_str()).collect();
-            let models: Vec<&str> = templates.iter().map(|t| t.model.as_str()).collect();
-            let tools: Vec<&str> = templates.iter().flat_map(|t| t.tools.iter().map(|s| s.as_str())).collect();
-            let knowledge: Vec<&str> = templates.iter().flat_map(|t| t.knowledge.iter().map(|s| s.as_str())).collect();
-            let skills: Vec<&str> = templates.iter().flat_map(|t| t.skills.iter().map(|s| s.as_str())).collect();
-            let mut unique_personas: Vec<&str> = personas.clone();
-            unique_personas.sort();
-            unique_personas.dedup();
-            let mut unique_models: Vec<&str> = models.clone();
-            unique_models.sort();
-            unique_models.dedup();
-            let mut unique_tools: Vec<&str> = tools.clone();
-            unique_tools.sort();
-            unique_tools.dedup();
-            let mut unique_knowledge: Vec<&str> = knowledge.clone();
-            unique_knowledge.sort();
-            unique_knowledge.dedup();
-            let mut unique_skills: Vec<&str> = skills.clone();
-            unique_skills.sort();
-            unique_skills.dedup();
-            (unique_personas.join(", "), unique_models.join(", "), unique_tools.join(", "), unique_knowledge.join(", "), unique_skills.join(", "))
-        } else {
-            (
-                ["assistant", "analyst", "researcher", "writer", "coder", "translator", "reviewer"].join(", "),
-                ["deepseek-chat", "deepseek-reasoner"].join(", "),
-                ["web_search", "read_file", "write_file", "exec_python", "calc", "get_time", "get_kline", "calc_macd", "chart"].join(", "),
-                ["docs", "glossary", "data_sources"].join(", "),
-                ["summarization", "translation", "code_review", "grammar_check", "format", "style", "proofread", "report_generation", "debug", "test"].join(", "),
-            )
-        };
+        let (persona_list, model_list, tool_list, knowledge_list, skill_list) =
+            if let Some(reg) = registry {
+                let templates = reg.list_templates();
+                let personas: Vec<&str> = templates.iter().map(|t| t.persona.as_str()).collect();
+                let models: Vec<&str> = templates.iter().map(|t| t.model.as_str()).collect();
+                let tools: Vec<&str> = templates
+                    .iter()
+                    .flat_map(|t| t.tools.iter().map(|s| s.as_str()))
+                    .collect();
+                let knowledge: Vec<&str> = templates
+                    .iter()
+                    .flat_map(|t| t.knowledge.iter().map(|s| s.as_str()))
+                    .collect();
+                let skills: Vec<&str> = templates
+                    .iter()
+                    .flat_map(|t| t.skills.iter().map(|s| s.as_str()))
+                    .collect();
+                let mut unique_personas: Vec<&str> = personas.clone();
+                unique_personas.sort();
+                unique_personas.dedup();
+                let mut unique_models: Vec<&str> = models.clone();
+                unique_models.sort();
+                unique_models.dedup();
+                let mut unique_tools: Vec<&str> = tools.clone();
+                unique_tools.sort();
+                unique_tools.dedup();
+                let mut unique_knowledge: Vec<&str> = knowledge.clone();
+                unique_knowledge.sort();
+                unique_knowledge.dedup();
+                let mut unique_skills: Vec<&str> = skills.clone();
+                unique_skills.sort();
+                unique_skills.dedup();
+                (
+                    unique_personas.join(", "),
+                    unique_models.join(", "),
+                    unique_tools.join(", "),
+                    unique_knowledge.join(", "),
+                    unique_skills.join(", "),
+                )
+            } else {
+                (
+                    [
+                        "assistant",
+                        "analyst",
+                        "researcher",
+                        "writer",
+                        "coder",
+                        "translator",
+                        "reviewer",
+                    ]
+                    .join(", "),
+                    ["deepseek-chat", "deepseek-reasoner"].join(", "),
+                    [
+                        "web_search",
+                        "read_file",
+                        "write_file",
+                        "exec_python",
+                        "calc",
+                        "get_time",
+                        "get_kline",
+                        "calc_macd",
+                        "chart",
+                    ]
+                    .join(", "),
+                    ["docs", "glossary", "data_sources"].join(", "),
+                    [
+                        "summarization",
+                        "translation",
+                        "code_review",
+                        "grammar_check",
+                        "format",
+                        "style",
+                        "proofread",
+                        "report_generation",
+                        "debug",
+                        "test",
+                    ]
+                    .join(", "),
+                )
+            };
 
         let prompt = format!(
             r#"User wants to create an agent. Analyze this description:

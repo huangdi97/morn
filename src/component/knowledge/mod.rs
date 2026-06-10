@@ -55,7 +55,9 @@ mod tests {
 
     #[test]
     fn test_update_strategy_periodic() {
-        let s = UpdateStrategy::Periodic { interval_secs: 3600 };
+        let s = UpdateStrategy::Periodic {
+            interval_secs: 3600,
+        };
         match s {
             UpdateStrategy::Periodic { interval_secs } => assert_eq!(interval_secs, 3600),
             _ => panic!("wrong variant"),

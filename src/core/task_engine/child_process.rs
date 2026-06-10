@@ -1,5 +1,5 @@
-use std::process::{Command, Child, Stdio};
-use std::io::{Write, Read};
+use std::io::{Read, Write};
+use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,6 +11,12 @@ pub enum ProcessStatus {
 
 pub struct ChildProcess {
     handle: Option<Child>,
+}
+
+impl Default for ChildProcess {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ChildProcess {
@@ -29,22 +35,30 @@ impl ChildProcess {
         }
     }
 
-    pub fn spawn(task_json: &str, _timeout_secs: u64) -> Result<Self, String> {
+    pub fn spawn(
+        &mut self,
+        task_json: &str,
+        timeout_secs: u64,
+    ) -> Result<serde_json::Value, String> {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         let mut child = Command::new(exe)
             .arg("--execute-task")
+            .env_remove("EXECUTE_TASK")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| e.to_string())?;
 
-        if let Some(ref mut stdin) = child.stdin {
-            stdin.write_all(task_json.as_bytes()).map_err(|e| e.to_string())?;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(task_json.as_bytes())
+                .map_err(|e| e.to_string())?;
         }
 
-        let handle = Some(child);
-        Ok(ChildProcess { handle })
+        self.handle = Some(child);
+        let output = self.wait(timeout_secs)?;
+        serde_json::from_str(output.trim()).map_err(|e| e.to_string())
     }
 
     pub fn wait(&mut self, timeout_secs: u64) -> Result<String, String> {
@@ -59,7 +73,12 @@ impl ChildProcess {
             match child.try_wait() {
                 Ok(Some(_)) => {
                     let mut output = String::new();
-                    child.stdout.take().expect("child process stdout should be piped").read_to_string(&mut output).ok();
+                    child
+                        .stdout
+                        .take()
+                        .expect("child process stdout should be piped")
+                        .read_to_string(&mut output)
+                        .ok();
                     return Ok(output);
                 }
                 Ok(None) => std::thread::sleep(Duration::from_millis(50)),
@@ -77,8 +96,8 @@ impl ChildProcess {
     }
 
     pub fn is_alive(&mut self) -> bool {
-        self.handle.as_mut().is_some_and(|c| {
-            c.try_wait().map_or(true, |s| s.is_none())
-        })
+        self.handle
+            .as_mut()
+            .is_some_and(|c| c.try_wait().map_or(true, |s| s.is_none()))
     }
 }

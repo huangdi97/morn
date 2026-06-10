@@ -142,7 +142,8 @@ impl Marketplace {
                 id: "listing-team-risk-control".into(),
                 item_type: ListingType::TeamTemplate.as_str().into(),
                 name: "Risk Control Team".into(),
-                description: "Pre-built risk control team with data, rule, analyst, and alert agents".into(),
+                description:
+                    "Pre-built risk control team with data, rule, analyst, and alert agents".into(),
                 price: 0.02,
                 author: "Morn Labs".into(),
                 rating: 4.0,

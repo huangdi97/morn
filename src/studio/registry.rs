@@ -271,3 +271,13 @@ impl NodeRegistry {
         ]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_registry_has_templates() {
+        let templates = NodeRegistry::all_templates();
+        assert!(!templates.is_empty());
+    }
+}

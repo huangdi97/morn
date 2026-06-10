@@ -27,6 +27,7 @@ pub struct RegistryInfo {
     pub template_count: usize,
 }
 
+#[allow(dead_code)] /* 预留：社区模板注册中心接线入口 */
 pub struct CommunityTemplateRegistry {
     registry_url: String,
     cache: HashMap<String, RemoteTemplate>,
@@ -34,6 +35,7 @@ pub struct CommunityTemplateRegistry {
     installed: HashMap<String, RemoteTemplate>,
 }
 
+#[allow(dead_code)] /* 预留：社区模板注册中心接线入口 */
 impl CommunityTemplateRegistry {
     pub fn new(registry_url: &str) -> Self {
         CommunityTemplateRegistry {

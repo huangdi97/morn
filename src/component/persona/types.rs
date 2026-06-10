@@ -107,7 +107,11 @@ fn merge_weighted_average(outputs: &[PersonaOutput]) -> String {
     }
     let best = outputs
         .iter()
-        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
+        .max_by(|a, b| {
+            a.confidence
+                .partial_cmp(&b.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
         .map(|o| o.response.clone())
         .unwrap_or_default();
     best

@@ -57,7 +57,12 @@ impl FeedbackSync {
         }
     }
 
-    pub fn send_to(&self, channel_name: &str, content: &str, user_id: &str) -> Result<String, String> {
+    pub fn send_to(
+        &self,
+        channel_name: &str,
+        content: &str,
+        user_id: &str,
+    ) -> Result<String, String> {
         match self.channels.get(channel_name) {
             Some(channel) => {
                 let msg = FeedbackMessage {
@@ -101,7 +106,12 @@ mod tests {
     fn broadcast_delivers_to_all_channels() {
         let mut sync = FeedbackSync::new();
         sync.register_channel("cli", Box::new(TestChannel { name: "cli".into() }));
-        sync.register_channel("desktop", Box::new(TestChannel { name: "desktop".into() }));
+        sync.register_channel(
+            "desktop",
+            Box::new(TestChannel {
+                name: "desktop".into(),
+            }),
+        );
 
         let result = sync.broadcast("hello", "user-1");
 
@@ -120,7 +130,12 @@ mod tests {
     #[test]
     fn send_to_delivers_to_specific_channel() {
         let mut sync = FeedbackSync::new();
-        sync.register_channel("desktop", Box::new(TestChannel { name: "desktop".into() }));
+        sync.register_channel(
+            "desktop",
+            Box::new(TestChannel {
+                name: "desktop".into(),
+            }),
+        );
 
         let result = sync.send_to("desktop", "alert", "user-1");
         assert!(result.is_ok());
@@ -139,7 +154,12 @@ mod tests {
     fn broadcast_with_confirmation_tracking() {
         let mut sync = FeedbackSync::new();
         sync.register_channel("cli", Box::new(TestChannel { name: "cli".into() }));
-        sync.register_channel("email", Box::new(TestChannel { name: "email".into() }));
+        sync.register_channel(
+            "email",
+            Box::new(TestChannel {
+                name: "email".into(),
+            }),
+        );
 
         let result = sync.broadcast("confirm-test", "user-2");
 
@@ -152,7 +172,12 @@ mod tests {
     fn broadcast_preserves_feedback_message_fields() {
         let mut sync = FeedbackSync::new();
         sync.register_channel("cli", Box::new(TestChannel { name: "cli".into() }));
-        sync.register_channel("desktop", Box::new(TestChannel { name: "desktop".into() }));
+        sync.register_channel(
+            "desktop",
+            Box::new(TestChannel {
+                name: "desktop".into(),
+            }),
+        );
 
         let result = sync.broadcast("save this feedback", "user-3");
 

@@ -119,7 +119,10 @@ impl AssemblyBuilder {
 
         Ok(AgentDef {
             id: format!("agent-{}", uuid::Uuid::new_v4()),
-            name: format!("agent-{}", selector.tool_ids.first().cloned().unwrap_or_default()),
+            name: format!(
+                "agent-{}",
+                selector.tool_ids.first().cloned().unwrap_or_default()
+            ),
             persona,
             model,
             tools: selector.tool_ids.clone(),
@@ -130,7 +133,13 @@ impl AssemblyBuilder {
     }
 
     pub fn from_description(description: &str) -> Result<AgentDef, String> {
-        crate::core::assembler::AgentAssembler::natural_language_build(description)
+        match crate::core::assembler::AgentAssembler::natural_language_build(description)? {
+            crate::core::assembler::AfterBuildAction::Save(def)
+            | crate::core::assembler::AfterBuildAction::Preview(def) => Ok(def),
+            crate::core::assembler::AfterBuildAction::Modify(_, _) => {
+                Err("Natural language build returned a modification request".to_string())
+            }
+        }
     }
 
     pub fn guided_build(steps: GuidedBuildSteps) -> Result<AgentDef, String> {
@@ -165,7 +174,7 @@ impl AssemblyBuilder {
                 AtomicComponentType::Channel => selector.channel_ids.push(comp.id.clone()),
                 AtomicComponentType::Persona => selector.persona_ids.push(comp.id.clone()),
                 AtomicComponentType::Skill => selector.skill_ids.push(comp.id.clone()),
-                AtomicComponentType::Knowledge | AtomicComponentType::SecurityPolicy => {},
+                AtomicComponentType::Knowledge | AtomicComponentType::SecurityPolicy => {}
             }
         }
 

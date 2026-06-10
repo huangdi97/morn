@@ -15,6 +15,7 @@ pub struct CacheEntry {
     pub created_at: i64,
 }
 
+#[allow(dead_code)] /* 预留：Office 文档处理接线入口 */
 pub struct OfficeHandler {
     cache: Mutex<HashMap<String, CacheEntry>>,
 }
@@ -31,6 +32,7 @@ pub mod spreadsheets;
 
 pub use slides_helper::*;
 
+#[allow(dead_code)] /* 预留：Office 文档处理接线入口 */
 impl OfficeHandler {
     pub fn new() -> Self {
         OfficeHandler {

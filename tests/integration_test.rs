@@ -1,3 +1,5 @@
+use morn::core::agent_templates::{all_templates, find_template};
+use morn::core::orchestrator::team_builder::nl_to_team;
 use morn::core::orchestrator::{CollaborationMode, ConsensusMechanism, Orchestrator, TeamDef};
 
 fn make_team(id: &str, mode: CollaborationMode) -> TeamDef {
@@ -51,4 +53,28 @@ fn test_orchestrator_voting_mode() {
     assert_eq!(result.outputs.len(), 3);
     assert!(!result.consensus_output.is_empty());
     assert_eq!(result.mode, "voting");
+}
+
+#[test]
+fn test_nl_to_team_stock_research() {
+    let team = nl_to_team("stock analysis team").unwrap();
+    assert!(!team.members.is_empty());
+}
+
+#[test]
+fn test_nl_to_team_code_review() {
+    let team = nl_to_team("code review team").unwrap();
+    assert!(!team.members.is_empty());
+}
+
+#[test]
+fn test_agent_templates_exist() {
+    let all = all_templates();
+    assert_eq!(all.len(), 8);
+}
+
+#[test]
+fn test_find_template_coder() {
+    let tpl = find_template("程序员").unwrap();
+    assert_eq!(tpl.persona, "coder");
 }

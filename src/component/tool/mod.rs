@@ -8,11 +8,13 @@ pub trait Tool: IOComponent {
 pub mod builtins;
 pub mod code_exec;
 pub mod file_ops;
+pub mod launcher;
 pub mod web_search;
 
 pub use builtins::{CalcTool, GetTimeTool, HttpRequestTool, SendMsgTool};
 pub use code_exec::ExecPythonTool;
 pub use file_ops::{ReadFileTool, WriteFileTool};
+pub use launcher::SearchLauncherTool;
 pub use web_search::WebSearchTool;
 
 pub fn create_default_tools() -> Vec<Box<dyn Tool>> {
@@ -25,6 +27,7 @@ pub fn create_default_tools() -> Vec<Box<dyn Tool>> {
         Box::new(CalcTool::new()),
         Box::new(SendMsgTool::new()),
         Box::new(HttpRequestTool::new()),
+        Box::new(SearchLauncherTool::new()),
     ]
 }
 
@@ -38,6 +41,7 @@ pub fn get_tool_by_name(name: &str) -> Option<Box<dyn Tool>> {
         "calc" => Some(Box::new(CalcTool::new())),
         "send_msg" => Some(Box::new(SendMsgTool::new())),
         "http_request" => Some(Box::new(HttpRequestTool::new())),
+        "search_launcher" => Some(Box::new(SearchLauncherTool::new())),
         _ => None,
     }
 }
@@ -57,6 +61,7 @@ mod tests {
             "calc",
             "send_msg",
             "http_request",
+            "search_launcher",
         ] {
             let tool = get_tool_by_name(name);
             assert!(tool.is_some(), "tool {} should exist", name);

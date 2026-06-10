@@ -56,10 +56,16 @@ mod tests {
     #[test]
     fn test_episodic_memory() {
         let mut em = EpisodicMemory::default();
-        em.store("event_1", MemoryRecord::new("event_1", Value::String("started".into())))
-            .unwrap();
-        em.store("event_2", MemoryRecord::new("event_2", Value::String("processing".into())))
-            .unwrap();
+        em.store(
+            "event_1",
+            MemoryRecord::new("event_1", Value::String("started".into())),
+        )
+        .unwrap();
+        em.store(
+            "event_2",
+            MemoryRecord::new("event_2", Value::String("processing".into())),
+        )
+        .unwrap();
         assert_eq!(em.size(), 2);
         let recent = em.recent_episodes(2);
         assert_eq!(recent.len(), 2);
@@ -68,8 +74,11 @@ mod tests {
     #[test]
     fn test_semantic_memory() {
         let mut sm = SemanticMemory::default();
-        sm.store("earth", MemoryRecord::new("earth", Value::String("planet".into())))
-            .unwrap();
+        sm.store(
+            "earth",
+            MemoryRecord::new("earth", Value::String("planet".into())),
+        )
+        .unwrap();
         sm.add_relation("earth", "orbits", "sun");
         let recalled = sm.recall("earth").unwrap().unwrap();
         assert_eq!(recalled.content, "planet");
@@ -82,7 +91,11 @@ mod tests {
     fn test_experiential_memory() {
         let mut xm = ExperientialMemory::default();
         xm.add_experience("search_failed", Value::String("retry".into()), None);
-        xm.add_experience("search_failed", Value::String("retry_with_backoff".into()), None);
+        xm.add_experience(
+            "search_failed",
+            Value::String("retry_with_backoff".into()),
+            None,
+        );
         let top = xm.top_experiences(1);
         assert_eq!(top[0].frequency, 2);
         assert_eq!(xm.size(), 1);
@@ -102,8 +115,11 @@ mod tests {
     #[test]
     fn test_flash_memory() {
         let mut fm = FlashMemory::new(10, 3600);
-        fm.store("urgent", MemoryRecord::new("urgent", Value::String("priority_data".into())).with_priority(10))
-            .unwrap();
+        fm.store(
+            "urgent",
+            MemoryRecord::new("urgent", Value::String("priority_data".into())).with_priority(10),
+        )
+        .unwrap();
         let recalled = fm.recall("urgent").unwrap().unwrap();
         assert_eq!(recalled.priority, 10);
     }
@@ -112,7 +128,10 @@ mod tests {
     fn test_memory_hub_all_layers() {
         let mut hub = MemoryHub::new();
         assert_eq!(hub.layer_count(), 7);
-        hub.store_all("test", MemoryRecord::new("test", Value::String("value".into())));
+        hub.store_all(
+            "test",
+            MemoryRecord::new("test", Value::String("value".into())),
+        );
         let results = hub.search_all("test", 10);
         assert_eq!(results.len(), 7);
     }
@@ -121,9 +140,10 @@ mod tests {
     fn test_memory_orchestrator() {
         let hub = MemoryHub::new();
         let mut orchestrator = MemoryOrchestrator::new(hub);
-        orchestrator
-            .hub_mut()
-            .store_all("key", MemoryRecord::new("key", Value::String("data".into())));
+        orchestrator.hub_mut().store_all(
+            "key",
+            MemoryRecord::new("key", Value::String("data".into())),
+        );
         let results = orchestrator.decide_with_memory("key").unwrap();
         assert_eq!(results.len(), 7);
     }
@@ -133,7 +153,10 @@ mod tests {
         let mut hub = MemoryHub::new();
         hub.get_mut("working")
             .unwrap()
-            .store("test_key", MemoryRecord::new("test_key", Value::String("test_value".into())))
+            .store(
+                "test_key",
+                MemoryRecord::new("test_key", Value::String("test_value".into())),
+            )
             .unwrap();
         let results = hub.search_all("test_key", 5);
         assert!(results.contains_key("working"));

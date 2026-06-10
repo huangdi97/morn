@@ -143,7 +143,12 @@ fn parse_figma_token(_token: &str) -> ParsedDesign {
                 }),
             },
         ],
-        colors: vec!["#1a1a2e".into(), "#3b82f6".into(), "#ffffff".into(), "#4a5568".into()],
+        colors: vec![
+            "#1a1a2e".into(),
+            "#3b82f6".into(),
+            "#ffffff".into(),
+            "#4a5568".into(),
+        ],
         spacing: vec![4, 8, 12, 16, 24],
     }
 }
@@ -151,14 +156,24 @@ fn parse_figma_token(_token: &str) -> ParsedDesign {
 fn generate_tsx(name: &str, design: &ParsedDesign, _framework: &str, _styling: &str) -> String {
     let mut code = String::new();
     code.push_str("import React from 'react';\n\n");
-    code.push_str(&format!("interface {}Props {{\n  className?: string;\n}}\n\n", name));
-    code.push_str(&format!("export const {}: React.FC<{}Props> = ({{ className }}) => {{\n  return (\n", name, name));
+    code.push_str(&format!(
+        "interface {}Props {{\n  className?: string;\n}}\n\n",
+        name
+    ));
+    code.push_str(&format!(
+        "export const {}: React.FC<{}Props> = ({{ className }}) => {{\n  return (\n",
+        name, name
+    ));
     code.push_str("    <div className={`container flex-col p-4 gap-3 bg-white rounded-lg ${className || ''}`}>\n");
 
     for el in &design.elements {
         match el.element_type.as_str() {
             "heading" => {
-                let level = el.properties.get("level").and_then(Value::as_u64).unwrap_or(2);
+                let level = el
+                    .properties
+                    .get("level")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(2);
                 let tag = format!("h{}", level);
                 code.push_str(&format!(
                     "      <{tag} className=\"text-2xl font-semibold text-gray-900\">{content}</{tag}>\n",
@@ -292,10 +307,7 @@ mod tests {
         };
         let resp = generate_component(req);
         assert!(resp.success);
-        assert_eq!(
-            resp.component.unwrap().component_name,
-            "FigmaComponent"
-        );
+        assert_eq!(resp.component.unwrap().component_name, "FigmaComponent");
     }
 
     #[test]

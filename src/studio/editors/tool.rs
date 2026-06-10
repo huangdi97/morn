@@ -18,8 +18,16 @@ impl ToolEditor {
         ToolEditor {
             name: name.to_string(),
             ports: vec![
-                PortDef { name: "input".into(), direction: "in".into(), data_type: "any".into() },
-                PortDef { name: "output".into(), direction: "out".into(), data_type: "any".into() },
+                PortDef {
+                    name: "input".into(),
+                    direction: "in".into(),
+                    data_type: "any".into(),
+                },
+                PortDef {
+                    name: "output".into(),
+                    direction: "out".into(),
+                    data_type: "any".into(),
+                },
             ],
             implementation_code: String::new(),
             permissions: vec!["read".to_string()],

@@ -72,9 +72,7 @@ impl ChannelAdapter {
     }
 
     pub fn supervisor_mode(&self) -> Option<&Mode> {
-        self.supervisor
-            .as_ref()
-            .map(|supervisor| supervisor.mode())
+        self.supervisor.as_ref().map(|supervisor| supervisor.mode())
     }
 
     pub fn format_response(text: &str, _source: &str) -> String {

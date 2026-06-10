@@ -1,6 +1,7 @@
 //! core — Exposes the main orchestration, storage, workflow, and agent subsystems.
 pub mod agent_loop;
 pub mod agent_pool;
+pub mod agent_templates;
 pub mod approval;
 pub mod assembler;
 pub mod assembly;
@@ -11,6 +12,7 @@ pub mod component;
 pub mod computer_control;
 pub mod consensus;
 pub mod cortex_engine;
+pub mod data_flow;
 pub mod decision_rules;
 pub mod delegation;
 
@@ -31,6 +33,7 @@ pub mod observability;
 pub mod office_handler;
 pub mod onboarding;
 pub mod orchestrator;
+pub mod personality_engine;
 pub mod pipeline;
 pub mod privacy_gate;
 pub mod registry;

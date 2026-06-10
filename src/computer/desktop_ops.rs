@@ -9,12 +9,12 @@
 //! When the `desktop-real` feature is enabled, real OS-level operations are used
 //! (screenshot via `screenshots` crate, window management via OS APIs).
 
-pub mod mouse;
 pub mod keyboard;
+pub mod mouse;
 pub mod window;
 
-pub use mouse::*;
 pub use keyboard::*;
+pub use mouse::*;
 pub use window::*;
 
 use super::{ComputerOpResult, SecurityLevel};
@@ -53,7 +53,9 @@ pub fn screenshot() -> ComputerOpResult {
     }
     #[cfg(not(feature = "desktop-real"))]
     {
-        tracing::info!("[desktop_ops] screenshot simulated (enable desktop-real for real captures)");
+        tracing::info!(
+            "[desktop_ops] screenshot simulated (enable desktop-real for real captures)"
+        );
         ComputerOpResult {
             success: true,
             data: "[simulated] screenshot captured (base64)".into(),

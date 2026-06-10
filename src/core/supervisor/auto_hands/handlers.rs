@@ -122,24 +122,12 @@ impl AutoHands {
 
     pub(crate) fn execute_task(&self, task: &MaintenanceTask) -> Result<String, String> {
         match task {
-            MaintenanceTask::Inspection => {
-                Ok(format!("inspection ok at {}", timestamp()))
-            }
-            MaintenanceTask::GarbageCollection => {
-                Ok(format!("gc reclaimed {} bytes", 0))
-            }
-            MaintenanceTask::MemoryCompaction => {
-                Ok(format!("memory compacted: {} pages freed", 0))
-            }
-            MaintenanceTask::LogRotation => {
-                Ok(format!("log rotated, {} bytes archived", 0))
-            }
-            MaintenanceTask::HealthCheck => {
-                Ok(format!("health check passed at {}", timestamp()))
-            }
-            MaintenanceTask::CacheCleanup => {
-                Ok(format!("cache cleaned: {} entries removed", 0))
-            }
+            MaintenanceTask::Inspection => Ok(format!("inspection ok at {}", timestamp())),
+            MaintenanceTask::GarbageCollection => Ok(format!("gc reclaimed {} bytes", 0)),
+            MaintenanceTask::MemoryCompaction => Ok(format!("memory compacted: {} pages freed", 0)),
+            MaintenanceTask::LogRotation => Ok(format!("log rotated, {} bytes archived", 0)),
+            MaintenanceTask::HealthCheck => Ok(format!("health check passed at {}", timestamp())),
+            MaintenanceTask::CacheCleanup => Ok(format!("cache cleaned: {} entries removed", 0)),
         }
     }
 }

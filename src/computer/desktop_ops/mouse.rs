@@ -1,7 +1,7 @@
 //! Mouse operations — move, click, and click-at via OS APIs or simulation.
 
-use super::{ComputerOpResult, SecurityLevel};
 use super::run_ps;
+use super::{ComputerOpResult, SecurityLevel};
 
 /// Move mouse to absolute screen coordinates (x, y).
 pub fn mouse_move(x: i32, y: i32) -> ComputerOpResult {

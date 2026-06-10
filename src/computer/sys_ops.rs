@@ -9,6 +9,43 @@ pub struct NetworkConfig {
 }
 
 pub fn set_wallpaper(path: &str) -> ComputerOpResult {
+    #[cfg(target_os = "linux")]
+    if let Ok(_) = std::process::Command::new("gsettings")
+        .args([
+            "set",
+            "org.gnome.desktop.background",
+            "picture-uri",
+            &format!("file://{}", path),
+        ])
+        .output()
+    {
+        return ComputerOpResult {
+            success: true,
+            data: format!("wallpaper set to: {}", path),
+            security_level: SecurityLevel::L2Local.as_str().to_string(),
+            approval_required: false,
+        };
+    }
+
+    #[cfg(target_os = "windows")]
+    if let Ok(_) = std::process::Command::new("powershell")
+        .args([
+            "-Command",
+            &format!(
+                "Add-Type -AssemblyName System.Drawing; Add-Type -AssemblyName System.Windows.Forms; $img = [System.Drawing.Image]::FromFile('{}'); [System.Windows.Forms.Application]::OpenForms | ForEach-Object {{ $_.BackgroundImage = $img }}",
+                path.replace('\'', "''")
+            ),
+        ])
+        .output()
+    {
+        return ComputerOpResult {
+            success: true,
+            data: format!("wallpaper set to: {}", path),
+            security_level: SecurityLevel::L2Local.as_str().to_string(),
+            approval_required: false,
+        };
+    }
+
     ComputerOpResult {
         success: true,
         data: format!("[simulated] wallpaper set to: {}", path),
@@ -304,6 +341,49 @@ pub fn set_proxy(url: &str) -> Result<(), String> {
         || trimmed.starts_with("socks5://"))
     {
         return Err("proxy url must start with http://, https://, or socks5://".to_string());
+    }
+
+    #[cfg(target_os = "linux")]
+    if let Ok(parsed) = reqwest::Url::parse(trimmed) {
+        if let Some(host) = parsed.host_str() {
+            let port = parsed
+                .port_or_known_default()
+                .unwrap_or(if parsed.scheme() == "socks5" {
+                    1080
+                } else {
+                    80
+                });
+            let schema = match parsed.scheme() {
+                "https" => "org.gnome.system.proxy.https",
+                "socks5" => "org.gnome.system.proxy.socks",
+                _ => "org.gnome.system.proxy.http",
+            };
+            let port_string = port.to_string();
+            let mode_result = std::process::Command::new("gsettings")
+                .args(["set", "org.gnome.system.proxy", "mode", "manual"])
+                .output();
+            let host_result = std::process::Command::new("gsettings")
+                .args(["set", schema, "host", host])
+                .output();
+            let port_result = std::process::Command::new("gsettings")
+                .args(["set", schema, "port", &port_string])
+                .output();
+
+            if mode_result.is_ok() && host_result.is_ok() && port_result.is_ok() {
+                return Ok(());
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    if let Ok(_) = std::process::Command::new("powershell")
+        .args([
+            "-Command",
+            &format!("netsh winhttp set proxy '{}'", trimmed.replace('\'', "''")),
+        ])
+        .output()
+    {
+        return Ok(());
     }
 
     tracing::info!("simulated proxy update to '{}'", trimmed);

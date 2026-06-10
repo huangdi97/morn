@@ -95,11 +95,7 @@ pub const PROVIDERS: &[ProviderConfig] = &[
         name: "perplexity",
         endpoint: "https://api.perplexity.ai",
         api_key_header: "Authorization",
-        models: &[
-            "sonar-small-chat",
-            "sonar-medium-chat",
-            "sonar-large-chat",
-        ],
+        models: &["sonar-small-chat", "sonar-medium-chat", "sonar-large-chat"],
     },
     ProviderConfig {
         name: "mistral",
@@ -116,21 +112,13 @@ pub const PROVIDERS: &[ProviderConfig] = &[
         name: "cohere",
         endpoint: "https://api.cohere.com",
         api_key_header: "Authorization",
-        models: &[
-            "command-r",
-            "command-r-plus",
-            "command",
-        ],
+        models: &["command-r", "command-r-plus", "command"],
     },
     ProviderConfig {
         name: "gemini",
         endpoint: "https://generativelanguage.googleapis.com",
         api_key_header: "x-goog-api-key",
-        models: &[
-            "gemini-1.5-pro",
-            "gemini-1.5-flash",
-            "gemini-1.0-pro",
-        ],
+        models: &["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"],
     },
     ProviderConfig {
         name: "xai",
@@ -202,19 +190,13 @@ pub const PROVIDERS: &[ProviderConfig] = &[
         name: "lepton",
         endpoint: "https://api.lepton.ai",
         api_key_header: "Authorization",
-        models: &[
-            "lepton-llama-3-70b",
-            "lepton-mixtral-8x7b",
-        ],
+        models: &["lepton-llama-3-70b", "lepton-mixtral-8x7b"],
     },
     ProviderConfig {
         name: "novita",
         endpoint: "https://api.novita.ai",
         api_key_header: "Authorization",
-        models: &[
-            "novita-llama-3-70b",
-            "novita-mixtral-8x7b",
-        ],
+        models: &["novita-llama-3-70b", "novita-mixtral-8x7b"],
     },
     ProviderConfig {
         name: "openrouter",
@@ -230,10 +212,7 @@ pub const PROVIDERS: &[ProviderConfig] = &[
         name: "sambanova",
         endpoint: "https://api.sambanova.ai",
         api_key_header: "Authorization",
-        models: &[
-            "sambanova-llama-3-70b",
-            "sambanova-mixtral-8x7b",
-        ],
+        models: &["sambanova-llama-3-70b", "sambanova-mixtral-8x7b"],
     },
     ProviderConfig {
         name: "together_embeddings",
@@ -249,11 +228,7 @@ pub const PROVIDERS: &[ProviderConfig] = &[
         name: "voyage",
         endpoint: "https://api.voyageai.com",
         api_key_header: "Authorization",
-        models: &[
-            "voyage-2",
-            "voyage-large-2",
-            "voyage-code-2",
-        ],
+        models: &["voyage-2", "voyage-large-2", "voyage-code-2"],
     },
 ];
 

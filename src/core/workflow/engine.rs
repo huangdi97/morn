@@ -129,11 +129,17 @@ impl WorkflowEngine {
                 expression,
                 cases,
                 default,
-            } => self.execute_switch(workflow_id, expression, cases, default).await,
+            } => {
+                self.execute_switch(workflow_id, expression, cases, default)
+                    .await
+            }
             ControlFlowNode::ForkJoin {
                 branches,
                 join_condition,
-            } => self.execute_fork_join(workflow_id, branches, join_condition).await,
+            } => {
+                self.execute_fork_join(workflow_id, branches, join_condition)
+                    .await
+            }
         }
     }
 
@@ -240,15 +246,24 @@ impl WorkflowEngine {
             }
             JoinCondition::Any => {
                 if results.is_empty() && !errors.is_empty() {
-                    let (id, e) = errors.into_iter().next().ok_or_else(|| "unexpected: errors vec was empty".to_string())?;
-                    return Err(format!("ForkJoin all branches failed, last error from '{}': {}", id, e));
+                    let (id, e) = errors
+                        .into_iter()
+                        .next()
+                        .ok_or_else(|| "unexpected: errors vec was empty".to_string())?;
+                    return Err(format!(
+                        "ForkJoin all branches failed, last error from '{}': {}",
+                        id, e
+                    ));
                 }
                 Ok(results)
             }
             JoinCondition::NOf(n) => {
                 let needed = *n as usize;
                 if results.len() < needed {
-                    let errs: Vec<String> = errors.into_iter().map(|(id, e)| format!("{}: {}", id, e)).collect();
+                    let errs: Vec<String> = errors
+                        .into_iter()
+                        .map(|(id, e)| format!("{}: {}", id, e))
+                        .collect();
                     return Err(format!(
                         "ForkJoin needed {} successful branches, got {}: [{}]",
                         needed,

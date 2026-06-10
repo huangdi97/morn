@@ -64,11 +64,7 @@ impl Pipeline {
         self.connections.push(connection);
     }
 
-    pub fn register_executor(
-        &mut self,
-        node_id: &str,
-        executor: Box<dyn PipelineNodeExecutor>,
-    ) {
+    pub fn register_executor(&mut self, node_id: &str, executor: Box<dyn PipelineNodeExecutor>) {
         self.executors.insert(node_id.to_string(), executor);
     }
 
@@ -119,7 +115,9 @@ impl Pipeline {
         }
 
         for conn in &self.connections {
-            adj.entry(conn.from.clone()).or_default().push(conn.to.clone());
+            adj.entry(conn.from.clone())
+                .or_default()
+                .push(conn.to.clone());
             *in_degree.entry(conn.to.clone()).or_insert(0) += 1;
         }
 
@@ -201,9 +199,7 @@ impl Pipeline {
                     PipelineNode::Transform { operation, .. } => {
                         default_transform(operation, &input_data)?
                     }
-                    PipelineNode::Timer { .. } => {
-                        PipelineData::Text("timer_triggered".to_string())
-                    }
+                    PipelineNode::Timer { .. } => PipelineData::Text("timer_triggered".to_string()),
                 }
             };
 

@@ -1,5 +1,7 @@
 //! persona — Defines persona types, registries, presets, and component adapters.
 mod builtin;
+mod combinator;
+pub mod presets;
 mod registry;
 mod traits;
 mod types;
@@ -210,9 +212,21 @@ mod tests {
     #[test]
     fn test_merge_majority_vote() {
         let outputs = vec![
-            PersonaOutput { persona_id: "a".into(), response: "yes".into(), confidence: 0.8 },
-            PersonaOutput { persona_id: "b".into(), response: "yes".into(), confidence: 0.7 },
-            PersonaOutput { persona_id: "c".into(), response: "no".into(), confidence: 0.9 },
+            PersonaOutput {
+                persona_id: "a".into(),
+                response: "yes".into(),
+                confidence: 0.8,
+            },
+            PersonaOutput {
+                persona_id: "b".into(),
+                response: "yes".into(),
+                confidence: 0.7,
+            },
+            PersonaOutput {
+                persona_id: "c".into(),
+                response: "no".into(),
+                confidence: 0.9,
+            },
         ];
         let result = merge_responses(&MergeStrategy::MajorityVote, &outputs);
         assert_eq!(result, "yes");
@@ -221,8 +235,16 @@ mod tests {
     #[test]
     fn test_merge_weighted_average() {
         let outputs = vec![
-            PersonaOutput { persona_id: "a".into(), response: "answer a".into(), confidence: 0.9 },
-            PersonaOutput { persona_id: "b".into(), response: "answer b".into(), confidence: 0.3 },
+            PersonaOutput {
+                persona_id: "a".into(),
+                response: "answer a".into(),
+                confidence: 0.9,
+            },
+            PersonaOutput {
+                persona_id: "b".into(),
+                response: "answer b".into(),
+                confidence: 0.3,
+            },
         ];
         let result = merge_responses(&MergeStrategy::WeightedAverage, &outputs);
         assert_eq!(result, "answer a");
@@ -231,8 +253,16 @@ mod tests {
     #[test]
     fn test_merge_sequential() {
         let outputs = vec![
-            PersonaOutput { persona_id: "a".into(), response: "first".into(), confidence: 1.0 },
-            PersonaOutput { persona_id: "b".into(), response: "second".into(), confidence: 1.0 },
+            PersonaOutput {
+                persona_id: "a".into(),
+                response: "first".into(),
+                confidence: 1.0,
+            },
+            PersonaOutput {
+                persona_id: "b".into(),
+                response: "second".into(),
+                confidence: 1.0,
+            },
         ];
         let result = merge_responses(&MergeStrategy::Sequential, &outputs);
         assert!(result.contains("first"));
@@ -241,9 +271,11 @@ mod tests {
 
     #[test]
     fn test_merge_debate() {
-        let outputs = vec![
-            PersonaOutput { persona_id: "p1".into(), response: "arg1".into(), confidence: 0.8 },
-        ];
+        let outputs = vec![PersonaOutput {
+            persona_id: "p1".into(),
+            response: "arg1".into(),
+            confidence: 0.8,
+        }];
         let result = merge_responses(&MergeStrategy::Debate, &outputs);
         assert!(result.contains("Debate Summary"));
         assert!(result.contains("p1"));

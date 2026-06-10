@@ -12,10 +12,16 @@ impl Supervisor {
         let text_lower = text.to_lowercase();
 
         // G22: COO override detection
-        if text_lower.contains("用数据团队") || text_lower.contains("use data team") || text_lower.contains("data team") {
+        if text_lower.contains("用数据团队")
+            || text_lower.contains("use data team")
+            || text_lower.contains("data team")
+        {
             return DecisionLevel::L4Team;
         }
-        if text_lower.contains("直接说") || text_lower.contains("just answer") || text_lower.contains("直接回答") {
+        if text_lower.contains("直接说")
+            || text_lower.contains("just answer")
+            || text_lower.contains("直接回答")
+        {
             return DecisionLevel::L1DirectAnswer;
         }
 
@@ -156,10 +162,18 @@ impl Supervisor {
         }
 
         // trust score influences execution path: low trust escalates
-        let _trust_score = self.trust_scorer.as_ref().map(|ts| {
-            ts.get_all_scores().iter().map(|(_, s)| s).cloned().fold(0.0_f64, |a, b| a + b)
-                / ts.get_all_scores().len().max(1) as f64
-        }).unwrap_or(50.0);
+        let _trust_score = self
+            .trust_scorer
+            .as_ref()
+            .map(|ts| {
+                ts.get_all_scores()
+                    .iter()
+                    .map(|(_, s)| s)
+                    .cloned()
+                    .fold(0.0_f64, |a, b| a + b)
+                    / ts.get_all_scores().len().max(1) as f64
+            })
+            .unwrap_or(50.0);
 
         if let Some(ref storage) = self.storage {
             let user_id = self.user_id.as_deref().unwrap_or("default");
@@ -197,10 +211,18 @@ impl Supervisor {
 
     /// Converts a decision level to a tier based on trust score.
     pub fn decide_tier(&self, level: &DecisionLevel) -> DecisionTier {
-        let trust_score = self.trust_scorer.as_ref().map(|ts| {
-            ts.get_all_scores().iter().map(|(_, s)| s).cloned().fold(0.0_f64, |a, b| a + b)
-                / ts.get_all_scores().len().max(1) as f64
-        }).unwrap_or(50.0);
+        let trust_score = self
+            .trust_scorer
+            .as_ref()
+            .map(|ts| {
+                ts.get_all_scores()
+                    .iter()
+                    .map(|(_, s)| s)
+                    .cloned()
+                    .fold(0.0_f64, |a, b| a + b)
+                    / ts.get_all_scores().len().max(1) as f64
+            })
+            .unwrap_or(50.0);
         DecisionTier::from_decision_level(level, trust_score)
     }
 

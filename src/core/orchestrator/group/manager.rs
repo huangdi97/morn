@@ -1,8 +1,8 @@
 //! Group execution manager — tracks registered groups, execution metrics, and cost estimates.
 
-use crate::core::orchestrator::CollaborationMode;
 use crate::core::orchestrator::group::modes;
 use crate::core::orchestrator::group::AgentGroup;
+use crate::core::orchestrator::CollaborationMode;
 use std::collections::HashMap;
 use std::time::SystemTime;
 
@@ -69,18 +69,20 @@ impl GroupExecutor {
 
     /// Estimates the per-execution cost for a group based on its mode and agent count.
     pub fn group_cost_estimate(&self, group_id: &str) -> Result<f64, String> {
-        let group = self.groups.get(group_id).ok_or_else(|| {
-            format!("group '{}' not found", group_id)
-        })?;
+        let group = self
+            .groups
+            .get(group_id)
+            .ok_or_else(|| format!("group '{}' not found", group_id))?;
         let base = modes::mode_base_cost(&group.mode);
         Ok(base * group.agent_ids.len() as f64)
     }
 
     /// Returns a supervisor-friendly summary string for a group.
     pub fn group_summary(&self, group_id: &str) -> Result<String, String> {
-        let group = self.groups.get(group_id).ok_or_else(|| {
-            format!("group '{}' not found", group_id)
-        })?;
+        let group = self
+            .groups
+            .get(group_id)
+            .ok_or_else(|| format!("group '{}' not found", group_id))?;
         let metrics = self.metrics.get(group_id);
         let cost = self.group_cost_estimate(group_id)?;
         Ok(format!(
@@ -107,7 +109,10 @@ impl GroupExecutor {
         }
 
         let prefix = modes::mode_exec_prefix(&mode);
-        let result = Ok(agent_ids.iter().map(|id| format!("{}{}", prefix, id)).collect());
+        let result = Ok(agent_ids
+            .iter()
+            .map(|id| format!("{}{}", prefix, id))
+            .collect());
 
         if result.is_ok() {
             if let Some(m) = self.metrics.get_mut(group_id) {

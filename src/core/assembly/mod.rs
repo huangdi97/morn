@@ -6,8 +6,8 @@ mod validator;
 
 pub use builder::{AssemblyBuilder, ComponentSelector, DefaultCompleter, GuidedBuildSteps};
 pub use graph::{
-    AtomicComponentDef, AtomicComponentType, ComponentConnection, ComponentGraph, ComponentRegistry,
-    ConnectionValidator,
+    AtomicComponentDef, AtomicComponentType, ComponentConnection, ComponentGraph,
+    ComponentRegistry, ConnectionValidator,
 };
 pub use validator::AssemblyValidator;
 
@@ -116,9 +116,15 @@ mod tests {
     fn test_component_registry_has_components() {
         let components = ComponentRegistry::available_components();
         assert!(components.len() >= 12);
-        assert!(components.iter().any(|c| c.component_type == AtomicComponentType::Memory));
-        assert!(components.iter().any(|c| c.component_type == AtomicComponentType::Tool));
-        assert!(components.iter().any(|c| c.component_type == AtomicComponentType::LLM));
+        assert!(components
+            .iter()
+            .any(|c| c.component_type == AtomicComponentType::Memory));
+        assert!(components
+            .iter()
+            .any(|c| c.component_type == AtomicComponentType::Tool));
+        assert!(components
+            .iter()
+            .any(|c| c.component_type == AtomicComponentType::LLM));
     }
 
     #[test]
@@ -128,14 +134,12 @@ mod tests {
                 ComponentRegistry::get_component("tool_web_search").unwrap(),
                 ComponentRegistry::get_component("llm_deepseek").unwrap(),
             ],
-            connections: vec![
-                ComponentConnection {
-                    source_id: "tool_web_search".into(),
-                    source_output: "results".into(),
-                    target_id: "llm_deepseek".into(),
-                    target_input: "prompt".into(),
-                },
-            ],
+            connections: vec![ComponentConnection {
+                source_id: "tool_web_search".into(),
+                source_output: "results".into(),
+                target_id: "llm_deepseek".into(),
+                target_input: "prompt".into(),
+            }],
         };
         assert!(ConnectionValidator::validate(&graph).is_ok());
     }
@@ -143,17 +147,13 @@ mod tests {
     #[test]
     fn test_connection_validator_rejects_bad_source() {
         let graph = ComponentGraph {
-            components: vec![
-                ComponentRegistry::get_component("tool_web_search").unwrap(),
-            ],
-            connections: vec![
-                ComponentConnection {
-                    source_id: "nonexistent".into(),
-                    source_output: "out".into(),
-                    target_id: "tool_web_search".into(),
-                    target_input: "query".into(),
-                },
-            ],
+            components: vec![ComponentRegistry::get_component("tool_web_search").unwrap()],
+            connections: vec![ComponentConnection {
+                source_id: "nonexistent".into(),
+                source_output: "out".into(),
+                target_id: "tool_web_search".into(),
+                target_input: "query".into(),
+            }],
         };
         assert!(ConnectionValidator::validate(&graph).is_err());
     }
@@ -165,14 +165,12 @@ mod tests {
                 ComponentRegistry::get_component("tool_web_search").unwrap(),
                 ComponentRegistry::get_component("llm_deepseek").unwrap(),
             ],
-            connections: vec![
-                ComponentConnection {
-                    source_id: "tool_web_search".into(),
-                    source_output: "results".into(),
-                    target_id: "llm_deepseek".into(),
-                    target_input: "prompt".into(),
-                },
-            ],
+            connections: vec![ComponentConnection {
+                source_id: "tool_web_search".into(),
+                source_output: "results".into(),
+                target_id: "llm_deepseek".into(),
+                target_input: "prompt".into(),
+            }],
         };
         let json = ComponentGraph::to_json(&graph).unwrap();
         let parsed = ComponentGraph::from_json(&json).unwrap();

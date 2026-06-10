@@ -20,11 +20,10 @@ impl TimedTrigger {
 
     pub fn is_ready(&self, now: SystemTime) -> bool {
         match self.last_fired {
-            Some(last) => {
-                now.duration_since(last)
-                    .map(|d| d.as_secs() >= self.interval_secs)
-                    .unwrap_or(true)
-            }
+            Some(last) => now
+                .duration_since(last)
+                .map(|d| d.as_secs() >= self.interval_secs)
+                .unwrap_or(true),
             None => true,
         }
     }

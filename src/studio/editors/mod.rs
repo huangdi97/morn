@@ -3,6 +3,7 @@ pub trait Editor {
 }
 
 pub mod agent;
+pub mod editor_base;
 pub mod knowledge;
 pub mod memory;
 pub mod model;
@@ -139,7 +140,11 @@ mod tests {
     #[test]
     fn tool_editor_port_editing() {
         let mut editor = ToolEditor::new("custom-tool");
-        editor.ports.push(PortDef { name: "debug".into(), direction: "out".into(), data_type: "string".into() });
+        editor.ports.push(PortDef {
+            name: "debug".into(),
+            direction: "out".into(),
+            data_type: "string".into(),
+        });
         assert_eq!(editor.ports.len(), 3);
         assert_eq!(editor.ports[2].name, "debug");
     }
@@ -149,14 +154,23 @@ mod tests {
         let mut editor = ToolEditor::new("admin-tool");
         editor.permissions.push("write".to_string());
         let config = editor.to_config();
-        assert!(config["permissions"].as_array().unwrap().contains(&serde_json::json!("write")));
+        assert!(config["permissions"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("write")));
     }
 
     #[test]
     fn knowledge_editor_data_source_config() {
         let mut editor = KnowledgeEditor::new("wiki-knowledge");
-        editor.data_sources.push(KnowledgeSource { name: "wikipedia".into(), source_type: "web".into() });
-        editor.data_sources.push(KnowledgeSource { name: "internal-docs".into(), source_type: "file".into() });
+        editor.data_sources.push(KnowledgeSource {
+            name: "wikipedia".into(),
+            source_type: "web".into(),
+        });
+        editor.data_sources.push(KnowledgeSource {
+            name: "internal-docs".into(),
+            source_type: "file".into(),
+        });
         assert_eq!(editor.data_sources.len(), 2);
         let config = editor.to_config();
         assert_eq!(config["data_sources"][1]["name"], "internal-docs");
@@ -192,7 +206,8 @@ mod tests {
     #[test]
     fn model_editor_parameter_config() {
         let mut editor = ModelEditor::new("custom-model");
-        editor.parameters = serde_json::json!({"temperature": 0.3, "max_tokens": 4096, "top_p": 0.9});
+        editor.parameters =
+            serde_json::json!({"temperature": 0.3, "max_tokens": 4096, "top_p": 0.9});
         editor.cost_tier = CostTier("high".to_string());
         let config = editor.to_config();
         assert_eq!(config["parameters"]["temperature"], 0.3);

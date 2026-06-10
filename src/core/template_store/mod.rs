@@ -27,6 +27,7 @@ pub struct TemplateManifest {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] /* 预留：模板存储接线入口 */
 pub struct TemplateStore {
     templates: HashMap<String, TemplateManifest>,
 }
@@ -37,6 +38,7 @@ impl Default for TemplateStore {
     }
 }
 
+#[allow(dead_code)] /* 预留：模板存储接线入口 */
 impl TemplateStore {
     pub fn new() -> Self {
         TemplateStore {

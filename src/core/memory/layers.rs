@@ -140,11 +140,7 @@ impl MemoryLayer for EpisodicMemory {
     }
 
     fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, String> {
-        Ok(self
-            .episodes
-            .iter()
-            .find(|e| e.key == key)
-            .cloned())
+        Ok(self.episodes.iter().find(|e| e.key == key).cloned())
     }
 
     fn forget(&mut self, key: &str) -> Result<(), String> {
@@ -170,8 +166,7 @@ impl MemoryLayer for EpisodicMemory {
             .iter()
             .filter(|e| {
                 e.key.to_lowercase().contains(&q)
-                    || e
-                        .content
+                    || e.content
                         .as_str()
                         .map(|s| s.to_lowercase().contains(&q))
                         .unwrap_or(false)
@@ -277,8 +272,7 @@ impl MemoryLayer for FlashMemory {
             .iter()
             .filter(|i| {
                 i.key.to_lowercase().contains(&q)
-                    || i
-                        .content
+                    || i.content
                         .as_str()
                         .map(|s| s.to_lowercase().contains(&q))
                         .unwrap_or(false)

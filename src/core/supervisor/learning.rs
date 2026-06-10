@@ -170,17 +170,25 @@ impl LearningEngine {
             })?;
         }
 
-        Ok(Some(format!("Auto-approved rule set for keyword '{}'", keyword)))
+        Ok(Some(format!(
+            "Auto-approved rule set for keyword '{}'",
+            keyword
+        )))
     }
 
     /// P5: Deep learning from user correction history for personalized decision preference
-    pub fn learn_from_correction_history(&self, corrections: &[(&str, bool)]) -> Result<usize, String> {
+    pub fn learn_from_correction_history(
+        &self,
+        corrections: &[(&str, bool)],
+    ) -> Result<usize, String> {
         let Some(storage) = &self.storage else {
             return Ok(0);
         };
         let mut updated = 0;
         for (keyword, approved) in corrections {
-            let existing = storage.get_decision_rules("default", keyword).unwrap_or_default();
+            let existing = storage
+                .get_decision_rules("default", keyword)
+                .unwrap_or_default();
             let change = if *approved { -5.0 } else { 10.0 };
             if let Some(rule) = existing.first() {
                 if let Some(rule_id) = rule.id {
@@ -255,10 +263,14 @@ mod tests {
     fn ingest_decision_adjusts_failed_existing_rule() {
         let storage = Storage::new_in_memory().unwrap();
         let engine = LearningEngine::new(Some(storage.clone()), 50.0);
-        engine.ingest_decision("search docs", "single_tool", true).unwrap();
+        engine
+            .ingest_decision("search docs", "single_tool", true)
+            .unwrap();
         let before = storage.get_decision_rules("default", "docs").unwrap()[0].trust_threshold;
 
-        engine.ingest_decision("search docs", "single_tool", false).unwrap();
+        engine
+            .ingest_decision("search docs", "single_tool", false)
+            .unwrap();
 
         let after = storage.get_decision_rules("default", "docs").unwrap()[0].trust_threshold;
         assert!(after > before);
@@ -268,7 +280,9 @@ mod tests {
     fn auto_adjust_downgrades_low_success_rule() {
         let storage = Storage::new_in_memory().unwrap();
         let engine = LearningEngine::new(Some(storage.clone()), 50.0);
-        engine.ingest_decision("report build", "workflow", true).unwrap();
+        engine
+            .ingest_decision("report build", "workflow", true)
+            .unwrap();
 
         engine.auto_adjust("build", 0.4).unwrap();
 
@@ -283,7 +297,10 @@ mod tests {
 
         let trends = engine.trend_analysis();
 
-        assert_eq!(trends, vec!["not enough learned decisions for trend analysis"]);
+        assert_eq!(
+            trends,
+            vec!["not enough learned decisions for trend analysis"]
+        );
     }
 
     #[test]
@@ -291,7 +308,9 @@ mod tests {
         let storage = Storage::new_in_memory().unwrap();
         let engine = LearningEngine::new(Some(storage.clone()), 50.0);
 
-        let result = engine.handle_dont_ask_pattern("以后不用问我 about reports").unwrap();
+        let result = engine
+            .handle_dont_ask_pattern("以后不用问我 about reports")
+            .unwrap();
 
         assert!(result.is_some());
         let rules = storage.get_decision_rules("default", "about").unwrap();
@@ -305,7 +324,9 @@ mod tests {
         let storage = Storage::new_in_memory().unwrap();
         let engine = LearningEngine::new(Some(storage.clone()), 50.0);
 
-        let result = engine.handle_dont_ask_pattern("don't ask me about deploy").unwrap();
+        let result = engine
+            .handle_dont_ask_pattern("don't ask me about deploy")
+            .unwrap();
 
         assert!(result.is_some());
         let rules = storage.get_decision_rules("default", "about").unwrap();
@@ -322,14 +343,18 @@ mod tests {
     #[test]
     fn ingest_decision_without_storage_is_noop() {
         let engine = LearningEngine::new(None, 50.0);
-        assert!(engine.ingest_decision("deploy now", "workflow", true).is_ok());
+        assert!(engine
+            .ingest_decision("deploy now", "workflow", true)
+            .is_ok());
     }
 
     #[test]
     fn auto_adjust_skipped_when_ratio_above_threshold() {
         let storage = Storage::new_in_memory().unwrap();
         let engine = LearningEngine::new(Some(storage.clone()), 50.0);
-        engine.ingest_decision("search docs", "single_tool", true).unwrap();
+        engine
+            .ingest_decision("search docs", "single_tool", true)
+            .unwrap();
         engine.auto_adjust("docs", 0.8).unwrap();
         let rules = storage.get_decision_rules("default", "docs").unwrap();
         assert_eq!(rules[0].level, "single_tool");
@@ -339,8 +364,12 @@ mod tests {
     fn learn_from_correction_history_updates_multiple_keywords() {
         let storage = Storage::new_in_memory().unwrap();
         let engine = LearningEngine::new(Some(storage.clone()), 50.0);
-        engine.ingest_decision("deploy report", "single_agent", true).unwrap();
-        engine.ingest_decision("search tool", "single_tool", true).unwrap();
+        engine
+            .ingest_decision("deploy report", "single_agent", true)
+            .unwrap();
+        engine
+            .ingest_decision("search tool", "single_tool", true)
+            .unwrap();
 
         let corrections = &[("deploy", false), ("search", true)];
         let updated = engine.learn_from_correction_history(corrections).unwrap();
@@ -350,7 +379,9 @@ mod tests {
     #[test]
     fn learn_from_correction_without_storage_returns_zero() {
         let engine = LearningEngine::new(None, 50.0);
-        let updated = engine.learn_from_correction_history(&[("deploy", false)]).unwrap();
+        let updated = engine
+            .learn_from_correction_history(&[("deploy", false)])
+            .unwrap();
         assert_eq!(updated, 0);
     }
 
@@ -364,7 +395,9 @@ mod tests {
     #[test]
     fn handle_dont_ask_no_storage() {
         let engine = LearningEngine::new(None, 50.0);
-        let result = engine.handle_dont_ask_pattern("以后不用问我 about reports").unwrap();
+        let result = engine
+            .handle_dont_ask_pattern("以后不用问我 about reports")
+            .unwrap();
         assert_eq!(result, Some("No storage for learning".to_string()));
     }
 }

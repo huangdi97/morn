@@ -3,7 +3,9 @@
 pub struct AssemblyValidator;
 
 impl AssemblyValidator {
-    pub fn validate(selector: &crate::core::assembly::builder::ComponentSelector) -> Result<(), Vec<String>> {
+    pub fn validate(
+        selector: &crate::core::assembly::builder::ComponentSelector,
+    ) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
 
         if selector.memory_ids.is_empty() {
@@ -28,7 +30,8 @@ impl AssemblyValidator {
         }
 
         if selector.persona_ids.len() > 1 {
-            errors.push("at most 1 persona allowed (use CompositePersona for multiple)".to_string());
+            errors
+                .push("at most 1 persona allowed (use CompositePersona for multiple)".to_string());
         }
 
         let has_local_llm = selector
@@ -52,7 +55,10 @@ impl AssemblyValidator {
         }
     }
 
-    pub fn check_constraints(selector: &crate::core::assembly::builder::ComponentSelector, active_agents: usize) -> Result<(), String> {
+    pub fn check_constraints(
+        selector: &crate::core::assembly::builder::ComponentSelector,
+        active_agents: usize,
+    ) -> Result<(), String> {
         let memory_layers = selector.memory_ids.len();
         if memory_layers * active_agents > 5 {
             return Err(format!(

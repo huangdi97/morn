@@ -92,11 +92,7 @@ impl AuditLog {
     }
 
     pub fn append(&mut self, agent_id: &str, action_type: &str, data: &str) -> &AuditEntry {
-        let prev_hash = self
-            .entries
-            .last()
-            .map(|e| e.hash)
-            .unwrap_or(0);
+        let prev_hash = self.entries.last().map(|e| e.hash).unwrap_or(0);
         let index = self.entries.len() as u64;
         let entry = AuditEntry::new(index, prev_hash, agent_id, action_type, data);
         self.entries.push(entry);
@@ -146,11 +142,7 @@ impl AuditLog {
             .collect()
     }
 
-    pub fn query_by_time_range(
-        &self,
-        start: &str,
-        end: &str,
-    ) -> Vec<&AuditEntry> {
+    pub fn query_by_time_range(&self, start: &str, end: &str) -> Vec<&AuditEntry> {
         self.entries
             .iter()
             .filter(|e| e.timestamp.as_str() >= start && e.timestamp.as_str() <= end)

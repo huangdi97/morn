@@ -32,17 +32,8 @@ impl ExperientialMemory {
         }
     }
 
-    pub fn add_experience(
-        &mut self,
-        pattern: &str,
-        outcome: Value,
-        embedding: Option<Vec<f64>>,
-    ) {
-        if let Some(existing) = self
-            .experiences
-            .iter_mut()
-            .find(|e| e.pattern == pattern)
-        {
+    pub fn add_experience(&mut self, pattern: &str, outcome: Value, embedding: Option<Vec<f64>>) {
+        if let Some(existing) = self.experiences.iter_mut().find(|e| e.pattern == pattern) {
             existing.frequency += 1;
             existing.outcome = outcome;
         } else {
@@ -220,7 +211,10 @@ impl MemoryOrchestrator {
         let experiential = self.hub.get("experiential").map(|m| m.search(context, 5));
         let graph = self.hub.get("graph").map(|m| m.search(context, 5));
         let flash = self.hub.get("flash").map(|m| m.search(context, 5));
-        let long_term = self.hub.get("long_term_experience").map(|m| m.search(context, 5));
+        let long_term = self
+            .hub
+            .get("long_term_experience")
+            .map(|m| m.search(context, 5));
 
         let mut results = HashMap::new();
         if let Some(r) = working {
