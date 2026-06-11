@@ -8,6 +8,7 @@ pub mod assembly;
 pub mod checkpoint;
 pub mod code_tool;
 pub mod component;
+pub mod component_type;
 pub mod computer_control;
 pub mod consensus;
 pub mod cortex_engine;
