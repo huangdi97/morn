@@ -83,8 +83,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: target/release/bundle/nsis/Morn_${{ replace(github.event.release.tag_name, 'v', '') }}_x64-setup.exe
-          asset_name: Morn_${{ replace(github.event.release.tag_name, 'v', '') }}_x64-setup.exe
+          asset_path: target/release/bundle/nsis/Morn_${{ replace(github.ref_name, 'v', '') }}_x64-setup.exe
+          asset_name: Morn_${{ replace(github.ref_name, 'v', '') }}_x64-setup.exe
           asset_content_type: application/x-msdownload
 
       - name: Upload MSI to Release
@@ -94,8 +94,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: target/release/bundle/msi/Morn_${{ replace(github.event.release.tag_name, 'v', '') }}_x64_en-US.msi
-          asset_name: Morn_${{ replace(github.event.release.tag_name, 'v', '') }}_x64_en-US.msi
+          asset_path: target/release/bundle/msi/Morn_${{ replace(github.ref_name, 'v', '') }}_x64_en-US.msi
+          asset_name: Morn_${{ replace(github.ref_name, 'v', '') }}_x64_en-US.msi
           asset_content_type: application/x-msdownload
 
       - name: Generate update.json for auto-updater
