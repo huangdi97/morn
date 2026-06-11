@@ -5,14 +5,11 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
-  release:
-    types: [published]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Ubuntu: 构建 + 测试 + 格式检查
   build-and-test:
     runs-on: ubuntu-latest
     steps:
@@ -28,7 +25,6 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
-  # Windows: Tauri 桌面构建 + NSIS 安装包
   build-tauri:
     runs-on: windows-latest
     steps:
@@ -75,58 +71,3 @@ jobs:
           name: morn-msi
           path: target/release/bundle/msi/*.msi
           if-no-files-found: warn
-
-      - name: Upload NSIS to Release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event_name == 'release' && github.event.release.upload_url || '' }}
-          asset_path: target/release/bundle/nsis/Morn_${{ replace(github.ref_name, 'v', '') }}_x64-setup.exe
-          asset_name: Morn_${{ replace(github.ref_name, 'v', '') }}_x64-setup.exe
-          asset_content_type: application/x-msdownload
-
-      - name: Upload MSI to Release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event_name == 'release' && github.event.release.upload_url || '' }}
-          asset_path: target/release/bundle/msi/Morn_${{ replace(github.ref_name, 'v', '') }}_x64_en-US.msi
-          asset_name: Morn_${{ replace(github.ref_name, 'v', '') }}_x64_en-US.msi
-          asset_content_type: application/x-msdownload
-
-      - name: Generate update.json for auto-updater
-        if: github.event_name == 'release'
-        shell: powershell
-        run: |
-          $VERSION = "${{ github.event_name == 'release' && github.event.release.tag_name || '' }}".TrimStart('v')
-          $MSI_PATH = Get-ChildItem -Path target/release/bundle/msi/*.msi | Select-Object -First 1
-          $SIZE = (Get-Item $MSI_PATH).Length
-          $SIGNATURE = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
-
-          $UPDATE_JSON = @{
-            version = $VERSION
-            notes = "See https://github.com/huangdi97/morn/releases/tag/${{ github.event_name == 'release' && github.event.release.tag_name || '' }}"
-            pub_date = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
-            platforms = @{
-              "windows-x86_64" = @{
-                signature = $SIGNATURE
-                url = "https://github.com/huangdi97/morn/releases/download/${{ github.event_name == 'release' && github.event.release.tag_name || '' }}/$(Split-Path $MSI_PATH -Leaf)"
-              }
-            }
-          }
-          $UPDATE_JSON | ConvertTo-Json | Out-File -FilePath update.json -Encoding utf8
-
-      - name: Upload update.json to release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event_name == 'release' && github.event.release.upload_url || '' }}
-          asset_path: ./update.json
-          asset_name: update.json
-          asset_content_type: application/json
