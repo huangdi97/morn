@@ -1,3 +1,4 @@
+//! Working memory — short-term task-context storage.
 use std::collections::{HashMap, VecDeque};
 
 use super::super::storage::{MemoryLayer, MemoryRecord};

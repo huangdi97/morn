@@ -1,3 +1,4 @@
+//! Router — model routing and provider selection.
 use super::local_engine::LocalEngine;
 use super::{
     ConfiguredModel, HybridStrategy, ModelRouter, ModelSpec, ModelType, ProviderCatalogEntry,

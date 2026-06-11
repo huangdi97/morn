@@ -1,3 +1,4 @@
+//! Supervisor integration tests.
 use super::*;
 
 #[test]

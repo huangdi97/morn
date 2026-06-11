@@ -248,32 +248,44 @@ mod tests {
         ComputerControl::move_file(&src, &dst).unwrap();
         assert!(ComputerControl::read_file(&src).is_err());
         assert_eq!(ComputerControl::read_file(&dst).unwrap(), "move test");
-        let _ = ComputerControl::delete_file(&dst);
+        if let Err(e) = ComputerControl::delete_file(&dst) {
+            tracing::warn!("failed to delete file: {}", e);
+        }
     }
 
     #[test]
     fn test_search_files() {
         let dir = tmp_path("_test_computer_control_search");
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::warn!("failed to remove dir: {}", e);
+        }
         fs::create_dir_all(&dir).unwrap();
         ComputerControl::write_file(&format!("{}/a.rs", dir), "").unwrap();
         ComputerControl::write_file(&format!("{}/b.txt", dir), "").unwrap();
         let results = ComputerControl::search_files("*.rs", &dir).unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].ends_with("a.rs"));
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::warn!("failed to remove dir: {}", e);
+        }
     }
 
     #[test]
     fn test_compress_real() {
         let src = tmp_path("_test_computer_control_compress.txt");
         let dst = tmp_path("_test_computer_control_out.zip");
-        let _ = std::fs::remove_file(&dst);
+        if let Err(e) = std::fs::remove_file(&dst) {
+            tracing::warn!("failed to remove file: {}", e);
+        }
         ComputerControl::write_file(&src, "compress me").unwrap();
         assert!(ComputerControl::compress(&src, &dst).is_ok());
         assert!(std::path::Path::new(&dst).exists());
-        let _ = std::fs::remove_file(src);
-        let _ = std::fs::remove_file(dst);
+        if let Err(e) = std::fs::remove_file(src) {
+            tracing::warn!("failed to remove file: {}", e);
+        }
+        if let Err(e) = std::fs::remove_file(dst) {
+            tracing::warn!("failed to remove file: {}", e);
+        }
     }
 
     #[test]
@@ -285,7 +297,9 @@ mod tests {
     #[test]
     fn test_close_app() {
         // pkill returns 0 even when no matching process exists
-        let _ = ComputerControl::close_app("nonexistent_cmd_xyz");
+        if let Err(e) = ComputerControl::close_app("nonexistent_cmd_xyz") {
+            tracing::warn!("failed to close app: {}", e);
+        }
     }
 
     #[test]

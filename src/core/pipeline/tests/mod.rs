@@ -1,3 +1,4 @@
+//! Pipeline integration tests.
 use super::*;
 
 mod basic;

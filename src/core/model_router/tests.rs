@@ -1,3 +1,4 @@
+//! Model router tests.
 use super::*;
 use crate::config::{CustomProviderConfig, HybridConfig, ModelConfig};
 use std::collections::HashMap;

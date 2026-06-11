@@ -1,3 +1,4 @@
+//! Component type definition and trait implementations.
 pub struct ComponentTypeDef {
     pub type_name: String,
     pub interfaces: Vec<String>,

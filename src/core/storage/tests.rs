@@ -1,3 +1,4 @@
+//! Storage core tests.
 use super::*;
 use crate::market::{License, Listing, Transaction};
 

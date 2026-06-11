@@ -1,3 +1,4 @@
+//! Agent builder — constructs agents from intent.
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 

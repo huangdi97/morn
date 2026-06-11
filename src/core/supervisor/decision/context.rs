@@ -1,3 +1,4 @@
+//! Decision context — provides execution context for decisions.
 use crate::core::supervisor::{DecisionLevel, DecisionTier, Supervisor};
 use tracing;
 

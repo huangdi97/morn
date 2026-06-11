@@ -1,3 +1,4 @@
+//! server — Server configuration types and builder.
 use serde::Deserialize;
 use std::env;
 

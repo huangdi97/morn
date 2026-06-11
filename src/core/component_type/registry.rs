@@ -1,3 +1,4 @@
+//! Component type registry.
 use std::collections::HashMap;
 
 use super::def::ComponentTypeDef;
