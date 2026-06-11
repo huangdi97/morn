@@ -6,6 +6,8 @@ use std::process::Command;
 
 use uuid::Uuid;
 
+use crate::sandbox::wasm::Sandbox;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeToolResult {
     pub stdout: String,
@@ -19,6 +21,7 @@ pub struct CodeToolExecutor {
     timeout_secs: u64,
     max_memory_mb: u64,
     forbidden_patterns: Vec<String>,
+    sandbox: Option<Sandbox>,
 }
 
 impl Default for CodeToolExecutor {
@@ -41,6 +44,7 @@ impl Default for CodeToolExecutor {
                 "eval.*wget".to_string(),
                 "eval.*curl".to_string(),
             ],
+            sandbox: None,
         }
     }
 }
@@ -57,6 +61,11 @@ impl CodeToolExecutor {
 
     pub fn with_max_memory(mut self, mb: u64) -> Self {
         self.max_memory_mb = mb;
+        self
+    }
+
+    pub fn with_sandbox(mut self, sandbox: Sandbox) -> Self {
+        self.sandbox = Some(sandbox);
         self
     }
 
@@ -78,6 +87,25 @@ impl CodeToolExecutor {
                     "dangerous pattern detected: '{}' is not allowed",
                     pattern
                 ));
+            }
+        }
+
+        if let Some(ref sb) = self.sandbox {
+            match sb.execute(code) {
+                Ok(output) => {
+                    return Ok(CodeToolResult {
+                        stdout: output,
+                        stderr: String::new(),
+                        exit_code: 0,
+                        timed_out: false,
+                    });
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "sandbox execution failed, falling back to subprocess: {}",
+                        e
+                    );
+                }
             }
         }
 

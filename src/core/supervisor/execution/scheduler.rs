@@ -4,12 +4,10 @@ use crate::core::supervisor::TaskPlan;
 pub struct Scheduler;
 
 impl Scheduler {
-    #[allow(dead_code)]
     pub fn new() -> Self {
         Scheduler
     }
 
-    #[allow(dead_code)]
     pub fn schedule(&self, _workflow_id: &str, plan: &TaskPlan) -> Result<Vec<String>, String> {
         // 骨架：返回 plan 中的 subtask ids
         let ids: Vec<String> = plan.subtasks.iter().map(|s| s.id.clone()).collect();

@@ -10,6 +10,20 @@ pub struct Sandbox {
     engine: Engine,
 }
 
+impl std::fmt::Debug for Sandbox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sandbox").finish_non_exhaustive()
+    }
+}
+
+impl Clone for Sandbox {
+    fn clone(&self) -> Self {
+        Sandbox {
+            engine: self.engine.clone(),
+        }
+    }
+}
+
 struct SandboxData {
     limits: StoreLimits,
 }
