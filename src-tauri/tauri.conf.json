@@ -24,7 +24,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi", "app", "dmg", "deb", "appimage", "apk", "ipa"],
+    "targets": ["nsis", "msi", "app", "dmg", "deb", "appimage"],
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -45,16 +45,6 @@
       "dialog": true,
       "endpoints": ["https://github.com/huangdi97/morn/releases/latest/download/update.json"],
       "pubkey": ""
-    }
-  },
-  "mobile": {
-    "iOS": {
-      "developmentTeam": "",
-      "minimumSystemVersion": "15.0"
-    },
-    "android": {
-      "minSdkVersion": 26,
-      "targetSdkVersion": 34
     }
   }
 }
