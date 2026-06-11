@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
 import { NodeCanvas } from "./NodeCanvas";
+import { StepWizard } from "./StepWizard";
 
 interface AgentDef {
   name: string;
@@ -46,6 +47,7 @@ const NL_EXAMPLES = [
 ];
 
 export function AgentBuilder() {
+  const [showWizard, setShowWizard] = useState(false);
   const [step, setStep] = useState(0);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
@@ -398,7 +400,20 @@ export function AgentBuilder() {
 
   return (
     <div className="agent-builder">
-      <h2>Agent Builder</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <h2 style={{ margin: 0 }}>Agent Builder</h2>
+        <button
+          onClick={() => setShowWizard(true)}
+          style={{
+            padding: "8px 16px", borderRadius: "6px",
+            background: "var(--accent)", color: "#fff", border: "none",
+            cursor: "pointer", fontSize: "13px", fontWeight: 500,
+          }}
+        >
+          引导式新建
+        </button>
+      </div>
+      {showWizard && <StepWizard onClose={() => setShowWizard(false)} />}
       <div className="steps-indicator">
         <span className={step >= 0 ? "active" : ""}>Describe</span>
         <span className={step >= 1 ? "active" : ""}>Configure</span>
