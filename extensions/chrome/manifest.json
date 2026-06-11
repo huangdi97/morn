@@ -3,7 +3,8 @@
   "name": "Morn AI Assistant",
   "version": "1.0",
   "description": "AI-powered browsing assistant powered by Morn",
-  "permissions": ["activeTab", "storage", "scripting"],
+  "permissions": ["activeTab", "storage", "scripting", "sidePanel"],
+  "side_panel": { "default_path": "sidepanel.html" },
   "host_permissions": [
     "http://localhost:*/*",
     "ws://localhost:*/*"
