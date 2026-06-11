@@ -22,6 +22,13 @@ impl Event {
     }
 }
 
+pub trait EventBus {
+    fn publish(&self, event: Event);
+    fn subscribe(&mut self, event_type: &str, handler: fn(Event));
+    fn unsubscribe(&mut self, event_type: &str, handler: fn(Event));
+    fn publish_event(&self, event_type: &str, source: &str, data: Value);
+}
+
 #[derive(Clone)]
 pub struct SimpleEventBus {
     subscribers: HashMap<String, Vec<fn(Event)>>,
@@ -61,6 +68,34 @@ impl SimpleEventBus {
 
     /// Builds and publishes an event from type, source, and data fields.
     pub fn publish_event(&self, event_type: &str, source: &str, data: Value) {
+        let event = Event::new(event_type, source, data);
+        self.publish(event);
+    }
+}
+
+impl EventBus for SimpleEventBus {
+    fn publish(&self, event: Event) {
+        if let Some(handlers) = self.subscribers.get(&event.event_type) {
+            for handler in handlers {
+                handler(event.clone());
+            }
+        }
+    }
+
+    fn subscribe(&mut self, event_type: &str, handler: fn(Event)) {
+        self.subscribers
+            .entry(event_type.to_string())
+            .or_default()
+            .push(handler);
+    }
+
+    fn unsubscribe(&mut self, event_type: &str, handler: fn(Event)) {
+        if let Some(handlers) = self.subscribers.get_mut(event_type) {
+            handlers.retain(|h| !std::ptr::fn_addr_eq(*h, handler));
+        }
+    }
+
+    fn publish_event(&self, event_type: &str, source: &str, data: Value) {
         let event = Event::new(event_type, source, data);
         self.publish(event);
     }
