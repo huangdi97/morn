@@ -31,7 +31,6 @@ pub mod oauth;
 pub mod observability;
 pub mod onboarding;
 pub mod orchestrator;
-pub mod personality_engine;
 pub mod pipeline;
 pub mod privacy_gate;
 pub mod registry;
