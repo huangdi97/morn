@@ -82,7 +82,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
+          upload_url: ${{ github.event_name == 'release' && github.event.release.upload_url || '' }}
           asset_path: target/release/bundle/nsis/Morn_${{ replace(github.ref_name, 'v', '') }}_x64-setup.exe
           asset_name: Morn_${{ replace(github.ref_name, 'v', '') }}_x64-setup.exe
           asset_content_type: application/x-msdownload
@@ -93,7 +93,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
+          upload_url: ${{ github.event_name == 'release' && github.event.release.upload_url || '' }}
           asset_path: target/release/bundle/msi/Morn_${{ replace(github.ref_name, 'v', '') }}_x64_en-US.msi
           asset_name: Morn_${{ replace(github.ref_name, 'v', '') }}_x64_en-US.msi
           asset_content_type: application/x-msdownload
@@ -102,19 +102,19 @@ jobs:
         if: github.event_name == 'release'
         shell: powershell
         run: |
-          $VERSION = "${{ github.event.release.tag_name }}".TrimStart('v')
+          $VERSION = "${{ github.event_name == 'release' && github.event.release.tag_name || '' }}".TrimStart('v')
           $MSI_PATH = Get-ChildItem -Path target/release/bundle/msi/*.msi | Select-Object -First 1
           $SIZE = (Get-Item $MSI_PATH).Length
           $SIGNATURE = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
 
           $UPDATE_JSON = @{
             version = $VERSION
-            notes = "See https://github.com/huangdi97/morn/releases/tag/${{ github.event.release.tag_name }}"
+            notes = "See https://github.com/huangdi97/morn/releases/tag/${{ github.event_name == 'release' && github.event.release.tag_name || '' }}"
             pub_date = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
             platforms = @{
               "windows-x86_64" = @{
                 signature = $SIGNATURE
-                url = "https://github.com/huangdi97/morn/releases/download/${{ github.event.release.tag_name }}/$(Split-Path $MSI_PATH -Leaf)"
+                url = "https://github.com/huangdi97/morn/releases/download/${{ github.event_name == 'release' && github.event.release.tag_name || '' }}/$(Split-Path $MSI_PATH -Leaf)"
               }
             }
           }
@@ -126,7 +126,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
+          upload_url: ${{ github.event_name == 'release' && github.event.release.upload_url || '' }}
           asset_path: ./update.json
           asset_name: update.json
           asset_content_type: application/json
