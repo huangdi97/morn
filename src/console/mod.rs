@@ -2,7 +2,6 @@
 pub mod cost;
 pub mod governance;
 pub mod security;
-pub use crate::core::kanban;
 
 use self::security::SecurityView;
 use crate::core::dual_llm::DualLlmGuard;
