@@ -226,8 +226,6 @@ fn format_structured_vlm_content(content: &str) -> String {
 }
 
 pub fn accessibility_tree() -> ComputerOpResult {
-    let simulated = r#"[simulated a11y] root → window[1] → button[2] → text[3] → input[1]"#;
-
     let result = try_linux_a11y().or_else(try_macos_a11y).or_else(try_windows_a11y);
 
     match result {
@@ -238,8 +236,8 @@ pub fn accessibility_tree() -> ComputerOpResult {
             approval_required: false,
         },
         None => ComputerOpResult {
-            success: true,
-            data: simulated.into(),
+            success: false,
+            data: "No accessibility system available; install AT-SPI2 (Linux), enable Accessibility permissions (macOS), or use a supported platform".into(),
             security_level: SecurityLevel::L2Local.as_str().to_string(),
             approval_required: false,
         },
@@ -420,15 +418,23 @@ pub fn ocr(image_path: &str) -> ComputerOpResult {
                 approval_required: false,
             }
         }
-        Ok(_) => ComputerOpResult {
-            success: true,
-            data: format!("[simulated OCR] extracted text from: {}", image_path),
-            security_level: SecurityLevel::L2Local.as_str().to_string(),
-            approval_required: false,
-        },
-        Err(_) => ComputerOpResult {
-            success: true,
-            data: format!("[simulated OCR] extracted text from: {}", image_path),
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let msg = if stderr.is_empty() {
+                format!("tesseract failed on '{}' with exit code {}", image_path, output.status.code().unwrap_or(-1))
+            } else {
+                format!("tesseract failed on '{}': {}", image_path, stderr)
+            };
+            ComputerOpResult {
+                success: false,
+                data: msg,
+                security_level: SecurityLevel::L2Local.as_str().to_string(),
+                approval_required: false,
+            }
+        }
+        Err(e) => ComputerOpResult {
+            success: false,
+            data: format!("tesseract not available: {}", e),
             security_level: SecurityLevel::L2Local.as_str().to_string(),
             approval_required: false,
         },
@@ -468,20 +474,19 @@ mod tests {
     }
 
     #[test]
-    fn accessibility_tree_returns_simulated_tree() {
+    fn accessibility_tree_returns_or_errors_gracefully() {
         let result = accessibility_tree();
-        assert!(result.success);
         assert_eq!(result.security_level, SecurityLevel::L2Local.as_str());
-        assert!(result.data.contains("root"));
+        assert!(!result.data.is_empty());
+        assert!(!result.data.contains("simulated"));
     }
 
     #[test]
-    fn ocr_missing_file_uses_simulated_result() {
+    fn ocr_missing_file_returns_error() {
         let img_path = std::env::temp_dir().join("morn_missing_ocr_input.png");
         let result = ocr(&img_path.to_string_lossy());
-        assert!(result.success);
-        assert_eq!(result.security_level, SecurityLevel::L2Local.as_str());
-        assert!(result.data.contains("OCR") || !result.data.is_empty());
+        assert!(!result.data.contains("simulated"));
+        assert!(!result.data.is_empty());
     }
 
     #[test]
