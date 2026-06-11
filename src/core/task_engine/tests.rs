@@ -1,3 +1,4 @@
+//! Task engine tests.
 use super::child_process::{ChildProcess, ProcessStatus};
 
 #[test]

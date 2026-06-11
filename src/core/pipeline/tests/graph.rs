@@ -1,3 +1,4 @@
+//! Pipeline graph execution tests.
 use crate::core::pipeline::*;
 use serde_json::Value;
 

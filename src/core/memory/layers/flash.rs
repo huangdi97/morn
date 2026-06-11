@@ -1,3 +1,4 @@
+//! Flash memory — priority-tagged instant recall.
 use std::collections::VecDeque;
 use std::time::Duration;
 

@@ -1,3 +1,4 @@
+//! Decision level — level classification and tier selection.
 use crate::core::supervisor::{DecisionLevel, Supervisor};
 
 impl Supervisor {

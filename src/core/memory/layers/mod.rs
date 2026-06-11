@@ -1,3 +1,4 @@
+//! Memory layers — multi-tier memory system.
 pub mod working;
 pub mod episodic;
 pub mod flash;

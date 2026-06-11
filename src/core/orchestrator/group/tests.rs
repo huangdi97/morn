@@ -1,3 +1,4 @@
+//! Agent group tests.
 use super::*;
 
 #[test]

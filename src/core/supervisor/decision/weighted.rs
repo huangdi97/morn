@@ -1,3 +1,4 @@
+//! Weighted decision — cost/risk weighted decision scoring.
 use crate::core::supervisor::{DecisionLevel, Intent, Supervisor};
 
 impl Supervisor {

@@ -1,3 +1,4 @@
+//! Pipeline basic functionality tests.
 #![cfg(test)]
 
 use crate::core::pipeline::*;

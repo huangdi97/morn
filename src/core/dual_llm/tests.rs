@@ -1,3 +1,4 @@
+//! Dual-LLM engine tests.
 use super::*;
 use crate::core::security::{SecurityGuard, SecurityProfile};
 

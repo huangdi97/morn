@@ -1,3 +1,4 @@
+//! Orchestrator integration tests.
 use super::*;
 
 fn create_test_team(id: &str, mode: CollaborationMode) -> TeamDef {

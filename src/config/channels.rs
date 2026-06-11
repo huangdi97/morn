@@ -1,3 +1,4 @@
+//! channel — Channel configuration types and default settings.
 use serde::Deserialize;
 use std::env;
 use std::path::PathBuf;

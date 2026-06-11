@@ -1,3 +1,4 @@
+//! User storage tests.
 use super::*;
 
 fn test_user() -> UserRecord {

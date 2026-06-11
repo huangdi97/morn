@@ -227,7 +227,9 @@ mod tests {
 
     fn test_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("morn-test-{}", uuid::Uuid::new_v4()));
-        let _ = fs::create_dir_all(&dir);
+        if let Err(e) = fs::create_dir_all(&dir) {
+            tracing::warn!("failed to create skill dir: {}", e);
+        }
         dir
     }
 
@@ -264,7 +266,9 @@ This is a test skill.
         assert_eq!(result.tools, vec!["web_search", "read_file"]);
         assert_eq!(result.tags, vec!["test", "sample"]);
 
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::warn!("failed to remove dir: {}", e);
+        }
     }
 
     #[test]
@@ -290,7 +294,9 @@ tags: utility
         assert_eq!(manifests.len(), 1);
         assert_eq!(manifests[0].id, "my-skill");
 
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::warn!("failed to remove dir: {}", e);
+        }
     }
 
     #[test]
@@ -304,7 +310,9 @@ tags: utility
         let result = loader.parse_file(&file_path);
         assert!(result.is_err());
 
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::warn!("failed to remove dir: {}", e);
+        }
     }
 
     #[test]
@@ -318,6 +326,8 @@ tags: utility
         let manifest = loader.parse_file(&path).unwrap();
         assert_eq!(manifest.id, "test-skill");
 
-        let _ = fs::remove_dir_all(&dir);
+        if let Err(e) = fs::remove_dir_all(&dir) {
+            tracing::warn!("failed to remove dir: {}", e);
+        }
     }
 }

@@ -1,7 +1,7 @@
 # Morn
 
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
-[![build](https://img.shields.io/badge/tests-1482_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
+[![build](https://img.shields.io/badge/tests-1423_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > **你的桌面 AI 创作系统** — From一个人的工位开始

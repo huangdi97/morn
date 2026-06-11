@@ -1,3 +1,4 @@
+//! Workflow integration tests.
 use super::*;
 
 #[test]

@@ -1,3 +1,4 @@
+//! Episodic memory — session-level event recall.
 use serde_json::Value;
 
 use super::super::storage::{MemoryLayer, MemoryRecord};

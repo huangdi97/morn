@@ -1,3 +1,4 @@
+//! Trust scorer tests.
 use super::*;
 
 #[test]
