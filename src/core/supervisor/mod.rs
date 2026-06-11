@@ -50,8 +50,8 @@ pub struct Supervisor {
     trust_scorer: Option<TrustScorer>,
     agent_pool: AgentPool,
     model_router: ModelRouter,
-    _planner: Option<Planner>,
-    _scheduler: Option<Scheduler>,
+    planner: Option<Planner>,
+    scheduler: Option<Scheduler>,
 }
 
 impl Supervisor {
@@ -79,8 +79,8 @@ impl Supervisor {
             trust_scorer: Some(TrustScorer::new()),
             agent_pool: AgentPool::new(PoolConfig::default()),
             model_router: ModelRouter::new(),
-            _planner: None,
-            _scheduler: None,
+            planner: Some(Planner),
+            scheduler: Some(Scheduler::new()),
         }
     }
 

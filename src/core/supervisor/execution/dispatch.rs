@@ -5,6 +5,7 @@ use tracing;
 
 use super::events::*;
 use super::{classify_execution_level, classify_execution_time, ExecutionTier};
+use crate::core::supervisor::execution::planner::Planner;
 use crate::core::supervisor::{
     DecisionLevel, DecisionOverride, Mode, SubTaskDef, SubTaskResult, Supervisor, TaskPlan,
     TaskResult,
@@ -51,6 +52,13 @@ impl Supervisor {
 
         if let Some(ref bus) = self.event_bus {
             publish_plan_started_events(bus, plan, &tier, &self.mode);
+        }
+
+        if let Some(ref _planner) = self.planner {
+            let _ = Planner::plan(&plan.user_input, plan.subtasks.clone());
+        }
+        if let Some(ref _scheduler) = self.scheduler {
+            let _ = _scheduler.schedule(&plan.task_id, plan);
         }
 
         if let Some(ref storage) = self.storage {

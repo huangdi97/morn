@@ -5,7 +5,6 @@ use crate::core::supervisor::{SubTaskDef, TaskPlan};
 pub struct Planner;
 
 impl Planner {
-    #[allow(dead_code)]
     pub fn plan(intent: &str, subtasks: Vec<SubTaskDef>) -> Result<TaskPlan, String> {
         let engine = TaskEngine::new(None, None);
         let levels = engine.compute_topological_order(&subtasks)?;
