@@ -248,3 +248,208 @@ impl Default for MemoryManager {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_core_memory_new_empty() {
+        let m = CoreMemory::new();
+        assert_eq!(m.to_prompt_block(), "");
+    }
+
+    #[test]
+    fn test_core_memory_add_and_get() {
+        let mut m = CoreMemory::new();
+        m.add("name", "test-user");
+        let item = m.get("name").unwrap();
+        assert_eq!(item.key, "name");
+        assert_eq!(item.value, "test-user");
+    }
+
+    #[test]
+    fn test_core_memory_get_missing() {
+        let m = CoreMemory::new();
+        assert!(m.get("missing").is_none());
+    }
+
+    #[test]
+    fn test_core_memory_remove() {
+        let mut m = CoreMemory::new();
+        m.add("key1", "val1");
+        m.add("key2", "val2");
+        m.remove("key1");
+        assert!(m.get("key1").is_none());
+        assert!(m.get("key2").is_some());
+    }
+
+    #[test]
+    fn test_core_memory_to_prompt_block() {
+        let mut m = CoreMemory::new();
+        m.add("name", "alice");
+        m.add("lang", "rust");
+        let block = m.to_prompt_block();
+        assert!(block.contains("## Core Memory"));
+        assert!(block.contains("name: alice"));
+        assert!(block.contains("lang: rust"));
+    }
+
+    #[test]
+    fn test_core_memory_apply_changes_add() {
+        let mut m = CoreMemory::new();
+        m.apply_changes(vec![MemoryChange {
+            operation: "add".into(),
+            key: "k".into(),
+            value: "v".into(),
+        }])
+        .unwrap();
+        assert_eq!(m.get("k").unwrap().value, "v");
+    }
+
+    #[test]
+    fn test_core_memory_apply_changes_set() {
+        let mut m = CoreMemory::new();
+        m.add("k", "old");
+        m.apply_changes(vec![MemoryChange {
+            operation: "set".into(),
+            key: "k".into(),
+            value: "new".into(),
+        }])
+        .unwrap();
+        assert_eq!(m.get("k").unwrap().value, "new");
+    }
+
+    #[test]
+    fn test_core_memory_apply_changes_remove() {
+        let mut m = CoreMemory::new();
+        m.add("k", "v");
+        m.apply_changes(vec![MemoryChange {
+            operation: "remove".into(),
+            key: "k".into(),
+            value: String::new(),
+        }])
+        .unwrap();
+        assert!(m.get("k").is_none());
+    }
+
+    #[test]
+    fn test_core_memory_apply_changes_unknown_op() {
+        let mut m = CoreMemory::new();
+        let result = m.apply_changes(vec![MemoryChange {
+            operation: "unknown".into(),
+            key: "k".into(),
+            value: "v".into(),
+        }]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_recall_memory_store_and_search() {
+        let mut r = RecallMemory::new();
+        r.store("greeting", "hello", "general");
+        let results = r.search("hello");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].key, "greeting");
+    }
+
+    #[test]
+    fn test_recall_memory_search_missing() {
+        let r = RecallMemory::new();
+        assert!(r.search("missing").is_empty());
+    }
+
+    #[test]
+    fn test_recall_memory_all() {
+        let mut r = RecallMemory::new();
+        r.store("a", "1", "ns1");
+        r.store("b", "2", "ns2");
+        assert_eq!(r.all().len(), 2);
+    }
+
+    #[test]
+    fn test_archival_memory_store_and_search() {
+        let mut a = ArchivalMemory::new();
+        a.store("important document content");
+        assert_eq!(a.search("important").len(), 1);
+    }
+
+    #[test]
+    fn test_archival_memory_search_no_match() {
+        let mut a = ArchivalMemory::new();
+        a.store("hello world");
+        assert!(a.search("missing").is_empty());
+    }
+
+    #[test]
+    fn test_memory_manager_new() {
+        let mm = MemoryManager::new();
+        assert_eq!(mm.to_prompt_block(), "");
+    }
+
+    #[test]
+    fn test_memory_manager_store_core() {
+        let mut mm = MemoryManager::new();
+        mm.store_core("k", "v");
+        assert!(mm.to_prompt_block().contains("k: v"));
+    }
+
+    #[test]
+    fn test_memory_manager_store_recall() {
+        let mut mm = MemoryManager::new();
+        mm.store_recall("k", "v", "ns");
+        assert!(mm.to_prompt_block().contains("k: v"));
+    }
+
+    #[test]
+    fn test_memory_manager_search() {
+        let mut mm = MemoryManager::new();
+        mm.store_recall("key1", "value1", "ns");
+        mm.store_archival("archival_value").unwrap();
+        let results = mm.search("value1").unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_memory_manager_extract_memories() {
+        let mut mm = MemoryManager::new();
+        let conv = vec![
+            ConversationMessage {
+                role: "user".into(),
+                content: "my name is Alice".into(),
+            },
+            ConversationMessage {
+                role: "user".into(),
+                content: "what is the weather".into(),
+            },
+        ];
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let extracted = rt.block_on(mm.extract_memories(&conv)).unwrap();
+        assert_eq!(extracted.len(), 1);
+        assert_eq!(extracted[0].namespace, "extracted");
+    }
+
+    #[test]
+    fn test_memory_manager_agent_edit_core() {
+        let mut mm = MemoryManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(mm.agent_edit_core(vec![MemoryChange {
+            operation: "add".into(),
+            key: "k".into(),
+            value: "v".into(),
+        }]));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_core_memory_default() {
+        let m: CoreMemory = Default::default();
+        assert!(m.get("anything").is_none());
+    }
+
+    #[test]
+    fn test_recall_memory_default() {
+        let r: RecallMemory = Default::default();
+        assert!(r.all().is_empty());
+    }
+}

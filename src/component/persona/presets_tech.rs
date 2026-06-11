@@ -254,3 +254,130 @@ pub fn preset_business_analyst() -> Persona {
         communication_style: "professional".into(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_preset_analyst_fields() {
+        let p = preset_analyst();
+        assert_eq!(p.id, "preset-analyst");
+        assert_eq!(p.name, "数据分析师");
+        assert!(!p.core_principles.is_empty());
+        assert!(!p.anti_patterns.is_empty());
+        assert_eq!(p.parameters.temperature, 0.3);
+        assert!(p.prompt_layers.l3_format_template.is_some());
+    }
+
+    #[test]
+    fn test_preset_coder_fields() {
+        let p = preset_coder();
+        assert_eq!(p.id, "preset-coder");
+        assert_eq!(p.name, "程序员");
+        assert_eq!(p.parameters.temperature, 0.2);
+        assert!(p.prompt_layers.l4_constraints.is_some());
+        assert!(p.prompt_layers.l3_format_template.is_some());
+    }
+
+    #[test]
+    fn test_preset_data_engineer_fields() {
+        let p = preset_data_engineer();
+        assert_eq!(p.id, "preset-data-engineer");
+        assert_eq!(p.name, "数据工程师");
+        assert_eq!(p.parameters.temperature, 0.2);
+        assert!(p.prompt_layers.l4_constraints.is_some());
+    }
+
+    #[test]
+    fn test_preset_devops_fields() {
+        let p = preset_devops();
+        assert_eq!(p.id, "preset-devops");
+        assert_eq!(p.name, "运维工程师");
+        assert_eq!(p.parameters.temperature, 0.15);
+        assert_eq!(p.parameters.proactiveness, 0.7);
+    }
+
+    #[test]
+    fn test_preset_security_fields() {
+        let p = preset_security();
+        assert_eq!(p.id, "preset-security");
+        assert_eq!(p.name, "安全分析师");
+        assert!(p.prompt_layers.l4_constraints.is_some());
+    }
+
+    #[test]
+    fn test_preset_qa_fields() {
+        let p = preset_qa();
+        assert_eq!(p.id, "preset-qa");
+        assert_eq!(p.name, "测试工程师");
+        assert!(!p.core_principles.is_empty());
+    }
+
+    #[test]
+    fn test_preset_startup_fields() {
+        let p = preset_startup();
+        assert_eq!(p.id, "preset-startup");
+        assert_eq!(p.name, "创业顾问");
+        assert_eq!(p.parameters.temperature, 0.5);
+        assert!(p.prompt_layers.l5_conversation_style.is_some());
+    }
+
+    #[test]
+    fn test_preset_architect_fields() {
+        let p = preset_architect();
+        assert_eq!(p.id, "preset-architect");
+        assert_eq!(p.name, "系统架构师");
+        assert!(!p.anti_patterns.is_empty());
+    }
+
+    #[test]
+    fn test_preset_business_analyst_fields() {
+        let p = preset_business_analyst();
+        assert_eq!(p.id, "preset-business-analyst");
+        assert_eq!(p.name, "商业分析师");
+        assert_eq!(p.parameters.temperature, 0.3);
+    }
+
+    #[test]
+    fn test_all_presets_have_unique_ids() {
+        let presets = vec![
+            preset_analyst(),
+            preset_coder(),
+            preset_data_engineer(),
+            preset_devops(),
+            preset_security(),
+            preset_qa(),
+            preset_startup(),
+            preset_architect(),
+            preset_business_analyst(),
+        ];
+        let mut ids: Vec<&str> = presets.iter().map(|p| p.id.as_str()).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), presets.len());
+    }
+
+    #[test]
+    fn test_all_presets_have_non_empty_fields() {
+        let presets = vec![
+            preset_analyst(),
+            preset_coder(),
+            preset_data_engineer(),
+            preset_devops(),
+            preset_security(),
+            preset_qa(),
+            preset_startup(),
+            preset_architect(),
+            preset_business_analyst(),
+        ];
+        for p in &presets {
+            assert!(!p.name.is_empty(), "Name empty for {}", p.id);
+            assert!(!p.core_principles.is_empty(), "Core principles empty for {}", p.id);
+            assert!(!p.decision_framework.is_empty(), "Decision framework empty for {}", p.id);
+            assert!(!p.anti_patterns.is_empty(), "Anti-patterns empty for {}", p.id);
+            assert!(!p.prompt_layers.l1_core_identity.is_empty(), "l1_core_identity empty for {}", p.id);
+            assert_eq!(p.communication_style, "professional", "Communication style not professional for {}", p.id);
+        }
+    }
+}

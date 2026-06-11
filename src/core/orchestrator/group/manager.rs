@@ -86,12 +86,13 @@ impl GroupExecutor {
         let metrics = self.metrics.get(group_id);
         let cost = self.group_cost_estimate(group_id)?;
         Ok(format!(
-            "Group[{}] mode={:?} agents={} cost_per_run=¥{:.3} execs={}",
+            "Group[{}] mode={:?} agents={} cost_per_run=¥{:.3} execs={} desc={}",
             group.group_id,
             group.mode,
             group.agent_ids.len(),
             cost,
-            metrics.map(|m| m.execution_count).unwrap_or(0)
+            metrics.map(|m| m.execution_count).unwrap_or(0),
+            modes::mode_description(&group.mode)
         ))
     }
 
@@ -108,11 +109,7 @@ impl GroupExecutor {
             mode = group.mode.clone();
         }
 
-        let prefix = modes::mode_exec_prefix(&mode);
-        let result = Ok(agent_ids
-            .iter()
-            .map(|id| format!("{}{}", prefix, id))
-            .collect());
+        let result = Ok(modes::handle_mode(&mode, &agent_ids, _input));
 
         if result.is_ok() {
             if let Some(m) = self.metrics.get_mut(group_id) {

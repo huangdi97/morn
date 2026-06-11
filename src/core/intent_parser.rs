@@ -1,3 +1,4 @@
+//! 用户意图解析器 — NL 指令转结构化任务描述
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum IntentType {
     DirectAnswer,

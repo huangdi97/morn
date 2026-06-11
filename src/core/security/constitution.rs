@@ -96,7 +96,8 @@ impl AuditLog {
         let index = self.entries.len() as u64;
         let entry = AuditEntry::new(index, prev_hash, agent_id, action_type, data);
         self.entries.push(entry);
-        self.entries.last().expect("entry was just pushed")
+        let last_index = self.entries.len() - 1;
+        &self.entries[last_index]
     }
 
     pub fn verify_chain(&self) -> bool {

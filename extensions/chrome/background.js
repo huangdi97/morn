@@ -1,8 +1,9 @@
+importScripts('config.js');
+
 // Morn AI Assistant - Background Service Worker
 // Maintains WebSocket connection to Morn server, forwards messages
 // between content scripts and the Morn WebSocket server.
 
-const DEFAULT_WS_PORT = 9876;
 let ws = null;
 let reconnectTimer = null;
 let reconnectAttempt = 0;
@@ -13,24 +14,20 @@ const PING_INTERVAL = 30000; // 30 seconds
 let pingInterval = null;
 let isConnected = false;
 
-// --- Configuration ---
+// --- WebSocket Connection ---
 
-function getWsUrl() {
+function getStoredWsUrl() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['wsPort'], (result) => {
-      const port = result.wsPort || DEFAULT_WS_PORT;
-      resolve(`ws://localhost:${port}`);
+    chrome.storage.sync.get(['serverWsUrl'], (result) => {
+      resolve(result.serverWsUrl || MORN_WS_URL);
     });
   });
 }
 
-// --- WebSocket Connection ---
-
 async function connect() {
-  // Clean up any existing connection
   disconnect();
 
-  const url = await getWsUrl();
+  const url = await getStoredWsUrl();
   console.log(`[Morn] Connecting to ${url}...`);
 
   try {

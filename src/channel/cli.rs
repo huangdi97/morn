@@ -286,7 +286,8 @@ mod tests {
     use crate::core::storage::Storage;
 
     fn market_and_registry() -> (Marketplace, Arc<Mutex<Registry>>) {
-        let storage = Storage::new_in_memory().expect("in-memory storage should initialize");
+        let storage = Storage::new_in_memory()
+            .unwrap_or_else(|e| panic!("in-memory storage should initialize: {}", e));
         let registry = Arc::new(Mutex::new(Registry::new(Some(storage.clone()), None)));
         (Marketplace::new(storage), registry)
     }

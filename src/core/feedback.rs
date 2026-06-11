@@ -1,3 +1,4 @@
+//! 用户反馈系统 — 会话反馈收集、情感分析、改进建议
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

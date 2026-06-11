@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 
 interface SystemInfoData {
   version: string;
@@ -30,7 +30,7 @@ export default function SystemInfo() {
   });
 
   useEffect(() => {
-    invoke<{ dashboard: any; system_info: SystemInfoData }>("get_system_status").then((res) => {
+    api.getSystemStatus().then((res: { dashboard: any; system_info: SystemInfoData }) => {
       setInfo(res.system_info);
     }).catch(() => {});
   }, []);

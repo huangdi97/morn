@@ -1,3 +1,4 @@
+//! 预设人格集合 — 内置的行业/通用/创意三类预设
 use super::Persona;
 
 pub fn load_preset_from_file(name: &str) -> Option<Persona> {

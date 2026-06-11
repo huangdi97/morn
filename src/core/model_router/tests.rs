@@ -1,4 +1,6 @@
 use super::*;
+use crate::config::{CustomProviderConfig, HybridConfig, ModelConfig};
+use std::collections::HashMap;
 
 #[test]
 fn test_default_router_has_models() {
@@ -119,4 +121,47 @@ fn test_has_local_models_default_false() {
 fn test_gguf_discovered_default_false() {
     let router = ModelRouter::new();
     assert!(!router.gguf_discovered());
+}
+
+#[test]
+fn test_custom_provider_loaded_from_model_config() {
+    let mut providers = HashMap::new();
+    providers.insert(
+        "my_custom".to_string(),
+        CustomProviderConfig {
+            base_url: "https://my-api.com/v1".to_string(),
+            api_key: Some("sk-xxx".to_string()),
+            models: vec!["my-model".to_string()],
+            api_key_header: "Authorization".to_string(),
+        },
+    );
+
+    let config = ModelConfig {
+        provider: "my_custom".to_string(),
+        name: "my-model".to_string(),
+        providers,
+        hybrid: HybridConfig {
+            strategy: "local_first".to_string(),
+            complexity_threshold: 42,
+        },
+        ..ModelConfig::default()
+    };
+
+    let router = ModelRouter::from_model_config(&config);
+    let route = router.route("hello").unwrap();
+
+    assert_eq!(router.hybrid_strategy(), HybridStrategy::LocalFirst);
+    assert_eq!(
+        router.get_provider_endpoint("my_custom").unwrap(),
+        "https://my-api.com/v1"
+    );
+    assert_eq!(
+        router.get_provider_models("my_custom").unwrap(),
+        vec!["my-model".to_string()]
+    );
+    assert_eq!(route.provider, "my_custom");
+    assert_eq!(route.name, "my-model");
+    assert_eq!(route.base_url, "https://my-api.com/v1");
+    assert_eq!(route.api_key, Some("sk-xxx".to_string()));
+    assert_eq!(route.api_key_header, "Authorization");
 }

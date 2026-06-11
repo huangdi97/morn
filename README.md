@@ -1,7 +1,7 @@
 # Morn
 
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
-[![build](https://img.shields.io/badge/tests-469_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
+[![build](https://img.shields.io/badge/tests-1482_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > **你的桌面 AI 创作系统** — From一个人的工位开始
@@ -16,9 +16,9 @@ Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对
 
 | 项目 | 状态 |
 |------|------|
-| Phase 0–9（75 项功能） | ✅ **全部实现** |
+| Phase 0–9（80+ 项功能） | ✅ **全部实现** |
 | cargo build 编译 | 0 errors, 0 warnings |
-| cargo test 测试 | **469 passed**, 0 failed |
+| cargo test 测试 | **1482+ passed**, 0 failed |
 | Tauri NSIS 安装器 | ✅ 配置就绪（中英文） |
 | 自动更新 (updater) | ✅ GitHub Releases 端点配置 |
 | 设计文档 | 1529 行，71 竞品深度调研 |
@@ -45,7 +45,7 @@ Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对
 | **核心运行时** | COO 主管决策树、DAG 引擎、事件总线、Registry 注册中心 |
 | **组件体系** | 6 类原子组件 + 52 个预置人格模板 |
 | **安全体系** | 4 层宪法（硬拦截→审批→通知→自由）+ Dual-LLM + 隐私闸门 |
-| **渠道适配** | CLI / Telegram / 企微 / 钉钉 / 飞书 / 微信小程序 / REST API / SMTP |
+| **渠道适配** | CLI / Telegram / 企微 / 钉钉 / 飞书 / 推送捷径 / 小程序 / REST API / SMTP |
 | **Agent 能力** | 三阶段 Agent(Plan→Implement→Review)、主管-专家调度、Agent 集群 |
 | **记忆系统** | 三层记忆(Working/Episodic/Semantic) + 自编辑记忆 |
 | **平台功能** | REST API、看板调度、Code-as-Tool、搜索启动器、模板商店 |
@@ -68,6 +68,9 @@ cargo build --release --bin morn
 MORN_API_KEY=sk-xxx cargo run --release -- cli
 
 # 4. 直接输入文本对话
+
+# 5. 以守护进程模式启动（支持多渠道接入）
+MORN_API_KEY=sk-xxx cargo run --release -- daemon
 ```
 
 ### CLI 命令
@@ -139,7 +142,7 @@ morn-desktop/
 
 ## 实现状态
 
-9 个 Phase / 75 项功能全部实现。详见 [DESIGN.md](./DESIGN.md) 第 11 章「实现状态追踪」。
+9 个 Phase / 80+ 项功能全部实现。详见 [DESIGN.md](./DESIGN.md) 第 11 章「实现状态追踪」。
 
 | Phase | 内容 | 状态 |
 |-------|------|------|

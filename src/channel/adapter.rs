@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 
+use crate::core::privacy_gate::{E2EEConfig, PrivacyGate};
 use crate::core::supervisor::{Mode, Supervisor};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +30,8 @@ type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>;
 pub struct ChannelAdapter {
     supervisor: Option<Supervisor>,
     chat_fn: Option<ChatFn>,
+    privacy_gate: PrivacyGate,
+    e2ee_config: E2EEConfig,
 }
 
 impl ChannelAdapter {
@@ -36,6 +39,8 @@ impl ChannelAdapter {
         ChannelAdapter {
             supervisor,
             chat_fn: None,
+            privacy_gate: PrivacyGate::new(),
+            e2ee_config: E2EEConfig::default(),
         }
     }
 
@@ -48,7 +53,55 @@ impl ChannelAdapter {
         self.chat_fn = Some(chat_fn);
     }
 
+    pub fn with_e2ee_config(mut self, config: E2EEConfig) -> Self {
+        self.e2ee_config = config;
+        self
+    }
+
+    pub fn set_e2ee_config(&mut self, config: E2EEConfig) {
+        self.e2ee_config = config;
+    }
+
+    pub fn e2ee_config(&self) -> &E2EEConfig {
+        &self.e2ee_config
+    }
+
     pub fn handle_message(&mut self, msg: &ChannelMessage) -> String {
+        let content = match self
+            .privacy_gate
+            .decrypt_message(&msg.content, &self.e2ee_config)
+        {
+            Ok(content) => content,
+            Err(err) => return format!("Error: {}", err),
+        };
+
+        let response = match (self.supervisor.as_mut(), self.chat_fn.as_ref()) {
+            (Some(ref mut supervisor), Some(ref chat_fn)) => {
+                let decrypted_msg = ChannelMessage {
+                    content,
+                    source: msg.source.clone(),
+                    timestamp: msg.timestamp,
+                    metadata: msg.metadata.clone(),
+                };
+                match supervisor.execute_chat(&decrypted_msg.content, chat_fn.as_ref()) {
+                    Ok(response) => response,
+                    Err(e) => format!("Error: {}", e),
+                }
+            }
+            (Some(_), None) => "Chat function not configured".to_string(),
+            (None, _) => "Supervisor not initialized. Please set MORN_API_KEY.".to_string(),
+        };
+
+        match self
+            .privacy_gate
+            .encrypt_message(&response, &self.e2ee_config)
+        {
+            Ok(response) => response,
+            Err(err) => format!("Error: {}", err),
+        }
+    }
+
+    pub fn handle_plain_message(&mut self, msg: &ChannelMessage) -> String {
         match (self.supervisor.as_mut(), self.chat_fn.as_ref()) {
             (Some(ref mut supervisor), Some(ref chat_fn)) => {
                 match supervisor.execute_chat(&msg.content, chat_fn.as_ref()) {
@@ -111,5 +164,22 @@ mod tests {
     #[test]
     fn format_response_preserves_message_text() {
         assert_eq!(ChannelAdapter::format_response("ok", "cli"), "ok");
+    }
+
+    #[test]
+    fn e2ee_config_defaults_disabled() {
+        let adapter = ChannelAdapter::new(None);
+        assert!(!adapter.e2ee_config().enabled);
+    }
+
+    #[test]
+    fn adapter_returns_error_for_unencrypted_message_when_e2ee_enabled() {
+        let mut adapter = ChannelAdapter::new(None).with_e2ee_config(E2EEConfig {
+            enabled: true,
+            algorithm: "aes-256-gcm".to_string(),
+            key: "channel-key".to_string(),
+        });
+        let response = adapter.handle_message(&ChannelMessage::new("plain", "test"));
+        assert!(response.contains("not encrypted"));
     }
 }

@@ -14,6 +14,7 @@ pub enum PersonalityTrait {
 #[derive(Debug, Clone)]
 pub struct PersonalityEngine {
     traits: Vec<PersonalityTrait>,
+    #[allow(dead_code)]
     style_overrides: HashMap<String, String>,
     energy_level: f64,
 }

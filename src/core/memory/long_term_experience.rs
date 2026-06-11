@@ -1,3 +1,4 @@
+//! 长期经验记忆 — 跨会话知识沉淀与模式学习
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -176,5 +177,116 @@ impl MemoryLayer for LongTermExperience {
 impl Default for LongTermExperience {
     fn default() -> Self {
         Self::new(1000)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_long_term_experience_store_recall() {
+        let mut lte = LongTermExperience::default();
+        let record = MemoryRecord::new("test_exp", Value::String("important lesson".into()))
+            .with_metadata("importance", Value::Number(serde_json::Number::from_f64(0.9).unwrap()));
+        lte.store("test_exp", record).unwrap();
+        assert_eq!(lte.size(), 1);
+    }
+
+    #[test]
+    fn test_long_term_experience_recall_by_summary() {
+        let mut lte = LongTermExperience::default();
+        let record = MemoryRecord::new("exp1", Value::String("my summary".into()))
+            .with_metadata("importance", Value::Number(serde_json::Number::from_f64(0.8).unwrap()));
+        lte.store("exp1", record).unwrap();
+
+        let recalled = lte.recall("my summary").unwrap().unwrap();
+        assert_eq!(recalled.content, "my summary");
+        assert!(recalled.metadata.contains_key("importance"));
+        assert!(recalled.metadata.contains_key("created_at"));
+        assert!(recalled.metadata.contains_key("access_count"));
+    }
+
+    #[test]
+    fn test_long_term_experience_recall_missing() {
+        let lte = LongTermExperience::default();
+        assert!(lte.recall("nonexistent").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_long_term_experience_compress_no_op() {
+        let mut lte = LongTermExperience::new(10);
+        let r1 = MemoryRecord::new("a", Value::String("low".into()))
+            .with_metadata("importance", Value::Number(serde_json::Number::from_f64(0.1).unwrap()));
+        let r2 = MemoryRecord::new("b", Value::String("medium".into()))
+            .with_metadata("importance", Value::Number(serde_json::Number::from_f64(0.5).unwrap()));
+        lte.store("a", r1).unwrap();
+        lte.store("b", r2).unwrap();
+        let removed = lte.compress().unwrap();
+        assert_eq!(removed, 0);
+        assert_eq!(lte.size(), 2);
+    }
+
+    #[test]
+    fn test_long_term_experience_add_experience() {
+        let mut lte = LongTermExperience::new(10);
+        let id = lte.add_experience("test summary", 0.7);
+        assert!(id.starts_with("lte_"));
+        assert_eq!(lte.size(), 1);
+    }
+
+    #[test]
+    fn test_long_term_experience_access_experience() {
+        let mut lte = LongTermExperience::new(10);
+        let id = lte.add_experience("my exp", 0.6);
+        let exp = lte.access_experience(&id).unwrap();
+        assert_eq!(exp.access_count, 1);
+        let exp = lte.access_experience(&id).unwrap();
+        assert_eq!(exp.access_count, 2);
+    }
+
+    #[test]
+    fn test_long_term_experience_access_missing() {
+        let mut lte = LongTermExperience::new(10);
+        assert!(lte.access_experience("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_long_term_experience_top_experiences() {
+        let mut lte = LongTermExperience::new(10);
+        lte.add_experience("low", 0.1);
+        lte.add_experience("high", 0.9);
+        lte.add_experience("medium", 0.5);
+        let top = lte.top_experiences(2);
+        assert_eq!(top.len(), 2);
+        assert_eq!(top[0].summary, "high");
+        assert_eq!(top[1].summary, "medium");
+    }
+
+    #[test]
+    fn test_long_term_experience_forget() {
+        let mut lte = LongTermExperience::new(10);
+        let id = lte.add_experience("to forget", 0.5);
+        lte.forget(&id).unwrap();
+        assert!(lte.recall(&id).unwrap().is_none());
+        assert_eq!(lte.size(), 0);
+    }
+
+    #[test]
+    fn test_long_term_experience_search() {
+        let mut lte = LongTermExperience::new(10);
+        lte.add_experience("important finding", 0.8);
+        let results = lte.search("finding", 10);
+        assert_eq!(results.len(), 1);
+        let results = lte.search("nothing", 10);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_long_term_experience_enforce_capacity() {
+        let mut lte = LongTermExperience::new(1);
+        lte.add_experience("first", 0.5);
+        lte.add_experience("second", 0.9);
+        assert_eq!(lte.size(), 1);
     }
 }

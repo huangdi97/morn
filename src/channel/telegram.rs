@@ -1,5 +1,5 @@
 //! telegram — Adapts Telegram messages into the shared channel interface.
-use crate::channel::adapter::ChannelMessage;
+use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 pub struct TelegramChannel {
     bot_token: String,
@@ -94,6 +94,57 @@ impl TelegramChannel {
             timestamp: chrono::Utc::now().timestamp(),
             metadata: serde_json::json!({"type": "text", "chat_id": self.chat_id, "from": "user_123"}),
         }))
+    }
+
+    pub fn poll_updates(&mut self, adapter: &mut ChannelAdapter) {
+        let client = reqwest::blocking::Client::new();
+        let mut offset = 0;
+
+        loop {
+            let url = format!("https://api.telegram.org/bot{}/getUpdates", self.bot_token);
+            let params = serde_json::json!({
+                "offset": offset,
+                "timeout": 30,
+                "allowed_updates": ["message"],
+            });
+
+            match client.post(&url).json(&params).send() {
+                Ok(resp) => {
+                    if let Ok(body) = resp.json::<serde_json::Value>() {
+                        if let Some(updates) = body["result"].as_array() {
+                            for update in updates {
+                                if let Some(msg) = update["message"].as_object() {
+                                    let text = msg
+                                        .get("text")
+                                        .and_then(|t| t.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    let chat_id =
+                                        msg.get("chat").and_then(|c| c["id"].as_i64()).unwrap_or(0);
+
+                                    if !text.is_empty() {
+                                        let channel_msg = ChannelMessage {
+                                            content: text,
+                                            source: "telegram".into(),
+                                            timestamp: chrono::Utc::now().timestamp_millis(),
+                                            metadata: serde_json::json!({"chat_id": chat_id}),
+                                        };
+                                        let reply = adapter.handle_message(&channel_msg);
+                                        self.send_message(&reply, Some("Markdown")).ok();
+                                    }
+                                }
+
+                                offset = update["update_id"].as_i64().unwrap_or(0) + 1;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("[Telegram] poll error: {}", e);
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                }
+            }
+        }
     }
 
     pub fn set_webhook(&self, url: &str) -> Result<(), String> {

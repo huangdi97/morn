@@ -10,7 +10,7 @@ pub struct NetworkConfig {
 
 pub fn set_wallpaper(path: &str) -> ComputerOpResult {
     #[cfg(target_os = "linux")]
-    if let Ok(_) = std::process::Command::new("gsettings")
+    if std::process::Command::new("gsettings")
         .args([
             "set",
             "org.gnome.desktop.background",
@@ -18,6 +18,7 @@ pub fn set_wallpaper(path: &str) -> ComputerOpResult {
             &format!("file://{}", path),
         ])
         .output()
+        .is_ok()
     {
         return ComputerOpResult {
             success: true,
@@ -396,10 +397,11 @@ mod tests {
 
     #[test]
     fn set_wallpaper_returns_local_result() {
-        let result = set_wallpaper("/tmp/wallpaper.png");
+        let tmp_path = std::env::temp_dir().join("wallpaper.png");
+        let result = set_wallpaper(&tmp_path.to_string_lossy());
         assert!(result.success);
         assert_eq!(result.security_level, SecurityLevel::L2Local.as_str());
-        assert!(result.data.contains("/tmp/wallpaper.png"));
+        assert!(result.data.contains(&*tmp_path.to_string_lossy()));
     }
 
     #[test]

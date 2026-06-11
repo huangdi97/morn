@@ -267,3 +267,163 @@ impl Default for GraphMemory {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn test_semantic_memory_store_recall() {
+        let mut sm = SemanticMemory::default();
+        let record = MemoryRecord::new("earth", Value::String("planet".into()));
+        sm.store("earth", record).unwrap();
+        let recalled = sm.recall("earth").unwrap().unwrap();
+        assert_eq!(recalled.content, "planet");
+        assert_eq!(recalled.metadata.get("fact_type").unwrap(), "factual");
+    }
+
+    #[test]
+    fn test_semantic_memory_recall_missing() {
+        let sm = SemanticMemory::default();
+        assert!(sm.recall("nonexistent").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_semantic_memory_forget() {
+        let mut sm = SemanticMemory::default();
+        sm.store("x", MemoryRecord::new("x", Value::String("y".into()))).unwrap();
+        sm.forget("x").unwrap();
+        assert!(sm.recall("x").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_semantic_memory_search() {
+        let mut sm = SemanticMemory::default();
+        sm.store("python", MemoryRecord::new("python", Value::String("programming language".into()))).unwrap();
+        let results = sm.search("python", 10);
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_semantic_memory_add_and_query_relations() {
+        let mut sm = SemanticMemory::default();
+        sm.add_relation("earth", "orbits", "sun");
+        sm.add_relation("earth", "has_satellite", "moon");
+        let rels = sm.query_relations("earth");
+        assert_eq!(rels.len(), 2);
+        let rels = sm.query_relations("sun");
+        assert!(rels.is_empty());
+    }
+
+    #[test]
+    fn test_semantic_memory_compress() {
+        let mut sm = SemanticMemory::default();
+        for i in 0..1001 {
+            sm.store(&format!("k{}", i), MemoryRecord::new(&format!("k{}", i), Value::Number(i.into()))).unwrap();
+        }
+        let removed = sm.compress().unwrap();
+        assert!(removed > 0);
+        assert!(sm.size() <= 1000);
+    }
+
+    #[test]
+    fn test_semantic_memory_size() {
+        let mut sm = SemanticMemory::default();
+        assert_eq!(sm.size(), 0);
+        sm.store("a", MemoryRecord::new("a", Value::String("1".into()))).unwrap();
+        assert_eq!(sm.size(), 1);
+    }
+
+    #[test]
+    fn test_graph_memory_add_node() {
+        let mut gm = GraphMemory::default();
+        gm.add_node("n1", "Node One");
+        let recalled = gm.recall("n1").unwrap().unwrap();
+        assert_eq!(recalled.content, "Node One");
+    }
+
+    #[test]
+    fn test_graph_memory_recall_missing() {
+        let gm = GraphMemory::default();
+        assert!(gm.recall("nonexistent").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_graph_memory_add_edge_and_get_neighbors() {
+        let mut gm = GraphMemory::default();
+        gm.add_node("a", "A");
+        gm.add_node("b", "B");
+        gm.add_node("c", "C");
+        gm.add_edge("a", "b", "knows", 1.0);
+        gm.add_edge("a", "c", "knows", 1.0);
+        let neighbors = gm.get_neighbors("a");
+        assert_eq!(neighbors.len(), 2);
+    }
+
+    #[test]
+    fn test_graph_memory_traverse() {
+        let mut gm = GraphMemory::default();
+        gm.add_node("a", "A");
+        gm.add_node("b", "B");
+        gm.add_node("c", "C");
+        gm.add_edge("a", "b", "knows", 1.0);
+        gm.add_edge("b", "c", "knows", 1.0);
+        let nodes = gm.traverse("a", "knows", 2);
+        assert_eq!(nodes.len(), 3);
+    }
+
+    #[test]
+    fn test_graph_memory_traverse_with_depth_limit() {
+        let mut gm = GraphMemory::default();
+        gm.add_node("a", "A");
+        gm.add_node("b", "B");
+        gm.add_node("c", "C");
+        gm.add_edge("a", "b", "knows", 1.0);
+        gm.add_edge("b", "c", "knows", 1.0);
+        let nodes = gm.traverse("a", "knows", 0);
+        assert_eq!(nodes.len(), 1);
+    }
+
+    #[test]
+    fn test_graph_memory_forget_removes_edges() {
+        let mut gm = GraphMemory::default();
+        gm.add_node("a", "A");
+        gm.add_node("b", "B");
+        gm.add_edge("a", "b", "connects", 1.0);
+        gm.forget("a").unwrap();
+        assert!(gm.recall("a").unwrap().is_none());
+        assert_eq!(gm.get_neighbors("a").len(), 0);
+    }
+
+    #[test]
+    fn test_graph_memory_search() {
+        let mut gm = GraphMemory::default();
+        gm.add_node("target", "Target Node");
+        let results = gm.search("target", 10);
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_graph_memory_compress() {
+        let mut gm = GraphMemory::default();
+        assert_eq!(gm.compress().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_graph_memory_size() {
+        let mut gm = GraphMemory::default();
+        assert_eq!(gm.size(), 0);
+        gm.add_node("x", "X");
+        assert_eq!(gm.size(), 1);
+    }
+
+    #[test]
+    fn test_graph_memory_duplicate_node_overwrites() {
+        let mut gm = GraphMemory::default();
+        gm.add_node("id1", "First");
+        gm.add_node("id1", "Second");
+        let recalled = gm.recall("id1").unwrap().unwrap();
+        assert_eq!(recalled.content, "Second");
+    }
+}

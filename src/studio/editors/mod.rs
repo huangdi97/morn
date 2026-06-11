@@ -1,24 +1,25 @@
+//! editors — Studio editor types for agent, knowledge, memory, model, persona, pipeline, skill, and tool editing.
+
 pub trait Editor {
     fn name(&self) -> &str;
 }
 
-pub mod agent;
 pub mod editor_base;
 pub mod knowledge;
+pub mod make_editors;
 pub mod memory;
 pub mod model;
-pub mod persona;
 pub mod pipeline;
-pub mod skill;
 pub mod tool;
 
-pub use agent::AgentEditor;
+pub use make_editors::AgentEditor;
+pub use editor_base::{EditorPosition, NodeEditorFields};
 pub use knowledge::{KnowledgeEditor, KnowledgeSource};
 pub use memory::MemoryEditor;
-pub use model::{CostTier, ModelEditor};
-pub use persona::PersonaEditor;
-pub use pipeline::PipelineEditor;
-pub use skill::SkillEditor;
+pub use model::{CostTier, ModelEditor, ModelParameters};
+pub use make_editors::PersonaEditor;
+pub use pipeline::{PipelineEditor, PipelineStage};
+pub use make_editors::SkillEditor;
 pub use tool::{PortDef, ToolEditor};
 
 impl Editor for ToolEditor {

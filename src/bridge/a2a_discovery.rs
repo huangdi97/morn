@@ -92,7 +92,9 @@ pub fn start_discovery_service(discovery: Arc<Mutex<A2ADiscovery>>) {
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_secs(30));
         if let Ok(d) = discovery.lock() {
-            let _ = d.discover_peers();
+            if let Err(e) = d.discover_peers() {
+                tracing::warn!("discover_peers failed: {}", e);
+            }
         }
     });
 }

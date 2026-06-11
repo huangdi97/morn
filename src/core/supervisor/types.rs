@@ -1,5 +1,24 @@
+//! types — Supervisor type definitions including NLAgentDef, DecisionLevel, and TaskPlan.
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::component::persona::{PersonaParameters, PromptLayers};
+pub use crate::computer::SecurityConfig;
+
+fn default_communication_style() -> String {
+    "professional".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
+pub struct NLPersonaConfig {
+    #[serde(default)]
+    pub parameters: PersonaParameters,
+    #[serde(default)]
+    pub prompt_layers: PromptLayers,
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NLAgentDef {
@@ -9,6 +28,12 @@ pub struct NLAgentDef {
     pub tools: Vec<String>,
     pub knowledge: Vec<String>,
     pub skills: Vec<String>,
+    #[serde(default)]
+    pub memory: Vec<String>,
+    #[serde(default)]
+    pub persona_config: NLPersonaConfig,
+    #[serde(default = "default_communication_style")]
+    pub communication_style: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

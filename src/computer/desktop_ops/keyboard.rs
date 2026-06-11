@@ -130,3 +130,82 @@ pub fn clipboard_paste() -> ComputerOpResult {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_keyboard_type_simulated() {
+        let result = keyboard_type("hello world");
+        assert!(result.success);
+        assert!(result.data.contains("[simulated]"));
+        assert!(result.data.contains("hello world"));
+    }
+
+    #[test]
+    fn test_keyboard_type_empty() {
+        let result = keyboard_type("");
+        assert!(result.success);
+        assert!(result.data.contains("[simulated]"));
+    }
+
+    #[test]
+    fn test_keyboard_hotkey_simulated() {
+        let result = keyboard_hotkey(&["ctrl", "shift", "p"]);
+        assert!(result.success);
+        assert!(result.data.contains("[simulated]"));
+        assert!(result.data.contains("ctrl+shift+p"));
+    }
+
+    #[test]
+    fn test_keyboard_hotkey_single_key() {
+        let result = keyboard_hotkey(&["enter"]);
+        assert!(result.success);
+        assert!(result.data.contains("enter"));
+    }
+
+    #[test]
+    fn test_clipboard_copy_simulated() {
+        let result = clipboard_copy("test content");
+        assert!(result.success);
+        assert!(result.data.contains("[simulated]"));
+        assert!(result.data.contains("test content"));
+    }
+
+    #[test]
+    fn test_clipboard_copy_empty() {
+        let result = clipboard_copy("");
+        assert!(result.success);
+    }
+
+    #[test]
+    fn test_clipboard_paste_simulated() {
+        let result = clipboard_paste();
+        assert!(result.success);
+        assert!(result.data.contains("[simulated]"));
+    }
+
+    #[test]
+    fn test_security_levels() {
+        let typing = keyboard_type("x");
+        assert_eq!(typing.security_level, "local");
+
+        let hotkey = keyboard_hotkey(&["a"]);
+        assert_eq!(hotkey.security_level, "local");
+
+        let copy = clipboard_copy("x");
+        assert_eq!(copy.security_level, "sandbox");
+
+        let paste = clipboard_paste();
+        assert_eq!(paste.security_level, "sandbox");
+    }
+
+    #[test]
+    fn test_no_approval_required() {
+        assert!(!keyboard_type("x").approval_required);
+        assert!(!keyboard_hotkey(&["a"]).approval_required);
+        assert!(!clipboard_copy("x").approval_required);
+        assert!(!clipboard_paste().approval_required);
+    }
+}

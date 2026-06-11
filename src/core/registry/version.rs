@@ -193,3 +193,135 @@ impl Registry {
         self.templates.get(id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::registry::Registry;
+
+    #[test]
+    fn test_compare_versions_equal() {
+        assert_eq!(compare_versions("1.0.0", "1.0.0"), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_compare_versions_greater() {
+        assert_eq!(compare_versions("2.0.0", "1.0.0"), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_compare_versions_less() {
+        assert_eq!(compare_versions("1.0.0", "2.0.0"), Ordering::Less);
+    }
+
+    #[test]
+    fn test_compare_versions_patch() {
+        assert_eq!(compare_versions("1.2.3", "1.2.4"), Ordering::Less);
+        assert_eq!(compare_versions("1.2.5", "1.2.4"), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_compare_versions_different_lengths() {
+        assert_eq!(compare_versions("1.0", "1.0.0"), Ordering::Equal);
+        assert_eq!(compare_versions("2.0", "1.9.9"), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_compare_versions_with_non_numeric() {
+        assert_eq!(compare_versions("1.0.0", "1.0.alpha"), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_empty() {
+        assert_eq!(compare_versions("", ""), Ordering::Equal);
+        assert_eq!(compare_versions("1", ""), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_agent_template_defaults() {
+        let templates = default_templates();
+        assert_eq!(templates.len(), 6);
+        for t in &templates {
+            assert_eq!(t.version, "0.1.0");
+        }
+    }
+
+    #[test]
+    fn test_agent_template_research_assistant() {
+        let templates = default_templates();
+        let ra = templates.iter().find(|t| t.id == "research-assistant").unwrap();
+        assert_eq!(ra.persona, "researcher");
+        assert!(ra.tools.contains(&"web_search".to_string()));
+    }
+
+    #[test]
+    fn test_agent_template_general_assistant() {
+        let templates = default_templates();
+        let ga = templates.iter().find(|t| t.id == "general-assistant").unwrap();
+        assert_eq!(ga.persona, "assistant");
+        assert!(ga.skills.is_empty());
+    }
+
+    #[test]
+    fn test_agent_template_translation_agent() {
+        let templates = default_templates();
+        let ta = templates.iter().find(|t| t.id == "translation-agent").unwrap();
+        assert_eq!(ta.persona, "translator");
+    }
+
+    #[test]
+    fn test_registry_list_by_version() {
+        let registry = Registry::new(None, None);
+        let caps = registry.list_by_version("0.1.0");
+        assert!(!caps.is_empty());
+    }
+
+    #[test]
+    fn test_registry_list_by_version_no_match() {
+        let registry = Registry::new(None, None);
+        let caps = registry.list_by_version("99.99.99");
+        assert!(caps.is_empty());
+    }
+
+    #[test]
+    fn test_registry_check_conflict() {
+        let registry = Registry::new(None, None);
+        assert!(registry.check_conflict("general-assistant", "0.2.0"));
+        assert!(!registry.check_conflict("general-assistant", "0.1.0"));
+        assert!(!registry.check_conflict("nonexistent", "0.1.0"));
+    }
+
+    #[test]
+    fn test_registry_get_version() {
+        let registry = Registry::new(None, None);
+        assert_eq!(registry.get_version("general-assistant"), Some("0.1.0"));
+        assert!(registry.get_version("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_registry_get_version_history() {
+        let registry = Registry::new(None, None);
+        // version history records capabilities, not templates
+        // The default chat agent capability has version "0.1.0"
+        let history = registry.get_version_history("general-assistant");
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn test_registry_list_by_version_with_default_cap() {
+        let registry = Registry::new(None, None);
+        // list_by_version only searches capabilities, not templates
+        let caps = registry.list_by_version("0.1.0");
+        assert_eq!(caps.len(), 1);
+    }
+
+    #[test]
+    fn test_registry_get_template() {
+        let registry = Registry::new(None, None);
+        let t = registry.get_template("coding-helper");
+        assert!(t.is_some());
+        assert_eq!(t.unwrap().persona, "coder");
+
+        assert!(registry.get_template("nonexistent").is_none());
+    }
+}

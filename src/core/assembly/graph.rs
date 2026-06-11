@@ -246,3 +246,215 @@ impl ComponentRegistry {
             .find(|c| c.id == id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_component_graph_to_json() {
+        let graph = ComponentGraph {
+            components: vec![],
+            connections: vec![],
+        };
+        let json = graph.to_json().unwrap();
+        assert!(json.contains("\"components\""));
+        assert!(json.contains("\"connections\""));
+    }
+
+    #[test]
+    fn test_component_graph_from_json() {
+        let json = r#"{"components":[{"id":"test","component_type":"Memory","name":"Test","description":"","input_types":[],"output_types":[],"config":{}}],"connections":[]}"#;
+        let graph = ComponentGraph::from_json(json).unwrap();
+        assert_eq!(graph.components.len(), 1);
+        assert_eq!(graph.components[0].id, "test");
+    }
+
+    #[test]
+    fn test_component_graph_from_json_invalid() {
+        let result = ComponentGraph::from_json("invalid");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_connection_validator_valid() {
+        let graph = ComponentGraph {
+            components: vec![
+                AtomicComponentDef {
+                    id: "src".into(),
+                    component_type: AtomicComponentType::Tool,
+                    name: "Source".into(),
+                    description: String::new(),
+                    input_types: vec![],
+                    output_types: vec!["out".into()],
+                    config: serde_json::json!({}),
+                },
+                AtomicComponentDef {
+                    id: "dst".into(),
+                    component_type: AtomicComponentType::Memory,
+                    name: "Dest".into(),
+                    description: String::new(),
+                    input_types: vec!["in".into()],
+                    output_types: vec![],
+                    config: serde_json::json!({}),
+                },
+            ],
+            connections: vec![ComponentConnection {
+                source_id: "src".into(),
+                source_output: "out".into(),
+                target_id: "dst".into(),
+                target_input: "in".into(),
+            }],
+        };
+        assert!(ConnectionValidator::validate(&graph).is_ok());
+    }
+
+    #[test]
+    fn test_connection_validator_source_not_found() {
+        let graph = ComponentGraph {
+            components: vec![],
+            connections: vec![ComponentConnection {
+                source_id: "missing".into(),
+                source_output: "out".into(),
+                target_id: "dst".into(),
+                target_input: "in".into(),
+            }],
+        };
+        let result = ConnectionValidator::validate(&graph);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().iter().any(|e| e.contains("not found")));
+    }
+
+    #[test]
+    fn test_connection_validator_output_type_mismatch() {
+        let graph = ComponentGraph {
+            components: vec![
+                AtomicComponentDef {
+                    id: "src".into(),
+                    component_type: AtomicComponentType::Tool,
+                    name: "Source".into(),
+                    description: String::new(),
+                    input_types: vec![],
+                    output_types: vec!["num".into()],
+                    config: serde_json::json!({}),
+                },
+                AtomicComponentDef {
+                    id: "dst".into(),
+                    component_type: AtomicComponentType::Memory,
+                    name: "Dest".into(),
+                    description: String::new(),
+                    input_types: vec!["text".into()],
+                    output_types: vec![],
+                    config: serde_json::json!({}),
+                },
+            ],
+            connections: vec![ComponentConnection {
+                source_id: "src".into(),
+                source_output: "text".into(),
+                target_id: "dst".into(),
+                target_input: "num".into(),
+            }],
+        };
+        let result = ConnectionValidator::validate(&graph);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_connection_validator_empty_types_accepts_any() {
+        let graph = ComponentGraph {
+            components: vec![
+                AtomicComponentDef {
+                    id: "src".into(),
+                    component_type: AtomicComponentType::Tool,
+                    name: "Source".into(),
+                    description: String::new(),
+                    input_types: vec![],
+                    output_types: vec![],
+                    config: serde_json::json!({}),
+                },
+                AtomicComponentDef {
+                    id: "dst".into(),
+                    component_type: AtomicComponentType::Memory,
+                    name: "Dest".into(),
+                    description: String::new(),
+                    input_types: vec![],
+                    output_types: vec![],
+                    config: serde_json::json!({}),
+                },
+            ],
+            connections: vec![ComponentConnection {
+                source_id: "src".into(),
+                source_output: "any".into(),
+                target_id: "dst".into(),
+                target_input: "any".into(),
+            }],
+        };
+        assert!(ConnectionValidator::validate(&graph).is_ok());
+    }
+
+    #[test]
+    fn test_component_registry_available_count() {
+        let components = ComponentRegistry::available_components();
+        assert_eq!(components.len(), 14);
+    }
+
+    #[test]
+    fn test_component_registry_contains_expected_ids() {
+        let components = ComponentRegistry::available_components();
+        let ids: Vec<&str> = components.iter().map(|c| c.id.as_str()).collect();
+        assert!(ids.contains(&"mem_working"));
+        assert!(ids.contains(&"tool_web_search"));
+        assert!(ids.contains(&"llm_deepseek"));
+        assert!(ids.contains(&"persona_assistant"));
+        assert!(ids.contains(&"ch_telegram"));
+    }
+
+    #[test]
+    fn test_component_registry_get_component_found() {
+        let comp = ComponentRegistry::get_component("mem_working");
+        assert!(comp.is_some());
+        assert_eq!(comp.unwrap().name, "Working Memory");
+    }
+
+    #[test]
+    fn test_component_registry_get_component_not_found() {
+        let comp = ComponentRegistry::get_component("nonexistent");
+        assert!(comp.is_none());
+    }
+
+    #[test]
+    fn test_atomic_component_type_serialization() {
+        let json = serde_json::to_string(&AtomicComponentType::Memory).unwrap();
+        assert_eq!(json, "\"Memory\"");
+        let deserialized: AtomicComponentType = serde_json::from_str("\"Tool\"").unwrap();
+        assert_eq!(deserialized, AtomicComponentType::Tool);
+    }
+
+    #[test]
+    fn test_component_graph_roundtrip() {
+        let graph = ComponentGraph {
+            components: vec![
+                AtomicComponentDef {
+                    id: "comp1".into(),
+                    component_type: AtomicComponentType::Memory,
+                    name: "Comp1".into(),
+                    description: "desc".into(),
+                    input_types: vec!["in".into()],
+                    output_types: vec!["out".into()],
+                    config: serde_json::json!({"key": "val"}),
+                },
+            ],
+            connections: vec![ComponentConnection {
+                source_id: "comp1".into(),
+                source_output: "out".into(),
+                target_id: "comp1".into(),
+                target_input: "in".into(),
+            }],
+        };
+        let json = graph.to_json().unwrap();
+        let restored = ComponentGraph::from_json(&json).unwrap();
+        assert_eq!(restored.components.len(), 1);
+        assert_eq!(restored.connections.len(), 1);
+        assert_eq!(restored.components[0].config["key"], "val");
+    }
+}

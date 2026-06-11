@@ -1,3 +1,4 @@
+//! Wasm 沙箱 — 基于 wasmtime 的代码隔离执行环境
 use std::time::Instant;
 use wasmtime::{Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
 

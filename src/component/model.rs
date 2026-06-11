@@ -151,3 +151,143 @@ pub fn create_default_models() -> Vec<ModelConfig> {
 pub fn create_model_component(config: ModelConfig) -> ModelComponent {
     ModelComponent::new(config)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_model_parameters_default() {
+        let p = ModelParameters::default();
+        assert_eq!(p.temperature, 0.6);
+        assert_eq!(p.max_tokens, 4096);
+        assert_eq!(p.top_p, 0.9);
+    }
+
+    #[test]
+    fn test_model_component_chat_returns_simulated_response() {
+        let config = ModelConfig {
+            id: "test-model".into(),
+            provider: "test".into(),
+            model_name: "test-model".into(),
+            base_url: "http://localhost".into(),
+            api_key: String::new(),
+            parameters: ModelParameters::default(),
+            fallback: None,
+            cost_tier: CostTier::Free,
+        };
+        let component = ModelComponent::new(config);
+        let result = component.chat("hello", "system").unwrap();
+        assert_eq!(result, "[test:test-model] (simulated response)");
+    }
+
+    #[test]
+    fn test_model_component_chat_with_empty_key() {
+        let config = ModelConfig {
+            id: "no-key-model".into(),
+            provider: "test".into(),
+            model_name: "test".into(),
+            base_url: "http://localhost".into(),
+            api_key: String::new(),
+            parameters: ModelParameters::default(),
+            fallback: None,
+            cost_tier: CostTier::Free,
+        };
+        let component = ModelComponent::new(config);
+        let result = component.chat("prompt", "system").unwrap();
+        assert!(result.contains("simulated"));
+    }
+
+    #[test]
+    fn test_create_default_models_count() {
+        let models = create_default_models();
+        assert_eq!(models.len(), 2);
+    }
+
+    #[test]
+    fn test_create_default_models_fields() {
+        let models = create_default_models();
+        assert_eq!(models[0].id, "model-deepseek-chat");
+        assert_eq!(models[0].provider, "deepseek");
+        assert_eq!(models[0].model_name, "deepseek-chat");
+        assert_eq!(models[0].fallback, Some("model-deepseek-reasoner".into()));
+        assert_eq!(models[1].id, "model-deepseek-reasoner");
+        assert_eq!(models[1].model_name, "deepseek-reasoner");
+        assert!(models[1].fallback.is_none());
+    }
+
+    #[test]
+    fn test_model_component_component_trait() {
+        let config = ModelConfig {
+            id: "comp-test".into(),
+            provider: "p".into(),
+            model_name: "m".into(),
+            base_url: "http://localhost".into(),
+            api_key: String::new(),
+            parameters: ModelParameters::default(),
+            fallback: None,
+            cost_tier: CostTier::Low,
+        };
+        let mut component = ModelComponent::new(config);
+        assert_eq!(component.id(), "comp-test");
+        assert_eq!(component.type_name(), "model");
+        assert!(component.init().is_ok());
+        assert!(component.run().is_ok());
+        assert!(component.pause().is_ok());
+        assert!(component.stop().is_ok());
+        assert_eq!(component.health_check(), HealthStatus::Healthy);
+    }
+
+    #[test]
+    fn test_model_component_ports() {
+        let config = ModelConfig {
+            id: "port-test".into(),
+            provider: "p".into(),
+            model_name: "m".into(),
+            base_url: "http://localhost".into(),
+            api_key: String::new(),
+            parameters: ModelParameters::default(),
+            fallback: None,
+            cost_tier: CostTier::Medium,
+        };
+        let component = ModelComponent::new(config);
+        let ports = component.ports();
+        assert_eq!(ports.len(), 2);
+        assert_eq!(ports[0].direction, PortDirection::Input);
+        assert_eq!(ports[1].direction, PortDirection::Output);
+    }
+
+    #[test]
+    fn test_secure_component_permissions() {
+        let config = ModelConfig {
+            id: "perm-test".into(),
+            provider: "p".into(),
+            model_name: "m".into(),
+            base_url: "http://localhost".into(),
+            api_key: String::new(),
+            parameters: ModelParameters::default(),
+            fallback: None,
+            cost_tier: CostTier::High,
+        };
+        let component = ModelComponent::new(config);
+        let perms = component.required_permissions();
+        assert_eq!(perms.len(), 1);
+        assert!(matches!(perms[0], Permission::NetworkAccess));
+    }
+
+    #[test]
+    fn test_create_model_component() {
+        let config = ModelConfig {
+            id: "factory-test".into(),
+            provider: "p".into(),
+            model_name: "m".into(),
+            base_url: "http://localhost".into(),
+            api_key: "key".into(),
+            parameters: ModelParameters::default(),
+            fallback: None,
+            cost_tier: CostTier::Free,
+        };
+        let component = create_model_component(config);
+        assert_eq!(component.config().id, "factory-test");
+    }
+}

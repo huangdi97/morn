@@ -256,3 +256,112 @@ pub fn create_cs_agent_persona() -> Persona {
         communication_style: "friendly".into(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_analyst_persona_fields() {
+        let p = create_analyst_persona();
+        assert_eq!(p.id, "persona-analyst");
+        assert_eq!(p.name, "Analyst");
+        assert!(!p.core_principles.is_empty());
+        assert!(!p.decision_framework.is_empty());
+        assert!(!p.anti_patterns.is_empty());
+        assert_eq!(p.parameters.temperature, 0.3);
+        assert_eq!(p.parameters.style, "professional");
+        assert_eq!(p.communication_style, "professional");
+        assert!(p.prompt_layers.l1_core_identity.contains("Analyst"));
+        assert!(p.prompt_layers.l3_format_template.is_some());
+        assert!(p.prompt_layers.l4_constraints.is_some());
+    }
+
+    #[test]
+    fn test_researcher_persona_fields() {
+        let p = create_researcher_persona();
+        assert_eq!(p.id, "persona-researcher");
+        assert_eq!(p.name, "Researcher");
+        assert!(!p.core_principles.is_empty());
+        assert!(p.prompt_layers.l2_skill_instructions.is_some());
+        assert!(p.prompt_layers.l4_constraints.is_some());
+    }
+
+    #[test]
+    fn test_writer_persona_fields() {
+        let p = create_writer_persona();
+        assert_eq!(p.id, "persona-writer");
+        assert_eq!(p.name, "Writer");
+        assert_eq!(p.parameters.temperature, 0.7);
+        assert!(p.prompt_layers.l3_format_template.is_some());
+    }
+
+    #[test]
+    fn test_coder_persona_fields() {
+        let p = create_coder_persona();
+        assert_eq!(p.id, "persona-coder");
+        assert_eq!(p.name, "Coder");
+        assert_eq!(p.parameters.temperature, 0.2);
+        assert!(!p.core_principles.is_empty());
+        assert!(!p.anti_patterns.is_empty());
+    }
+
+    #[test]
+    fn test_assistant_persona_fields() {
+        let p = create_assistant_persona();
+        assert_eq!(p.id, "persona-assistant");
+        assert_eq!(p.name, "Assistant");
+        assert_eq!(p.parameters.verbosity, 0.4);
+        assert_eq!(p.parameters.proactiveness, 0.5);
+        assert_eq!(p.parameters.style, "professional");
+    }
+
+    #[test]
+    fn test_translator_persona_fields() {
+        let p = create_translator_persona();
+        assert_eq!(p.id, "persona-translator");
+        assert_eq!(p.name, "Translator");
+        assert_eq!(p.parameters.temperature, 0.3);
+        assert!(p.prompt_layers.l1_core_identity.contains("Translator"));
+        assert!(p.prompt_layers.l5_conversation_style.is_some());
+    }
+
+    #[test]
+    fn test_reviewer_persona_fields() {
+        let p = create_reviewer_persona();
+        assert_eq!(p.id, "persona-reviewer");
+        assert_eq!(p.name, "Reviewer");
+        assert!(p.prompt_layers.l2_skill_instructions.is_some());
+        assert!(p.prompt_layers.l3_format_template.is_some());
+        assert!(p.prompt_layers.l4_constraints.is_some());
+        assert!(p.prompt_layers.l5_conversation_style.is_some());
+    }
+
+    #[test]
+    fn test_cs_agent_persona_fields() {
+        let p = create_cs_agent_persona();
+        assert_eq!(p.id, "persona-cs-agent");
+        assert_eq!(p.name, "客服");
+        assert_eq!(p.parameters.style, "friendly");
+        assert_eq!(p.communication_style, "friendly");
+        assert!(p.prompt_layers.l2_skill_instructions.is_some());
+    }
+
+    #[test]
+    fn test_all_personas_have_unique_ids() {
+        let personas = vec![
+            create_analyst_persona(),
+            create_researcher_persona(),
+            create_writer_persona(),
+            create_coder_persona(),
+            create_assistant_persona(),
+            create_translator_persona(),
+            create_reviewer_persona(),
+            create_cs_agent_persona(),
+        ];
+        let mut ids: Vec<&str> = personas.iter().map(|p| p.id.as_str()).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), personas.len());
+    }
+}

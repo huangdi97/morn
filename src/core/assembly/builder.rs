@@ -226,3 +226,121 @@ impl Default for GuidedBuildSteps {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_component_selector_new_empty() {
+        let sel = ComponentSelector::new();
+        assert!(sel.memory_ids.is_empty());
+        assert!(sel.tool_ids.is_empty());
+        assert!(sel.llm_ids.is_empty());
+        assert!(sel.channel_ids.is_empty());
+        assert!(sel.persona_ids.is_empty());
+        assert!(sel.skill_ids.is_empty());
+    }
+
+    #[test]
+    fn test_component_selector_with_memory() {
+        let sel = ComponentSelector::new().with_memory(vec!["mem1".into()]);
+        assert_eq!(sel.memory_ids, vec!["mem1"]);
+    }
+
+    #[test]
+    fn test_component_selector_with_tools() {
+        let sel = ComponentSelector::new().with_tools(vec!["tool1".into(), "tool2".into()]);
+        assert_eq!(sel.tool_ids.len(), 2);
+    }
+
+    #[test]
+    fn test_component_selector_with_llm() {
+        let sel = ComponentSelector::new().with_llm(vec!["gpt-4".into()]);
+        assert_eq!(sel.llm_ids, vec!["gpt-4"]);
+    }
+
+    #[test]
+    fn test_component_selector_with_channels() {
+        let sel = ComponentSelector::new().with_channels(vec!["ch1".into()]);
+        assert_eq!(sel.channel_ids, vec!["ch1"]);
+    }
+
+    #[test]
+    fn test_component_selector_with_personas() {
+        let sel = ComponentSelector::new().with_personas(vec!["researcher".into()]);
+        assert_eq!(sel.persona_ids, vec!["researcher"]);
+    }
+
+    #[test]
+    fn test_component_selector_with_skills() {
+        let sel = ComponentSelector::new().with_skills(vec!["skill1".into()]);
+        assert_eq!(sel.skill_ids, vec!["skill1"]);
+    }
+
+    #[test]
+    fn test_component_selector_chaining() {
+        let sel = ComponentSelector::new()
+            .with_memory(vec!["m1".into()])
+            .with_tools(vec!["t1".into()])
+            .with_llm(vec!["l1".into()]);
+        assert_eq!(sel.memory_ids, vec!["m1"]);
+        assert_eq!(sel.tool_ids, vec!["t1"]);
+        assert_eq!(sel.llm_ids, vec!["l1"]);
+    }
+
+    #[test]
+    fn test_default_completer_fills_empty() {
+        let mut sel = ComponentSelector::new();
+        DefaultCompleter::complete(&mut sel);
+        assert_eq!(sel.memory_ids, vec!["working_memory"]);
+        assert_eq!(sel.tool_ids, vec!["web_search", "read_file"]);
+        assert_eq!(sel.llm_ids, vec!["deepseek-chat"]);
+    }
+
+    #[test]
+    fn test_default_completer_does_not_override() {
+        let mut sel = ComponentSelector::new()
+            .with_memory(vec!["custom_mem".into()])
+            .with_tools(vec!["custom_tool".into()])
+            .with_llm(vec!["custom_llm".into()]);
+        DefaultCompleter::complete(&mut sel);
+        assert_eq!(sel.memory_ids, vec!["custom_mem"]);
+    }
+
+    #[test]
+    fn test_assembly_builder_build_default() {
+        let mut sel = ComponentSelector::new();
+        DefaultCompleter::complete(&mut sel);
+        let result = AssemblyBuilder::build(&sel);
+        assert!(result.is_ok());
+        let def = result.unwrap();
+        assert!(def.id.starts_with("agent-"));
+    }
+
+    #[test]
+    fn test_guided_build_steps_new() {
+        let steps = GuidedBuildSteps::new();
+        assert!(steps.memory_ids.is_empty());
+        assert!(steps.tool_ids.is_empty());
+    }
+
+    #[test]
+    fn test_assembly_builder_export_import_graph() {
+        let graph = ComponentGraph {
+            components: vec![],
+            connections: vec![],
+        };
+        let json = AssemblyBuilder::export_graph(&graph).unwrap();
+        assert!(json.contains("\"components\""));
+        let imported = AssemblyBuilder::import_graph(&json).unwrap();
+        assert!(imported.components.is_empty());
+    }
+
+    #[test]
+    fn test_assembly_builder_new() {
+        let builder = AssemblyBuilder::new();
+        // just verify it constructs
+        let _ = builder;
+    }
+}

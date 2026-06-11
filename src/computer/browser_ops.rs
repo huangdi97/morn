@@ -40,9 +40,10 @@ pub fn navigate(url: &str) -> ComputerOpResult {
 
 pub fn form_fill(selector: &str, value: &str) -> ComputerOpResult {
     #[cfg(target_os = "linux")]
-    if let Ok(_) = std::process::Command::new("xdotool")
+    if std::process::Command::new("xdotool")
         .args(["type", "--clearmodifiers", value])
         .output()
+        .is_ok()
     {
         return ComputerOpResult {
             success: true,

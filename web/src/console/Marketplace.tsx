@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 
 interface Listing {
   id: string;
@@ -25,7 +25,7 @@ export default function Marketplace() {
   const [tab, setTab] = useState("all");
 
   useEffect(() => {
-    invoke<Listing[]>("get_market_listings", { typeFilter: null }).then(setListings).catch(() => {
+    api.getMarketListings(null).then(setListings).catch(() => {
       setListings(hardcodedListings);
     });
   }, []);

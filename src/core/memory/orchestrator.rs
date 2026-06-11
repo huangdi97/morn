@@ -249,3 +249,148 @@ impl MemoryOrchestrator {
         &mut self.hub
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn test_memory_hub_default_layers() {
+        let hub = MemoryHub::new();
+        assert_eq!(hub.layer_count(), 7);
+    }
+
+    #[test]
+    fn test_memory_hub_register() {
+        let mut hub = MemoryHub::new();
+        assert!(hub.get("working").is_some());
+        assert!(hub.get("episodic").is_some());
+        assert!(hub.get("semantic").is_some());
+        assert!(hub.get("experiential").is_some());
+        assert!(hub.get("graph").is_some());
+        assert!(hub.get("flash").is_some());
+        assert!(hub.get("long_term_experience").is_some());
+    }
+
+    #[test]
+    fn test_memory_hub_get_missing() {
+        let hub = MemoryHub::new();
+        assert!(hub.get("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_memory_hub_get_mut() {
+        let mut hub = MemoryHub::new();
+        let wm = hub.get_mut("working").unwrap();
+        assert!(wm.id() == "working");
+    }
+
+    #[test]
+    fn test_memory_hub_store_all() {
+        let mut hub = MemoryHub::new();
+        let results = hub.store_all("test_key", MemoryRecord::new("test_key", Value::String("val".into())));
+        assert_eq!(results.len(), 7);
+        for r in &results {
+            assert!(r.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_memory_hub_search_all() {
+        let mut hub = MemoryHub::new();
+        hub.store_all("query_term", MemoryRecord::new("query_term", Value::String("data".into())));
+        let results = hub.search_all("query_term", 10);
+        assert_eq!(results.len(), 7);
+        assert!(results.contains_key("working"));
+    }
+
+    #[test]
+    fn test_memory_hub_compress_all() {
+        let mut hub = MemoryHub::new();
+        for i in 0..150 {
+            hub.store_all(&format!("k{}", i), MemoryRecord::new(&format!("k{}", i), Value::Number(i.into())));
+        }
+        let compressed = hub.compress_all();
+        assert!(compressed.contains_key("working"));
+        assert!(compressed.contains_key("episodic"));
+    }
+
+    #[test]
+    fn test_experiential_memory_store_recall() {
+        let mut xm = ExperientialMemory::default();
+        let record = MemoryRecord::new("pattern1", Value::String("outcome1".into()))
+            .with_metadata("outcome", Value::String("success".into()));
+        xm.store("", record).unwrap();
+        let recalled = xm.recall("outcome1").unwrap().unwrap();
+        assert_eq!(recalled.metadata.get("pattern").unwrap(), "outcome1");
+    }
+
+    #[test]
+    fn test_experiential_memory_frequency_increment() {
+        let mut xm = ExperientialMemory::default();
+        xm.add_experience("retry", Value::String("success".into()), None);
+        xm.add_experience("retry", Value::String("success".into()), None);
+        let top = xm.top_experiences(1);
+        assert_eq!(top[0].frequency, 2);
+    }
+
+    #[test]
+    fn test_experiential_memory_compress() {
+        let mut xm = ExperientialMemory::new(2);
+        xm.add_experience("a", Value::String("1".into()), None);
+        xm.add_experience("b", Value::String("2".into()), None);
+        xm.add_experience("c", Value::String("3".into()), None);
+        let removed = xm.compress().unwrap();
+        assert!(removed > 0);
+        assert_eq!(xm.size(), 2);
+    }
+
+    #[test]
+    fn test_experiential_memory_forget() {
+        let mut xm = ExperientialMemory::default();
+        xm.add_experience("pattern1", Value::String("outcome".into()), None);
+        xm.forget("pattern1").unwrap();
+        assert!(xm.recall("pattern1").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_experiential_memory_search() {
+        let mut xm = ExperientialMemory::default();
+        xm.add_experience("login_failed", Value::String("retry".into()), None);
+        let results = xm.search("login", 10);
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn test_memory_orchestrator_new() {
+        let hub = MemoryHub::new();
+        let orchestrator = MemoryOrchestrator::new(hub);
+        assert_eq!(orchestrator.hub().layer_count(), 7);
+    }
+
+    #[test]
+    fn test_memory_orchestrator_decide() {
+        let hub = MemoryHub::new();
+        let mut orchestrator = MemoryOrchestrator::new(hub);
+        orchestrator.hub_mut().store_all("context_key", MemoryRecord::new("context_key", Value::String("data".into())));
+        let results = orchestrator.decide_with_memory("context_key").unwrap();
+        assert_eq!(results.len(), 7);
+    }
+
+    #[test]
+    fn test_memory_orchestrator_decide_no_match() {
+        let hub = MemoryHub::new();
+        let mut orchestrator = MemoryOrchestrator::new(hub);
+        let results = orchestrator.decide_with_memory("zzz_nonexistent_zzz").unwrap();
+        for v in results.values() {
+            assert!(v.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_experiential_memory_default() {
+        let xm = ExperientialMemory::default();
+        assert_eq!(xm.size(), 0);
+    }
+}

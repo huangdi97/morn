@@ -1,6 +1,7 @@
 //! Security guard — policy enforcement, action checking, and profile management.
 
 use serde_json::Value;
+use std::collections::HashMap;
 use tracing;
 
 use super::constitution::{SecurityLevel, SecurityPolicy};
@@ -11,6 +12,9 @@ pub struct SecurityGuard {
     pub block_enabled: bool,
     pub notify_enabled: bool,
     profiles: Vec<SecurityProfile>,
+    agent_authorization_levels: HashMap<String, SecurityLevel>,
+    user_team_authorization_levels: HashMap<String, SecurityLevel>,
+    default_authorization_level: Option<SecurityLevel>,
 }
 
 impl SecurityGuard {
@@ -101,6 +105,9 @@ impl SecurityGuard {
             block_enabled: true,
             notify_enabled: true,
             profiles: vec![SecurityProfile::default()],
+            agent_authorization_levels: HashMap::new(),
+            user_team_authorization_levels: HashMap::new(),
+            default_authorization_level: None,
         }
     }
 
@@ -117,6 +124,24 @@ impl SecurityGuard {
     /// Validates whether an action is allowed and returns an error for blocked or approval-required actions.
     pub fn is_allowed(&self, action: &str, params: &Value) -> Result<(), String> {
         let level = self.check(action, params);
+        self.enforce_level(action, &level)
+    }
+
+    pub fn authorize(&self, operation: &str, agent_id: &str, user_id: &str) -> Result<(), String> {
+        let level = self.authorization_level(operation, agent_id, user_id);
+        self.enforce_level(operation, &level)
+    }
+
+    fn authorization_level(&self, operation: &str, agent_id: &str, user_id: &str) -> SecurityLevel {
+        self.agent_authorization_levels
+            .get(agent_id)
+            .cloned()
+            .or_else(|| self.user_team_authorization_levels.get(user_id).cloned())
+            .or_else(|| self.default_authorization_level.clone())
+            .unwrap_or_else(|| self.check(operation, &serde_json::json!({})))
+    }
+
+    fn enforce_level(&self, action: &str, level: &SecurityLevel) -> Result<(), String> {
         match level {
             SecurityLevel::L1HardBlocked => {
                 if self.block_enabled {
@@ -182,6 +207,24 @@ impl SecurityGuard {
     /// Enables or disables notifications for notify-level actions.
     pub fn set_notify_enabled(&mut self, enabled: bool) {
         self.notify_enabled = enabled;
+    }
+
+    pub fn set_agent_authorization_level(&mut self, agent_id: &str, level: SecurityLevel) {
+        self.agent_authorization_levels
+            .insert(agent_id.to_string(), level);
+    }
+
+    pub fn set_user_team_authorization_level(&mut self, user_id: &str, level: SecurityLevel) {
+        self.user_team_authorization_levels
+            .insert(user_id.to_string(), level);
+    }
+
+    pub fn set_default_authorization_level(&mut self, level: SecurityLevel) {
+        self.default_authorization_level = Some(level);
+    }
+
+    pub fn clear_default_authorization_level(&mut self) {
+        self.default_authorization_level = None;
     }
 
     pub fn get_profile(&self, agent_id: &str) -> Option<&SecurityProfile> {

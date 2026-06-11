@@ -96,17 +96,18 @@ Write-Output $base64
 
 #[cfg(feature = "desktop-real")]
 fn screenshot_native() -> ComputerOpResult {
+    let ss_path = std::env::temp_dir().join("morn_screenshot.png");
     let output = if cfg!(target_os = "macos") {
         std::process::Command::new("screencapture")
-            .args(["-x", "-C", "-t", "png", "/tmp/morn_screenshot.png"])
+            .args(["-x", "-C", "-t", "png", &ss_path.to_string_lossy()])
             .output()
     } else if cfg!(target_os = "linux") {
         std::process::Command::new("import")
-            .args(["-window", "root", "/tmp/morn_screenshot.png"])
+            .args(["-window", "root", &ss_path.to_string_lossy()])
             .output()
             .or_else(|_| {
                 std::process::Command::new("gnome-screenshot")
-                    .args(["-f", "/tmp/morn_screenshot.png"])
+                    .args(["-f", &ss_path.to_string_lossy()])
                     .output()
             })
     } else {
@@ -119,9 +120,9 @@ fn screenshot_native() -> ComputerOpResult {
     };
     match output {
         Ok(o) if o.status.success() => {
-            if let Ok(data) = std::fs::read("/tmp/morn_screenshot.png") {
+            if let Ok(data) = std::fs::read(&ss_path) {
                 let b64 = base64_engine(&data);
-                let _ = std::fs::remove_file("/tmp/morn_screenshot.png");
+                let _ = std::fs::remove_file(&ss_path);
                 ComputerOpResult {
                     success: true,
                     data: format!("data:image/png;base64,{}", b64),

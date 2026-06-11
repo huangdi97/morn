@@ -1,3 +1,4 @@
+//! 多 Agent 协作模式 — 投票/路由/AgentAsTool/黑板等 7 种模式
 pub struct DebateMode {
     pub agents: Vec<String>,
     pub rounds: u32,

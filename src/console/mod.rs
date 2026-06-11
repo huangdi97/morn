@@ -34,6 +34,24 @@ pub struct DashboardData {
     pub agent_count: usize,
     pub active_channels: usize,
     pub uptime_hours: f64,
+    pub request_trend: Vec<TrendPoint>,
+    pub latency_trend: Vec<TrendPoint>,
+    pub alerts: Vec<DashboardAlert>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TrendPoint {
+    pub label: String,
+    pub value: f64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DashboardAlert {
+    pub id: String,
+    pub kind: String,
+    pub severity: String,
+    pub title: String,
+    pub detail: String,
 }
 
 /// 系统信息 — 版本、CPU、内存、磁盘、操作系统及运行时长。
@@ -73,6 +91,7 @@ impl ConsoleBackend {
     /// 获取仪表盘数据 — 从存储中读取任务数、注册表中的 Agent 数，返回 DashboardData。
     /// Retrieves dashboard data — reads task count from storage and agent count from registry.
     pub fn get_dashboard(&self) -> DashboardData {
+        tracing::debug!("building console dashboard snapshot");
         let task_count = self
             .storage
             .as_ref()
@@ -84,15 +103,111 @@ impl ConsoleBackend {
             .as_ref()
             .map(|r| r.list_all().len())
             .unwrap_or(0);
+        let today_cost = 0.05;
+        let budget = 0.04;
+        let security_logs = self.get_security_logs();
+        let security_event_count = security_logs
+            .iter()
+            .filter(|entry| entry.severity == "warning" || entry.severity == "critical")
+            .count();
+        let mut alerts = vec![DashboardAlert {
+            id: "new-version-0.1.0".into(),
+            kind: "version".into(),
+            severity: "info".into(),
+            title: "New version available".into(),
+            detail: "Morn 0.1.0 is the current packaged version.".into(),
+        }];
+        if today_cost > budget {
+            alerts.push(DashboardAlert {
+                id: "cost-budget-exceeded".into(),
+                kind: "cost".into(),
+                severity: "warning".into(),
+                title: "Cost budget exceeded".into(),
+                detail: format!(
+                    "Today's cost ¥{:.2} is above budget ¥{:.2}.",
+                    today_cost, budget
+                ),
+            });
+        }
+        if security_event_count > 0 {
+            alerts.push(DashboardAlert {
+                id: "security-events".into(),
+                kind: "security".into(),
+                severity: "warning".into(),
+                title: "Security events detected".into(),
+                detail: format!("{} security event(s) need review.", security_event_count),
+            });
+        }
 
         DashboardData {
             total_tasks: task_count,
             success_rate: 0.95,
             avg_latency_ms: 1250.0,
-            today_cost: 0.05,
+            today_cost,
             agent_count,
             active_channels: 3,
             uptime_hours: 12.5,
+            request_trend: vec![
+                TrendPoint {
+                    label: "Mon".into(),
+                    value: 18.0,
+                },
+                TrendPoint {
+                    label: "Tue".into(),
+                    value: 27.0,
+                },
+                TrendPoint {
+                    label: "Wed".into(),
+                    value: 21.0,
+                },
+                TrendPoint {
+                    label: "Thu".into(),
+                    value: 34.0,
+                },
+                TrendPoint {
+                    label: "Fri".into(),
+                    value: 30.0,
+                },
+                TrendPoint {
+                    label: "Sat".into(),
+                    value: 16.0,
+                },
+                TrendPoint {
+                    label: "Sun".into(),
+                    value: task_count.max(12) as f64,
+                },
+            ],
+            latency_trend: vec![
+                TrendPoint {
+                    label: "Mon".into(),
+                    value: 980.0,
+                },
+                TrendPoint {
+                    label: "Tue".into(),
+                    value: 1140.0,
+                },
+                TrendPoint {
+                    label: "Wed".into(),
+                    value: 1060.0,
+                },
+                TrendPoint {
+                    label: "Thu".into(),
+                    value: 1320.0,
+                },
+                TrendPoint {
+                    label: "Fri".into(),
+                    value: 1250.0,
+                },
+                TrendPoint {
+                    label: "Sat".into(),
+                    value: 910.0,
+                },
+                TrendPoint {
+                    label: "Sun".into(),
+                    value: 1250.0,
+                },
+            ],
+            alerts,
         }
     }
 

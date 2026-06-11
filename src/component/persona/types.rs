@@ -233,3 +233,198 @@ impl Persona {
         prompt
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_persona_parameters_default() {
+        let p = PersonaParameters::default();
+        assert!((p.temperature - 0.6).abs() < f64::EPSILON);
+        assert_eq!(p.style, "professional");
+        assert!((p.verbosity - 0.5).abs() < f64::EPSILON);
+        assert!((p.proactiveness - 0.3).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_prompt_layers_default() {
+        let pl = PromptLayers::default();
+        assert_eq!(pl.l1_core_identity, "You are a helpful AI assistant.");
+        assert!(pl.l2_skill_instructions.is_none());
+        assert!(pl.l3_format_template.is_none());
+        assert!(pl.l4_constraints.is_none());
+        assert!(pl.l5_conversation_style.is_none());
+    }
+
+    #[test]
+    fn test_persona_new() {
+        let p = Persona::new("test-id", "Test Persona");
+        assert_eq!(p.id, "test-id");
+        assert_eq!(p.name, "Test Persona");
+        assert!(p.core_principles.is_empty());
+        assert!(p.anti_patterns.is_empty());
+        assert_eq!(p.communication_style, "professional");
+        assert_eq!(p.parameters.temperature, 0.6);
+    }
+
+    #[test]
+    fn test_persona_build_system_prompt_core_identity_only() {
+        let p = Persona::new("simple", "Simple");
+        let prompt = p.build_system_prompt();
+        assert_eq!(prompt, "You are a helpful AI assistant.");
+    }
+
+    #[test]
+    fn test_persona_build_system_prompt_full() {
+        let p = Persona {
+            id: "full".into(),
+            name: "Full".into(),
+            core_principles: vec!["Be clear".into(), "Be concise".into()],
+            decision_framework: vec!["Analyze → Act".into()],
+            anti_patterns: vec!["Haste".into()],
+            parameters: PersonaParameters::default(),
+            prompt_layers: PromptLayers {
+                l1_core_identity: "You are a test persona.".into(),
+                l2_skill_instructions: Some("Think step by step.".into()),
+                l3_format_template: Some("Output as JSON.".into()),
+                l4_constraints: Some("Be safe.".into()),
+                l5_conversation_style: Some("Be professional.".into()),
+            },
+            communication_style: "professional".into(),
+        };
+        let prompt = p.build_system_prompt();
+        assert!(prompt.contains("You are a test persona."));
+        assert!(prompt.contains("Think step by step."));
+        assert!(prompt.contains("Output as JSON."));
+        assert!(prompt.contains("Be safe."));
+        assert!(prompt.contains("Be professional."));
+        assert!(prompt.contains("Core Principles:"));
+        assert!(prompt.contains("Avoid:"));
+        assert!(prompt.contains("Be clear"));
+        assert!(prompt.contains("Haste"));
+    }
+
+    #[test]
+    fn test_merge_strategy_label() {
+        assert_eq!(MergeStrategy::MajorityVote.label(), "majority_vote");
+        assert_eq!(MergeStrategy::WeightedAverage.label(), "weighted_average");
+        assert_eq!(MergeStrategy::Sequential.label(), "sequential");
+        assert_eq!(MergeStrategy::Debate.label(), "debate");
+    }
+
+    #[test]
+    fn test_composite_persona_default() {
+        let cp = CompositePersona::default();
+        assert!(cp.primary.is_empty());
+        assert!(cp.secondary.is_none());
+        assert!((cp.blend_ratio - 0.5).abs() < f32::EPSILON);
+        assert!(cp.persona_ids.is_empty());
+        assert_eq!(cp.merge_strategy, MergeStrategy::WeightedAverage);
+    }
+
+    #[test]
+    fn test_composite_persona_new() {
+        let cp = CompositePersona::new(
+            vec!["p1".into(), "p2".into()],
+            MergeStrategy::MajorityVote,
+        );
+        assert_eq!(cp.primary, "p1");
+        assert_eq!(cp.secondary, Some("p2".into()));
+        assert_eq!(cp.persona_ids.len(), 2);
+        assert_eq!(cp.merge_strategy, MergeStrategy::MajorityVote);
+    }
+
+    #[test]
+    fn test_merge_responses_empty() {
+        let result = merge_responses(&MergeStrategy::Sequential, &[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_merge_responses_sequential() {
+        let outputs = vec![
+            PersonaOutput { persona_id: "a".into(), response: "First".into(), confidence: 0.5 },
+            PersonaOutput { persona_id: "b".into(), response: "Second".into(), confidence: 0.8 },
+        ];
+        let result = merge_responses(&MergeStrategy::Sequential, &outputs);
+        assert_eq!(result, "First\n---\nSecond");
+    }
+
+    #[test]
+    fn test_merge_responses_majority_vote() {
+        let outputs = vec![
+            PersonaOutput { persona_id: "a".into(), response: "yes".into(), confidence: 0.5 },
+            PersonaOutput { persona_id: "b".into(), response: "yes".into(), confidence: 0.6 },
+            PersonaOutput { persona_id: "c".into(), response: "no".into(), confidence: 0.9 },
+        ];
+        let result = merge_responses(&MergeStrategy::MajorityVote, &outputs);
+        assert_eq!(result, "yes");
+    }
+
+    #[test]
+    fn test_merge_responses_weighted_average() {
+        let outputs = vec![
+            PersonaOutput { persona_id: "a".into(), response: "low".into(), confidence: 0.1 },
+            PersonaOutput { persona_id: "b".into(), response: "high".into(), confidence: 0.9 },
+        ];
+        let result = merge_responses(&MergeStrategy::WeightedAverage, &outputs);
+        assert_eq!(result, "high");
+    }
+
+    #[test]
+    fn test_merge_responses_debate() {
+        let outputs = vec![
+            PersonaOutput { persona_id: "p1".into(), response: "arg1".into(), confidence: 0.7 },
+        ];
+        let result = merge_responses(&MergeStrategy::Debate, &outputs);
+        assert!(result.contains("Debate Summary"));
+        assert!(result.contains("p1"));
+    }
+
+    #[test]
+    fn test_persona_parameters_serialize() {
+        let p = PersonaParameters::default();
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(json.contains("temperature"));
+        assert!(json.contains("style"));
+    }
+
+    #[test]
+    fn test_persona_parameters_deserialize() {
+        let json = r#"{"temperature":0.5,"style":"casual","verbosity":0.7,"proactiveness":0.4}"#;
+        let p: PersonaParameters = serde_json::from_str(json).unwrap();
+        assert!((p.temperature - 0.5).abs() < f64::EPSILON);
+        assert_eq!(p.style, "casual");
+    }
+
+    #[test]
+    fn test_composite_persona_serialize() {
+        let cp = CompositePersona::default();
+        let json = serde_json::to_string(&cp).unwrap();
+        assert!(json.contains("blend_ratio"));
+        assert!(json.contains("merge_strategy"));
+    }
+
+    #[test]
+    fn test_merge_majority_vote_empty() {
+        let result = merge_majority_vote(&[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_merge_weighted_average_zero_confidence() {
+        let outputs = vec![
+            PersonaOutput { persona_id: "a".into(), response: "r1".into(), confidence: 0.0 },
+            PersonaOutput { persona_id: "b".into(), response: "r2".into(), confidence: 0.0 },
+        ];
+        let result = merge_weighted_average(&outputs);
+        assert_eq!(result, "r1\n---\nr2");
+    }
+
+    #[test]
+    fn test_merge_debate_empty() {
+        let result = merge_debate(&[]);
+        assert!(result.is_empty());
+    }
+}

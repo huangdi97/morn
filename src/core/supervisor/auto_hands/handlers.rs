@@ -1,3 +1,4 @@
+//! 自动执行处理器 — 各类自动操作的执行逻辑
 use crate::core::event_bus::Event;
 use std::time::SystemTime;
 

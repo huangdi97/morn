@@ -105,6 +105,62 @@ impl Registry {
         Ok(())
     }
 
+    /// Creates and registers an empty component skeleton for later Studio configuration.
+    pub fn create_skeleton(
+        &mut self,
+        name: &str,
+        component_type: &str,
+    ) -> Result<Capability, String> {
+        let name = name.trim();
+        let component_type = component_type.trim().to_lowercase();
+        if name.is_empty() {
+            return Err("component skeleton name cannot be empty".to_string());
+        }
+        if component_type.is_empty() {
+            return Err("component skeleton type cannot be empty".to_string());
+        }
+
+        let slug = name
+            .to_lowercase()
+            .chars()
+            .map(|ch| if ch.is_alphanumeric() { ch } else { '-' })
+            .collect::<String>()
+            .split('-')
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("-");
+        let slug = if slug.is_empty() {
+            "component".to_string()
+        } else {
+            slug
+        };
+
+        let capability = Capability {
+            id: format!(
+                "{}-{}-{}",
+                component_type,
+                slug,
+                uuid::Uuid::new_v4().simple()
+            ),
+            version: "0.1.0".to_string(),
+            name: name.to_string(),
+            domain: component_type.clone(),
+            actions: Vec::new(),
+            description: format!("Empty {} component skeleton", component_type),
+            trust_score: 50.0,
+            total_calls: 0,
+            success_calls: 0,
+            avg_latency_ms: 0.0,
+            visibility: "private".to_string(),
+            owner_id: None,
+            team_id: None,
+            daily_quota: 0,
+        };
+
+        self.register_dynamic(capability.clone())?;
+        Ok(capability)
+    }
+
     /// Removes a capability by id and returns it when it existed.
     pub fn unregister(&mut self, id: &str) -> Option<Capability> {
         let removed = self.capabilities.remove(id);
@@ -330,6 +386,23 @@ mod tests {
         let err = result.expect_err("expected duplicate registration to fail");
         assert!(err.contains("cap-1"));
         assert!(err.contains("0.1.0"));
+    }
+
+    #[test]
+    fn test_create_skeleton_registers_empty_component() {
+        let mut registry = Registry::new(None, None);
+
+        let skeleton = registry
+            .create_skeleton("Draft Researcher", "Agent")
+            .unwrap();
+
+        assert_eq!(skeleton.name, "Draft Researcher");
+        assert_eq!(skeleton.domain, "agent");
+        assert!(skeleton.actions.is_empty());
+        assert_eq!(
+            registry.get(&skeleton.id).map(|cap| cap.name.as_str()),
+            Some("Draft Researcher")
+        );
     }
 
     #[test]

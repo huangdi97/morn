@@ -1,5 +1,5 @@
 //! approval — Manages approval requests, responses, and policy decisions.
-use crate::core::event_stream::{EventBus, EVENT_APPROVAL_REQUESTED, EVENT_APPROVAL_RESPONDED};
+use crate::core::event_bus::{SimpleEventBus, EVENT_APPROVAL_REQUESTED, EVENT_APPROVAL_RESPONDED};
 use crate::core::storage::Storage;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -73,12 +73,12 @@ pub struct WorkflowApproval {
 
 pub struct ApprovalManager {
     storage: Arc<Storage>,
-    event_bus: Option<Arc<EventBus>>,
+    event_bus: Option<Arc<SimpleEventBus>>,
 }
 
 impl ApprovalManager {
     /// Creates an approval manager backed by shared storage and an optional event bus.
-    pub fn new(storage: Arc<Storage>, event_bus: Option<Arc<EventBus>>) -> Self {
+    pub fn new(storage: Arc<Storage>, event_bus: Option<Arc<SimpleEventBus>>) -> Self {
         ApprovalManager { storage, event_bus }
     }
 
@@ -113,8 +113,7 @@ impl ApprovalManager {
         };
 
         if let Some(ref bus) = self.event_bus {
-            let _ = bus.publish_event(
-                &id,
+            bus.publish_event(
                 EVENT_APPROVAL_REQUESTED,
                 "approval",
                 serde_json::json!({
@@ -141,8 +140,7 @@ impl ApprovalManager {
             .update_approval_response(id, status_str, response_text.as_deref())?;
 
         if let Some(ref bus) = self.event_bus {
-            let _ = bus.publish_event(
-                id,
+            bus.publish_event(
                 EVENT_APPROVAL_RESPONDED,
                 "approval",
                 serde_json::json!({

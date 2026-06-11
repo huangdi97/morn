@@ -6,7 +6,6 @@ web/dist/
 *.swo
 tasks.md
 DESIGN.md
-tasks.md
 competitors_full_list.md
 fix_*.md
 p0-*.md
@@ -15,4 +14,3 @@ tasks-*.md
 browser-extension/
 GAP_ANALYSIS.md
 tasks-remaining.md
-tasks.md

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 
 interface BotListing {
   id: string;
@@ -36,7 +36,7 @@ export default function BotStore() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    invoke<BotListing[]>("list_bot_store").then(setBots).catch(() => {
+    api.listBotStore().then(setBots).catch(() => {
       setBots(hardcodedBots);
     });
   }, []);
@@ -49,7 +49,7 @@ export default function BotStore() {
 
   const handleInstall = (bot: BotListing) => {
     if (installed.has(bot.id)) return;
-    invoke("install_bot_from_store", { botId: bot.id, templateId: bot.template_id })
+    api.installBotFromStore(bot.id, bot.template_id)
       .then(() => setInstalled(prev => new Set(prev).add(bot.id)))
       .catch(console.error);
   };

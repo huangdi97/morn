@@ -3,14 +3,14 @@ use super::gateway::{PaymentError, PaymentGateway, PaymentStatus, PaymentUrl};
 
 #[derive(Debug)]
 pub struct StripePaymentGateway {
-    secret_key: String,
+    _secret_key: String,
 }
 
 impl StripePaymentGateway {
     pub fn from_env() -> Result<Self, PaymentError> {
-        let secret_key =
+        let _secret_key =
             std::env::var("STRIPE_SECRET_KEY").map_err(|_| PaymentError::GatewayNotConfigured)?;
-        Ok(Self { secret_key })
+        Ok(Self { _secret_key })
     }
 }
 
@@ -52,8 +52,8 @@ mod tests {
     #[test]
     fn constructor_does_not_panic() {
         let gw = StripePaymentGateway {
-            secret_key: "sk_test".into(),
+            _secret_key: "sk_test".into(),
         };
-        assert_eq!(gw.secret_key, "sk_test");
+        assert_eq!(gw._secret_key, "sk_test");
     }
 }

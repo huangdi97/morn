@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 
 type ComponentType = "tool" | "knowledge" | "skill" | "persona" | "memory" | "model";
 
@@ -28,7 +28,7 @@ export function ComponentEditor() {
 
   const loadComponents = async () => {
     try {
-      const list = await invoke<ComponentSummary[]>("list_components", { typeFilter: null });
+      const list = await api.listComponents(null) as ComponentSummary[];
       setComponents(list);
     } catch (e: any) {
       setError(e.toString());
@@ -45,8 +45,8 @@ export function ComponentEditor() {
     setDef({ name: c.name, type: c.component_type as ComponentType, config: "{}" });
     setEditingId(null);
     try {
-      const configJson = await invoke<string>("get_component", { id: c.id });
-      setDef({ name: c.name, type: c.component_type as ComponentType, config: configJson });
+      const detail = await api.getComponent(c.id);
+      setDef({ name: c.name, type: c.component_type as ComponentType, config: detail.config_json ?? "{}" });
       setEditingId(c.id);
     } catch {
       setDef({ name: c.name, type: c.component_type as ComponentType, config: "{}" });
@@ -57,18 +57,17 @@ export function ComponentEditor() {
     try {
       setError(null);
       if (editingId) {
-        await invoke<string>("update_component", {
-          id: editingId,
+        await api.updateComponent(editingId, {
           name: def.name,
           componentType: def.type,
           configJson: def.config,
         });
       } else {
-        const id = await invoke<string>("create_component", {
+        const id = await api.createComponent({
           name: def.name,
           componentType: def.type,
           configJson: def.config,
-        });
+        }) as string;
         setLastCreatedId(id);
       }
       setSaved(true);
@@ -85,7 +84,7 @@ export function ComponentEditor() {
   const handleDelete = async (id: string) => {
     try {
       setError(null);
-      await invoke("delete_component", { id });
+      await api.deleteComponent(id);
       if (selectedId === id) {
         setDef({ name: "", type: "tool", config: "{}" });
         setEditingId(null);

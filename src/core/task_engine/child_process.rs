@@ -1,3 +1,5 @@
+//! child_process — Spawns and manages long-running child process tasks.
+
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -73,12 +75,12 @@ impl ChildProcess {
             match child.try_wait() {
                 Ok(Some(_)) => {
                     let mut output = String::new();
-                    child
+                    let stdout = child
                         .stdout
                         .take()
-                        .expect("child process stdout should be piped")
-                        .read_to_string(&mut output)
-                        .ok();
+                        .ok_or_else(|| "child process stdout was not piped".to_string())?;
+                    let mut stdout = stdout;
+                    stdout.read_to_string(&mut output).ok();
                     return Ok(output);
                 }
                 Ok(None) => std::thread::sleep(Duration::from_millis(50)),

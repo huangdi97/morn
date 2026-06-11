@@ -91,11 +91,12 @@ mod tests {
 
     #[test]
     fn install_requires_approval() {
-        let result = install("/tmp/app.pkg");
+        let pkg_path = std::env::temp_dir().join("app.pkg");
+        let result = install(&pkg_path.to_string_lossy());
         assert!(result.success);
         assert_eq!(result.security_level, SecurityLevel::L2Local.as_str());
         assert!(result.approval_required);
-        assert!(result.data.contains("/tmp/app.pkg"));
+        assert!(result.data.contains(&*pkg_path.to_string_lossy()));
     }
 
     #[test]
