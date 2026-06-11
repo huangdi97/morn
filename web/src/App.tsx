@@ -1,17 +1,19 @@
 import { useState, useRef, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "./api";
 import { ComponentEditor } from "./studio/ComponentEditor";
 import { AgentBuilder } from "./studio/AgentBuilder";
 import { TestPanel } from "./studio/TestPanel";
 import { QuickActions } from "./QuickActions";
 import Topology from "./console/Topology";
 import SystemInfo from "./console/SystemInfo";
-import Dashboard from "./console/Dashboard";
+import AdminDashboard from "./console/AdminDashboard";
 import CostCenter from "./console/CostCenter";
 import Governance from "./console/Governance";
 import Security from "./console/Security";
 import Marketplace from "./console/Marketplace";
 import BotStore from "./store/BotStore";
+import { Settings } from "./Settings";
+import "./styles/base.css";
 
 type View = "workbench" | "studio" | "console" | "store";
 
@@ -40,6 +42,7 @@ function App() {
   const [theme, setTheme] = useState<string>(() => {
     return localStorage.getItem(THEME_KEY) || "dark";
   });
+  const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,7 +54,7 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
-    invoke("get_status").then((s: any) => {
+    api.getStatus().then((s: any) => {
       setStatus(`v${s.version} | ${s.turn_count} turns`);
     });
   }, []);
@@ -71,9 +74,9 @@ function App() {
     setInput("");
 
     if (text === "/clear") {
-      await invoke("clear_history");
+      await api.clearHistory();
       setMessages([]);
-      const s: any = await invoke("get_status");
+      const s: any = await api.getStatus();
       setStatus(`v${s.version} | ${s.turn_count} turns`);
       return;
     }
@@ -83,11 +86,11 @@ function App() {
     setIsTyping(true);
 
     try {
-      const response = await invoke<string>("send_message", { text });
+      const response = await api.sendMessage(text);
       const assistantMsg: Message = { role: "assistant", content: response, timestamp: Date.now() };
       setMessages((prev) => [...prev, assistantMsg]);
 
-      const s: any = await invoke("get_status");
+      const s: any = await api.getStatus();
       setStatus(`v${s.version} | ${s.turn_count} turns`);
     } catch (e: any) {
       const errorMsg: Message = {
@@ -102,9 +105,9 @@ function App() {
   };
 
   const clearHistory = async () => {
-    await invoke("clear_history");
+    await api.clearHistory();
     setMessages([]);
-    const s: any = await invoke("get_status");
+    const s: any = await api.getStatus();
     setStatus(`v${s.version} | ${s.turn_count} turns`);
   };
 
@@ -156,7 +159,7 @@ function App() {
         <button className={consoleTab === "market" ? "active" : ""} onClick={() => setConsoleTab("market")}>Marketplace</button>
       </nav>
       <div className="console-content">
-        {consoleTab === "dashboard" && <Dashboard />}
+        {consoleTab === "dashboard" && <AdminDashboard />}
         {consoleTab === "topology" && <Topology />}
         {consoleTab === "system" && <SystemInfo />}
         {consoleTab === "cost" && <CostCenter />}
@@ -177,6 +180,9 @@ function App() {
         </button>
         <button className="theme-toggle" onClick={toggleTheme}>
           {theme === "dark" ? "\u2600" : "\u263E"}
+        </button>
+        <button className="settings-btn" onClick={() => setShowSettings(true)}>
+          ⚙
         </button>
       </header>
 
@@ -236,6 +242,7 @@ function App() {
       {view === "studio" && renderStudio()}
       {view === "store" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}
       {view === "console" && renderConsole()}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

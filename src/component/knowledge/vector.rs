@@ -14,7 +14,7 @@ pub struct VectorKnowledge {
     _name: String,
     vectors: HashMap<String, Vec<f64>>,
     texts: HashMap<String, String>,
-    store: Option<sled::Db>,
+    _store: Option<sled::Db>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -32,7 +32,7 @@ impl VectorKnowledge {
             _name: name.to_string(),
             vectors: HashMap::new(),
             texts: HashMap::new(),
-            store: None,
+            _store: None,
         }
     }
 
@@ -84,7 +84,7 @@ impl VectorKnowledge {
             _name: snapshot.name,
             vectors: snapshot.vectors,
             texts: snapshot.texts,
-            store: Some(db),
+            _store: Some(db),
         })
     }
 
@@ -267,7 +267,7 @@ mod tests {
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].key, "doc3");
-        assert!(loaded.store.is_some());
+        assert!(loaded._store.is_some());
     }
 
     #[test]

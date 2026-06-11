@@ -1,3 +1,4 @@
+//! 数据流引擎 — 跨模块事件路由与数据传递
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -96,7 +97,7 @@ impl DataFlowLogger {
 
     pub fn recent_flows(&self, n: usize) -> Vec<&DataFlowRecord> {
         let mut sorted = self.records.iter().collect::<Vec<_>>();
-        sorted.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.timestamp));
         sorted.truncate(n);
         sorted
     }

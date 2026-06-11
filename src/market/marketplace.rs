@@ -1,6 +1,7 @@
 //! marketplace — Lists, installs, and manages marketplace capabilities.
 use crate::core::registry::{Capability, Registry};
 use crate::core::storage::Storage;
+use tracing;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ListingType {
@@ -159,7 +160,9 @@ impl Marketplace {
                 .flatten()
                 .is_none()
             {
-                let _ = self.storage.save_listing(&listing);
+                if let Err(e) = self.storage.save_listing(&listing) {
+                tracing::warn!("Failed to save listing: {}", e);
+            }
             }
         }
     }

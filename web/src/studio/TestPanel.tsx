@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 
 interface TestStep {
   name: string;
@@ -39,7 +39,7 @@ export function TestPanel() {
   const [editInput, setEditInput] = useState("");
 
   useEffect(() => {
-    invoke<ComponentType[]>("list_component_types").then(setTypes).catch(() => {});
+    api.listComponentTypes().then(setTypes).catch(() => {});
   }, []);
 
   const runTest = async () => {
@@ -51,11 +51,7 @@ export function TestPanel() {
     setEditingStep(null);
 
     try {
-      const res = await invoke<TestResult>("test_component", {
-        id: componentId,
-        input: input,
-        componentType: componentType,
-      });
+      const res = await api.testComponent(componentType, componentId, "", input) as TestResult;
       setResult(res);
     } catch (e: any) {
       setError(e.toString());
@@ -81,12 +77,7 @@ export function TestPanel() {
 
   const runEdit = async (idx: number) => {
     try {
-      const step = await invoke<TestStep>("test_component_rerun", {
-        id: componentId,
-        componentType: componentType,
-        stepIndex: idx,
-        newInput: editInput,
-      });
+      const step = await api.testComponentRerun(componentType, componentId, idx, editInput) as TestStep;
       if (result) {
         const newSteps = [...result.steps];
         newSteps[idx] = step;

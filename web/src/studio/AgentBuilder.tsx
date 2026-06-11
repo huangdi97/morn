@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 import { NodeCanvas } from "./NodeCanvas";
 
 interface AgentDef {
@@ -70,12 +70,12 @@ export function AgentBuilder() {
   const [presets, setPresets] = useState<PresetInfo[]>([]);
 
   useEffect(() => {
-    invoke<ComponentSummary[]>("list_components", { typeFilter: null }).then((list) => {
+    api.listComponents(null).then((list: ComponentSummary[]) => {
       setTools(list.filter((c) => c.component_type === "tool").map((c) => c.id));
       setKnowledge(list.filter((c) => c.component_type === "knowledge").map((c) => c.id));
       setSkills(list.filter((c) => c.component_type === "skill").map((c) => c.id));
     }).catch(() => {});
-    invoke<PresetInfo[]>("list_preset_personas").then(setPresets).catch(() => {});
+    api.listPresetPersonas().then(setPresets).catch(() => {});
   }, []);
 
   const toggleArray = (arr: string[], item: string): string[] => {
@@ -87,7 +87,7 @@ export function AgentBuilder() {
     setNlLoading(true);
     setError(null);
     try {
-      const result = await invoke<string>("create_agent_from_description", { nl: nlInput.trim() });
+      const result = await api.createAgentFromDescription(nlInput.trim()) as string;
       const parsed: AgentDef = JSON.parse(result);
       setDef(parsed);
       setStep(1);
@@ -113,7 +113,7 @@ export function AgentBuilder() {
 
   const handlePresetSelect = async (presetId: string) => {
     try {
-      const persona = await invoke<any>("get_preset_persona", { name: presetId });
+      const persona = await api.getPresetPersona(presetId);
       const simpleName = PRESET_TO_PERSONA[presetId] || "assistant";
       setDef({ ...def, name: persona.name, persona: simpleName });
     } catch (e: any) {
@@ -125,14 +125,7 @@ export function AgentBuilder() {
     try {
       setBuilding(true);
       setError(null);
-      const result = await invoke<{ agent_id: string }>("assemble_agent", {
-        name: def.name,
-        persona: def.persona,
-        model: def.model,
-        tools: def.tools,
-        knowledge: def.knowledge,
-        skills: def.skills,
-      });
+      const result = await api.assembleAgent(def) as { agent_id: string };
       setAgentId(result.agent_id);
       setStep(2);
     } catch (e: any) {
@@ -147,7 +140,7 @@ export function AgentBuilder() {
     try {
       setPublishing(true);
       setPublishMsg(null);
-      await invoke("publish_component", { id: agentId });
+      await api.publishComponent(agentId);
       setPublishMsg("Published to Workbench successfully");
     } catch (e: any) {
       setPublishMsg("Publish failed: " + e.toString());

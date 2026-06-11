@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 
 interface SecurityLog {
   timestamp: string;
@@ -15,7 +15,7 @@ export default function Security() {
   const [logs, setLogs] = useState<SecurityLog[]>([]);
 
   useEffect(() => {
-    invoke<any>("get_system_status").then((res) => {
+    api.getSystemStatus().then((res: any) => {
       if (res.dashboard?.constitution_status) {
         setConstitutionStatus(res.dashboard.constitution_status);
       }

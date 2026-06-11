@@ -8,6 +8,7 @@ use axum::Router;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex as AsyncMutex;
+use tower_http::cors::CorsLayer;
 
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 use crate::component::tool::get_tool_by_name;
@@ -231,11 +232,16 @@ pub async fn serve(state: ApiState) -> Result<(), String> {
     let app = Router::new()
         .route("/health", get(api_health_handler))
         .route("/chat", post(api_chat_handler))
-        .route("/ws", get(crate::channel::browser_ext::ws_handler))
         .route("/tools", get(api_tools_list_handler))
         .route("/tools/{name}/execute", post(api_tool_execute_handler))
         .route("/workflows", get(api_workflows_list_handler))
-        .route("/workflows/{id}", get(api_workflow_get_handler))
+        .route("/workflows/{id}", get(api_workflow_get_handler));
+
+    #[cfg(feature = "channels-full")]
+    let app = app.route("/ws", get(crate::channel::browser_ext::ws_handler));
+
+    let app = app
+        .layer(CorsLayer::permissive())
         .with_state(Arc::new(state));
 
     let addr = format!("0.0.0.0:{}", port);

@@ -75,7 +75,8 @@ impl TaskPool {
     }
 
     pub fn default_pool() -> Self {
-        TaskPool::new(TaskPoolConfig::default()).expect("default task pool config is valid")
+        TaskPool::new(TaskPoolConfig::default())
+            .unwrap_or_else(|e| panic!("default task pool config is valid: {}", e))
     }
 
     pub fn config(&self) -> &TaskPoolConfig {

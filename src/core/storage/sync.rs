@@ -66,6 +66,49 @@ impl Storage {
         Ok(events)
     }
 
+    pub fn get_sync_event(&self, id: &str) -> Result<Option<SyncEventRecord>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, entity_type, entity_id, action, data_json, timestamp, device_id, synced FROM sync_events WHERE id = ?1")
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            let synced_int: i32 = row.get(7).map_err(|e| e.to_string())?;
+            Ok(Some(SyncEventRecord {
+                id: row.get(0).map_err(|e| e.to_string())?,
+                entity_type: row.get(1).map_err(|e| e.to_string())?,
+                entity_id: row.get(2).map_err(|e| e.to_string())?,
+                action: row.get(3).map_err(|e| e.to_string())?,
+                data_json: row.get(4).map_err(|e| e.to_string())?,
+                timestamp: row.get(5).map_err(|e| e.to_string())?,
+                device_id: row.get(6).map_err(|e| e.to_string())?,
+                synced: synced_int != 0,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn insert_remote_sync_event(&self, event: &SyncEventRecord) -> Result<bool, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let changed = conn
+            .execute(
+                "INSERT OR IGNORE INTO sync_events (id, entity_type, entity_id, action, data_json, timestamp, device_id, synced)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1)",
+                params![
+                    event.id,
+                    event.entity_type,
+                    event.entity_id,
+                    event.action,
+                    event.data_json,
+                    event.timestamp,
+                    event.device_id
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(changed > 0)
+    }
+
     pub fn mark_event_synced(&self, id: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
@@ -73,6 +116,13 @@ impl Storage {
             params![id],
         )
         .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn mark_events_synced(&self, ids: &[String]) -> Result<(), String> {
+        for id in ids {
+            self.mark_event_synced(id)?;
+        }
         Ok(())
     }
 
@@ -178,5 +228,25 @@ mod tests {
         let conn = storage.conn.lock().unwrap();
         conn.query_row("SELECT COUNT(*) FROM sync_events", [], |row| row.get(0))
             .unwrap()
+    }
+
+    #[test]
+    fn remote_sync_event_insert_is_idempotent() {
+        let storage = Storage::new_in_memory().unwrap();
+        let event = SyncEventRecord {
+            id: "remote-event-1".to_string(),
+            entity_type: "state".to_string(),
+            entity_id: "settings.theme".to_string(),
+            action: "update".to_string(),
+            data_json: r#"{"value":"dark"}"#.to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            device_id: "remote-device".to_string(),
+            synced: true,
+        };
+
+        assert!(storage.insert_remote_sync_event(&event).unwrap());
+        assert!(!storage.insert_remote_sync_event(&event).unwrap());
+        assert!(storage.list_unsynced_events().unwrap().is_empty());
+        assert!(storage.get_sync_event("remote-event-1").unwrap().is_some());
     }
 }

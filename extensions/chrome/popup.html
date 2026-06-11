@@ -54,11 +54,15 @@
         <div class="connection-info">
           <div class="info-row">
             <span class="info-label">Server:</span>
-            <span class="info-value" id="serverAddress">ws://localhost:9876</span>
+            <span class="info-value" id="serverAddress">ws://localhost:3000/ws</span>
           </div>
           <div class="info-row">
             <span class="info-label">Status:</span>
             <span class="info-value" id="detailedStatus">Disconnected</span>
+          </div>
+          <div class="server-config">
+            <input type="text" id="serverInput" class="server-input" placeholder="ws://localhost:3000/ws" />
+            <button class="btn btn-primary btn-save" id="saveServerBtn">Save</button>
           </div>
         </div>
       </div>
@@ -75,6 +79,7 @@
     </div>
   </div>
 
+  <script src="config.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

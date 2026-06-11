@@ -23,13 +23,17 @@ pub use team_builder::*;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum CollaborationMode {
+    Debate,
     Chain,
     ManagerWorker,
     Broadcast,
     Voting,
+    RoundRobin,
     Routing,
     AgentAsTool,
     Blackboard,
+    Consensus,
+    Swarm,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -172,13 +176,17 @@ impl Orchestrator {
             .ok_or_else(|| format!("Team '{}' not found", team_id))?;
 
         let outputs = match team.mode {
+            CollaborationMode::Debate => self.run_debate(&team.members, input)?,
             CollaborationMode::Chain => self.run_chain(&team.members, input)?,
             CollaborationMode::ManagerWorker => self.run_manager_worker(&team.members, input)?,
             CollaborationMode::Broadcast => self.run_broadcast(&team.members, input)?,
             CollaborationMode::Voting => self.run_voting(&team.members, input)?,
+            CollaborationMode::RoundRobin => self.run_round_robin(&team.members, input)?,
             CollaborationMode::Routing => self.run_routing(&team.members, input)?,
             CollaborationMode::AgentAsTool => self.run_agent_as_tool(&team.members, input)?,
             CollaborationMode::Blackboard => self.run_blackboard(&team.members, input)?,
+            CollaborationMode::Consensus => self.run_consensus_mode(&team.members, input)?,
+            CollaborationMode::Swarm => self.run_swarm(&team.members, input)?,
         };
 
         let consensus_output = self.compute_consensus(&outputs, &team.consensus);

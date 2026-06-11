@@ -18,8 +18,8 @@ pub mod delegation;
 
 pub mod dual_llm;
 pub mod engine;
+pub mod error;
 pub mod event_bus;
-pub mod event_stream;
 pub mod feedback;
 pub mod intent_parser;
 pub mod kanban;
@@ -38,6 +38,7 @@ pub mod pipeline;
 pub mod privacy_gate;
 pub mod registry;
 pub mod repo_map;
+pub mod retry;
 pub mod scan_bind;
 pub mod search_launcher;
 pub mod security;

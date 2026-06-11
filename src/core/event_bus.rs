@@ -86,6 +86,8 @@ pub const EVENT_WORKFLOW_COMPLETED: &str = "workflow.completed";
 pub const EVENT_WORKFLOW_FAILED: &str = "workflow.failed";
 pub const EVENT_CHANNEL_CONNECTED: &str = "channel.connected";
 pub const EVENT_CHANNEL_DISCONNECTED: &str = "channel.disconnected";
+pub const EVENT_APPROVAL_REQUESTED: &str = "approval.requested";
+pub const EVENT_APPROVAL_RESPONDED: &str = "approval.responded";
 
 #[cfg(test)]
 mod tests {

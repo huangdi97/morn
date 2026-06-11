@@ -1,5 +1,6 @@
 //! storage — Provides SQLite-backed persistence for agents, tasks, settings, and sync data.
 use rusqlite::Connection;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
@@ -27,8 +28,23 @@ pub use tasks::*;
 pub use users::*;
 
 impl Storage {
+    /// Opens or creates the default persistent SQLite database under the OS data directory.
+    pub fn new() -> Result<Self, String> {
+        Self::with_path(default_database_path()?)
+    }
+
     /// Opens or creates a SQLite database at `path` and returns initialized storage.
-    pub fn new(path: &str) -> Result<Self, String> {
+    pub fn with_path(path: impl AsRef<Path>) -> Result<Self, String> {
+        if let Some(parent) = path.as_ref().parent() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                format!(
+                    "Failed to create storage directory {}: {}",
+                    parent.display(),
+                    e
+                )
+            })?;
+        }
+
         let conn = Connection::open(path).map_err(|e| e.to_string())?;
         let storage = Storage {
             conn: Arc::new(Mutex::new(conn)),
@@ -238,6 +254,14 @@ impl Storage {
         .map_err(|e| e.to_string())?;
         Ok(())
     }
+}
+
+fn default_database_path() -> Result<PathBuf, String> {
+    let data_dir = dirs::data_dir()
+        .or_else(dirs::home_dir)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("morn");
+    Ok(data_dir.join("morn.sqlite3"))
 }
 
 #[cfg(test)]

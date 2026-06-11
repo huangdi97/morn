@@ -6,6 +6,8 @@ pub mod fs_ops;
 pub mod perception;
 pub mod sys_ops;
 
+use std::collections::HashMap;
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum SecurityLevel {
     L1Sandbox,
@@ -20,6 +22,45 @@ impl SecurityLevel {
             SecurityLevel::L2Local => "local",
             SecurityLevel::L3System => "system",
         }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SecurityConfig {
+    pub default_level: SecurityLevel,
+    #[serde(default)]
+    pub per_agent_levels: HashMap<String, SecurityLevel>,
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        SecurityConfig {
+            default_level: SecurityLevel::L1Sandbox,
+            per_agent_levels: HashMap::new(),
+        }
+    }
+}
+
+impl SecurityConfig {
+    pub fn new(default_level: SecurityLevel) -> Self {
+        SecurityConfig {
+            default_level,
+            per_agent_levels: HashMap::new(),
+        }
+    }
+
+    pub fn level_for_agent(&self, agent_id: &str) -> &SecurityLevel {
+        self.per_agent_levels
+            .get(agent_id)
+            .unwrap_or(&self.default_level)
+    }
+
+    pub fn set_agent_level(&mut self, agent_id: impl Into<String>, level: SecurityLevel) {
+        self.per_agent_levels.insert(agent_id.into(), level);
+    }
+
+    pub fn approval_required_for_agent(&self, agent_id: &str) -> bool {
+        matches!(self.level_for_agent(agent_id), SecurityLevel::L3System)
     }
 }
 
@@ -61,5 +102,22 @@ mod tests {
         assert_eq!(result.data, "ok");
         assert_eq!(result.security_level, "sandbox");
         assert!(!result.approval_required);
+    }
+
+    #[test]
+    fn security_config_supports_per_agent_overrides() {
+        let mut config = SecurityConfig::new(SecurityLevel::L1Sandbox);
+        config.set_agent_level("desktop-agent", SecurityLevel::L3System);
+
+        assert_eq!(
+            config.level_for_agent("desktop-agent"),
+            &SecurityLevel::L3System
+        );
+        assert_eq!(
+            config.level_for_agent("unknown-agent"),
+            &SecurityLevel::L1Sandbox
+        );
+        assert!(config.approval_required_for_agent("desktop-agent"));
+        assert!(!config.approval_required_for_agent("unknown-agent"));
     }
 }

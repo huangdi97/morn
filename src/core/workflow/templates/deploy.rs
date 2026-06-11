@@ -197,3 +197,73 @@ impl WorkflowTemplate {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn product_launch_has_six_steps() {
+        let t = WorkflowTemplate::product_launch_template();
+        assert_eq!(t.id, "workflow-product-launch");
+        assert_eq!(t.name, "Product Launch");
+        assert_eq!(t.steps.len(), 6);
+    }
+
+    #[test]
+    fn product_launch_step_ids_in_order() {
+        let t = WorkflowTemplate::product_launch_template();
+        assert_eq!(t.steps[0].id, "market_research");
+        assert_eq!(t.steps[1].id, "positioning");
+        assert_eq!(t.steps[2].id, "launch_plan");
+        assert_eq!(t.steps[3].id, "materials");
+        assert_eq!(t.steps[4].id, "coordinate");
+        assert_eq!(t.steps[5].id, "launch");
+    }
+
+    #[test]
+    fn product_launch_approval_required_on_positioning_and_plan() {
+        let t = WorkflowTemplate::product_launch_template();
+        assert!(t.steps[1].approval_required);
+        assert!(t.steps[2].approval_required);
+    }
+
+    #[test]
+    fn product_launch_ends_with_human_approval() {
+        let t = WorkflowTemplate::product_launch_template();
+        assert!(matches!(t.steps[5].action, WorkflowAction::HumanApproval { .. }));
+        assert!(t.steps[5].approval_required);
+    }
+
+    #[test]
+    fn task_execution_has_six_steps() {
+        let t = WorkflowTemplate::task_execution_template();
+        assert_eq!(t.id, "workflow-task-execution");
+        assert_eq!(t.steps.len(), 6);
+    }
+
+    #[test]
+    fn task_execution_step_ids_are_ordered() {
+        let t = WorkflowTemplate::task_execution_template();
+        assert_eq!(t.steps[0].id, "understand");
+        assert_eq!(t.steps[1].id, "plan");
+        assert_eq!(t.steps[2].id, "execute");
+        assert_eq!(t.steps[3].id, "review");
+        assert_eq!(t.steps[4].id, "summarize");
+        assert_eq!(t.steps[5].id, "notify");
+    }
+
+    #[test]
+    fn task_execution_plan_step_requires_approval() {
+        let t = WorkflowTemplate::task_execution_template();
+        assert!(t.steps[1].approval_required);
+    }
+
+    #[test]
+    fn deploy_templates_have_non_empty_tags() {
+        for t in [WorkflowTemplate::product_launch_template(), WorkflowTemplate::task_execution_template()] {
+            assert!(!t.tags.is_empty());
+            assert!(t.estimated_duration_secs > 0);
+        }
+    }
+}

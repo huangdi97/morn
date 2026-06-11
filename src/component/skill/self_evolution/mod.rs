@@ -121,10 +121,14 @@ mod tests {
 
     fn with_error_log<T>(content: &str, test: impl FnOnce() -> T) -> T {
         let _guard = log_guard().lock().unwrap();
-        let path = SelfEvolutionSkill::error_log_path().expect("HOME should be set for tests");
+        let path = SelfEvolutionSkill::error_log_path()
+            .unwrap_or_else(|| panic!("HOME should be set for tests"));
         let original = fs::read(&path).ok();
 
-        fs::create_dir_all(path.parent().expect("error log should have parent")).unwrap();
+        let parent = path
+            .parent()
+            .unwrap_or_else(|| panic!("error log should have parent"));
+        fs::create_dir_all(parent).unwrap();
         fs::write(&path, content).unwrap();
 
         let result = test();

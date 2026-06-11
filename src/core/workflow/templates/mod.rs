@@ -24,3 +24,35 @@ impl WorkflowTemplate {
         Self::list_builtin().into_iter().find(|t| t.id == id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn list_builtin_returns_eight_templates() {
+        let templates = WorkflowTemplate::list_builtin();
+        assert_eq!(templates.len(), 8);
+    }
+
+    #[test]
+    fn get_by_id_finds_existing_template() {
+        let t = WorkflowTemplate::get_by_id("workflow-task-execution");
+        assert!(t.is_some());
+        assert_eq!(t.unwrap().id, "workflow-task-execution");
+    }
+
+    #[test]
+    fn get_by_id_returns_none_for_missing_id() {
+        let t = WorkflowTemplate::get_by_id("non-existent-id");
+        assert!(t.is_none());
+    }
+
+    #[test]
+    fn every_template_has_non_empty_id_and_category() {
+        for t in WorkflowTemplate::list_builtin() {
+            assert!(!t.id.is_empty(), "template id is empty");
+            assert!(!t.category.is_empty(), "template category is empty for id={}", t.id);
+        }
+    }
+}

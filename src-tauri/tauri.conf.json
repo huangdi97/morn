@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/v2/crates/tauri-cli/schema.json",
   "productName": "Morn",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.morn.desktop",
   "build": {
     "frontendDist": "../web/dist",

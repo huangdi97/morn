@@ -218,6 +218,41 @@ input:disabled + .slider {
   word-break: break-all;
 }
 
+/* --- Server Config --- */
+
+.server-config {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.server-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #3a3a5c;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.server-input:focus {
+  border-color: #6c63ff;
+}
+
+.server-input::placeholder {
+  color: #555;
+}
+
+.btn-save {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  font-size: 11px;
+}
+
 /* --- Actions --- */
 
 .actions {

@@ -4,7 +4,15 @@
   "version": "1.0",
   "description": "AI-powered browsing assistant powered by Morn",
   "permissions": ["activeTab", "storage", "scripting"],
-  "host_permissions": ["http://localhost:*/*", "ws://localhost:*/*"],
+  "host_permissions": [
+    "http://localhost:*/*",
+    "ws://localhost:*/*"
+  ],
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:*/*"
+    ]
+  },
   "action": { "default_popup": "popup.html", "default_title": "Morn" },
   "background": { "service_worker": "background.js" },
   "content_scripts": [{

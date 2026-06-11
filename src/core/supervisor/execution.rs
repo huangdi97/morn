@@ -13,6 +13,15 @@ pub enum ExecutionTier {
     Background,  // >30s: background -> notify on completion
 }
 
+pub fn classify_execution_level(decision_level: &str) -> Option<ExecutionTier> {
+    match decision_level {
+        "direct_answer" => Some(ExecutionTier::Direct),
+        "single_agent" => Some(ExecutionTier::Interactive),
+        "team" => Some(ExecutionTier::Background),
+        _ => None,
+    }
+}
+
 pub fn classify_execution_time(estimated_secs: u64) -> ExecutionTier {
     if estimated_secs < 3 {
         ExecutionTier::Direct
@@ -272,5 +281,22 @@ mod tests {
     fn classify_background_tier_over_30s() {
         assert_eq!(classify_execution_time(31), ExecutionTier::Background);
         assert_eq!(classify_execution_time(300), ExecutionTier::Background);
+    }
+
+    #[test]
+    fn classify_level_overrides_known_execution_strategies() {
+        assert_eq!(
+            classify_execution_level("direct_answer"),
+            Some(ExecutionTier::Direct)
+        );
+        assert_eq!(
+            classify_execution_level("single_agent"),
+            Some(ExecutionTier::Interactive)
+        );
+        assert_eq!(
+            classify_execution_level("team"),
+            Some(ExecutionTier::Background)
+        );
+        assert_eq!(classify_execution_level("workflow"), None);
     }
 }

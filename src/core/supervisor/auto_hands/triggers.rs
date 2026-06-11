@@ -1,3 +1,4 @@
+//! 自动执行触发器 — 条件/定时/事件三种触发方式
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]

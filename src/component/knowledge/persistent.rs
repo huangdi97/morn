@@ -280,3 +280,132 @@ impl Knowledge for SqliteKnowledge {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_static_knowledge_new_empty() {
+        let k = StaticKnowledge::new(HashMap::new());
+        assert_eq!(k.query("anything").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_static_knowledge_query_finds_matching() {
+        let mut data = HashMap::new();
+        data.insert("rust".into(), "systems language".into());
+        data.insert("python".into(), "scripting language".into());
+        let k = StaticKnowledge::new(data);
+        let results = k.query("rust").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].key, "rust");
+        assert_eq!(results[0].value, "systems language");
+    }
+
+    #[test]
+    fn test_static_knowledge_empty_query_returns_all() {
+        let mut data = HashMap::new();
+        data.insert("a".into(), "1".into());
+        data.insert("b".into(), "2".into());
+        let k = StaticKnowledge::new(data);
+        assert_eq!(k.query("").unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_static_knowledge_update_adds_items() {
+        let mut data = HashMap::new();
+        data.insert("k1".into(), "v1".into());
+        let mut k = StaticKnowledge::new(data);
+        k.update(vec![KnowledgeItem {
+            key: "k2".into(),
+            value: "v2".into(),
+            source: "test".into(),
+        }])
+        .unwrap();
+        let results = k.query("").unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_static_knowledge_component_impl() {
+        let mut k = StaticKnowledge::new(HashMap::new());
+        assert_eq!(k.id(), "knowledge-static");
+        assert_eq!(k.type_name(), "knowledge");
+        assert!(k.init().is_ok());
+        assert!(k.run().is_ok());
+        assert!(k.pause().is_ok());
+        assert!(k.stop().is_ok());
+        assert_eq!(k.health_check(), HealthStatus::Healthy);
+    }
+
+    #[test]
+    fn test_static_knowledge_io_ports() {
+        let k = StaticKnowledge::new(HashMap::new());
+        let ports = k.ports();
+        assert_eq!(ports.len(), 2);
+        assert_eq!(ports[0].id, "query");
+        assert_eq!(ports[1].id, "result");
+    }
+
+    #[test]
+    fn test_static_knowledge_secure_permissions() {
+        let k = StaticKnowledge::new(HashMap::new());
+        assert!(k.required_permissions().is_empty());
+    }
+
+    #[test]
+    fn test_file_knowledge_new() {
+        let k = FileKnowledge::new("/tmp/test.json");
+        assert!(k.query("").unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_file_knowledge_query_and_update() {
+        let mut k = FileKnowledge::new("/tmp/test.json");
+        k.update(vec![KnowledgeItem {
+            key: "k".into(),
+            value: "v".into(),
+            source: "test".into(),
+        }])
+        .unwrap();
+        let results = k.query("k").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].source, "/tmp/test.json");
+    }
+
+    #[test]
+    fn test_file_knowledge_component_impl() {
+        let mut k = FileKnowledge::new("/tmp/test.json");
+        assert_eq!(k.id(), "knowledge-file");
+        assert!(k.init().is_ok());
+        assert!(k.run().is_ok());
+    }
+
+    #[test]
+    fn test_file_knowledge_permissions() {
+        let k = FileKnowledge::new("/tmp/test.json");
+        assert!(k.required_permissions().contains(&Permission::ReadFile));
+    }
+
+    #[test]
+    fn test_sqlite_knowledge_new() {
+        let k = SqliteKnowledge::new(None, "test_table");
+        assert_eq!(k.id(), "knowledge-sqlite");
+        assert!(k.query("").unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_sqlite_knowledge_update() {
+        let mut k = SqliteKnowledge::new(None, "test_table");
+        assert!(k.update(vec![]).is_ok());
+    }
+
+    #[test]
+    fn test_sqlite_knowledge_component_impl() {
+        let mut k = SqliteKnowledge::new(None, "test_table");
+        assert!(k.init().is_ok());
+        assert!(k.run().is_ok());
+        assert_eq!(k.health_check(), HealthStatus::Healthy);
+    }
+}

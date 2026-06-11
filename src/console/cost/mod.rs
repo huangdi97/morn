@@ -3,6 +3,7 @@
 pub mod budget;
 pub mod report;
 
+pub use budget::BudgetDecision;
 pub use report::{CostBreakdown, CostReport, DailyCost, MonthlyCost};
 
 /// 成本中心 — 管理预算、通知和成本汇总。
@@ -120,6 +121,35 @@ mod tests {
         center.check_and_act(2.0).unwrap();
 
         assert_eq!(center.summary()["notification_count"], 1);
+    }
+
+    #[test]
+    fn check_budget_can_downgrade_model_when_over_budget() {
+        let mut center = CostCenter::new(1.0);
+        center.reset();
+        center.set_budget_action("downgrade");
+
+        let decision = center.check_budget(2.0).unwrap();
+
+        assert_eq!(
+            decision,
+            BudgetDecision::DowngradeModel {
+                from: "premium".to_string(),
+                to: "economy".to_string(),
+                reason: "budget exceeded: total cost 2.00 is above budget 1.00".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn check_budget_can_pause_workflow_when_over_budget() {
+        let mut center = CostCenter::new(1.0);
+        center.reset();
+        center.set_budget_action("pause");
+
+        let decision = center.check_budget(2.0).unwrap();
+
+        assert!(matches!(decision, BudgetDecision::PauseWorkflow { .. }));
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 
 interface ApiKeyInfo {
   id: string;
@@ -23,7 +23,7 @@ export default function Governance() {
   const [threshold, setThreshold] = useState(50);
 
   useEffect(() => {
-    invoke<any>("get_system_status").then((res) => {
+    api.getSystemStatus().then((res: any) => {
       if (res.dashboard?.api_keys) {
         setKeys(res.dashboard.api_keys);
       }

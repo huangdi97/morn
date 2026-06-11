@@ -1,5 +1,7 @@
+//! 人格组合器 — 多组人格特征融合与混合人格生成
 use super::Persona;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct CombinedPersona {
     pub base: Persona,
@@ -8,6 +10,7 @@ pub struct CombinedPersona {
 }
 
 impl CombinedPersona {
+    #[allow(dead_code)]
     pub fn new(base: Persona) -> Self {
         CombinedPersona {
             base,
@@ -16,6 +19,7 @@ impl CombinedPersona {
         }
     }
 
+    #[allow(dead_code)]
     pub fn combine(&mut self, other: &Persona, ratio: f64) {
         self.blend_ratio = ratio.clamp(0.0, 1.0);
         self.traits.push(other.name.clone());
@@ -29,12 +33,14 @@ impl CombinedPersona {
         }
     }
 
+    #[allow(dead_code)]
     pub fn to_persona(&self) -> Persona {
         let mut persona = self.base.clone();
         persona.name = format!("{} (blended)", persona.name);
         persona
     }
 
+    #[allow(dead_code)]
     pub fn blended_traits(&self) -> &[String] {
         &self.traits
     }

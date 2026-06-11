@@ -2,6 +2,7 @@
 pub mod local_engine;
 pub mod providers;
 
+use crate::config::ModelConfig as AppModelConfig;
 use local_engine::LocalEngine;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,6 +39,24 @@ pub struct ModelSpec {
     pub is_available: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfiguredModel {
+    pub provider: String,
+    pub name: String,
+    pub base_url: String,
+    pub api_key: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoutedModel {
+    pub provider: String,
+    pub name: String,
+    pub base_url: String,
+    pub api_key: Option<String>,
+    pub api_key_header: String,
+    pub model_type: ModelType,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModelType {
     Cloud,
@@ -45,13 +64,48 @@ pub enum ModelType {
     FallbackTiny,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Default)]
+pub enum HybridStrategy {
+    #[default]
+    Auto,
+    LocalFirst,
+    CloudOnly,
+    CostSave,
+}
+
+impl HybridStrategy {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value.trim().to_ascii_lowercase().replace('-', "_").as_str() {
+            "auto" => Ok(HybridStrategy::Auto),
+            "local_first" | "localfirst" => Ok(HybridStrategy::LocalFirst),
+            "cloud_only" | "cloudonly" => Ok(HybridStrategy::CloudOnly),
+            "cost_save" | "costsave" => Ok(HybridStrategy::CostSave),
+            other => Err(format!("unknown hybrid strategy: {}", other)),
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+struct ProviderCatalogEntry {
+    name: String,
+    endpoint: String,
+    api_key_header: String,
+    models: Vec<String>,
+    api_key: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ModelRouter {
     mode: RouterMode,
     local_engine: LocalEngine,
+    default_model: Option<ConfiguredModel>,
+    providers: Vec<ProviderCatalogEntry>,
     cloud_models: Vec<ModelSpec>,
     local_models: Vec<ModelSpec>,
     fallback_models: Vec<ModelSpec>,
+    hybrid_strategy: HybridStrategy,
     hybrid_threshold: usize,
     gguf_discovered: bool,
 }
@@ -61,9 +115,12 @@ impl ModelRouter {
         let mut router = ModelRouter {
             mode: RouterMode::CloudFirst,
             local_engine: LocalEngine::new(),
+            default_model: None,
+            providers: default_provider_catalog(),
             cloud_models: Vec::new(),
             local_models: Vec::new(),
             fallback_models: Vec::new(),
+            hybrid_strategy: HybridStrategy::Auto,
             hybrid_threshold: 500,
             gguf_discovered: false,
         };
@@ -71,15 +128,86 @@ impl ModelRouter {
         router
     }
 
+    pub fn with_default_model(
+        provider: &str,
+        name: &str,
+        base_url: &str,
+        api_key: Option<String>,
+    ) -> Self {
+        let mut router = Self::new();
+        router.set_default_model(provider, name, base_url, api_key);
+        router
+    }
+
+    pub fn from_model_config(config: &AppModelConfig) -> Self {
+        let mut router = Self::new();
+        router.apply_model_config(config);
+        router
+    }
+
+    pub fn apply_model_config(&mut self, config: &AppModelConfig) {
+        self.merge_custom_providers(config);
+        self.hybrid_threshold = config.hybrid.complexity_threshold;
+        self.hybrid_strategy = HybridStrategy::parse(&config.hybrid.strategy).unwrap_or_default();
+
+        let api_key = config.api_key.clone().or_else(|| {
+            self.find_provider(&config.provider)
+                .and_then(|provider| provider.api_key.clone())
+        });
+        let base_url = config
+            .providers
+            .get(&config.provider)
+            .map(|provider| provider.base_url.clone())
+            .filter(|base_url| !base_url.trim().is_empty())
+            .unwrap_or_else(|| config.base_url.clone());
+
+        self.set_default_model(&config.provider, &config.name, &base_url, api_key);
+    }
+
+    pub fn set_default_model(
+        &mut self,
+        provider: &str,
+        name: &str,
+        base_url: &str,
+        api_key: Option<String>,
+    ) {
+        let configured = ConfiguredModel {
+            provider: provider.to_string(),
+            name: name.to_string(),
+            base_url: base_url.to_string(),
+            api_key,
+        };
+
+        if !self
+            .cloud_models
+            .iter()
+            .any(|model| model.provider == configured.provider && model.id == configured.name)
+        {
+            self.cloud_models.push(ModelSpec {
+                id: configured.name.clone(),
+                name: configured.name.clone(),
+                provider: configured.provider.clone(),
+                model_type: ModelType::Cloud,
+                capabilities: vec!["chat".to_string(), "reasoning".to_string()],
+                cost_per_1k_tokens: 0.0,
+                is_available: true,
+            });
+        }
+
+        self.default_model = Some(configured);
+    }
+
+    pub fn default_model(&self) -> Option<&ConfiguredModel> {
+        self.default_model.as_ref()
+    }
+
     fn init_default_models(&mut self) {
-        for p in providers::PROVIDERS {
+        for p in self.providers.clone() {
             #[cfg(feature = "providers-full")]
             {
-                for model_id in p.models {
-                    let provider_name = p.name;
-                    let is_local = provider_name == "ollama"
-                        || provider_name == "lm_studio"
-                        || provider_name == "local";
+                for model_id in &p.models {
+                    let provider_name = p.name.as_str();
+                    let is_local = is_local_provider(provider_name);
                     let model_type = if is_local {
                         ModelType::LocalGGUF
                     } else if provider_name == "builtin" {
@@ -88,8 +216,8 @@ impl ModelRouter {
                         ModelType::Cloud
                     };
                     let spec = ModelSpec {
-                        id: model_id.to_string(),
-                        name: model_id.to_string(),
+                        id: model_id.clone(),
+                        name: model_id.clone(),
                         provider: provider_name.to_string(),
                         model_type,
                         capabilities: vec!["chat".to_string(), "reasoning".to_string()],
@@ -105,7 +233,7 @@ impl ModelRouter {
             }
             #[cfg(not(feature = "providers-full"))]
             {
-                let _ = p;
+                let _ = &p;
             }
         }
 
@@ -175,18 +303,25 @@ impl ModelRouter {
         self.mode = mode;
     }
 
-    pub fn route(&self, prompt: &str) -> Result<String, String> {
-        match self.mode {
-            RouterMode::CloudFirst => RouterMode::CloudFirst.route(prompt),
-            RouterMode::LocalOnly => self.local_engine.inference(prompt),
-            RouterMode::Hybrid => {
-                if prompt.len() < self.hybrid_threshold && self.local_engine.supports_inference() {
-                    self.local_engine.inference(prompt)
-                } else {
-                    RouterMode::CloudFirst.route(prompt)
-                }
+    pub fn route(&self, prompt: &str) -> Result<RoutedModel, String> {
+        let selected = self.select_model(prompt, &["chat"])?;
+
+        if selected.model_type == ModelType::Cloud {
+            if let Some(default_model) = &self.default_model {
+                return Ok(RoutedModel {
+                    provider: default_model.provider.clone(),
+                    name: default_model.name.clone(),
+                    base_url: default_model.base_url.clone(),
+                    api_key: default_model.api_key.clone(),
+                    api_key_header: self
+                        .get_provider_api_key_header(&default_model.provider)
+                        .unwrap_or_else(|| "Authorization".to_string()),
+                    model_type: ModelType::Cloud,
+                });
             }
         }
+
+        Ok(self.route_from_spec(selected))
     }
 
     pub fn available_models(&self) -> Vec<&ModelSpec> {
@@ -245,20 +380,31 @@ impl ModelRouter {
     }
 
     fn select_hybrid(&self, prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, String> {
-        let is_complex = prompt.len() > self.hybrid_threshold
-            || prompt.contains("analyze")
-            || prompt.contains("compare")
-            || prompt.contains("explain")
-            || prompt.contains("write")
-            || prompt.contains("code")
-            || prompt.contains("generate");
+        let local_available = self.has_available_local_model(capabilities);
 
-        if is_complex {
-            self.select_cloud(prompt, capabilities)
-        } else if cfg!(feature = "local-llm") && !self.local_models.is_empty() {
-            self.select_local(capabilities)
-        } else {
-            self.select_cloud(prompt, capabilities)
+        match self.hybrid_strategy {
+            HybridStrategy::Auto => {
+                if estimate_complexity(prompt) > self.hybrid_threshold && local_available {
+                    self.select_local(capabilities)
+                } else {
+                    self.select_cloud(prompt, capabilities)
+                }
+            }
+            HybridStrategy::LocalFirst => {
+                if local_available {
+                    self.select_local(capabilities)
+                } else {
+                    self.select_cloud(prompt, capabilities)
+                }
+            }
+            HybridStrategy::CloudOnly => self.select_cloud(prompt, capabilities),
+            HybridStrategy::CostSave => {
+                if self.estimate_cloud_cost(prompt, capabilities) > 0.01 && local_available {
+                    self.select_local(capabilities)
+                } else {
+                    self.select_cloud(prompt, capabilities)
+                }
+            }
         }
     }
 
@@ -329,20 +475,123 @@ impl ModelRouter {
         chain
     }
 
+    pub fn fallback_routes_for(&self, current: &RoutedModel) -> Vec<RoutedModel> {
+        self.get_fallback_chain()
+            .into_iter()
+            .map(|spec| self.route_from_spec(spec))
+            .filter(|route| {
+                route.provider != current.provider
+                    || route.name != current.name
+                    || route.base_url != current.base_url
+            })
+            .collect()
+    }
+
     pub fn set_hybrid_threshold(&mut self, tokens: usize) {
         self.hybrid_threshold = tokens;
     }
 
-    pub fn get_provider_endpoint(&self, provider: &str) -> Option<&'static str> {
-        providers::get_provider(provider).map(|p| p.endpoint)
+    pub fn set_hybrid_strategy(&mut self, strategy: HybridStrategy) {
+        self.hybrid_strategy = strategy;
     }
 
-    pub fn get_provider_api_key_header(&self, provider: &str) -> Option<&'static str> {
-        providers::get_provider(provider).map(|p| p.api_key_header)
+    pub fn hybrid_strategy(&self) -> HybridStrategy {
+        self.hybrid_strategy
     }
 
-    pub fn get_provider_models(&self, provider: &str) -> Option<&'static [&'static str]> {
-        providers::get_provider(provider).map(|p| p.models)
+    pub fn get_provider_endpoint(&self, provider: &str) -> Option<String> {
+        self.find_provider(provider)
+            .map(|provider| provider.endpoint.clone())
+    }
+
+    pub fn get_provider_api_key_header(&self, provider: &str) -> Option<String> {
+        self.find_provider(provider)
+            .map(|provider| provider.api_key_header.clone())
+    }
+
+    pub fn get_provider_models(&self, provider: &str) -> Option<Vec<String>> {
+        self.find_provider(provider)
+            .map(|provider| provider.models.clone())
+    }
+
+    fn route_from_spec(&self, spec: &ModelSpec) -> RoutedModel {
+        let provider = self.find_provider(&spec.provider);
+        let base_url = provider
+            .map(|provider| provider.endpoint.clone())
+            .unwrap_or_else(|| endpoint_from_provider(&spec.provider));
+
+        RoutedModel {
+            provider: spec.provider.clone(),
+            name: spec.id.clone(),
+            base_url,
+            api_key: provider.and_then(|provider| provider.api_key.clone()),
+            api_key_header: provider
+                .map(|provider| provider.api_key_header.clone())
+                .unwrap_or_else(|| "Authorization".to_string()),
+            model_type: spec.model_type,
+        }
+    }
+
+    fn merge_custom_providers(&mut self, config: &AppModelConfig) {
+        for (name, provider) in &config.providers {
+            let entry = ProviderCatalogEntry {
+                name: name.clone(),
+                endpoint: provider.base_url.clone(),
+                api_key_header: provider.api_key_header.clone(),
+                models: provider.models.clone(),
+                api_key: provider.api_key.clone(),
+            };
+
+            if let Some(existing) = self
+                .providers
+                .iter_mut()
+                .find(|existing| existing.name == entry.name)
+            {
+                *existing = entry.clone();
+            } else {
+                self.providers.push(entry.clone());
+            }
+
+            for model_id in &entry.models {
+                if self
+                    .cloud_models
+                    .iter()
+                    .any(|model| model.provider == entry.name && model.id == *model_id)
+                {
+                    continue;
+                }
+
+                self.cloud_models.push(ModelSpec {
+                    id: model_id.clone(),
+                    name: model_id.clone(),
+                    provider: entry.name.clone(),
+                    model_type: ModelType::Cloud,
+                    capabilities: vec!["chat".to_string(), "reasoning".to_string()],
+                    cost_per_1k_tokens: 0.01,
+                    is_available: true,
+                });
+            }
+        }
+    }
+
+    fn find_provider(&self, provider: &str) -> Option<&ProviderCatalogEntry> {
+        self.providers.iter().find(|p| p.name == provider)
+    }
+
+    fn has_available_local_model(&self, capabilities: &[&str]) -> bool {
+        self.local_models
+            .iter()
+            .any(|m| m.is_available && has_all_capabilities(m, capabilities))
+    }
+
+    fn estimate_cloud_cost(&self, prompt: &str, capabilities: &[&str]) -> f64 {
+        let tokens = ((prompt.len() as f64) / 4.0).ceil().max(1.0);
+        self.cloud_models
+            .iter()
+            .filter(|m| m.is_available && has_all_capabilities(m, capabilities))
+            .map(|m| (tokens / 1000.0) * m.cost_per_1k_tokens)
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .unwrap_or(0.0)
     }
 }
 
@@ -356,6 +605,50 @@ fn has_all_capabilities(model: &ModelSpec, required: &[&str]) -> bool {
     required
         .iter()
         .all(|cap| model.capabilities.iter().any(|c| c == cap))
+}
+
+fn default_provider_catalog() -> Vec<ProviderCatalogEntry> {
+    providers::PROVIDERS
+        .iter()
+        .map(|provider| ProviderCatalogEntry {
+            name: provider.name.to_string(),
+            endpoint: provider.endpoint.to_string(),
+            api_key_header: provider.api_key_header.to_string(),
+            models: provider
+                .models
+                .iter()
+                .map(|model| model.to_string())
+                .collect(),
+            api_key: None,
+        })
+        .collect()
+}
+
+fn is_local_provider(provider: &str) -> bool {
+    provider == "ollama" || provider == "lm_studio" || provider == "local"
+}
+
+fn estimate_complexity(prompt: &str) -> usize {
+    let lower = prompt.to_ascii_lowercase();
+    let keyword_score = [
+        "analyze", "compare", "explain", "write", "code", "generate", "design", "plan",
+    ]
+    .iter()
+    .filter(|keyword| lower.contains(**keyword))
+    .count()
+        * 100;
+
+    prompt.len() + keyword_score
+}
+
+fn endpoint_from_provider(provider: &str) -> String {
+    if provider.starts_with("http://") || provider.starts_with("https://") {
+        provider.to_string()
+    } else if provider.contains('.') {
+        format!("https://{}", provider)
+    } else {
+        String::new()
+    }
 }
 
 #[cfg(test)]

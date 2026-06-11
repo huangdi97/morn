@@ -10,6 +10,7 @@ mod types;
 mod workflow_approvals;
 
 pub use auto_hands::*;
+pub use decision::{parse_with_llm, Intent};
 pub use guided_builder::*;
 pub use learning::*;
 pub use types::*;
@@ -19,6 +20,7 @@ use crate::core::approval::WorkflowApproval;
 pub(crate) use crate::core::dual_llm::{DualLlmGuard, DualLlmLog};
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::memory::{MemoryHub, MemoryOrchestrator};
+use crate::core::model_router::ModelRouter;
 use crate::core::orchestrator::TeamDef;
 use crate::core::security::AuditLog;
 use crate::core::storage::Storage;
@@ -47,6 +49,7 @@ pub struct Supervisor {
     pub audit_log: AuditLog,
     trust_scorer: Option<TrustScorer>,
     agent_pool: AgentPool,
+    model_router: ModelRouter,
     _planner: Option<Planner>,
     _scheduler: Option<Scheduler>,
 }
@@ -75,9 +78,16 @@ impl Supervisor {
             audit_log: AuditLog::new(),
             trust_scorer: Some(TrustScorer::new()),
             agent_pool: AgentPool::new(PoolConfig::default()),
+            model_router: ModelRouter::new(),
             _planner: None,
             _scheduler: None,
         }
+    }
+
+    /// Creates a supervisor that uses the provided model router for chat routing.
+    pub fn with_model_router(mut self, router: ModelRouter) -> Self {
+        self.model_router = router;
+        self
     }
 
     /// Attaches a user id and team list to the supervisor and returns the updated instance.
@@ -123,6 +133,14 @@ impl Supervisor {
 
     pub fn agent_pool(&self) -> &AgentPool {
         &self.agent_pool
+    }
+
+    pub fn model_router(&self) -> &ModelRouter {
+        &self.model_router
+    }
+
+    pub fn model_router_mut(&mut self) -> &mut ModelRouter {
+        &mut self.model_router
     }
 
     /// Sets the COO execution mode that controls approval and automation behavior.

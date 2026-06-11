@@ -1,5 +1,7 @@
 //! local_engine — Scans and manages local GGUF models for on-device inference.
 
+use serde::Deserialize;
+
 #[derive(Debug, Clone)]
 pub struct LocalEngine {
     pub models: Vec<LocalModel>,
@@ -57,6 +59,105 @@ impl LocalEngine {
             Err(String::from_utf8_lossy(&output.stderr).to_string())
         }
     }
+
+    #[cfg(feature = "channels-full")]
+    pub fn inference_ollama(&self, prompt: &str, model: &str) -> Result<String, String> {
+        let payload = serde_json::json!({
+            "model": model,
+            "prompt": prompt,
+            "stream": false,
+        });
+
+        let response = reqwest::blocking::Client::new()
+            .post("http://localhost:11434/api/generate")
+            .json(&payload)
+            .send()
+            .map_err(|e| format!("Ollama request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+            return Err(format!("Ollama API error {}: {}", status, body));
+        }
+
+        let body: OllamaGenerateResponse = response
+            .json()
+            .map_err(|e| format!("Ollama JSON parse error: {}", e))?;
+
+        if let Some(error) = body.error {
+            return Err(format!("Ollama API error: {}", error));
+        }
+
+        Ok(body.response.unwrap_or_default())
+    }
+
+    #[cfg(not(feature = "channels-full"))]
+    pub fn inference_ollama(&self, _prompt: &str, _model: &str) -> Result<String, String> {
+        Err("Ollama HTTP inference requires the channels-full feature".to_string())
+    }
+
+    #[cfg(feature = "channels-full")]
+    pub fn inference_lm_studio(&self, prompt: &str) -> Result<String, String> {
+        let payload = serde_json::json!({
+            "model": "local-model",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            "stream": false,
+        });
+
+        let response = reqwest::blocking::Client::new()
+            .post("http://localhost:1234/v1/chat/completions")
+            .json(&payload)
+            .send()
+            .map_err(|e| format!("LM Studio request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+            return Err(format!("LM Studio API error {}: {}", status, body));
+        }
+
+        let body: LmStudioChatResponse = response
+            .json()
+            .map_err(|e| format!("LM Studio JSON parse error: {}", e))?;
+
+        Ok(body
+            .choices
+            .into_iter()
+            .next()
+            .map(|choice| choice.message.content)
+            .unwrap_or_default())
+    }
+
+    #[cfg(not(feature = "channels-full"))]
+    pub fn inference_lm_studio(&self, _prompt: &str) -> Result<String, String> {
+        Err("LM Studio HTTP inference requires the channels-full feature".to_string())
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaGenerateResponse {
+    response: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LmStudioChatResponse {
+    choices: Vec<LmStudioChoice>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LmStudioChoice {
+    message: LmStudioMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct LmStudioMessage {
+    content: String,
 }
 
 impl Default for LocalEngine {

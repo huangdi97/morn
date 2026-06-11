@@ -19,6 +19,7 @@ pub struct GuidedBuildResponse {
     pub step: GuidedBuildStep,
     pub prompt: String,
     pub suggestions: Vec<String>,
+    pub actions: Vec<String>,
     pub done: bool,
 }
 
@@ -95,8 +96,17 @@ impl GuidedBuilder {
             step: self.step.clone(),
             prompt,
             suggestions,
+            actions: Self::default_actions(),
             done: self.step == GuidedBuildStep::Complete,
         }
+    }
+
+    fn default_actions() -> Vec<String> {
+        vec![
+            "直接保存".to_string(),
+            "修改".to_string(),
+            "预览详情".to_string(),
+        ]
     }
 
     fn record_selection(&mut self, input: &str) {
@@ -146,6 +156,7 @@ mod tests {
         let response = builder.advance("release safely");
 
         assert_eq!(response.step, GuidedBuildStep::Team);
+        assert_eq!(response.actions, vec!["直接保存", "修改", "预览详情"]);
         assert_eq!(
             builder.selections().get("goal").map(String::as_str),
             Some("release safely")

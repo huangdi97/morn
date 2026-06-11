@@ -4,6 +4,7 @@ use crate::core::event_bus::{
     EVENT_SUPERVISOR_PLAN_EXECUTING, EVENT_TASK_COMPLETED, EVENT_TASK_FAILED,
 };
 use crate::core::supervisor::{SubTaskDef, SubTaskResult, TaskPlan, TaskResult};
+use tracing;
 
 impl TaskEngine {
     pub fn run_plan(
@@ -25,7 +26,9 @@ impl TaskEngine {
         let result = execute_fn(plan)?;
 
         if let Some(ref storage) = self.storage {
-            let _ = storage.update_task_status(&plan.task_id, "completed");
+            if let Err(e) = storage.update_task_status(&plan.task_id, "completed") {
+                tracing::warn!("Failed to update task status: {}", e);
+            }
         }
 
         if let Some(ref bus) = self.event_bus {
@@ -58,7 +61,7 @@ impl TaskEngine {
                 Ok(output) => Some(output.clone()),
                 Err(e) => Some(e.clone()),
             };
-            let _ = storage.insert_subtask(&crate::core::storage::SubtaskRecord {
+            if let Err(e) = storage.insert_subtask(&crate::core::storage::SubtaskRecord {
                 id: subtask.id.clone(),
                 task_id: _plan.task_id.clone(),
                 agent_id: subtask.agent_id.clone(),
@@ -68,7 +71,9 @@ impl TaskEngine {
                 result_json,
                 started_at: Some(now.clone()),
                 finished_at: Some(now),
-            });
+            }) {
+                tracing::warn!("Failed to insert subtask: {}", e);
+            }
 
             if result.is_err() {
                 if let Some(ref bus) = self.event_bus {
@@ -165,7 +170,9 @@ impl TaskEngine {
         }
 
         if let Some(ref storage) = self.storage {
-            let _ = storage.update_task_status(&plan.task_id, "completed");
+            if let Err(e) = storage.update_task_status(&plan.task_id, "completed") {
+                tracing::warn!("Failed to update task status: {}", e);
+            }
         }
 
         let summary = subtask_results

@@ -194,3 +194,63 @@ impl WorkflowTemplate {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn code_delivery_has_expected_steps() {
+        let t = WorkflowTemplate::code_delivery_template();
+        assert_eq!(t.id, "workflow-code-delivery");
+        assert_eq!(t.name, "Code Delivery");
+        assert_eq!(t.steps.len(), 7);
+        assert_eq!(t.steps[0].id, "requirements");
+        assert_eq!(t.steps[6].id, "document");
+    }
+
+    #[test]
+    fn code_delivery_step_types_are_correct() {
+        let t = WorkflowTemplate::code_delivery_template();
+        assert!(matches!(t.steps[0].action, WorkflowAction::LLMCall { .. }));
+        assert!(matches!(t.steps[2].action, WorkflowAction::AgentCall { .. }));
+        assert!(matches!(t.steps[3].action, WorkflowAction::CodeExec { .. }));
+        assert!(matches!(t.steps[5].action, WorkflowAction::Notification { .. }));
+    }
+
+    #[test]
+    fn code_delivery_approval_required_on_early_steps() {
+        let t = WorkflowTemplate::code_delivery_template();
+        assert!(t.steps[0].approval_required);
+        assert!(t.steps[1].approval_required);
+        assert!(!t.steps[2].approval_required);
+    }
+
+    #[test]
+    fn code_delivery_dependency_chain_is_valid() {
+        let t = WorkflowTemplate::code_delivery_template();
+        assert!(t.steps[1].depends_on.contains(&"requirements".into()));
+        assert!(t.steps[2].depends_on.contains(&"design".into()));
+        assert!(t.steps[4].depends_on.contains(&"test".into()));
+    }
+
+    #[test]
+    fn scheduled_inspection_has_four_steps() {
+        let t = WorkflowTemplate::scheduled_inspection_template();
+        assert_eq!(t.id, "workflow-scheduled-inspection");
+        assert_eq!(t.steps.len(), 4);
+    }
+
+    #[test]
+    fn inspection_uses_condition_action() {
+        let t = WorkflowTemplate::scheduled_inspection_template();
+        assert!(matches!(t.steps[3].action, WorkflowAction::Condition { .. }));
+    }
+
+    #[test]
+    fn scheduled_inspection_tags_are_set() {
+        let t = WorkflowTemplate::scheduled_inspection_template();
+        assert!(t.tags.contains(&"ops".into()));
+        assert!(t.tags.contains(&"inspection".into()));
+    }
+}

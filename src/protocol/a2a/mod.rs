@@ -12,8 +12,10 @@
 //! 2. Router dispatches based on routing mode and recipient capabilities.
 //! 3. Recipient agent receives and processes the message.
 
+pub mod discovery;
 pub mod protocol;
 pub mod router;
 
+pub use discovery::*;
 pub use protocol::*;
 pub use router::*;

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use tracing;
 
 use crate::core::event_bus::{SimpleEventBus, EVENT_CHAT_AGENT_RESPONSE};
+use crate::core::model_router::{ModelRouter, ModelType, RoutedModel};
 
 #[derive(Debug, Serialize)]
 struct ChatRequest {
@@ -37,6 +38,7 @@ struct Usage {
 pub struct ChatAgent {
     client: Client,
     api_key: String,
+    api_key_header: String,
     api_url: String,
     model: String,
     event_bus: Option<SimpleEventBus>,
@@ -47,10 +49,42 @@ impl ChatAgent {
         ChatAgent {
             client: Client::new(),
             api_key: api_key.to_string(),
+            api_key_header: "Authorization".to_string(),
             api_url: format!("{}/chat/completions", base_url.trim_end_matches('/')),
             model: model.to_string(),
             event_bus: None,
         }
+    }
+
+    pub fn from_router(router: &ModelRouter, request: &str) -> Result<Self, String> {
+        let route = router.route(request)?;
+        Self::from_route(&route)
+    }
+
+    pub fn from_route(route: &RoutedModel) -> Result<Self, String> {
+        if route.base_url.trim().is_empty() {
+            return Err(format!(
+                "Routed model '{}' from provider '{}' has no chat endpoint",
+                route.name, route.provider
+            ));
+        }
+
+        let api_key = route.api_key.clone().unwrap_or_default();
+        if route.model_type == ModelType::Cloud && api_key.trim().is_empty() {
+            return Err(format!(
+                "Routed cloud model '{}' from provider '{}' is missing an API key",
+                route.name, route.provider
+            ));
+        }
+
+        Ok(ChatAgent {
+            client: Client::new(),
+            api_key,
+            api_key_header: route.api_key_header.clone(),
+            api_url: format!("{}/chat/completions", route.base_url.trim_end_matches('/')),
+            model: route.name.clone(),
+            event_bus: None,
+        })
     }
 
     pub fn with_event_bus(mut self, event_bus: SimpleEventBus) -> Self {
@@ -93,16 +127,22 @@ impl ChatAgent {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
 
-            match self
+            let mut builder = self
                 .client
                 .post(&self.api_url)
-                .header("Authorization", format!("Bearer {}", self.api_key))
                 .header("Content-Type", "application/json")
                 .json(&request)
-                .timeout(std::time::Duration::from_secs(30))
-                .send()
-                .await
-            {
+                .timeout(std::time::Duration::from_secs(30));
+
+            if !self.api_key.trim().is_empty() {
+                builder = if self.api_key_header == "Authorization" {
+                    builder.header("Authorization", format!("Bearer {}", self.api_key))
+                } else {
+                    builder.header(&self.api_key_header, self.api_key.clone())
+                };
+            }
+
+            match builder.send().await {
                 Ok(response) => {
                     if !response.status().is_success() {
                         let status = response.status();
@@ -160,6 +200,21 @@ mod tests {
     fn test_chat_agent_new() {
         let agent = ChatAgent::new("test-key", "https://api.deepseek.com", "deepseek-chat");
         assert_eq!(agent.model, "deepseek-chat");
+        assert_eq!(agent.api_url, "https://api.deepseek.com/chat/completions");
+    }
+
+    #[test]
+    fn test_chat_agent_from_router_uses_configured_model() {
+        let router = ModelRouter::with_default_model(
+            "deepseek",
+            "deepseek-reasoner",
+            "https://api.deepseek.com",
+            Some("test-key".to_string()),
+        );
+
+        let agent = ChatAgent::from_router(&router, "hello").unwrap();
+
+        assert_eq!(agent.model, "deepseek-reasoner");
         assert_eq!(agent.api_url, "https://api.deepseek.com/chat/completions");
     }
 }

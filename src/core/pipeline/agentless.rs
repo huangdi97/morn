@@ -1,3 +1,4 @@
+//! 无 Agent 流水线 — 无需 Agent 参与的自动步骤处理
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

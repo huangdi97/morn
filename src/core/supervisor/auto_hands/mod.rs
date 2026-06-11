@@ -1,4 +1,5 @@
-use crate::core::event_bus::{Event, SimpleEventBus};
+//! 自动执行模块 — 自主触发与预审批的自动操作
+use crate::core::event_bus::SimpleEventBus;
 use std::collections::VecDeque;
 use std::time::SystemTime;
 
@@ -120,6 +121,7 @@ fn timestamp() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::event_bus::Event;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
     use std::sync::OnceLock;

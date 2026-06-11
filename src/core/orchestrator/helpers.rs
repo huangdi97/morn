@@ -5,13 +5,17 @@ impl CollaborationMode {
     /// Returns the stable string identifier for this collaboration mode.
     pub fn as_str(&self) -> &'static str {
         match self {
+            CollaborationMode::Debate => "debate",
             CollaborationMode::Chain => "chain",
             CollaborationMode::ManagerWorker => "manager_worker",
             CollaborationMode::Broadcast => "broadcast",
             CollaborationMode::Voting => "voting",
+            CollaborationMode::RoundRobin => "round_robin",
             CollaborationMode::Routing => "routing",
             CollaborationMode::AgentAsTool => "agent_as_tool",
             CollaborationMode::Blackboard => "blackboard",
+            CollaborationMode::Consensus => "consensus",
+            CollaborationMode::Swarm => "swarm",
         }
     }
 }

@@ -1,6 +1,19 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 import { TemplateSelector } from "../studio/TemplateSelector";
+
+interface TrendPoint {
+  label: string;
+  value: number;
+}
+
+interface DashboardAlert {
+  id: string;
+  kind: "version" | "cost" | "security" | string;
+  severity: "info" | "warning" | "critical" | string;
+  title: string;
+  detail: string;
+}
 
 interface DashboardData {
   total_tasks: number;
@@ -10,6 +23,9 @@ interface DashboardData {
   agent_count: number;
   active_channels: number;
   uptime_hours: number;
+  request_trend?: TrendPoint[];
+  latency_trend?: TrendPoint[];
+  alerts?: DashboardAlert[];
 }
 
 const cardStyle: React.CSSProperties = {
@@ -26,6 +42,31 @@ const valueStyle: React.CSSProperties = {
   marginTop: "8px",
 };
 
+const chartStyle: React.CSSProperties = {
+  ...cardStyle,
+  minHeight: "210px",
+};
+
+const defaultRequestTrend: TrendPoint[] = [
+  { label: "Mon", value: 12 },
+  { label: "Tue", value: 18 },
+  { label: "Wed", value: 15 },
+  { label: "Thu", value: 24 },
+  { label: "Fri", value: 22 },
+  { label: "Sat", value: 10 },
+  { label: "Sun", value: 16 },
+];
+
+const defaultLatencyTrend: TrendPoint[] = [
+  { label: "Mon", value: 960 },
+  { label: "Tue", value: 1120 },
+  { label: "Wed", value: 1040 },
+  { label: "Thu", value: 1280 },
+  { label: "Fri", value: 1180 },
+  { label: "Sat", value: 900 },
+  { label: "Sun", value: 1020 },
+];
+
 const ONBOARDING_KEY = "morn_onboarded";
 
 const overlayStyle: React.CSSProperties = {
@@ -40,7 +81,7 @@ const modalStyle: React.CSSProperties = {
   maxWidth: "600px", width: "90%", maxHeight: "80vh", overflow: "auto",
 };
 
-export default function Dashboard() {
+export default function AdminDashboard() {
   const [data, setData] = useState<DashboardData>({
     total_tasks: 0,
     success_rate: 0,
@@ -49,12 +90,15 @@ export default function Dashboard() {
     agent_count: 2,
     active_channels: 3,
     uptime_hours: 12.5,
+    request_trend: defaultRequestTrend,
+    latency_trend: defaultLatencyTrend,
+    alerts: [],
   });
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(1);
 
   useEffect(() => {
-    invoke<{ dashboard: DashboardData; system_info: any }>("get_system_status").then((res) => {
+    api.getSystemStatus().then((res: { dashboard: DashboardData; system_info: any }) => {
       setData(res.dashboard);
     }).catch(() => {});
   }, []);
@@ -79,6 +123,70 @@ export default function Dashboard() {
     { label: "Agents", value: data.agent_count.toString(), color: "#bc8cff" },
     { label: "Active Channels", value: data.active_channels.toString(), color: "#79c0ff" },
   ];
+
+  const renderTrendChart = (title: string, points: TrendPoint[], color: string, unit = "") => {
+    const width = 520;
+    const height = 150;
+    const padding = 28;
+    const maxValue = Math.max(...points.map((point) => point.value), 1);
+    const chartPoints = points.map((point, index) => {
+      const x = padding + (index * (width - padding * 2)) / Math.max(points.length - 1, 1);
+      const y = height - padding - (point.value / maxValue) * (height - padding * 2);
+      return { ...point, x, y };
+    });
+    const path = chartPoints
+      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+      .join(" ");
+
+    return (
+      <div style={chartStyle}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+          <div style={{ color: "#e6edf3", fontWeight: 600 }}>{title}</div>
+          <div style={{ color: "#8b949e", fontSize: "12px" }}>
+            Peak {maxValue.toFixed(0)}{unit}
+          </div>
+        </div>
+        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "150px", display: "block" }}>
+          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#30363d" />
+          <polyline points={chartPoints.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke={`${color}33`} strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={path} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          {chartPoints.map((point) => (
+            <g key={point.label}>
+              <circle cx={point.x} cy={point.y} r="4" fill={color} />
+              <text x={point.x} y={height - 8} textAnchor="middle" fontSize="10" fill="#8b949e">{point.label}</text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    );
+  };
+
+  const renderAlerts = () => {
+    const alerts = data.alerts ?? [];
+    const severityColor = (severity: string) => {
+      switch (severity) {
+        case "critical": return "#f85149";
+        case "warning": return "#d29922";
+        default: return "#58a6ff";
+      }
+    };
+
+    return (
+      <div style={{ ...cardStyle, marginTop: "16px" }}>
+        <div style={{ color: "#e6edf3", fontWeight: 600, marginBottom: "12px" }}>Alerts</div>
+        {alerts.length === 0 && <div style={{ color: "#8b949e", fontSize: "13px" }}>No active alerts.</div>}
+        <div style={{ display: "grid", gap: "10px" }}>
+          {alerts.map((alert) => (
+            <div key={alert.id} style={{ border: `1px solid ${severityColor(alert.severity)}55`, borderLeft: `3px solid ${severityColor(alert.severity)}`, borderRadius: "6px", padding: "10px 12px", background: "#0d1117" }}>
+              <div style={{ color: severityColor(alert.severity), fontSize: "11px", textTransform: "uppercase" }}>{alert.kind}</div>
+              <div style={{ color: "#e6edf3", fontWeight: 600, marginTop: "3px" }}>{alert.title}</div>
+              <div style={{ color: "#8b949e", fontSize: "12px", marginTop: "4px" }}>{alert.detail}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const renderOnboarding = () => {
     return (
@@ -164,6 +272,11 @@ export default function Dashboard() {
         <div style={{ color: "#8b949e", fontSize: "13px" }}>Uptime</div>
         <div style={valueStyle}>{data.uptime_hours.toFixed(1)} hours</div>
       </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px", marginTop: "16px" }}>
+        {renderTrendChart("Request Trend", data.request_trend ?? defaultRequestTrend, "#58a6ff")}
+        {renderTrendChart("Latency Trend", data.latency_trend ?? defaultLatencyTrend, "#d29922", "ms")}
+      </div>
+      {renderAlerts()}
       {showOnboarding && renderOnboarding()}
     </div>
   );

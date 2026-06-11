@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 
 interface CostBreakdown {
   name: string;
@@ -25,7 +25,7 @@ export default function CostCenter() {
   const [totalCost, setTotalCost] = useState("0.00");
 
   useEffect(() => {
-    invoke<{ dashboard: { agent_costs?: { name: string, cost: number, calls: number }[], daily_costs?: { date: string, cost: number }[] } }>("get_system_status").then((res) => {
+    api.getSystemStatus().then((res: { dashboard: { agent_costs?: { name: string, cost: number, calls: number }[], daily_costs?: { date: string, cost: number }[] } }) => {
       const ac = res.dashboard.agent_costs;
       if (ac && ac.length > 0) {
         const total = ac.reduce((s, a) => s + a.cost, 0);

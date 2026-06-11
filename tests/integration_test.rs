@@ -78,3 +78,16 @@ fn test_find_template_coder() {
     let tpl = find_template("程序员").unwrap();
     assert_eq!(tpl.persona, "coder");
 }
+
+#[test]
+fn test_persona_preset() {
+    let p = morn::component::persona::presets_industry::preset_researcher();
+    assert!(!p.name.is_empty());
+}
+
+#[test]
+fn test_coo_decision() {
+    use morn::core::supervisor::{DecisionLevel, Supervisor};
+    let sup = Supervisor::new(None, None);
+    assert_eq!(sup.decide_level("hello"), DecisionLevel::L1DirectAnswer);
+}

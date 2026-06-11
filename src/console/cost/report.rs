@@ -190,3 +190,101 @@ impl CostCenter {
         trend
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::console::cost::CostCenter;
+
+    #[test]
+    fn test_cost_report_structure() {
+        let center = CostCenter::new(100.0);
+        let report = center.get_report();
+        assert_eq!(report.budget, 100.0);
+        assert!(!report.by_agent.is_empty());
+        assert!(!report.by_tool.is_empty());
+        assert!(!report.by_model.is_empty());
+        assert_eq!(report.daily_trend.len(), 7);
+        assert_eq!(report.monthly_trend.len(), 3);
+    }
+
+    #[test]
+    fn test_cost_report_budget_exceeded() {
+        let center = CostCenter::new(5.0);
+        let report = center.get_report();
+        assert!(report.budget_exceeded);
+    }
+
+    #[test]
+    fn test_cost_breakdown_fields() {
+        let b = CostBreakdown {
+            name: "test".into(),
+            cost: 10.0,
+            calls: 5,
+            percentage: 50.0,
+        };
+        assert_eq!(b.name, "test");
+        assert_eq!(b.cost, 10.0);
+        assert_eq!(b.calls, 5);
+        assert_eq!(b.percentage, 50.0);
+    }
+
+    #[test]
+    fn test_daily_cost_fields() {
+        let d = DailyCost {
+            date: "2024-01-01".into(),
+            cost: 1.5,
+        };
+        assert_eq!(d.date, "2024-01-01");
+        assert_eq!(d.cost, 1.5);
+    }
+
+    #[test]
+    fn test_monthly_cost_fields() {
+        let m = MonthlyCost {
+            month: "2024-01".into(),
+            cost: 30.0,
+        };
+        assert_eq!(m.month, "2024-01");
+        assert_eq!(m.cost, 30.0);
+    }
+
+    #[test]
+    fn test_report_reference_method() {
+        let center = CostCenter::new(50.0);
+        let report = center.report();
+        assert_eq!(report.total_cost, 12.45);
+    }
+
+    #[test]
+    fn test_generate_daily_trend_length() {
+        let center = CostCenter::new(100.0);
+        let trend = center.generate_daily_trend();
+        assert_eq!(trend.len(), 7);
+        for day in &trend {
+            assert!(!day.date.is_empty());
+            assert!(day.cost > 0.0);
+        }
+    }
+
+    #[test]
+    fn test_generate_monthly_trend_length() {
+        let center = CostCenter::new(100.0);
+        let trend = center.generate_monthly_trend();
+        assert_eq!(trend.len(), 6);
+        for month in &trend {
+            assert!(!month.month.is_empty());
+            assert!(month.cost > 0.0);
+        }
+    }
+
+    #[test]
+    fn test_cost_report_serialization() {
+        let center = CostCenter::new(100.0);
+        let report = center.get_report();
+        let json = serde_json::to_string(&report).unwrap();
+        assert!(json.contains("total_cost"));
+        assert!(json.contains("by_agent"));
+        assert!(json.contains("daily_trend"));
+    }
+}

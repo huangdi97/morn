@@ -1,3 +1,4 @@
+//! 数据转换器 — 流水线中数据格式转换与校验
 use serde_json::{Map, Value};
 
 pub trait DataTransformer {

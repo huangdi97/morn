@@ -5,4 +5,7 @@ mod checkpoints;
 mod engine;
 
 pub use checkpoints::{CheckResult, Checkpoint, InjectionRisk};
-pub use engine::{DualLlmGuard, DualLlmLog, LlmJudgeFn};
+pub use engine::{
+    DualLlmExecutorDecision, DualLlmGuard, DualLlmGuardDecision, DualLlmJudgeDecision, DualLlmLog,
+    LlmJudgeFn,
+};

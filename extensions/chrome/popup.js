@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const pageUrl = document.getElementById('pageUrl');
   const toggleMorn = document.getElementById('toggleMorn');
   const reconnectBtn = document.getElementById('reconnectBtn');
+  const serverInput = document.getElementById('serverInput');
+  const saveServerBtn = document.getElementById('saveServerBtn');
 
   let connected = false;
   let mornEnabled = true;
@@ -23,6 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleMorn.checked = mornEnabled;
   });
 
+  // Load saved server URL
+  chrome.storage.sync.get(['serverWsUrl'], (result) => {
+    serverInput.value = result.serverWsUrl || MORN_WS_URL;
+  });
+
   // Get current tab info
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs && tabs.length > 0) {
@@ -33,10 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Get server address
-  chrome.storage.local.get(['wsPort'], (result) => {
-    const port = result.wsPort || 9876;
-    serverAddress.textContent = `ws://localhost:${port}`;
-  });
+  serverAddress.textContent = MORN_WS_URL;
 
   // --- Connection Status ---
 
@@ -123,5 +127,20 @@ document.addEventListener('DOMContentLoaded', () => {
       reconnectBtn.disabled = false;
       reconnectBtn.textContent = 'Reconnect';
     }, 5000);
+  });
+
+  // --- Server URL Save ---
+
+  saveServerBtn.addEventListener('click', () => {
+    const url = serverInput.value.trim();
+    if (!url) return;
+
+    chrome.storage.sync.set({ serverWsUrl: url }, () => {
+      serverAddress.textContent = url;
+      saveServerBtn.textContent = 'Saved!';
+      setTimeout(() => { saveServerBtn.textContent = 'Save'; }, 2000);
+
+      reconnectBtn.click();
+    });
   });
 });

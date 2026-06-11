@@ -1,3 +1,4 @@
+//! 记忆编辑器 — Agent 核心/回忆/归档记忆的配置编辑
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MemoryEditor {
     pub name: String,

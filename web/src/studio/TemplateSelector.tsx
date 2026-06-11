@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
 
 interface Template {
   id: string;
@@ -32,7 +32,7 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    invoke<Template[]>("list_agent_templates").then((list) => {
+    api.listAgentTemplates().then((list: Template[]) => {
       if (list.length > 0) {
         setTemplates(list);
       }

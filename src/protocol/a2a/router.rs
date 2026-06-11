@@ -1,3 +1,4 @@
+//! A2A 消息路由器 — Agent 注册发现、消息转发、广播中继
 use std::collections::HashMap;
 
 use super::protocol::{A2AEnvelope, AgentCapability, RoutingMode};

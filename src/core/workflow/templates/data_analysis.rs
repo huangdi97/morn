@@ -192,3 +192,73 @@ impl WorkflowTemplate {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deep_analysis_has_four_steps() {
+        let t = WorkflowTemplate::deep_analysis_template();
+        assert_eq!(t.id, "workflow-deep-analysis");
+        assert_eq!(t.name, "Deep Analysis");
+        assert_eq!(t.steps.len(), 4);
+    }
+
+    #[test]
+    fn deep_analysis_step_ids_in_order() {
+        let t = WorkflowTemplate::deep_analysis_template();
+        assert_eq!(t.steps[0].id, "gather");
+        assert_eq!(t.steps[1].id, "cross_verify");
+        assert_eq!(t.steps[2].id, "analyze");
+        assert_eq!(t.steps[3].id, "conclude");
+    }
+
+    #[test]
+    fn deep_analysis_first_two_steps_are_tool_calls() {
+        let t = WorkflowTemplate::deep_analysis_template();
+        assert!(matches!(t.steps[0].action, WorkflowAction::ToolCall { .. }));
+        assert!(matches!(t.steps[1].action, WorkflowAction::ToolCall { .. }));
+    }
+
+    #[test]
+    fn report_generation_has_six_steps() {
+        let t = WorkflowTemplate::report_generation_template();
+        assert_eq!(t.id, "workflow-report-gen");
+        assert_eq!(t.steps.len(), 6);
+    }
+
+    #[test]
+    fn report_generation_includes_human_approval() {
+        let t = WorkflowTemplate::report_generation_template();
+        assert!(matches!(t.steps[4].action, WorkflowAction::HumanApproval { .. }));
+        assert!(t.steps[4].approval_required);
+    }
+
+    #[test]
+    fn report_generation_ends_with_notification() {
+        let t = WorkflowTemplate::report_generation_template();
+        assert!(matches!(t.steps[5].action, WorkflowAction::Notification { .. }));
+    }
+
+    #[test]
+    fn news_monitor_has_five_steps() {
+        let t = WorkflowTemplate::news_monitor_template();
+        assert_eq!(t.id, "workflow-news-monitor");
+        assert_eq!(t.steps.len(), 5);
+    }
+
+    #[test]
+    fn news_monitor_alert_at_end() {
+        let t = WorkflowTemplate::news_monitor_template();
+        assert!(matches!(t.steps[4].action, WorkflowAction::Notification { .. }));
+    }
+
+    #[test]
+    fn all_templates_have_category_and_version() {
+        for t in [WorkflowTemplate::deep_analysis_template(), WorkflowTemplate::report_generation_template(), WorkflowTemplate::news_monitor_template()] {
+            assert!(!t.category.is_empty());
+            assert!(!t.version.is_empty());
+        }
+    }
+}

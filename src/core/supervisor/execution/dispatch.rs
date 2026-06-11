@@ -1,9 +1,10 @@
 //! dispatch — Task execution, lifecycle events, and inline chat dispatch.
+use crate::bridge::chat_agent::ChatAgent;
 use crate::core::storage::{DecisionRecord, TaskRecord};
 use tracing;
 
 use super::events::*;
-use super::{classify_execution_time, ExecutionTier};
+use super::{classify_execution_level, classify_execution_time, ExecutionTier};
 use crate::core::supervisor::{
     DecisionLevel, DecisionOverride, Mode, SubTaskDef, SubTaskResult, Supervisor, TaskPlan,
     TaskResult,
@@ -18,12 +19,20 @@ impl Supervisor {
     ) -> Result<TaskResult, String> {
         self.turn_count += 1;
 
-        let tier = classify_execution_time(plan.estimated_secs);
+        let tier = classify_execution_level(&plan.decision_level)
+            .unwrap_or_else(|| classify_execution_time(plan.estimated_secs));
         if tier == ExecutionTier::Background {
             tracing::info!(
                 "[COO] Background execution: {} (est. {}s)",
                 plan.task_id,
                 plan.estimated_secs
+            );
+        }
+        if tier == ExecutionTier::Interactive {
+            tracing::info!(
+                "[COO] Interactive execution requires plan confirmation: {} (level {})",
+                plan.task_id,
+                plan.decision_level
             );
         }
 
@@ -53,7 +62,9 @@ impl Supervisor {
                 created_at: chrono::Utc::now().to_rfc3339(),
                 completed_at: None,
             };
-            let _ = storage.insert_task(&task_record);
+            if let Err(e) = storage.insert_task(&task_record) {
+                tracing::warn!("Failed to insert task: {}", e);
+            }
 
             let decision = DecisionRecord {
                 id: format!("dec-{}", uuid::Uuid::new_v4()),
@@ -64,6 +75,7 @@ impl Supervisor {
                     serde_json::json!({
                         "mode": self.mode.as_str(),
                         "estimated_secs": plan.estimated_secs,
+                        "execution_tier": format!("{:?}", tier),
                         "decision_point": self.requires_decision_point(plan),
                     })
                     .to_string(),
@@ -72,7 +84,9 @@ impl Supervisor {
                     || (self.mode == Mode::Proactive && !self.requires_decision_point(plan)),
                 created_at: chrono::Utc::now().to_rfc3339(),
             };
-            let _ = storage.insert_decision(&decision);
+            if let Err(e) = storage.insert_decision(&decision) {
+                tracing::warn!("Failed to insert decision: {}", e);
+            }
         }
 
         if self.mode == Mode::Safe && self.requires_decision_point(plan) {
@@ -90,7 +104,9 @@ impl Supervisor {
             Ok(response) => response,
             Err(err) => {
                 if let Some(ref storage) = self.storage {
-                    let _ = storage.update_task_status(&plan.task_id, "failed");
+                    if let Err(e) = storage.update_task_status(&plan.task_id, "failed") {
+                        tracing::warn!("Failed to update task status: {}", e);
+                    }
                 }
                 if let Some(ref bus) = self.event_bus {
                     publish_plan_failed_events(bus, &plan.task_id, &err);
@@ -123,7 +139,9 @@ impl Supervisor {
         };
 
         if let Some(ref storage) = self.storage {
-            let _ = storage.update_task_status(&plan.task_id, "completed");
+            if let Err(e) = storage.update_task_status(&plan.task_id, "completed") {
+                tracing::warn!("Failed to update task status: {}", e);
+            }
         }
 
         if let Some(ref bus) = self.event_bus {
@@ -153,6 +171,20 @@ impl Supervisor {
             self.override_decision(override_.level, override_.scope);
         }
 
+        let routed_model = self.model_router.route(&clean_input)?;
+        let routed_agent = match ChatAgent::from_route(&routed_model) {
+            Ok(agent) => Some(agent),
+            Err(err) => {
+                tracing::debug!(
+                    "[COO] Routed model {} via {} is not directly callable by ChatAgent: {}",
+                    routed_model.name,
+                    routed_model.provider,
+                    err
+                );
+                None
+            }
+        };
+
         let (level, _reasoning) = match self.take_next_turn_override() {
             Some(override_) => (
                 override_.level,
@@ -168,7 +200,11 @@ impl Supervisor {
                 id: "main".to_string(),
                 agent_id: "chat-agent".to_string(),
                 action: "chat".to_string(),
-                params: serde_json::json!({"input": clean_input}),
+                params: serde_json::json!({
+                    "input": clean_input,
+                    "provider": routed_model.provider.clone(),
+                    "model": routed_model.name.clone(),
+                }),
                 depends_on: vec![],
             }],
             estimated_secs: match level {
@@ -182,9 +218,17 @@ impl Supervisor {
             decision_level: level.as_str().to_string(),
             approval_required: false,
         };
-        self.apply_dual_llm_check(&mut plan, chat_fn);
+        let routed_chat_fn = |context: &str, system: &str| -> Result<String, String> {
+            if let Some(agent) = &routed_agent {
+                agent.chat(context, system)
+            } else {
+                chat_fn(context, system)
+            }
+        };
 
-        let result = self.execute_plan(&plan, chat_fn)?;
+        self.apply_dual_llm_check(&mut plan, &routed_chat_fn);
+
+        let result = self.execute_plan(&plan, &routed_chat_fn)?;
         Ok(result.summary)
     }
 
@@ -197,6 +241,7 @@ impl Supervisor {
             plan.decision_level.as_str(),
             "team" | "workflow" | "jump_studio"
         );
+        let interactive_level = matches!(plan.decision_level.as_str(), "single_agent");
         let high_risk_action = plan.subtasks.iter().any(|task| {
             let action = task.action.to_lowercase();
             action.contains("delete")
@@ -204,7 +249,7 @@ impl Supervisor {
                 || action.contains("publish")
                 || action.contains("payment")
         });
-        high_level || high_risk_action
+        high_level || interactive_level || high_risk_action
     }
 }
 

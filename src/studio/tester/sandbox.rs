@@ -1,3 +1,4 @@
+//! 测试沙箱 — Agent/Tool/Workflow 的隔离测试执行环境
 use std::time::Instant;
 
 use super::{StudioTester, TestRunner, TestStep};

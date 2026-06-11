@@ -1,3 +1,4 @@
+//! 信任积分器 — Agent 信用积分记录、排名、历史查询
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

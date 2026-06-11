@@ -77,3 +77,59 @@ pub fn find_template(name: &str) -> Option<&'static AgentTemplate> {
         .iter()
         .find(|template| template.name.contains(name) || name.contains(template.name))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_templates_returns_all_entries() {
+        let templates = all_templates();
+        assert_eq!(templates.len(), AGENT_TEMPLATES.len());
+    }
+
+    #[test]
+    fn all_templates_has_expected_names() {
+        let names: Vec<&str> = all_templates().iter().map(|t| t.name).collect();
+        assert!(names.contains(&"程序员"));
+        assert!(names.contains(&"研究员"));
+        assert!(names.contains(&"审查员"));
+    }
+
+    #[test]
+    fn find_template_by_exact_name() {
+        let t = find_template("程序员").unwrap();
+        assert_eq!(t.persona, "coder");
+    }
+
+    #[test]
+    fn find_template_by_partial_name() {
+        let t = find_template("程序").unwrap();
+        assert_eq!(t.name, "程序员");
+    }
+
+    #[test]
+    fn find_template_by_containing_name() {
+        let t = find_template("翻译").unwrap();
+        assert_eq!(t.persona, "translator");
+    }
+
+    #[test]
+    fn find_template_returns_none_for_unknown() {
+        assert!(find_template("nonexistent").is_none());
+    }
+
+    #[test]
+    fn each_template_has_non_empty_fields() {
+        for t in AGENT_TEMPLATES {
+            assert!(!t.name.is_empty(), "name should not be empty");
+            assert!(!t.persona.is_empty(), "persona should not be empty");
+            assert!(!t.description.is_empty(), "description should not be empty");
+        }
+    }
+
+    #[test]
+    fn all_templates_has_correct_count() {
+        assert_eq!(AGENT_TEMPLATES.len(), 8);
+    }
+}

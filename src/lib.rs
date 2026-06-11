@@ -4,8 +4,10 @@ pub mod bridge;
 pub mod channel;
 pub mod component;
 pub mod computer;
+pub mod config;
 pub mod console;
 pub mod core;
+
 pub mod market;
 pub mod mcp;
 pub mod org;

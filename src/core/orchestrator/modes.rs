@@ -1,11 +1,37 @@
+//! modes — Orchestrator collaboration mode implementations (debate, voting, round-robin, broadcast, consensus, swarm).
+
 use crate::component::model::ModelConfig;
 use crate::component::persona;
 use crate::core::assembler::{AgentAssembler, AgentDef};
 use crate::core::orchestrator::*;
+use tracing;
 
 // === voting ===
 
 impl Orchestrator {
+    pub fn run_debate(
+        &self,
+        members: &[String],
+        input: &str,
+    ) -> Result<Vec<TeamMemberOutput>, String> {
+        if members.len() < 2 {
+            return Err("Debate mode requires at least 2 members".to_string());
+        }
+        let mut transcript = input.to_string();
+        let mut outputs = Vec::new();
+        for round in 0..2 {
+            for member in members {
+                let result = self.dispatch_agent(
+                    member,
+                    &format!("[DEBATE round={}] {}", round + 1, transcript),
+                )?;
+                transcript = result.output.clone();
+                outputs.push(result);
+            }
+        }
+        Ok(outputs)
+    }
+
     pub fn run_voting(
         &self,
         members: &[String],
@@ -75,6 +101,23 @@ impl Orchestrator {
 // === chain ===
 
 impl Orchestrator {
+    pub fn run_round_robin(
+        &self,
+        members: &[String],
+        input: &str,
+    ) -> Result<Vec<TeamMemberOutput>, String> {
+        if members.is_empty() {
+            return Err("Round-robin mode requires at least 1 member".to_string());
+        }
+        let mut outputs = Vec::new();
+        for (idx, member) in members.iter().enumerate() {
+            outputs.push(
+                self.dispatch_agent(member, &format!("[ROUND_ROBIN step={}] {}", idx + 1, input))?,
+            );
+        }
+        Ok(outputs)
+    }
+
     pub fn run_chain(
         &self,
         members: &[String],
@@ -155,6 +198,42 @@ impl Orchestrator {
 // === routing ===
 
 impl Orchestrator {
+    pub fn run_consensus_mode(
+        &self,
+        members: &[String],
+        input: &str,
+    ) -> Result<Vec<TeamMemberOutput>, String> {
+        if members.is_empty() {
+            return Err("Consensus mode requires at least 1 member".to_string());
+        }
+        let mut outputs = self.run_broadcast(members, input)?;
+        let synthesis = self.compute_consensus(&outputs, &ConsensusMechanism::AutoSynthesis);
+        if let Some(first) = members.first() {
+            outputs.push(self.dispatch_agent(first, &format!("[CONSENSUS] {}", synthesis))?);
+        }
+        Ok(outputs)
+    }
+
+    pub fn run_swarm(
+        &self,
+        members: &[String],
+        input: &str,
+    ) -> Result<Vec<TeamMemberOutput>, String> {
+        if members.is_empty() {
+            return Err("Swarm mode requires at least 1 member".to_string());
+        }
+        let mut outputs = Vec::new();
+        for iteration in 0..3 {
+            for member in members {
+                outputs.push(self.dispatch_agent(
+                    member,
+                    &format!("[SWARM iteration={}] {}", iteration + 1, input),
+                )?);
+            }
+        }
+        Ok(outputs)
+    }
+
     pub fn find_experts_for_task(&self, task: &str, max: usize) -> Vec<&ExpertSpec> {
         let task_lower = task.to_lowercase();
         let mut matches: Vec<&ExpertSpec> = self
@@ -227,8 +306,12 @@ impl Orchestrator {
                 };
                 let assembler = AgentAssembler::new(Some(registry.clone()));
                 if let Ok(mut agent) = assembler.assemble(agent_def) {
-                    let _ = agent.init();
-                    let _ = agent.run();
+                    if let Err(e) = agent.init() {
+                        tracing::warn!("Failed to init agent: {}", e);
+                    }
+                    if let Err(e) = agent.run() {
+                        tracing::warn!("Failed to run agent: {}", e);
+                    }
                 }
             }
         }

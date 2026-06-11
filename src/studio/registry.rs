@@ -1,6 +1,7 @@
 //! Node registry and template catalog: all available node templates organized by category.
 
 use super::types::{NodeTemplate, NodeType};
+use crate::core::registry::{Capability, Registry};
 
 pub struct NodeRegistry;
 
@@ -270,6 +271,172 @@ impl NodeRegistry {
             },
         ]
     }
+
+    pub fn find_template(label: &str) -> Option<NodeTemplate> {
+        Self::all_templates()
+            .into_iter()
+            .find(|template| template.label.eq_ignore_ascii_case(label))
+    }
+
+    pub fn templates_by_category(category: &str) -> Vec<NodeTemplate> {
+        Self::all_templates()
+            .into_iter()
+            .filter(|template| template.category.eq_ignore_ascii_case(category))
+            .collect()
+    }
+
+    pub fn categories() -> Vec<&'static str> {
+        let mut categories = Vec::new();
+        for template in Self::all_templates() {
+            if !categories.contains(&template.category) {
+                categories.push(template.category);
+            }
+        }
+        categories
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StudioRegistration {
+    pub id: String,
+    pub version: String,
+    pub name: String,
+    pub component_type: String,
+    pub actions: Vec<String>,
+    pub description: String,
+    #[serde(default = "default_visibility")]
+    pub visibility: String,
+    #[serde(default)]
+    pub owner_id: Option<String>,
+    #[serde(default)]
+    pub team_id: Option<String>,
+}
+
+fn default_visibility() -> String {
+    "private".to_string()
+}
+
+impl StudioRegistration {
+    pub fn new(id: &str, name: &str, component_type: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            version: "0.1.0".to_string(),
+            name: name.to_string(),
+            component_type: component_type.to_string(),
+            actions: Vec::new(),
+            description: String::new(),
+            visibility: default_visibility(),
+            owner_id: None,
+            team_id: None,
+        }
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        if self.id.trim().is_empty() {
+            return Err("registration id cannot be empty".into());
+        }
+        if self.name.trim().is_empty() {
+            return Err("registration name cannot be empty".into());
+        }
+        if self.component_type.trim().is_empty() {
+            return Err("registration component_type cannot be empty".into());
+        }
+        if self.version.trim().is_empty() {
+            return Err("registration version cannot be empty".into());
+        }
+        Ok(())
+    }
+}
+
+impl From<StudioRegistration> for Capability {
+    fn from(registration: StudioRegistration) -> Self {
+        Capability {
+            id: registration.id,
+            version: registration.version,
+            name: registration.name,
+            domain: registration.component_type.to_lowercase(),
+            actions: registration.actions,
+            description: registration.description,
+            trust_score: 70.0,
+            total_calls: 0,
+            success_calls: 0,
+            avg_latency_ms: 0.0,
+            visibility: registration.visibility,
+            owner_id: registration.owner_id,
+            team_id: registration.team_id,
+            daily_quota: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct StudioVersionInfo {
+    pub id: String,
+    pub current: Option<String>,
+    pub history: Vec<String>,
+}
+
+pub struct StudioRegistry {
+    registry: Registry,
+}
+
+impl StudioRegistry {
+    pub fn new(registry: Registry) -> Self {
+        Self { registry }
+    }
+
+    pub fn empty() -> Self {
+        Self::new(Registry::new(None, None))
+    }
+
+    pub fn register_component(
+        &mut self,
+        registration: StudioRegistration,
+    ) -> Result<Capability, String> {
+        registration.validate()?;
+        let capability: Capability = registration.into();
+        if self.registry.get(&capability.id).is_some() {
+            self.registry.register(capability.clone());
+        } else {
+            self.registry.register_dynamic(capability.clone())?;
+        }
+        Ok(capability)
+    }
+
+    pub fn unregister_component(&mut self, id: &str) -> Result<Capability, String> {
+        self.registry
+            .unregister(id)
+            .ok_or_else(|| format!("component '{}' is not registered", id))
+    }
+
+    pub fn get_component(&self, id: &str) -> Option<&Capability> {
+        self.registry.get(id)
+    }
+
+    pub fn get_version(&self, id: &str) -> Option<&str> {
+        self.registry.get_version(id)
+    }
+
+    pub fn get_version_info(&self, id: &str) -> StudioVersionInfo {
+        StudioVersionInfo {
+            id: id.to_string(),
+            current: self.registry.get_version(id).map(str::to_string),
+            history: self
+                .registry
+                .get_version_history(id)
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        }
+    }
+
+    pub fn list_by_version(&self, version: &str) -> Vec<&Capability> {
+        self.registry.list_by_version(version)
+    }
+
+    pub fn into_inner(self) -> Registry {
+        self.registry
+    }
 }
 
 #[cfg(test)]
@@ -279,5 +446,34 @@ mod tests {
     fn test_registry_has_templates() {
         let templates = NodeRegistry::all_templates();
         assert!(!templates.is_empty());
+    }
+
+    #[test]
+    fn test_template_lookup_helpers() {
+        assert!(NodeRegistry::find_template("HTTP Request").is_some());
+        assert!(!NodeRegistry::templates_by_category("AI").is_empty());
+        assert!(NodeRegistry::categories().contains(&"Flow"));
+    }
+
+    #[test]
+    fn studio_registry_registers_updates_versions_and_unregisters() {
+        let mut registry = StudioRegistry::empty();
+        let mut registration = StudioRegistration::new("studio-agent", "Studio Agent", "agent");
+        registration.actions = vec!["chat".into()];
+
+        registry.register_component(registration.clone()).unwrap();
+        assert_eq!(registry.get_version("studio-agent"), Some("0.1.0"));
+
+        registration.version = "0.2.0".into();
+        registry.register_component(registration).unwrap();
+        assert_eq!(registry.get_version("studio-agent"), Some("0.2.0"));
+        assert_eq!(
+            registry.get_version_info("studio-agent").history,
+            vec!["0.1.0".to_string(), "0.2.0".to_string()]
+        );
+
+        let removed = registry.unregister_component("studio-agent").unwrap();
+        assert_eq!(removed.id, "studio-agent");
+        assert!(registry.get_component("studio-agent").is_none());
     }
 }

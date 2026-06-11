@@ -133,7 +133,9 @@ impl ThreadPool {
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
         while let Some(handle) = self.handles.pop() {
-            let _ = handle.join();
+            if let Err(e) = handle.join() {
+                tracing::warn!("thread join failed: {:?}", e);
+            }
         }
         tracing::info!("[thread_pool] All threads stopped");
     }
