@@ -149,12 +149,14 @@ impl ComputerControl {
     pub fn screenshot() -> Result<Vec<u8>, String> {
         #[cfg(target_os = "linux")]
         {
+            let screenshot_path = std::env::temp_dir().join("morn_screenshot.png");
+            let screenshot_str = screenshot_path.to_str().unwrap().to_string();
             let output = std::process::Command::new("import")
-                .args(["-window", "root", "/tmp/morn_screenshot.png"])
+                .args(["-window", "root", &screenshot_str])
                 .output()
                 .map_err(|e| format!("screenshot failed: {}", e))?;
             if output.status.success() {
-                return std::fs::read("/tmp/morn_screenshot.png").map_err(|e| e.to_string());
+                return std::fs::read(&screenshot_path).map_err(|e| e.to_string());
             }
         }
         tracing::warn!("screenshot not implemented on this platform");
@@ -180,6 +182,11 @@ impl ComputerControl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    fn tmp_path(name: &str) -> String {
+        std::env::temp_dir().join(name).display().to_string()
+    }
 
     #[test]
     fn test_glob_match_exact() {
@@ -222,46 +229,46 @@ mod tests {
 
     #[test]
     fn test_read_write_delete_file() {
-        let path = "/tmp/_test_computer_control_write.txt";
-        ComputerControl::write_file(path, "hello world").unwrap();
-        let content = ComputerControl::read_file(path).unwrap();
+        let path = tmp_path("_test_computer_control_write.txt");
+        ComputerControl::write_file(&path, "hello world").unwrap();
+        let content = ComputerControl::read_file(&path).unwrap();
         assert_eq!(content, "hello world");
-        ComputerControl::delete_file(path).unwrap();
-        assert!(ComputerControl::read_file(path).is_err());
+        ComputerControl::delete_file(&path).unwrap();
+        assert!(ComputerControl::read_file(&path).is_err());
     }
 
     #[test]
     fn test_move_file() {
-        let src = "/tmp/_test_computer_control_move_src.txt";
-        let dst = "/tmp/_test_computer_control_move_dst.txt";
-        ComputerControl::write_file(src, "move test").unwrap();
-        ComputerControl::move_file(src, dst).unwrap();
-        assert!(ComputerControl::read_file(src).is_err());
-        assert_eq!(ComputerControl::read_file(dst).unwrap(), "move test");
-        let _ = ComputerControl::delete_file(dst);
+        let src = tmp_path("_test_computer_control_move_src.txt");
+        let dst = tmp_path("_test_computer_control_move_dst.txt");
+        ComputerControl::write_file(&src, "move test").unwrap();
+        ComputerControl::move_file(&src, &dst).unwrap();
+        assert!(ComputerControl::read_file(&src).is_err());
+        assert_eq!(ComputerControl::read_file(&dst).unwrap(), "move test");
+        let _ = ComputerControl::delete_file(&dst);
     }
 
     #[test]
     fn test_search_files() {
-        let dir = "/tmp/_test_computer_control_search";
-        let _ = fs::remove_dir_all(dir);
-        fs::create_dir_all(dir).unwrap();
+        let dir = tmp_path("_test_computer_control_search");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
         ComputerControl::write_file(&format!("{}/a.rs", dir), "").unwrap();
         ComputerControl::write_file(&format!("{}/b.txt", dir), "").unwrap();
-        let results = ComputerControl::search_files("*.rs", dir).unwrap();
+        let results = ComputerControl::search_files("*.rs", &dir).unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].ends_with("a.rs"));
-        let _ = fs::remove_dir_all(dir);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn test_compress_real() {
-        let src = "/tmp/_test_computer_control_compress.txt";
-        let dst = "/tmp/_test_computer_control_out.zip";
-        let _ = std::fs::remove_file(dst);
-        ComputerControl::write_file(src, "compress me").unwrap();
-        assert!(ComputerControl::compress(src, dst).is_ok());
-        assert!(std::path::Path::new(dst).exists());
+        let src = tmp_path("_test_computer_control_compress.txt");
+        let dst = tmp_path("_test_computer_control_out.zip");
+        let _ = std::fs::remove_file(&dst);
+        ComputerControl::write_file(&src, "compress me").unwrap();
+        assert!(ComputerControl::compress(&src, &dst).is_ok());
+        assert!(std::path::Path::new(&dst).exists());
         let _ = std::fs::remove_file(src);
         let _ = std::fs::remove_file(dst);
     }

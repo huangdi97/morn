@@ -136,7 +136,7 @@ impl WeComChannel {
             .map_err(|e| format!("Invalid WeCom webhook_url {}: {}", self.webhook_url, e))?;
         let host = match url.host_str() {
             Some("localhost") | Some("127.0.0.1") | Some("0.0.0.0") => {
-                url.host_str().unwrap().to_string()
+                url.host_str().unwrap_or("localhost").to_string()
             }
             Some(_) => "0.0.0.0".to_string(),
             None => "0.0.0.0".to_string(),
