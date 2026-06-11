@@ -14,6 +14,8 @@ import Marketplace from "./console/Marketplace";
 import BotStore from "./store/BotStore";
 import { Settings } from "./Settings";
 import "./styles/base.css";
+import "./styles/skeleton.css";
+import "./styles/dashboard.css";
 
 type View = "workbench" | "studio" | "console" | "store";
 
@@ -43,6 +45,8 @@ function App() {
     return localStorage.getItem(THEME_KEY) || "dark";
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [sendingIndex, setSendingIndex] = useState<number | null>(null);
+  const [loading, setLoading] = useState<Record<string, boolean>>({ workbench: true, studio: true, console: true });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -63,6 +67,14 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
+  useEffect(() => {
+    if (view !== "store") {
+      setLoading(prev => ({ ...prev, [view]: true }));
+      const t = setTimeout(() => setLoading(prev => ({ ...prev, [view]: false })), 500);
+      return () => clearTimeout(t);
+    }
+  }, [view]);
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
@@ -82,7 +94,11 @@ function App() {
     }
 
     const userMsg: Message = { role: "user", content: text, timestamp: Date.now() };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => {
+      const next = [...prev, userMsg];
+      setSendingIndex(next.length - 1);
+      return next;
+    });
     setIsTyping(true);
 
     try {
@@ -101,6 +117,7 @@ function App() {
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsTyping(false);
+      setTimeout(() => setSendingIndex(null), 500);
     }
   };
 
@@ -132,6 +149,50 @@ function App() {
   const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test">("builder");
   const [consoleTab, setConsoleTab] = useState<"dashboard" | "topology" | "system" | "cost" | "governance" | "security" | "market">("dashboard");
 
+  const SkeletonChat = () => (
+    <div className="skeleton-chat">
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className={`skeleton-chat-row ${i % 2 === 0 ? "user" : ""}`}>
+          <div className="skeleton skeleton-avatar" />
+          <div className="skeleton skeleton-bubble" />
+        </div>
+      ))}
+    </div>
+  );
+
+  const SkeletonStudio = () => (
+    <div className="skeleton-studio">
+      <div className="skeleton-studio-nav">
+        {[1, 2, 3].map(i => <div key={i} className="skeleton skeleton-studio-nav-item" />)}
+      </div>
+      <div className="skeleton-studio-body">
+        <div className="skeleton-studio-sidebar">
+          {[1, 2, 3, 4, 5].map(i => <div key={i} className="skeleton skeleton-studio-sidebar-item" />)}
+        </div>
+        <div className="skeleton-studio-main">
+          <div className="skeleton skeleton-studio-main-item half" />
+          <div className="skeleton skeleton-studio-main-item" />
+          <div className="skeleton skeleton-studio-main-item" />
+          <div className="skeleton skeleton-studio-main-item tall" />
+          <div className="skeleton skeleton-studio-main-item half" />
+        </div>
+      </div>
+    </div>
+  );
+
+  const SkeletonConsole = () => (
+    <div className="skeleton-console">
+      <div className="skeleton-console-grid">
+        {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="skeleton skeleton-console-card" />)}
+      </div>
+      <div className="skeleton skeleton-console-wide" />
+      <div className="skeleton-console-charts">
+        <div className="skeleton skeleton-console-chart" />
+        <div className="skeleton skeleton-console-chart" />
+      </div>
+    </div>
+  );
+
   const renderStudio = () => (
     <div className="studio-view">
       <nav className="studio-tabs">
@@ -140,9 +201,13 @@ function App() {
         <button className={studioTab === "test" ? "active" : ""} onClick={() => setStudioTab("test")}>Test Runner</button>
       </nav>
       <div className="studio-content">
-        {studioTab === "editor" && <ComponentEditor />}
-        {studioTab === "builder" && <AgentBuilder />}
-        {studioTab === "test" && <TestPanel />}
+        {loading.studio ? <SkeletonStudio /> : (
+          <>
+            {studioTab === "editor" && <ComponentEditor />}
+            {studioTab === "builder" && <AgentBuilder />}
+            {studioTab === "test" && <TestPanel />}
+          </>
+        )}
       </div>
     </div>
   );
@@ -159,13 +224,17 @@ function App() {
         <button className={consoleTab === "market" ? "active" : ""} onClick={() => setConsoleTab("market")}>Marketplace</button>
       </nav>
       <div className="console-content">
-        {consoleTab === "dashboard" && <AdminDashboard />}
-        {consoleTab === "topology" && <Topology />}
-        {consoleTab === "system" && <SystemInfo />}
-        {consoleTab === "cost" && <CostCenter />}
-        {consoleTab === "governance" && <Governance />}
-        {consoleTab === "security" && <Security />}
-        {consoleTab === "market" && <Marketplace />}
+        {loading.console ? <SkeletonConsole /> : (
+          <>
+            {consoleTab === "dashboard" && <AdminDashboard />}
+            {consoleTab === "topology" && <Topology />}
+            {consoleTab === "system" && <SystemInfo />}
+            {consoleTab === "cost" && <CostCenter />}
+            {consoleTab === "governance" && <Governance />}
+            {consoleTab === "security" && <Security />}
+            {consoleTab === "market" && <Marketplace />}
+          </>
+        )}
       </div>
     </div>
   );
@@ -187,6 +256,8 @@ function App() {
       </header>
 
       <main className="chat-area">
+        {loading.workbench && messages.length === 0 ? <SkeletonChat /> : (
+          <>
         {messages.length === 0 && (
           <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-secondary)" }}>
             <div style={{ fontSize: "48px", marginBottom: "12px" }}>🤖</div>
@@ -196,7 +267,7 @@ function App() {
           </div>
         )}
         {messages.map((msg, i) => (
-          <div key={i} className={`message ${msg.role}`}>
+          <div key={i} className={`message ${msg.role}${i === sendingIndex ? ' sending' : ''}`}>
             <div className="avatar">{msg.role === "user" ? "U" : "M"}</div>
             <div className="bubble">
               <div className="bubble-text">{msg.content}</div>
@@ -208,11 +279,13 @@ function App() {
           <div className="message assistant">
             <div className="avatar">M</div>
             <div className="bubble typing-indicator">
-              <span>typing...</span>
+              <span></span><span></span><span></span>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
+          </>
+        )}
       </main>
 
       <footer className="input-bar">
@@ -233,10 +306,22 @@ function App() {
   return (
     <div className={`app${theme === "light" ? " light" : ""}`}>
       <nav className="main-tabs">
-        <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")}>Workbench</button>
-        <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")}>Studio</button>
-        <button className={view === "store" ? "active" : ""} onClick={() => setView("store")}>Store</button>
-        <button className={view === "console" ? "active" : ""} onClick={() => setView("console")}>Console</button>
+        <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Workbench</span>
+        </button>
+        <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="16 3 21 8 8 21 3 21 3 16 16 3"/></svg>
+          <span>Studio</span>
+        </button>
+        <button className={view === "store" ? "active" : ""} onClick={() => setView("store")}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+          <span>Store</span>
+        </button>
+        <button className={view === "console" ? "active" : ""} onClick={() => setView("console")}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span>Console</span>
+        </button>
       </nav>
       {view === "workbench" && renderWorkbench()}
       {view === "studio" && renderStudio()}

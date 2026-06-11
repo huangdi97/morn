@@ -218,6 +218,21 @@ export const api = {
     return res.json();
   },
 
+  async listTeamTemplates(): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/studio/team-templates`, {
+        headers: getApiHeaders(),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("list_team_templates");
+    }
+    const res = await fetch("/api/studio/team-templates");
+    return res.json();
+  },
+
   async testComponent(type: string, id: string, config: string, input: string): Promise<any> {
     if (isRemote()) {
       const res = await fetch(`${getBaseUrl()}/api/studio/components/${id}/test`, {

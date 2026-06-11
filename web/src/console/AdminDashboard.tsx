@@ -28,25 +28,6 @@ interface DashboardData {
   alerts?: DashboardAlert[];
 }
 
-const cardStyle: React.CSSProperties = {
-  background: "#161b22",
-  borderRadius: "8px",
-  padding: "16px",
-  border: "1px solid #30363d",
-};
-
-const valueStyle: React.CSSProperties = {
-  fontSize: "24px",
-  fontWeight: "bold",
-  color: "#58a6ff",
-  marginTop: "8px",
-};
-
-const chartStyle: React.CSSProperties = {
-  ...cardStyle,
-  minHeight: "210px",
-};
-
 const defaultRequestTrend: TrendPoint[] = [
   { label: "Mon", value: 12 },
   { label: "Tue", value: 18 },
@@ -76,9 +57,18 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const modalStyle: React.CSSProperties = {
-  background: "#161b22", borderRadius: "12px",
-  border: "1px solid #30363d", padding: "32px",
+  background: "var(--bg-surface)", borderRadius: "var(--radius-xl)",
+  border: "1px solid var(--border-default)", padding: "32px",
   maxWidth: "600px", width: "90%", maxHeight: "80vh", overflow: "auto",
+};
+
+const cardGradient: Record<string, string> = {
+  "#58a6ff": "accent-blue",
+  "#3fb950": "accent-green",
+  "#d29922": "accent-yellow",
+  "#f85149": "accent-red",
+  "#bc8cff": "accent-purple",
+  "#79c0ff": "accent-cyan",
 };
 
 export default function AdminDashboard() {
@@ -139,21 +129,21 @@ export default function AdminDashboard() {
       .join(" ");
 
     return (
-      <div style={chartStyle}>
+      <div className="dashboard-chart-card">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-          <div style={{ color: "#e6edf3", fontWeight: 600 }}>{title}</div>
-          <div style={{ color: "#8b949e", fontSize: "12px" }}>
+          <div style={{ color: "var(--text-primary)", fontWeight: 600 }}>{title}</div>
+          <div style={{ color: "var(--text-tertiary)", fontSize: "12px" }}>
             Peak {maxValue.toFixed(0)}{unit}
           </div>
         </div>
         <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "150px", display: "block" }}>
-          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#30363d" />
+          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="var(--border-default)" />
           <polyline points={chartPoints.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke={`${color}33`} strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" />
           <path d={path} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
           {chartPoints.map((point) => (
             <g key={point.label}>
               <circle cx={point.x} cy={point.y} r="4" fill={color} />
-              <text x={point.x} y={height - 8} textAnchor="middle" fontSize="10" fill="#8b949e">{point.label}</text>
+              <text x={point.x} y={height - 8} textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">{point.label}</text>
             </g>
           ))}
         </svg>
@@ -172,15 +162,15 @@ export default function AdminDashboard() {
     };
 
     return (
-      <div style={{ ...cardStyle, marginTop: "16px" }}>
-        <div style={{ color: "#e6edf3", fontWeight: 600, marginBottom: "12px" }}>Alerts</div>
-        {alerts.length === 0 && <div style={{ color: "#8b949e", fontSize: "13px" }}>No active alerts.</div>}
+      <div className="dashboard-card dashboard-alerts">
+        <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "12px" }}>Alerts</div>
+        {alerts.length === 0 && <div style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>No active alerts.</div>}
         <div style={{ display: "grid", gap: "10px" }}>
           {alerts.map((alert) => (
-            <div key={alert.id} style={{ border: `1px solid ${severityColor(alert.severity)}55`, borderLeft: `3px solid ${severityColor(alert.severity)}`, borderRadius: "6px", padding: "10px 12px", background: "#0d1117" }}>
+            <div key={alert.id} style={{ border: `1px solid ${severityColor(alert.severity)}55`, borderLeft: `3px solid ${severityColor(alert.severity)}`, borderRadius: "6px", padding: "10px 12px", background: "var(--bg-page)" }}>
               <div style={{ color: severityColor(alert.severity), fontSize: "11px", textTransform: "uppercase" }}>{alert.kind}</div>
-              <div style={{ color: "#e6edf3", fontWeight: 600, marginTop: "3px" }}>{alert.title}</div>
-              <div style={{ color: "#8b949e", fontSize: "12px", marginTop: "4px" }}>{alert.detail}</div>
+              <div style={{ color: "var(--text-primary)", fontWeight: 600, marginTop: "3px" }}>{alert.title}</div>
+              <div style={{ color: "var(--text-tertiary)", fontSize: "12px", marginTop: "4px" }}>{alert.detail}</div>
             </div>
           ))}
         </div>
@@ -195,21 +185,21 @@ export default function AdminDashboard() {
           {onboardingStep === 1 && (
             <>
               <div style={{ fontSize: "48px", textAlign: "center", marginBottom: "16px" }}>🤖</div>
-              <h2 style={{ color: "#e6edf3", textAlign: "center", margin: "0 0 8px 0" }}>欢迎使用 Morn</h2>
-              <p style={{ color: "#8b949e", textAlign: "center", fontSize: "14px", lineHeight: "1.6", margin: "0 0 24px 0" }}>
+              <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>欢迎使用 Morn</h2>
+              <p style={{ color: "var(--text-tertiary)", textAlign: "center", fontSize: "14px", lineHeight: "1.6", margin: "0 0 24px 0" }}>
                 Morn 是一个智能 AI 助手平台，帮你构建和使用 AI Agent。
                 你可以通过自然语言快速创建定制 Agent，或从模板开始。
               </p>
               <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
                 <button
                   onClick={completeOnboarding}
-                  style={{ padding: "10px 24px", borderRadius: "6px", border: "1px solid #30363d", background: "transparent", color: "#8b949e", cursor: "pointer" }}
+                  style={{ padding: "10px 24px", borderRadius: "6px", border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer" }}
                 >
                   跳过
                 </button>
                 <button
                   onClick={() => setOnboardingStep(2)}
-                  style={{ padding: "10px 24px", borderRadius: "6px", border: "none", background: "#58a6ff", color: "#fff", cursor: "pointer" }}
+                  style={{ padding: "10px 24px", borderRadius: "6px", border: "none", background: "var(--accent-brand)", color: "#fff", cursor: "pointer" }}
                 >
                   开始使用
                 </button>
@@ -218,8 +208,8 @@ export default function AdminDashboard() {
           )}
           {onboardingStep === 2 && (
             <>
-              <h3 style={{ color: "#e6edf3", margin: "0 0 16px 0" }}>选择你的第一个 Agent</h3>
-              <p style={{ color: "#8b949e", fontSize: "14px", margin: "0 0 16px 0" }}>
+              <h3 style={{ color: "var(--text-primary)", margin: "0 0 16px 0" }}>选择你的第一个 Agent</h3>
+              <p style={{ color: "var(--text-tertiary)", fontSize: "14px", margin: "0 0 16px 0" }}>
                 选择一个模板开始，你也可以之后在 Studio 中自定义。
               </p>
               <TemplateSelector
@@ -228,7 +218,7 @@ export default function AdminDashboard() {
               <div style={{ textAlign: "center", marginTop: "16px" }}>
                 <button
                   onClick={completeOnboarding}
-                  style={{ padding: "8px 20px", borderRadius: "6px", border: "1px solid #30363d", background: "transparent", color: "#8b949e", cursor: "pointer" }}
+                  style={{ padding: "8px 20px", borderRadius: "6px", border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer" }}
                 >
                   稍后再说
                 </button>
@@ -238,14 +228,14 @@ export default function AdminDashboard() {
           {onboardingStep === 3 && (
             <>
               <div style={{ fontSize: "48px", textAlign: "center", marginBottom: "16px" }}>🚀</div>
-              <h2 style={{ color: "#e6edf3", textAlign: "center", margin: "0 0 8px 0" }}>试试吧</h2>
-              <p style={{ color: "#8b949e", textAlign: "center", fontSize: "14px", margin: "0 0 24px 0" }}>
+              <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>试试吧</h2>
+              <p style={{ color: "var(--text-tertiary)", textAlign: "center", fontSize: "14px", margin: "0 0 24px 0" }}>
                 前往 Workbench 开始对话，或在 Studio 中创建你的第一个 Agent。
               </p>
               <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
                 <button
                   onClick={completeOnboarding}
-                  style={{ padding: "10px 24px", borderRadius: "6px", border: "none", background: "#58a6ff", color: "#fff", cursor: "pointer" }}
+                  style={{ padding: "10px 24px", borderRadius: "6px", border: "none", background: "var(--accent-brand)", color: "#fff", cursor: "pointer" }}
                 >
                   开始探索
                 </button>
@@ -259,20 +249,20 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Dashboard</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+      <h2 style={{ color: "var(--text-primary)", marginBottom: "16px" }}>Dashboard</h2>
+      <div className="dashboard-grid">
         {cards.map((card) => (
-          <div key={card.label} style={cardStyle}>
-            <div style={{ color: "#8b949e", fontSize: "13px" }}>{card.label}</div>
-            <div style={{ ...valueStyle, color: card.color }}>{card.value}</div>
+          <div key={card.label} className={`dashboard-card ${cardGradient[card.color] ?? ""}`}>
+            <div className="dashboard-card-label">{card.label}</div>
+            <div className="dashboard-card-value" style={{ color: card.color }}>{card.value}</div>
           </div>
         ))}
       </div>
-      <div style={{ ...cardStyle, marginTop: "16px" }}>
-        <div style={{ color: "#8b949e", fontSize: "13px" }}>Uptime</div>
-        <div style={valueStyle}>{data.uptime_hours.toFixed(1)} hours</div>
+      <div className={`dashboard-card dashboard-card-uptime`} style={{ marginTop: "var(--space-md)" }}>
+        <div className="dashboard-card-label">Uptime</div>
+        <div className="dashboard-card-value" style={{ color: "var(--accent-brand)" }}>{data.uptime_hours.toFixed(1)} hours</div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px", marginTop: "16px" }}>
+      <div className="dashboard-chart-grid">
         {renderTrendChart("Request Trend", data.request_trend ?? defaultRequestTrend, "#58a6ff")}
         {renderTrendChart("Latency Trend", data.latency_trend ?? defaultLatencyTrend, "#d29922", "ms")}
       </div>
