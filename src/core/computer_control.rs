@@ -150,7 +150,10 @@ impl ComputerControl {
         #[cfg(target_os = "linux")]
         {
             let screenshot_path = std::env::temp_dir().join("morn_screenshot.png");
-            let screenshot_str = screenshot_path.to_str().unwrap().to_string();
+            let screenshot_str = screenshot_path
+                .to_str()
+                .ok_or_else(|| format!("非UTF-8路径: {:?}", screenshot_path))?
+                .to_string();
             let output = std::process::Command::new("import")
                 .args(["-window", "root", &screenshot_str])
                 .output()

@@ -1,4 +1,5 @@
 //! component — Defines shared component traits, data values, and execution context.
+pub mod trait_def;
 pub mod types;
 
 pub use crate::core::component::types::{

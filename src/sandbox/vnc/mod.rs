@@ -179,7 +179,10 @@ impl VncManager {
         if !cfg!(test) && cfg!(feature = "vnc-sandbox") && cfg!(target_os = "linux") {
             let display = session.display.as_deref().unwrap_or(":0");
             let screenshot_path = std::env::temp_dir().join("morn_vnc_screenshot.png");
-            let screenshot_str = screenshot_path.to_str().unwrap().to_string();
+            let screenshot_str = screenshot_path
+                .to_str()
+                .ok_or_else(|| format!("非UTF-8路径: {:?}", screenshot_path))?
+                .to_string();
             let output = std::process::Command::new("import")
                 .args([
                     "-display",

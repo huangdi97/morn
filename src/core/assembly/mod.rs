@@ -2,6 +2,7 @@
 
 mod builder;
 mod graph;
+pub mod rules;
 mod validator;
 
 pub use builder::{AssemblyBuilder, ComponentSelector, DefaultCompleter, GuidedBuildSteps};
