@@ -1,4 +1,5 @@
 //! marketplace — Lists, installs, and manages marketplace capabilities.
+use crate::core::component_type::ComponentTypeDef;
 use crate::core::registry::{Capability, Registry};
 use crate::core::storage::Storage;
 use tracing;
@@ -12,6 +13,7 @@ pub enum ListingType {
     Agent,
     Workflow,
     TeamTemplate,
+    ComponentTypeDef,
 }
 
 impl ListingType {
@@ -24,6 +26,7 @@ impl ListingType {
             ListingType::Agent => "agent",
             ListingType::Workflow => "workflow",
             ListingType::TeamTemplate => "team_template",
+            ListingType::ComponentTypeDef => "component_type_def",
         }
     }
 }
@@ -292,6 +295,62 @@ impl Marketplace {
         registry.register(cap);
         Ok(())
     }
+
+    pub fn publish_type(
+        &self,
+        type_def: ComponentTypeDef,
+        user_id: &str,
+    ) -> Result<String, String> {
+        let id = format!("listing-ctype-{}", uuid::Uuid::new_v4());
+        let listing = Listing {
+            id: id.clone(),
+            item_type: ListingType::ComponentTypeDef.as_str().into(),
+            name: type_def.type_name.clone(),
+            description: format!(
+                "Component type '{}' v{} by {} — interfaces: {:?}",
+                type_def.type_name, type_def.version, type_def.author, type_def.interfaces
+            ),
+            price: 0.0,
+            author: user_id.to_string(),
+            rating: 0.0,
+            downloads: 0,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        self.storage.save_listing(&listing)?;
+        Ok(id)
+    }
+
+    pub fn install_type_to_registry(
+        &self,
+        listing_id: &str,
+        registry: &mut Registry,
+    ) -> Result<(), String> {
+        let listing = self
+            .storage
+            .get_listing(listing_id)?
+            .ok_or("Listing not found")?;
+        if listing.item_type != ListingType::ComponentTypeDef.as_str() {
+            return Err("Listing is not a ComponentTypeDef".to_string());
+        }
+        let cap = Capability {
+            id: format!("market-{}", listing.id),
+            version: "0.1.0".to_string(),
+            name: listing.name,
+            domain: listing.item_type,
+            actions: vec![listing.id.clone()],
+            description: listing.description,
+            trust_score: listing.rating * 20.0,
+            total_calls: 0,
+            success_calls: 0,
+            avg_latency_ms: 0.0,
+            visibility: "public".to_string(),
+            owner_id: None,
+            team_id: None,
+            daily_quota: 0,
+        };
+        registry.register(cap);
+        Ok(())
+    }
 }
 
 impl Listing {
@@ -390,5 +449,58 @@ mod tests {
         let cap = registry.get("market-listing-tool-web-search");
         assert!(cap.is_some());
         assert_eq!(cap.unwrap().name, "Web Search Pro");
+    }
+
+    #[test]
+    fn test_publish_type() {
+        let market = Marketplace::new(test_storage());
+        let type_def = ComponentTypeDef {
+            type_name: "my_custom_type".to_string(),
+            interfaces: vec!["execute".to_string()],
+            config_schema: serde_json::json!({"type": "object"}),
+            implements: vec![],
+            author: "test-author".to_string(),
+            version: "0.1.0".to_string(),
+        };
+        let listing_id = market
+            .publish_type(type_def, "user-1")
+            .unwrap();
+        let listing = market.get(&listing_id).unwrap();
+        assert_eq!(listing.item_type, "component_type_def");
+        assert_eq!(listing.name, "my_custom_type");
+        assert_eq!(listing.author, "user-1");
+    }
+
+    #[test]
+    fn test_install_type_to_registry() {
+        let mut registry = Registry::new(None, None);
+        let market = Marketplace::new(test_storage());
+
+        let type_def = ComponentTypeDef {
+            type_name: "vision_model".to_string(),
+            interfaces: vec!["predict".to_string(), "embed".to_string()],
+            config_schema: serde_json::json!({"type": "object"}),
+            implements: vec!["model".to_string()],
+            author: "test".to_string(),
+            version: "0.1.0".to_string(),
+        };
+        let listing_id = market.publish_type(type_def, "user-1").unwrap();
+        market
+            .install_type_to_registry(&listing_id, &mut registry)
+            .unwrap();
+
+        let cap = registry.get(&format!("market-{}", listing_id));
+        assert!(cap.is_some());
+        assert_eq!(cap.unwrap().domain, "component_type_def");
+    }
+
+    #[test]
+    fn test_install_type_to_registry_rejects_non_type_listing() {
+        let mut registry = Registry::new(None, None);
+        let market = Marketplace::new(test_storage());
+        let result =
+            market.install_type_to_registry("listing-tool-web-search", &mut registry);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not a ComponentTypeDef"));
     }
 }

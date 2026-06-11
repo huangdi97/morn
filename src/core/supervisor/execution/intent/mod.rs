@@ -1,11 +1,43 @@
 //! intent — Natural-language agent creation and feedback-based learning.
 pub mod agent_builder;
 
+use crate::core::registry::Registry;
 use crate::core::storage::DecisionRule;
-
+use crate::core::storage::Storage;
 use crate::core::supervisor::Supervisor;
+use crate::market::Marketplace;
 
 impl Supervisor {
+    /// Queries registry capabilities matching the natural-language description and returns matching tool names.
+    pub fn infer_from_registry(&self, nl: &str) -> Vec<String> {
+        let registry = Registry::new(self.storage.clone(), None);
+        let keyword = nl.to_lowercase();
+        registry
+            .list_all()
+            .into_iter()
+            .filter(|c| {
+                c.name.to_lowercase().contains(&keyword)
+                    || c.description.to_lowercase().contains(&keyword)
+                    || c.domain.to_lowercase().contains(&keyword)
+            })
+            .map(|c| c.name.clone())
+            .collect()
+    }
+
+    /// Searches the marketplace for components relevant to the natural-language description and returns component names with types.
+    pub fn suggest_from_market(&self, nl: &str) -> Vec<String> {
+        let storage = match Storage::new_in_memory() {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+        let market = Marketplace::new(storage);
+        market
+            .search(nl)
+            .into_iter()
+            .map(|l| format!("{} ({})", l.name, l.item_type))
+            .collect()
+    }
+
     /// Learns a decision rule from user feedback and returns success when storage updates complete.
     pub fn learn_from_feedback(&mut self, user_input: &str, approved: bool) -> Result<(), String> {
         let user_id = self.user_id.as_deref().unwrap_or("default").to_string();

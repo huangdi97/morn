@@ -32,6 +32,8 @@ pub struct NLAgentDef {
     pub persona_config: NLPersonaConfig,
     #[serde(default = "default_communication_style")]
     pub communication_style: String,
+    #[serde(default)]
+    pub suggestions: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
