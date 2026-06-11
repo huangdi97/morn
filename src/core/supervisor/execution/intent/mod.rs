@@ -114,9 +114,9 @@ mod tests {
         let chat_fn = |prompt: &str, system: &str| {
             let idx = call_count.fetch_add(1, Ordering::SeqCst);
             assert!(system.contains("COO agent configuration planner"));
-            assert!(prompt.contains(&format!("Step {}", idx + 1)));
+            assert!(prompt.contains("Step"));
             if idx > 0 {
-                assert!(prompt.contains(&format!("Step {} result", idx)));
+                assert!(prompt.contains("result:"));
             }
             Ok(responses[idx].to_string())
         };

@@ -1,4 +1,4 @@
-//! Agent builder — constructs agents from intent.
+//! Agent builder — constructs agents from intent using DESIGN.md §3.1 6-step inference chain.
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 
@@ -141,140 +141,105 @@ fn ensure_prompt_layers(mut layers: PromptLayers, role: &str) -> PromptLayers {
     layers
 }
 
-fn step1_analyze_domain(
-    context: &str,
-    chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    system_prompt: &str,
-) -> Result<(DomainStep, String), String> {
-    let prompt = format!(
-        r#"{}
-
-Step 1: Analyze the domain: what field is this agent for?
-Return exactly:
-{{
-  "domain": "short domain label",
-  "name": "short agent name, 2-5 words"
-}}"#,
-        context
-    );
-    call_json_step::<DomainStep>(chat_fn, "Step 1", &prompt, system_prompt)
+fn list_registry_tools(registry: &Registry) -> Vec<String> {
+    let templates = registry.list_templates();
+    let mut tools: Vec<String> = templates
+        .iter()
+        .flat_map(|t| t.tools.iter().cloned())
+        .collect();
+    tools.sort();
+    tools.dedup();
+    tools
 }
 
-fn step2_determine_role(
-    context: &str,
-    chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    system_prompt: &str,
-) -> Result<(RoleStep, String), String> {
-    let prompt = format!(
-        r#"{}
-
-Step 2: Determine the role: what role should this agent play?
-Use the previous domain result as context. Select persona from available personas when possible.
-Return exactly:
-{{
-  "role": "role this agent should play",
-  "persona": "persona id or name from the available personas",
-  "name": "optional refined short agent name"
-}}"#,
-        context
-    );
-    call_json_step::<RoleStep>(chat_fn, "Step 2", &prompt, system_prompt)
+fn list_registry_personas(registry: &Registry) -> Vec<String> {
+    let templates = registry.list_templates();
+    let mut personas: Vec<String> = templates.iter().map(|t| t.persona.clone()).collect();
+    personas.sort();
+    personas.dedup();
+    personas
 }
 
-fn step3_infer_capabilities(
-    context: &str,
-    chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    system_prompt: &str,
-) -> Result<(CapabilitiesStep, String), String> {
-    let prompt = format!(
-        r#"{}
-
-Step 3: Infer capabilities needed.
-Use the previous domain and role results as context. Map capabilities to available skills when possible.
-Return exactly:
-{{
-  "capabilities": ["capability names needed by the agent"],
-  "skills": ["skill names selected from available skills"]
-}}"#,
-        context
-    );
-    call_json_step::<CapabilitiesStep>(chat_fn, "Step 3", &prompt, system_prompt)
+fn list_registry_models(registry: &Registry) -> Vec<String> {
+    let templates = registry.list_templates();
+    let mut models: Vec<String> = templates.iter().map(|t| t.model.clone()).collect();
+    models.sort();
+    models.dedup();
+    models
 }
 
-fn step4_infer_tools(
-    context: &str,
-    chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    system_prompt: &str,
-) -> Result<(ToolsStep, String), String> {
-    let prompt = format!(
-        r#"{}
-
-Step 4: Infer tools needed.
-Use all previous results as context. Select tool names from available tools when possible.
-Return exactly:
-{{
-  "tools": ["tool names"]
-}}"#,
-        context
-    );
-    call_json_step::<ToolsStep>(chat_fn, "Step 4", &prompt, system_prompt)
+fn list_registry_knowledge(registry: &Registry) -> Vec<String> {
+    let templates = registry.list_templates();
+    let mut knowledge: Vec<String> = templates
+        .iter()
+        .flat_map(|t| t.knowledge.iter().cloned())
+        .collect();
+    knowledge.sort();
+    knowledge.dedup();
+    knowledge
 }
 
-fn step5_infer_knowledge(
-    context: &str,
-    chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    system_prompt: &str,
-) -> Result<(KnowledgeStep, String), String> {
-    let prompt = format!(
-        r#"{}
-
-Step 5: Infer knowledge needed.
-Use all previous results as context. Select knowledge sources from available knowledge when possible, and choose memory layers needed by this agent.
-Return exactly:
-{{
-  "knowledge": ["knowledge source names"],
-  "memory": ["memory layer names"]
-}}"#,
-        context
-    );
-    call_json_step::<KnowledgeStep>(chat_fn, "Step 5", &prompt, system_prompt)
+fn list_registry_skills(registry: &Registry) -> Vec<String> {
+    let templates = registry.list_templates();
+    let mut skills: Vec<String> = templates
+        .iter()
+        .flat_map(|t| t.skills.iter().cloned())
+        .collect();
+    skills.sort();
+    skills.dedup();
+    skills
 }
 
-fn step6_infer_persona(
-    context: &str,
-    chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    system_prompt: &str,
-) -> Result<(PersonaStep, String), String> {
-    let prompt = format!(
-        r#"{}
+fn build_default_tool_context() -> String {
+    [
+        "web_search",
+        "read_file",
+        "write_file",
+        "exec_python",
+        "calc",
+        "get_time",
+        "get_kline",
+        "calc_macd",
+        "chart",
+    ]
+    .join(", ")
+}
 
-Step 6: Infer persona configuration.
-Use all previous results as context. Generate persona parameters and all 5 prompt layers for the final agent definition.
-Return exactly:
-{{
-  "model": "model name from available models",
-  "persona": "optional refined persona",
-  "name": "optional refined short agent name",
-  "communication_style": "professional|friendly|detailed|creative|technical or similar",
-  "persona_config": {{
-    "parameters": {{
-      "temperature": 0.6,
-      "style": "professional",
-      "verbosity": 0.5,
-      "proactiveness": 0.3
-    }},
-    "prompt_layers": {{
-      "l1_core_identity": "core identity prompt",
-      "l2_skill_instructions": "skill instruction prompt or null",
-      "l3_format_template": "format template prompt or null",
-      "l4_constraints": "constraints prompt or null",
-      "l5_conversation_style": "conversation style prompt or null"
-    }}
-  }}
-}}"#,
-        context
-    );
-    call_json_step::<PersonaStep>(chat_fn, "Step 6", &prompt, system_prompt)
+fn build_default_persona_context() -> String {
+    [
+        "assistant",
+        "analyst",
+        "researcher",
+        "writer",
+        "coder",
+        "translator",
+        "reviewer",
+    ]
+    .join(", ")
+}
+
+fn build_default_model_context() -> String {
+    "deepseek-chat, deepseek-reasoner".to_string()
+}
+
+fn build_default_knowledge_context() -> String {
+    "docs, glossary, data_sources".to_string()
+}
+
+fn build_default_skill_context() -> String {
+    [
+        "summarization",
+        "translation",
+        "code_review",
+        "grammar_check",
+        "format",
+        "style",
+        "proofread",
+        "report_generation",
+        "debug",
+        "test",
+    ]
+    .join(", ")
 }
 
 fn collect_step_results(
@@ -337,6 +302,189 @@ fn collect_step_results(
 }
 
 impl Supervisor {
+    /// Step 1 — 领域识别: extract the professional domain from natural language.
+    fn domain_recognition(
+        &self,
+        context: &str,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        system_prompt: &str,
+    ) -> Result<(DomainStep, String), String> {
+        let prompt = format!(
+            r#"{}
+
+Step 1 — Domain Recognition: extract the professional domain from the user's description.
+Return exactly:
+{{
+  "domain": "short domain label",
+  "name": "short agent name, 2-5 words"
+}}"#,
+            context
+        );
+        call_json_step::<DomainStep>(chat_fn, "Step 1 — Domain Recognition", &prompt, system_prompt)
+    }
+
+    /// Step 2 — 角色推断: infer the role type needed.
+    fn role_inference(
+        &self,
+        context: &str,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        system_prompt: &str,
+    ) -> Result<(RoleStep, String), String> {
+        let prompt = format!(
+            r#"{}
+
+Step 2 — Role Inference: determine what role this agent should play.
+Use the previous domain result as context. Select persona from available personas when possible.
+Return exactly:
+{{
+  "role": "role this agent should play",
+  "persona": "persona id or name from the available personas",
+  "name": "optional refined short agent name"
+}}"#,
+            context
+        );
+        call_json_step::<RoleStep>(chat_fn, "Step 2 — Role Inference", &prompt, system_prompt)
+    }
+
+    /// Step 3 — 能力推断: infer the required capability set.
+    fn capability_inference(
+        &self,
+        context: &str,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        system_prompt: &str,
+    ) -> Result<(CapabilitiesStep, String), String> {
+        let prompt = format!(
+            r#"{}
+
+Step 3 — Capability Inference: infer capabilities needed.
+Use the previous domain and role results as context. Map capabilities to available skills when possible.
+Return exactly:
+{{
+  "capabilities": ["capability names needed by the agent"],
+  "skills": ["skill names selected from available skills"]
+}}"#,
+            context
+        );
+        call_json_step::<CapabilitiesStep>(chat_fn, "Step 3 — Capability Inference", &prompt, system_prompt)
+    }
+
+    /// Step 4 — 工具推断: infer required tools, query Registry for recommendations.
+    fn tool_inference(
+        &self,
+        context: &str,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        system_prompt: &str,
+        registry: Option<&Registry>,
+    ) -> Result<(ToolsStep, String), String> {
+        let tool_list = if let Some(reg) = registry {
+            list_registry_tools(reg).join(", ")
+        } else {
+            build_default_tool_context()
+        };
+
+        let prompt = format!(
+            r#"{}
+
+Step 4 — Tool Inference: infer tools needed.
+Use all previous results as context. Select tool names from available tools when possible.
+Available tools: {}
+
+Return exactly:
+{{
+  "tools": ["tool names"]
+}}"#,
+            context, tool_list
+        );
+        call_json_step::<ToolsStep>(chat_fn, "Step 4 — Tool Inference", &prompt, system_prompt)
+    }
+
+    /// Step 5 — 知识推断: infer required knowledge bases and data sources.
+    fn knowledge_inference(
+        &self,
+        context: &str,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        system_prompt: &str,
+        registry: Option<&Registry>,
+    ) -> Result<(KnowledgeStep, String), String> {
+        let knowledge_list = if let Some(reg) = registry {
+            list_registry_knowledge(reg).join(", ")
+        } else {
+            build_default_knowledge_context()
+        };
+
+        let prompt = format!(
+            r#"{}
+
+Step 5 — Knowledge Inference: infer knowledge needed.
+Use all previous results as context. Select knowledge sources from available knowledge when possible, and choose memory layers needed by this agent.
+Available knowledge: {}
+Available memory: working_memory, episodic_memory, semantic_memory, graph_memory, flash_memory
+
+Return exactly:
+{{
+  "knowledge": ["knowledge source names"],
+  "memory": ["memory layer names"]
+}}"#,
+            context, knowledge_list
+        );
+        call_json_step::<KnowledgeStep>(chat_fn, "Step 5 — Knowledge Inference", &prompt, system_prompt)
+    }
+
+    /// Step 6 — 人格推断: infer suitable persona, match against available personas.
+    fn persona_inference(
+        &self,
+        context: &str,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        system_prompt: &str,
+        registry: Option<&Registry>,
+    ) -> Result<(PersonaStep, String), String> {
+        let persona_list = if let Some(reg) = registry {
+            list_registry_personas(reg).join(", ")
+        } else {
+            build_default_persona_context()
+        };
+        let model_list = if let Some(reg) = registry {
+            list_registry_models(reg).join(", ")
+        } else {
+            build_default_model_context()
+        };
+
+        let prompt = format!(
+            r#"{}
+
+Step 6 — Persona Inference: infer persona configuration.
+Use all previous results as context. Generate persona parameters and all 5 prompt layers for the final agent definition.
+Match against available personas when possible.
+Available personas: {}
+Available models: {}
+
+Return exactly:
+{{
+  "model": "model name from available models",
+  "persona": "optional refined persona",
+  "name": "optional refined short agent name",
+  "communication_style": "professional|friendly|detailed|creative|technical or similar",
+  "persona_config": {{
+    "parameters": {{
+      "temperature": 0.6,
+      "style": "professional",
+      "verbosity": 0.5,
+      "proactiveness": 0.3
+    }},
+    "prompt_layers": {{
+      "l1_core_identity": "core identity prompt",
+      "l2_skill_instructions": "skill instruction prompt or null",
+      "l3_format_template": "format template prompt or null",
+      "l4_constraints": "constraints prompt or null",
+      "l5_conversation_style": "conversation style prompt or null"
+    }}
+  }}
+}}"#,
+            context, persona_list, model_list
+        );
+        call_json_step::<PersonaStep>(chat_fn, "Step 6 — Persona Inference", &prompt, system_prompt)
+    }
+
     pub fn create_agent_from_nl(
         &self,
         nl: &str,
@@ -351,86 +499,21 @@ impl Supervisor {
         suggestions.sort();
         suggestions.dedup();
 
-        let (persona_list, model_list, tool_list, knowledge_list, skill_list) =
-            if let Some(reg) = registry {
-                let templates = reg.list_templates();
-                let personas: Vec<&str> = templates.iter().map(|t| t.persona.as_str()).collect();
-                let models: Vec<&str> = templates.iter().map(|t| t.model.as_str()).collect();
-                let tools: Vec<&str> = templates
-                    .iter()
-                    .flat_map(|t| t.tools.iter().map(|s| s.as_str()))
-                    .collect();
-                let knowledge: Vec<&str> = templates
-                    .iter()
-                    .flat_map(|t| t.knowledge.iter().map(|s| s.as_str()))
-                    .collect();
-                let skills: Vec<&str> = templates
-                    .iter()
-                    .flat_map(|t| t.skills.iter().map(|s| s.as_str()))
-                    .collect();
-                let mut unique_personas: Vec<&str> = personas.clone();
-                unique_personas.sort();
-                unique_personas.dedup();
-                let mut unique_models: Vec<&str> = models.clone();
-                unique_models.sort();
-                unique_models.dedup();
-                let mut unique_tools: Vec<&str> = tools.clone();
-                unique_tools.sort();
-                unique_tools.dedup();
-                let mut unique_knowledge: Vec<&str> = knowledge.clone();
-                unique_knowledge.sort();
-                unique_knowledge.dedup();
-                let mut unique_skills: Vec<&str> = skills.clone();
-                unique_skills.sort();
-                unique_skills.dedup();
-                (
-                    unique_personas.join(", "),
-                    unique_models.join(", "),
-                    unique_tools.join(", "),
-                    unique_knowledge.join(", "),
-                    unique_skills.join(", "),
-                )
-            } else {
-                (
-                    [
-                        "assistant",
-                        "analyst",
-                        "researcher",
-                        "writer",
-                        "coder",
-                        "translator",
-                        "reviewer",
-                    ]
-                    .join(", "),
-                    ["deepseek-chat", "deepseek-reasoner"].join(", "),
-                    [
-                        "web_search",
-                        "read_file",
-                        "write_file",
-                        "exec_python",
-                        "calc",
-                        "get_time",
-                        "get_kline",
-                        "calc_macd",
-                        "chart",
-                    ]
-                    .join(", "),
-                    ["docs", "glossary", "data_sources"].join(", "),
-                    [
-                        "summarization",
-                        "translation",
-                        "code_review",
-                        "grammar_check",
-                        "format",
-                        "style",
-                        "proofread",
-                        "report_generation",
-                        "debug",
-                        "test",
-                    ]
-                    .join(", "),
-                )
-            };
+        let persona_list = if let Some(reg) = registry {
+            list_registry_personas(reg).join(", ")
+        } else {
+            build_default_persona_context()
+        };
+        let model_list = if let Some(reg) = registry {
+            list_registry_models(reg).join(", ")
+        } else {
+            build_default_model_context()
+        };
+        let skill_list = if let Some(reg) = registry {
+            list_registry_skills(reg).join(", ")
+        } else {
+            build_default_skill_context()
+        };
 
         let mut context = format!(
             r#"User wants to create an agent.
@@ -439,30 +522,29 @@ Description:
 
 Available personas: {}
 Available models: {}
-Available tools: {}
-Available knowledge: {}
-Available skills: {}
-Available memory: working_memory, episodic_memory, semantic_memory, graph_memory, flash_memory"#,
-            nl, persona_list, model_list, tool_list, knowledge_list, skill_list
+Available skills: {}"#,
+            nl, persona_list, model_list, skill_list
         );
 
-        let (domain, domain_json) = step1_analyze_domain(&context, chat_fn, system_prompt)?;
-        append_context(&mut context, "Step 1", &domain_json);
+        let (domain, domain_json) = self.domain_recognition(&context, chat_fn, system_prompt)?;
+        append_context(&mut context, "Step 1 — Domain Recognition", &domain_json);
 
-        let (role, role_json) = step2_determine_role(&context, chat_fn, system_prompt)?;
-        append_context(&mut context, "Step 2", &role_json);
+        let (role, role_json) = self.role_inference(&context, chat_fn, system_prompt)?;
+        append_context(&mut context, "Step 2 — Role Inference", &role_json);
 
         let (capabilities, capabilities_json) =
-            step3_infer_capabilities(&context, chat_fn, system_prompt)?;
-        append_context(&mut context, "Step 3", &capabilities_json);
+            self.capability_inference(&context, chat_fn, system_prompt)?;
+        append_context(&mut context, "Step 3 — Capability Inference", &capabilities_json);
 
-        let (tools, tools_json) = step4_infer_tools(&context, chat_fn, system_prompt)?;
-        append_context(&mut context, "Step 4", &tools_json);
+        let (tools, tools_json) = self.tool_inference(&context, chat_fn, system_prompt, registry)?;
+        append_context(&mut context, "Step 4 — Tool Inference", &tools_json);
 
-        let (knowledge, knowledge_json) = step5_infer_knowledge(&context, chat_fn, system_prompt)?;
-        append_context(&mut context, "Step 5", &knowledge_json);
+        let (knowledge, knowledge_json) =
+            self.knowledge_inference(&context, chat_fn, system_prompt, registry)?;
+        append_context(&mut context, "Step 5 — Knowledge Inference", &knowledge_json);
 
-        let (persona, _persona_json) = step6_infer_persona(&context, chat_fn, system_prompt)?;
+        let (persona, _persona_json) =
+            self.persona_inference(&context, chat_fn, system_prompt, registry)?;
 
         Ok(collect_step_results(
             domain, role, capabilities, tools, knowledge, persona, suggestions,
