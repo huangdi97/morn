@@ -1,4 +1,6 @@
 //! workflow_builder — Builds executable workflows from registered capabilities and tasks.
+use crate::bridge::chat_agent::ChatAgent;
+use crate::core::model_router::ModelRouter;
 use crate::core::registry::Registry;
 use crate::core::workflow::{WorkflowAction, WorkflowStep, WorkflowTemplate};
 use std::collections::HashMap;
@@ -28,14 +30,77 @@ pub struct WorkflowEdge {
 pub struct WorkflowBuilder {
     #[allow(dead_code)] /* 预留：后续按 registry 校验 workflow action/tool */
     registry: Arc<Registry>,
+    model_router: Option<ModelRouter>,
 }
 
 impl WorkflowBuilder {
     pub fn new(registry: Arc<Registry>) -> Self {
-        WorkflowBuilder { registry }
+        WorkflowBuilder {
+            registry,
+            model_router: None,
+        }
+    }
+
+    pub fn with_model_router(mut self, router: ModelRouter) -> Self {
+        self.model_router = Some(router);
+        self
     }
 
     pub async fn nl_to_workflow(&self, description: &str) -> Result<WorkflowPlan, String> {
+        if let Some(ref router) = self.model_router {
+            return self.nl_to_workflow_llm(router, description).await;
+        }
+        self.nl_to_workflow_keyword(description)
+    }
+
+    async fn nl_to_workflow_llm(
+        &self,
+        router: &ModelRouter,
+        description: &str,
+    ) -> Result<WorkflowPlan, String> {
+        let system_prompt = "\
+You are a workflow planner. Given a user's natural language request, produce a JSON object that represents a workflow plan.
+
+The JSON must strictly follow this schema (no markdown fences, no extra text, only raw JSON):
+{
+  \"description\": \"<brief description>\",
+  \"nodes\": [
+    {
+      \"id\": \"<unique node id>\",
+      \"action_type\": \"llm_call\" | \"tool_call\" | \"agent_call\" | \"human_input\" | \"code_exec\",
+      \"label\": \"<human-readable label>\",
+      \"params\": { <arbitrary JSON object> }
+    }
+  ],
+  \"edges\": [
+    {
+      \"from\": \"<source node id>\",
+      \"to\": \"<target node id>\"
+    }
+  ]
+}
+
+Rules:
+- Always include at least 2-3 nodes. Common actions: \"llm_call\" for reasoning/generation, \"tool_call\" for search or external tools.
+- Connect nodes with edges to show execution order.
+- The \"params\" field of each node should contain meaningful configuration for the action type (e.g., for tool_call use {\"tool\": \"...\", \"query\": \"...\"}; for llm_call use {\"task\": \"...\"}).
+- Return ONLY the raw JSON. No explanations.";
+
+        let agent = ChatAgent::from_router(router, description)?;
+        let response = agent.chat_async(description, system_prompt).await?;
+
+        let trimmed = response.trim();
+        let json_str = trimmed
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+
+        serde_json::from_str::<WorkflowPlan>(json_str)
+            .map_err(|e| format!("LLM returned invalid WorkflowPlan JSON: {}\nRaw: {}", e, trimmed))
+    }
+
+    fn nl_to_workflow_keyword(&self, description: &str) -> Result<WorkflowPlan, String> {
         let lower = description.to_lowercase();
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
