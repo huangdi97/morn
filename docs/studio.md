@@ -38,6 +38,60 @@
 | Workflow | ⚙️ | 工作流 |
 | Knowledge | 📚 | 知识库 |
 | Persona | 🧑 | 人格模板 |
+| Pipeline | 🔀 | 流水线节点 |
+
+## Canvas 画布
+
+Canvas 提供可视化 Agent/组件编排与连线功能：
+
+| 功能 | 描述 |
+|------|------|
+| 缩放 | 滚轮缩放画布 |
+| 撤销 | Ctrl+Z 撤销操作 |
+| 快照 (SVG) | 导出画布为 SVG 图片 |
+| 快照 (JSON) | 导出/导入画布为 JSON 配置 |
+| 拖拽连线 | 从节点拖出连线到目标节点 |
+
+### 16 种 PipelineNodeType
+
+| 类型 | 用途 |
+|------|------|
+| Input | 输入节点 |
+| Output | 输出节点 |
+| LLM | 大模型调用 |
+| Tool | 工具调用 |
+| Knowledge | 知识库检索 |
+| Memory | 记忆读写 |
+| Code | 代码执行 |
+| Condition | 条件分支 |
+| Loop | 循环节点 |
+| Parallel | 并行分支 |
+| Merge | 结果合并 |
+| Transform | 数据转换 |
+| Filter | 数据过滤 |
+| Log | 日志记录 |
+| Notify | 通知发送 |
+| Delay | 延时等待 |
+
+### 7 种协作模式
+
+| 模式 | 描述 |
+|------|------|
+| Chain | A→B→C 串行执行 |
+| Supervisor-Worker | 主管拆任务→工人并行 |
+| Broadcast | 同一输入发所有 Agent |
+| Voting | 多 Agent 独立决策→投票 |
+| Router | 按输入内容路由到指定 Agent |
+| Agent-as-Tool | Agent 注册为其他 Agent 的工具 |
+| Shared Blackboard | 所有 Agent 读写同一上下文 |
+
+### 手机画布简化模式
+
+在移动设备上自动启用简化视图：
+- 单列布局
+- 触摸手势替代拖拽
+- 简化节点类型（仅显示核心 8 种）
+- 性能优化（限制画布节点数）
 
 ## 测试面板 (TestPanel.tsx)
 

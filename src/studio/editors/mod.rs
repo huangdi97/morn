@@ -12,14 +12,14 @@ pub mod model;
 pub mod pipeline;
 pub mod tool;
 
-pub use make_editors::AgentEditor;
 pub use editor_base::{EditorPosition, NodeEditorFields};
 pub use knowledge::{KnowledgeEditor, KnowledgeSource};
+pub use make_editors::AgentEditor;
+pub use make_editors::PersonaEditor;
+pub use make_editors::SkillEditor;
 pub use memory::MemoryEditor;
 pub use model::{CostTier, ModelEditor, ModelParameters};
-pub use make_editors::PersonaEditor;
 pub use pipeline::{PipelineEditor, PipelineStage};
-pub use make_editors::SkillEditor;
 pub use tool::{PortDef, ToolEditor};
 
 impl Editor for ToolEditor {

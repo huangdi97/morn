@@ -231,7 +231,10 @@ mod tests {
     #[test]
     fn product_launch_ends_with_human_approval() {
         let t = WorkflowTemplate::product_launch_template();
-        assert!(matches!(t.steps[5].action, WorkflowAction::HumanApproval { .. }));
+        assert!(matches!(
+            t.steps[5].action,
+            WorkflowAction::HumanApproval { .. }
+        ));
         assert!(t.steps[5].approval_required);
     }
 
@@ -261,7 +264,10 @@ mod tests {
 
     #[test]
     fn deploy_templates_have_non_empty_tags() {
-        for t in [WorkflowTemplate::product_launch_template(), WorkflowTemplate::task_execution_template()] {
+        for t in [
+            WorkflowTemplate::product_launch_template(),
+            WorkflowTemplate::task_execution_template(),
+        ] {
             assert!(!t.tags.is_empty());
             assert!(t.estimated_duration_secs > 0);
         }

@@ -1,5 +1,5 @@
-use std::env;
 use serde::Deserialize;
+use std::env;
 
 use super::{env_bool, env_u16};
 

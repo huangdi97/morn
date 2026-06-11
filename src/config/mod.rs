@@ -194,11 +194,31 @@ mod tests {
         assert_eq!(model.api_key, Some("sk-test".to_string()));
         assert_eq!(model.timeout_seconds, 120);
 
-        if let Some(v) = original_provider { env::set_var("MORN_MODEL_PROVIDER", v); } else { env::remove_var("MORN_MODEL_PROVIDER"); }
-        if let Some(v) = original_name { env::set_var("MORN_MODEL_NAME", v); } else { env::remove_var("MORN_MODEL_NAME"); }
-        if let Some(v) = original_base_url { env::set_var("MORN_MODEL_BASE_URL", v); } else { env::remove_var("MORN_MODEL_BASE_URL"); }
-        if let Some(v) = original_key { env::set_var("MORN_API_KEY", v); } else { env::remove_var("MORN_API_KEY"); }
-        if let Some(v) = original_timeout { env::set_var("MORN_MODEL_TIMEOUT_SECONDS", v); } else { env::remove_var("MORN_MODEL_TIMEOUT_SECONDS"); }
+        if let Some(v) = original_provider {
+            env::set_var("MORN_MODEL_PROVIDER", v);
+        } else {
+            env::remove_var("MORN_MODEL_PROVIDER");
+        }
+        if let Some(v) = original_name {
+            env::set_var("MORN_MODEL_NAME", v);
+        } else {
+            env::remove_var("MORN_MODEL_NAME");
+        }
+        if let Some(v) = original_base_url {
+            env::set_var("MORN_MODEL_BASE_URL", v);
+        } else {
+            env::remove_var("MORN_MODEL_BASE_URL");
+        }
+        if let Some(v) = original_key {
+            env::set_var("MORN_API_KEY", v);
+        } else {
+            env::remove_var("MORN_API_KEY");
+        }
+        if let Some(v) = original_timeout {
+            env::set_var("MORN_MODEL_TIMEOUT_SECONDS", v);
+        } else {
+            env::remove_var("MORN_MODEL_TIMEOUT_SECONDS");
+        }
     }
 
     #[test]
@@ -212,8 +232,12 @@ mod tests {
         assert_eq!(model.provider, "deepseek");
         assert_eq!(model.name, "deepseek-chat");
 
-        if let Some(v) = original_provider { env::set_var("MORN_MODEL_PROVIDER", v); }
-        if let Some(v) = original_name { env::set_var("MORN_MODEL_NAME", v); }
+        if let Some(v) = original_provider {
+            env::set_var("MORN_MODEL_PROVIDER", v);
+        }
+        if let Some(v) = original_name {
+            env::set_var("MORN_MODEL_NAME", v);
+        }
     }
 
     #[test]
@@ -258,10 +282,26 @@ mod tests {
         assert!(ch.rest_api);
         assert_eq!(ch.default_channel, "rest_api");
 
-        if let Some(v) = original_cli { env::set_var("MORN_CHANNEL_CLI", v); } else { env::remove_var("MORN_CHANNEL_CLI"); }
-        if let Some(v) = original_desktop { env::set_var("MORN_CHANNEL_DESKTOP", v); } else { env::remove_var("MORN_CHANNEL_DESKTOP"); }
-        if let Some(v) = original_api { env::set_var("MORN_CHANNEL_REST_API", v); } else { env::remove_var("MORN_CHANNEL_REST_API"); }
-        if let Some(v) = original_default { env::set_var("MORN_DEFAULT_CHANNEL", v); } else { env::remove_var("MORN_DEFAULT_CHANNEL"); }
+        if let Some(v) = original_cli {
+            env::set_var("MORN_CHANNEL_CLI", v);
+        } else {
+            env::remove_var("MORN_CHANNEL_CLI");
+        }
+        if let Some(v) = original_desktop {
+            env::set_var("MORN_CHANNEL_DESKTOP", v);
+        } else {
+            env::remove_var("MORN_CHANNEL_DESKTOP");
+        }
+        if let Some(v) = original_api {
+            env::set_var("MORN_CHANNEL_REST_API", v);
+        } else {
+            env::remove_var("MORN_CHANNEL_REST_API");
+        }
+        if let Some(v) = original_default {
+            env::set_var("MORN_DEFAULT_CHANNEL", v);
+        } else {
+            env::remove_var("MORN_DEFAULT_CHANNEL");
+        }
     }
 
     #[test]
@@ -279,9 +319,21 @@ mod tests {
         assert_eq!(srv.host, "0.0.0.0");
         assert_eq!(srv.port, 8080);
 
-        if let Some(v) = original_enabled { env::set_var("MORN_SERVER_ENABLED", v); } else { env::remove_var("MORN_SERVER_ENABLED"); }
-        if let Some(v) = original_host { env::set_var("MORN_SERVER_HOST", v); } else { env::remove_var("MORN_SERVER_HOST"); }
-        if let Some(v) = original_port { env::set_var("MORN_SERVER_PORT", v); } else { env::remove_var("MORN_SERVER_PORT"); }
+        if let Some(v) = original_enabled {
+            env::set_var("MORN_SERVER_ENABLED", v);
+        } else {
+            env::remove_var("MORN_SERVER_ENABLED");
+        }
+        if let Some(v) = original_host {
+            env::set_var("MORN_SERVER_HOST", v);
+        } else {
+            env::remove_var("MORN_SERVER_HOST");
+        }
+        if let Some(v) = original_port {
+            env::set_var("MORN_SERVER_PORT", v);
+        } else {
+            env::remove_var("MORN_SERVER_PORT");
+        }
     }
 
     #[test]
@@ -297,8 +349,16 @@ mod tests {
 
         assert_eq!(env_bool("_TEST_NONEXISTENT", true), true);
 
-        if let Some(v) = original_1 { env::set_var("_TEST_BOOL_1", v); } else { env::remove_var("_TEST_BOOL_1"); }
-        if let Some(v) = original_2 { env::set_var("_TEST_BOOL_2", v); } else { env::remove_var("_TEST_BOOL_2"); }
+        if let Some(v) = original_1 {
+            env::set_var("_TEST_BOOL_1", v);
+        } else {
+            env::remove_var("_TEST_BOOL_1");
+        }
+        if let Some(v) = original_2 {
+            env::set_var("_TEST_BOOL_2", v);
+        } else {
+            env::remove_var("_TEST_BOOL_2");
+        }
     }
 
     #[test]
@@ -306,7 +366,11 @@ mod tests {
         let original = env::var("_TEST_U16").ok();
         env::set_var("_TEST_U16", "8080");
         assert_eq!(env_u16("_TEST_U16", 0), 8080);
-        if let Some(v) = original { env::set_var("_TEST_U16", v); } else { env::remove_var("_TEST_U16"); }
+        if let Some(v) = original {
+            env::set_var("_TEST_U16", v);
+        } else {
+            env::remove_var("_TEST_U16");
+        }
 
         assert_eq!(env_u16("_TEST_NONEXISTENT_U16", 42), 42);
     }
@@ -325,6 +389,9 @@ mod tests {
         let home = dirs::home_dir().unwrap();
         assert_eq!(expand_tilde("~"), home);
         assert_eq!(expand_tilde("~/test"), home.join("test"));
-        assert_eq!(expand_tilde("/absolute/path"), PathBuf::from("/absolute/path"));
+        assert_eq!(
+            expand_tilde("/absolute/path"),
+            PathBuf::from("/absolute/path")
+        );
     }
 }

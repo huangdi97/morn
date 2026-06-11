@@ -27,6 +27,7 @@ MORN_API_KEY=sk-xxx cargo run --release -- cli
 | `/mode` | 设置 COO 模式 (active/safe/auto) |
 | `/market` | 浏览组件市场 |
 | `/help` | 帮助信息 |
+| `--daemon` | 以守护进程模式启动 |
 
 ## Tauri 桌面端（完整体验）
 
@@ -85,10 +86,34 @@ cd .. && cargo build --workspace --release
 | `MORN_API_KEY` | 是 | LLM API 密钥 |
 | `MORN_API_BASE` | 否 | API 端点 (默认 https://api.deepseek.com) |
 | `MORN_MODEL` | 否 | 模型名 (默认 deepseek-chat) |
+| `MORN_CONFIG_DIR` | 否 | 配置文件目录 (默认 ~/.config/morn) |
+| `MORN_DATA_DIR` | 否 | 数据存储目录 (默认 ~/.local/share/morn) |
+| `MORN_LOG_LEVEL` | 否 | 日志级别 (默认 info) |
+| `MORN_DAEMON_PORT` | 否 | 守护进程端口 (默认 3000) |
 
-## 配置文件
+## 配置文件 (config.toml)
 
-桌面端通过 Tauri 配置管理：
-- 聊天历史 → localStorage
-- 主题设置 → localStorage
-- 用户偏好 → Tauri store plugin (待实现)
+```toml
+[api]
+key = "sk-xxx"              # LLM API 密钥
+base_url = "https://api.deepseek.com"
+model = "deepseek-chat"
+
+[daemon]
+enabled = true
+port = 3000
+host = "127.0.0.1"
+
+[storage]
+data_dir = "~/.local/share/morn"
+db_name = "morn.db"
+
+[logging]
+level = "info"
+file = "~/.local/share/morn/morn.log"
+
+[security]
+guard_model = "deepseek-chat"    # Guard LLM 模型
+judge_model = "deepseek-chat"    # Judge LLM 模型
+encryption_key = ""              # E2E 加密密钥（自动生成）
+```

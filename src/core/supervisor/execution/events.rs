@@ -164,7 +164,12 @@ mod tests {
         let _guard = test_lock().lock().unwrap();
         reset();
         let bus = bus_with_collector();
-        publish_plan_started_events(&bus, &sample_plan(), &ExecutionTier::Interactive, &Mode::Proactive);
+        publish_plan_started_events(
+            &bus,
+            &sample_plan(),
+            &ExecutionTier::Interactive,
+            &Mode::Proactive,
+        );
         assert_eq!(EVENT_CALLS.load(Ordering::SeqCst), 3);
         let types = EVENT_TYPES.lock().unwrap().clone();
         assert!(types.contains(&EVENT_WORKFLOW_STARTED.to_string()));
@@ -201,7 +206,12 @@ mod tests {
     #[test]
     fn publish_plan_started_includes_tier_in_data() {
         let bus = SimpleEventBus::new();
-        publish_plan_started_events(&bus, &sample_plan(), &ExecutionTier::Direct, &Mode::Automated);
+        publish_plan_started_events(
+            &bus,
+            &sample_plan(),
+            &ExecutionTier::Direct,
+            &Mode::Automated,
+        );
     }
 
     #[test]

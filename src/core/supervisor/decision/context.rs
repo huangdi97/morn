@@ -15,7 +15,9 @@ impl Supervisor {
     ) -> DecisionLevel {
         let base_level = self.decide_level(text);
         let adjusted_level = match task_complexity {
-            Some(complexity) if complexity <= 2 && super::weighted::is_advanced_level(&base_level) => {
+            Some(complexity)
+                if complexity <= 2 && super::weighted::is_advanced_level(&base_level) =>
+            {
                 DecisionLevel::L2SingleTool
             }
             Some(complexity) if complexity >= 8 && super::weighted::is_low_level(&base_level) => {
@@ -87,8 +89,8 @@ impl Supervisor {
                 if let Some(rule) = rules.first() {
                     if let Some(ref storage) = self.storage {
                         if let Err(e) = storage.increment_rule_hit(rule.id.unwrap_or(0)) {
-                        tracing::warn!("Failed to increment rule hit: {}", e);
-                    }
+                            tracing::warn!("Failed to increment rule hit: {}", e);
+                        }
                     }
                     if rule.auto_execute {
                         return (

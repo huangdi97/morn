@@ -231,14 +231,20 @@ mod tests {
     #[test]
     fn report_generation_includes_human_approval() {
         let t = WorkflowTemplate::report_generation_template();
-        assert!(matches!(t.steps[4].action, WorkflowAction::HumanApproval { .. }));
+        assert!(matches!(
+            t.steps[4].action,
+            WorkflowAction::HumanApproval { .. }
+        ));
         assert!(t.steps[4].approval_required);
     }
 
     #[test]
     fn report_generation_ends_with_notification() {
         let t = WorkflowTemplate::report_generation_template();
-        assert!(matches!(t.steps[5].action, WorkflowAction::Notification { .. }));
+        assert!(matches!(
+            t.steps[5].action,
+            WorkflowAction::Notification { .. }
+        ));
     }
 
     #[test]
@@ -251,12 +257,19 @@ mod tests {
     #[test]
     fn news_monitor_alert_at_end() {
         let t = WorkflowTemplate::news_monitor_template();
-        assert!(matches!(t.steps[4].action, WorkflowAction::Notification { .. }));
+        assert!(matches!(
+            t.steps[4].action,
+            WorkflowAction::Notification { .. }
+        ));
     }
 
     #[test]
     fn all_templates_have_category_and_version() {
-        for t in [WorkflowTemplate::deep_analysis_template(), WorkflowTemplate::report_generation_template(), WorkflowTemplate::news_monitor_template()] {
+        for t in [
+            WorkflowTemplate::deep_analysis_template(),
+            WorkflowTemplate::report_generation_template(),
+            WorkflowTemplate::news_monitor_template(),
+        ] {
             assert!(!t.category.is_empty());
             assert!(!t.version.is_empty());
         }

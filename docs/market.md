@@ -32,6 +32,28 @@ pub struct ComponentListing {
 | 版本管理 | 版本号 + 更新检查 |
 | 评分系统 | 用户评分 + 自动信任评分 |
 
+### Gateway trait
+
+```rust
+pub trait Gateway {
+    fn process_payment(&self, amount: f64, currency: &str) -> Result<PaymentResult>;
+    fn refund(&self, payment_id: &str) -> Result<RefundResult>;
+}
+```
+
+| 实现 | 用途 |
+|------|------|
+| MockGateway | 测试用模拟支付 |
+| StripeGateway | 生产用 Stripe 支付 |
+
+### License / Billing
+
+| 功能 | 描述 |
+|------|------|
+| License 验证 | 检查组件许可证有效性 |
+| Billing 计费 | 按使用量/订阅模式计费 |
+| 免费/付费标记 | 组件可设置免费或付费 |
+
 ## 工作流模板商店 (WorkflowTemplateStore)
 
 预置工作流模板：

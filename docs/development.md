@@ -75,10 +75,11 @@ morn-desktop/
 | 命令 | 说明 |
 |------|------|
 | `cargo build` | 构建调试版本 |
+| `cargo build --features full` | 构建完整功能版本 |
 | `cargo build --release` | 构建发布版本 |
-| `cargo test` | 运行全部测试 (417 tests) |
+| `cargo test` | 运行全部测试 (1115+ tests) |
 | `cargo fmt` | 格式化代码 |
-| `cargo clippy` | 静态分析 |
+| `cargo clippy` | 静态分析 (5 warnings) |
 | `cd web && npm run build` | 构建前端 |
 | `cargo tauri build` | 构建桌面安装包 |
 
@@ -94,7 +95,7 @@ morn-desktop/
 
 | 测试类型 | 数量 | 运行方式 |
 |---------|------|---------|
-| 单元测试 | 417+ | `cargo test` |
+| 单元测试 | 1115+ | `cargo test` |
 | 前端类型检查 | - | `cd web && tsc --noEmit` |
 | 前端构建 | - | `cd web && npm run build` |
 | 格式检查 | - | `cargo fmt --check` |

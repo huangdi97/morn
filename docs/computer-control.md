@@ -15,6 +15,17 @@
 | 系统管理 | 系统设置、环境变量 |
 | 感知模块 | 屏幕内容理解（辅助视觉GUI） |
 
+### CLI 子命令
+
+| 命令 | 功能 |
+|------|------|
+| `morn app launch <name>` | 启动应用 |
+| `morn app close <name>` | 关闭应用 |
+| `morn app list` | 列出运行中应用 |
+| `morn desktop type <text>` | 模拟键盘输入 |
+| `morn desktop click <x> <y>` | 模拟鼠标点击 |
+| `morn desktop move <x> <y>` | 模拟鼠标移动 |
+
 ### 安全限制
 | 操作类型 | 安全等级 |
 |---------|---------|

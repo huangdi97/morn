@@ -1,6 +1,6 @@
+use serde::Deserialize;
 use std::env;
 use std::path::PathBuf;
-use serde::Deserialize;
 
 use super::{deserialize_path, env_bool, env_path, expand_tilde};
 

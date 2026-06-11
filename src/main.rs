@@ -173,12 +173,12 @@ fn run_daemon(config: MornConfig) -> Result<(), String> {
     let result = runtime.block_on(async move {
         let event_bus = SimpleEventBus::new();
         let storage = match Storage::new() {
-        Ok(s) => Some(s),
-        Err(e) => {
-            tracing::warn!("Storage init failed: {}", e);
-            None
-        }
-    };
+            Ok(s) => Some(s),
+            Err(e) => {
+                tracing::warn!("Storage init failed: {}", e);
+                None
+            }
+        };
         let registry = Arc::new(tokio::sync::Mutex::new(Registry::new(
             storage.clone(),
             Some(event_bus.clone()),

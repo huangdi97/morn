@@ -52,7 +52,8 @@ impl ComputerControl {
             .file_name()
             .unwrap_or_default()
             .to_string_lossy();
-        zip.start_file(name.as_ref(), options).map_err(|e| e.to_string())?;
+        zip.start_file(name.as_ref(), options)
+            .map_err(|e| e.to_string())?;
         zip.write_all(&data).map_err(|e| e.to_string())?;
         zip.finish().map_err(|e| e.to_string())?;
         Ok(())
@@ -118,11 +119,23 @@ impl ComputerControl {
 
     pub fn close_app(name: &str) -> Result<(), String> {
         #[cfg(target_os = "linux")]
-        { std::process::Command::new("pkill").arg(name).output().map_err(|e| e.to_string())?; }
+        {
+            std::process::Command::new("pkill")
+                .arg(name)
+                .output()
+                .map_err(|e| e.to_string())?;
+        }
         #[cfg(target_os = "windows")]
-        { std::process::Command::new("taskkill").args(["/IM", name, "/F"]).output().map_err(|e| e.to_string())?; }
+        {
+            std::process::Command::new("taskkill")
+                .args(["/IM", name, "/F"])
+                .output()
+                .map_err(|e| e.to_string())?;
+        }
         #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-        { tracing::warn!("close_app not implemented on this platform"); }
+        {
+            tracing::warn!("close_app not implemented on this platform");
+        }
         Ok(())
     }
 

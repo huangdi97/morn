@@ -52,7 +52,11 @@ mod tests {
     fn every_template_has_non_empty_id_and_category() {
         for t in WorkflowTemplate::list_builtin() {
             assert!(!t.id.is_empty(), "template id is empty");
-            assert!(!t.category.is_empty(), "template category is empty for id={}", t.id);
+            assert!(
+                !t.category.is_empty(),
+                "template category is empty for id={}",
+                t.id
+            );
         }
     }
 }

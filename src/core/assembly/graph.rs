@@ -433,17 +433,15 @@ mod tests {
     #[test]
     fn test_component_graph_roundtrip() {
         let graph = ComponentGraph {
-            components: vec![
-                AtomicComponentDef {
-                    id: "comp1".into(),
-                    component_type: AtomicComponentType::Memory,
-                    name: "Comp1".into(),
-                    description: "desc".into(),
-                    input_types: vec!["in".into()],
-                    output_types: vec!["out".into()],
-                    config: serde_json::json!({"key": "val"}),
-                },
-            ],
+            components: vec![AtomicComponentDef {
+                id: "comp1".into(),
+                component_type: AtomicComponentType::Memory,
+                name: "Comp1".into(),
+                description: "desc".into(),
+                input_types: vec!["in".into()],
+                output_types: vec!["out".into()],
+                config: serde_json::json!({"key": "val"}),
+            }],
             connections: vec![ComponentConnection {
                 source_id: "comp1".into(),
                 source_output: "out".into(),

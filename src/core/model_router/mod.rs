@@ -64,8 +64,7 @@ pub enum ModelType {
     FallbackTiny,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum HybridStrategy {
     #[default]
     Auto,
@@ -85,7 +84,6 @@ impl HybridStrategy {
         }
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq)]
 struct ProviderCatalogEntry {

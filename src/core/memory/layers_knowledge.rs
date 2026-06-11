@@ -292,7 +292,8 @@ mod tests {
     #[test]
     fn test_semantic_memory_forget() {
         let mut sm = SemanticMemory::default();
-        sm.store("x", MemoryRecord::new("x", Value::String("y".into()))).unwrap();
+        sm.store("x", MemoryRecord::new("x", Value::String("y".into())))
+            .unwrap();
         sm.forget("x").unwrap();
         assert!(sm.recall("x").unwrap().is_none());
     }
@@ -300,7 +301,11 @@ mod tests {
     #[test]
     fn test_semantic_memory_search() {
         let mut sm = SemanticMemory::default();
-        sm.store("python", MemoryRecord::new("python", Value::String("programming language".into()))).unwrap();
+        sm.store(
+            "python",
+            MemoryRecord::new("python", Value::String("programming language".into())),
+        )
+        .unwrap();
         let results = sm.search("python", 10);
         assert_eq!(results.len(), 1);
     }
@@ -320,7 +325,11 @@ mod tests {
     fn test_semantic_memory_compress() {
         let mut sm = SemanticMemory::default();
         for i in 0..1001 {
-            sm.store(&format!("k{}", i), MemoryRecord::new(&format!("k{}", i), Value::Number(i.into()))).unwrap();
+            sm.store(
+                &format!("k{}", i),
+                MemoryRecord::new(&format!("k{}", i), Value::Number(i.into())),
+            )
+            .unwrap();
         }
         let removed = sm.compress().unwrap();
         assert!(removed > 0);
@@ -331,7 +340,8 @@ mod tests {
     fn test_semantic_memory_size() {
         let mut sm = SemanticMemory::default();
         assert_eq!(sm.size(), 0);
-        sm.store("a", MemoryRecord::new("a", Value::String("1".into()))).unwrap();
+        sm.store("a", MemoryRecord::new("a", Value::String("1".into())))
+            .unwrap();
         assert_eq!(sm.size(), 1);
     }
 
