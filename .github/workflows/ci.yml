@@ -56,6 +56,10 @@ jobs:
         run: npm run build
         working-directory: ./web
 
+      - name: Debug check (verbose)
+        shell: bash
+        run: cargo check -p morn-desktop 2>&1 || true
+
       - name: Build Tauri desktop app + NSIS
         run: cargo tauri build --bundles nsis,msi
         working-directory: ./src-tauri
