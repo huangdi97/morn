@@ -1,4 +1,4 @@
-pub fn setup_autostart(app: &tauri::App) {
+pub fn setup_autostart(_app: &tauri::App) {
     #[cfg(target_os = "linux")]
     {
         if let Ok(home) = std::env::var("HOME") {
