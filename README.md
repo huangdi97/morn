@@ -1,7 +1,7 @@
 # Morn
 
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
-[![build](https://img.shields.io/badge/tests-1423_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
+[![build](https://img.shields.io/badge/tests-1417_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > **你的桌面 AI 创作系统** — From一个人的工位开始
@@ -29,7 +29,7 @@ Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对
 | ③ 多 Agent 团队 | 7 种协作模式：链式 / 主管-工人 / 广播 / 投票 / 路由 / 工具 / 黑板 |
 | ④ 工作流 | NL→Workflow 自动编排，支持变量系统、模板商店 |
 
-### 10 大模块集群
+### 7 大模块集群
 
 | 模块 | 功能 |
 |------|------|
@@ -40,10 +40,6 @@ Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对
 | **Agent 能力** | 三阶段 Agent(Plan→Implement→Review)、主管-专家调度、Agent 集群 |
 | **记忆系统** | 三层记忆(Working/Episodic/Semantic) + 自编辑记忆 |
 | **平台功能** | REST API、看板调度、Code-as-Tool、搜索启动器、模板商店 |
-| **认知智能** | PikoSoul 性格引擎、认知录制、信任评分、共识协作 |
-| **高级能力** | 跨渠道身份统一、3D 可视化、超长任务引擎 |
-| **工具生态** | MCP 协议、Office 处理(PPT/Excel)、Cortex推理引擎、社区模板市场 |
-| **电脑操控** | 视觉 GUI 操控、窗口管理、鼠标键盘模拟、截图 OCR |
 
 ## 快速开始
 
@@ -128,7 +124,7 @@ morn-desktop/
 │       ├── dashboard/            # 仪表盘
 │       ├── store/                # BotStore
 │       └── console/              # 管理台 UI
-└── DESIGN.md                     # 设计总纲（1529 行，本地专属）
+└── DESIGN.md                     # 设计总纲（1212 行，本地专属）
 ```
 
 ## 技术栈
