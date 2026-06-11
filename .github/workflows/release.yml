@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-upload:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install npm dependencies
+        run: npm ci
+        working-directory: ./web
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: cargo install tauri-cli --version "^2"
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: ./web
+
+      - name: Build Tauri desktop app + NSIS
+        run: cargo tauri build --bundles nsis,msi
+        working-directory: ./src-tauri
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload NSIS to Release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          FILE="target/release/bundle/nsis/Morn_${VERSION}_x64-setup.exe"
+          UPLOAD_URL="${{ github.event.release.upload_url }}"
+          UPLOAD_URL="${UPLOAD_URL%\{*}"
+          curl -f -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/x-msdownload" \
+            --data-binary "@$FILE" \
+            "$UPLOAD_URL?name=$(basename $FILE)"
+          echo "Uploaded: $(basename $FILE)"
+
+      - name: Upload MSI to Release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          FILE="target/release/bundle/msi/Morn_${VERSION}_x64_en-US.msi"
+          UPLOAD_URL="${{ github.event.release.upload_url }}"
+          UPLOAD_URL="${UPLOAD_URL%\{*}"
+          curl -f -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/x-msdownload" \
+            --data-binary "@$FILE" \
+            "$UPLOAD_URL?name=$(basename $FILE)"
+          echo "Uploaded: $(basename $FILE)"
+
+      - name: Generate update.json
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.event.release.tag_name }}".TrimStart('v')
+          $MSI_PATH = Get-ChildItem -Path target/release/bundle/msi/*.msi | Select-Object -First 1
+          $SIZE = (Get-Item $MSI_PATH).Length
+          $SIGNATURE = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+
+          $UPDATE_JSON = @{
+            version = $VERSION
+            notes = "See https://github.com/huangdi97/morn/releases/tag/${{ github.event.release.tag_name }}"
+            pub_date = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $SIGNATURE
+                url = "https://github.com/huangdi97/morn/releases/download/${{ github.event.release.tag_name }}/$(Split-Path $MSI_PATH -Leaf)"
+              }
+            }
+          }
+          $UPDATE_JSON | ConvertTo-Json | Out-File -FilePath update.json -Encoding utf8
+
+      - name: Upload update.json to Release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPLOAD_URL="${{ github.event.release.upload_url }}"
+          UPLOAD_URL="${UPLOAD_URL%\{*}"
+          curl -f -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary "@update.json" \
+            "$UPLOAD_URL?name=update.json"
+          echo "Uploaded: update.json"
