@@ -56,10 +56,6 @@ jobs:
         run: npm run build
         working-directory: ./web
 
-      - name: Debug check (verbose)
-        shell: bash
-        run: cargo check -p morn-desktop 2>&1 || true
-
       - name: Build Tauri desktop app + NSIS
         run: cargo tauri build --bundles nsis,msi
         working-directory: ./src-tauri
@@ -70,22 +66,44 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: morn-installer
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          path: target/release/bundle/nsis/*.exe
           if-no-files-found: warn
 
       - name: Upload MSI artifacts
         uses: actions/upload-artifact@v4
         with:
           name: morn-msi
-          path: src-tauri/target/release/bundle/msi/*.msi
+          path: target/release/bundle/msi/*.msi
           if-no-files-found: warn
+
+      - name: Upload NSIS to Release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: target/release/bundle/nsis/Morn_${{ replace(github.event.release.tag_name, 'v', '') }}_x64-setup.exe
+          asset_name: Morn_${{ replace(github.event.release.tag_name, 'v', '') }}_x64-setup.exe
+          asset_content_type: application/x-msdownload
+
+      - name: Upload MSI to Release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: target/release/bundle/msi/Morn_${{ replace(github.event.release.tag_name, 'v', '') }}_x64_en-US.msi
+          asset_name: Morn_${{ replace(github.event.release.tag_name, 'v', '') }}_x64_en-US.msi
+          asset_content_type: application/x-msdownload
 
       - name: Generate update.json for auto-updater
         if: github.event_name == 'release'
         shell: powershell
         run: |
           $VERSION = "${{ github.event.release.tag_name }}".TrimStart('v')
-          $MSI_PATH = Get-ChildItem -Path src-tauri/target/release/bundle/msi/*.msi | Select-Object -First 1
+          $MSI_PATH = Get-ChildItem -Path target/release/bundle/msi/*.msi | Select-Object -First 1
           $SIZE = (Get-Item $MSI_PATH).Length
           $SIGNATURE = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
 
