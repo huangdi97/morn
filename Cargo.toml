@@ -54,8 +54,6 @@ tower-http = { version = "0.6", features = ["cors"], optional = true }
 futures-util = { version = "0.3", optional = true }
 
 # optional: office/file exports
-csv = { version = "1" }
-rust_xlsxwriter = { version = "0.95" }
 zip = { version = "2" }
 
 # always needed (small)
@@ -66,8 +64,3 @@ tempfile = "3"
 wat = "1"
 csv = "1"
 rust_xlsxwriter = "0.95"
-zip = "2"
-lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder"] }
-axum = { version = "0.8", features = ["json", "ws"] }
-tower = "0.5"
-futures-util = "0.3"

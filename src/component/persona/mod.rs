@@ -6,16 +6,8 @@ mod registry;
 mod traits;
 mod types;
 
-pub mod presets_creative;
-pub mod presets_general;
-pub mod presets_industry;
-pub mod presets_tech;
-
 pub use builtin::*;
-pub use presets_creative::*;
-pub use presets_general::*;
-pub use presets_industry::*;
-pub use presets_tech::*;
+pub use presets::all;
 pub use registry::*;
 pub use types::*;
 
@@ -81,60 +73,7 @@ mod tests {
 
     #[test]
     fn test_preset_functions() {
-        let presets = vec![
-            preset_analyst(),
-            preset_researcher(),
-            preset_writer(),
-            preset_coder(),
-            preset_translator(),
-            preset_assistant(),
-            preset_reviewer(),
-            preset_cs_agent(),
-            preset_investment(),
-            preset_medical(),
-            preset_legal(),
-            preset_tutor(),
-            preset_marketing(),
-            preset_hr(),
-            preset_pm(),
-            preset_product(),
-            preset_ui_designer(),
-            preset_data_engineer(),
-            preset_devops(),
-            preset_security(),
-            preset_qa(),
-            preset_tech_writer(),
-            preset_social_media(),
-            preset_copywriter(),
-            preset_editor(),
-            preset_journalist(),
-            preset_philosopher(),
-            preset_psychologist(),
-            preset_career_coach(),
-            preset_travel_guide(),
-            preset_language_tutor(),
-            preset_math_tutor(),
-            preset_science_tutor(),
-            preset_life_coach(),
-            preset_fitness(),
-            preset_chef(),
-            preset_music(),
-            preset_history(),
-            preset_startup(),
-            preset_architect(),
-            preset_seo(),
-            preset_business_analyst(),
-            preset_financial_analyst(),
-            preset_trainer(),
-            preset_content_moderator(),
-            preset_social_assistant(),
-            preset_game_designer(),
-            preset_video_editor(),
-            preset_research_assistant(),
-            preset_academic_writer(),
-            preset_debate_coach(),
-            preset_negotiator(),
-        ];
+        let presets = all();
         assert_eq!(presets.len(), 52);
         assert!(presets[0].id.contains("analyst"));
         assert!(presets[7].id.contains("cs-agent"));
