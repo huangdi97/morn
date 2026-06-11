@@ -284,6 +284,7 @@ fn collect_step_results(
     tools: ToolsStep,
     knowledge: KnowledgeStep,
     mut persona: PersonaStep,
+    suggestions: Vec<String>,
 ) -> NLAgentDef {
     let skills = if capabilities.skills.is_empty() {
         capabilities.capabilities
@@ -331,6 +332,7 @@ fn collect_step_results(
         memory,
         persona_config: persona.persona_config,
         communication_style,
+        suggestions,
     }
 }
 
@@ -342,6 +344,12 @@ impl Supervisor {
         registry: Option<&Registry>,
     ) -> Result<NLAgentDef, String> {
         let system_prompt = "You are a COO agent configuration planner. Complete exactly the requested step. Only return valid JSON, no markdown, no explanation.";
+
+        let mut suggestions: Vec<String> = Vec::new();
+        suggestions.extend(self.infer_from_registry(nl));
+        suggestions.extend(self.suggest_from_market(nl));
+        suggestions.sort();
+        suggestions.dedup();
 
         let (persona_list, model_list, tool_list, knowledge_list, skill_list) =
             if let Some(reg) = registry {
@@ -457,7 +465,7 @@ Available memory: working_memory, episodic_memory, semantic_memory, graph_memory
         let (persona, _persona_json) = step6_infer_persona(&context, chat_fn, system_prompt)?;
 
         Ok(collect_step_results(
-            domain, role, capabilities, tools, knowledge, persona,
+            domain, role, capabilities, tools, knowledge, persona, suggestions,
         ))
     }
 }
