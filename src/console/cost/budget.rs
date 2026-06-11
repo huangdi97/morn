@@ -177,12 +177,18 @@ mod tests {
         center.set_budget_action("notify");
         let d1 = center.check_budget(20.0).unwrap();
         let d2 = center.check_budget(5.0).unwrap();
-        if let BudgetDecision::Notify { notification_count, .. } = d1 {
+        if let BudgetDecision::Notify {
+            notification_count, ..
+        } = d1
+        {
             assert_eq!(notification_count, 1);
         } else {
             panic!("expected Notify");
         }
-        if let BudgetDecision::Notify { notification_count, .. } = d2 {
+        if let BudgetDecision::Notify {
+            notification_count, ..
+        } = d2
+        {
             assert_eq!(notification_count, 2);
         } else {
             panic!("expected Notify");

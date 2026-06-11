@@ -1,6 +1,6 @@
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
-use serde::Deserialize;
 
 use super::{env_u64, env_usize};
 

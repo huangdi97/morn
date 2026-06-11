@@ -1,6 +1,6 @@
 # Morn 架构文档
 
-> 版本：v0.1.0
+> 版本：v0.2.0
 
 ## 三台一体
 
@@ -8,7 +8,7 @@ Morn 三个工作台共享同一套底层系统：
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Morn Desktop v0.1.0                      │
+│                    Morn Desktop v0.2.0                      │
 ├─────────────────┬─────────────────┬─────────────────────────┤
 │   🛠 工作台      │   🎨 创作台      │   📋 管理台             │
 │  (Workbench)    │  (Studio)       │  (Console)              │
@@ -59,7 +59,7 @@ Morn 三个工作台共享同一套底层系统：
 | Registry | `registry.rs` | 组件注册中心、生命周期管理 |
 | Storage | `storage.rs` | SQLite 持久化、12+ 数据表 |
 | 执行引擎 | `engine.rs` | DAG 调度、任务编排 |
-| 事件总线 | `event_bus.rs` | publish/subscribe/replay |
+| 事件总线 | `event_bus.rs` | SimpleEventBus 统一实现 (publish/subscribe/replay) |
 | 安全体系 | `security.rs` | 4 层宪法安全 |
 
 ### 2. 组件体系 (Components)
@@ -135,7 +135,13 @@ Morn 三个工作台共享同一套底层系统：
 | Cortex 引擎 | `cortex_engine.rs` | MCP 模型仓库 |
 | 社区模板市场 | `community_templates.rs` | 远程模板仓库 |
 
-### 10. 安全与治理
+### 10. 跨设备 A2A 协议
+| 模块 | 文件 | 职责 |
+|------|------|------|
+| A2A Discovery | `a2a_discovery.rs` | 局域网设备发现与公告 |
+| A2A Sync | `a2a_sync.rs` | 跨设备状态同步 |
+
+### 11. 安全与治理
 | 模块 | 文件 | 职责 |
 |------|------|------|
 | SecurityGuard | `security.rs` | 4 层宪法安全 |
@@ -162,7 +168,7 @@ Morn 三个工作台共享同一套底层系统：
 | 指标 | 数值 |
 |------|------|
 | cargo build | 0 errors, 3 minor warnings |
-| cargo test | 417 passed, 0 failed |
+| cargo test | 1115+ passed, 0 failed |
 | npm run build | 0 errors |
 | 总代码量 | ~13,000+ 行 Rust |
 | 前端代码 | ~2,000+ 行 TypeScript/React |

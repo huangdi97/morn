@@ -373,11 +373,31 @@ mod tests {
         ];
         for p in &presets {
             assert!(!p.name.is_empty(), "Name empty for {}", p.id);
-            assert!(!p.core_principles.is_empty(), "Core principles empty for {}", p.id);
-            assert!(!p.decision_framework.is_empty(), "Decision framework empty for {}", p.id);
-            assert!(!p.anti_patterns.is_empty(), "Anti-patterns empty for {}", p.id);
-            assert!(!p.prompt_layers.l1_core_identity.is_empty(), "l1_core_identity empty for {}", p.id);
-            assert_eq!(p.communication_style, "professional", "Communication style not professional for {}", p.id);
+            assert!(
+                !p.core_principles.is_empty(),
+                "Core principles empty for {}",
+                p.id
+            );
+            assert!(
+                !p.decision_framework.is_empty(),
+                "Decision framework empty for {}",
+                p.id
+            );
+            assert!(
+                !p.anti_patterns.is_empty(),
+                "Anti-patterns empty for {}",
+                p.id
+            );
+            assert!(
+                !p.prompt_layers.l1_core_identity.is_empty(),
+                "l1_core_identity empty for {}",
+                p.id
+            );
+            assert_eq!(
+                p.communication_style, "professional",
+                "Communication style not professional for {}",
+                p.id
+            );
         }
     }
 }

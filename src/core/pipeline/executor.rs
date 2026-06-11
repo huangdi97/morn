@@ -200,10 +200,33 @@ impl Pipeline {
                         default_transform(operation, &input_data)?
                     }
                     PipelineNode::Timer { .. } => PipelineData::Text("timer_triggered".to_string()),
-                    PipelineNode::Start { .. } | PipelineNode::End { .. } => return Err("start/end node not implemented in simple chain".to_string()),
-                    PipelineNode::LLM { id: _, model: _, prompt: _, params: _ } => input_data.clone(),
-                    PipelineNode::Tool { id: _, tool_name: _, args: _ } => input_data.clone(),
-                    PipelineNode::Code { .. } | PipelineNode::Condition { .. } | PipelineNode::Loop { .. } | PipelineNode::Parallel { .. } | PipelineNode::Merge { .. } | PipelineNode::Wait { .. } | PipelineNode::HumanInput { .. } | PipelineNode::Email { .. } | PipelineNode::Webhook { .. } | PipelineNode::Log { .. } | PipelineNode::SubWorkflow { .. } => return Err("node type not implemented in simple chain".to_string()),
+                    PipelineNode::Start { .. } | PipelineNode::End { .. } => {
+                        return Err("start/end node not implemented in simple chain".to_string())
+                    }
+                    PipelineNode::LLM {
+                        id: _,
+                        model: _,
+                        prompt: _,
+                        params: _,
+                    } => input_data.clone(),
+                    PipelineNode::Tool {
+                        id: _,
+                        tool_name: _,
+                        args: _,
+                    } => input_data.clone(),
+                    PipelineNode::Code { .. }
+                    | PipelineNode::Condition { .. }
+                    | PipelineNode::Loop { .. }
+                    | PipelineNode::Parallel { .. }
+                    | PipelineNode::Merge { .. }
+                    | PipelineNode::Wait { .. }
+                    | PipelineNode::HumanInput { .. }
+                    | PipelineNode::Email { .. }
+                    | PipelineNode::Webhook { .. }
+                    | PipelineNode::Log { .. }
+                    | PipelineNode::SubWorkflow { .. } => {
+                        return Err("node type not implemented in simple chain".to_string())
+                    }
                 }
             };
 
@@ -241,8 +264,24 @@ impl Pipeline {
                     PipelineNode::Timer { interval_secs, .. } => {
                         format!("timer:{}", interval_secs)
                     }
-                    PipelineNode::Start { .. } | PipelineNode::End { .. } => "pipeline-start-end:passthrough".to_string(),
-                    PipelineNode::LLM { .. } | PipelineNode::Tool { .. } | PipelineNode::Code { .. } | PipelineNode::Condition { .. } | PipelineNode::Loop { .. } | PipelineNode::Parallel { .. } | PipelineNode::Merge { .. } | PipelineNode::Wait { .. } | PipelineNode::HumanInput { .. } | PipelineNode::Email { .. } | PipelineNode::Webhook { .. } | PipelineNode::Log { .. } | PipelineNode::SubWorkflow { .. } => "pipeline-node-stub:passthrough".to_string(),
+                    PipelineNode::Start { .. } | PipelineNode::End { .. } => {
+                        "pipeline-start-end:passthrough".to_string()
+                    }
+                    PipelineNode::LLM { .. }
+                    | PipelineNode::Tool { .. }
+                    | PipelineNode::Code { .. }
+                    | PipelineNode::Condition { .. }
+                    | PipelineNode::Loop { .. }
+                    | PipelineNode::Parallel { .. }
+                    | PipelineNode::Merge { .. }
+                    | PipelineNode::Wait { .. }
+                    | PipelineNode::HumanInput { .. }
+                    | PipelineNode::Email { .. }
+                    | PipelineNode::Webhook { .. }
+                    | PipelineNode::Log { .. }
+                    | PipelineNode::SubWorkflow { .. } => {
+                        "pipeline-node-stub:passthrough".to_string()
+                    }
                 };
                 crate::core::pipeline::agentless::PipelineStep {
                     name,

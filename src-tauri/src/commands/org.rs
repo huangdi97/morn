@@ -75,7 +75,11 @@ pub(crate) fn add_member(
 }
 
 #[tauri::command]
-pub(crate) fn remove_member(team_id: String, user_id: String, state: State<AppState>) -> Result<(), String> {
+pub(crate) fn remove_member(
+    team_id: String,
+    user_id: String,
+    state: State<AppState>,
+) -> Result<(), String> {
     let storage = state.storage.lock().map_err(|e| e.to_string())?;
     let s = storage
         .as_ref()

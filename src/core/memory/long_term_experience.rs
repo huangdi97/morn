@@ -188,7 +188,10 @@ mod tests {
     fn test_long_term_experience_store_recall() {
         let mut lte = LongTermExperience::default();
         let record = MemoryRecord::new("test_exp", Value::String("important lesson".into()))
-            .with_metadata("importance", Value::Number(serde_json::Number::from_f64(0.9).unwrap()));
+            .with_metadata(
+                "importance",
+                Value::Number(serde_json::Number::from_f64(0.9).unwrap()),
+            );
         lte.store("test_exp", record).unwrap();
         assert_eq!(lte.size(), 1);
     }
@@ -196,8 +199,10 @@ mod tests {
     #[test]
     fn test_long_term_experience_recall_by_summary() {
         let mut lte = LongTermExperience::default();
-        let record = MemoryRecord::new("exp1", Value::String("my summary".into()))
-            .with_metadata("importance", Value::Number(serde_json::Number::from_f64(0.8).unwrap()));
+        let record = MemoryRecord::new("exp1", Value::String("my summary".into())).with_metadata(
+            "importance",
+            Value::Number(serde_json::Number::from_f64(0.8).unwrap()),
+        );
         lte.store("exp1", record).unwrap();
 
         let recalled = lte.recall("my summary").unwrap().unwrap();
@@ -216,10 +221,14 @@ mod tests {
     #[test]
     fn test_long_term_experience_compress_no_op() {
         let mut lte = LongTermExperience::new(10);
-        let r1 = MemoryRecord::new("a", Value::String("low".into()))
-            .with_metadata("importance", Value::Number(serde_json::Number::from_f64(0.1).unwrap()));
-        let r2 = MemoryRecord::new("b", Value::String("medium".into()))
-            .with_metadata("importance", Value::Number(serde_json::Number::from_f64(0.5).unwrap()));
+        let r1 = MemoryRecord::new("a", Value::String("low".into())).with_metadata(
+            "importance",
+            Value::Number(serde_json::Number::from_f64(0.1).unwrap()),
+        );
+        let r2 = MemoryRecord::new("b", Value::String("medium".into())).with_metadata(
+            "importance",
+            Value::Number(serde_json::Number::from_f64(0.5).unwrap()),
+        );
         lte.store("a", r1).unwrap();
         lte.store("b", r2).unwrap();
         let removed = lte.compress().unwrap();

@@ -174,7 +174,10 @@ fn config_path() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".config").join("morn").join("config.toml")
+    PathBuf::from(home)
+        .join(".config")
+        .join("morn")
+        .join("config.toml")
 }
 
 fn persist_onboarding_config(draft: &OnboardingDraft) -> Result<(), String> {
@@ -219,8 +222,14 @@ fn persist_onboarding_config(draft: &OnboardingDraft) -> Result<(), String> {
     let persisted = PersistedConfig {
         onboarding: OnboardingField { completed: true },
         model: ModelField {
-            provider: draft.provider.clone().unwrap_or_else(|| "deepseek".to_string()),
-            name: draft.model.clone().unwrap_or_else(|| "deepseek-chat".to_string()),
+            provider: draft
+                .provider
+                .clone()
+                .unwrap_or_else(|| "deepseek".to_string()),
+            name: draft
+                .model
+                .clone()
+                .unwrap_or_else(|| "deepseek-chat".to_string()),
             api_key: draft.api_key.clone().unwrap_or_default(),
         },
         channels: ChannelsField {

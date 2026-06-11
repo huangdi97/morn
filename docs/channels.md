@@ -23,17 +23,19 @@
 
 | 渠道 | 状态 | 传输协议 |
 |------|------|---------|
-| CLI (本地终端) | ✅ | stdin/stdout REPL |
-| REST API | ✅ | HTTP JSON (axum) |
-| SMTP 邮件 | ✅ | SMTP (lettre) |
-| 企业微信 | ✅ | HTTP Webhook / Bot API |
-| 钉钉 | ✅ | HTTP Webhook / Bot API |
-| 飞书 | ✅ | HTTP Webhook / Bot API |
-| 微信小程序 | ✅ | HTTP JSON |
-| Telegram | ✅ | Bot API |
-| QQ Bot | ✅ | HTTP JSON |
-| 微信公众号 | ✅ | HTTP XML/JSON |
-| 浏览器扩展 | ✅ | WebSocket |
+| CLI (本地终端) | ✅ real | stdin/stdout REPL |
+| REST API | ✅ real | HTTP JSON (axum) |
+| SMTP 邮件 | ✅ real | SMTP (lettre) |
+| 企业微信 | ✅ real | HTTP Webhook / Bot API |
+| 钉钉 | ✅ real | HTTP Webhook / Bot API |
+| 飞书 | ✅ real | HTTP Webhook / Bot API |
+| 微信小程序 | ✅ real | HTTP JSON 客服消息 |
+| Telegram | ✅ real | Bot API (轮询) |
+| QQ Bot | ✅ real | HTTP JSON |
+| 微信公众号 | ✅ real | HTTP XML/JSON |
+| 浏览器扩展 | ✅ real | WebSocket |
+| 推送捷径 (PushPlus) | ✅ real | HTTP API |
+| 推送捷径 (ServerChan) | ✅ real | HTTP API |
 
 ## 跨渠道身份统一 (IdentityBridge)
 

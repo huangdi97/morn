@@ -47,7 +47,10 @@ pub(crate) fn list_preset_personas() -> Vec<std::collections::HashMap<String, St
 }
 
 #[tauri::command]
-pub(crate) fn create_agent_from_description(nl: String, state: State<AppState>) -> Result<String, String> {
+pub(crate) fn create_agent_from_description(
+    nl: String,
+    state: State<AppState>,
+) -> Result<String, String> {
     let api_key = std::env::var("MORN_API_KEY").map_err(|_| "MORN_API_KEY not set".to_string())?;
     let chat_agent = morn::bridge::chat_agent::ChatAgent::new(
         &api_key,

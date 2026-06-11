@@ -116,16 +116,32 @@ mod tests {
     fn decision_eval_step_ids_in_order() {
         let t = WorkflowTemplate::decision_eval_template();
         let ids: Vec<&str> = t.steps.iter().map(|s| s.id.as_str()).collect();
-        assert_eq!(ids, vec!["proposal_analysis", "risk_assessment", "resource_eval", "stakeholder_impact", "recommendation", "present"]);
+        assert_eq!(
+            ids,
+            vec![
+                "proposal_analysis",
+                "risk_assessment",
+                "resource_eval",
+                "stakeholder_impact",
+                "recommendation",
+                "present"
+            ]
+        );
     }
 
     #[test]
     fn decision_eval_step_actions_are_diverse() {
         let t = WorkflowTemplate::decision_eval_template();
         assert!(matches!(t.steps[0].action, WorkflowAction::LLMCall { .. }));
-        assert!(matches!(t.steps[1].action, WorkflowAction::AgentCall { .. }));
+        assert!(matches!(
+            t.steps[1].action,
+            WorkflowAction::AgentCall { .. }
+        ));
         assert!(matches!(t.steps[2].action, WorkflowAction::ToolCall { .. }));
-        assert!(matches!(t.steps[5].action, WorkflowAction::Notification { .. }));
+        assert!(matches!(
+            t.steps[5].action,
+            WorkflowAction::Notification { .. }
+        ));
     }
 
     #[test]
@@ -141,7 +157,10 @@ mod tests {
     #[test]
     fn decision_eval_ends_with_notification() {
         let t = WorkflowTemplate::decision_eval_template();
-        assert!(matches!(t.steps[5].action, WorkflowAction::Notification { .. }));
+        assert!(matches!(
+            t.steps[5].action,
+            WorkflowAction::Notification { .. }
+        ));
     }
 
     #[test]

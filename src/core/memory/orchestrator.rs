@@ -289,7 +289,10 @@ mod tests {
     #[test]
     fn test_memory_hub_store_all() {
         let mut hub = MemoryHub::new();
-        let results = hub.store_all("test_key", MemoryRecord::new("test_key", Value::String("val".into())));
+        let results = hub.store_all(
+            "test_key",
+            MemoryRecord::new("test_key", Value::String("val".into())),
+        );
         assert_eq!(results.len(), 7);
         for r in &results {
             assert!(r.is_ok());
@@ -299,7 +302,10 @@ mod tests {
     #[test]
     fn test_memory_hub_search_all() {
         let mut hub = MemoryHub::new();
-        hub.store_all("query_term", MemoryRecord::new("query_term", Value::String("data".into())));
+        hub.store_all(
+            "query_term",
+            MemoryRecord::new("query_term", Value::String("data".into())),
+        );
         let results = hub.search_all("query_term", 10);
         assert_eq!(results.len(), 7);
         assert!(results.contains_key("working"));
@@ -309,7 +315,10 @@ mod tests {
     fn test_memory_hub_compress_all() {
         let mut hub = MemoryHub::new();
         for i in 0..150 {
-            hub.store_all(&format!("k{}", i), MemoryRecord::new(&format!("k{}", i), Value::Number(i.into())));
+            hub.store_all(
+                &format!("k{}", i),
+                MemoryRecord::new(&format!("k{}", i), Value::Number(i.into())),
+            );
         }
         let compressed = hub.compress_all();
         assert!(compressed.contains_key("working"));
@@ -373,7 +382,10 @@ mod tests {
     fn test_memory_orchestrator_decide() {
         let hub = MemoryHub::new();
         let mut orchestrator = MemoryOrchestrator::new(hub);
-        orchestrator.hub_mut().store_all("context_key", MemoryRecord::new("context_key", Value::String("data".into())));
+        orchestrator.hub_mut().store_all(
+            "context_key",
+            MemoryRecord::new("context_key", Value::String("data".into())),
+        );
         let results = orchestrator.decide_with_memory("context_key").unwrap();
         assert_eq!(results.len(), 7);
     }
@@ -382,7 +394,9 @@ mod tests {
     fn test_memory_orchestrator_decide_no_match() {
         let hub = MemoryHub::new();
         let mut orchestrator = MemoryOrchestrator::new(hub);
-        let results = orchestrator.decide_with_memory("zzz_nonexistent_zzz").unwrap();
+        let results = orchestrator
+            .decide_with_memory("zzz_nonexistent_zzz")
+            .unwrap();
         for v in results.values() {
             assert!(v.is_empty());
         }

@@ -447,7 +447,8 @@ Available memory: working_memory, episodic_memory, semantic_memory, graph_memory
         let (role, role_json) = step2_determine_role(&context, chat_fn, system_prompt)?;
         append_context(&mut context, "Step 2", &role_json);
 
-        let (capabilities, capabilities_json) = step3_infer_capabilities(&context, chat_fn, system_prompt)?;
+        let (capabilities, capabilities_json) =
+            step3_infer_capabilities(&context, chat_fn, system_prompt)?;
         append_context(&mut context, "Step 3", &capabilities_json);
 
         let (tools, tools_json) = step4_infer_tools(&context, chat_fn, system_prompt)?;
@@ -458,7 +459,14 @@ Available memory: working_memory, episodic_memory, semantic_memory, graph_memory
 
         let (persona, _persona_json) = step6_infer_persona(&context, chat_fn, system_prompt)?;
 
-        Ok(collect_step_results(domain, role, capabilities, tools, knowledge, persona))
+        Ok(collect_step_results(
+            domain,
+            role,
+            capabilities,
+            tools,
+            knowledge,
+            persona,
+        ))
     }
 
     /// Learns a decision rule from user feedback and returns success when storage updates complete.

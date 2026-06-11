@@ -318,18 +318,24 @@ mod tests {
     #[test]
     fn test_working_memory_capacity_eviction() {
         let mut wm = WorkingMemory::new(2);
-        wm.store("a", MemoryRecord::new("a", Value::Number(1.into()))).unwrap();
-        wm.store("b", MemoryRecord::new("b", Value::Number(2.into()))).unwrap();
-        wm.store("c", MemoryRecord::new("c", Value::Number(3.into()))).unwrap();
+        wm.store("a", MemoryRecord::new("a", Value::Number(1.into())))
+            .unwrap();
+        wm.store("b", MemoryRecord::new("b", Value::Number(2.into())))
+            .unwrap();
+        wm.store("c", MemoryRecord::new("c", Value::Number(3.into())))
+            .unwrap();
         assert_eq!(wm.size(), 2);
     }
 
     #[test]
     fn test_working_memory_update_existing_within_capacity() {
         let mut wm = WorkingMemory::new(2);
-        wm.store("a", MemoryRecord::new("a", Value::Number(1.into()))).unwrap();
-        wm.store("b", MemoryRecord::new("b", Value::Number(2.into()))).unwrap();
-        wm.store("a", MemoryRecord::new("a", Value::Number(99.into()))).unwrap();
+        wm.store("a", MemoryRecord::new("a", Value::Number(1.into())))
+            .unwrap();
+        wm.store("b", MemoryRecord::new("b", Value::Number(2.into())))
+            .unwrap();
+        wm.store("a", MemoryRecord::new("a", Value::Number(99.into())))
+            .unwrap();
         assert_eq!(wm.size(), 2);
         let recalled = wm.recall("a").unwrap().unwrap();
         assert_eq!(recalled.content, 99);
@@ -338,7 +344,8 @@ mod tests {
     #[test]
     fn test_working_memory_forget() {
         let mut wm = WorkingMemory::new(10);
-        wm.store("x", MemoryRecord::new("x", Value::String("y".into()))).unwrap();
+        wm.store("x", MemoryRecord::new("x", Value::String("y".into())))
+            .unwrap();
         wm.forget("x").unwrap();
         assert!(wm.recall("x").unwrap().is_none());
     }
@@ -346,8 +353,10 @@ mod tests {
     #[test]
     fn test_working_memory_compress_no_op_when_under_capacity() {
         let mut wm = WorkingMemory::new(10);
-        wm.store("a", MemoryRecord::new("a", Value::Number(1.into()))).unwrap();
-        wm.store("b", MemoryRecord::new("b", Value::Number(2.into()))).unwrap();
+        wm.store("a", MemoryRecord::new("a", Value::Number(1.into())))
+            .unwrap();
+        wm.store("b", MemoryRecord::new("b", Value::Number(2.into())))
+            .unwrap();
         let removed = wm.compress().unwrap();
         assert_eq!(removed, 0);
         assert_eq!(wm.size(), 2);
@@ -356,8 +365,16 @@ mod tests {
     #[test]
     fn test_working_memory_search_by_priority() {
         let mut wm = WorkingMemory::new(10);
-        wm.store("low", MemoryRecord::new("low", Value::String("low".into())).with_priority(1)).unwrap();
-        wm.store("high", MemoryRecord::new("high", Value::String("high".into())).with_priority(10)).unwrap();
+        wm.store(
+            "low",
+            MemoryRecord::new("low", Value::String("low".into())).with_priority(1),
+        )
+        .unwrap();
+        wm.store(
+            "high",
+            MemoryRecord::new("high", Value::String("high".into())).with_priority(10),
+        )
+        .unwrap();
         let results = wm.search("irrelevant", 2);
         assert_eq!(results.len(), 2);
         assert!(results[0].priority >= results[1].priority);
@@ -380,7 +397,10 @@ mod tests {
         em.store("evt1", record).unwrap();
         let recalled = em.recall("evt1").unwrap().unwrap();
         assert_eq!(recalled.content, "started");
-        assert_eq!(recalled.metadata.get("episode_type").unwrap(), "event_sequence");
+        assert_eq!(
+            recalled.metadata.get("episode_type").unwrap(),
+            "event_sequence"
+        );
     }
 
     #[test]
@@ -392,9 +412,12 @@ mod tests {
     #[test]
     fn test_episodic_memory_capacity() {
         let mut em = EpisodicMemory::new(2);
-        em.store("a", MemoryRecord::new("a", Value::Number(1.into()))).unwrap();
-        em.store("b", MemoryRecord::new("b", Value::Number(2.into()))).unwrap();
-        em.store("c", MemoryRecord::new("c", Value::Number(3.into()))).unwrap();
+        em.store("a", MemoryRecord::new("a", Value::Number(1.into())))
+            .unwrap();
+        em.store("b", MemoryRecord::new("b", Value::Number(2.into())))
+            .unwrap();
+        em.store("c", MemoryRecord::new("c", Value::Number(3.into())))
+            .unwrap();
         assert_eq!(em.size(), 2);
         assert!(em.recall("a").unwrap().is_none());
     }
@@ -402,8 +425,10 @@ mod tests {
     #[test]
     fn test_episodic_memory_recent_episodes() {
         let mut em = EpisodicMemory::new(10);
-        em.store("a", MemoryRecord::new("a", Value::Number(1.into()))).unwrap();
-        em.store("b", MemoryRecord::new("b", Value::Number(2.into()))).unwrap();
+        em.store("a", MemoryRecord::new("a", Value::Number(1.into())))
+            .unwrap();
+        em.store("b", MemoryRecord::new("b", Value::Number(2.into())))
+            .unwrap();
         let recent = em.recent_episodes(1);
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].key, "b");
@@ -412,7 +437,8 @@ mod tests {
     #[test]
     fn test_episodic_memory_forget() {
         let mut em = EpisodicMemory::new(10);
-        em.store("x", MemoryRecord::new("x", Value::String("y".into()))).unwrap();
+        em.store("x", MemoryRecord::new("x", Value::String("y".into())))
+            .unwrap();
         em.forget("x").unwrap();
         assert!(em.recall("x").unwrap().is_none());
     }
@@ -420,7 +446,11 @@ mod tests {
     #[test]
     fn test_episodic_memory_search() {
         let mut em = EpisodicMemory::new(10);
-        em.store("hello_world", MemoryRecord::new("hello_world", Value::String("test data".into()))).unwrap();
+        em.store(
+            "hello_world",
+            MemoryRecord::new("hello_world", Value::String("test data".into())),
+        )
+        .unwrap();
         let results = em.search("hello", 10);
         assert_eq!(results.len(), 1);
         let results = em.search("nonexistent", 10);
@@ -436,9 +466,12 @@ mod tests {
     #[test]
     fn test_flash_memory_capacity() {
         let mut fm = FlashMemory::new(2, 3600);
-        fm.store("a", MemoryRecord::new("a", Value::Number(1.into()))).unwrap();
-        fm.store("b", MemoryRecord::new("b", Value::Number(2.into()))).unwrap();
-        fm.store("c", MemoryRecord::new("c", Value::Number(3.into()))).unwrap();
+        fm.store("a", MemoryRecord::new("a", Value::Number(1.into())))
+            .unwrap();
+        fm.store("b", MemoryRecord::new("b", Value::Number(2.into())))
+            .unwrap();
+        fm.store("c", MemoryRecord::new("c", Value::Number(3.into())))
+            .unwrap();
         assert_eq!(fm.size(), 2);
     }
 
@@ -478,7 +511,8 @@ mod tests {
     #[test]
     fn test_flash_memory_forget() {
         let mut fm = FlashMemory::new(10, 300);
-        fm.store("x", MemoryRecord::new("x", Value::String("y".into()))).unwrap();
+        fm.store("x", MemoryRecord::new("x", Value::String("y".into())))
+            .unwrap();
         fm.forget("x").unwrap();
         assert!(fm.recall("x").unwrap().is_none());
     }
@@ -496,7 +530,11 @@ mod tests {
     #[test]
     fn test_flash_memory_search() {
         let mut fm = FlashMemory::new(10, 300);
-        fm.store("find_me", MemoryRecord::new("find_me", Value::String("data".into()))).unwrap();
+        fm.store(
+            "find_me",
+            MemoryRecord::new("find_me", Value::String("data".into())),
+        )
+        .unwrap();
         let results = fm.search("find", 10);
         assert_eq!(results.len(), 1);
     }

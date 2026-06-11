@@ -11,6 +11,15 @@
 | EventStreamView | 实时事件流、Agent 活动、任务进度 |
 | TaskProgress | 运行/排队/完成的任务统计 |
 | SystemStatus | 系统健康度、资源占用、错误率 |
+| AlertPanel | 告警事件列表 |
+
+### DashboardData 字段
+
+| 字段 | 描述 |
+|------|------|
+| request_trend | 请求量趋势数据 |
+| latency_trend | 延迟趋势数据 |
+| alerts | 告警事件列表 |
 
 ## 拓扑可视化 (Topology.tsx)
 
@@ -39,8 +48,9 @@ LLM API 成本追踪：
 |------|------|
 | Token 消耗 | 各模型/Agent 消耗量 |
 | 费用统计 | 按时间/Agent/用户聚合 |
-| 预算管理 | 设置配额和告警阈值 |
+| 预算管理 | check_budget、设置配额和告警阈值 |
 | 成本趋势 | 日/周/月趋势图 |
+| BudgetDecision | 超限决策枚举（继续/降级/暂停） |
 
 ## 信任评分 (TrustScorer)
 

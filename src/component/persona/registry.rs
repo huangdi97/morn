@@ -231,7 +231,16 @@ mod tests {
 
     #[test]
     fn test_get_persona_all_ids() {
-        for id in &["analyst", "researcher", "writer", "coder", "assistant", "translator", "reviewer", "cs_agent"] {
+        for id in &[
+            "analyst",
+            "researcher",
+            "writer",
+            "coder",
+            "assistant",
+            "translator",
+            "reviewer",
+            "cs_agent",
+        ] {
             let persona = get_persona(id);
             assert!(persona.is_some(), "Persona {} should exist", id);
         }

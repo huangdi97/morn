@@ -18,7 +18,10 @@ pub(crate) fn list_components(
 }
 
 #[tauri::command]
-pub(crate) fn get_component(id: String, state: State<AppState>) -> Result<serde_json::Value, String> {
+pub(crate) fn get_component(
+    id: String,
+    state: State<AppState>,
+) -> Result<serde_json::Value, String> {
     let manager = state.manager.lock().map_err(|e| e.to_string())?;
     let mgr = manager
         .as_ref()

@@ -161,8 +161,8 @@ impl Marketplace {
                 .is_none()
             {
                 if let Err(e) = self.storage.save_listing(&listing) {
-                tracing::warn!("Failed to save listing: {}", e);
-            }
+                    tracing::warn!("Failed to save listing: {}", e);
+                }
             }
         }
     }

@@ -29,13 +29,16 @@ mod tests {
         TaskPlan {
             task_id: "test-task".into(),
             user_input: "test".into(),
-            subtasks: subtask_ids.iter().map(|id| SubTaskDef {
-                id: id.to_string(),
-                agent_id: "agent".into(),
-                action: "chat".into(),
-                params: serde_json::json!({}),
-                depends_on: vec![],
-            }).collect(),
+            subtasks: subtask_ids
+                .iter()
+                .map(|id| SubTaskDef {
+                    id: id.to_string(),
+                    agent_id: "agent".into(),
+                    action: "chat".into(),
+                    params: serde_json::json!({}),
+                    depends_on: vec![],
+                })
+                .collect(),
             estimated_secs: 10,
             decision_level: "single_agent".into(),
             approval_required: false,

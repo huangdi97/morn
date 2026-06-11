@@ -249,7 +249,10 @@ mod tests {
     #[test]
     fn test_agent_template_research_assistant() {
         let templates = default_templates();
-        let ra = templates.iter().find(|t| t.id == "research-assistant").unwrap();
+        let ra = templates
+            .iter()
+            .find(|t| t.id == "research-assistant")
+            .unwrap();
         assert_eq!(ra.persona, "researcher");
         assert!(ra.tools.contains(&"web_search".to_string()));
     }
@@ -257,7 +260,10 @@ mod tests {
     #[test]
     fn test_agent_template_general_assistant() {
         let templates = default_templates();
-        let ga = templates.iter().find(|t| t.id == "general-assistant").unwrap();
+        let ga = templates
+            .iter()
+            .find(|t| t.id == "general-assistant")
+            .unwrap();
         assert_eq!(ga.persona, "assistant");
         assert!(ga.skills.is_empty());
     }
@@ -265,7 +271,10 @@ mod tests {
     #[test]
     fn test_agent_template_translation_agent() {
         let templates = default_templates();
-        let ta = templates.iter().find(|t| t.id == "translation-agent").unwrap();
+        let ta = templates
+            .iter()
+            .find(|t| t.id == "translation-agent")
+            .unwrap();
         assert_eq!(ta.persona, "translator");
     }
 

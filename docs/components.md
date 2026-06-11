@@ -66,13 +66,17 @@ pub struct Persona {
 | 更多 | 共 52 个预置人格 |
 
 ### 5. Memory（记忆）
-三层记忆架构：
+
+6 层记忆系统：
 
 | 层 | 存储 | 生命周期 | API |
 |----|------|---------|-----|
 | Working | 当前会话 | 会话结束清除 | save/load/clear |
 | Episodic | SQLite | 永久 + 压缩 | store/recall/prune |
 | Semantic | SQLite | 永久 + 融合 | infer/update/merge |
+| Procedural | SQLite | 永久 | learn/apply/forget |
+| Emotional | SQLite | 永久 | record/query/adjust |
+| Collective | SQLite | 永久（共享） | share/sync/merge |
 
 自编辑记忆 (`memory_self_edit.rs`) 支持修正、压缩、合并旧记忆。
 
@@ -93,6 +97,16 @@ pub struct ModelConfig {
 ## Agent 组装
 
 组件 → Agent 的组装过程：
+
+### Assembly 组件系统
+
+| 模块 | 职责 |
+|------|------|
+| builder | Agent 构建器：人格+模型+工具+知识+技能+记忆 组合 |
+| graph | Agent 依赖图构建与拓扑排序 |
+| validator | Agent 配置校验：必填字段/依赖完整性/循环检测 |
+
+### 手动组装步骤
 
 1. 选择人格 (Persona)
 2. 选择模型 (Model)

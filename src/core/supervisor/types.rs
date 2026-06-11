@@ -10,15 +10,13 @@ fn default_communication_style() -> String {
     "professional".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NLPersonaConfig {
     #[serde(default)]
     pub parameters: PersonaParameters,
     #[serde(default)]
     pub prompt_layers: PromptLayers,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NLAgentDef {

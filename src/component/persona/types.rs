@@ -325,10 +325,7 @@ mod tests {
 
     #[test]
     fn test_composite_persona_new() {
-        let cp = CompositePersona::new(
-            vec!["p1".into(), "p2".into()],
-            MergeStrategy::MajorityVote,
-        );
+        let cp = CompositePersona::new(vec!["p1".into(), "p2".into()], MergeStrategy::MajorityVote);
         assert_eq!(cp.primary, "p1");
         assert_eq!(cp.secondary, Some("p2".into()));
         assert_eq!(cp.persona_ids.len(), 2);
@@ -344,8 +341,16 @@ mod tests {
     #[test]
     fn test_merge_responses_sequential() {
         let outputs = vec![
-            PersonaOutput { persona_id: "a".into(), response: "First".into(), confidence: 0.5 },
-            PersonaOutput { persona_id: "b".into(), response: "Second".into(), confidence: 0.8 },
+            PersonaOutput {
+                persona_id: "a".into(),
+                response: "First".into(),
+                confidence: 0.5,
+            },
+            PersonaOutput {
+                persona_id: "b".into(),
+                response: "Second".into(),
+                confidence: 0.8,
+            },
         ];
         let result = merge_responses(&MergeStrategy::Sequential, &outputs);
         assert_eq!(result, "First\n---\nSecond");
@@ -354,9 +359,21 @@ mod tests {
     #[test]
     fn test_merge_responses_majority_vote() {
         let outputs = vec![
-            PersonaOutput { persona_id: "a".into(), response: "yes".into(), confidence: 0.5 },
-            PersonaOutput { persona_id: "b".into(), response: "yes".into(), confidence: 0.6 },
-            PersonaOutput { persona_id: "c".into(), response: "no".into(), confidence: 0.9 },
+            PersonaOutput {
+                persona_id: "a".into(),
+                response: "yes".into(),
+                confidence: 0.5,
+            },
+            PersonaOutput {
+                persona_id: "b".into(),
+                response: "yes".into(),
+                confidence: 0.6,
+            },
+            PersonaOutput {
+                persona_id: "c".into(),
+                response: "no".into(),
+                confidence: 0.9,
+            },
         ];
         let result = merge_responses(&MergeStrategy::MajorityVote, &outputs);
         assert_eq!(result, "yes");
@@ -365,8 +382,16 @@ mod tests {
     #[test]
     fn test_merge_responses_weighted_average() {
         let outputs = vec![
-            PersonaOutput { persona_id: "a".into(), response: "low".into(), confidence: 0.1 },
-            PersonaOutput { persona_id: "b".into(), response: "high".into(), confidence: 0.9 },
+            PersonaOutput {
+                persona_id: "a".into(),
+                response: "low".into(),
+                confidence: 0.1,
+            },
+            PersonaOutput {
+                persona_id: "b".into(),
+                response: "high".into(),
+                confidence: 0.9,
+            },
         ];
         let result = merge_responses(&MergeStrategy::WeightedAverage, &outputs);
         assert_eq!(result, "high");
@@ -374,9 +399,11 @@ mod tests {
 
     #[test]
     fn test_merge_responses_debate() {
-        let outputs = vec![
-            PersonaOutput { persona_id: "p1".into(), response: "arg1".into(), confidence: 0.7 },
-        ];
+        let outputs = vec![PersonaOutput {
+            persona_id: "p1".into(),
+            response: "arg1".into(),
+            confidence: 0.7,
+        }];
         let result = merge_responses(&MergeStrategy::Debate, &outputs);
         assert!(result.contains("Debate Summary"));
         assert!(result.contains("p1"));
@@ -415,8 +442,16 @@ mod tests {
     #[test]
     fn test_merge_weighted_average_zero_confidence() {
         let outputs = vec![
-            PersonaOutput { persona_id: "a".into(), response: "r1".into(), confidence: 0.0 },
-            PersonaOutput { persona_id: "b".into(), response: "r2".into(), confidence: 0.0 },
+            PersonaOutput {
+                persona_id: "a".into(),
+                response: "r1".into(),
+                confidence: 0.0,
+            },
+            PersonaOutput {
+                persona_id: "b".into(),
+                response: "r2".into(),
+                confidence: 0.0,
+            },
         ];
         let result = merge_weighted_average(&outputs);
         assert_eq!(result, "r1\n---\nr2");

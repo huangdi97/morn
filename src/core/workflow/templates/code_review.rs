@@ -213,9 +213,15 @@ mod tests {
     fn code_delivery_step_types_are_correct() {
         let t = WorkflowTemplate::code_delivery_template();
         assert!(matches!(t.steps[0].action, WorkflowAction::LLMCall { .. }));
-        assert!(matches!(t.steps[2].action, WorkflowAction::AgentCall { .. }));
+        assert!(matches!(
+            t.steps[2].action,
+            WorkflowAction::AgentCall { .. }
+        ));
         assert!(matches!(t.steps[3].action, WorkflowAction::CodeExec { .. }));
-        assert!(matches!(t.steps[5].action, WorkflowAction::Notification { .. }));
+        assert!(matches!(
+            t.steps[5].action,
+            WorkflowAction::Notification { .. }
+        ));
     }
 
     #[test]
@@ -244,7 +250,10 @@ mod tests {
     #[test]
     fn inspection_uses_condition_action() {
         let t = WorkflowTemplate::scheduled_inspection_template();
-        assert!(matches!(t.steps[3].action, WorkflowAction::Condition { .. }));
+        assert!(matches!(
+            t.steps[3].action,
+            WorkflowAction::Condition { .. }
+        ));
     }
 
     #[test]
