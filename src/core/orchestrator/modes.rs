@@ -9,6 +9,7 @@ use tracing;
 // === voting ===
 
 impl Orchestrator {
+    /// Run a debate between multiple agents over two rounds.
     pub fn run_debate(
         &self,
         members: &[String],
@@ -32,6 +33,7 @@ impl Orchestrator {
         Ok(outputs)
     }
 
+    /// Run a voting session where each member submits a vote.
     pub fn run_voting(
         &self,
         members: &[String],
@@ -46,10 +48,12 @@ impl Orchestrator {
         Ok(outputs)
     }
 
+    /// Submit a single vote from a member.
     pub fn submit_vote(&self, member: &str, input: &str) -> Result<TeamMemberOutput, String> {
         self.dispatch_agent(member, &format!("[EVALUATE] {}", input))
     }
 
+    /// Count votes and return the output with the highest confidence.
     pub fn count_votes<'a>(&self, outputs: &'a [TeamMemberOutput]) -> Option<&'a TeamMemberOutput> {
         outputs.iter().max_by(|a, b| {
             a.confidence
@@ -58,6 +62,7 @@ impl Orchestrator {
         })
     }
 
+    /// Check that the member list meets the minimum quorum (at least 3).
     pub fn check_quorum(&self, members: &[String]) -> Result<(), String> {
         if members.len() < 3 {
             return Err("Voting mode requires at least 3 members".to_string());
@@ -69,6 +74,7 @@ impl Orchestrator {
 // === blackboard ===
 
 impl Orchestrator {
+    /// Run a blackboard collaboration where members post and read from a shared board.
     pub fn run_blackboard(
         &self,
         members: &[String],
@@ -85,14 +91,17 @@ impl Orchestrator {
         Ok(outputs)
     }
 
+    /// Post a member's output to the blackboard.
     pub fn post_to_blackboard(&self, board: &mut String, member: &str, output: &str) {
         board.push_str(&format!("{}: {}\n", member, output));
     }
 
+    /// Read the current blackboard content.
     pub fn read_blackboard<'a>(&self, board: &'a str) -> &'a str {
         board
     }
 
+    /// Clear the blackboard.
     pub fn clear_blackboard(&self, board: &mut String) {
         board.clear();
     }
@@ -101,6 +110,7 @@ impl Orchestrator {
 // === chain ===
 
 impl Orchestrator {
+    /// Run round-robin mode where each member processes the input sequentially.
     pub fn run_round_robin(
         &self,
         members: &[String],
@@ -118,6 +128,7 @@ impl Orchestrator {
         Ok(outputs)
     }
 
+    /// Run chain mode where each member passes its output to the next.
     pub fn run_chain(
         &self,
         members: &[String],

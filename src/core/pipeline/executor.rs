@@ -47,6 +47,7 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
+    /// Create a new empty Pipeline.
     pub fn new() -> Self {
         Pipeline {
             nodes: Vec::new(),
@@ -56,34 +57,42 @@ impl Pipeline {
         }
     }
 
+    /// Add a node to the pipeline.
     pub fn add_node(&mut self, node: PipelineNode) {
         self.nodes.push(node);
     }
 
+    /// Add a connection between two nodes.
     pub fn add_connection(&mut self, connection: Connection) {
         self.connections.push(connection);
     }
 
+    /// Register a custom executor for a node.
     pub fn register_executor(&mut self, node_id: &str, executor: Box<dyn PipelineNodeExecutor>) {
         self.executors.insert(node_id.to_string(), executor);
     }
 
+    /// Get a reference to all nodes.
     pub fn nodes(&self) -> &[PipelineNode] {
         &self.nodes
     }
 
+    /// Get a reference to all connections.
     pub fn connections(&self) -> &[Connection] {
         &self.connections
     }
 
+    /// Get a node by its ID.
     pub fn get_node(&self, id: &str) -> Option<&PipelineNode> {
         self.nodes.iter().find(|n| n.id() == id)
     }
 
+    /// Get the output of a specific node.
     pub fn get_node_output(&self, node_id: &str) -> Option<&PipelineData> {
         self.context.node_outputs.get(node_id)
     }
 
+    /// Collect all node outputs into a vector.
     pub fn collect_all_outputs(&self) -> Vec<&PipelineData> {
         self.context.node_outputs.values().collect()
     }
@@ -150,6 +159,7 @@ impl Pipeline {
         Ok(sorted)
     }
 
+    /// Execute the pipeline with an optional input.
     pub fn execute(&mut self, input: Option<PipelineData>) -> Result<(), String> {
         self.context.started_at = Some(Instant::now());
 
@@ -236,6 +246,7 @@ impl Pipeline {
         Ok(())
     }
 
+    /// Execute nodes as a simple chain and return the last node's output.
     pub fn execute_simple_chain(&mut self, input: PipelineData) -> Result<PipelineData, String> {
         self.execute(Some(input))?;
 
@@ -247,10 +258,12 @@ impl Pipeline {
             .ok_or_else(|| "no output produced".to_string())
     }
 
+    /// Reset the pipeline context to its initial state.
     pub fn reset(&mut self) {
         self.context = PipelineContext::new();
     }
 
+    /// Convert this pipeline into an agentless pipeline representation.
     pub fn as_agentless(&self) -> crate::core::pipeline::agentless::AgentlessPipeline {
         let steps: Vec<crate::core::pipeline::agentless::PipelineStep> = self
             .nodes

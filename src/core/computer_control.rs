@@ -7,6 +7,7 @@ pub struct ComputerControl;
 
 /// File system operations
 impl ComputerControl {
+    /// List all entries in a directory.
     pub fn list_dir(path: &str) -> Result<Vec<String>, String> {
         let entries = fs::read_dir(path).map_err(|e| e.to_string())?;
         entries
@@ -18,37 +19,86 @@ impl ComputerControl {
             .collect()
     }
 
+    /// Read the full contents of a file as a string.
     pub fn read_file(path: &str) -> Result<String, String> {
-        fs::read_to_string(path).map_err(|e| e.to_string())
+        let resolved = Path::new(path)
+            .canonicalize()
+            .map_err(|e| format!("invalid path: {}", e))?;
+        fs::read_to_string(&resolved).map_err(|e| e.to_string())
     }
 
+    /// Write content to a file, creating or overwriting it.
     pub fn write_file(path: &str, content: &str) -> Result<(), String> {
-        fs::write(path, content).map_err(|e| e.to_string())
+        let p = Path::new(path);
+        let resolved = if let Some(parent) = p.parent().filter(|x| !x.as_os_str().is_empty()) {
+            let canonical_parent = parent
+                .canonicalize()
+                .map_err(|e| format!("invalid path: {}", e))?;
+            canonical_parent.join(p.file_name().unwrap_or_default())
+        } else {
+            p.to_path_buf()
+        };
+        fs::write(&resolved, content).map_err(|e| e.to_string())
     }
 
+    /// Move or rename a file from source to destination.
     pub fn move_file(src: &str, dst: &str) -> Result<(), String> {
-        fs::rename(src, dst).map_err(|e| e.to_string())
+        let resolved_src = Path::new(src)
+            .canonicalize()
+            .map_err(|e| format!("invalid source path: {}", e))?;
+        let dst_path = Path::new(dst);
+        let resolved_dst =
+            if let Some(parent) = dst_path.parent().filter(|x| !x.as_os_str().is_empty()) {
+                let canonical_parent = parent
+                    .canonicalize()
+                    .map_err(|e| format!("invalid destination path: {}", e))?;
+                canonical_parent.join(dst_path.file_name().unwrap_or_default())
+            } else {
+                dst_path.to_path_buf()
+            };
+        fs::rename(&resolved_src, &resolved_dst).map_err(|e| e.to_string())
     }
 
+    /// Delete a file at the given path.
     pub fn delete_file(path: &str) -> Result<(), String> {
-        fs::remove_file(path).map_err(|e| e.to_string())
+        let resolved = Path::new(path)
+            .canonicalize()
+            .map_err(|e| format!("invalid path: {}", e))?;
+        fs::remove_file(&resolved).map_err(|e| e.to_string())
     }
 
+    /// Recursively search for files matching a glob-like pattern.
     pub fn search_files(pattern: &str, path: &str) -> Result<Vec<String>, String> {
+        let base = Path::new(path)
+            .canonicalize()
+            .map_err(|e| format!("invalid path: {}", e))?;
         let mut results = Vec::new();
-        let base = Path::new(path);
         let pattern = pattern.to_string();
-        visit_dirs(base, &pattern, &mut results).map_err(|e| e.to_string())?;
+        visit_dirs(&base, &pattern, &mut results).map_err(|e| e.to_string())?;
         Ok(results)
     }
 
+    /// Compress a file or directory into a zip archive.
     pub fn compress(path: &str, dest: &str) -> Result<(), String> {
         use std::fs::File;
-        let file = File::create(dest).map_err(|e| e.to_string())?;
+        let resolved_path = Path::new(path)
+            .canonicalize()
+            .map_err(|e| format!("invalid source path: {}", e))?;
+        let dest_path = Path::new(dest);
+        let resolved_dest =
+            if let Some(parent) = dest_path.parent().filter(|x| !x.as_os_str().is_empty()) {
+                let canonical_parent = parent
+                    .canonicalize()
+                    .map_err(|e| format!("invalid destination path: {}", e))?;
+                canonical_parent.join(dest_path.file_name().unwrap_or_default())
+            } else {
+                dest_path.to_path_buf()
+            };
+        let file = File::create(&resolved_dest).map_err(|e| e.to_string())?;
         let mut zip = zip::ZipWriter::new(file);
         let options = zip::write::SimpleFileOptions::default();
-        let data = std::fs::read(path).map_err(|e| e.to_string())?;
-        let name = std::path::Path::new(path)
+        let data = std::fs::read(&resolved_path).map_err(|e| e.to_string())?;
+        let name = resolved_path
             .file_name()
             .unwrap_or_default()
             .to_string_lossy();
@@ -110,6 +160,7 @@ fn visit_dirs(dir: &Path, pattern: &str, results: &mut Vec<String>) -> Result<()
 
 /// Application management
 impl ComputerControl {
+    /// Launch a desktop application by executable name or path.
     pub fn launch_app(name: &str) -> Result<(), String> {
         std::process::Command::new(name)
             .spawn()
@@ -117,6 +168,7 @@ impl ComputerControl {
         Ok(())
     }
 
+    /// Close a running application by name or PID.
     pub fn close_app(name: &str) -> Result<(), String> {
         #[cfg(target_os = "linux")]
         {
@@ -139,6 +191,7 @@ impl ComputerControl {
         Ok(())
     }
 
+    /// List all currently running desktop applications.
     pub fn list_running_apps() -> Result<Vec<String>, String> {
         Ok(vec![])
     }
@@ -146,6 +199,7 @@ impl ComputerControl {
 
 /// Desktop control
 impl ComputerControl {
+    /// Capture a screenshot of the desktop or active window.
     pub fn screenshot() -> Result<Vec<u8>, String> {
         #[cfg(target_os = "linux")]
         {
@@ -166,16 +220,19 @@ impl ComputerControl {
         Ok(vec![])
     }
 
+    /// Type text programmatically (placeholder).
     pub fn type_text(text: &str) -> Result<(), String> {
         tracing::warn!("type_text not implemented: would type '{}'", text);
         Ok(())
     }
 
+    /// Get the current clipboard text content.
     pub fn get_clipboard() -> Result<String, String> {
         tracing::warn!("get_clipboard not implemented");
         Ok(String::new())
     }
 
+    /// Set clipboard text content.
     pub fn set_clipboard(text: &str) -> Result<(), String> {
         tracing::warn!("set_clipboard not implemented: '{}'", text);
         Ok(())
