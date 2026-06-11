@@ -12,16 +12,7 @@ Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对
 
 ---
 
-## 现状
-
-| 项目 | 状态 |
-|------|------|
-| Phase 0–9（80+ 项功能） | ✅ **全部实现** |
-| cargo build 编译 | 0 errors, 0 warnings |
-| cargo test 测试 | **1482+ passed**, 0 failed |
-| Tauri NSIS 安装器 | ✅ 配置就绪（中英文） |
-| 自动更新 (updater) | ✅ GitHub Releases 端点配置 |
-| 设计文档 | 1529 行，71 竞品深度调研 |
+---
 
 ## 功能矩阵
 
@@ -166,16 +157,6 @@ morn-desktop/
 - **存储**: SQLite (rusqlite)
 - **HTTP**: reqwest + axum
 - **协议**: MCP (Model Context Protocol)
-
-## 路线图
-
-| 优先级 | 项 |
-|--------|-----|
-| **P0** | 🏗️ 打成安装包 + 自动更新 |
-| **P1** | 🎯 首次引导 (Onboarding) + Registry 热加载 |
-| **P2** | 🧬 自进化 Skill + MDRM 图谱记忆 |
-| **P3** | 📱 扫码绑定 IM + 活人感引擎 |
-| **P4** | 📊 深度可观测性 |
 
 ---
 
