@@ -161,34 +161,6 @@ impl CostCenter {
             budget_exceeded: self.total_cost > self.budget,
         }
     }
-
-    #[allow(dead_code)]
-    fn generate_daily_trend(&self) -> Vec<DailyCost> {
-        let mut trend = Vec::new();
-        let now = chrono::Utc::now();
-        for i in (0..7).rev() {
-            let day = now - chrono::Duration::days(i);
-            trend.push(DailyCost {
-                date: day.format("%Y-%m-%d").to_string(),
-                cost: (self.total_cost / 7.0) * (1.0 + (i as f64 * 0.05)),
-            });
-        }
-        trend
-    }
-
-    #[allow(dead_code)]
-    fn generate_monthly_trend(&self) -> Vec<MonthlyCost> {
-        let mut trend = Vec::new();
-        let now = chrono::Utc::now();
-        for i in (0..6).rev() {
-            let month = now - chrono::Duration::days(i * 30);
-            trend.push(MonthlyCost {
-                month: month.format("%Y-%m").to_string(),
-                cost: (self.total_cost / 6.0) * (1.0 + (i as f64 * 0.1)),
-            });
-        }
-        trend
-    }
 }
 
 #[cfg(test)]
@@ -254,28 +226,6 @@ mod tests {
         let center = CostCenter::new(50.0);
         let report = center.report();
         assert_eq!(report.total_cost, 12.45);
-    }
-
-    #[test]
-    fn test_generate_daily_trend_length() {
-        let center = CostCenter::new(100.0);
-        let trend = center.generate_daily_trend();
-        assert_eq!(trend.len(), 7);
-        for day in &trend {
-            assert!(!day.date.is_empty());
-            assert!(day.cost > 0.0);
-        }
-    }
-
-    #[test]
-    fn test_generate_monthly_trend_length() {
-        let center = CostCenter::new(100.0);
-        let trend = center.generate_monthly_trend();
-        assert_eq!(trend.len(), 6);
-        for month in &trend {
-            assert!(!month.month.is_empty());
-            assert!(month.cost > 0.0);
-        }
     }
 
     #[test]

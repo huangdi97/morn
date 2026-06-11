@@ -1,6 +1,5 @@
 //! persona — Defines persona types, registries, presets, and component adapters.
 mod builtin;
-mod combinator;
 pub mod presets;
 mod registry;
 mod traits;
