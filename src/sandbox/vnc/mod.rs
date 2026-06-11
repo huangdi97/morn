@@ -178,19 +178,21 @@ impl VncManager {
 
         if !cfg!(test) && cfg!(feature = "vnc-sandbox") && cfg!(target_os = "linux") {
             let display = session.display.as_deref().unwrap_or(":0");
+            let screenshot_path = std::env::temp_dir().join("morn_vnc_screenshot.png");
+            let screenshot_str = screenshot_path.to_str().unwrap().to_string();
             let output = std::process::Command::new("import")
                 .args([
                     "-display",
                     display,
                     "-window",
                     "root",
-                    "/tmp/morn_vnc_screenshot.png",
+                    &screenshot_str,
                 ])
                 .output()
                 .map_err(|e| format!("Screenshot failed: {}", e))?;
 
             if output.status.success() {
-                Ok("/tmp/morn_vnc_screenshot.png".to_string())
+                Ok(screenshot_str)
             } else {
                 Err("Screenshot command failed".to_string())
             }
