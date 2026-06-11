@@ -1,8 +1,8 @@
-mod chat;
-mod console;
-mod market;
-mod org;
-mod studio;
+pub mod chat;
+pub mod console;
+pub mod market;
+pub mod org;
+pub mod studio;
 
 pub(crate) use chat::{clear_history, get_status, send_message};
 pub(crate) use console::{get_component_topology, get_system_status};
