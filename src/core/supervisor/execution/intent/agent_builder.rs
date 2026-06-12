@@ -79,7 +79,12 @@ Return exactly:
 }}"#,
             context
         );
-        call_json_step::<DomainStep>(chat_fn, "Step 1 — Domain Recognition", &prompt, system_prompt)
+        call_json_step::<DomainStep>(
+            chat_fn,
+            "Step 1 — Domain Recognition",
+            &prompt,
+            system_prompt,
+        )
     }
 
     /// Step 2 — 角色推断: infer the role type needed.
@@ -124,7 +129,12 @@ Return exactly:
 }}"#,
             context
         );
-        call_json_step::<CapabilitiesStep>(chat_fn, "Step 3 — Capability Inference", &prompt, system_prompt)
+        call_json_step::<CapabilitiesStep>(
+            chat_fn,
+            "Step 3 — Capability Inference",
+            &prompt,
+            system_prompt,
+        )
     }
 
     /// Step 4 — 工具推断: infer required tools, query Registry for recommendations.
@@ -186,7 +196,12 @@ Return exactly:
 }}"#,
             context, knowledge_list
         );
-        call_json_step::<KnowledgeStep>(chat_fn, "Step 5 — Knowledge Inference", &prompt, system_prompt)
+        call_json_step::<KnowledgeStep>(
+            chat_fn,
+            "Step 5 — Knowledge Inference",
+            &prompt,
+            system_prompt,
+        )
     }
 
     /// Step 6 — 人格推断: infer suitable persona, match against available personas.
@@ -241,7 +256,12 @@ Return exactly:
 }}"#,
             context, persona_list, model_list
         );
-        call_json_step::<PersonaStep>(chat_fn, "Step 6 — Persona Inference", &prompt, system_prompt)
+        call_json_step::<PersonaStep>(
+            chat_fn,
+            "Step 6 — Persona Inference",
+            &prompt,
+            system_prompt,
+        )
     }
 
     pub fn create_agent_from_nl(
@@ -293,20 +313,35 @@ Available skills: {}"#,
 
         let (capabilities, capabilities_json) =
             self.capability_inference(&context, chat_fn, system_prompt)?;
-        append_context(&mut context, "Step 3 — Capability Inference", &capabilities_json);
+        append_context(
+            &mut context,
+            "Step 3 — Capability Inference",
+            &capabilities_json,
+        );
 
-        let (tools, tools_json) = self.tool_inference(&context, chat_fn, system_prompt, registry)?;
+        let (tools, tools_json) =
+            self.tool_inference(&context, chat_fn, system_prompt, registry)?;
         append_context(&mut context, "Step 4 — Tool Inference", &tools_json);
 
         let (knowledge, knowledge_json) =
             self.knowledge_inference(&context, chat_fn, system_prompt, registry)?;
-        append_context(&mut context, "Step 5 — Knowledge Inference", &knowledge_json);
+        append_context(
+            &mut context,
+            "Step 5 — Knowledge Inference",
+            &knowledge_json,
+        );
 
         let (persona, _persona_json) =
             self.persona_inference(&context, chat_fn, system_prompt, registry)?;
 
         Ok(collect_step_results(
-            domain, role, capabilities, tools, knowledge, persona, suggestions,
+            domain,
+            role,
+            capabilities,
+            tools,
+            knowledge,
+            persona,
+            suggestions,
         ))
     }
 }

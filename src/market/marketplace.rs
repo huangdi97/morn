@@ -462,9 +462,7 @@ mod tests {
             author: "test-author".to_string(),
             version: "0.1.0".to_string(),
         };
-        let listing_id = market
-            .publish_type(type_def, "user-1")
-            .unwrap();
+        let listing_id = market.publish_type(type_def, "user-1").unwrap();
         let listing = market.get(&listing_id).unwrap();
         assert_eq!(listing.item_type, "component_type_def");
         assert_eq!(listing.name, "my_custom_type");
@@ -498,8 +496,7 @@ mod tests {
     fn test_install_type_to_registry_rejects_non_type_listing() {
         let mut registry = Registry::new(None, None);
         let market = Marketplace::new(test_storage());
-        let result =
-            market.install_type_to_registry("listing-tool-web-search", &mut registry);
+        let result = market.install_type_to_registry("listing-tool-web-search", &mut registry);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not a ComponentTypeDef"));
     }

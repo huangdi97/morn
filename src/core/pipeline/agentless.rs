@@ -49,10 +49,7 @@ impl AgentlessPipeline {
         }
     }
 
-    pub fn with_tool_registry(
-        mut self,
-        registry: ToolRegistry,
-    ) -> Self {
+    pub fn with_tool_registry(mut self, registry: ToolRegistry) -> Self {
         self.tool_registry = Some(registry);
         self
     }

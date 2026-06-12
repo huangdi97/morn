@@ -10,7 +10,11 @@ const PRESET_NAMES: &[(&str, &str, &str)] = &[
     ("preset-assistant", "系统管家", "高效随叫随到的 AI 管家"),
     ("preset-reviewer", "审查员", "严谨的代码/文档审查"),
     ("preset-cs-agent", "客服", "有耐心有同理心的客户服务"),
-    ("preset-investment", "投资分析师", "风险与收益平衡的专业分析"),
+    (
+        "preset-investment",
+        "投资分析师",
+        "风险与收益平衡的专业分析",
+    ),
     ("preset-medical", "医疗顾问", "循证医学健康信息"),
     ("preset-legal", "法律顾问", "法律信息参考"),
     ("preset-tutor", "教育导师", "因材施教的启发式教学"),
@@ -115,7 +119,11 @@ mod tests {
     fn test_all_presets_have_valid_data() {
         for p in all() {
             assert!(!p.name.is_empty(), "Name empty for {}", p.id);
-            assert!(!p.prompt_layers.l1_core_identity.is_empty(), "Identity empty for {}", p.id);
+            assert!(
+                !p.prompt_layers.l1_core_identity.is_empty(),
+                "Identity empty for {}",
+                p.id
+            );
             assert!((0.0..=2.0).contains(&p.parameters.temperature));
             assert!((0.0..=1.0).contains(&p.parameters.verbosity));
             assert!((0.0..=1.0).contains(&p.parameters.proactiveness));

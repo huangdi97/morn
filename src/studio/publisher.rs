@@ -290,11 +290,7 @@ mod tests {
     fn publish_component_registers_type_in_type_registry() {
         let storage = storage_with_agent("draft");
         let type_registry = TypeRegistry::new();
-        let publisher = StudioPublisher::new(
-            None,
-            Some(storage.clone()),
-            Some(type_registry),
-        );
+        let publisher = StudioPublisher::new(None, Some(storage.clone()), Some(type_registry));
 
         publisher.publish_component("agent-1").unwrap();
 

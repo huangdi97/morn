@@ -2,7 +2,9 @@
 use crate::computer::{ComputerOpResult, SecurityLevel};
 
 pub fn accessibility_tree() -> ComputerOpResult {
-    let result = try_linux_a11y().or_else(try_macos_a11y).or_else(try_windows_a11y);
+    let result = try_linux_a11y()
+        .or_else(try_macos_a11y)
+        .or_else(try_windows_a11y);
 
     match result {
         Some(tree) => ComputerOpResult {
@@ -79,7 +81,9 @@ except Exception as e:
         .output()
         .ok()?;
     if dbus_output.status.success() {
-        let text = String::from_utf8_lossy(&dbus_output.stdout).trim().to_string();
+        let text = String::from_utf8_lossy(&dbus_output.stdout)
+            .trim()
+            .to_string();
         if !text.is_empty() {
             return Some(format!("root [from AT-SPI2]\n{}", text));
         }
@@ -130,7 +134,9 @@ end tell
         .output()
         .ok()?;
     if front_output.status.success() {
-        let text = String::from_utf8_lossy(&front_output.stdout).trim().to_string();
+        let text = String::from_utf8_lossy(&front_output.stdout)
+            .trim()
+            .to_string();
         if !text.is_empty() {
             return Some(format!("root → [application] {}", text));
         }

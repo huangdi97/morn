@@ -1,6 +1,6 @@
 //! Event handling for device sync.
+use super::{DeviceInfo, PullResponse, SyncEngine};
 use crate::core::storage::{DeviceRecord, Storage, SyncEventRecord};
-use super::{DeviceInfo, SyncEngine, PullResponse};
 
 impl SyncEngine {
     pub fn resolve_conflicts(

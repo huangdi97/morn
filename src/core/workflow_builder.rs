@@ -96,8 +96,12 @@ Rules:
             .trim_end_matches("```")
             .trim();
 
-        serde_json::from_str::<WorkflowPlan>(json_str)
-            .map_err(|e| format!("LLM returned invalid WorkflowPlan JSON: {}\nRaw: {}", e, trimmed))
+        serde_json::from_str::<WorkflowPlan>(json_str).map_err(|e| {
+            format!(
+                "LLM returned invalid WorkflowPlan JSON: {}\nRaw: {}",
+                e, trimmed
+            )
+        })
     }
 
     fn nl_to_workflow_keyword(&self, description: &str) -> Result<WorkflowPlan, String> {
