@@ -41,7 +41,7 @@ pub fn run() {
 
     let registry = None;
     let manager = Some(StudioManager::new(registry.clone(), storage.clone(), None));
-    let publisher = Some(StudioPublisher::new(registry.clone(), storage.clone()));
+    let publisher = Some(StudioPublisher::new(registry.clone(), storage.clone(), None));
     let tester = Some(StudioTester::new());
     let console = Some(ConsoleBackend::new(
         registry,
