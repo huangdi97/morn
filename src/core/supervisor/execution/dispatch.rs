@@ -55,10 +55,10 @@ impl Supervisor {
         }
 
         if let Some(ref _planner) = self.planner {
-            let _ = Planner::plan(&plan.user_input, plan.subtasks.clone());
+            Planner::plan(&plan.user_input, plan.subtasks.clone())?;
         }
         if let Some(ref _scheduler) = self.scheduler {
-            let _ = _scheduler.schedule(&plan.task_id, plan);
+            _scheduler.schedule(&plan.task_id, plan)?;
         }
 
         if let Some(ref storage) = self.storage {

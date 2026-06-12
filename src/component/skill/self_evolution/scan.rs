@@ -133,16 +133,14 @@ impl SelfEvolutionSkill {
         }
     }
 
-    pub fn apply_fixes(fixes: &[String]) -> Result<String, String> {
+    pub fn apply_fixes(_fixes: &[String]) -> Result<String, String> {
         #[cfg(test)]
         {
-            let _ = fixes;
             Ok("test validation skipped".to_string())
         }
 
         #[cfg(not(test))]
         {
-            let _ = fixes;
             let output = Command::new("cargo")
                 .arg("build")
                 .output()

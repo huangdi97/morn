@@ -1,4 +1,3 @@
-//! Router — model routing and provider selection.
 use super::local_engine::LocalEngine;
 use super::{
     ConfiguredModel, HybridStrategy, ModelRouter, ModelSpec, ModelType, ProviderCatalogEntry,
@@ -6,13 +5,15 @@ use super::{
 };
 use crate::config::ModelConfig as AppModelConfig;
 
+pub mod qa_router;
+
 impl ModelRouter {
     pub fn new() -> Self {
         let mut router = ModelRouter {
             mode: RouterMode::CloudFirst,
             local_engine: LocalEngine::new(),
             default_model: None,
-            providers: default_provider_catalog(),
+            providers: qa_router::default_provider_catalog(),
             cloud_models: Vec::new(),
             local_models: Vec::new(),
             fallback_models: Vec::new(),
@@ -103,7 +104,7 @@ impl ModelRouter {
             {
                 for model_id in &p.models {
                     let provider_name = p.name.as_str();
-                    let is_local = is_local_provider(provider_name);
+                    let is_local = qa_router::is_local_provider(provider_name);
                     let model_type = if is_local {
                         ModelType::LocalGGUF
                     } else if provider_name == "builtin" {
@@ -129,7 +130,6 @@ impl ModelRouter {
             }
             #[cfg(not(feature = "providers-full"))]
             {
-                let _ = &p;
             }
         }
 
@@ -245,7 +245,7 @@ impl ModelRouter {
         let candidates: Vec<&ModelSpec> = self
             .cloud_models
             .iter()
-            .filter(|m| m.is_available && has_all_capabilities(m, capabilities))
+            .filter(|m| m.is_available && qa_router::has_all_capabilities(m, capabilities))
             .collect();
         if let Some(best) = candidates.iter().min_by(|a, b| {
             a.cost_per_1k_tokens
@@ -264,7 +264,7 @@ impl ModelRouter {
         let candidates: Vec<&ModelSpec> = self
             .local_models
             .iter()
-            .filter(|m| m.is_available && has_all_capabilities(m, capabilities))
+            .filter(|m| m.is_available && qa_router::has_all_capabilities(m, capabilities))
             .collect();
         if let Some(model) = candidates.first() {
             return Ok(model);
@@ -280,7 +280,8 @@ impl ModelRouter {
 
         match self.hybrid_strategy {
             HybridStrategy::Auto => {
-                if estimate_complexity(prompt) > self.hybrid_threshold && local_available {
+                if qa_router::estimate_complexity(prompt) > self.hybrid_threshold && local_available
+                {
                     self.select_local(capabilities)
                 } else {
                     self.select_cloud(prompt, capabilities)
@@ -414,7 +415,7 @@ impl ModelRouter {
         let provider = self.find_provider(&spec.provider);
         let base_url = provider
             .map(|provider| provider.endpoint.clone())
-            .unwrap_or_else(|| endpoint_from_provider(&spec.provider));
+            .unwrap_or_else(|| qa_router::endpoint_from_provider(&spec.provider));
 
         RoutedModel {
             provider: spec.provider.clone(),
@@ -477,14 +478,14 @@ impl ModelRouter {
     fn has_available_local_model(&self, capabilities: &[&str]) -> bool {
         self.local_models
             .iter()
-            .any(|m| m.is_available && has_all_capabilities(m, capabilities))
+            .any(|m| m.is_available && qa_router::has_all_capabilities(m, capabilities))
     }
 
     fn estimate_cloud_cost(&self, prompt: &str, capabilities: &[&str]) -> f64 {
         let tokens = ((prompt.len() as f64) / 4.0).ceil().max(1.0);
         self.cloud_models
             .iter()
-            .filter(|m| m.is_available && has_all_capabilities(m, capabilities))
+            .filter(|m| m.is_available && qa_router::has_all_capabilities(m, capabilities))
             .map(|m| (tokens / 1000.0) * m.cost_per_1k_tokens)
             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or(0.0)
@@ -494,55 +495,5 @@ impl ModelRouter {
 impl Default for ModelRouter {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-fn has_all_capabilities(model: &ModelSpec, required: &[&str]) -> bool {
-    required
-        .iter()
-        .all(|cap| model.capabilities.iter().any(|c| c == cap))
-}
-
-fn default_provider_catalog() -> Vec<ProviderCatalogEntry> {
-    super::providers::PROVIDERS
-        .iter()
-        .map(|provider| ProviderCatalogEntry {
-            name: provider.name.to_string(),
-            endpoint: provider.endpoint.to_string(),
-            api_key_header: provider.api_key_header.to_string(),
-            models: provider
-                .models
-                .iter()
-                .map(|model| model.to_string())
-                .collect(),
-            api_key: None,
-        })
-        .collect()
-}
-
-fn is_local_provider(provider: &str) -> bool {
-    provider == "ollama" || provider == "lm_studio" || provider == "local"
-}
-
-fn estimate_complexity(prompt: &str) -> usize {
-    let lower = prompt.to_ascii_lowercase();
-    let keyword_score = [
-        "analyze", "compare", "explain", "write", "code", "generate", "design", "plan",
-    ]
-    .iter()
-    .filter(|keyword| lower.contains(**keyword))
-    .count()
-        * 100;
-
-    prompt.len() + keyword_score
-}
-
-fn endpoint_from_provider(provider: &str) -> String {
-    if provider.starts_with("http://") || provider.starts_with("https://") {
-        provider.to_string()
-    } else if provider.contains('.') {
-        format!("https://{}", provider)
-    } else {
-        String::new()
     }
 }

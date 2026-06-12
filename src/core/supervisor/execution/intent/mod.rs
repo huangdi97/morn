@@ -1,5 +1,6 @@
 //! intent — Natural-language agent creation and feedback-based learning.
 pub mod agent_builder;
+pub mod helpers;
 
 use crate::core::registry::Registry;
 use crate::core::storage::DecisionRule;

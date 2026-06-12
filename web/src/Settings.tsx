@@ -49,6 +49,23 @@ export function Settings({ onClose }: SettingsProps) {
         </div>
 
         <div className="settings-body">
+          <div className="settings-section">
+            <label className="settings-label">Theme</label>
+            <select
+              className="settings-select"
+              defaultValue={localStorage.getItem('morn-theme') || 'cyber'}
+              onChange={(e) => {
+                localStorage.setItem('morn-theme', e.target.value);
+                window.dispatchEvent(new StorageEvent('storage', {
+                  key: 'morn-theme',
+                  newValue: e.target.value,
+                }));
+              }}
+            >
+              <option value="default">Default Dark</option>
+              <option value="cyber">Cyberpunk</option>
+            </select>
+          </div>
           <label className="settings-label">Mode</label>
           <div className="settings-radio-group">
             <label className="settings-radio">

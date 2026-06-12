@@ -1,8 +1,8 @@
 //! Node type definitions and related data types for the pipeline system.
+mod execution;
+pub use execution::{PipelineContext, PipelineNodeExecutor};
 
 use serde_json::Value;
-use std::collections::HashMap;
-use std::time::Instant;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PortSchema {
@@ -483,30 +483,4 @@ pub struct Connection {
     pub to: String,
     pub from_port: String,
     pub to_port: String,
-}
-
-pub trait PipelineNodeExecutor: Send {
-    fn execute(&self, input: PipelineData) -> Result<PipelineData, String>;
-}
-
-pub struct PipelineContext {
-    pub data: HashMap<String, PipelineData>,
-    pub node_outputs: HashMap<String, PipelineData>,
-    pub started_at: Option<Instant>,
-}
-
-impl PipelineContext {
-    pub fn new() -> Self {
-        PipelineContext {
-            data: HashMap::new(),
-            node_outputs: HashMap::new(),
-            started_at: None,
-        }
-    }
-}
-
-impl Default for PipelineContext {
-    fn default() -> Self {
-        Self::new()
-    }
 }

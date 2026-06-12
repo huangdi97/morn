@@ -1,10 +1,14 @@
+@import './themes/default.css';
+@import './themes/cyber.css';
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-:root {
+:root,
+[data-theme="cyber"] {
   /* Background */
   --bg-page: #08080c;
   --bg-panel: #0d0e14;
@@ -17,7 +21,7 @@
   --text-tertiary: #63657a;
   --text-muted: #4a4c5c;
 
-  /* Accent */
+  /* Accent (青) */
   --accent: #00f0ff;
   --accent-hover: #4af5ff;
   --accent-active: #7af8ff;
@@ -52,14 +56,16 @@
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
 
+  /* Bubble colors */
+  --user-bubble: #1f6feb;
+  --assistant-bubble: #21262d;
+
   /* Kept for backward compat */
   --bg-primary: var(--bg-page);
   --bg-secondary: var(--bg-panel);
   --bg-tertiary: var(--bg-surface);
   --border: var(--border-default);
   --accent-brand: var(--accent);
-  --user-bubble: #1f6feb;
-  --assistant-bubble: #21262d;
 }
 
 html, body, #root {
@@ -80,20 +86,6 @@ body {
   flex-direction: column;
   height: 100%;
   transition: background 0.3s ease, color 0.3s ease;
-}
-
-.app.light {
-  --bg-page: #ffffff;
-  --bg-panel: #f6f8fa;
-  --bg-surface: #eaeef2;
-  --text-primary: #1f2328;
-  --text-secondary: #656d76;
-  --border-default: #d0d7de;
-}
-
-.app.light .message.assistant .bubble {
-  background: linear-gradient(135deg, #f0f2f5, #e4e8ed);
-  border: 1px solid var(--border-default);
 }
 
 .main-tabs {
