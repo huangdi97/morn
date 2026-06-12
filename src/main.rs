@@ -50,14 +50,22 @@ fn main() -> Result<(), String> {
             "success": true,
             "task": task,
         });
-        println!("{}", serde_json::to_string(&result).unwrap_or_else(|e| format!("{{\"error\":\"serialize failed: {}\"}}", e)));
+        println!(
+            "{}",
+            serde_json::to_string(&result)
+                .unwrap_or_else(|e| format!("{{\"error\":\"serialize failed: {}\"}}", e))
+        );
         return Ok(());
     }
 
     if let Ok(exec_task) = std::env::var("EXECUTE_TASK") {
         let mut child = morn::core::task_engine::child_process::ChildProcess::new();
         let result = child.spawn(&exec_task, 300)?;
-        println!("{}", serde_json::to_string(&result).unwrap_or_else(|e| format!("{{\"error\":\"serialize failed: {}\"}}", e)));
+        println!(
+            "{}",
+            serde_json::to_string(&result)
+                .unwrap_or_else(|e| format!("{{\"error\":\"serialize failed: {}\"}}", e))
+        );
         return Ok(());
     }
 

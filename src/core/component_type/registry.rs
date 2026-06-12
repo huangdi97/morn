@@ -105,8 +105,21 @@ mod tests {
     #[test]
     fn list_contains_all_builtin_names() {
         let registry = TypeRegistry::new();
-        let names: Vec<&str> = registry.list().iter().map(|d| d.type_name.as_str()).collect();
-        for n in &["tool", "knowledge", "skill", "persona", "memory", "model", "agent", "pipeline"] {
+        let names: Vec<&str> = registry
+            .list()
+            .iter()
+            .map(|d| d.type_name.as_str())
+            .collect();
+        for n in &[
+            "tool",
+            "knowledge",
+            "skill",
+            "persona",
+            "memory",
+            "model",
+            "agent",
+            "pipeline",
+        ] {
             assert!(names.contains(n), "missing builtin type '{}'", n);
         }
     }
@@ -178,8 +191,15 @@ mod tests {
     fn available_interfaces_contains_all() {
         let registry = TypeRegistry::new();
         let ifaces = registry.available_interfaces();
-        for expected in &["execute", "retrieve", "store", "generate", "embed", "recall", "predict", "chat", "act", "run", "compose"] {
-            assert!(ifaces.contains(&expected.to_string()), "missing interface '{}'", expected);
+        for expected in &[
+            "execute", "retrieve", "store", "generate", "embed", "recall", "predict", "chat",
+            "act", "run", "compose",
+        ] {
+            assert!(
+                ifaces.contains(&expected.to_string()),
+                "missing interface '{}'",
+                expected
+            );
         }
     }
 

@@ -184,13 +184,7 @@ impl VncManager {
                 .ok_or_else(|| format!("非UTF-8路径: {:?}", screenshot_path))?
                 .to_string();
             let output = std::process::Command::new("import")
-                .args([
-                    "-display",
-                    display,
-                    "-window",
-                    "root",
-                    &screenshot_str,
-                ])
+                .args(["-display", display, "-window", "root", &screenshot_str])
                 .output()
                 .map_err(|e| format!("Screenshot failed: {}", e))?;
 

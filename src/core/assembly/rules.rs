@@ -229,11 +229,7 @@ mod tests {
     #[test]
     fn test_constraint_memory_agent_overflow() {
         let sel = ComponentSelection::new(3)
-            .with_memory(vec![
-                "a".into(),
-                "b".into(),
-                "c".into(),
-            ])
+            .with_memory(vec!["a".into(), "b".into(), "c".into()])
             .with_tools(vec!["web_search".into()])
             .with_llm(vec!["deepseek".into()]);
         let violations = CompositionRules::check_constraints(&sel);

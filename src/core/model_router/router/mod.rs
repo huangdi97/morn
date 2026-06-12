@@ -1,7 +1,7 @@
 use super::local_engine::LocalEngine;
 use super::{
     ConfiguredModel, HybridStrategy, ModelRouter, ModelSpec, ModelType, ProviderCatalogEntry,
-    RouterMode, RoutedModel,
+    RoutedModel, RouterMode,
 };
 use crate::config::ModelConfig as AppModelConfig;
 
@@ -129,8 +129,7 @@ impl ModelRouter {
                 }
             }
             #[cfg(not(feature = "providers-full"))]
-            {
-            }
+            {}
         }
 
         #[cfg(not(feature = "providers-full"))]

@@ -1,11 +1,11 @@
 //! Memory layers — multi-tier memory system.
-pub mod working;
 pub mod episodic;
 pub mod flash;
+pub mod working;
 
-pub use working::*;
 pub use episodic::*;
 pub use flash::*;
+pub use working::*;
 
 #[cfg(test)]
 mod tests {

@@ -19,7 +19,11 @@ pub fn ocr(image_path: &str) -> ComputerOpResult {
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             let msg = if stderr.is_empty() {
-                format!("tesseract failed on '{}' with exit code {}", image_path, output.status.code().unwrap_or(-1))
+                format!(
+                    "tesseract failed on '{}' with exit code {}",
+                    image_path,
+                    output.status.code().unwrap_or(-1)
+                )
             } else {
                 format!("tesseract failed on '{}': {}", image_path, stderr)
             };
