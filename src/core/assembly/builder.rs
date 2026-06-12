@@ -341,6 +341,5 @@ mod tests {
     fn test_assembly_builder_new() {
         let builder = AssemblyBuilder::new();
         // just verify it constructs
-        let _ = builder;
     }
 }
