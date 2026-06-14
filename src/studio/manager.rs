@@ -115,6 +115,8 @@ impl StudioManager {
                 trust_score: 70.0,
                 created_at: now,
                 updated_at: None,
+                current_version: "0.1.0".into(),
+                update_available: false,
             })?;
         }
         Ok(id)
@@ -182,6 +184,8 @@ impl StudioManager {
                     trust_score: 70.0,
                     created_at: now,
                     updated_at: None,
+                    current_version: "0.1.0".into(),
+                    update_available: false,
                 })?;
             }
             Ok(agent_id)

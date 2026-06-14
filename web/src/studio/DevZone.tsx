@@ -6,14 +6,40 @@ interface ExamplePlugin {
   name: string;
   type: PluginType;
   description: string;
+  details: string;
 }
 
 const EXAMPLE_PLUGINS: ExamplePlugin[] = [
-  { name: "Cyber Theme", type: "theme", description: "Custom UI theme with neon colors" },
-  { name: "WeChat Channel", type: "channel", description: "Connect to WeChat for messaging" },
-  { name: "Web Search Tool", type: "ui_slot", description: "Add web search to agent toolbox" },
-  { name: "MCP Server", type: "protocol", description: "Add MCP server capabilities" },
-  { name: "Analytics Widget", type: "ui_slot", description: "Dashboard analytics panel" },
+  {
+    name: "Cyber Theme",
+    type: "theme",
+    description: "Custom UI theme with neon colors",
+    details: "Manifest + theme.css + main.js — 3 files",
+  },
+  {
+    name: "WeChat Channel",
+    type: "channel",
+    description: "Connect to WeChat for messaging",
+    details: "Manifest + channel.js + main.js — 3 files",
+  },
+  {
+    name: "Web Search Tool",
+    type: "ui_slot",
+    description: "Add web search to agent toolbox",
+    details: "Manifest + panel.html + main.js — 3 files",
+  },
+  {
+    name: "MCP Server Protocol",
+    type: "protocol",
+    description: "Add MCP server capabilities",
+    details: "Manifest + protocol.json + main.js — 3 files",
+  },
+  {
+    name: "Analytics Widget",
+    type: "ui_slot",
+    description: "Dashboard analytics panel",
+    details: "Manifest + panel.html + main.js — 3 files",
+  },
 ];
 
 const PLUGIN_TYPE_LABELS: Record<PluginType, string> = {
@@ -54,19 +80,30 @@ export function DevZone() {
   const [nlInput, setNlInput] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generatedPath, setGeneratedPath] = useState("");
+  const [generatedFiles, setGeneratedFiles] = useState<string[]>([]);
 
   const handleGenerateWithAI = async () => {
     setGenerating(true);
     setGeneratedPath("");
+    setGeneratedFiles([]);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      const path = await invoke<string>("generate_plugin_from_nl", { nl: nlInput });
-      setGeneratedPath(path);
+      await invoke<string>("generate_plugin_from_nl", { nl: nlInput });
+      setGeneratedFiles(["manifest.json", "main.js"]);
     } catch (e) {
       console.error("AI generation failed", e);
       setGeneratedPath("Error: " + e);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleInstall = async () => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("plugin_install", { path: generatedPath.replace("/manifest.json", "") });
+    } catch (e) {
+      console.error("Install failed", e);
     }
   };
 
@@ -274,7 +311,7 @@ export function DevZone() {
             <textarea
               value={nlInput}
               onChange={(e) => setNlInput(e.target.value)}
-              placeholder="e.g. A weather widget that shows the forecast for the current location..."
+              placeholder='e.g. "A weather widget that shows the forecast for the current location" or "A dark theme plugin with purple accents"'
               rows={4}
               style={{
                 width: "100%",
@@ -291,36 +328,74 @@ export function DevZone() {
             />
           </div>
 
-          <button
-            onClick={handleGenerateWithAI}
-            disabled={generating || !nlInput.trim()}
-            style={{
-              alignSelf: "flex-start",
-              padding: "8px 20px",
-              borderRadius: "6px",
-              background: generating ? "var(--border)" : "var(--accent)",
-              color: "#fff",
-              border: "none",
-              fontSize: "14px",
-              fontWeight: 500,
-              cursor: generating || !nlInput.trim() ? "not-allowed" : "pointer",
-            }}
-          >
-            {generating ? "Generating..." : "Generate with AI"}
-          </button>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              onClick={handleGenerateWithAI}
+              disabled={generating || !nlInput.trim()}
+              style={{
+                padding: "8px 20px",
+                borderRadius: "6px",
+                background: generating ? "var(--border)" : "var(--accent)",
+                color: "#fff",
+                border: "none",
+                fontSize: "14px",
+                fontWeight: 500,
+                cursor: generating || !nlInput.trim() ? "not-allowed" : "pointer",
+              }}
+            >
+              {generating ? "Generating..." : "Generate with AI"}
+            </button>
+          </div>
 
           {generatedPath && (
             <div
               style={{
-                padding: "10px 12px",
+                padding: "12px",
                 borderRadius: "6px",
-                background: "rgba(34, 197, 94, 0.1)",
-                border: "1px solid rgba(34, 197, 94, 0.3)",
-                color: "rgb(34, 197, 94)",
+                background: generatedPath.startsWith("Error")
+                  ? "rgba(239, 68, 68, 0.1)"
+                  : "rgba(34, 197, 94, 0.1)",
+                border: generatedPath.startsWith("Error")
+                  ? "1px solid rgba(239, 68, 68, 0.3)"
+                  : "1px solid rgba(34, 197, 94, 0.3)",
+                color: generatedPath.startsWith("Error") ? "rgb(239, 68, 68)" : "rgb(34, 197, 94)",
                 fontSize: "13px",
               }}
             >
-              Plugin generated at: {generatedPath}
+              {generatedPath.startsWith("Error") ? (
+                <p>{generatedPath}</p>
+              ) : (
+                <>
+                  <p style={{ marginBottom: "8px" }}>
+                    Plugin generated at: <code style={{ fontSize: "12px" }}>{generatedPath}</code>
+                  </p>
+                  {generatedFiles.length > 0 && (
+                    <>
+                      <p style={{ marginBottom: "4px", fontWeight: 500 }}>Generated files:</p>
+                      <ul style={{ margin: 0, paddingLeft: "16px", listStyle: "disc" }}>
+                        {generatedFiles.map((f) => (
+                          <li key={f}>{f}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  <button
+                    onClick={handleInstall}
+                    style={{
+                      marginTop: "8px",
+                      padding: "6px 16px",
+                      borderRadius: "4px",
+                      background: "rgb(34, 197, 94)",
+                      color: "#fff",
+                      border: "none",
+                      fontSize: "13px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Install Plugin
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -331,6 +406,23 @@ export function DevZone() {
         <h3 style={{ color: "var(--text-primary)", marginBottom: "16px", fontSize: "16px", fontWeight: 600 }}>
           Example Plugins
         </h3>
+        <div
+          style={{
+            padding: "12px 16px",
+            background: "var(--bg-secondary)",
+            border: "1px solid var(--border)",
+            borderRadius: "8px",
+            marginBottom: "16px",
+            fontSize: "13px",
+            color: "var(--text-secondary)",
+            lineHeight: 1.5,
+          }}
+        >
+          Get started fast with these ready-made plugin templates. Click <strong>Use Template</strong> to
+          pre-fill the scaffold form above, or describe your own plugin in the AI generator.
+          <br />
+          Full example code is available at <code>src/themes/examples/</code> in the source tree.
+        </div>
         {EXAMPLE_PLUGINS.length === 0 ? (
           <div style={{
             padding: "24px",
@@ -372,8 +464,11 @@ export function DevZone() {
               >
                 {PLUGIN_TYPE_LABELS[example.type]}
               </span>
-              <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px", lineHeight: "1.4" }}>
+              <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "4px", lineHeight: "1.4" }}>
                 {example.description}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "12px", fontFamily: "var(--font-mono)" }}>
+                {example.details}
               </div>
               <button
                 onClick={() => handleUseTemplate(example)}

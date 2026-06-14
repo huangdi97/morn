@@ -14,6 +14,15 @@ interface BotListing {
   template_id: string;
 }
 
+interface Review {
+  id: string;
+  listing_id: string;
+  user_id: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+}
+
 const hardcodedBots: BotListing[] = [
   { id: "b1", name: "Data Analyst", icon: "📊", description: "Turn raw data into actionable insights with statistical analysis and visualization", category: "analysis", rating: 4.8, installs: 3420, author: "Morn Labs", price: 0, template_id: "preset-analyst" },
   { id: "b2", name: "Research Assistant", icon: "🔬", description: "Multi-source research with cross-validation and citation management", category: "research", rating: 4.7, installs: 2890, author: "Morn Labs", price: 0, template_id: "preset-researcher" },
@@ -34,6 +43,9 @@ export default function BotStore() {
   const [category, setCategory] = useState("all");
   const [installed, setInstalled] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  const [reviews, setReviews] = useState<Record<string, Review[]>>({});
+  const [reviewForm, setReviewForm] = useState<Record<string, { rating: number; comment: string }>>({});
+  const [expandedReviews, setExpandedReviews] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     api.listBotStore().then(setBots).catch(() => {
@@ -54,6 +66,40 @@ export default function BotStore() {
       .catch(console.error);
   };
 
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    api.searchMarketListings(val || null, category === "all" ? null : category).then(setBots).catch(() => {});
+  };
+
+  const handleCategoryChange = (cat: string) => {
+    setCategory(cat);
+    api.searchMarketListings(search || null, cat === "all" ? null : cat).then(setBots).catch(() => {});
+  };
+
+  const toggleReviews = (botId: string) => {
+    const next = new Set(expandedReviews);
+    if (next.has(botId)) {
+      next.delete(botId);
+    } else {
+      next.add(botId);
+      api.getListingReviews(botId).then((data: Review[]) => {
+        setReviews(prev => ({ ...prev, [botId]: data }));
+      }).catch(() => {});
+    }
+    setExpandedReviews(next);
+  };
+
+  const handleSubmitReview = (botId: string) => {
+    const form = reviewForm[botId];
+    if (!form || form.rating < 1 || form.rating > 5 || !form.comment.trim()) return;
+    api.submitReview(botId, form.rating, form.comment).then(() => {
+      api.getListingReviews(botId).then((data: Review[]) => {
+        setReviews(prev => ({ ...prev, [botId]: data }));
+      });
+      setReviewForm(prev => ({ ...prev, [botId]: { rating: 5, comment: "" } }));
+    }).catch(console.error);
+  };
+
   const getCategoryColor = (cat: string) => {
     const colors: Record<string, string> = {
       analysis: "#3fb950", research: "#bc8cff", writing: "#d29922",
@@ -69,7 +115,7 @@ export default function BotStore() {
         <h2 style={{ color: "#e6edf3", margin: 0 }}>Bot Store</h2>
         <input
           type="text" placeholder="Search bots..."
-          value={search} onChange={e => setSearch(e.target.value)}
+          value={search} onChange={e => handleSearch(e.target.value)}
           style={{
             background: "#0d1117", border: "1px solid #30363d", borderRadius: "4px",
             padding: "6px 12px", color: "#e6edf3", fontSize: "13px", width: "240px",
@@ -77,19 +123,16 @@ export default function BotStore() {
         />
       </div>
 
-      <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-        {categories.map(c => (
-          <button key={c} onClick={() => setCategory(c)}
-            style={{
-              background: category === c ? "#1f6feb" : "transparent",
-              color: category === c ? "#fff" : "#8b949e",
-              border: "1px solid #30363d", padding: "4px 12px",
-              borderRadius: "4px", cursor: "pointer", fontSize: "13px",
-              textTransform: "capitalize",
-            }}>
-            {c}
-          </button>
-        ))}
+      <div style={{ marginBottom: "16px" }}>
+        <select value={category} onChange={e => handleCategoryChange(e.target.value)}
+          style={{
+            background: "#0d1117", border: "1px solid #30363d", borderRadius: "4px",
+            padding: "6px 12px", color: "#e6edf3", fontSize: "13px", textTransform: "capitalize",
+          }}>
+          {categories.map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
@@ -126,6 +169,38 @@ export default function BotStore() {
               }}>
               {installed.has(bot.id) ? "Installed ✓" : bot.price === 0 ? "Install" : "Purchase"}
             </button>
+            <button
+              onClick={() => toggleReviews(bot.id)}
+              style={{
+                width: "100%", marginTop: "6px", padding: "6px",
+                background: "transparent", color: "#58a6ff",
+                border: "1px solid #30363d", borderRadius: "4px", cursor: "pointer", fontSize: "13px",
+              }}>
+              {expandedReviews.has(bot.id) ? "Hide Reviews" : "Show Reviews"}
+            </button>
+            {expandedReviews.has(bot.id) && (
+              <div style={{ marginTop: "8px", borderTop: "1px solid #30363d", paddingTop: "8px" }}>
+                {reviews[bot.id]?.map(r => (
+                  <div key={r.id} style={{ fontSize: "12px", color: "#8b949e", marginBottom: "6px", padding: "4px 0", borderBottom: "1px solid #21262d" }}>
+                    <span style={{ color: "#d29922" }}>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</span>
+                    <span> {r.comment}</span>
+                  </div>
+                )) || <div style={{ fontSize: "12px", color: "#8b949e", marginBottom: "6px" }}>No reviews yet</div>}
+                <div style={{ display: "flex", gap: "6px", marginTop: "6px", alignItems: "center" }}>
+                  <select value={reviewForm[bot.id]?.rating || 5} onChange={e => setReviewForm(prev => ({ ...prev, [bot.id]: { rating: Number(e.target.value), comment: prev[bot.id]?.comment || "" } }))}
+                    style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: "4px", padding: "4px", color: "#e6edf3", fontSize: "12px" }}>
+                    {[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n}★</option>)}
+                  </select>
+                  <input type="text" placeholder="Write a review..." value={reviewForm[bot.id]?.comment || ""}
+                    onChange={e => setReviewForm(prev => ({ ...prev, [bot.id]: { rating: prev[bot.id]?.rating || 5, comment: e.target.value } }))}
+                    style={{ flex: 1, background: "#0d1117", border: "1px solid #30363d", borderRadius: "4px", padding: "4px 8px", color: "#e6edf3", fontSize: "12px" }} />
+                  <button onClick={() => handleSubmitReview(bot.id)}
+                    style={{ background: "#1f6feb", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", cursor: "pointer", fontSize: "12px" }}>
+                    Submit
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

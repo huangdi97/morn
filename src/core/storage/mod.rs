@@ -70,7 +70,9 @@ impl Storage {
             CREATE TABLE IF NOT EXISTS agents (
                 id TEXT PRIMARY KEY, name TEXT NOT NULL, component_type TEXT NOT NULL,
                 config_json TEXT, status TEXT DEFAULT 'inactive',
-                trust_score REAL DEFAULT 70.0, created_at TEXT NOT NULL, updated_at TEXT
+                trust_score REAL DEFAULT 70.0, created_at TEXT NOT NULL, updated_at TEXT,
+                current_version TEXT DEFAULT '0.1.0',
+                update_available INTEGER DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS capabilities (
@@ -142,6 +144,16 @@ impl Storage {
                 version TEXT NOT NULL,
                 data_json TEXT NOT NULL,
                 changelog TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (listing_id) REFERENCES market_listings(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS market_reviews (
+                id TEXT PRIMARY KEY,
+                listing_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+                comment TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (listing_id) REFERENCES market_listings(id) ON DELETE CASCADE
             );

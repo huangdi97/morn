@@ -2,7 +2,7 @@
 use rusqlite::params;
 
 use super::Storage;
-use crate::market::{AgentVersion, License, Listing, Transaction};
+use crate::market::{AgentVersion, License, Listing, Review, Transaction};
 
 impl Storage {
     pub fn save_listing(&self, listing: &Listing) -> Result<(), String> {
@@ -239,6 +239,47 @@ impl Storage {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn save_review(&self, review: &Review) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO market_reviews (id, listing_id, user_id, rating, comment, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                review.id, review.listing_id, review.user_id, review.rating,
+                review.comment, review.created_at
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn get_listing_reviews(&self, listing_id: &str) -> Result<Vec<Review>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, listing_id, user_id, rating, comment, created_at
+                 FROM market_reviews WHERE listing_id = ?1 ORDER BY created_at DESC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![listing_id], |row| {
+                Ok(Review {
+                    id: row.get(0)?,
+                    listing_id: row.get(1)?,
+                    user_id: row.get(2)?,
+                    rating: row.get(3)?,
+                    comment: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        let mut reviews = Vec::new();
+        for row in rows {
+            reviews.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(reviews)
     }
 }
 

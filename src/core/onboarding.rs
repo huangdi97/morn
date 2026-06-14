@@ -1,5 +1,6 @@
-//! First-run onboarding wizard and setup flow.
+//! First-run onboarding wizard, setup flow, and user journey.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -202,6 +203,7 @@ fn persist_onboarding_config(draft: &OnboardingDraft) -> Result<(), String> {
     #[derive(Serialize)]
     struct OnboardingField {
         completed: bool,
+        completed_at: Option<String>,
     }
     #[derive(Serialize)]
     struct ModelField {
@@ -220,7 +222,10 @@ fn persist_onboarding_config(draft: &OnboardingDraft) -> Result<(), String> {
 
     let channel = draft.channel.clone().unwrap_or_else(|| "cli".to_string());
     let persisted = PersistedConfig {
-        onboarding: OnboardingField { completed: true },
+        onboarding: OnboardingField {
+            completed: true,
+            completed_at: Some(Utc::now().to_rfc3339()),
+        },
         model: ModelField {
             provider: draft
                 .provider
@@ -264,6 +269,59 @@ fn is_supported_channel(channel: &str) -> bool {
             | "pushplus"
             | "serverchan"
     )
+}
+
+/// Returns the number of days since onboarding was completed (1-indexed).
+pub fn days_since_first_use() -> u32 {
+    let path = config_path();
+    if !path.exists() {
+        return 1;
+    }
+    let Ok(content) = fs::read_to_string(&path) else {
+        return 1;
+    };
+    let Ok(config) = content.parse::<Value>() else {
+        return 1;
+    };
+    let completed_at = config
+        .get("onboarding")
+        .and_then(|o| o.get("completed_at"))
+        .and_then(Value::as_str)
+        .and_then(|s| s.parse::<DateTime<Utc>>().ok());
+    let Some(first_launch) = completed_at else {
+        return 1;
+    };
+    let now = Utc::now();
+    let diff = now.signed_duration_since(first_launch);
+    let days = diff.num_days().max(0) as u32 + 1;
+    days.min(30)
+}
+
+/// Returns a motivational message based on the current day.
+pub fn get_day_message(day: u32) -> &'static str {
+    match day {
+        2 => "昨天你创建了 Agent，试试团队协作",
+        3..=6 => "继续构建你的 Agent 团队，每一步都在提升效率",
+        7 => "一周了！看看你的 ROI 面板",
+        8..=13 => "你已经坚持了一周多，继续保持！",
+        14 => "自动化工作流正在改变你的工作方式",
+        15..=29 => "你已经省了很多时间，探索更多功能吧",
+        30 => "你已经省了不少钱，来看看更多功能",
+        _ => "每天进步一点点",
+    }
+}
+
+/// Returns the current user journey state (day, message, next milestone).
+pub fn get_user_journey() -> (u32, &'static str, u32) {
+    let day = days_since_first_use();
+    let message = get_day_message(day);
+    let next = match day {
+        0..=1 => 2,
+        2..=6 => 7,
+        7..=29 => 30,
+        _ => 30,
+    };
+    (day, message, next)
 }
 
 #[cfg(test)]

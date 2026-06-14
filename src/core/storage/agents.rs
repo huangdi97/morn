@@ -14,6 +14,8 @@ pub struct AgentRecord {
     pub trust_score: f64,
     pub created_at: String,
     pub updated_at: Option<String>,
+    pub current_version: String,
+    pub update_available: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,11 +46,12 @@ impl Storage {
     pub fn insert_agent(&self, agent: &AgentRecord) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
-            "INSERT INTO agents (id, name, component_type, config_json, status, trust_score, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO agents (id, name, component_type, config_json, status, trust_score, created_at, updated_at, current_version, update_available)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 agent.id, agent.name, agent.component_type, agent.config_json,
-                agent.status, agent.trust_score, agent.created_at, agent.updated_at
+                agent.status, agent.trust_score, agent.created_at, agent.updated_at,
+                agent.current_version, agent.update_available
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -59,7 +62,7 @@ impl Storage {
     pub fn get_agent(&self, id: &str) -> Result<Option<AgentRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
-            .prepare("SELECT id, name, component_type, config_json, status, trust_score, created_at, updated_at FROM agents WHERE id = ?1")
+            .prepare("SELECT id, name, component_type, config_json, status, trust_score, created_at, updated_at, current_version, update_available FROM agents WHERE id = ?1")
             .map_err(|e| e.to_string())?;
         let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
         if let Some(row) = rows.next().map_err(|e| e.to_string())? {
@@ -72,6 +75,8 @@ impl Storage {
                 trust_score: row.get(5).map_err(|e| e.to_string())?,
                 created_at: row.get(6).map_err(|e| e.to_string())?,
                 updated_at: row.get(7).map_err(|e| e.to_string())?,
+                current_version: row.get(8).map_err(|e| e.to_string())?,
+                update_available: row.get(9).map_err(|e| e.to_string())?,
             }))
         } else {
             Ok(None)
@@ -82,7 +87,7 @@ impl Storage {
     pub fn list_agents(&self) -> Result<Vec<AgentRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
-            .prepare("SELECT id, name, component_type, config_json, status, trust_score, created_at, updated_at FROM agents ORDER BY created_at DESC")
+            .prepare("SELECT id, name, component_type, config_json, status, trust_score, created_at, updated_at, current_version, update_available FROM agents ORDER BY created_at DESC")
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |row| {
@@ -95,6 +100,8 @@ impl Storage {
                     trust_score: row.get(5)?,
                     created_at: row.get(6)?,
                     updated_at: row.get(7)?,
+                    current_version: row.get(8)?,
+                    update_available: row.get(9)?,
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -121,6 +128,22 @@ impl Storage {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute("DELETE FROM agents WHERE id = ?1", params![id])
             .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// Updates the version metadata for an agent.
+    pub fn update_agent_version(
+        &self,
+        id: &str,
+        version: &str,
+        update_available: bool,
+    ) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE agents SET current_version = ?1, update_available = ?2, updated_at = ?3 WHERE id = ?4",
+            params![version, update_available, chrono::Utc::now().to_rfc3339(), id],
+        )
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -189,6 +212,8 @@ mod tests {
             trust_score: 70.0,
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: None,
+            current_version: "0.1.0".to_string(),
+            update_available: false,
         }
     }
 

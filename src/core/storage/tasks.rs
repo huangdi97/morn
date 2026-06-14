@@ -241,6 +241,151 @@ impl Storage {
         Ok(executions)
     }
 
+    /// Lists execution records created today by matching the date prefix.
+    pub fn list_today_executions(&self) -> Result<Vec<ExecutionRecord>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let pattern = format!("{}%", today);
+        let mut stmt = conn
+            .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, created_at FROM executions WHERE created_at LIKE ?1")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![pattern], |row| {
+                Ok(ExecutionRecord {
+                    id: row.get(0)?,
+                    agent_id: row.get(1)?,
+                    task_id: row.get(2)?,
+                    action: row.get(3)?,
+                    status: row.get(4)?,
+                    latency_ms: row.get(5)?,
+                    error_msg: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        let mut executions = Vec::new();
+        for row in rows {
+            executions.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(executions)
+    }
+
+    pub fn list_recent_executions(&self, limit: usize) -> Result<Vec<ExecutionRecord>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, created_at FROM executions ORDER BY created_at DESC LIMIT ?1")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![limit as i64], |row| {
+                Ok(ExecutionRecord {
+                    id: row.get(0)?,
+                    agent_id: row.get(1)?,
+                    task_id: row.get(2)?,
+                    action: row.get(3)?,
+                    status: row.get(4)?,
+                    latency_ms: row.get(5)?,
+                    error_msg: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        let mut executions = Vec::new();
+        for row in rows {
+            executions.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(executions)
+    }
+
+    pub fn get_reliability_metrics(&self) -> Result<serde_json::Value, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let past_24h = (chrono::Utc::now() - chrono::Duration::hours(24))
+            .format("%Y-%m-%dT%H:%M:%S")
+            .to_string();
+
+        let total: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM executions WHERE created_at >= ?1",
+                params![past_24h],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+
+        let success_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM executions WHERE created_at >= ?1 AND status = 'success'",
+                params![past_24h],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+
+        let success_rate = if total > 0 {
+            (success_count as f64 / total as f64) * 100.0
+        } else {
+            100.0
+        };
+
+        let avg_latency: f64 = conn
+            .query_row(
+                "SELECT COALESCE(AVG(latency_ms), 0) FROM executions WHERE created_at >= ?1 AND latency_ms IS NOT NULL",
+                params![past_24h],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+
+        let sla_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM executions WHERE created_at >= ?1 AND latency_ms < 5000",
+                params![past_24h],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+
+        let sla_rate = if total > 0 {
+            (sla_count as f64 / total as f64) * 100.0
+        } else {
+            100.0
+        };
+
+        let mut latencies: Vec<i64> = Vec::new();
+        if total > 0 {
+            let mut stmt = conn
+                .prepare("SELECT latency_ms FROM executions WHERE created_at >= ?1 AND latency_ms IS NOT NULL ORDER BY latency_ms ASC")
+                .map_err(|e| e.to_string())?;
+            let rows = stmt
+                .query_map(params![past_24h], |row| row.get::<_, Option<i64>>(0))
+                .map_err(|e| e.to_string())?;
+            for row in rows {
+                if let Some(lat) = row.map_err(|e| e.to_string())? {
+                    latencies.push(lat);
+                }
+            }
+        }
+
+        let p50 = if latencies.is_empty() {
+            0.0
+        } else {
+            let idx = latencies.len() / 2;
+            latencies[idx] as f64
+        };
+
+        let p95 = if latencies.is_empty() {
+            0.0
+        } else {
+            let idx = (latencies.len() as f64 * 0.95).ceil() as usize - 1;
+            let idx = idx.min(latencies.len() - 1);
+            latencies[idx] as f64
+        };
+
+        Ok(serde_json::json!({
+            "success_rate": success_rate,
+            "avg_latency_ms": avg_latency,
+            "p50_latency_ms": p50,
+            "p95_latency_ms": p95,
+            "sla_rate": sla_rate,
+            "total_executions": total
+        }))
+    }
+
     // Decisions CRUD
     /// Inserts a decision record and returns success when the row is stored.
     pub fn insert_decision(&self, decision: &DecisionRecord) -> Result<(), String> {

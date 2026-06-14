@@ -15,6 +15,7 @@ pub struct ModelConfig {
     pub timeout_seconds: u64,
     pub providers: HashMap<String, CustomProviderConfig>,
     pub hybrid: HybridConfig,
+    pub local_first: bool,
 }
 
 impl Default for ModelConfig {
@@ -27,6 +28,7 @@ impl Default for ModelConfig {
             timeout_seconds: 300,
             providers: HashMap::new(),
             hybrid: HybridConfig::default(),
+            local_first: false,
         }
     }
 }
@@ -43,6 +45,7 @@ impl ModelConfig {
             timeout_seconds: env_u64("MORN_MODEL_TIMEOUT_SECONDS", default.timeout_seconds),
             providers: HashMap::new(),
             hybrid: HybridConfig::from_env(),
+            local_first: false,
         }
     }
 }

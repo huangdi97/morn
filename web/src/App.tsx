@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { api } from "./api";
 import { ComponentEditor } from "./studio/ComponentEditor";
 import { AgentBuilder } from "./studio/AgentBuilder";
+import { TeamBuilder } from "./studio/TeamBuilder";
 import { TestPanel } from "./studio/TestPanel";
 import { TeamTemplateSelector } from "./studio/TeamTemplateSelector";
 import { DevZone } from "./studio/DevZone";
@@ -25,8 +26,12 @@ import AudioPanel from "./console/AudioPanel";
 import CostPanel from "./console/CostPanel";
 import LocalModelPanel from "./console/LocalModelPanel";
 import AnalyticsPanel from "./console/AnalyticsPanel";
+import SandboxPanel from "./console/SandboxPanel";
+import ProactivePanel from "./console/ProactivePanel";
+import BusinessTemplates from "./console/BusinessTemplates";
 import BotStore from "./store/BotStore";
 import { Settings } from "./Settings";
+import StatusBar from "./StatusBar";
 import "./styles/base.css";
 import "./styles/skeleton.css";
 import "./styles/dashboard.css";
@@ -182,8 +187,8 @@ function App() {
     return `${hh}:${mm}`;
   };
 
-  const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "dev" | "types" | "mcp">("builder");
-  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics">("dashboard");
+  const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "team" | "dev" | "types" | "mcp">("builder");
+  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business">("dashboard");
 
   const SkeletonChat = () => (
     <div className="skeleton-chat">
@@ -282,6 +287,7 @@ function App() {
         <button className={studioTab === "editor" ? "active" : ""} onClick={() => setStudioTab("editor")}>Component Editor</button>
         <button className={studioTab === "builder" ? "active" : ""} onClick={() => setStudioTab("builder")}>Agent Builder</button>
         <button className={studioTab === "teams" ? "active" : ""} onClick={() => setStudioTab("teams")}>Teams</button>
+        <button className={studioTab === "team" ? "active" : ""} onClick={() => setStudioTab("team")}>Team Builder</button>
         <button className={studioTab === "dev" ? "active" : ""} onClick={() => setStudioTab("dev")}>Dev</button>
         <button className={studioTab === "types" ? "active" : ""} onClick={() => setStudioTab("types")}>Types</button>
         <button className={studioTab === "mcp" ? "active" : ""} onClick={() => setStudioTab("mcp")}>MCP</button>
@@ -304,6 +310,7 @@ function App() {
                 }}
               />
             )}
+            {studioTab === "team" && <TeamBuilder />}
             {studioTab === "test" && <TestPanel />}
             {studioTab === "dev" && <DevZone />}
             {studioTab === "types" && <ComponentTypeManager />}
@@ -334,6 +341,9 @@ function App() {
         <button className={consoleTab === "cost_tracking" ? "active" : ""} onClick={() => setConsoleTab("cost_tracking")}>Cost</button>
         <button className={consoleTab === "local_models" ? "active" : ""} onClick={() => setConsoleTab("local_models")}>Local Models</button>
         <button className={consoleTab === "analytics" ? "active" : ""} onClick={() => setConsoleTab("analytics")}>Analytics</button>
+        <button className={consoleTab === "sandbox" ? "active" : ""} onClick={() => setConsoleTab("sandbox")}>Sandbox</button>
+        <button className={consoleTab === "proactive" ? "active" : ""} onClick={() => setConsoleTab("proactive")}>Proactive</button>
+        <button className={consoleTab === "business" ? "active" : ""} onClick={() => setConsoleTab("business")}>Business</button>
       </nav>
       <div className="console-content">
         {loading.console ? <SkeletonConsole /> : (
@@ -355,6 +365,9 @@ function App() {
             {consoleTab === "cost_tracking" && <CostPanel />}
             {consoleTab === "local_models" && <LocalModelPanel />}
             {consoleTab === "analytics" && <AnalyticsPanel />}
+            {consoleTab === "sandbox" && <SandboxPanel />}
+            {consoleTab === "proactive" && <ProactivePanel />}
+            {consoleTab === "business" && <BusinessTemplates />}
           </>
         )}
       </div>
@@ -450,6 +463,7 @@ function App() {
       {view === "store" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}
       {view === "console" && renderConsole()}
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+      <StatusBar />
     </div>
   );
 }

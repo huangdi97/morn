@@ -10,6 +10,7 @@ pub use marketplace::AgentVersion;
 pub use marketplace::License;
 pub use marketplace::Listing;
 pub use marketplace::Marketplace;
+pub use marketplace::Review;
 pub use marketplace::Transaction;
 
 pub fn render_market_browser() -> String {

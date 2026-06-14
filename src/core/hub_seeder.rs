@@ -1,19 +1,22 @@
-//! Seeds the marketplace hub with initial workflow templates and agent templates
-//! during first-time setup or when listings are missing.
+//! Seeds the marketplace hub with initial workflow templates, agent templates,
+//! and preset agent definitions during first-time setup or when listings are missing.
 
 use crate::core::agent_templates::AGENT_TEMPLATES;
 use crate::core::storage::Storage;
+use crate::core::supervisor::presets::preset_agent_defs;
 use crate::core::workflow::WorkflowTemplate;
 use crate::market::{Listing, Marketplace};
 
-/// Publishes built-in workflow templates and agent templates to the marketplace.
+/// Publishes built-in workflow templates, agent templates, and preset agent
+/// definitions to the marketplace.
 ///
 /// For each built-in [`WorkflowTemplate`] and each entry in [`AGENT_TEMPLATES`],
 /// a free [`Listing`] is published under the `"Morn Labs"` author. Existing
 /// listings are skipped (identified by a deterministic `id` prefix), making this
 /// function safe to call repeatedly.
 ///
-/// This is a no-op when `storage` is `None`.
+/// Additionally, when the marketplace is completely empty, all preset agent
+/// definitions from [`preset_agent_defs`] are also published as `agent` listings.
 pub fn seed_hub_data(storage: &Option<Storage>) {
     let storage = match storage {
         Some(s) => s,
@@ -55,6 +58,25 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
             downloads: 0,
             created_at: chrono::Utc::now().to_rfc3339(),
         });
+    }
+
+    // Seed preset agent definitions (from presets.rs) as marketplace listings
+    // when the market_listings table is completely empty.
+    if market.list(None).is_empty() {
+        for def in preset_agent_defs() {
+            let id = format!("listing-preset-agent-{}", def.name);
+            let _ = market.publish(Listing {
+                id,
+                item_type: "agent".into(),
+                name: def.name.clone(),
+                description: def.persona.clone(),
+                price: 0.0,
+                author: "Morn Labs".into(),
+                rating: 0.0,
+                downloads: 0,
+                created_at: chrono::Utc::now().to_rfc3339(),
+            });
+        }
     }
 }
 

@@ -7,13 +7,17 @@ pub mod console;
 pub mod cost;
 pub mod errors;
 pub(crate) use errors::CommandError;
+pub mod journey;
 pub mod local_model;
 pub mod market;
+pub mod market_search;
 pub mod mcp;
 pub mod memory;
+pub mod metrics;
 pub mod notifications;
 pub mod oauth;
 pub mod org;
+pub mod proactive;
 pub mod recovery;
 pub mod sandbox;
 pub mod studio;
@@ -28,16 +32,20 @@ pub(crate) use component_type::{
 pub(crate) use config::{export_config, import_config};
 pub(crate) use console::{get_component_topology, get_system_status};
 pub(crate) use cost::{estimate_cost, get_cost_summary};
+pub(crate) use journey::get_user_journey;
 pub(crate) use local_model::{delete_local_model, download_model, list_local_models};
 pub(crate) use market::{
     apply_theme, create_agent_from_description, generate_plugin_from_nl, get_agent_versions,
-    get_market_listings, get_preset_persona, install_bot_from_store, list_bot_store,
-    list_preset_personas, list_themes, publish_agent_version, sync_now, test_notification,
+    get_market_listings, get_preset_persona, hub_publish, install_bot_from_store, list_bot_store,
+    list_preset_personas, list_themes, publish_agent_version, rollback_agent, sync_now, test_notification,
 };
-pub(crate) use mcp::{mcp_connect, mcp_disconnect, mcp_list_servers, mcp_serve};
+pub(crate) use market_search::{get_listing_reviews, search_market_listings, submit_review};
+pub(crate) use mcp::{mcp_call_tool, mcp_connect, mcp_disconnect, mcp_list_servers, mcp_serve};
 pub(crate) use memory::{delete_memory, list_memories, search_memories};
+pub(crate) use metrics::get_reliability_metrics;
 pub(crate) use notifications::{list_notifications, send_notification};
 pub(crate) use oauth::{oauth_authorize, oauth_list_providers};
+pub(crate) use proactive::{list_proactive_rules, toggle_proactive_rule};
 pub(crate) use org::{
     add_member, create_team, create_user, get_audit_log, grant_permission, list_teams, list_users,
     remove_member, revoke_permission,

@@ -43,6 +43,8 @@ export function Settings({ onClose }: SettingsProps) {
   const [notifyAgentComplete, setNotifyAgentComplete] = useState(() => localStorage.getItem('morn_notify_agent_complete') === 'true');
   const [notifySecurityAlert, setNotifySecurityAlert] = useState(() => localStorage.getItem('morn_notify_security_alert') === 'true');
   const [notifyUpdateAvailable, setNotifyUpdateAvailable] = useState(() => localStorage.getItem('morn_notify_update_available') === 'true');
+  const [provider, setProvider] = useState(() => localStorage.getItem('morn_model_provider') || 'sensenova');
+  const [modelApiKey, setModelApiKey] = useState(() => localStorage.getItem('morn_model_api_key') || '');
 
   useEffect(() => {
     (async () => {
@@ -158,6 +160,11 @@ export function Settings({ onClose }: SettingsProps) {
     }
   };
 
+  const handleSaveModelConfig = () => {
+    localStorage.setItem('morn_model_provider', provider);
+    localStorage.setItem('morn_model_api_key', modelApiKey);
+  };
+
   const handleNotifyChange = (key: string, value: boolean) => {
     localStorage.setItem(key, String(value));
     switch (key) {
@@ -239,6 +246,32 @@ export function Settings({ onClose }: SettingsProps) {
             <button className="settings-btn" onClick={handleExport}>Export .mornpack</button>
             <button className="settings-btn" onClick={handleImport}>Import .mornpack</button>
           </div>
+        </div>
+
+        <div className="settings-section">
+          <label className="settings-label">Model Configuration</label>
+          <select
+            className="settings-select"
+            value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+            style={{ marginBottom: "8px" }}
+          >
+            <option value="sensenova">sensenova</option>
+            <option value="deepseek">deepseek</option>
+            <option value="openai">openai</option>
+            <option value="local">local</option>
+          </select>
+          <input
+            className="settings-input"
+            type="password"
+            value={modelApiKey}
+            onChange={(e) => setModelApiKey(e.target.value)}
+            placeholder="API Key"
+            style={{ marginBottom: "8px" }}
+          />
+          <button className="settings-btn" onClick={handleSaveModelConfig}>
+            Save Model Config
+          </button>
         </div>
 
         <div className="settings-section">

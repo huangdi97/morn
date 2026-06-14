@@ -1,0 +1,8 @@
+{
+  "name": "plugin-protocol-echo",
+  "version": "1.0.0",
+  "description": "An echo protocol plugin for testing MCP-style communication",
+  "author": "",
+  "plugin_type": "protocol",
+  "entry": "main.js"
+}

@@ -6,13 +6,14 @@ use crate::studio::manager::{CreateComponentDef, StudioManager};
 
 /// Returns the built-in set of preset agent definitions.
 ///
-/// Four default agents are provided: a general-purpose assistant, a code expert,
-/// a data analyst, and a project manager. Each carries a Chinese-language persona,
+/// Eight default agents are provided: a general-purpose assistant, a file assistant,
+/// a system assistant, a writing assistant, a translator, a system butler, a reviewer,
+/// and a customer service agent. Each carries a Chinese-language persona,
 /// a default model (`gpt-4o`), relevant tools, knowledge bases, and skills.
 pub fn preset_agent_defs() -> Vec<NLAgentDef> {
     vec![
         NLAgentDef {
-            name: "通用助手".into(),
+            name: "万能助手".into(),
             persona: "你是一个通用的AI助手，能够处理各种日常任务和问题。".into(),
             model: "gpt-4o".into(),
             tools: vec!["web_search".into(), "calculator".into()],
@@ -24,7 +25,7 @@ pub fn preset_agent_defs() -> Vec<NLAgentDef> {
             suggestions: vec![],
         },
         NLAgentDef {
-            name: "代码专家".into(),
+            name: "文件助手".into(),
             persona: "你是一个经验丰富的软件工程师，精通多种编程语言和框架。".into(),
             model: "gpt-4o".into(),
             tools: vec![
@@ -44,7 +45,7 @@ pub fn preset_agent_defs() -> Vec<NLAgentDef> {
             suggestions: vec![],
         },
         NLAgentDef {
-            name: "数据分析师".into(),
+            name: "系统助手".into(),
             persona: "你是一个专业的数据分析师，擅长数据清洗、统计分析和可视化。".into(),
             model: "gpt-4o".into(),
             tools: vec![
@@ -68,7 +69,7 @@ pub fn preset_agent_defs() -> Vec<NLAgentDef> {
             suggestions: vec![],
         },
         NLAgentDef {
-            name: "项目管理".into(),
+            name: "写作助手".into(),
             persona: "你是一个资深的项目经理，擅长任务规划、进度跟踪和团队协调。".into(),
             model: "gpt-4o".into(),
             tools: vec![
@@ -89,6 +90,70 @@ pub fn preset_agent_defs() -> Vec<NLAgentDef> {
             memory: vec![],
             persona_config: NLPersonaConfig::default(),
             communication_style: "professional".into(),
+            suggestions: vec![],
+        },
+        NLAgentDef {
+            name: "翻译官".into(),
+            persona: "你是一名专业的翻译官，精通多国语言互译和本地化。".into(),
+            model: "gpt-4o".into(),
+            tools: vec![
+                "detect_lang".into(),
+                "translate".into(),
+                "proofread".into(),
+            ],
+            knowledge: vec!["bilingual_dict".into()],
+            skills: vec!["translation".into(), "proofreading".into()],
+            memory: vec![],
+            persona_config: NLPersonaConfig::default(),
+            communication_style: "professional".into(),
+            suggestions: vec![],
+        },
+        NLAgentDef {
+            name: "系统管家".into(),
+            persona: "你是一个贴心的系统管家，擅长桌面操作、文件管理和应用启动。".into(),
+            model: "gpt-4o".into(),
+            tools: vec![
+                "launch_app".into(),
+                "read_file".into(),
+                "browse_web".into(),
+            ],
+            knowledge: vec![],
+            skills: vec!["system_management".into(), "file_operations".into()],
+            memory: vec![],
+            persona_config: NLPersonaConfig::default(),
+            communication_style: "professional".into(),
+            suggestions: vec![],
+        },
+        NLAgentDef {
+            name: "审查员".into(),
+            persona: "你是一名严谨的审查员，擅长代码审查、文档校对和合规检查。".into(),
+            model: "gpt-4o".into(),
+            tools: vec![
+                "read_file".into(),
+                "diff".into(),
+                "lint_check".into(),
+            ],
+            knowledge: vec!["coding_standards".into()],
+            skills: vec!["code_review".into(), "quality_assurance".into()],
+            memory: vec![],
+            persona_config: NLPersonaConfig::default(),
+            communication_style: "professional".into(),
+            suggestions: vec![],
+        },
+        NLAgentDef {
+            name: "客服".into(),
+            persona: "你是一个友好的客服代表，擅长解答用户问题、处理反馈和升级工单。".into(),
+            model: "gpt-4o".into(),
+            tools: vec![
+                "search_kb".into(),
+                "classify_intent".into(),
+                "escalate".into(),
+            ],
+            knowledge: vec!["faq_db".into()],
+            skills: vec!["customer_service".into(), "communication".into()],
+            memory: vec![],
+            persona_config: NLPersonaConfig::default(),
+            communication_style: "friendly".into(),
             suggestions: vec![],
         },
     ]
@@ -133,7 +198,7 @@ mod tests {
     #[test]
     fn test_preset_agent_defs_count() {
         let defs = preset_agent_defs();
-        assert_eq!(defs.len(), 4);
+        assert_eq!(defs.len(), 8);
     }
 
     #[test]
@@ -147,13 +212,13 @@ mod tests {
     }
 
     #[test]
-    fn test_seed_preset_agents_creates_four_agents() {
+    fn test_seed_preset_agents_creates_eight_agents() {
         let storage = Storage::new_in_memory().unwrap();
         let manager = StudioManager::new(None, Some(storage.clone()), None);
         seed_preset_agents(&Some(storage.clone()), &manager);
 
         let agents = storage.list_agents().unwrap();
-        assert_eq!(agents.len(), 4);
+        assert_eq!(agents.len(), 8);
     }
 
     #[test]
@@ -164,7 +229,7 @@ mod tests {
         seed_preset_agents(&Some(storage.clone()), &manager);
 
         let agents = storage.list_agents().unwrap();
-        assert_eq!(agents.len(), 4);
+        assert_eq!(agents.len(), 8);
     }
 
     #[test]

@@ -434,20 +434,24 @@ export const api = {
     return res.json();
   },
 
-  async getMarketListings(typeFilter: string | null = null): Promise<any> {
+  async getMarketListings(typeFilter: string | null = null, priceFilter: string | null = null): Promise<any> {
     if (isRemote()) {
-      const params = typeFilter ? `?typeFilter=${encodeURIComponent(typeFilter)}` : "";
-      const res = await fetch(`${getBaseUrl()}/api/market/listings${params}`, {
+      const params = new URLSearchParams();
+      if (typeFilter) params.set("typeFilter", typeFilter);
+      if (priceFilter) params.set("priceFilter", priceFilter);
+      const res = await fetch(`${getBaseUrl()}/api/market/listings?${params}`, {
         headers: getApiHeaders(),
       });
       return res.json();
     }
     if (isTauri) {
       const { invoke } = await import("@tauri-apps/api/core");
-      return invoke("get_market_listings", { typeFilter });
+      return invoke("get_market_listings", { typeFilter, priceFilter });
     }
-    const params = typeFilter ? `?typeFilter=${encodeURIComponent(typeFilter)}` : "";
-    const res = await fetch(`/api/market/listings${params}`);
+    const params = new URLSearchParams();
+    if (typeFilter) params.set("typeFilter", typeFilter);
+    if (priceFilter) params.set("priceFilter", priceFilter);
+    const res = await fetch(`/api/market/listings?${params}`);
     return res.json();
   },
 
@@ -469,6 +473,105 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ templateId }),
     });
+    return res.json();
+  },
+
+  async hubPublish(params: { name: string; description: string; itemType: string; price: number; author: string }): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/hub/publish`, {
+        method: "POST",
+        headers: getApiHeaders(),
+        body: JSON.stringify(params),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("hub_publish", {
+        name: params.name,
+        description: params.description,
+        itemType: params.itemType,
+        price: params.price,
+        author: params.author,
+      });
+    }
+    const res = await fetch("/api/hub/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    return res.json();
+  },
+
+  async getCostSummary(): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/cost/summary`, {
+        headers: getApiHeaders(),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("get_cost_summary");
+    }
+    const res = await fetch("/api/cost/summary");
+    return res.json();
+  },
+
+  async searchMarketListings(query: string | null = null, typeFilter: string | null = null): Promise<any> {
+    if (isRemote()) {
+      const params = new URLSearchParams();
+      if (query) params.set("query", query);
+      if (typeFilter) params.set("typeFilter", typeFilter);
+      const res = await fetch(`${getBaseUrl()}/api/market/search?${params}`, {
+        headers: getApiHeaders(),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("search_market_listings", { query, typeFilter });
+    }
+    const params = new URLSearchParams();
+    if (query) params.set("query", query);
+    if (typeFilter) params.set("typeFilter", typeFilter);
+    const res = await fetch(`/api/market/search?${params}`);
+    return res.json();
+  },
+
+  async submitReview(listingId: string, rating: number, comment: string): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/market/reviews`, {
+        method: "POST",
+        headers: getApiHeaders(),
+        body: JSON.stringify({ listingId, rating, comment }),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("submit_review", { listingId, rating, comment });
+    }
+    const res = await fetch("/api/market/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listingId, rating, comment }),
+    });
+    return res.json();
+  },
+
+  async getListingReviews(listingId: string): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/market/reviews/${listingId}`, {
+        headers: getApiHeaders(),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("get_listing_reviews", { listingId });
+    }
+    const res = await fetch(`/api/market/reviews/${listingId}`);
     return res.json();
   },
 };

@@ -1,0 +1,11 @@
+/* plugin-theme-simple - A minimal theme plugin */
+:root {
+  --primary: #6366f1;
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --border: #334155;
+  --accent: #6366f1;
+}

@@ -1,9 +1,7 @@
-//! plugin_generator — Natural language to plugin scaffolding.
 use std::path::Path;
 
 use crate::core::plugin_manager::PluginError;
 
-/// Structured spec parsed from natural language.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PluginSpec {
     pub name: String,
@@ -13,12 +11,11 @@ pub struct PluginSpec {
     pub entry_filename: String,
 }
 
-/// Uses an LLM (chat_fn) to parse a natural-language description into a PluginSpec.
 pub fn parse_nl_to_spec(
     nl: &str,
     chat_fn: &impl Fn(&str, &str) -> Result<String, String>,
 ) -> Result<PluginSpec, PluginError> {
-    let system = "You are a plugin scaffolding assistant. Given a user's description of a plugin, extract the plugin name, type (theme|channel|ui_slot|protocol|tool), description, and generate a minimal JavaScript entry file. Respond ONLY with valid JSON in this exact format:\n{\"name\":\"...\",\"plugin_type\":\"...\",\"description\":\"...\",\"entry_content\":\"...\",\"entry_filename\":\"main.js\"}";
+    let system = "You are a plugin scaffolding assistant. Given a user's description of a plugin, extract the plugin name, type (theme|channel|tool|knowledge|ui_slot|protocol), description, and generate a minimal JavaScript entry file that exports a class or function suitable for the type. Respond ONLY with valid JSON in this exact format:\n{\"name\":\"...\",\"plugin_type\":\"...\",\"description\":\"...\",\"entry_content\":\"...\",\"entry_filename\":\"main.js\"}";
 
     let prompt = format!("Describe the plugin you want: {}", nl);
     let response = chat_fn(&prompt, system).map_err(PluginError::Llm)?;
@@ -38,7 +35,94 @@ pub fn parse_nl_to_spec(
     })
 }
 
-/// Creates plugin directory and files from a PluginSpec.
+fn type_specific_files(plugin_type: &str, spec: &PluginSpec) -> Vec<(String, String)> {
+    let mut files = Vec::new();
+    match plugin_type {
+        "theme" => {
+            files.push((
+                "theme.css".to_string(),
+                format!(
+                    "/* {} - {} */\n:root {{\n  --primary: #6366f1;\n  --bg-primary: #0f172a;\n  --text-primary: #f1f5f9;\n}}",
+                    spec.name, spec.description
+                ),
+            ));
+        }
+        "channel" => {
+            files.push((
+                "channel.js".to_string(),
+                format!(
+                    "// {} channel plugin\nclass {} {{\n  connect() {{ console.log('{} connected'); }}\n  send(msg) {{ console.log('Send:', msg); }}\n  onMessage(handler) {{ this._handler = handler; }}\n}}\nexport default {};",
+                    spec.name,
+                    to_pascal_case(&spec.name),
+                    spec.name,
+                    to_pascal_case(&spec.name)
+                ),
+            ));
+        }
+        "tool" => {
+            files.push((
+                "tool_def.json".to_string(),
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "name": spec.name,
+                    "description": spec.description,
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                }))
+                .unwrap_or_default(),
+            ));
+        }
+        "knowledge" => {
+            files.push((
+                "data.json".to_string(),
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "name": spec.name,
+                    "version": "1.0.0",
+                    "entries": []
+                }))
+                .unwrap_or_default(),
+            ));
+        }
+        "ui_slot" => {
+            files.push((
+                "panel.html".to_string(),
+                format!(
+                    "<div id=\"{}-root\"><p>{}</p></div>\n<script src=\"./main.js\"></script>",
+                    spec.name, spec.description
+                ),
+            ));
+        }
+        "protocol" => {
+            files.push((
+                "protocol.json".to_string(),
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "name": spec.name,
+                    "version": "1.0.0",
+                    "endpoints": [],
+                    "description": spec.description
+                }))
+                .unwrap_or_default(),
+            ));
+        }
+        _ => {}
+    }
+    files
+}
+
+fn to_pascal_case(s: &str) -> String {
+    s.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            let mut c = w.chars();
+            match c.next() {
+                None => String::new(),
+                Some(f) => f.to_uppercase().to_string() + c.as_str(),
+            }
+        })
+        .collect()
+}
+
 pub fn scaffold_plugin(spec: &PluginSpec, output_dir: &Path) -> Result<String, PluginError> {
     let plugin_dir = output_dir.join(&spec.name);
     std::fs::create_dir_all(&plugin_dir)?;
@@ -59,10 +143,13 @@ pub fn scaffold_plugin(spec: &PluginSpec, output_dir: &Path) -> Result<String, P
     let entry_path = plugin_dir.join(&spec.entry_filename);
     std::fs::write(&entry_path, &spec.entry_content)?;
 
+    for (filename, content) in type_specific_files(&spec.plugin_type, spec) {
+        std::fs::write(plugin_dir.join(&filename), &content)?;
+    }
+
     Ok(manifest_path.to_string_lossy().to_string())
 }
 
-/// Combines LLM parsing + file scaffolding in one call.
 pub fn generate_plugin_from_nl(
     nl: &str,
     output_dir: &Path,
@@ -160,5 +247,47 @@ mod tests {
         assert!(result.is_ok());
         let path = result.unwrap();
         assert!(std::path::Path::new(&path).exists());
+    }
+
+    #[test]
+    fn test_type_theme_creates_css() {
+        let dir = TempDir::new().unwrap();
+        let spec = PluginSpec {
+            name: "dark-theme".into(),
+            plugin_type: "theme".into(),
+            description: "A dark theme".into(),
+            entry_content: "// theme entry".into(),
+            entry_filename: "main.js".into(),
+        };
+        scaffold_plugin(&spec, dir.path()).unwrap();
+        assert!(dir.path().join("dark-theme/theme.css").exists());
+    }
+
+    #[test]
+    fn test_type_knowledge_creates_data_json() {
+        let dir = TempDir::new().unwrap();
+        let spec = PluginSpec {
+            name: "faq-data".into(),
+            plugin_type: "knowledge".into(),
+            description: "FAQ knowledge base".into(),
+            entry_content: "// entry".into(),
+            entry_filename: "main.js".into(),
+        };
+        scaffold_plugin(&spec, dir.path()).unwrap();
+        assert!(dir.path().join("faq-data/data.json").exists());
+    }
+
+    #[test]
+    fn test_type_protocol_creates_protocol_json() {
+        let dir = TempDir::new().unwrap();
+        let spec = PluginSpec {
+            name: "my-protocol".into(),
+            plugin_type: "protocol".into(),
+            description: "Custom protocol".into(),
+            entry_content: "// entry".into(),
+            entry_filename: "main.js".into(),
+        };
+        scaffold_plugin(&spec, dir.path()).unwrap();
+        assert!(dir.path().join("my-protocol/protocol.json").exists());
     }
 }

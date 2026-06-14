@@ -1,0 +1,8 @@
+{
+  "name": "plugin-channel-echo",
+  "version": "1.0.0",
+  "description": "An echo channel plugin that mirrors messages back",
+  "author": "",
+  "plugin_type": "channel",
+  "entry": "main.js"
+}

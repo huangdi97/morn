@@ -4,7 +4,7 @@ use tauri::State;
 
 use morn::bridge::chat_agent::ChatAgent;
 use morn::core::plugin_generator;
-use morn::market::Marketplace;
+use morn::market::{Listing, Marketplace};
 use morn::studio::manager::CreateComponentDef;
 
 #[tauri::command]
@@ -26,7 +26,6 @@ pub(crate) fn apply_theme(name: String, state: State<AppState>) -> Result<String
     let mgr = mgr
         .as_mut()
         .ok_or_else(|| "PluginManager not initialized".to_string())?;
-    // Activate the theme plugin if not already active, which caches its CSS
     mgr.activate(&name).map_err(|e| e.to_string())?;
     mgr.get_theme_css(&name)
         .map(|s| s.to_string())
@@ -36,6 +35,7 @@ pub(crate) fn apply_theme(name: String, state: State<AppState>) -> Result<String
 #[tauri::command]
 pub(crate) fn get_market_listings(
     type_filter: Option<String>,
+    price_filter: Option<String>,
     state: State<AppState>,
 ) -> Result<serde_json::Value, String> {
     let storage = state.storage.lock().map_err(|e| e.to_string())?;
@@ -44,7 +44,12 @@ pub(crate) fn get_market_listings(
         .ok_or_else(|| "Storage not initialized".to_string())?;
     let marketplace = Marketplace::new(s.clone());
     let listings = marketplace.list(type_filter.as_deref());
-    serde_json::to_value(listings).map_err(|e| e.to_string())
+    let filtered = match price_filter.as_deref() {
+        Some("free") => listings.into_iter().filter(|l| l.price == 0.0).collect(),
+        Some("paid") => listings.into_iter().filter(|l| l.price > 0.0).collect(),
+        _ => listings,
+    };
+    serde_json::to_value(filtered).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -96,6 +101,36 @@ pub(crate) fn install_bot_from_store(
             serde_json::json!({"template_id": template_id, "bot_id": bot_id}).to_string(),
         ),
     })?;
+    Ok(id)
+}
+
+#[tauri::command]
+pub(crate) fn hub_publish(
+    name: String,
+    description: String,
+    item_type: String,
+    price: f64,
+    author: String,
+    state: State<AppState>,
+) -> Result<String, String> {
+    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+    let s = storage
+        .as_ref()
+        .ok_or_else(|| "Storage not initialized".to_string())?;
+    let marketplace = Marketplace::new(s.clone());
+    let id = format!("hub-{}", uuid::Uuid::new_v4());
+    let listing = Listing {
+        id: id.clone(),
+        item_type,
+        name,
+        description,
+        price,
+        author,
+        rating: 0.0,
+        downloads: 0,
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+    marketplace.publish(listing)?;
     Ok(id)
 }
 
@@ -165,6 +200,21 @@ pub(crate) fn publish_agent_version(
 }
 
 #[tauri::command]
+pub(crate) fn rollback_agent(
+    listing_id: String,
+    version: String,
+    state: State<AppState>,
+) -> Result<serde_json::Value, String> {
+    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+    let s = storage
+        .as_ref()
+        .ok_or_else(|| "Storage not initialized".to_string())?;
+    let marketplace = Marketplace::new(s.clone());
+    let data = marketplace.restore_version(&listing_id, &version)?;
+    serde_json::to_value(data).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub(crate) fn generate_plugin_from_nl(
     nl: String,
     state: State<AppState>,
@@ -172,14 +222,25 @@ pub(crate) fn generate_plugin_from_nl(
     let api_key = std::env::var("MORN_API_KEY").map_err(|_| "MORN_API_KEY not set".to_string())?;
     let chat_agent = ChatAgent::new(&api_key, "https://api.deepseek.com", "deepseek-chat");
 
-    let plugin_manager = state.plugin_manager.lock().map_err(|e| e.to_string())?;
-    let mgr = plugin_manager
-        .as_ref()
-        .ok_or_else(|| "PluginManager not initialized".to_string())?;
+    let plugin_dir = {
+        let plugin_manager = state.plugin_manager.lock().map_err(|e| e.to_string())?;
+        let mgr = plugin_manager
+            .as_ref()
+            .ok_or_else(|| "PluginManager not initialized".to_string())?;
+        mgr.plugin_dir.clone()
+    };
 
     let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
-    let path = plugin_generator::generate_plugin_from_nl(&nl, &mgr.plugin_dir, &chat_fn)
-        .map_err(|e| e.to_string())?;
+    let path =
+        plugin_generator::generate_plugin_from_nl(&nl, &plugin_dir, &chat_fn).map_err(|e| e.to_string())?;
+
+    {
+        let mut plugin_manager = state.plugin_manager.lock().map_err(|e| e.to_string())?;
+        if let Some(mgr) = plugin_manager.as_mut() {
+            let _ = mgr.scan();
+        }
+    }
+
     Ok(path)
 }
 

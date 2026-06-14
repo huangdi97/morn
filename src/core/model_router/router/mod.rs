@@ -46,6 +46,9 @@ impl ModelRouter {
         self.merge_custom_providers(config);
         self.hybrid_threshold = config.hybrid.complexity_threshold;
         self.hybrid_strategy = HybridStrategy::parse(&config.hybrid.strategy).unwrap_or_default();
+        if config.local_first && self.hybrid_strategy != HybridStrategy::CloudOnly {
+            self.hybrid_strategy = HybridStrategy::LocalFirst;
+        }
 
         let api_key = config.api_key.clone().or_else(|| {
             self.find_provider(&config.provider)

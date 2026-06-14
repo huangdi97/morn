@@ -179,6 +179,7 @@ pub fn run() {
             commands::market::get_market_listings,
             commands::market::list_bot_store,
             commands::market::install_bot_from_store,
+            commands::market::hub_publish,
             commands::market::get_agent_versions,
             commands::market::publish_agent_version,
             commands::market::list_themes,
@@ -186,8 +187,12 @@ pub fn run() {
             commands::market::generate_plugin_from_nl,
             commands::market::sync_now,
             commands::market::test_notification,
+            commands::market_search::search_market_listings,
+            commands::market_search::submit_review,
+            commands::market_search::get_listing_reviews,
             commands::analytics::get_usage_stats,
             commands::analytics::get_performance_metrics,
+            commands::journey::get_user_journey,
             commands::local_model::list_local_models,
             commands::local_model::download_model,
             commands::local_model::delete_local_model,
@@ -199,6 +204,7 @@ pub fn run() {
             commands::mcp::mcp_connect,
             commands::mcp::mcp_disconnect,
             commands::mcp::mcp_list_servers,
+            commands::mcp::mcp_call_tool,
             commands::mcp::mcp_serve,
             commands::sandbox::run_in_sandbox,
             commands::sandbox::sandbox_status,
@@ -217,6 +223,9 @@ pub fn run() {
             commands::cost::get_cost_summary,
             commands::recovery::get_last_error,
             commands::recovery::retry_last_operation,
+            commands::proactive::list_proactive_rules,
+            commands::proactive::toggle_proactive_rule,
+            commands::metrics::get_reliability_metrics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

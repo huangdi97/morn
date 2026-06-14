@@ -72,6 +72,16 @@ pub struct AgentVersion {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Review {
+    pub id: String,
+    pub listing_id: String,
+    pub user_id: String,
+    pub rating: u8,
+    pub comment: String,
+    pub created_at: String,
+}
+
 pub struct Marketplace {
     storage: Storage,
 }
