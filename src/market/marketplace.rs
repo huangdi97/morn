@@ -62,6 +62,16 @@ pub struct License {
     pub expires_at: Option<String>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgentVersion {
+    pub id: String,
+    pub listing_id: String,
+    pub version: String,
+    pub data_json: String,
+    pub changelog: String,
+    pub created_at: String,
+}
+
 pub struct Marketplace {
     storage: Storage,
 }
@@ -350,6 +360,65 @@ impl Marketplace {
         };
         registry.register(cap);
         Ok(())
+    }
+
+    pub fn save_version(
+        &self,
+        listing_id: &str,
+        version: &str,
+        data_json: &str,
+        changelog: &str,
+    ) -> Result<AgentVersion, String> {
+        let ver = AgentVersion {
+            id: format!("ver-{}", uuid::Uuid::new_v4()),
+            listing_id: listing_id.to_string(),
+            version: version.to_string(),
+            data_json: data_json.to_string(),
+            changelog: changelog.to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        self.storage.save_agent_version(&ver)?;
+        Ok(ver)
+    }
+
+    pub fn get_version_history(&self, listing_id: &str) -> Vec<AgentVersion> {
+        self.storage
+            .get_agent_versions(listing_id)
+            .unwrap_or_default()
+    }
+
+    pub fn restore_version(
+        &self,
+        listing_id: &str,
+        version: &str,
+    ) -> Result<serde_json::Value, String> {
+        let ver = self
+            .storage
+            .get_agent_version(listing_id, version)?
+            .ok_or_else(|| format!("Version {} not found for listing {}", version, listing_id))?;
+        serde_json::from_str(&ver.data_json).map_err(|e| e.to_string())
+    }
+
+    pub fn publish_new_version(
+        &self,
+        listing_id: &str,
+        data_json: &str,
+        changelog: &str,
+    ) -> Result<AgentVersion, String> {
+        let _listing = self
+            .storage
+            .get_listing(listing_id)?
+            .ok_or_else(|| "Listing not found".to_string())?;
+        let versions = self.storage.get_agent_versions(listing_id)?;
+        let next_version = if versions.is_empty() {
+            "0.1.0".to_string()
+        } else {
+            let latest = &versions[0];
+            let parts: Vec<&str> = latest.version.split('.').collect();
+            let patch: u64 = parts.get(2).and_then(|p| p.parse().ok()).unwrap_or(0);
+            format!("0.1.{}", patch + 1)
+        };
+        self.save_version(listing_id, &next_version, data_json, changelog)
     }
 }
 

@@ -3,6 +3,7 @@
 use crate::core::assembler::AgentDef;
 use crate::core::assembly::graph::{AtomicComponentType, ComponentGraph, ConnectionValidator};
 use crate::core::assembly::validator::AssemblyValidator;
+use crate::core::component_type::registry::TypeRegistry;
 
 #[derive(Debug, Clone)]
 pub struct ComponentSelector {
@@ -79,11 +80,18 @@ impl DefaultCompleter {
     }
 }
 
-pub struct AssemblyBuilder;
+pub struct AssemblyBuilder {
+    pub registry: TypeRegistry,
+}
 
 impl AssemblyBuilder {
     pub fn new() -> Self {
-        AssemblyBuilder
+        AssemblyBuilder {
+            registry: TypeRegistry::new(),
+        }
+    }
+    pub fn with_registry(registry: TypeRegistry) -> Self {
+        AssemblyBuilder { registry }
     }
     pub fn build(selector: &ComponentSelector) -> Result<AgentDef, String> {
         AssemblyValidator::validate(selector).map_err(|errs| errs.join("; "))?;
@@ -162,19 +170,42 @@ impl AssemblyBuilder {
         AssemblyBuilder::build(&selector)
     }
 
-    pub fn build_from_graph(graph: &ComponentGraph) -> Result<AgentDef, String> {
+    pub fn build_from_graph(&self, graph: &ComponentGraph) -> Result<AgentDef, String> {
         ConnectionValidator::validate(graph).map_err(|errs| errs.join("; "))?;
 
         let mut selector = ComponentSelector::new();
         for comp in &graph.components {
-            match comp.component_type {
-                AtomicComponentType::Memory => selector.memory_ids.push(comp.id.clone()),
-                AtomicComponentType::Tool => selector.tool_ids.push(comp.id.clone()),
-                AtomicComponentType::LLM => selector.llm_ids.push(comp.id.clone()),
-                AtomicComponentType::Channel => selector.channel_ids.push(comp.id.clone()),
-                AtomicComponentType::Persona => selector.persona_ids.push(comp.id.clone()),
-                AtomicComponentType::Skill => selector.skill_ids.push(comp.id.clone()),
-                AtomicComponentType::Knowledge | AtomicComponentType::SecurityPolicy => {}
+            let type_name = if comp.type_name.is_empty() {
+                comp.component_type.type_name()
+            } else {
+                &comp.type_name
+            };
+            if let Some(def) = self.registry.get(type_name) {
+                if def.interfaces.contains(&"store".to_string())
+                    || def.interfaces.contains(&"recall".to_string())
+                {
+                    selector.memory_ids.push(comp.id.clone());
+                } else if def.interfaces.contains(&"execute".to_string()) {
+                    selector.tool_ids.push(comp.id.clone());
+                } else if def.interfaces.contains(&"predict".to_string())
+                    || def.interfaces.contains(&"embed".to_string())
+                {
+                    selector.llm_ids.push(comp.id.clone());
+                } else if def.interfaces.contains(&"generate".to_string()) {
+                    selector.persona_ids.push(comp.id.clone());
+                } else {
+                    selector.skill_ids.push(comp.id.clone());
+                }
+            } else {
+                match comp.component_type {
+                    AtomicComponentType::Memory => selector.memory_ids.push(comp.id.clone()),
+                    AtomicComponentType::Tool => selector.tool_ids.push(comp.id.clone()),
+                    AtomicComponentType::LLM => selector.llm_ids.push(comp.id.clone()),
+                    AtomicComponentType::Channel => selector.channel_ids.push(comp.id.clone()),
+                    AtomicComponentType::Persona => selector.persona_ids.push(comp.id.clone()),
+                    AtomicComponentType::Skill => selector.skill_ids.push(comp.id.clone()),
+                    AtomicComponentType::Knowledge | AtomicComponentType::SecurityPolicy => {}
+                }
             }
         }
 
@@ -339,7 +370,7 @@ mod tests {
 
     #[test]
     fn test_assembly_builder_new() {
-        let builder = AssemblyBuilder::new();
+        let _builder = AssemblyBuilder::new();
         // just verify it constructs
     }
 }

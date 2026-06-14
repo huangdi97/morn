@@ -1,0 +1,183 @@
+//! Built-in preset agent definitions and seeding logic used during first-time setup.
+
+use crate::core::storage::Storage;
+use crate::core::supervisor::types::{NLAgentDef, NLPersonaConfig};
+use crate::studio::manager::{CreateComponentDef, StudioManager};
+
+/// Returns the built-in set of preset agent definitions.
+///
+/// Four default agents are provided: a general-purpose assistant, a code expert,
+/// a data analyst, and a project manager. Each carries a Chinese-language persona,
+/// a default model (`gpt-4o`), relevant tools, knowledge bases, and skills.
+pub fn preset_agent_defs() -> Vec<NLAgentDef> {
+    vec![
+        NLAgentDef {
+            name: "通用助手".into(),
+            persona: "你是一个通用的AI助手，能够处理各种日常任务和问题。".into(),
+            model: "gpt-4o".into(),
+            tools: vec!["web_search".into(), "calculator".into()],
+            knowledge: vec!["general_knowledge".into()],
+            skills: vec!["communication".into(), "problem_solving".into()],
+            memory: vec![],
+            persona_config: NLPersonaConfig::default(),
+            communication_style: "professional".into(),
+            suggestions: vec![],
+        },
+        NLAgentDef {
+            name: "代码专家".into(),
+            persona: "你是一个经验丰富的软件工程师，精通多种编程语言和框架。".into(),
+            model: "gpt-4o".into(),
+            tools: vec![
+                "code_review".into(),
+                "code_generation".into(),
+                "debugging".into(),
+            ],
+            knowledge: vec![
+                "programming_languages".into(),
+                "frameworks".into(),
+                "best_practices".into(),
+            ],
+            skills: vec!["code_review".into(), "refactoring".into(), "testing".into()],
+            memory: vec![],
+            persona_config: NLPersonaConfig::default(),
+            communication_style: "professional".into(),
+            suggestions: vec![],
+        },
+        NLAgentDef {
+            name: "数据分析师".into(),
+            persona: "你是一个专业的数据分析师，擅长数据清洗、统计分析和可视化。".into(),
+            model: "gpt-4o".into(),
+            tools: vec![
+                "data_query".into(),
+                "visualization".into(),
+                "statistical_analysis".into(),
+            ],
+            knowledge: vec![
+                "data_science".into(),
+                "statistics".into(),
+                "visualization_libraries".into(),
+            ],
+            skills: vec![
+                "data_analysis".into(),
+                "reporting".into(),
+                "insight_extraction".into(),
+            ],
+            memory: vec![],
+            persona_config: NLPersonaConfig::default(),
+            communication_style: "professional".into(),
+            suggestions: vec![],
+        },
+        NLAgentDef {
+            name: "项目管理".into(),
+            persona: "你是一个资深的项目经理，擅长任务规划、进度跟踪和团队协调。".into(),
+            model: "gpt-4o".into(),
+            tools: vec![
+                "task_planning".into(),
+                "progress_tracking".into(),
+                "team_coordination".into(),
+            ],
+            knowledge: vec![
+                "project_management".into(),
+                "agile_methodologies".into(),
+                "risk_management".into(),
+            ],
+            skills: vec![
+                "planning".into(),
+                "scheduling".into(),
+                "communication".into(),
+            ],
+            memory: vec![],
+            persona_config: NLPersonaConfig::default(),
+            communication_style: "professional".into(),
+            suggestions: vec![],
+        },
+    ]
+}
+
+/// Seeds preset agents into storage if no agents already exist.
+///
+/// This is a no-op when `storage` is `None` or when the storage already contains
+/// at least one agent (to avoid duplicating presets on re-initialization).
+///
+/// For each preset definition returned by [`preset_agent_defs`], a component of
+/// type `"agent"` is created through the provided [`StudioManager`].
+pub fn seed_preset_agents(storage: &Option<Storage>, manager: &StudioManager) {
+    let storage = match storage {
+        Some(s) => s,
+        None => return,
+    };
+
+    if storage
+        .list_agents()
+        .map(|a| !a.is_empty())
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    for def in preset_agent_defs() {
+        let config_json = serde_json::to_string(&def).ok();
+        let _ = manager.create_component(CreateComponentDef {
+            name: def.name,
+            component_type: "agent".into(),
+            config_json,
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::storage::Storage;
+
+    #[test]
+    fn test_preset_agent_defs_count() {
+        let defs = preset_agent_defs();
+        assert_eq!(defs.len(), 4);
+    }
+
+    #[test]
+    fn test_preset_agent_defs_have_names() {
+        let defs = preset_agent_defs();
+        for def in &defs {
+            assert!(!def.name.is_empty());
+            assert!(!def.persona.is_empty());
+            assert!(!def.model.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_seed_preset_agents_creates_four_agents() {
+        let storage = Storage::new_in_memory().unwrap();
+        let manager = StudioManager::new(None, Some(storage.clone()), None);
+        seed_preset_agents(&Some(storage.clone()), &manager);
+
+        let agents = storage.list_agents().unwrap();
+        assert_eq!(agents.len(), 4);
+    }
+
+    #[test]
+    fn test_seed_preset_agents_idempotent() {
+        let storage = Storage::new_in_memory().unwrap();
+        let manager = StudioManager::new(None, Some(storage.clone()), None);
+        seed_preset_agents(&Some(storage.clone()), &manager);
+        seed_preset_agents(&Some(storage.clone()), &manager);
+
+        let agents = storage.list_agents().unwrap();
+        assert_eq!(agents.len(), 4);
+    }
+
+    #[test]
+    fn test_seed_preset_agents_config_json_is_valid() {
+        let storage = Storage::new_in_memory().unwrap();
+        let manager = StudioManager::new(None, Some(storage.clone()), None);
+        seed_preset_agents(&Some(storage.clone()), &manager);
+
+        let agents = storage.list_agents().unwrap();
+        for agent in &agents {
+            let config = agent.config_json.as_deref().unwrap_or("{}");
+            let def: NLAgentDef = serde_json::from_str(config).unwrap();
+            assert!(!def.name.is_empty());
+        }
+    }
+}

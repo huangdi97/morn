@@ -218,6 +218,27 @@ export const api = {
     return res.json();
   },
 
+  async createTeam(name: string, description: string, ownerId: string): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/studio/teams`, {
+        method: "POST",
+        headers: getApiHeaders(),
+        body: JSON.stringify({ name, description, owner_id: ownerId }),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("create_team", { name, description, ownerId });
+    }
+    const res = await fetch("/api/studio/teams", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, description, owner_id: ownerId }),
+    });
+    return res.json();
+  },
+
   async listTeamTemplates(): Promise<any> {
     if (isRemote()) {
       const res = await fetch(`${getBaseUrl()}/api/studio/team-templates`, {

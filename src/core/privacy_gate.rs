@@ -31,11 +31,6 @@ impl DataSensitivity {
             _ => DataSensitivity::Public,
         }
     }
-
-    #[allow(clippy::should_implement_trait)] /* 预留：兼容旧调用入口 */
-    pub fn from_str(s: &str) -> Self {
-        Self::from_str_value(s)
-    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -94,10 +89,6 @@ impl PrivacyGate {
             action: "anonymize".into(),
         });
         gate
-    }
-
-    pub fn with_rules(rules: Vec<PrivacyRule>) -> Self {
-        PrivacyGate { rules }
     }
 
     pub fn add_rule(&mut self, rule: PrivacyRule) {

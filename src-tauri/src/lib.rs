@@ -1,10 +1,16 @@
+use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 
 use morn::console::ConsoleBackend;
+use morn::core::component_type::registry::TypeRegistry;
+use morn::core::hub_seeder::seed_hub_data;
+use morn::core::mcp::MCPServer;
+use morn::core::plugin_manager::PluginManager;
 use morn::core::storage::Storage;
+use morn::core::supervisor::presets::seed_preset_agents;
 use morn::core::supervisor::Supervisor;
 use morn::studio::manager::StudioManager;
 use morn::studio::publisher::StudioPublisher;
@@ -12,6 +18,8 @@ use morn::studio::tester::StudioTester;
 
 mod autostart;
 mod commands;
+
+const DEFAULT_API_KEY: &str = "sk-zcFNOoh23DWQZxNdmCgXQnomTvc1jmPt";
 
 pub struct AppState {
     pub supervisor: Mutex<Option<Supervisor>>,
@@ -21,11 +29,15 @@ pub struct AppState {
     pub tester: Mutex<Option<StudioTester>>,
     pub console: Mutex<Option<ConsoleBackend>>,
     pub storage: Mutex<Option<Storage>>,
+    pub plugin_manager: Mutex<Option<PluginManager>>,
+    pub type_registry: Mutex<TypeRegistry>,
+    pub mcp_manager: Mutex<Vec<MCPServer>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let api_key = std::env::var("MORN_API_KEY").ok();
+    let effective_key = api_key.unwrap_or(DEFAULT_API_KEY.to_string());
     let storage = match Storage::new() {
         Ok(s) => Some(s),
         Err(e) => {
@@ -33,14 +45,15 @@ pub fn run() {
             None
         }
     };
-    let supervisor = if api_key.is_some() {
-        Some(Supervisor::new(storage.clone(), None))
-    } else {
-        None
-    };
+    let supervisor = Some(Supervisor::new(storage.clone(), None));
 
     let registry = None;
     let manager = Some(StudioManager::new(registry.clone(), storage.clone(), None));
+
+    if let Some(ref manager) = manager {
+        seed_preset_agents(&storage, manager);
+    }
+    seed_hub_data(&storage);
     let publisher = Some(StudioPublisher::new(
         registry.clone(),
         storage.clone(),
@@ -55,6 +68,13 @@ pub fn run() {
         None,
         None,
     ));
+
+    let plugin_dir = dirs::data_dir()
+        .map(|d| d.join("morn").join("plugins"))
+        .unwrap_or_else(|| PathBuf::from("./plugins"));
+    let mut plugin_manager = PluginManager::new(plugin_dir);
+    let _ = plugin_manager.scan();
+    let plugin_manager = Some(plugin_manager);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -123,6 +143,9 @@ pub fn run() {
             tester: Mutex::new(tester),
             console: Mutex::new(console),
             storage: Mutex::new(storage),
+            plugin_manager: Mutex::new(plugin_manager),
+            type_registry: Mutex::new(TypeRegistry::new()),
+            mcp_manager: Mutex::new(Vec::new()),
         })
         .invoke_handler(tauri::generate_handler![
             commands::chat::send_message,
@@ -155,6 +178,45 @@ pub fn run() {
             commands::market::list_preset_personas,
             commands::market::get_market_listings,
             commands::market::list_bot_store,
+            commands::market::install_bot_from_store,
+            commands::market::get_agent_versions,
+            commands::market::publish_agent_version,
+            commands::market::list_themes,
+            commands::market::apply_theme,
+            commands::market::generate_plugin_from_nl,
+            commands::market::sync_now,
+            commands::market::test_notification,
+            commands::analytics::get_usage_stats,
+            commands::analytics::get_performance_metrics,
+            commands::local_model::list_local_models,
+            commands::local_model::download_model,
+            commands::local_model::delete_local_model,
+            commands::backup::export_mornpack,
+            commands::backup::import_mornpack,
+            commands::component_type::register_component_type,
+            commands::component_type::unregister_component_type,
+            commands::component_type::list_component_types,
+            commands::mcp::mcp_connect,
+            commands::mcp::mcp_disconnect,
+            commands::mcp::mcp_list_servers,
+            commands::mcp::mcp_serve,
+            commands::sandbox::run_in_sandbox,
+            commands::sandbox::sandbox_status,
+            commands::notifications::send_notification,
+            commands::notifications::list_notifications,
+            commands::config::export_config,
+            commands::config::import_config,
+            commands::oauth::oauth_authorize,
+            commands::oauth::oauth_list_providers,
+            commands::memory::list_memories,
+            commands::memory::search_memories,
+            commands::memory::delete_memory,
+            commands::whisper::transcribe_audio,
+            commands::whisper::list_audio_devices,
+            commands::cost::estimate_cost,
+            commands::cost::get_cost_summary,
+            commands::recovery::get_last_error,
+            commands::recovery::retry_last_operation,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -178,7 +178,19 @@ export function ComponentEditor() {
     <div className="component-editor" style={{ display: "flex", gap: "16px" }}>
       <div className="component-list" style={{ width: "250px", flexShrink: 0 }}>
         <h3>Existing Components</h3>
-        {components.map((c) => (
+        {components.length === 0 ? (
+          <div style={{
+            padding: "16px",
+            textAlign: "center",
+            color: "var(--text-secondary)",
+            fontSize: "13px",
+            border: "1px dashed var(--border)",
+            borderRadius: "6px",
+            background: "var(--bg-secondary)",
+          }}>
+            No components yet. Create one in the Agent Builder.
+          </div>
+        ) : components.map((c) => (
           <div
             key={c.id}
             className={`component-list-item${selectedId === c.id ? " selected" : ""}`}

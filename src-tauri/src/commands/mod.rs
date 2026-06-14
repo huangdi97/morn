@@ -1,21 +1,51 @@
+pub mod analytics;
+pub mod backup;
 pub mod chat;
+pub mod component_type;
+pub mod config;
 pub mod console;
+pub mod cost;
+pub mod errors;
+pub(crate) use errors::CommandError;
+pub mod local_model;
 pub mod market;
+pub mod mcp;
+pub mod memory;
+pub mod notifications;
+pub mod oauth;
 pub mod org;
+pub mod recovery;
+pub mod sandbox;
 pub mod studio;
+pub mod whisper;
 
+pub(crate) use analytics::{get_performance_metrics, get_usage_stats};
+pub(crate) use backup::{export_mornpack, import_mornpack};
 pub(crate) use chat::{clear_history, get_status, send_message};
-pub(crate) use console::{get_component_topology, get_system_status};
-pub(crate) use market::{
-    create_agent_from_description, get_market_listings, get_preset_persona, list_bot_store,
-    list_preset_personas,
+pub(crate) use component_type::{
+    list_component_types, register_component_type, unregister_component_type,
 };
+pub(crate) use config::{export_config, import_config};
+pub(crate) use console::{get_component_topology, get_system_status};
+pub(crate) use cost::{estimate_cost, get_cost_summary};
+pub(crate) use local_model::{delete_local_model, download_model, list_local_models};
+pub(crate) use market::{
+    apply_theme, create_agent_from_description, generate_plugin_from_nl, get_agent_versions,
+    get_market_listings, get_preset_persona, install_bot_from_store, list_bot_store,
+    list_preset_personas, list_themes, publish_agent_version, sync_now, test_notification,
+};
+pub(crate) use mcp::{mcp_connect, mcp_disconnect, mcp_list_servers, mcp_serve};
+pub(crate) use memory::{delete_memory, list_memories, search_memories};
+pub(crate) use notifications::{list_notifications, send_notification};
+pub(crate) use oauth::{oauth_authorize, oauth_list_providers};
 pub(crate) use org::{
     add_member, create_team, create_user, get_audit_log, grant_permission, list_teams, list_users,
     remove_member, revoke_permission,
 };
+pub(crate) use recovery::{get_last_error, retry_last_operation};
 pub(crate) use studio::{
     assemble_agent, create_component, delete_component, get_component, list_agent_templates,
     list_component_types, list_components, publish_component, test_component, test_component_rerun,
     update_component,
 };
+pub(crate) use whisper::{list_audio_devices, transcribe_audio};

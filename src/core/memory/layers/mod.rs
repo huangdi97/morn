@@ -237,7 +237,7 @@ mod tests {
         let mut record = MemoryRecord::new("expired", Value::String("gone".into()));
         record.ttl_secs = Some(0);
         fm.store("expired", record).unwrap();
-        let removed = fm.compress().unwrap();
+        let _removed = fm.compress().unwrap();
         assert_eq!(fm.size(), 0);
     }
 

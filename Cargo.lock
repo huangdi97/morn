@@ -2845,7 +2845,7 @@ dependencies = [
 
 [[package]]
 name = "morn"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -2862,6 +2862,7 @@ dependencies = [
  "serde_json",
  "sled",
  "tempfile",
+ "thiserror 2.0.18",
  "tokio",
  "toml 0.8.23",
  "tower",
@@ -2875,8 +2876,9 @@ dependencies = [
 
 [[package]]
 name = "morn-desktop"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
+ "dirs 5.0.1",
  "image",
  "morn",
  "serde",

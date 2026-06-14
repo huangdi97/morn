@@ -1,6 +1,7 @@
 //! templates — Collects built-in workflow templates by task category.
 use super::{WorkflowAction, WorkflowStep, WorkflowTemplate};
 
+mod business;
 mod code_review;
 mod data_analysis;
 mod deploy;
@@ -17,6 +18,11 @@ impl WorkflowTemplate {
             Self::product_launch_template(),
             Self::decision_eval_template(),
             Self::scheduled_inspection_template(),
+            Self::crm_template(),
+            Self::invoice_template(),
+            Self::email_marketing_template(),
+            Self::client_portal_template(),
+            Self::schedule_template(),
         ]
     }
 
@@ -30,9 +36,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn list_builtin_returns_eight_templates() {
+    fn list_builtin_returns_thirteen_templates() {
         let templates = WorkflowTemplate::list_builtin();
-        assert_eq!(templates.len(), 8);
+        assert_eq!(templates.len(), 13);
     }
 
     #[test]

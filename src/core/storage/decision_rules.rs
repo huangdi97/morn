@@ -112,7 +112,6 @@ impl DecisionRuleStore for Storage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::core::decision_rules::{DecisionRule, DecisionRuleStore};
     use crate::core::storage::Storage;
     use crate::core::supervisor::DecisionLevel;

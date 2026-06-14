@@ -32,12 +32,6 @@ impl ApprovalLevel {
             _ => ApprovalLevel::Low,
         }
     }
-
-    #[allow(clippy::should_implement_trait)] /* 预留：兼容旧调用入口 */
-    /// Parses an approval level string through the legacy helper entry point.
-    pub fn from_str(s: &str) -> Self {
-        Self::from_str_value(s)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

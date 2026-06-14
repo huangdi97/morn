@@ -1,0 +1,7 @@
+{
+  "name": "default",
+  "version": "1.0.0",
+  "description": "Default dark theme",
+  "plugin_type": "theme",
+  "entry": "theme.css"
+}

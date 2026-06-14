@@ -6,13 +6,6 @@ use std::time::Duration;
 pub const DEFAULT_RETRY_ATTEMPTS: usize = 3;
 const DEFAULT_BACKOFF_MS: u64 = 200;
 
-pub fn retry_blocking<T, E, F>(mut operation: F) -> Result<T, E>
-where
-    F: FnMut(usize) -> Result<T, E>,
-{
-    retry_blocking_with_backoff(DEFAULT_RETRY_ATTEMPTS, default_backoff, &mut operation)
-}
-
 pub fn retry_blocking_with_backoff<T, E, F, B>(
     attempts: usize,
     backoff: B,

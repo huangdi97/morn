@@ -18,6 +18,7 @@ pub enum AtomicComponentType {
 pub struct AtomicComponentDef {
     pub id: String,
     pub component_type: AtomicComponentType,
+    pub type_name: String,
     pub name: String,
     pub description: String,
     pub input_types: Vec<String>,
@@ -39,6 +40,20 @@ pub struct ComponentGraph {
     pub connections: Vec<ComponentConnection>,
 }
 
+impl AtomicComponentType {
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            AtomicComponentType::Memory => "memory",
+            AtomicComponentType::Tool => "tool",
+            AtomicComponentType::LLM => "model",
+            AtomicComponentType::Channel => "channel",
+            AtomicComponentType::Persona => "persona",
+            AtomicComponentType::Skill => "skill",
+            AtomicComponentType::Knowledge => "knowledge",
+            AtomicComponentType::SecurityPolicy => "security_policy",
+        }
+    }
+}
 impl ComponentGraph {
     pub fn to_json(&self) -> Result<String, String> {
         serde_json::to_string_pretty(self).map_err(|e| format!("serialization error: {}", e))
@@ -114,6 +129,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "mem_working".into(),
                 component_type: AtomicComponentType::Memory,
+                type_name: AtomicComponentType::Memory.type_name().into(),
                 name: "Working Memory".into(),
                 description: "Short-term working memory for active context".into(),
                 input_types: vec!["write".into()],
@@ -123,6 +139,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "mem_long_term".into(),
                 component_type: AtomicComponentType::Memory,
+                type_name: AtomicComponentType::Memory.type_name().into(),
                 name: "Long-term Memory".into(),
                 description: "Persistent long-term storage".into(),
                 input_types: vec!["store".into()],
@@ -132,6 +149,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "tool_web_search".into(),
                 component_type: AtomicComponentType::Tool,
+                type_name: AtomicComponentType::Tool.type_name().into(),
                 name: "Web Search".into(),
                 description: "Search the web for information".into(),
                 input_types: vec!["query".into()],
@@ -141,6 +159,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "tool_file_read".into(),
                 component_type: AtomicComponentType::Tool,
+                type_name: AtomicComponentType::Tool.type_name().into(),
                 name: "File Reader".into(),
                 description: "Read local files".into(),
                 input_types: vec!["path".into()],
@@ -150,6 +169,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "tool_code_exec".into(),
                 component_type: AtomicComponentType::Tool,
+                type_name: AtomicComponentType::Tool.type_name().into(),
                 name: "Code Executor".into(),
                 description: "Execute code in sandbox".into(),
                 input_types: vec!["code".into()],
@@ -159,6 +179,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "llm_deepseek".into(),
                 component_type: AtomicComponentType::LLM,
+                type_name: AtomicComponentType::LLM.type_name().into(),
                 name: "DeepSeek Chat".into(),
                 description: "DeepSeek chat model".into(),
                 input_types: vec!["prompt".into()],
@@ -168,6 +189,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "llm_gpt4".into(),
                 component_type: AtomicComponentType::LLM,
+                type_name: AtomicComponentType::LLM.type_name().into(),
                 name: "GPT-4o".into(),
                 description: "OpenAI GPT-4o model".into(),
                 input_types: vec!["prompt".into()],
@@ -177,6 +199,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "ch_telegram".into(),
                 component_type: AtomicComponentType::Channel,
+                type_name: AtomicComponentType::Channel.type_name().into(),
                 name: "Telegram".into(),
                 description: "Telegram messaging channel".into(),
                 input_types: vec!["send".into()],
@@ -186,6 +209,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "ch_desktop".into(),
                 component_type: AtomicComponentType::Channel,
+                type_name: AtomicComponentType::Channel.type_name().into(),
                 name: "Desktop".into(),
                 description: "Desktop notification channel".into(),
                 input_types: vec!["notify".into()],
@@ -195,6 +219,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "persona_assistant".into(),
                 component_type: AtomicComponentType::Persona,
+                type_name: AtomicComponentType::Persona.type_name().into(),
                 name: "Assistant".into(),
                 description: "Default helpful assistant persona".into(),
                 input_types: vec![],
@@ -204,6 +229,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "persona_researcher".into(),
                 component_type: AtomicComponentType::Persona,
+                type_name: AtomicComponentType::Persona.type_name().into(),
                 name: "Researcher".into(),
                 description: "Deep research-oriented persona".into(),
                 input_types: vec![],
@@ -213,6 +239,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "skill_analysis".into(),
                 component_type: AtomicComponentType::Skill,
+                type_name: AtomicComponentType::Skill.type_name().into(),
                 name: "Data Analysis".into(),
                 description: "Data analysis and visualization skill".into(),
                 input_types: vec!["data".into()],
@@ -222,6 +249,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "knowledge_docs".into(),
                 component_type: AtomicComponentType::Knowledge,
+                type_name: AtomicComponentType::Knowledge.type_name().into(),
                 name: "Document Knowledge".into(),
                 description: "Document-based knowledge base".into(),
                 input_types: vec!["query".into()],
@@ -231,6 +259,7 @@ impl ComponentRegistry {
             AtomicComponentDef {
                 id: "sec_policy_default".into(),
                 component_type: AtomicComponentType::SecurityPolicy,
+                type_name: AtomicComponentType::SecurityPolicy.type_name().into(),
                 name: "Default Security Policy".into(),
                 description: "Baseline security policy for access control".into(),
                 input_types: vec!["request".into()],
@@ -264,7 +293,7 @@ mod tests {
 
     #[test]
     fn test_component_graph_from_json() {
-        let json = r#"{"components":[{"id":"test","component_type":"Memory","name":"Test","description":"","input_types":[],"output_types":[],"config":{}}],"connections":[]}"#;
+        let json = r#"{"components":[{"id":"test","component_type":"Memory","type_name":"memory","name":"Test","description":"","input_types":[],"output_types":[],"config":{}}],"connections":[]}"#;
         let graph = ComponentGraph::from_json(json).unwrap();
         assert_eq!(graph.components.len(), 1);
         assert_eq!(graph.components[0].id, "test");
@@ -283,6 +312,7 @@ mod tests {
                 AtomicComponentDef {
                     id: "src".into(),
                     component_type: AtomicComponentType::Tool,
+                    type_name: AtomicComponentType::Tool.type_name().into(),
                     name: "Source".into(),
                     description: String::new(),
                     input_types: vec![],
@@ -292,6 +322,7 @@ mod tests {
                 AtomicComponentDef {
                     id: "dst".into(),
                     component_type: AtomicComponentType::Memory,
+                    type_name: AtomicComponentType::Memory.type_name().into(),
                     name: "Dest".into(),
                     description: String::new(),
                     input_types: vec!["in".into()],
@@ -332,6 +363,7 @@ mod tests {
                 AtomicComponentDef {
                     id: "src".into(),
                     component_type: AtomicComponentType::Tool,
+                    type_name: AtomicComponentType::Tool.type_name().into(),
                     name: "Source".into(),
                     description: String::new(),
                     input_types: vec![],
@@ -341,6 +373,7 @@ mod tests {
                 AtomicComponentDef {
                     id: "dst".into(),
                     component_type: AtomicComponentType::Memory,
+                    type_name: AtomicComponentType::Memory.type_name().into(),
                     name: "Dest".into(),
                     description: String::new(),
                     input_types: vec!["text".into()],
@@ -366,6 +399,7 @@ mod tests {
                 AtomicComponentDef {
                     id: "src".into(),
                     component_type: AtomicComponentType::Tool,
+                    type_name: AtomicComponentType::Tool.type_name().into(),
                     name: "Source".into(),
                     description: String::new(),
                     input_types: vec![],
@@ -375,6 +409,7 @@ mod tests {
                 AtomicComponentDef {
                     id: "dst".into(),
                     component_type: AtomicComponentType::Memory,
+                    type_name: AtomicComponentType::Memory.type_name().into(),
                     name: "Dest".into(),
                     description: String::new(),
                     input_types: vec![],
@@ -436,6 +471,7 @@ mod tests {
             components: vec![AtomicComponentDef {
                 id: "comp1".into(),
                 component_type: AtomicComponentType::Memory,
+                type_name: AtomicComponentType::Memory.type_name().into(),
                 name: "Comp1".into(),
                 description: "desc".into(),
                 input_types: vec!["in".into()],

@@ -59,8 +59,7 @@ impl ScanBindManager {
         session.status
     }
 
-    pub fn confirm_bind(&mut self, token: &str, config_json: &str) -> Result<(), String> {
-        let _config_json = config_json;
+    pub fn confirm_bind(&mut self, token: &str, _config_json: &str) -> Result<(), String> {
         let session = self
             .active_sessions
             .get_mut(token)

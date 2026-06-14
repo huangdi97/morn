@@ -3,14 +3,28 @@ import { api } from "./api";
 import { ComponentEditor } from "./studio/ComponentEditor";
 import { AgentBuilder } from "./studio/AgentBuilder";
 import { TestPanel } from "./studio/TestPanel";
+import { TeamTemplateSelector } from "./studio/TeamTemplateSelector";
+import { DevZone } from "./studio/DevZone";
+import { ComponentTypeManager } from "./studio/ComponentTypeManager";
+import { McpManager } from "./studio/McpManager";
 import { QuickActions } from "./QuickActions";
 import Topology from "./console/Topology";
 import SystemInfo from "./console/SystemInfo";
 import AdminDashboard from "./console/AdminDashboard";
 import CostCenter from "./console/CostCenter";
+import RoiCalculator from "./console/RoiCalculator";
+import SystemCheck from "./console/SystemCheck";
 import Governance from "./console/Governance";
 import Security from "./console/Security";
 import Marketplace from "./console/Marketplace";
+import NotificationManager from "./console/NotificationManager";
+import MemoryManager from "./console/MemoryManager";
+import Connections from "./console/Connections";
+import UserJourney from "./console/UserJourney";
+import AudioPanel from "./console/AudioPanel";
+import CostPanel from "./console/CostPanel";
+import LocalModelPanel from "./console/LocalModelPanel";
+import AnalyticsPanel from "./console/AnalyticsPanel";
 import BotStore from "./store/BotStore";
 import { Settings } from "./Settings";
 import "./styles/base.css";
@@ -47,6 +61,8 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [sendingIndex, setSendingIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState<Record<string, boolean>>({ workbench: true, studio: true, console: true });
+  const [workStep, setWorkStep] = useState(0);
+  const [workVisible, setWorkVisible] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -74,6 +90,22 @@ function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
+
+  useEffect(() => {
+    if (!isTyping) return;
+    setWorkStep(0);
+    setWorkVisible(true);
+  }, [isTyping]);
+
+  useEffect(() => {
+    if (!workVisible) return;
+    if (workStep >= 4) {
+      const t = setTimeout(() => setWorkVisible(false), 2000);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => setWorkStep(s => s + 1), 1000);
+    return () => clearTimeout(t);
+  }, [workVisible, workStep]);
 
   useEffect(() => {
     if (view !== "store") {
@@ -150,8 +182,8 @@ function App() {
     return `${hh}:${mm}`;
   };
 
-  const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test">("builder");
-  const [consoleTab, setConsoleTab] = useState<"dashboard" | "topology" | "system" | "cost" | "governance" | "security" | "market">("dashboard");
+  const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "dev" | "types" | "mcp">("builder");
+  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics">("dashboard");
 
   const SkeletonChat = () => (
     <div className="skeleton-chat">
@@ -197,11 +229,62 @@ function App() {
     </div>
   );
 
+  const AGENTS = [
+    { name: "Planner", active: true },
+    { name: "Coder", active: true },
+    { name: "Reviewer", active: true },
+    { name: "Tester", active: true },
+    { name: "Monitor", active: true },
+    { name: "Deployer", active: false },
+    { name: "Optimizer", active: false },
+    { name: "Analyst", active: false },
+  ];
+
+  const WORK_STEPS = ["Thinking...", "Planning...", "Working...", "Done ✓"];
+
+  function AgentBar() {
+    const maxVisible = 6;
+    const visible = AGENTS.slice(0, maxVisible);
+    const extra = AGENTS.length - maxVisible;
+
+    return (
+      <div className="agent-bar">
+        {visible.map(agent => (
+          <span key={agent.name} className="agent-item">
+            <span className={`agent-dot ${agent.active ? "active" : "inactive"}`} />
+            {agent.name}
+          </span>
+        ))}
+        {extra > 0 && <span className="agent-extra">+{extra} more</span>}
+      </div>
+    );
+  }
+
+  function WorkLog({ visible, step }: { visible: boolean; step: number }) {
+    if (!visible) return null;
+    const label = step < WORK_STEPS.length ? WORK_STEPS[step] : WORK_STEPS[WORK_STEPS.length - 1];
+
+    return (
+      <div className="work-log">
+        <span className="work-log-label">{label}</span>
+        <div className="work-log-dots">
+          {[0, 1, 2, 3].map(i => (
+            <span key={i} className={`work-dot ${i <= step ? "filled" : ""}`} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const renderStudio = () => (
     <div className="studio-view">
       <nav className="studio-tabs">
         <button className={studioTab === "editor" ? "active" : ""} onClick={() => setStudioTab("editor")}>Component Editor</button>
         <button className={studioTab === "builder" ? "active" : ""} onClick={() => setStudioTab("builder")}>Agent Builder</button>
+        <button className={studioTab === "teams" ? "active" : ""} onClick={() => setStudioTab("teams")}>Teams</button>
+        <button className={studioTab === "dev" ? "active" : ""} onClick={() => setStudioTab("dev")}>Dev</button>
+        <button className={studioTab === "types" ? "active" : ""} onClick={() => setStudioTab("types")}>Types</button>
+        <button className={studioTab === "mcp" ? "active" : ""} onClick={() => setStudioTab("mcp")}>MCP</button>
         <button className={studioTab === "test" ? "active" : ""} onClick={() => setStudioTab("test")}>Test Runner</button>
       </nav>
       <div className="studio-content">
@@ -209,7 +292,22 @@ function App() {
           <>
             {studioTab === "editor" && <ComponentEditor />}
             {studioTab === "builder" && <AgentBuilder />}
+            {studioTab === "teams" && (
+              <TeamTemplateSelector
+                onSelect={async (template) => {
+                  try {
+                    await api.createTeam(template.name, template.description, "default-user");
+                    alert(`团队 "${template.name}" 创建成功`);
+                  } catch (e: any) {
+                    alert(`创建失败: ${e}`);
+                  }
+                }}
+              />
+            )}
             {studioTab === "test" && <TestPanel />}
+            {studioTab === "dev" && <DevZone />}
+            {studioTab === "types" && <ComponentTypeManager />}
+            {studioTab === "mcp" && <McpManager />}
           </>
         )}
       </div>
@@ -220,23 +318,43 @@ function App() {
     <div className="console-view">
       <nav className="console-tabs">
         <button className={consoleTab === "dashboard" ? "active" : ""} onClick={() => setConsoleTab("dashboard")}>Dashboard</button>
+        <button className={consoleTab === "journey" ? "active" : ""} onClick={() => setConsoleTab("journey")}>Journey</button>
         <button className={consoleTab === "topology" ? "active" : ""} onClick={() => setConsoleTab("topology")}>Topology</button>
         <button className={consoleTab === "system" ? "active" : ""} onClick={() => setConsoleTab("system")}>System</button>
         <button className={consoleTab === "cost" ? "active" : ""} onClick={() => setConsoleTab("cost")}>Cost</button>
+        <button className={consoleTab === "roi" ? "active" : ""} onClick={() => setConsoleTab("roi")}>ROI</button>
         <button className={consoleTab === "governance" ? "active" : ""} onClick={() => setConsoleTab("governance")}>Governance</button>
         <button className={consoleTab === "security" ? "active" : ""} onClick={() => setConsoleTab("security")}>Security</button>
         <button className={consoleTab === "market" ? "active" : ""} onClick={() => setConsoleTab("market")}>Marketplace</button>
+        <button className={consoleTab === "system_check" ? "active" : ""} onClick={() => setConsoleTab("system_check")}>Self-Check</button>
+        <button className={consoleTab === "notifications" ? "active" : ""} onClick={() => setConsoleTab("notifications")}>Notifications</button>
+        <button className={consoleTab === "memory" ? "active" : ""} onClick={() => setConsoleTab("memory")}>Memory</button>
+        <button className={consoleTab === "connections" ? "active" : ""} onClick={() => setConsoleTab("connections")}>Connections</button>
+        <button className={consoleTab === "audio" ? "active" : ""} onClick={() => setConsoleTab("audio")}>Audio</button>
+        <button className={consoleTab === "cost_tracking" ? "active" : ""} onClick={() => setConsoleTab("cost_tracking")}>Cost</button>
+        <button className={consoleTab === "local_models" ? "active" : ""} onClick={() => setConsoleTab("local_models")}>Local Models</button>
+        <button className={consoleTab === "analytics" ? "active" : ""} onClick={() => setConsoleTab("analytics")}>Analytics</button>
       </nav>
       <div className="console-content">
         {loading.console ? <SkeletonConsole /> : (
           <>
             {consoleTab === "dashboard" && <AdminDashboard />}
+            {consoleTab === "journey" && <UserJourney />}
             {consoleTab === "topology" && <Topology />}
             {consoleTab === "system" && <SystemInfo />}
             {consoleTab === "cost" && <CostCenter />}
+            {consoleTab === "roi" && <RoiCalculator />}
             {consoleTab === "governance" && <Governance />}
             {consoleTab === "security" && <Security />}
             {consoleTab === "market" && <Marketplace />}
+            {consoleTab === "system_check" && <SystemCheck />}
+            {consoleTab === "notifications" && <NotificationManager />}
+            {consoleTab === "memory" && <MemoryManager />}
+            {consoleTab === "connections" && <Connections />}
+            {consoleTab === "audio" && <AudioPanel />}
+            {consoleTab === "cost_tracking" && <CostPanel />}
+            {consoleTab === "local_models" && <LocalModelPanel />}
+            {consoleTab === "analytics" && <AnalyticsPanel />}
           </>
         )}
       </div>
@@ -255,6 +373,9 @@ function App() {
           ⚙
         </button>
       </header>
+
+      <AgentBar />
+      <WorkLog visible={workVisible} step={workStep} />
 
       <main className="chat-area">
         {loading.workbench && messages.length === 0 ? <SkeletonChat /> : (

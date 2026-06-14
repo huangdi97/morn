@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_memory_hub_register() {
-        let mut hub = MemoryHub::new();
+        let hub = MemoryHub::new();
         assert!(hub.get("working").is_some());
         assert!(hub.get("episodic").is_some());
         assert!(hub.get("semantic").is_some());

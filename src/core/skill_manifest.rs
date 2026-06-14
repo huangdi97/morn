@@ -27,20 +27,6 @@ impl SkillLoader {
         SkillLoader { scan_dirs }
     }
 
-    pub fn with_default_dirs() -> Self {
-        let mut dirs = Vec::new();
-        if let Ok(cwd) = std::env::current_dir() {
-            dirs.push(cwd.join("skills"));
-        }
-        if let Some(data_dir) = dirs::data_dir() {
-            dirs.push(data_dir.join("morn").join("skills"));
-        }
-        if let Some(config_dir) = dirs::config_dir() {
-            dirs.push(config_dir.join("morn").join("skills"));
-        }
-        SkillLoader { scan_dirs: dirs }
-    }
-
     pub fn discover(&self) -> Result<Vec<SkillManifest>, String> {
         let mut manifests = Vec::new();
         for dir in &self.scan_dirs {
@@ -134,46 +120,9 @@ impl SkillLoader {
             source_file: None,
         })
     }
-
-    pub fn load_to_registry(
-        &self,
-        _registry: &crate::core::registry::Registry,
-    ) -> Result<Vec<String>, String> {
-        let manifests = self.discover()?;
-        let loaded: Vec<String> = manifests.iter().map(|m| m.id.clone()).collect();
-        Ok(loaded)
-    }
-
-    pub fn load_to_registry_mut(
-        &self,
-        registry: &mut crate::core::registry::Registry,
-    ) -> Result<Vec<String>, String> {
-        let manifests = self.discover()?;
-        let mut loaded = Vec::new();
-        for manifest in &manifests {
-            let cap = crate::core::registry::Capability {
-                id: format!("skill-{}", manifest.id),
-                version: manifest.version.clone(),
-                name: manifest.name.clone(),
-                domain: "skill".to_string(),
-                actions: manifest.tools.clone(),
-                description: manifest.description.clone(),
-                trust_score: 70.0,
-                total_calls: 0,
-                success_calls: 0,
-                avg_latency_ms: 0.0,
-                visibility: "public".to_string(),
-                owner_id: None,
-                team_id: None,
-                daily_quota: 0,
-            };
-            registry.register(cap);
-            loaded.push(manifest.id.clone());
-        }
-        Ok(loaded)
-    }
 }
 
+/// Parses structured key-value pairs from a YAML-like frontmatter block.
 fn parse_frontmatter(content: &str) -> Result<Vec<(String, String)>, String> {
     let content = content.trim();
     if !content.starts_with("---") {

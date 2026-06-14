@@ -136,6 +136,16 @@ impl Storage {
                 FOREIGN KEY (listing_id) REFERENCES market_listings(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS market_agent_versions (
+                id TEXT PRIMARY KEY,
+                listing_id TEXT NOT NULL,
+                version TEXT NOT NULL,
+                data_json TEXT NOT NULL,
+                changelog TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (listing_id) REFERENCES market_listings(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'user', created_at TEXT NOT NULL, last_login TEXT

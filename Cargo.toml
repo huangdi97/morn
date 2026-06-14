@@ -58,6 +58,7 @@ zip = { version = "2" }
 
 # always needed (small)
 rusqlite = { version = "0.31", features = ["bundled"] }
+thiserror = "2.0.18"
 
 [dev-dependencies]
 tempfile = "3"

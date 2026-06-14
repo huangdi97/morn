@@ -4,6 +4,7 @@ mod decision;
 mod execution;
 mod guided_builder;
 mod learning;
+pub mod presets;
 mod rule_commands;
 mod team_builder;
 mod types;

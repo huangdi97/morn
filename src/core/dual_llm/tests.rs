@@ -1,6 +1,6 @@
 //! Dual-LLM engine tests.
 use super::*;
-use crate::core::security::{SecurityGuard, SecurityProfile};
+use crate::core::security::SecurityProfile;
 
 fn create_guard() -> DualLlmGuard {
     DualLlmGuard::new(None, None)

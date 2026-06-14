@@ -2,7 +2,7 @@
 use rusqlite::params;
 
 use super::Storage;
-use crate::market::{License, Listing, Transaction};
+use crate::market::{AgentVersion, License, Listing, Transaction};
 
 impl Storage {
     pub fn save_listing(&self, listing: &Listing) -> Result<(), String> {
@@ -170,6 +170,75 @@ impl Storage {
             txs.push(row.map_err(|e| e.to_string())?);
         }
         Ok(txs)
+    }
+
+    pub fn save_agent_version(&self, ver: &AgentVersion) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO market_agent_versions (id, listing_id, version, data_json, changelog, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                ver.id, ver.listing_id, ver.version, ver.data_json, ver.changelog, ver.created_at
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn get_agent_versions(&self, listing_id: &str) -> Result<Vec<AgentVersion>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, listing_id, version, data_json, changelog, created_at
+                 FROM market_agent_versions WHERE listing_id = ?1 ORDER BY created_at DESC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![listing_id], |row| {
+                Ok(AgentVersion {
+                    id: row.get(0)?,
+                    listing_id: row.get(1)?,
+                    version: row.get(2)?,
+                    data_json: row.get(3)?,
+                    changelog: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        let mut versions = Vec::new();
+        for row in rows {
+            versions.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(versions)
+    }
+
+    pub fn get_agent_version(
+        &self,
+        listing_id: &str,
+        version: &str,
+    ) -> Result<Option<AgentVersion>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, listing_id, version, data_json, changelog, created_at
+                 FROM market_agent_versions WHERE listing_id = ?1 AND version = ?2",
+            )
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query(params![listing_id, version])
+            .map_err(|e| e.to_string())?;
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            Ok(Some(AgentVersion {
+                id: row.get(0).map_err(|e| e.to_string())?,
+                listing_id: row.get(1).map_err(|e| e.to_string())?,
+                version: row.get(2).map_err(|e| e.to_string())?,
+                data_json: row.get(3).map_err(|e| e.to_string())?,
+                changelog: row.get(4).map_err(|e| e.to_string())?,
+                created_at: row.get(5).map_err(|e| e.to_string())?,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }
 

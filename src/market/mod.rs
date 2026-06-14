@@ -6,6 +6,7 @@ pub mod gateway_stripe;
 pub mod marketplace;
 pub mod revenue;
 
+pub use marketplace::AgentVersion;
 pub use marketplace::License;
 pub use marketplace::Listing;
 pub use marketplace::Marketplace;

@@ -12,6 +12,8 @@ pub use graph::{
 };
 pub use validator::AssemblyValidator;
 
+pub use crate::core::component_type::registry::TypeRegistry;
+
 #[cfg(test)]
 mod tests {
     use super::*;

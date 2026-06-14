@@ -89,6 +89,20 @@ impl TypeRegistry {
             .filter(|def| def.interfaces.contains(&interface.to_string()))
             .collect()
     }
+
+    pub fn unregister(&mut self, type_name: &str) -> bool {
+        if type_name == "system" || self.is_builtin(type_name) {
+            return false;
+        }
+        self.types.remove(type_name).is_some()
+    }
+
+    fn is_builtin(&self, type_name: &str) -> bool {
+        matches!(
+            type_name,
+            "tool" | "knowledge" | "skill" | "persona" | "memory" | "model" | "agent" | "pipeline"
+        )
+    }
 }
 
 #[cfg(test)]

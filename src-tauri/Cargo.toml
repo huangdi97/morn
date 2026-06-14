@@ -21,6 +21,7 @@ uuid = { version = "1", features = ["v4"] }
 image = "0.25"
 tracing = "0.1"
 morn = { path = ".." }
+dirs = "5"
 
 # Mobile-specific (optional, only for mobile targets)
 [target.'cfg(target_os = "android")'.dependencies]

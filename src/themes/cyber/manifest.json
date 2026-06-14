@@ -1,0 +1,7 @@
+{
+  "name": "cyber",
+  "version": "1.0.0",
+  "description": "Cyberpunk theme",
+  "plugin_type": "theme",
+  "entry": "theme.css"
+}

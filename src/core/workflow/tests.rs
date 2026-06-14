@@ -4,7 +4,7 @@ use super::*;
 #[test]
 fn test_list_builtin_templates() {
     let templates = WorkflowTemplate::list_builtin();
-    assert_eq!(templates.len(), 8);
+    assert_eq!(templates.len(), 13);
 }
 
 #[test]
@@ -22,6 +22,7 @@ fn test_template_categories() {
     assert!(categories.contains(&"research"));
     assert!(categories.contains(&"development"));
     assert!(categories.contains(&"operations"));
+    assert!(categories.contains(&"business"));
 }
 
 #[test]

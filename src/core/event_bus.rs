@@ -113,14 +113,11 @@ pub const EVENT_TASK_COMPLETED: &str = "supervisor.task.completed";
 pub const EVENT_TASK_FAILED: &str = "supervisor.task.failed";
 pub const EVENT_CHAT_AGENT_RESPONSE: &str = "chat_agent.response";
 pub const EVENT_SYSTEM_READY: &str = "system.ready";
-pub const EVENT_SYSTEM_SHUTDOWN: &str = "system.shutdown";
 pub const EVENT_AGENT_CREATED: &str = "agent.created";
 pub const EVENT_AGENT_DESTROYED: &str = "agent.destroyed";
 pub const EVENT_WORKFLOW_STARTED: &str = "workflow.started";
 pub const EVENT_WORKFLOW_COMPLETED: &str = "workflow.completed";
 pub const EVENT_WORKFLOW_FAILED: &str = "workflow.failed";
-pub const EVENT_CHANNEL_CONNECTED: &str = "channel.connected";
-pub const EVENT_CHANNEL_DISCONNECTED: &str = "channel.disconnected";
 pub const EVENT_APPROVAL_REQUESTED: &str = "approval.requested";
 pub const EVENT_APPROVAL_RESPONDED: &str = "approval.responded";
 
@@ -128,9 +125,15 @@ pub const EVENT_APPROVAL_RESPONDED: &str = "approval.responded";
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Mutex;
 
     static HANDLER_ONE_CALLS: AtomicUsize = AtomicUsize::new(0);
     static HANDLER_TWO_CALLS: AtomicUsize = AtomicUsize::new(0);
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    const EVENT_SYSTEM_SHUTDOWN: &str = "system.shutdown";
+    const EVENT_CHANNEL_CONNECTED: &str = "channel.connected";
+    const EVENT_CHANNEL_DISCONNECTED: &str = "channel.disconnected";
 
     fn handler_one(event: Event) {
         assert_eq!(event.source, "test");
@@ -148,6 +151,7 @@ mod tests {
 
     #[test]
     fn subscribes_handler_to_event_type() {
+        let _lock = TEST_LOCK.lock().unwrap();
         reset_calls();
         let mut bus = SimpleEventBus::new();
 
@@ -159,6 +163,7 @@ mod tests {
 
     #[test]
     fn publishes_only_matching_event_type() {
+        let _lock = TEST_LOCK.lock().unwrap();
         reset_calls();
         let mut bus = SimpleEventBus::new();
 
@@ -170,6 +175,7 @@ mod tests {
 
     #[test]
     fn unsubscribes_handler_from_event_type() {
+        let _lock = TEST_LOCK.lock().unwrap();
         reset_calls();
         let mut bus = SimpleEventBus::new();
 
@@ -182,6 +188,7 @@ mod tests {
 
     #[test]
     fn publishes_to_multiple_subscribers() {
+        let _lock = TEST_LOCK.lock().unwrap();
         reset_calls();
         let mut bus = SimpleEventBus::new();
 

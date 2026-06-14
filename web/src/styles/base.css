@@ -419,3 +419,96 @@ body {
     rgba(0, 240, 255, 0.02) 4px
   );
 }
+
+/* Agent Status Bar */
+.agent-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: #161b22;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.agent-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #e6edf3;
+  white-space: nowrap;
+}
+
+.agent-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agent-dot.active {
+  background: #3fb950;
+  box-shadow: 0 0 4px #3fb950;
+}
+
+.agent-dot.inactive {
+  background: #8b949e;
+}
+
+.agent-extra {
+  color: #8b949e;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Work Log Panel */
+.work-log {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 16px;
+  background: #161b22;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  animation: workLogIn 0.25s ease-out;
+}
+
+.work-log-label {
+  color: #e6edf3;
+}
+
+.work-log-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.work-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8b949e;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.work-dot.filled {
+  background: #3fb950;
+  box-shadow: 0 0 4px #3fb950;
+}
+
+@keyframes workLogIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
