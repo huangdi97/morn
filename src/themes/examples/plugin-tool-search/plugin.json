@@ -1,0 +1,12 @@
+{
+  "id": "plugin-tool-search",
+  "name": "网页搜索工具",
+  "version": "0.1.0",
+  "type": "tool",
+  "entry": "tool_def.json",
+  "hooks": ["tool:execute"],
+  "description": "通过搜索引擎获取网页内容的工具",
+  "author": "Morn Labs",
+  "license": "MIT",
+  "permissions": ["network:http"]
+}

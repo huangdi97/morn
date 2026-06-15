@@ -1,6 +1,7 @@
 pub mod analytics;
 pub mod backup;
 pub mod chat;
+pub mod checkup;
 pub mod component_type;
 pub mod config;
 pub mod console;
@@ -25,6 +26,7 @@ pub mod whisper;
 
 pub(crate) use analytics::{get_performance_metrics, get_usage_stats};
 pub(crate) use backup::{export_mornpack, import_mornpack};
+pub(crate) use checkup::run_system_check;
 pub(crate) use chat::{clear_history, get_status, send_message};
 pub(crate) use component_type::{
     list_component_types, register_component_type, unregister_component_type,

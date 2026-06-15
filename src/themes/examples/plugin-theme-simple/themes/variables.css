@@ -1,0 +1,20 @@
+[data-theme="cyber"] {
+  --bg-page: #08080c;
+  --bg-panel: #0d0e14;
+  --bg-surface: #14151e;
+  --bg-hover: #1c1d2a;
+  --text-primary: #e8e9f0;
+  --text-secondary: #9b9db2;
+  --text-tertiary: #63657a;
+  --text-muted: #4a4c5c;
+  --accent: #00f0ff;
+  --accent-hover: #4af5ff;
+  --accent-active: #7af8ff;
+  --success: #05ffa1;
+  --danger: #ff2a6d;
+  --warning: #fcee0a;
+  --border-default: rgba(255,255,255,0.08);
+  --border-subtle: rgba(255,255,255,0.05);
+  --user-bubble: #1f6feb;
+  --assistant-bubble: #21262d;
+}

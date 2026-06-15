@@ -1,8 +1,0 @@
-{
-  "name": "plugin-theme-simple",
-  "version": "1.0.0",
-  "description": "A minimal theme plugin that customises UI colors",
-  "author": "",
-  "plugin_type": "theme",
-  "entry": "main.js"
-}

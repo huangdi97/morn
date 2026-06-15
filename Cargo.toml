@@ -23,7 +23,8 @@ channels-full = []
 providers-full = []
 desktop-real = []
 vnc-sandbox = []
-full = ["sandbox", "email", "server", "channels-full", "providers-full", "desktop-real", "vnc-sandbox"]
+voice = []
+full = ["sandbox", "email", "server", "channels-full", "providers-full", "desktop-real", "vnc-sandbox", "local-llm", "voice"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

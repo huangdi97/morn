@@ -1,0 +1,13 @@
+{
+  "id": "plugin-theme-simple",
+  "name": "赛博朋克主题",
+  "version": "1.0.0",
+  "type": "theme",
+  "entry": "themes/variables.css",
+  "hooks": ["ui:css-variables"],
+  "description": "暗色霓虹风格，青色发光 + 扫描线效果",
+  "author": "Morn Labs",
+  "license": "MIT",
+  "requires": "morn >= 0.2.0",
+  "permissions": ["ui:override-styles"]
+}

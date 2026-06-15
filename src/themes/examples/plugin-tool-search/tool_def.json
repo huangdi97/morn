@@ -1,0 +1,19 @@
+{
+  "name": "web_search",
+  "description": "Search the web and return page content snippets",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Search keywords"
+      },
+      "max_results": {
+        "type": "integer",
+        "description": "Maximum number of results to return",
+        "default": 5
+      }
+    },
+    "required": ["query"]
+  }
+}

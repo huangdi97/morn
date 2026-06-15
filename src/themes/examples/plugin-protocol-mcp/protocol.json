@@ -1,0 +1,21 @@
+{
+  "name": "mcp",
+  "version": "0.1.0",
+  "endpoints": {
+    "register": {
+      "method": "POST",
+      "path": "/mcp/register",
+      "description": "Register a new MCP service"
+    },
+    "discover": {
+      "method": "GET",
+      "path": "/mcp/discover",
+      "description": "Discover available MCP services"
+    },
+    "invoke": {
+      "method": "POST",
+      "path": "/mcp/invoke",
+      "description": "Invoke a registered MCP service"
+    }
+  }
+}

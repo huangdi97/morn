@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface CheckResult {
   label: string;
-  status: "ok" | "fail";
+  status: string;
   value?: string;
 }
 
@@ -28,24 +29,22 @@ function CheckRow({ item }: { item: CheckResult }) {
   );
 }
 
-function runChecks(): CheckResult[] {
-  return [
-    { label: "Storage Status", status: Math.random() > 0.2 ? "ok" : "fail" },
-    { label: "API Connection", status: Math.random() > 0.1 ? "ok" : "fail" },
-    { label: "Memory Usage", status: Math.random() > 0.15 ? "ok" : "fail" },
-    { label: "Plugin Count", status: "ok", value: `${Math.floor(Math.random() * 20) + 5} active` },
-    { label: "Agent Count", status: "ok", value: `${Math.floor(Math.random() * 8) + 3} registered` },
-    { label: "Workflow Templates", status: "ok", value: `${Math.floor(Math.random() * 12) + 3} available` },
-  ];
-}
-
 export default function SystemCheck() {
   const [checks, setChecks] = useState<CheckResult[]>([]);
   const [ran, setRan] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleRun = () => {
-    setChecks(runChecks());
-    setRan(true);
+  const handleRun = async () => {
+    setLoading(true);
+    try {
+      const result = await invoke<CheckResult[]>("run_system_check");
+      setChecks(result);
+      setRan(true);
+    } catch (err) {
+      console.error("System check failed:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const allOk = checks.length > 0 && checks.every(c => c.status === "ok");
@@ -57,28 +56,35 @@ export default function SystemCheck() {
       <div className="cost-card">
         <button
           onClick={handleRun}
+          disabled={loading}
           style={{
             padding: "10px 24px",
-            background: "#238636",
+            background: loading ? "#555" : "#238636",
             color: "#fff",
             border: "none",
             borderRadius: "6px",
             fontSize: "14px",
             fontWeight: 600,
-            cursor: "pointer",
+            cursor: loading ? "not-allowed" : "pointer",
             marginBottom: "16px",
           }}
         >
-          Run Check
+          {loading ? "Running..." : "Run Check"}
         </button>
 
-        {!ran && (
+        {!ran && !loading && (
           <div style={{ color: "#8b949e", fontSize: "14px", padding: "20px 0", textAlign: "center" }}>
             Click "Run Check" to run system diagnostics
           </div>
         )}
 
-        {ran && (
+        {loading && (
+          <div style={{ color: "#8b949e", fontSize: "14px", padding: "20px 0", textAlign: "center" }}>
+            Running diagnostics...
+          </div>
+        )}
+
+        {ran && !loading && (
           <>
             <div style={{
               padding: "10px 12px",

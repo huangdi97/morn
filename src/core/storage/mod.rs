@@ -276,6 +276,22 @@ impl Storage {
         .map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    /// Runs a quick health check against the SQLite database.
+    ///
+    /// Returns `Ok(())` when the database responds to a `PRAGMA quick_check`
+    /// with the value `"ok"`, and an error otherwise.
+    pub fn check_health(&self) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let result: String = conn
+            .pragma_query_value(None, "quick_check", |row| row.get(0))
+            .map_err(|e| e.to_string())?;
+        if result == "ok" {
+            Ok(())
+        } else {
+            Err(format!("Database integrity issue: {}", result))
+        }
+    }
 }
 
 fn default_database_path() -> Result<PathBuf, String> {

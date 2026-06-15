@@ -1,8 +1,0 @@
-{
-  "name": "plugin-tool-greeter",
-  "version": "1.0.0",
-  "description": "A tool plugin that greets users by name",
-  "author": "",
-  "plugin_type": "tool",
-  "entry": "main.js"
-}

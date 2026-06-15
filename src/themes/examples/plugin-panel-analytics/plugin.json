@@ -1,0 +1,12 @@
+{
+  "id": "plugin-panel-analytics",
+  "name": "数据分析面板",
+  "version": "0.1.0",
+  "type": "ui-panel",
+  "entry": "panel.html",
+  "hooks": ["console:tab"],
+  "description": "Console 中的交互式数据分析仪表盘",
+  "author": "Morn Labs",
+  "license": "MIT",
+  "permissions": ["ui:slot-console"]
+}

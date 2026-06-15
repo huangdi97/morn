@@ -1,7 +1,0 @@
-{
-  "name": "plugin-knowledge-faq",
-  "entries": [
-    { "question": "What is Morn?", "answer": "Morn is an agentic desktop IDE for building AI agents." },
-    { "question": "How do I install a plugin?", "answer": "Place it in the plugins directory and run scan." }
-  ]
-}

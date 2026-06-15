@@ -1,0 +1,12 @@
+{
+  "id": "plugin-protocol-mcp",
+  "name": "MCP 服务协议",
+  "version": "0.1.0",
+  "type": "protocol",
+  "entry": "protocol.json",
+  "hooks": ["protocol:register"],
+  "description": "MCP (Model Context Protocol) 服务注册与发现",
+  "author": "Morn Labs",
+  "license": "MIT",
+  "permissions": ["network:listen"]
+}

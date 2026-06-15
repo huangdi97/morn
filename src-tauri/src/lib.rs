@@ -226,6 +226,7 @@ pub fn run() {
             commands::proactive::list_proactive_rules,
             commands::proactive::toggle_proactive_rule,
             commands::metrics::get_reliability_metrics,
+            commands::checkup::run_system_check,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

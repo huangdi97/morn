@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Analytics Panel</title>
+  <style>
+    body { background: #0d1117; color: #e6edf3; font-family: -apple-system, sans-serif; padding: 16px; }
+    .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .stat-value { font-size: 24px; font-weight: 600; color: #58a6ff; }
+    .stat-label { font-size: 12px; color: #8b949e; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="stat-card">
+    <div class="stat-value" id="total-calls">—</div>
+    <div class="stat-label">Total API Calls</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="avg-latency">—</div>
+    <div class="stat-label">Avg Latency (ms)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="success-rate">—</div>
+    <div class="stat-label">Success Rate</div>
+  </div>
+  <script>
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/analytics/stats');
+        const data = await res.json();
+        document.getElementById('total-calls').textContent = data.total_calls ?? 'N/A';
+        document.getElementById('avg-latency').textContent = data.avg_latency ?? 'N/A';
+        document.getElementById('success-rate').textContent = (data.success_rate * 100).toFixed(1) + '%';
+      } catch { /* run standalone */ }
+    }
+    loadStats();
+  </script>
+</body>
+</html>

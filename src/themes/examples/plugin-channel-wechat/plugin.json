@@ -1,0 +1,12 @@
+{
+  "id": "plugin-channel-wechat",
+  "name": "微信渠道",
+  "version": "0.1.0",
+  "type": "channel",
+  "entry": "channel.js",
+  "hooks": ["channel:message", "channel:send"],
+  "description": "企业微信机器人渠道插件，支持消息收发和任务管理",
+  "author": "Morn Labs",
+  "license": "MIT",
+  "permissions": ["network:http"]
+}

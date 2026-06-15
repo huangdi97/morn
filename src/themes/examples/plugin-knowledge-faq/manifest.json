@@ -1,8 +1,0 @@
-{
-  "name": "plugin-knowledge-faq",
-  "version": "1.0.0",
-  "description": "An FAQ knowledge base plugin",
-  "author": "",
-  "plugin_type": "knowledge",
-  "entry": "main.js"
-}
