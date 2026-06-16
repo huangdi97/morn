@@ -4,17 +4,3 @@ web/dist/
 .DS_Store
 *.swp
 *.swo
-tasks.md
-DESIGN.md
-competitors_full_list.md
-tasks-*.md
-.hermes/
-browser-extension/
-GAP_ANALYSIS.md
-tasks-remaining.md
-tests/
-task-*.md
-mornd/tasks*.md
-mornd/phase*_task.txt
-channel-trait-task.md
-child-process-task.md
