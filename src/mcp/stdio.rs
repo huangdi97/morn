@@ -21,7 +21,6 @@ pub fn call_stdio(
         .stderr(Stdio::piped())
         .spawn()
         .and_then(|mut child| {
-            use std::io::Write;
             if let Some(ref mut stdin) = child.stdin {
                 serde_json::to_writer(stdin, &input)?;
             }

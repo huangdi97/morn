@@ -1,7 +1,8 @@
 use std::collections::HashMap;
-use std::process::{Command, Stdio};
 
 use crate::core::mcp::{MCPError, MCPResponse, MCPTool};
+use crate::mcp::http::call_http;
+use crate::mcp::stdio::call_stdio;
 use crate::mcp::server::{MCPServer, MCPTransport, ServerStatus};
 
 #[derive(Debug, Clone)]
@@ -40,72 +41,11 @@ impl MCPManager {
         }
 
         match &server.transport {
-            MCPTransport::Http { url, api_key } => self.call_http(url, api_key, tool_name, args),
+            MCPTransport::Http { url, api_key } => call_http(url, api_key, tool_name, args),
             MCPTransport::Stdio { command, args: cmd_args } => {
-                self.call_stdio(command, cmd_args, tool_name, args)
+                call_stdio(command, cmd_args, tool_name, args)
             }
         }
-    }
-
-    fn call_http(
-        &self,
-        url: &str,
-        api_key: &Option<String>,
-        tool_name: &str,
-        args: &serde_json::Value,
-    ) -> Result<MCPResponse, MCPError> {
-        let client = reqwest::blocking::Client::new();
-        let request_url = format!("{}/call", url.trim_end_matches('/'));
-
-        let mut req = client.post(&request_url).json(&serde_json::json!({
-            "tool": tool_name,
-            "params": args,
-        }));
-
-        if let Some(key) = api_key {
-            req = req.header("Authorization", format!("Bearer {}", key));
-        }
-
-        let resp = req.send().map_err(|e| MCPError(format!("HTTP request failed: {}", e)))?;
-        let data: MCPResponse = resp.json().map_err(|e| MCPError(format!("JSON decode failed: {}", e)))?;
-        Ok(data)
-    }
-
-    fn call_stdio(
-        &self,
-        command: &str,
-        cmd_args: &[String],
-        tool_name: &str,
-        args: &serde_json::Value,
-    ) -> Result<MCPResponse, MCPError> {
-        let input = serde_json::json!({
-            "tool": tool_name,
-            "params": args,
-        });
-
-        let output = Command::new(command)
-            .args(cmd_args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .and_then(|mut child| {
-                use std::io::Write;
-                if let Some(ref mut stdin) = child.stdin {
-                    serde_json::to_writer(stdin, &input)?;
-                }
-                child.wait_with_output()
-            })
-            .map_err(|e| MCPError(format!("Stdio command failed: {}", e)))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(MCPError(format!("Command exited with error: {}", stderr)));
-        }
-
-        let data: MCPResponse = serde_json::from_slice(&output.stdout)
-            .map_err(|e| MCPError(format!("JSON parse failed: {}", e)))?;
-        Ok(data)
     }
 
     pub fn disconnect(&mut self, server_name: &str) {
