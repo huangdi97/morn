@@ -9,6 +9,7 @@ use morn::core::component_type::registry::TypeRegistry;
 use morn::core::hub_seeder::seed_hub_data;
 use morn::core::mcp::MCPServer;
 use morn::core::plugin_manager::PluginManager;
+use morn::core::scheduler::Scheduler;
 use morn::core::storage::Storage;
 use morn::core::supervisor::presets::seed_preset_agents;
 use morn::core::supervisor::Supervisor;
@@ -32,6 +33,7 @@ pub struct AppState {
     pub plugin_manager: Mutex<Option<PluginManager>>,
     pub type_registry: Mutex<TypeRegistry>,
     pub mcp_manager: Mutex<Vec<MCPServer>>,
+    pub scheduler: Mutex<Option<Scheduler>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -146,6 +148,7 @@ pub fn run() {
             plugin_manager: Mutex::new(plugin_manager),
             type_registry: Mutex::new(TypeRegistry::new()),
             mcp_manager: Mutex::new(Vec::new()),
+            scheduler: Mutex::new(Some(core::scheduler::Scheduler::new())),
         })
         .invoke_handler(tauri::generate_handler![
             commands::chat::send_message,
@@ -227,6 +230,9 @@ pub fn run() {
             commands::proactive::toggle_proactive_rule,
             commands::metrics::get_reliability_metrics,
             commands::checkup::run_system_check,
+            commands::scheduler::schedule_task,
+            commands::scheduler::list_scheduled_tasks,
+            commands::scheduler::cancel_task,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

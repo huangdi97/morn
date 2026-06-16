@@ -22,6 +22,7 @@ pub mod org;
 pub mod proactive;
 pub mod recovery;
 pub mod sandbox;
+pub mod scheduler;
 pub mod studio;
 pub mod whisper;
 

@@ -41,6 +41,7 @@ pub mod registry;
 pub mod repo_map;
 pub mod retry;
 pub mod scan_bind;
+pub mod scheduler;
 pub mod search_launcher;
 pub mod security;
 pub mod skill_manifest;
