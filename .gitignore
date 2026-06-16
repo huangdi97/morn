@@ -13,3 +13,8 @@ browser-extension/
 GAP_ANALYSIS.md
 tasks-remaining.md
 tests/
+task-*.md
+mornd/tasks*.md
+mornd/phase*_task.txt
+channel-trait-task.md
+child-process-task.md
