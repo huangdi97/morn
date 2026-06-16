@@ -1,4 +1,5 @@
 //! Screenshot perception — screen capture and VLM-based analysis.
+use crate::core::error::MornError;
 use crate::computer::{ComputerOpResult, SecurityLevel};
 
 const DEFAULT_VLM_ENDPOINT: &str = "https://api.openai.com";
@@ -108,7 +109,7 @@ fn analyze_screenshot_result(screenshot_b64: &str) -> ComputerOpResult {
         },
         Err(e) => ComputerOpResult {
             success: false,
-            data: e,
+            data: e.to_string(),
             security_level: SecurityLevel::L2Local.as_str().to_string(),
             approval_required: true,
         },
@@ -119,17 +120,17 @@ pub fn analyze_screen(
     screenshot_b64: &str,
     vlm_endpoint: &str,
     vlm_api_key: &str,
-) -> Result<String, String> {
+) -> Result<String, MornError> {
     if screenshot_b64.trim().is_empty() {
-        return Err("Screenshot data is empty".to_string());
+        return Err(MornError::Internal("Screenshot data is empty".to_string()))
     }
     if vlm_endpoint.trim().is_empty() {
-        return Err("VLM endpoint is empty".to_string());
+        return Err(MornError::Internal("VLM endpoint is empty".to_string()))
     }
     if vlm_api_key.trim().is_empty() {
-        return Err(
+        return Err(MornError::Internal(
             "VLM API key is empty; real VLM screen analysis requires an API key".to_string(),
-        );
+        ));
     }
 
     let endpoint = vlm_endpoint.trim().trim_end_matches('/');
@@ -161,27 +162,27 @@ pub fn analyze_screen(
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()
-        .map_err(|e| format!("Failed to create VLM HTTP client: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to create VLM HTTP client: {}", e)))?;
     let response = client
         .post(url)
         .header("Authorization", format!("Bearer {}", vlm_api_key.trim()))
         .header("Content-Type", "application/json")
         .json(&payload)
         .send()
-        .map_err(|e| format!("VLM request failed: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("VLM request failed: {}", e)))?;
 
     let status = response.status();
     let body = response
         .text()
-        .map_err(|e| format!("Failed to read VLM response body: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to read VLM response body: {}", e)))?;
     if !status.is_success() {
-        return Err(format!("VLM API error {}: {}", status, body));
+        return Err(MornError::Internal(format!("VLM API error {}: {}", status, body)));
     }
 
     let parsed: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|e| format!("Failed to parse VLM response JSON: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to parse VLM response JSON: {}", e)))?;
     let content = extract_vlm_content(&parsed)
-        .ok_or_else(|| "VLM response contained no message content".to_string())?;
+        .ok_or_else(|| MornError::Internal("VLM response contained no message content".to_string()))?;
 
     Ok(format_structured_vlm_content(&content))
 }

@@ -6,6 +6,7 @@
 //! - `layers_knowledge` — knowledge-oriented layers: SemanticMemory, GraphMemory, and related types
 //! - `orchestrator` — experience memory, MemoryHub, and MemoryOrchestrator
 
+use crate::core::error::MornError;
 mod layers;
 mod layers_knowledge;
 mod long_term_experience;

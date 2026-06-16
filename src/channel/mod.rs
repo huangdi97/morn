@@ -1,4 +1,5 @@
 //! channel — Exposes communication channels for users and external platforms.
+use crate::core::error::MornError;
 pub mod adapter;
 #[cfg(feature = "channels-full")]
 pub mod browser_ext;

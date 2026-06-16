@@ -1,5 +1,6 @@
 //! editors — Studio editor types for agent, knowledge, memory, model, persona, pipeline, skill, and tool editing.
 
+use crate::core::error::MornError;
 pub trait Editor {
     fn name(&self) -> &str;
 }

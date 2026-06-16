@@ -1,3 +1,4 @@
+use crate::MornError;
 use crate::AppState;
 use tauri::State;
 
@@ -8,8 +9,8 @@ pub(crate) fn search_market_listings(
     query: Option<String>,
     type_filter: Option<String>,
     state: State<AppState>,
-) -> Result<serde_json::Value, String> {
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, MornError> {
+    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -34,7 +35,7 @@ pub(crate) fn search_market_listings(
         _ => listings,
     };
 
-    serde_json::to_value(filtered).map_err(|e| e.to_string())
+    serde_json::to_value(filtered).map_err(|e| MornError::Internal(e.to_string()))
 }
 
 #[tauri::command]
@@ -43,12 +44,12 @@ pub(crate) fn submit_review(
     rating: u8,
     comment: String,
     state: State<AppState>,
-) -> Result<String, String> {
+) -> Result<String, MornError> {
     if rating < 1 || rating > 5 {
-        return Err("Rating must be between 1 and 5".to_string());
+        return Err(MornError::Internal("Rating must be between 1 and 5".to_string()));
     }
 
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -84,12 +85,12 @@ pub(crate) fn submit_review(
 pub(crate) fn get_listing_reviews(
     listing_id: String,
     state: State<AppState>,
-) -> Result<serde_json::Value, String> {
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, MornError> {
+    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
 
     let reviews = s.get_listing_reviews(&listing_id)?;
-    serde_json::to_value(reviews).map_err(|e| e.to_string())
+    serde_json::to_value(reviews).map_err(|e| MornError::Internal(e.to_string()))
 }

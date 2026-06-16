@@ -1,4 +1,5 @@
 //! simple — Provides an in-memory implementation of the memory component.
+use crate::core::error::MornError;
 use super::Memory;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
@@ -35,16 +36,16 @@ impl Component for SqliteMemory {
     fn type_name(&self) -> &str {
         "memory"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -69,10 +70,10 @@ impl IOComponent for SqliteMemory {
             },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }
@@ -84,7 +85,7 @@ impl SecureComponent for SqliteMemory {
 }
 
 impl Memory for SqliteMemory {
-    fn store(&mut self, key: &str, value: &str, namespace: &str) -> Result<(), String> {
+    fn store(&mut self, key: &str, value: &str, namespace: &str) -> Result<(), MornError> {
         self.data
             .entry(namespace.to_string())
             .or_default()
@@ -92,11 +93,11 @@ impl Memory for SqliteMemory {
         Ok(())
     }
 
-    fn retrieve(&self, key: &str, namespace: &str) -> Result<Option<String>, String> {
+    fn retrieve(&self, key: &str, namespace: &str) -> Result<Option<String>, MornError> {
         Ok(self.data.get(namespace).and_then(|ns| ns.get(key)).cloned())
     }
 
-    fn search(&self, query: &str, namespace: &str) -> Result<Vec<(String, String)>, String> {
+    fn search(&self, query: &str, namespace: &str) -> Result<Vec<(String, String)>, MornError> {
         let mut results = Vec::new();
         if let Some(ns) = self.data.get(namespace) {
             for (k, v) in ns {

@@ -1,4 +1,5 @@
 //! agent_pool — Manages pooled agent instances and task assignment.
+use crate::core::error::MornError;
 use crate::core::registry::Registry;
 use crate::core::trust_scorer::TrustScorer;
 use std::collections::HashMap;
@@ -90,15 +91,15 @@ impl AgentPool {
         id: &str,
         name: &str,
         agent_type: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, MornError> {
         if self.agents.len() >= self.config.max_agents {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "Pool max agents ({}) reached",
                 self.config.max_agents
-            ));
+            )));
         }
         if self.agents.contains_key(id) {
-            return Err(format!("Agent '{}' already registered in pool", id));
+            return Err(MornError::Internal(format!("Agent '{}' already registered in pool", id)));
         }
         let instance = AgentInstance {
             id: id.to_string(),
@@ -117,19 +118,19 @@ impl AgentPool {
         Ok(id.to_string())
     }
 
-    pub fn unregister_agent(&mut self, id: &str) -> Result<(), String> {
-        self.agents
+    pub fn unregister_agent(&mut self, id: &str) -> Result<(), MornError> {
+        Ok(self.agents
             .remove(id)
-            .ok_or_else(|| format!("Agent '{}' not found", id))
-            .map(|_| ())
+            .ok_or_else(|| MornError::Internal(format!("Agent '{}' not found", id)))
+            .map(|_| ())?)
     }
 
-    pub fn submit_task(&mut self, task: AgentTask) -> Result<String, String> {
+    pub fn submit_task(&mut self, task: AgentTask) -> Result<String, MornError> {
         if !self.agents.contains_key(&task.agent_id) {
-            return Err(format!("Agent '{}' not found in pool", task.agent_id));
+            return Err(MornError::Internal(format!("Agent '{}' not found in pool", task.agent_id)));
         }
         if self.tasks.len() >= self.config.queue_size {
-            return Err("Task queue full".to_string());
+            return Err(MornError::Internal("Task queue full".to_string()))
         }
         let id = task.id.clone();
         self.tasks.push(task);

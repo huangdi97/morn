@@ -1,4 +1,5 @@
 //! skill_manifest — Parses and represents skill manifest metadata.
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,16 +28,16 @@ impl SkillLoader {
         SkillLoader { scan_dirs }
     }
 
-    pub fn discover(&self) -> Result<Vec<SkillManifest>, String> {
+    pub fn discover(&self) -> Result<Vec<SkillManifest>, MornError> {
         let mut manifests = Vec::new();
         for dir in &self.scan_dirs {
             if !dir.exists() {
                 continue;
             }
             let entries =
-                fs::read_dir(dir).map_err(|e| format!("Cannot read dir {:?}: {}", dir, e))?;
+                fs::read_dir(dir).map_err(|e| MornError::Internal(format!("Cannot read dir {:?}: {}", dir, e)))?;
             for entry in entries {
-                let entry = entry.map_err(|e| format!("Entry error: {}", e))?;
+                let entry = entry.map_err(|e| MornError::Internal(format!("Entry error: {}", e)))?;
                 let path = entry.path();
                 if path.is_dir() {
                     let skill_file = path.join("SKILL.md");
@@ -62,9 +63,9 @@ impl SkillLoader {
         Ok(manifests)
     }
 
-    pub fn parse_file(&self, path: &Path) -> Result<SkillManifest, String> {
+    pub fn parse_file(&self, path: &Path) -> Result<SkillManifest, MornError> {
         let content =
-            fs::read_to_string(path).map_err(|e| format!("Cannot read {:?}: {}", path, e))?;
+            fs::read_to_string(path).map_err(|e| MornError::Internal(format!("Cannot read {:?}: {}", path, e)))?;
 
         let frontmatter = parse_frontmatter(&content)?;
         let map: HashMap<String, String> = frontmatter.into_iter().collect();
@@ -123,10 +124,10 @@ impl SkillLoader {
 }
 
 /// Parses structured key-value pairs from a YAML-like frontmatter block.
-fn parse_frontmatter(content: &str) -> Result<Vec<(String, String)>, String> {
+fn parse_frontmatter(content: &str) -> Result<Vec<(String, String)>, MornError> {
     let content = content.trim();
     if !content.starts_with("---") {
-        return Err("Missing frontmatter delimiters (---)".to_string());
+        return Err(MornError::Internal("Missing frontmatter delimiters (---)".to_string()));
     }
 
     let rest = &content[3..];
@@ -157,15 +158,15 @@ pub fn create_default_skill_md(
     id: &str,
     name: &str,
     description: &str,
-) -> Result<(), String> {
+) -> Result<(), MornError> {
     let content = format!(
         "---\nid: {}\nname: {}\ndescription: {}\nversion: 0.1.0\nauthor: morn\ntools: \ndependencies: \ntags: \n---\n\n# {}\n\n{}",
         id, name, description, name, description
     );
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Cannot create dir: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| MornError::Internal(format!("Cannot create dir: {}", e)))?;
     }
-    fs::write(path, &content).map_err(|e| format!("Cannot write {:?}: {}", path, e))?;
+    fs::write(path, &content).map_err(|e| MornError::Internal(format!("Cannot write {:?}: {}", path, e)))?;
     Ok(())
 }
 

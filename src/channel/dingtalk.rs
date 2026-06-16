@@ -2,6 +2,7 @@
 //! 配置方式：在钉钉开放平台创建应用，获取 Webhook URL
 //! 环境变量：DINGTALK_WEBHOOK_URL
 
+use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -39,7 +40,7 @@ impl DingTalkChannel {
         }
     }
 
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env() -> Result<Self, MornError> {
         let url = std::env::var("DINGTALK_WEBHOOK_URL")
             .map_err(|_| "DINGTALK_WEBHOOK_URL not set".to_string())?;
         Ok(DingTalkChannel::with_webhook_config(
@@ -50,22 +51,22 @@ impl DingTalkChannel {
         ))
     }
 
-    pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {
+    pub fn send(&self, msg: &ChannelMessage) -> Result<(), MornError> {
         let payload = Self::build_payload(msg);
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
         let resp = client
             .post(&self.webhook_url)
             .json(&payload)
             .send()
-            .map_err(|e| format!("Failed to send DingTalk message: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to send DingTalk message: {}", e)))?;
         if !resp.status().is_success() {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "DingTalk webhook returned non-200 status: {}",
                 resp.status()
-            ));
+            )));
         }
         Ok(())
     }
@@ -79,11 +80,11 @@ impl DingTalkChannel {
         })
     }
 
-    pub fn receive(&self) -> Result<Option<ChannelMessage>, String> {
-        Err("DingTalk receive uses webhook_listen(adapter) for incoming callbacks".to_string())
+    pub fn receive(&self) -> Result<Option<ChannelMessage>, MornError> {
+        Err(MornError::Internal("DingTalk receive uses webhook_listen(adapter) for incoming callbacks".to_string()))
     }
 
-    pub fn webhook_listen(&self, adapter: &mut ChannelAdapter) -> Result<(), String> {
+    pub fn webhook_listen(&self, adapter: &mut ChannelAdapter) -> Result<(), MornError> {
         let listen_addr = self.listen_addr();
         let listener = TcpListener::bind(&listen_addr).map_err(|e| {
             format!(
@@ -115,7 +116,7 @@ impl DingTalkChannel {
         &self,
         stream: &mut TcpStream,
         adapter: &mut ChannelAdapter,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         let request = read_http_request(stream)?;
 
         if request.method != "POST" {
@@ -137,7 +138,7 @@ impl DingTalkChannel {
                 "content": reply,
             }
         }))
-        .map_err(|e| format!("Failed to serialize DingTalk reply: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to serialize DingTalk reply: {}", e)))?;
 
         write_http_response(stream, 200, "application/json; charset=utf-8", &body)
     }
@@ -180,7 +181,7 @@ impl DingTalkServer {
         DingTalkServer { adapter }
     }
 
-    pub fn handle_callback(&mut self, text: &str) -> Result<String, String> {
+    pub fn handle_callback(&mut self, text: &str) -> Result<String, MornError> {
         if let Some(ref mut adapter) = self.adapter {
             let msg = ChannelMessage {
                 content: text.to_string(),
@@ -230,10 +231,10 @@ impl DingTalkIncomingMessage {
     }
 }
 
-fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, String> {
+fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, MornError> {
     stream
         .set_read_timeout(Some(Duration::from_secs(10)))
-        .map_err(|e| format!("Failed to set read timeout: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to set read timeout: {}", e)))?;
 
     let mut buffer = Vec::new();
     let header_end = loop {
@@ -244,9 +245,9 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, String> {
         let mut chunk = [0u8; 4096];
         let bytes_read = stream
             .read(&mut chunk)
-            .map_err(|e| format!("Failed to read HTTP request: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to read HTTP request: {}", e)))?;
         if bytes_read == 0 {
-            return Err("Connection closed before HTTP headers were complete".to_string());
+            return Err(MornError::Internal("Connection closed before HTTP headers were complete".to_string()))
         }
         buffer.extend_from_slice(&chunk[..bytes_read]);
     };
@@ -282,7 +283,7 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, String> {
         let mut chunk = [0u8; 4096];
         let bytes_read = stream
             .read(&mut chunk)
-            .map_err(|e| format!("Failed to read HTTP body: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to read HTTP body: {}", e)))?;
         if bytes_read == 0 {
             break;
         }
@@ -291,7 +292,7 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, String> {
 
     let body_bytes = &buffer[header_end..buffer.len().min(header_end + content_length)];
     let body = String::from_utf8(body_bytes.to_vec())
-        .map_err(|e| format!("DingTalk webhook body is not UTF-8: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("DingTalk webhook body is not UTF-8: {}", e)))?;
 
     Ok(HttpRequest {
         method,
@@ -320,7 +321,7 @@ fn write_http_response(
     status: u16,
     content_type: &str,
     body: &str,
-) -> Result<(), String> {
+) -> Result<(), MornError> {
     let reason = match status {
         200 => "OK",
         400 => "Bad Request",
@@ -339,12 +340,12 @@ fn write_http_response(
     );
     stream
         .write_all(response.as_bytes())
-        .map_err(|e| format!("Failed to write HTTP response: {}", e))
+        .map_err(|e| MornError::Internal(format!("Failed to write HTTP response: {}", e)))
 }
 
-fn parse_dingtalk_json(body: &str) -> Result<DingTalkIncomingMessage, String> {
+fn parse_dingtalk_json(body: &str) -> Result<DingTalkIncomingMessage, MornError> {
     let value: serde_json::Value =
-        serde_json::from_str(body).map_err(|e| format!("Invalid DingTalk JSON body: {}", e))?;
+        serde_json::from_str(body).map_err(|e| MornError::Internal(format!("Invalid DingTalk JSON body: {}", e)))?;
     let content = value
         .get("text")
         .and_then(|text| text.get("content"))

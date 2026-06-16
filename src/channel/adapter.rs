@@ -1,4 +1,5 @@
 //! adapter — Defines shared channel message types and adapter behavior.
+use crate::core::error::MornError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -25,7 +26,7 @@ impl ChannelMessage {
     }
 }
 
-type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>;
+type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, MornError> + Send + Sync>;
 
 pub struct ChannelAdapter {
     supervisor: Option<Supervisor>,
@@ -114,13 +115,13 @@ impl ChannelAdapter {
         }
     }
 
-    pub fn set_supervisor_mode(&mut self, mode: Mode) -> Result<(), String> {
+    pub fn set_supervisor_mode(&mut self, mode: Mode) -> Result<(), MornError> {
         match self.supervisor.as_mut() {
             Some(supervisor) => {
                 supervisor.set_mode(mode);
                 Ok(())
             }
-            None => Err("Supervisor not initialized. Please set MORN_API_KEY.".to_string()),
+            None => Err(MornError::Internal("Supervisor not initialized. Please set MORN_API_KEY.".to_string())),
         }
     }
 

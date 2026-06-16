@@ -12,6 +12,7 @@
 //! - Local headless sessions require Xvfb (X Virtual Framebuffer) on Linux.
 //! - Remote connections work cross-platform via TCP.
 
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -48,11 +49,11 @@ impl VncManager {
         agent_id: &str,
         width: u32,
         height: u32,
-    ) -> Result<String, String> {
+    ) -> Result<String, MornError> {
         let session_id = format!("vnc-{}", uuid::Uuid::new_v4());
 
         let session = if self.can_start_xvfb() {
-            let mut disp = self.next_display.lock().map_err(|e| e.to_string())?;
+            let mut disp = self.next_display.lock().map_err(|e| MornError::Internal(e.to_string()))?;
             *disp += 1;
             let display_str = format!(":{}", disp);
             let xvfb_args = [
@@ -82,7 +83,7 @@ impl VncManager {
             self.simulated_session(&session_id, agent_id, width, height)
         };
 
-        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+        let mut sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         sessions.insert(session_id.clone(), session);
         Ok(session_id)
     }
@@ -118,7 +119,7 @@ impl VncManager {
     }
 
     /// Connect to a remote VNC server.
-    pub fn connect_remote(&self, agent_id: &str, host: &str, port: u16) -> Result<String, String> {
+    pub fn connect_remote(&self, agent_id: &str, host: &str, port: u16) -> Result<String, MornError> {
         let session_id = format!("vnc-remote-{}", uuid::Uuid::new_v4());
 
         use std::net::TcpStream;
@@ -135,31 +136,31 @@ impl VncManager {
                     height: 1080,
                     connected: true,
                 };
-                let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+                let mut sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
                 sessions.insert(session_id.clone(), session);
                 Ok(session_id)
             }
-            Err(e) => Err(format!(
+            Err(e) => Err(MornError::Internal(format!(
                 "Failed to connect to VNC server at {}: {}",
                 addr, e
-            )),
+            ))),
         }
     }
 
     /// Destroy a VNC session.
-    pub fn destroy_session(&self, session_id: &str) -> Result<(), String> {
-        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+    pub fn destroy_session(&self, session_id: &str) -> Result<(), MornError> {
+        let mut sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         sessions.remove(session_id);
         Ok(())
     }
 
     /// Get a session by ID.
-    pub fn get_session(&self, session_id: &str) -> Result<VncSession, String> {
-        let sessions = self.sessions.lock().map_err(|e| e.to_string())?;
-        sessions
+    pub fn get_session(&self, session_id: &str) -> Result<VncSession, MornError> {
+        let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        Ok(sessions
             .get(session_id)
             .cloned()
-            .ok_or_else(|| format!("Session not found: {}", session_id))
+            .ok_or_else(|| MornError::Internal(format!("Session not found: {}", session_id)))?)
     }
 
     /// List all sessions for a given agent.
@@ -173,7 +174,7 @@ impl VncManager {
     }
 
     /// Take a screenshot of a VNC session.
-    pub fn screenshot(&self, session_id: &str) -> Result<String, String> {
+    pub fn screenshot(&self, session_id: &str) -> Result<String, MornError> {
         let session = self.get_session(session_id)?;
 
         if !cfg!(test) && cfg!(feature = "vnc-sandbox") && cfg!(target_os = "linux") {
@@ -186,12 +187,12 @@ impl VncManager {
             let output = std::process::Command::new("import")
                 .args(["-display", display, "-window", "root", &screenshot_str])
                 .output()
-                .map_err(|e| format!("Screenshot failed: {}", e))?;
+                .map_err(|e| MornError::Internal(format!("Screenshot failed: {}", e)))?;
 
             if output.status.success() {
                 Ok(screenshot_str)
             } else {
-                Err("Screenshot command failed".to_string())
+                Err(MornError::Internal("Screenshot command failed".to_string()))
             }
         } else {
             Ok("[simulated] vnc screenshot path".to_string())
@@ -199,7 +200,7 @@ impl VncManager {
     }
 
     /// Send keyboard input to a VNC session.
-    pub fn keyboard_type(&self, session_id: &str, text: &str) -> Result<(), String> {
+    pub fn keyboard_type(&self, session_id: &str, text: &str) -> Result<(), MornError> {
         let _session = self.get_session(session_id)?;
 
         if !cfg!(test) && cfg!(feature = "vnc-sandbox") && cfg!(target_os = "linux") {
@@ -207,13 +208,13 @@ impl VncManager {
             let output = std::process::Command::new("xdotool")
                 .args(["type", "--display", display, text])
                 .output()
-                .map_err(|e| format!("xdotool type failed: {}", e))?;
+                .map_err(|e| MornError::Internal(format!("xdotool type failed: {}", e)))?;
 
             if output.status.success() {
                 Ok(())
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                Err(format!("xdotool error: {}", stderr))
+                Err(MornError::Internal(format!("xdotool error: {}", stderr)))
             }
         } else {
             Ok(())
@@ -227,7 +228,7 @@ impl VncManager {
         x: i32,
         y: i32,
         button: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         let _session = self.get_session(session_id)?;
 
         if !cfg!(test) && cfg!(feature = "vnc-sandbox") && cfg!(target_os = "linux") {
@@ -247,12 +248,12 @@ impl VncManager {
                     &y.to_string(),
                 ])
                 .output()
-                .map_err(|e| format!("xdotool mousemove failed: {}", e))?;
+                .map_err(|e| MornError::Internal(format!("xdotool mousemove failed: {}", e)))?;
 
             std::process::Command::new("xdotool")
                 .args(["click", "--display", display, btn])
                 .output()
-                .map_err(|e| format!("xdotool click failed: {}", e))?;
+                .map_err(|e| MornError::Internal(format!("xdotool click failed: {}", e)))?;
 
             Ok(())
         } else {

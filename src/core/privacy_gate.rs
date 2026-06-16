@@ -1,4 +1,5 @@
 //! privacy_gate — Evaluates privacy rules before data is shared or processed.
+use crate::core::error::MornError;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine as _;
 use ring::aead::{self, Aad, LessSafeKey, Nonce, UnboundKey};
@@ -175,7 +176,7 @@ impl PrivacyGate {
         }
     }
 
-    pub fn encrypt_message(&self, message: &str, config: &E2EEConfig) -> Result<String, String> {
+    pub fn encrypt_message(&self, message: &str, config: &E2EEConfig) -> Result<String, MornError> {
         if !config.enabled {
             return Ok(message.to_string());
         }
@@ -204,7 +205,7 @@ impl PrivacyGate {
         ))
     }
 
-    pub fn decrypt_message(&self, message: &str, config: &E2EEConfig) -> Result<String, String> {
+    pub fn decrypt_message(&self, message: &str, config: &E2EEConfig) -> Result<String, MornError> {
         if !config.enabled {
             return Ok(message.to_string());
         }
@@ -216,9 +217,9 @@ impl PrivacyGate {
         })?;
         let mut packed = BASE64_STANDARD
             .decode(encoded)
-            .map_err(|e| format!("invalid E2EE payload: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("invalid E2EE payload: {}", e)))?;
         if packed.len() <= 12 {
-            return Err("invalid E2EE payload length".to_string());
+            return Err(MornError::Internal("invalid E2EE payload length".to_string()))
         }
 
         let mut nonce_bytes = [0u8; 12];
@@ -234,7 +235,7 @@ impl PrivacyGate {
             .map_err(|_| "failed to decrypt E2EE message".to_string())?;
 
         String::from_utf8(plaintext.to_vec())
-            .map_err(|e| format!("E2EE plaintext is not valid UTF-8: {}", e))
+            .map_err(|e| MornError::Internal(format!("E2EE plaintext is not valid UTF-8: {}", e)))
     }
 }
 
@@ -245,17 +246,17 @@ fn normalize_algorithm(algorithm: &str) -> &'static str {
     }
 }
 
-fn validate_algorithm(algorithm: &str) -> Result<(), String> {
+fn validate_algorithm(algorithm: &str) -> Result<(), MornError> {
     if normalize_algorithm(algorithm) == "aes-256-gcm" {
         Ok(())
     } else {
-        Err(format!("unsupported E2EE algorithm '{}'", algorithm))
+        Err(MornError::Internal(format!("unsupported E2EE algorithm '{}'", algorithm)))
     }
 }
 
-fn aead_key(config: &E2EEConfig) -> Result<LessSafeKey, String> {
+fn aead_key(config: &E2EEConfig) -> Result<LessSafeKey, MornError> {
     if config.key.is_empty() {
-        return Err("E2EE key is empty".to_string());
+        return Err(MornError::Internal("E2EE key is empty".to_string()))
     }
 
     let decoded = BASE64_STANDARD.decode(&config.key).ok();

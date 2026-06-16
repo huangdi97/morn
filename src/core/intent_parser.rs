@@ -1,4 +1,5 @@
 //! 用户意图解析器 — NL 指令转结构化任务描述
+use crate::core::error::MornError;
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum IntentType {
     DirectAnswer,
@@ -25,7 +26,7 @@ impl IntentParser {
     /// Parses the user input using an LLM, with rule-based matching as fallback.
     pub fn parse_with_llm(
         input: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
     ) -> Intent {
         let system_prompt = "You are an intent classifier. Given a user input, determine the intent type. Return a JSON object with fields: intent_type (one of: DirectAnswer, ToolCall, AgentTask, TeamTask, WorkflowTemplate, JumpToStudio), confidence (0.0-1.0), entities (array of key phrases), target_level (one of: direct_answer, single_tool, single_agent, team, workflow, jump_studio). Only return valid JSON, no markdown, no explanation.";
 
@@ -274,7 +275,7 @@ mod tests {
 
     #[test]
     fn parse_with_llm_error_falls_back_to_rule() {
-        let chat_fn = |_prompt: &str, _system: &str| Err("LLM unavailable".to_string());
+        let chat_fn = |_prompt: &str, _system: &str| Err(MornError::Internal("LLM unavailable".to_string()));
         let intent = IntentParser::parse_with_llm("search for AI news", &chat_fn);
         assert_eq!(intent.intent_type, IntentType::ToolCall);
     }

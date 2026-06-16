@@ -1,3 +1,4 @@
+use crate::core::error::MornError;
 use std::path::Path;
 
 use crate::core::plugin_manager::PluginError;
@@ -13,12 +14,12 @@ pub struct PluginSpec {
 
 pub fn parse_nl_to_spec(
     nl: &str,
-    chat_fn: &impl Fn(&str, &str) -> Result<String, String>,
+    chat_fn: &impl Fn(&str, &str) -> Result<String, MornError>,
 ) -> Result<PluginSpec, PluginError> {
     let system = "You are a plugin scaffolding assistant. Given a user's description of a plugin, extract the plugin name, type (theme|channel|tool|knowledge|ui_slot|protocol), description, and generate a minimal JavaScript entry file that exports a class or function suitable for the type. Respond ONLY with valid JSON in this exact format:\n{\"name\":\"...\",\"plugin_type\":\"...\",\"description\":\"...\",\"entry_content\":\"...\",\"entry_filename\":\"main.js\"}";
 
     let prompt = format!("Describe the plugin you want: {}", nl);
-    let response = chat_fn(&prompt, system).map_err(PluginError::Llm)?;
+    let response = chat_fn(&prompt, system).map_err(|e| PluginError::Llm(e.to_string()))?;
 
     let cleaned = response
         .trim()
@@ -153,7 +154,7 @@ pub fn scaffold_plugin(spec: &PluginSpec, output_dir: &Path) -> Result<String, P
 pub fn generate_plugin_from_nl(
     nl: &str,
     output_dir: &Path,
-    chat_fn: &impl Fn(&str, &str) -> Result<String, String>,
+    chat_fn: &impl Fn(&str, &str) -> Result<String, MornError>,
 ) -> Result<String, PluginError> {
     let spec = parse_nl_to_spec(nl, chat_fn)?;
     let path = scaffold_plugin(&spec, output_dir)?;
@@ -166,7 +167,7 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    fn mock_chat_fn() -> impl Fn(&str, &str) -> Result<String, String> {
+    fn mock_chat_fn() -> impl Fn(&str, &str) -> Result<String, MornError> {
         |_prompt: &str, _system: &str| {
             Ok(r#"{"name":"weather-widget","plugin_type":"ui_slot","description":"Shows today's weather forecast","entry_content":"console.log('Weather widget loaded');","entry_filename":"main.js"}"#.to_string())
         }

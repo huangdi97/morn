@@ -1,4 +1,5 @@
 //! audit — Records and queries organization audit log entries.
+use crate::core::error::MornError;
 use crate::core::storage::{AuditLogRecord, Storage};
 
 pub struct AuditLogger {
@@ -17,7 +18,7 @@ impl AuditLogger {
         target_type: &str,
         target_id: &str,
         details: Option<serde_json::Value>,
-    ) -> Result<AuditLogRecord, String> {
+    ) -> Result<AuditLogRecord, MornError> {
         let record = AuditLogRecord {
             id: format!("audit-{}", uuid::Uuid::new_v4()),
             user_id: user_id.to_string(),
@@ -31,11 +32,11 @@ impl AuditLogger {
         Ok(record)
     }
 
-    pub fn log_login(&self, user_id: &str) -> Result<AuditLogRecord, String> {
+    pub fn log_login(&self, user_id: &str) -> Result<AuditLogRecord, MornError> {
         self.log(user_id, "login", "user", user_id, None)
     }
 
-    pub fn log_logout(&self, user_id: &str) -> Result<AuditLogRecord, String> {
+    pub fn log_logout(&self, user_id: &str) -> Result<AuditLogRecord, MornError> {
         self.log(user_id, "logout", "user", user_id, None)
     }
 
@@ -44,7 +45,7 @@ impl AuditLogger {
         user_id: &str,
         agent_id: &str,
         agent_name: &str,
-    ) -> Result<AuditLogRecord, String> {
+    ) -> Result<AuditLogRecord, MornError> {
         self.log(
             user_id,
             "agent_created",
@@ -59,7 +60,7 @@ impl AuditLogger {
         user_id: &str,
         agent_id: &str,
         changes: serde_json::Value,
-    ) -> Result<AuditLogRecord, String> {
+    ) -> Result<AuditLogRecord, MornError> {
         self.log(user_id, "agent_updated", "agent", agent_id, Some(changes))
     }
 
@@ -67,7 +68,7 @@ impl AuditLogger {
         &self,
         user_id: &str,
         agent_id: &str,
-    ) -> Result<AuditLogRecord, String> {
+    ) -> Result<AuditLogRecord, MornError> {
         self.log(user_id, "agent_deleted", "agent", agent_id, None)
     }
 
@@ -78,7 +79,7 @@ impl AuditLogger {
         agent_id: &str,
         permission: &str,
         action: &str,
-    ) -> Result<AuditLogRecord, String> {
+    ) -> Result<AuditLogRecord, MornError> {
         self.log(
             user_id,
             &format!("permission_{}", action),
@@ -94,7 +95,7 @@ impl AuditLogger {
         team_id: &str,
         action: &str,
         details: Option<serde_json::Value>,
-    ) -> Result<AuditLogRecord, String> {
+    ) -> Result<AuditLogRecord, MornError> {
         self.log(
             user_id,
             &format!("team_{}", action),
@@ -109,7 +110,7 @@ impl AuditLogger {
         user_id: Option<&str>,
         action_type: Option<&str>,
         limit: u64,
-    ) -> Result<Vec<AuditLogRecord>, String> {
+    ) -> Result<Vec<AuditLogRecord>, MornError> {
         self.storage.query_audit_log(user_id, action_type, limit)
     }
 

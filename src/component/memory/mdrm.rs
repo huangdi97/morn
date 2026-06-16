@@ -1,4 +1,5 @@
 //! mdrm — Multi-Dimensional Relationship Memory graph storage.
+use crate::core::error::MornError;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -40,9 +41,9 @@ impl MDRMGraph {
         }
     }
 
-    pub fn add_entity(&mut self, entity: Entity) -> Result<(), String> {
+    pub fn add_entity(&mut self, entity: Entity) -> Result<(), MornError> {
         if self.entities.contains_key(&entity.id) {
-            return Err(format!("Duplicate entity id: {}", entity.id));
+            return Err(MornError::Internal(format!("Duplicate entity id: {}", entity.id)));
         }
 
         self.entities.insert(entity.id.clone(), entity);
@@ -55,15 +56,15 @@ impl MDRMGraph {
         target_id: impl Into<String>,
         relation_type: impl Into<String>,
         weight: f64,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         let source_id = source_id.into();
         let target_id = target_id.into();
 
         if !self.entities.contains_key(&source_id) {
-            return Err(format!("Unknown source entity id: {source_id}"));
+            return Err(MornError::Internal(format!("Unknown source entity id: {source_id}")));
         }
         if !self.entities.contains_key(&target_id) {
-            return Err(format!("Unknown target entity id: {target_id}"));
+            return Err(MornError::Internal(format!("Unknown target entity id: {target_id}")));
         }
 
         self.relations.push(Relation {

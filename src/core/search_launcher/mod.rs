@@ -1,4 +1,5 @@
 //! search_launcher — Provides launcher search across local, cached, and web sources.
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 mod cache;

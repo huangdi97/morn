@@ -1,4 +1,5 @@
 //! trust_scorer - Scores agents and actions using trust-related metrics.
+use crate::core::error::MornError;
 pub mod evaluator;
 pub mod scorer;
 

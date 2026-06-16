@@ -1,7 +1,8 @@
 //! Server酱推送渠道 — 通过 sctapi.ftqq.com 发送消息通知
+use crate::core::error::MornError;
 use reqwest::blocking::Client;
 
-pub fn serverchan_push(token: &str, title: &str, content: &str) -> Result<(), String> {
+pub fn serverchan_push(token: &str, title: &str, content: &str) -> Result<(), MornError> {
     let url = format!("https://sctapi.ftqq.com/{}.send", token);
     let payload = serde_json::json!({
         "title": title,
@@ -11,24 +12,24 @@ pub fn serverchan_push(token: &str, title: &str, content: &str) -> Result<(), St
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
 
     let response = client
         .post(&url)
         .json(&payload)
         .send()
-        .map_err(|e| format!("Failed to send ServerChan message: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to send ServerChan message: {}", e)))?;
 
     let status = response.status();
     let body: serde_json::Value = response
         .json()
-        .map_err(|e| format!("Failed to parse ServerChan response: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to parse ServerChan response: {}", e)))?;
 
     if !status.is_success() {
-        return Err(format!(
+        return Err(MornError::Internal(format!(
             "ServerChan API returned non-200 status {}: {}",
             status, body
-        ));
+        )));
     }
 
     let code = body
@@ -45,7 +46,7 @@ pub fn serverchan_push(token: &str, title: &str, content: &str) -> Result<(), St
             .or_else(|| body.get("msg"))
             .and_then(|v| v.as_str())
             .unwrap_or("unknown error");
-        return Err(format!("ServerChan API error {}: {}", code, message));
+        return Err(MornError::Internal(format!("ServerChan API error {}: {}", code, message)));
     }
 
     Ok(())

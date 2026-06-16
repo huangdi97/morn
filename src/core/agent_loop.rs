@@ -1,4 +1,5 @@
 //! agent_loop — Runs iterative agent turns with approvals, tools, and event streaming.
+use crate::core::error::MornError;
 use crate::core::approval::{ApprovalLevel, ApprovalManager, ApprovalStatus};
 use crate::core::checkpoint::{Checkpoint, CheckpointManager};
 use crate::core::event_bus::SimpleEventBus;
@@ -64,7 +65,7 @@ impl AgentLoop {
         }
     }
 
-    fn save_checkpoint(&self, step_name: &str, state: &serde_json::Value) -> Result<(), String> {
+    fn save_checkpoint(&self, step_name: &str, state: &serde_json::Value) -> Result<(), MornError> {
         let cp = Checkpoint {
             id: uuid::Uuid::new_v4().to_string(),
             session_id: self.session_id.clone(),
@@ -82,7 +83,7 @@ impl AgentLoop {
         self.checkpoint.save(&cp)
     }
 
-    pub async fn run_plan(&mut self, task: &str) -> Result<String, String> {
+    pub async fn run_plan(&mut self, task: &str) -> Result<String, MornError> {
         self.phase = AgentPhase::Plan;
 
         let plan = format!(
@@ -108,12 +109,12 @@ impl AgentLoop {
 
         match status {
             ApprovalStatus::Approved | ApprovalStatus::Modified(_) => Ok(plan),
-            ApprovalStatus::Rejected => Err("Plan rejected by user".to_string()),
-            ApprovalStatus::Pending => Err("Plan approval timed out".to_string()),
+            ApprovalStatus::Rejected => Err(MornError::Internal("Plan rejected by user".to_string())),
+            ApprovalStatus::Pending => Err(MornError::Internal("Plan approval timed out".to_string())),
         }
     }
 
-    pub async fn run_implement(&mut self, approved_plan: &str) -> Result<String, String> {
+    pub async fn run_implement(&mut self, approved_plan: &str) -> Result<String, MornError> {
         self.phase = AgentPhase::Implement;
 
         let implementation = format!(
@@ -129,7 +130,7 @@ impl AgentLoop {
         Ok(implementation)
     }
 
-    pub async fn run_review(&mut self, result: &str) -> Result<ReviewResult, String> {
+    pub async fn run_review(&mut self, result: &str) -> Result<ReviewResult, MornError> {
         self.phase = AgentPhase::Review;
 
         let review = ReviewResult {
@@ -147,7 +148,7 @@ impl AgentLoop {
         Ok(review)
     }
 
-    pub async fn run_full(&mut self, task: &str) -> Result<AgentResult, String> {
+    pub async fn run_full(&mut self, task: &str) -> Result<AgentResult, MornError> {
         let plan = self.run_plan(task).await?;
         let implementation = self.run_implement(&plan).await?;
         let review = self.run_review(&implementation).await?;

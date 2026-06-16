@@ -1,5 +1,6 @@
 //! learning::preferences — Component preference tracking and ranking.
 
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 use super::LearningEngine;
@@ -9,10 +10,10 @@ impl LearningEngine {
         &self,
         component_name: &str,
         added: bool,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Vec<String>, MornError> {
         let component_name = component_name.trim();
         if component_name.is_empty() {
-            return Err("component preference name cannot be empty".to_string());
+            return Err(MornError::Internal("component preference name cannot be empty".to_string()))
         }
 
         let mut preferences = self.load_component_preferences()?;
@@ -29,7 +30,7 @@ impl LearningEngine {
             .unwrap_or_default()
     }
 
-    pub(crate) fn load_component_preferences(&self) -> Result<HashMap<String, i64>, String> {
+    pub(crate) fn load_component_preferences(&self) -> Result<HashMap<String, i64>, MornError> {
         if let Some(storage) = &self.storage {
             let preferences = match storage.get_setting(super::COMPONENT_PREFERENCES_KEY)? {
                 Some(value) => {
@@ -40,7 +41,7 @@ impl LearningEngine {
             let mut cache = self
                 .component_preferences
                 .lock()
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| MornError::Internal(e.to_string()))?;
             *cache = preferences.clone();
             return Ok(preferences);
         }
@@ -48,23 +49,23 @@ impl LearningEngine {
         self.component_preferences
             .lock()
             .map(|cache| cache.clone())
-            .map_err(|e| e.to_string())
+            .map_err(|e| MornError::Internal(e.to_string()))
     }
 
     pub(crate) fn save_component_preferences(
         &self,
         preferences: &HashMap<String, i64>,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         {
             let mut cache = self
                 .component_preferences
                 .lock()
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| MornError::Internal(e.to_string()))?;
             *cache = preferences.clone();
         }
 
         if let Some(storage) = &self.storage {
-            let value = serde_json::to_string(preferences).map_err(|e| e.to_string())?;
+            let value = serde_json::to_string(preferences).map_err(|e| MornError::Internal(e.to_string()))?;
             storage.set_setting(super::COMPONENT_PREFERENCES_KEY, &value)?;
         }
         Ok(())

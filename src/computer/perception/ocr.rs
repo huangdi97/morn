@@ -1,4 +1,5 @@
 //! OCR perception — text extraction from images via tesseract.
+use crate::core::error::MornError;
 use crate::computer::{ComputerOpResult, SecurityLevel};
 
 pub fn ocr(image_path: &str) -> ComputerOpResult {

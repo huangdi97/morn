@@ -1,3 +1,4 @@
+use crate::MornError;
 use crate::AppState;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
@@ -8,8 +9,8 @@ use morn::market::{Listing, Marketplace};
 use morn::studio::manager::CreateComponentDef;
 
 #[tauri::command]
-pub(crate) fn list_themes(state: State<AppState>) -> Result<Vec<String>, String> {
-    let mgr = state.plugin_manager.lock().map_err(|e| e.to_string())?;
+pub(crate) fn list_themes(state: State<AppState>) -> Result<Vec<String>, MornError> {
+    let mgr = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = mgr
         .as_ref()
         .ok_or_else(|| "PluginManager not initialized".to_string())?;
@@ -21,12 +22,12 @@ pub(crate) fn list_themes(state: State<AppState>) -> Result<Vec<String>, String>
 }
 
 #[tauri::command]
-pub(crate) fn apply_theme(name: String, state: State<AppState>) -> Result<String, String> {
-    let mut mgr = state.plugin_manager.lock().map_err(|e| e.to_string())?;
+pub(crate) fn apply_theme(name: String, state: State<AppState>) -> Result<String, MornError> {
+    let mut mgr = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = mgr
         .as_mut()
         .ok_or_else(|| "PluginManager not initialized".to_string())?;
-    mgr.activate(&name).map_err(|e| e.to_string())?;
+    mgr.activate(&name).map_err(|e| MornError::Internal(e.to_string()))?;
     mgr.get_theme_css(&name)
         .map(|s| s.to_string())
         .ok_or_else(|| format!("No CSS cached for theme '{}'", name))
@@ -37,8 +38,8 @@ pub(crate) fn get_market_listings(
     type_filter: Option<String>,
     price_filter: Option<String>,
     state: State<AppState>,
-) -> Result<serde_json::Value, String> {
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, MornError> {
+    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -49,7 +50,7 @@ pub(crate) fn get_market_listings(
         Some("paid") => listings.into_iter().filter(|l| l.price > 0.0).collect(),
         _ => listings,
     };
-    serde_json::to_value(filtered).map_err(|e| e.to_string())
+    serde_json::to_value(filtered).map_err(|e| MornError::Internal(e.to_string()))
 }
 
 #[tauri::command]
@@ -73,8 +74,8 @@ pub(crate) fn install_bot_from_store(
     bot_id: String,
     template_id: String,
     state: State<AppState>,
-) -> Result<String, String> {
-    let manager = state.manager.lock().map_err(|e| e.to_string())?;
+) -> Result<String, MornError> {
+    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -112,8 +113,8 @@ pub(crate) fn hub_publish(
     price: f64,
     author: String,
     state: State<AppState>,
-) -> Result<String, String> {
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+) -> Result<String, MornError> {
+    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -135,9 +136,9 @@ pub(crate) fn hub_publish(
 }
 
 #[tauri::command]
-pub(crate) fn get_preset_persona(name: String) -> Result<serde_json::Value, String> {
+pub(crate) fn get_preset_persona(name: String) -> Result<serde_json::Value, MornError> {
     match morn::component::persona::get_preset_persona(&name) {
-        Some(persona) => serde_json::to_value(persona).map_err(|e| e.to_string()),
+        Some(persona) => serde_json::to_value(persona).map_err(|e| MornError::Internal(e.to_string())),
         None => Err(format!("Preset persona '{}' not found", name)),
     }
 }
@@ -151,7 +152,7 @@ pub(crate) fn list_preset_personas() -> Vec<std::collections::HashMap<String, St
 pub(crate) fn create_agent_from_description(
     nl: String,
     state: State<AppState>,
-) -> Result<String, String> {
+) -> Result<String, MornError> {
     let api_key = std::env::var("MORN_API_KEY").map_err(|_| "MORN_API_KEY not set".to_string())?;
     let chat_agent = morn::bridge::chat_agent::ChatAgent::new(
         &api_key,
@@ -159,28 +160,28 @@ pub(crate) fn create_agent_from_description(
         "deepseek-chat",
     );
 
-    let supervisor = state.supervisor.lock().map_err(|e| e.to_string())?;
+    let supervisor = state.supervisor.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let sup = supervisor
         .as_ref()
         .ok_or_else(|| "Supervisor not initialized.".to_string())?;
 
     let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
     let nl_def = sup.create_agent_from_nl(&nl, &chat_fn, None)?;
-    serde_json::to_string(&nl_def).map_err(|e| e.to_string())
+    serde_json::to_string(&nl_def).map_err(|e| MornError::Internal(e.to_string()))
 }
 
 #[tauri::command]
 pub(crate) fn get_agent_versions(
     listing_id: String,
     state: State<AppState>,
-) -> Result<serde_json::Value, String> {
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, MornError> {
+    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
     let marketplace = Marketplace::new(s.clone());
     let versions = marketplace.get_version_history(&listing_id);
-    serde_json::to_value(versions).map_err(|e| e.to_string())
+    serde_json::to_value(versions).map_err(|e| MornError::Internal(e.to_string()))
 }
 
 #[tauri::command]
@@ -189,14 +190,14 @@ pub(crate) fn publish_agent_version(
     data_json: String,
     changelog: String,
     state: State<AppState>,
-) -> Result<serde_json::Value, String> {
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, MornError> {
+    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
     let marketplace = Marketplace::new(s.clone());
     let ver = marketplace.publish_new_version(&listing_id, &data_json, &changelog)?;
-    serde_json::to_value(ver).map_err(|e| e.to_string())
+    serde_json::to_value(ver).map_err(|e| MornError::Internal(e.to_string()))
 }
 
 #[tauri::command]
@@ -204,26 +205,26 @@ pub(crate) fn rollback_agent(
     listing_id: String,
     version: String,
     state: State<AppState>,
-) -> Result<serde_json::Value, String> {
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, MornError> {
+    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
     let marketplace = Marketplace::new(s.clone());
     let data = marketplace.restore_version(&listing_id, &version)?;
-    serde_json::to_value(data).map_err(|e| e.to_string())
+    serde_json::to_value(data).map_err(|e| MornError::Internal(e.to_string()))
 }
 
 #[tauri::command]
 pub(crate) fn generate_plugin_from_nl(
     nl: String,
     state: State<AppState>,
-) -> Result<String, String> {
+) -> Result<String, MornError> {
     let api_key = std::env::var("MORN_API_KEY").map_err(|_| "MORN_API_KEY not set".to_string())?;
     let chat_agent = ChatAgent::new(&api_key, "https://api.deepseek.com", "deepseek-chat");
 
     let plugin_dir = {
-        let plugin_manager = state.plugin_manager.lock().map_err(|e| e.to_string())?;
+        let plugin_manager = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mgr = plugin_manager
             .as_ref()
             .ok_or_else(|| "PluginManager not initialized".to_string())?;
@@ -232,10 +233,10 @@ pub(crate) fn generate_plugin_from_nl(
 
     let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
     let path =
-        plugin_generator::generate_plugin_from_nl(&nl, &plugin_dir, &chat_fn).map_err(|e| e.to_string())?;
+        plugin_generator::generate_plugin_from_nl(&nl, &plugin_dir, &chat_fn).map_err(|e| MornError::Internal(e.to_string()))?;
 
     {
-        let mut plugin_manager = state.plugin_manager.lock().map_err(|e| e.to_string())?;
+        let mut plugin_manager = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         if let Some(mgr) = plugin_manager.as_mut() {
             let _ = mgr.scan();
         }
@@ -245,8 +246,8 @@ pub(crate) fn generate_plugin_from_nl(
 }
 
 #[tauri::command]
-pub(crate) fn sync_now(state: State<AppState>) -> Result<String, String> {
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+pub(crate) fn sync_now(state: State<AppState>) -> Result<String, MornError> {
+    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -264,7 +265,7 @@ pub(crate) fn sync_now(state: State<AppState>) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub(crate) fn test_notification(state: State<AppState>) -> Result<String, String> {
+pub(crate) fn test_notification(state: State<AppState>) -> Result<String, MornError> {
     tracing::info!("test notification");
     let _ = state;
     Ok("Notification sent (placeholder)".to_string())

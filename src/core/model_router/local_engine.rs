@@ -1,5 +1,6 @@
 //! local_engine — Scans and manages local GGUF models for on-device inference.
 
+use crate::core::error::MornError;
 use serde::Deserialize;
 
 #[derive(Debug, Clone)]
@@ -19,7 +20,7 @@ impl LocalEngine {
         LocalEngine { models: vec![] }
     }
 
-    pub fn discover(gguf_dir: &str) -> Result<Vec<LocalModel>, String> {
+    pub fn discover(gguf_dir: &str) -> Result<Vec<LocalModel>, MornError> {
         let mut models = vec![];
         if let Ok(entries) = std::fs::read_dir(gguf_dir) {
             for entry in entries.flatten() {
@@ -47,21 +48,21 @@ impl LocalEngine {
         !self.models.is_empty()
     }
 
-    pub fn inference(&self, prompt: &str) -> Result<String, String> {
+    pub fn inference(&self, prompt: &str) -> Result<String, MornError> {
         let model = self.models.first().ok_or("No local model found")?;
         let output = std::process::Command::new("llama-cli")
             .args(["-m", &model.path, "-p", prompt, "-n", "256"])
             .output()
-            .map_err(|e| format!("llama-cli not found: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("llama-cli not found: {}", e)))?;
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
+            Err(MornError::Internal(String::from_utf8_lossy(&output.stderr).to_string()))
         }
     }
 
     #[cfg(feature = "channels-full")]
-    pub fn inference_ollama(&self, prompt: &str, model: &str) -> Result<String, String> {
+    pub fn inference_ollama(&self, prompt: &str, model: &str) -> Result<String, MornError> {
         let payload = serde_json::json!({
             "model": model,
             "prompt": prompt,
@@ -72,32 +73,32 @@ impl LocalEngine {
             .post("http://localhost:11434/api/generate")
             .json(&payload)
             .send()
-            .map_err(|e| format!("Ollama request failed: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Ollama request failed: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().unwrap_or_default();
-            return Err(format!("Ollama API error {}: {}", status, body));
+            return Err(MornError::Internal(format!("Ollama API error {}: {}", status, body)));
         }
 
         let body: OllamaGenerateResponse = response
             .json()
-            .map_err(|e| format!("Ollama JSON parse error: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Ollama JSON parse error: {}", e)))?;
 
         if let Some(error) = body.error {
-            return Err(format!("Ollama API error: {}", error));
+            return Err(MornError::Internal(format!("Ollama API error: {}", error)));
         }
 
         Ok(body.response.unwrap_or_default())
     }
 
     #[cfg(not(feature = "channels-full"))]
-    pub fn inference_ollama(&self, _prompt: &str, _model: &str) -> Result<String, String> {
-        Err("Ollama HTTP inference requires the channels-full feature".to_string())
+    pub fn inference_ollama(&self, _prompt: &str, _model: &str) -> Result<String, MornError> {
+        Err(MornError::Internal("Ollama HTTP inference requires the channels-full feature".to_string()))
     }
 
     #[cfg(feature = "channels-full")]
-    pub fn inference_lm_studio(&self, prompt: &str) -> Result<String, String> {
+    pub fn inference_lm_studio(&self, prompt: &str) -> Result<String, MornError> {
         let payload = serde_json::json!({
             "model": "local-model",
             "messages": [
@@ -113,17 +114,17 @@ impl LocalEngine {
             .post("http://localhost:1234/v1/chat/completions")
             .json(&payload)
             .send()
-            .map_err(|e| format!("LM Studio request failed: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("LM Studio request failed: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().unwrap_or_default();
-            return Err(format!("LM Studio API error {}: {}", status, body));
+            return Err(MornError::Internal(format!("LM Studio API error {}: {}", status, body)));
         }
 
         let body: LmStudioChatResponse = response
             .json()
-            .map_err(|e| format!("LM Studio JSON parse error: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("LM Studio JSON parse error: {}", e)))?;
 
         Ok(body
             .choices
@@ -134,8 +135,8 @@ impl LocalEngine {
     }
 
     #[cfg(not(feature = "channels-full"))]
-    pub fn inference_lm_studio(&self, _prompt: &str) -> Result<String, String> {
-        Err("LM Studio HTTP inference requires the channels-full feature".to_string())
+    pub fn inference_lm_studio(&self, _prompt: &str) -> Result<String, MornError> {
+        Err(MornError::Internal("LM Studio HTTP inference requires the channels-full feature".to_string()))
     }
 }
 

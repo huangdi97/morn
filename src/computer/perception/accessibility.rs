@@ -1,4 +1,5 @@
 //! Accessibility tree perception — platform-specific accessibility queries.
+use crate::core::error::MornError;
 use crate::computer::{ComputerOpResult, SecurityLevel};
 
 pub fn accessibility_tree() -> ComputerOpResult {

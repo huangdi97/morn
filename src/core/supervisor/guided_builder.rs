@@ -1,4 +1,5 @@
 //! guided_builder — Provides COO-guided workflow construction state.
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 use super::Supervisor;
@@ -135,7 +136,7 @@ impl Supervisor {
         response
     }
 
-    pub fn guided_step(&mut self, input: &str) -> Result<GuidedBuildResponse, String> {
+    pub fn guided_step(&mut self, input: &str) -> Result<GuidedBuildResponse, MornError> {
         let builder = self
             .guided_builder
             .as_mut()

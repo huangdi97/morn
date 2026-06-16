@@ -1,4 +1,5 @@
 //! 用户反馈系统 — 会话反馈收集、情感分析、改进建议
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -21,7 +22,7 @@ pub struct FeedbackSync {
 }
 
 pub trait FeedbackChannel {
-    fn send(&self, msg: &FeedbackMessage) -> Result<String, String>;
+    fn send(&self, msg: &FeedbackMessage) -> Result<String, MornError>;
     fn name(&self) -> &str;
 }
 
@@ -63,7 +64,7 @@ impl FeedbackSync {
         channel_name: &str,
         content: &str,
         user_id: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, MornError> {
         match self.channels.get(channel_name) {
             Some(channel) => {
                 let msg = FeedbackMessage {
@@ -74,7 +75,7 @@ impl FeedbackSync {
                 };
                 channel.send(&msg)
             }
-            None => Err(format!("Channel '{}' not registered", channel_name)),
+            None => Err(MornError::Internal(format!("Channel '{}' not registered", channel_name))),
         }
     }
 }
@@ -94,7 +95,7 @@ mod tests {
     }
 
     impl FeedbackChannel for TestChannel {
-        fn send(&self, msg: &FeedbackMessage) -> Result<String, String> {
+        fn send(&self, msg: &FeedbackMessage) -> Result<String, MornError> {
             Ok(format!("{} delivered to {}", msg.content, self.name))
         }
 

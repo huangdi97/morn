@@ -1,4 +1,5 @@
 //! pool — ThreadPool and ThreadPoolConfig for managing OS threads.
+use crate::core::error::MornError;
 use crate::core::pipeline::PipelineTask;
 use crate::core::thread_pool::task::execute_pipeline_task;
 use std::sync::atomic::{AtomicBool, Ordering};

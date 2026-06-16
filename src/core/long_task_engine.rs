@@ -1,4 +1,5 @@
 //! long_task_engine — Runs long-lived tasks with progress tracking and resumable state.
+use crate::core::error::MornError;
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
@@ -61,12 +62,12 @@ impl LongTaskEngine {
         }
     }
 
-    pub fn save_progress(&self) -> Result<String, String> {
-        serde_json::to_string_pretty(&self.task).map_err(|e| e.to_string())
+    pub fn save_progress(&self) -> Result<String, MornError> {
+        serde_json::to_string_pretty(&self.task).map_err(|e| MornError::Internal(e.to_string()))
     }
 
-    pub fn load_progress(json: &str) -> Result<Self, String> {
-        let task: TaskProgress = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    pub fn load_progress(json: &str) -> Result<Self, MornError> {
+        let task: TaskProgress = serde_json::from_str(json).map_err(|e| MornError::Internal(e.to_string()))?;
         let now = chrono::Utc::now().timestamp();
         Ok(LongTaskEngine {
             task,
@@ -77,8 +78,8 @@ impl LongTaskEngine {
         })
     }
 
-    pub fn resume_from_checkpoint(&mut self, json: &str) -> Result<(), String> {
-        let saved: TaskProgress = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    pub fn resume_from_checkpoint(&mut self, json: &str) -> Result<(), MornError> {
+        let saved: TaskProgress = serde_json::from_str(json).map_err(|e| MornError::Internal(e.to_string()))?;
         self.task.completed_steps = saved.completed_steps;
         self.task.current_step = saved.current_step;
         self.task.status = TaskStatus::Running;

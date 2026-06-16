@@ -2,6 +2,7 @@
 //! 配置方式：在微信公众平台注册服务号，获取 AppID 和 AppSecret
 //! 环境变量：WECHAT_MP_APPID, WECHAT_MP_SECRET
 
+use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 pub struct WeChatMpChannel {
@@ -19,7 +20,7 @@ impl WeChatMpChannel {
         }
     }
 
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env() -> Result<Self, MornError> {
         let app_id =
             std::env::var("WECHAT_MP_APPID").map_err(|_| "WECHAT_MP_APPID not set".to_string())?;
         let app_secret = std::env::var("WECHAT_MP_SECRET")
@@ -27,7 +28,7 @@ impl WeChatMpChannel {
         Ok(WeChatMpChannel::new(&app_id, &app_secret))
     }
 
-    pub fn get_access_token(&mut self) -> Result<String, String> {
+    pub fn get_access_token(&mut self) -> Result<String, MornError> {
         if let Some(ref token) = self.access_token {
             return Ok(token.clone());
         }
@@ -38,14 +39,14 @@ impl WeChatMpChannel {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
         let resp = client
             .get(&url)
             .send()
-            .map_err(|e| format!("Failed to get access token: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to get access token: {}", e)))?;
         let body: serde_json::Value = resp
             .json()
-            .map_err(|e| format!("Failed to parse access token response: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to parse access token response: {}", e)))?;
         if let Some(token) = body.get("access_token").and_then(|v| v.as_str()) {
             self.access_token = Some(token.to_string());
             Ok(token.to_string())
@@ -54,11 +55,11 @@ impl WeChatMpChannel {
                 .get("errmsg")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown error");
-            Err(format!("WeChat API error: {}", err_msg))
+            Err(MornError::Internal(format!("WeChat API error: {}", err_msg)))
         }
     }
 
-    pub fn send(&mut self, msg: &ChannelMessage) -> Result<(), String> {
+    pub fn send(&mut self, msg: &ChannelMessage) -> Result<(), MornError> {
         let payload = Self::build_payload(msg);
         let access_token = self.get_access_token()?;
         let url = format!(
@@ -68,17 +69,17 @@ impl WeChatMpChannel {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
         let resp = client
             .post(&url)
             .json(&payload)
             .send()
-            .map_err(|e| format!("Failed to send WeChat MP message: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to send WeChat MP message: {}", e)))?;
         if !resp.status().is_success() {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "WeChat MP API returned non-200 status: {}",
                 resp.status()
-            ));
+            )));
         }
         Ok(())
     }
@@ -93,11 +94,11 @@ impl WeChatMpChannel {
         })
     }
 
-    pub fn receive(&self) -> Result<Option<ChannelMessage>, String> {
+    pub fn receive(&self) -> Result<Option<ChannelMessage>, MornError> {
         Ok(None)
     }
 
-    pub fn handle_event(&self, event_type: &str, payload: &str) -> Result<String, String> {
+    pub fn handle_event(&self, event_type: &str, payload: &str) -> Result<String, MornError> {
         Ok(format!(
             "[WeChat MP] handled event '{}': {}",
             event_type, payload
@@ -114,7 +115,7 @@ impl WeChatMpServer {
         WeChatMpServer { adapter }
     }
 
-    pub fn handle_callback(&mut self, text: &str) -> Result<String, String> {
+    pub fn handle_callback(&mut self, text: &str) -> Result<String, MornError> {
         if let Some(ref mut adapter) = self.adapter {
             let msg = ChannelMessage {
                 content: text.to_string(),

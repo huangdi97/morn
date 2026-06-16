@@ -1,5 +1,6 @@
 //! learning — Learning engine for decision rules and component preference tracking.
 
+use crate::core::error::MornError;
 mod preferences;
 
 use std::collections::HashMap;
@@ -32,7 +33,7 @@ impl LearningEngine {
         user_input: &str,
         chosen_level: &str,
         success: bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         let Some(storage) = &self.storage else {
             return Ok(());
         };
@@ -69,7 +70,7 @@ impl LearningEngine {
         })
     }
 
-    pub fn auto_adjust(&self, keyword: &str, success_ratio: f64) -> Result<(), String> {
+    pub fn auto_adjust(&self, keyword: &str, success_ratio: f64) -> Result<(), MornError> {
         let Some(storage) = &self.storage else {
             return Ok(());
         };
@@ -124,7 +125,7 @@ impl LearningEngine {
         trends
     }
 
-    pub fn handle_dont_ask_pattern(&self, user_input: &str) -> Result<Option<String>, String> {
+    pub fn handle_dont_ask_pattern(&self, user_input: &str) -> Result<Option<String>, MornError> {
         let lower = user_input.to_lowercase();
         let is_dont_ask = lower.contains("以后不用问我")
             || lower.contains("don't ask me")
@@ -185,7 +186,7 @@ impl LearningEngine {
     pub fn learn_from_correction_history(
         &self,
         corrections: &[(&str, bool)],
-    ) -> Result<usize, String> {
+    ) -> Result<usize, MornError> {
         let Some(storage) = &self.storage else {
             return Ok(0);
         };

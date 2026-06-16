@@ -1,5 +1,6 @@
 //! Graph/topology types and logic for component assembly.
 
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -55,12 +56,12 @@ impl AtomicComponentType {
     }
 }
 impl ComponentGraph {
-    pub fn to_json(&self) -> Result<String, String> {
-        serde_json::to_string_pretty(self).map_err(|e| format!("serialization error: {}", e))
+    pub fn to_json(&self) -> Result<String, MornError> {
+        serde_json::to_string_pretty(self).map_err(|e| MornError::Internal(format!("serialization error: {}", e)))
     }
 
-    pub fn from_json(json: &str) -> Result<Self, String> {
-        serde_json::from_str(json).map_err(|e| format!("deserialization error: {}", e))
+    pub fn from_json(json: &str) -> Result<Self, MornError> {
+        serde_json::from_str(json).map_err(|e| MornError::Internal(format!("deserialization error: {}", e)))
     }
 }
 

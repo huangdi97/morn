@@ -1,4 +1,5 @@
 //! registry — Registers built-in and custom skills for lookup and execution.
+use crate::core::error::MornError;
 use super::{
     CodeReviewSkill, DataAnalysisSkill, ReportGenSkill, SelfEvolutionSkill, Skill, WebResearchSkill,
 };

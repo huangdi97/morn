@@ -1,4 +1,5 @@
 //! workflow_approvals — Tracks pending workflow approval gates in Supervisor.
+use crate::core::error::MornError;
 use crate::core::approval::{ApprovalStatus, WorkflowApproval};
 
 use super::Supervisor;
@@ -27,7 +28,7 @@ impl Supervisor {
         step_id: &str,
         approved: bool,
         comment: Option<String>,
-    ) -> Result<WorkflowApproval, String> {
+    ) -> Result<WorkflowApproval, MornError> {
         let approval = self
             .workflow_approvals
             .iter_mut()

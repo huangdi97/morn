@@ -1,4 +1,5 @@
 //! tester — Provides studio test execution and result collection.
+use crate::core::error::MornError;
 use std::sync::Arc;
 
 use crate::core::component::Data;
@@ -162,7 +163,7 @@ mod tests {
     #[test]
     fn test_run_and_measure_ok() {
         let (step, val) =
-            TestRunner::run_and_measure("test", "test fn", || -> Result<i32, String> { Ok(42) });
+            TestRunner::run_and_measure("test", "test fn", || -> Result<i32, MornError> { Ok(42) });
         assert!(step.success);
         assert_eq!(val, 42);
         assert!(step.duration_ms >= 0.0);
@@ -171,7 +172,7 @@ mod tests {
     #[test]
     fn test_run_and_measure_err() {
         let (step, val) =
-            TestRunner::run_and_measure("test", "test fn", || -> Result<i32, String> {
+            TestRunner::run_and_measure("test", "test fn", || -> Result<i32, MornError> {
                 Err("oops".into())
             });
         assert!(!step.success);

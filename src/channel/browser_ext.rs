@@ -1,4 +1,5 @@
 //! browser_ext — WebSocket channel for browser extension communication.
+use crate::core::error::MornError;
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -97,7 +98,7 @@ async fn handle_text_message(text: &str, state: &Arc<ApiState>) -> BrowserExtRes
 
             match supervisor.execute_chat(&text, &*chat_fn) {
                 Ok(reply) => BrowserExtResponse::Reply { text: reply },
-                Err(e) => BrowserExtResponse::Error { message: e },
+                Err(e) => BrowserExtResponse::Error { message: e.to_string() },
             }
         }
         Err(e) => BrowserExtResponse::Error {

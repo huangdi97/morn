@@ -1,4 +1,5 @@
 //! Orchestrator integration tests.
+use crate::core::error::MornError;
 use super::*;
 
 fn create_test_team(id: &str, mode: CollaborationMode) -> TeamDef {

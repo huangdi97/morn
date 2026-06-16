@@ -1,4 +1,5 @@
 //! msg — SendMsgTool: send messages via configured channels.
+use crate::core::error::MornError;
 use crate::component::tool::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
@@ -32,16 +33,16 @@ impl Component for SendMsgTool {
     fn type_name(&self) -> &str {
         "tool"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -66,10 +67,10 @@ impl IOComponent for SendMsgTool {
             },
         ]
     }
-    fn send(&mut self, port: &str, _data: Data) -> Result<(), String> {
-        Err(format!("SendMsgTool cannot receive on port {}", port))
+    fn send(&mut self, port: &str, _data: Data) -> Result<(), MornError> {
+        Err(MornError::Internal(format!("SendMsgTool cannot receive on port {}", port)))
     }
-    fn recv(&mut self, port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, port: &str) -> Result<Option<Data>, MornError> {
         if port == "output" {
             Ok(Some(Data::text("")))
         } else {
@@ -85,7 +86,7 @@ impl SecureComponent for SendMsgTool {
 }
 
 impl Tool for SendMsgTool {
-    fn execute(&mut self, input: Data) -> Result<Data, String> {
+    fn execute(&mut self, input: Data) -> Result<Data, MornError> {
         let msg = input.content.as_str().unwrap_or("").to_string();
         Ok(Data::text(&format!("[send_msg] sent: {}", msg)))
     }

@@ -1,5 +1,6 @@
 //! Type definitions for the node system: node types, definitions, edges, graphs, and templates.
 
+use crate::core::error::MornError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

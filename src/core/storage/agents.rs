@@ -1,4 +1,5 @@
 //! agents — Persists agent records, capabilities, and related ownership data.
+use crate::core::error::MornError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
@@ -43,8 +44,8 @@ pub struct BindingRecord {
 
 impl Storage {
     /// Inserts an agent record and returns success when the row is stored.
-    pub fn insert_agent(&self, agent: &AgentRecord) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn insert_agent(&self, agent: &AgentRecord) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT INTO agents (id, name, component_type, config_json, status, trust_score, created_at, updated_at, current_version, update_available)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -54,29 +55,29 @@ impl Storage {
                 agent.current_version, agent.update_available
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     /// Fetches an agent by id and returns `None` when no row exists.
-    pub fn get_agent(&self, id: &str) -> Result<Option<AgentRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn get_agent(&self, id: &str) -> Result<Option<AgentRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, name, component_type, config_json, status, trust_score, created_at, updated_at, current_version, update_available FROM agents WHERE id = ?1")
-            .map_err(|e| e.to_string())?;
-        let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
-        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut rows = stmt.query(params![id]).map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
             Ok(Some(AgentRecord {
-                id: row.get(0).map_err(|e| e.to_string())?,
-                name: row.get(1).map_err(|e| e.to_string())?,
-                component_type: row.get(2).map_err(|e| e.to_string())?,
-                config_json: row.get(3).map_err(|e| e.to_string())?,
-                status: row.get(4).map_err(|e| e.to_string())?,
-                trust_score: row.get(5).map_err(|e| e.to_string())?,
-                created_at: row.get(6).map_err(|e| e.to_string())?,
-                updated_at: row.get(7).map_err(|e| e.to_string())?,
-                current_version: row.get(8).map_err(|e| e.to_string())?,
-                update_available: row.get(9).map_err(|e| e.to_string())?,
+                id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
+                name: row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,
+                component_type: row.get(2).map_err(|e| MornError::Internal(e.to_string()))?,
+                config_json: row.get(3).map_err(|e| MornError::Internal(e.to_string()))?,
+                status: row.get(4).map_err(|e| MornError::Internal(e.to_string()))?,
+                trust_score: row.get(5).map_err(|e| MornError::Internal(e.to_string()))?,
+                created_at: row.get(6).map_err(|e| MornError::Internal(e.to_string()))?,
+                updated_at: row.get(7).map_err(|e| MornError::Internal(e.to_string()))?,
+                current_version: row.get(8).map_err(|e| MornError::Internal(e.to_string()))?,
+                update_available: row.get(9).map_err(|e| MornError::Internal(e.to_string()))?,
             }))
         } else {
             Ok(None)
@@ -84,11 +85,11 @@ impl Storage {
     }
 
     /// Lists agent records ordered by newest creation time first.
-    pub fn list_agents(&self) -> Result<Vec<AgentRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_agents(&self) -> Result<Vec<AgentRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, name, component_type, config_json, status, trust_score, created_at, updated_at, current_version, update_available FROM agents ORDER BY created_at DESC")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
                 Ok(AgentRecord {
@@ -104,30 +105,30 @@ impl Storage {
                     update_available: row.get(9)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut agents = Vec::new();
         for row in rows {
-            agents.push(row.map_err(|e| e.to_string())?);
+            agents.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(agents)
     }
 
     /// Updates an agent status by id and records the update timestamp.
-    pub fn update_agent_status(&self, id: &str, status: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn update_agent_status(&self, id: &str, status: &str) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "UPDATE agents SET status = ?1, updated_at = ?2 WHERE id = ?3",
             params![status, chrono::Utc::now().to_rfc3339(), id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     /// Deletes an agent by id and returns success when the delete statement completes.
-    pub fn delete_agent(&self, id: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn delete_agent(&self, id: &str) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute("DELETE FROM agents WHERE id = ?1", params![id])
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
@@ -137,20 +138,20 @@ impl Storage {
         id: &str,
         version: &str,
         update_available: bool,
-    ) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    ) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "UPDATE agents SET current_version = ?1, update_available = ?2, updated_at = ?3 WHERE id = ?4",
             params![version, update_available, chrono::Utc::now().to_rfc3339(), id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     // Capabilities CRUD
     /// Inserts a capability record and returns success when the row is stored.
-    pub fn insert_capability(&self, cap: &CapabilityRecord) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn insert_capability(&self, cap: &CapabilityRecord) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT INTO capabilities (id, agent_id, name, domain, actions, description, trust_score)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -159,16 +160,16 @@ impl Storage {
                 cap.actions, cap.description, cap.trust_score
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     /// Lists all stored capability records.
-    pub fn list_capabilities(&self) -> Result<Vec<CapabilityRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_capabilities(&self) -> Result<Vec<CapabilityRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, agent_id, name, domain, actions, description, trust_score FROM capabilities")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
                 Ok(CapabilityRecord {
@@ -181,19 +182,19 @@ impl Storage {
                     trust_score: row.get(6)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut caps = Vec::new();
         for row in rows {
-            caps.push(row.map_err(|e| e.to_string())?);
+            caps.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(caps)
     }
 
     /// Deletes a capability by id and returns success when the delete statement completes.
-    pub fn delete_capability(&self, id: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn delete_capability(&self, id: &str) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute("DELETE FROM capabilities WHERE id = ?1", params![id])
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 }

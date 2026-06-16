@@ -1,4 +1,5 @@
 //! 自动执行处理器 — 各类自动操作的执行逻辑
+use crate::core::error::MornError;
 use crate::core::event_bus::Event;
 use std::time::SystemTime;
 
@@ -85,7 +86,7 @@ impl AutoHands {
         fired
     }
 
-    pub fn run(&mut self) -> Vec<(MaintenanceTask, Result<String, String>)> {
+    pub fn run(&mut self) -> Vec<(MaintenanceTask, Result<String, MornError>)> {
         let _ = self.tick();
         let mut tasks = self.drain_queue();
         let mut results = Vec::new();
@@ -114,14 +115,14 @@ impl AutoHands {
         results
     }
 
-    pub fn run_once(&mut self) -> Vec<(MaintenanceTask, Result<String, String>)> {
+    pub fn run_once(&mut self) -> Vec<(MaintenanceTask, Result<String, MornError>)> {
         self.timed_triggers.iter_mut().for_each(|t| {
             t.last_fired = Some(SystemTime::now());
         });
         self.run()
     }
 
-    pub(crate) fn execute_task(&self, task: &MaintenanceTask) -> Result<String, String> {
+    pub(crate) fn execute_task(&self, task: &MaintenanceTask) -> Result<String, MornError> {
         match task {
             MaintenanceTask::Inspection => Ok(format!("inspection ok at {}", timestamp())),
             MaintenanceTask::GarbageCollection => Ok(format!("gc reclaimed {} bytes", 0)),

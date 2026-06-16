@@ -1,4 +1,5 @@
 //! scan — Scan, fix, and apply-fix methods for SelfEvolutionSkill.
+use crate::core::error::MornError;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -133,7 +134,7 @@ impl SelfEvolutionSkill {
         }
     }
 
-    pub fn apply_fixes(_fixes: &[String]) -> Result<String, String> {
+    pub fn apply_fixes(_fixes: &[String]) -> Result<String, MornError> {
         #[cfg(test)]
         {
             Ok("test validation skipped".to_string())
@@ -144,7 +145,7 @@ impl SelfEvolutionSkill {
             let output = Command::new("cargo")
                 .arg("build")
                 .output()
-                .map_err(|e| format!("cargo build failed to start: {}", e))?;
+                .map_err(|e| MornError::Internal(format!("cargo build failed to start: {}", e)))?;
             let combined = format!(
                 "{}{}",
                 String::from_utf8_lossy(&output.stdout),
@@ -153,12 +154,12 @@ impl SelfEvolutionSkill {
             if output.status.success() {
                 Ok(combined)
             } else {
-                Err(combined)
+                Err(MornError::Internal(combined))
             }
         }
     }
 
-    pub fn apply_fix(fix: &str) -> Result<(), String> {
+    pub fn apply_fix(fix: &str) -> Result<(), MornError> {
         Self::apply_fixes(&[fix.to_string()]).map(|_| ())
     }
 

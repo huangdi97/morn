@@ -1,4 +1,5 @@
 //! visual_grounding — Maps visual observations to screen coordinates and UI targets.
+use crate::core::error::MornError;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ScreenCoord {
     pub x: f64,
@@ -27,7 +28,7 @@ impl VisualGrounding {
         &self,
         _screenshot: &[u8],
         instruction: &str,
-    ) -> Result<ScreenCoord, String> {
+    ) -> Result<ScreenCoord, MornError> {
         let lower = instruction.to_lowercase();
         let coord = if lower.contains("search") || lower.contains("搜索") {
             ScreenCoord {
@@ -74,7 +75,7 @@ impl VisualGrounding {
         Ok(coord)
     }
 
-    pub async fn detect_elements(&self, _screenshot: &[u8]) -> Result<Vec<UIElement>, String> {
+    pub async fn detect_elements(&self, _screenshot: &[u8]) -> Result<Vec<UIElement>, MornError> {
         let elements = vec![
             UIElement {
                 label: "Search".to_string(),

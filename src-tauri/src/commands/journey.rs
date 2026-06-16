@@ -1,3 +1,4 @@
+use crate::MornError;
 use crate::commands::errors::CommandError;
 
 #[tauri::command]

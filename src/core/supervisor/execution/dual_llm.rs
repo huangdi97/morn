@@ -1,4 +1,5 @@
 //! dual_llm — Dual-LLM security check wiring within supervisor dispatch.
+use crate::core::error::MornError;
 use crate::core::dual_llm::{
     CheckResult, DualLlmExecutorDecision, DualLlmGuardDecision, DualLlmJudgeDecision,
 };
@@ -16,7 +17,7 @@ impl Supervisor {
     pub(crate) fn apply_dual_llm_check(
         &self,
         plan: &mut TaskPlan,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
     ) {
         let result = execute_dual_check(plan, chat_fn);
         if result.executor.approval_required || !result.executor.allowed {
@@ -40,7 +41,7 @@ impl Supervisor {
 
 pub(crate) fn execute_dual_check(
     plan: &TaskPlan,
-    chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+    chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
 ) -> DualLlmPipelineResult {
     let input = plan.user_input.clone();
     let primary_prompt = dual_llm_judge_prompt(&input);

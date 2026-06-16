@@ -1,4 +1,5 @@
 //! rest_api — Provides a channel adapter backed by REST-style message handling.
+use crate::core::error::MornError;
 use std::sync::{Arc, Mutex};
 
 use axum::extract::{Path, State};
@@ -53,7 +54,7 @@ impl RestApiServer {
         }
     }
 
-    pub fn chat(&mut self, text: &str) -> Result<String, String> {
+    pub fn chat(&mut self, text: &str) -> Result<String, MornError> {
         self.turn_count += 1;
         if let Some(ref mut adapter) = self.adapter {
             let msg = ChannelMessage {
@@ -76,16 +77,16 @@ impl RestApiServer {
         })
     }
 
-    pub fn clear(&mut self) -> Result<(), String> {
+    pub fn clear(&mut self) -> Result<(), MornError> {
         self.turn_count = 0;
         Ok(())
     }
 
-    pub async fn serve(self) -> Result<(), String> {
+    pub async fn serve(self) -> Result<(), MornError> {
         let port = std::env::var("API_PORT")
             .unwrap_or_else(|_| "8080".to_string())
             .parse::<u16>()
-            .map_err(|e| format!("Invalid API_PORT: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Invalid API_PORT: {}", e)))?;
 
         let state = RestApiState {
             adapter: Arc::new(Mutex::new(self.adapter)),
@@ -103,11 +104,11 @@ impl RestApiServer {
 
         let listener = tokio::net::TcpListener::bind(&addr)
             .await
-            .map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to bind to {}: {}", addr, e)))?;
 
         axum::serve(listener, app)
             .await
-            .map_err(|e| format!("Server error: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Server error: {}", e)))?;
 
         Ok(())
     }
@@ -157,7 +158,7 @@ async fn clear_handler(State(state): State<RestApiState>) -> Result<Json<Value>,
     Ok(Json(serde_json::json!({"success": true})))
 }
 
-type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>;
+type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, MornError> + Send + Sync>;
 
 pub struct ApiState {
     pub supervisor: Arc<AsyncMutex<Supervisor>>,
@@ -223,11 +224,11 @@ impl From<&WorkflowTemplate> for ApiWorkflowInfo {
     }
 }
 
-pub async fn serve(state: ApiState) -> Result<(), String> {
+pub async fn serve(state: ApiState) -> Result<(), MornError> {
     let port = std::env::var("API_PORT")
         .unwrap_or_else(|_| "3000".to_string())
         .parse::<u16>()
-        .map_err(|e| format!("Invalid API_PORT: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Invalid API_PORT: {}", e)))?;
 
     let app = Router::new()
         .route("/health", get(api_health_handler))
@@ -249,11 +250,11 @@ pub async fn serve(state: ApiState) -> Result<(), String> {
 
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
-        .map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to bind to {}: {}", addr, e)))?;
 
     axum::serve(listener, app)
         .await
-        .map_err(|e| format!("Server error: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Server error: {}", e)))?;
 
     Ok(())
 }
@@ -413,7 +414,7 @@ mod tests {
         let state = Arc::new(ApiState {
             supervisor: Arc::new(tokio::sync::Mutex::new(Supervisor::new(None, None))),
             registry: Arc::new(tokio::sync::Mutex::new(Registry::new(None, None))),
-            chat_fn: Arc::new(|_, _| Err("chat failed".to_string())),
+            chat_fn: Arc::new(|_, _| Err(MornError::Internal("chat failed".to_string()))),
         });
 
         let err = api_chat_handler(

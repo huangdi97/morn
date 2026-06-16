@@ -12,6 +12,7 @@
 //! 2. Router dispatches based on routing mode and recipient capabilities.
 //! 3. Recipient agent receives and processes the message.
 
+use crate::core::error::MornError;
 pub mod discovery;
 pub mod protocol;
 pub mod router;

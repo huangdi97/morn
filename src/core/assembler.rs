@@ -1,4 +1,5 @@
 //! assembler — Builds agents from persona, model, skill, and tool components.
+use crate::core::error::MornError;
 use crate::component::model::ModelConfig;
 use crate::component::persona::Persona;
 use crate::core::assembly::AssemblyBuilder;
@@ -38,7 +39,7 @@ impl AgentAssembler {
         }
     }
 
-    pub fn assemble(&self, def: AgentDef) -> Result<Box<dyn Component>, String> {
+    pub fn assemble(&self, def: AgentDef) -> Result<Box<dyn Component>, MornError> {
         let agent_id = def.id.clone();
         let _agent_name = def.name.clone();
         let _persona = def.persona;
@@ -57,16 +58,16 @@ impl AgentAssembler {
             fn type_name(&self) -> &str {
                 "agent"
             }
-            fn init(&mut self) -> Result<(), String> {
+            fn init(&mut self) -> Result<(), MornError> {
                 Ok(())
             }
-            fn run(&mut self) -> Result<(), String> {
+            fn run(&mut self) -> Result<(), MornError> {
                 Ok(())
             }
-            fn pause(&mut self) -> Result<(), String> {
+            fn pause(&mut self) -> Result<(), MornError> {
                 Ok(())
             }
-            fn stop(&mut self) -> Result<(), String> {
+            fn stop(&mut self) -> Result<(), MornError> {
                 Ok(())
             }
             fn health_check(&self) -> crate::core::component::HealthStatus {
@@ -95,13 +96,13 @@ impl AgentAssembler {
                 &mut self,
                 _port: &str,
                 _data: crate::core::component::Data,
-            ) -> Result<(), String> {
+            ) -> Result<(), MornError> {
                 Ok(())
             }
             fn recv(
                 &mut self,
                 _port: &str,
-            ) -> Result<Option<crate::core::component::Data>, String> {
+            ) -> Result<Option<crate::core::component::Data>, MornError> {
                 Ok(None)
             }
         }
@@ -118,7 +119,7 @@ impl AgentAssembler {
         }))
     }
 
-    pub fn natural_language_build(description: &str) -> Result<AfterBuildAction, String> {
+    pub fn natural_language_build(description: &str) -> Result<AfterBuildAction, MornError> {
         let desc_lower = description.to_lowercase();
         let (persona, persona_id) = if desc_lower.contains("biology")
             || desc_lower.contains("research")

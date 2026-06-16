@@ -1,5 +1,6 @@
 //! knowledge — Knowledge editor with data source, process method, capacity, and TTL settings.
 
+use crate::core::error::MornError;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct KnowledgeSource {
     pub name: String,

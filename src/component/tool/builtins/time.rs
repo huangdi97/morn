@@ -1,4 +1,5 @@
 //! time — GetTimeTool: retrieve current date and time.
+use crate::core::error::MornError;
 use crate::component::tool::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
@@ -32,16 +33,16 @@ impl Component for GetTimeTool {
     fn type_name(&self) -> &str {
         "tool"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -58,10 +59,10 @@ impl IOComponent for GetTimeTool {
             description: "current time".into(),
         }]
     }
-    fn send(&mut self, port: &str, _data: Data) -> Result<(), String> {
-        Err(format!("GetTimeTool cannot receive on port {}", port))
+    fn send(&mut self, port: &str, _data: Data) -> Result<(), MornError> {
+        Err(MornError::Internal(format!("GetTimeTool cannot receive on port {}", port)))
     }
-    fn recv(&mut self, port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, port: &str) -> Result<Option<Data>, MornError> {
         if port == "output" {
             Ok(Some(Data::text("")))
         } else {
@@ -77,7 +78,7 @@ impl SecureComponent for GetTimeTool {
 }
 
 impl Tool for GetTimeTool {
-    fn execute(&mut self, _input: Data) -> Result<Data, String> {
+    fn execute(&mut self, _input: Data) -> Result<Data, MornError> {
         let now = chrono::Utc::now()
             .format("%Y-%m-%d %H:%M:%S UTC")
             .to_string();

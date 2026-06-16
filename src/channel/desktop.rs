@@ -2,6 +2,7 @@
 //! Actual Tauri integration lives in src-tauri/src/lib.rs.
 //! This module provides the interface expected by the channel layer.
 
+use crate::core::error::MornError;
 pub struct DesktopChannel;
 
 impl Default for DesktopChannel {

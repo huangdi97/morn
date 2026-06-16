@@ -1,4 +1,5 @@
 //! Working memory — short-term task-context storage.
+use crate::core::error::MornError;
 use std::collections::{HashMap, VecDeque};
 
 use super::super::storage::{MemoryLayer, MemoryRecord};
@@ -36,7 +37,7 @@ impl MemoryLayer for WorkingMemory {
         "Working Memory"
     }
 
-    fn store(&mut self, key: &str, record: MemoryRecord) -> Result<(), String> {
+    fn store(&mut self, key: &str, record: MemoryRecord) -> Result<(), MornError> {
         if self.data.len() >= self.max_capacity && !self.data.contains_key(key) {
             let oldest_key = self
                 .data
@@ -51,16 +52,16 @@ impl MemoryLayer for WorkingMemory {
         Ok(())
     }
 
-    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, String> {
+    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, MornError> {
         Ok(self.data.get(key).cloned())
     }
 
-    fn forget(&mut self, key: &str) -> Result<(), String> {
+    fn forget(&mut self, key: &str) -> Result<(), MornError> {
         self.data.remove(key);
         Ok(())
     }
 
-    fn compress(&mut self) -> Result<usize, String> {
+    fn compress(&mut self) -> Result<usize, MornError> {
         let before = self.data.len();
         if self.data.len() > self.max_capacity {
             let to_remove = self.data.len() - self.max_capacity;

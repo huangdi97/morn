@@ -1,5 +1,6 @@
 //! Node registry and template catalog: all available node templates organized by category.
 
+use crate::core::error::MornError;
 use super::types::{NodeTemplate, NodeType};
 use crate::core::registry::{Capability, Registry};
 
@@ -331,7 +332,7 @@ impl StudioRegistration {
         }
     }
 
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), MornError> {
         if self.id.trim().is_empty() {
             return Err("registration id cannot be empty".into());
         }
@@ -392,7 +393,7 @@ impl StudioRegistry {
     pub fn register_component(
         &mut self,
         registration: StudioRegistration,
-    ) -> Result<Capability, String> {
+    ) -> Result<Capability, MornError> {
         registration.validate()?;
         let capability: Capability = registration.into();
         if self.registry.get(&capability.id).is_some() {
@@ -403,10 +404,10 @@ impl StudioRegistry {
         Ok(capability)
     }
 
-    pub fn unregister_component(&mut self, id: &str) -> Result<Capability, String> {
-        self.registry
+    pub fn unregister_component(&mut self, id: &str) -> Result<Capability, MornError> {
+        Ok(self.registry
             .unregister(id)
-            .ok_or_else(|| format!("component '{}' is not registered", id))
+            .ok_or_else(|| MornError::Internal(format!("component '{}' is not registered", id)))?)
     }
 
     pub fn get_component(&self, id: &str) -> Option<&Capability> {

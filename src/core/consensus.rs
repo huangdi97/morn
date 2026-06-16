@@ -1,4 +1,5 @@
 //! consensus — Aggregates multiple agent outputs into consensus decisions.
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -34,7 +35,7 @@ impl ConsensusManager {
         agent_id: &str,
         content: &str,
         stage: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, MornError> {
         let file = ConsensusFile {
             session_id: session_id.to_string(),
             agent_id: agent_id.to_string(),
@@ -46,11 +47,11 @@ impl ConsensusManager {
         let file_name = format!("{}_{}_{}.consensus", session_id, agent_id, stage);
         let file_path = self.base_dir.join(&file_name);
 
-        let file_content = serde_json::to_string(&file).map_err(|e| e.to_string())?;
-        fs::write(&file_path, &file_content).map_err(|e| e.to_string())?;
+        let file_content = serde_json::to_string(&file).map_err(|e| MornError::Internal(e.to_string()))?;
+        fs::write(&file_path, &file_content).map_err(|e| MornError::Internal(e.to_string()))?;
 
         {
-            let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+            let mut sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
             sessions
                 .entry(session_id.to_string())
                 .or_default()
@@ -65,7 +66,7 @@ impl ConsensusManager {
         session_id: &str,
         agent_id: &str,
         stage: &str,
-    ) -> Result<Option<ConsensusFile>, String> {
+    ) -> Result<Option<ConsensusFile>, MornError> {
         let file_name = format!("{}_{}_{}.consensus", session_id, agent_id, stage);
         let file_path = self.base_dir.join(&file_name);
 
@@ -73,18 +74,18 @@ impl ConsensusManager {
             return Ok(None);
         }
 
-        let content = fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
-        let file: ConsensusFile = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        let content = fs::read_to_string(&file_path).map_err(|e| MornError::Internal(e.to_string()))?;
+        let file: ConsensusFile = serde_json::from_str(&content).map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(Some(file))
     }
 
-    pub fn get_session_chain(&self, session_id: &str) -> Result<Vec<ConsensusFile>, String> {
-        let sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+    pub fn get_session_chain(&self, session_id: &str) -> Result<Vec<ConsensusFile>, MornError> {
+        let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(sessions.get(session_id).cloned().unwrap_or_default())
     }
 
-    pub fn replay_session(&self, session_id: &str) -> Result<String, String> {
-        let sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+    pub fn replay_session(&self, session_id: &str) -> Result<String, MornError> {
+        let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let files = sessions.get(session_id);
         match files {
             None => Ok(format!("No consensus files for session '{}'", session_id)),
@@ -108,7 +109,7 @@ impl ConsensusManager {
         to_session: &str,
         to_agent: &str,
         content: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, MornError> {
         self.publish(from_session, from_agent, content, "relay_out")?;
         self.publish(to_session, to_agent, content, "relay_in")?;
         Ok(format!(
@@ -117,8 +118,8 @@ impl ConsensusManager {
         ))
     }
 
-    pub fn find_consensus(&self, keywords: &[&str]) -> Result<Vec<ConsensusFile>, String> {
-        let sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+    pub fn find_consensus(&self, keywords: &[&str]) -> Result<Vec<ConsensusFile>, MornError> {
+        let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut results = Vec::new();
         for files in sessions.values() {
             for file in files {
@@ -130,8 +131,8 @@ impl ConsensusManager {
         Ok(results)
     }
 
-    pub fn derive_summary(&self, session_id: &str) -> Result<String, String> {
-        let sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+    pub fn derive_summary(&self, session_id: &str) -> Result<String, MornError> {
+        let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let files = sessions.get(session_id);
         match files {
             None => Ok(String::new()),
@@ -159,7 +160,7 @@ impl ConsensusManager {
         }
     }
 
-    pub fn scan_persisted(&self) -> Result<Vec<String>, String> {
+    pub fn scan_persisted(&self) -> Result<Vec<String>, MornError> {
         let mut files = Vec::new();
         if let Ok(entries) = fs::read_dir(&self.base_dir) {
             for entry in entries.flatten() {

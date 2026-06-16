@@ -1,4 +1,5 @@
 //! workflow — Defines workflow actions, steps, templates, and execution helpers.
+use crate::core::error::MornError;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -53,7 +54,7 @@ impl VariableStore {
         }
     }
 
-    pub fn set(&mut self, step_id: &str, name: &str, value: Value) -> Result<(), String> {
+    pub fn set(&mut self, step_id: &str, name: &str, value: Value) -> Result<(), MornError> {
         let var_type = VarType::detect(&value);
         let key = format!("{}.{}", step_id, name);
         self.variables.insert(
@@ -78,26 +79,26 @@ impl VariableStore {
         Ok(())
     }
 
-    pub fn get(&self, name: &str) -> Result<Variable, String> {
-        self.variables
+    pub fn get(&self, name: &str) -> Result<Variable, MornError> {
+        Ok(self.variables
             .get(name)
             .cloned()
-            .ok_or_else(|| format!("Variable '{}' not found", name))
+            .ok_or_else(|| MornError::Internal(format!("Variable '{}' not found", name)))?)
     }
 
-    pub fn convert(&self, value: &Variable, target_type: VarType) -> Result<Variable, String> {
+    pub fn convert(&self, value: &Variable, target_type: VarType) -> Result<Variable, MornError> {
         let converted_value = match (&value.var_type, &target_type) {
             (VarType::String, VarType::Number) => {
-                let s = value.value.as_str().ok_or("expected string")?;
+                let s = value.value.as_str().ok_or_else(|| MornError::Internal("expected string".to_string()))?;
                 let n: f64 = s
                     .parse()
-                    .map_err(|e| format!("cannot parse as number: {}", e))?;
+                    .map_err(|e| MornError::Internal(format!("cannot parse as number: {}", e)))?;
                 Value::Number(
                     serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0)),
                 )
             }
             (VarType::String, VarType::Boolean) => {
-                let s = value.value.as_str().ok_or("expected string")?;
+                let s = value.value.as_str().ok_or_else(|| MornError::Internal("expected string".to_string()))?;
                 Value::Bool(s == "true" || s == "1" || s == "yes")
             }
             (VarType::Number, VarType::String) => Value::String(value.value.to_string()),
@@ -117,10 +118,10 @@ impl VariableStore {
                 if std::mem::discriminant(&value.var_type) == std::mem::discriminant(&target_type) {
                     value.value.clone()
                 } else {
-                    return Err(format!(
+                    return Err(MornError::Internal(format!(
                         "Unsupported conversion from {:?} to {:?}",
                         value.var_type, target_type
-                    ));
+                    )));
                 }
             }
         };

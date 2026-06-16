@@ -1,3 +1,4 @@
+use crate::MornError;
 use crate::AppState;
 use tauri::State;
 
@@ -13,8 +14,8 @@ pub(crate) fn register_component_type(
     author: Option<String>,
     version: Option<String>,
     state: State<AppState>,
-) -> Result<serde_json::Value, String> {
-    let mut registry = state.type_registry.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, MornError> {
+    let mut registry = state.type_registry.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let def = ComponentTypeDef {
         type_name,
         interfaces,
@@ -31,8 +32,8 @@ pub(crate) fn register_component_type(
 pub(crate) fn unregister_component_type(
     type_name: String,
     state: State<AppState>,
-) -> Result<serde_json::Value, String> {
-    let mut registry = state.type_registry.lock().map_err(|e| e.to_string())?;
+) -> Result<serde_json::Value, MornError> {
+    let mut registry = state.type_registry.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let removed = registry.unregister(&type_name);
     if removed {
         Ok(serde_json::json!({ "status": "removed" }))
@@ -42,8 +43,8 @@ pub(crate) fn unregister_component_type(
 }
 
 #[tauri::command]
-pub(crate) fn list_component_types(state: State<AppState>) -> Result<serde_json::Value, String> {
-    let registry = state.type_registry.lock().map_err(|e| e.to_string())?;
+pub(crate) fn list_component_types(state: State<AppState>) -> Result<serde_json::Value, MornError> {
+    let registry = state.type_registry.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let types: Vec<&ComponentTypeDef> = registry.list();
-    Ok(serde_json::to_value(types).map_err(|e| e.to_string())?)
+    Ok(serde_json::to_value(types).map_err(|e| MornError::Internal(e.to_string()))?)
 }

@@ -1,4 +1,5 @@
 //! execution — Supervises execution plans and emits task lifecycle events.
+use crate::core::error::MornError;
 mod dispatch;
 pub mod dual_llm;
 pub mod events;
@@ -152,7 +153,7 @@ mod tests {
     fn execute_plan_propagates_chat_error() {
         let mut supervisor = Supervisor::new(None, None);
         let err = supervisor
-            .execute_plan(&plan("workflow"), &|_, _| Err("model failed".to_string()))
+            .execute_plan(&plan("workflow"), &|_, _| Err(MornError::Internal("model failed".to_string())))
             .unwrap_err();
 
         assert_eq!(err, "model failed");
@@ -250,7 +251,7 @@ mod tests {
         let err = supervisor
             .execute_plan(
                 &plan("single_tool"),
-                &|_, _| Err("model failed".to_string()),
+                &|_, _| Err(MornError::Internal("model failed".to_string()))
             )
             .unwrap_err();
 

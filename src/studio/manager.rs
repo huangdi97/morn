@@ -1,4 +1,5 @@
 //! manager — Manages studio projects and registered capabilities.
+use crate::core::error::MornError;
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 
@@ -86,7 +87,7 @@ impl StudioManager {
             .unwrap_or_default()
     }
 
-    pub fn get_component(&self, id: &str) -> Result<ComponentDetail, String> {
+    pub fn get_component(&self, id: &str) -> Result<ComponentDetail, MornError> {
         if let Some(ref storage) = self.storage {
             if let Some(agent) = storage.get_agent(id)? {
                 return Ok(ComponentDetail {
@@ -99,10 +100,10 @@ impl StudioManager {
                 });
             }
         }
-        Err(format!("Component {} not found", id))
+        Err(MornError::Internal(format!("Component {} not found", id)))
     }
 
-    pub fn create_component(&self, def: CreateComponentDef) -> Result<String, String> {
+    pub fn create_component(&self, def: CreateComponentDef) -> Result<String, MornError> {
         let id = format!("comp-{}", uuid::Uuid::new_v4());
         let now = chrono::Utc::now().to_rfc3339();
         if let Some(ref storage) = self.storage {
@@ -122,7 +123,7 @@ impl StudioManager {
         Ok(id)
     }
 
-    pub fn update_component(&self, id: &str, def: UpdateComponentDef) -> Result<(), String> {
+    pub fn update_component(&self, id: &str, def: UpdateComponentDef) -> Result<(), MornError> {
         if let Some(ref storage) = self.storage {
             if let Some(mut agent) = storage.get_agent(id)? {
                 if let Some(name) = def.name {
@@ -139,7 +140,7 @@ impl StudioManager {
         Ok(())
     }
 
-    pub fn delete_component(&self, id: &str) -> Result<(), String> {
+    pub fn delete_component(&self, id: &str) -> Result<(), MornError> {
         if let Some(ref storage) = self.storage {
             storage.delete_agent(id)?;
         }
@@ -151,7 +152,7 @@ impl StudioManager {
         id: &str,
         input: crate::core::component::Data,
         component_type: Option<&str>,
-    ) -> Result<crate::studio::tester::TestResult, String> {
+    ) -> Result<crate::studio::tester::TestResult, MornError> {
         let tester = crate::studio::tester::StudioTester::new();
         let ctype = component_type.unwrap_or("agent");
         let config = "";
@@ -164,12 +165,12 @@ impl StudioManager {
         component_id: &str,
         step_index: usize,
         new_input: &str,
-    ) -> Result<crate::studio::tester::TestStep, String> {
+    ) -> Result<crate::studio::tester::TestStep, MornError> {
         let tester = crate::studio::tester::StudioTester::new();
         Ok(tester.rerun_step(component_type, component_id, step_index, new_input))
     }
 
-    pub fn assemble_agent(&self, def: crate::core::assembler::AgentDef) -> Result<String, String> {
+    pub fn assemble_agent(&self, def: crate::core::assembler::AgentDef) -> Result<String, MornError> {
         if let Some(ref assembler) = self.assembler {
             let component = assembler.assemble(def)?;
             let agent_id = component.id().to_string();
@@ -194,7 +195,7 @@ impl StudioManager {
         }
     }
 
-    pub fn publish_to_workbench(&self, _id: &str) -> Result<(), String> {
+    pub fn publish_to_workbench(&self, _id: &str) -> Result<(), MornError> {
         Ok(())
     }
 }

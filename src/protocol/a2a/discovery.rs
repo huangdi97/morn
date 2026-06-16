@@ -1,5 +1,6 @@
 //! A2A agent discovery registry — registration, heartbeat, pruning, and local agent tracking.
 
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -127,7 +128,7 @@ impl A2ADiscoveryRegistry {
         self.agents.remove(agent_id)
     }
 
-    pub fn heartbeat(&mut self, agent_id: &str) -> Result<(), String> {
+    pub fn heartbeat(&mut self, agent_id: &str) -> Result<(), MornError> {
         let registration = self
             .agents
             .get_mut(agent_id)
@@ -138,7 +139,7 @@ impl A2ADiscoveryRegistry {
         Ok(())
     }
 
-    pub fn mark_unavailable(&mut self, agent_id: &str) -> Result<(), String> {
+    pub fn mark_unavailable(&mut self, agent_id: &str) -> Result<(), MornError> {
         let registration = self
             .agents
             .get_mut(agent_id)

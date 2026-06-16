@@ -1,4 +1,5 @@
 //! 测试沙箱 — Agent/Tool/Workflow 的隔离测试执行环境
+use crate::core::error::MornError;
 use std::time::Instant;
 
 use super::{StudioTester, TestRunner, TestStep};
@@ -6,7 +7,7 @@ use super::{StudioTester, TestRunner, TestStep};
 impl TestRunner {
     pub fn run_and_measure<F, T>(label: &str, description: &str, f: F) -> (TestStep, T)
     where
-        F: FnOnce() -> Result<T, String>,
+        F: FnOnce() -> Result<T, MornError>,
         T: Default + std::fmt::Debug,
     {
         let start = Instant::now();
@@ -41,7 +42,7 @@ impl TestRunner {
                     tokens_used: None,
                     cost: None,
                     input_preview: None,
-                    output_preview: Some(e.clone()),
+                    output_preview: Some(e.to_string()),
                 },
                 T::default(),
             ),
@@ -56,7 +57,7 @@ mod tests {
     #[test]
     fn run_and_measure_returns_success_step_and_output() {
         let (step, value) =
-            TestRunner::run_and_measure("sandbox", "start", || -> Result<String, String> {
+            TestRunner::run_and_measure("sandbox", "start", || -> Result<String, MornError> {
                 Ok("ready".into())
             });
 
@@ -69,7 +70,7 @@ mod tests {
     #[test]
     fn run_and_measure_returns_default_output_on_error() {
         let (step, value) =
-            TestRunner::run_and_measure("sandbox", "cleanup", || -> Result<Vec<String>, String> {
+            TestRunner::run_and_measure("sandbox", "cleanup", || -> Result<Vec<String>, MornError> {
                 Err("denied".into())
             });
 

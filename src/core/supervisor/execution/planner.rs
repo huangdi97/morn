@@ -1,11 +1,12 @@
 //! 任务规划器 — 多步骤子任务拆分与依赖编排
+use crate::core::error::MornError;
 use crate::core::engine::TaskEngine;
 use crate::core::supervisor::{SubTaskDef, TaskPlan};
 
 pub struct Planner;
 
 impl Planner {
-    pub fn plan(intent: &str, subtasks: Vec<SubTaskDef>) -> Result<TaskPlan, String> {
+    pub fn plan(intent: &str, subtasks: Vec<SubTaskDef>) -> Result<TaskPlan, MornError> {
         let engine = TaskEngine::new(None, None);
         let levels = engine.compute_topological_order(&subtasks)?;
 

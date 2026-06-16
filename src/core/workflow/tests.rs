@@ -1,4 +1,5 @@
 //! Workflow integration tests.
+use crate::core::error::MornError;
 use super::*;
 
 #[test]

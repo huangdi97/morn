@@ -1,20 +1,21 @@
+use crate::MornError;
 use crate::AppState;
 use tauri::State;
 
 use morn::sandbox::wasm::Sandbox;
 
 #[tauri::command]
-pub(crate) fn run_in_sandbox(code: String) -> Result<String, String> {
+pub(crate) fn run_in_sandbox(code: String) -> Result<String, MornError> {
     let sandbox = Sandbox::new().map_err(|e| format!("Sandbox init failed: {}", e))?;
-    sandbox.execute(&code).map_err(|e| e.to_string())
+    sandbox.execute(&code).map_err(|e| MornError::Internal(e.to_string()))
 }
 
 #[tauri::command]
 pub(crate) fn load_plugin_sandboxed(
     path: String,
     state: State<AppState>,
-) -> Result<String, String> {
-    let plugin_manager = state.plugin_manager.lock().map_err(|e| e.to_string())?;
+) -> Result<String, MornError> {
+    let plugin_manager = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = plugin_manager
         .as_ref()
         .ok_or("PluginManager not initialized")?;
@@ -23,7 +24,7 @@ pub(crate) fn load_plugin_sandboxed(
 }
 
 #[tauri::command]
-pub(crate) fn sandbox_status() -> Result<serde_json::Value, String> {
+pub(crate) fn sandbox_status() -> Result<serde_json::Value, MornError> {
     Ok(serde_json::json!({
         "available": true,
         "max_memory_mb": 64,

@@ -1,4 +1,5 @@
 //! code_exec — Provides a tool for running code execution tasks.
+use crate::core::error::MornError;
 use super::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
@@ -32,16 +33,16 @@ impl Component for ExecPythonTool {
     fn type_name(&self) -> &str {
         "tool"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -66,10 +67,10 @@ impl IOComponent for ExecPythonTool {
             },
         ]
     }
-    fn send(&mut self, port: &str, _data: Data) -> Result<(), String> {
-        Err(format!("ExecPythonTool cannot receive on port {}", port))
+    fn send(&mut self, port: &str, _data: Data) -> Result<(), MornError> {
+        Err(MornError::Internal(format!("ExecPythonTool cannot receive on port {}", port)))
     }
-    fn recv(&mut self, port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, port: &str) -> Result<Option<Data>, MornError> {
         if port == "output" {
             Ok(Some(Data::text("")))
         } else {
@@ -85,7 +86,7 @@ impl SecureComponent for ExecPythonTool {
 }
 
 impl Tool for ExecPythonTool {
-    fn execute(&mut self, input: Data) -> Result<Data, String> {
+    fn execute(&mut self, input: Data) -> Result<Data, MornError> {
         let script = input.content.as_str().unwrap_or("").to_string();
         Ok(Data::text(&format!(
             "[exec_python] executed: {} lines",

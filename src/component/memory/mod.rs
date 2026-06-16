@@ -1,4 +1,5 @@
 //! memory — Defines memory components used to persist conversational context.
+use crate::core::error::MornError;
 use crate::core::component::IOComponent;
 
 pub mod mdrm;
@@ -13,9 +14,9 @@ pub use storage::{
 };
 
 pub trait Memory: IOComponent {
-    fn store(&mut self, key: &str, value: &str, namespace: &str) -> Result<(), String>;
-    fn retrieve(&self, key: &str, namespace: &str) -> Result<Option<String>, String>;
-    fn search(&self, query: &str, namespace: &str) -> Result<Vec<(String, String)>, String>;
+    fn store(&mut self, key: &str, value: &str, namespace: &str) -> Result<(), MornError>;
+    fn retrieve(&self, key: &str, namespace: &str) -> Result<Option<String>, MornError>;
+    fn search(&self, query: &str, namespace: &str) -> Result<Vec<(String, String)>, MornError>;
 }
 
 #[cfg(test)]

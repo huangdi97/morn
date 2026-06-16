@@ -1,5 +1,6 @@
 //! Fulltext knowledge with inverted-index keyword search.
 
+use crate::core::error::MornError;
 use std::collections::{BTreeSet, HashMap};
 
 use crate::core::component::{
@@ -47,16 +48,16 @@ impl Component for FulltextKnowledge {
     fn type_name(&self) -> &str {
         "knowledge"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -81,10 +82,10 @@ impl IOComponent for FulltextKnowledge {
             },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }
@@ -96,7 +97,7 @@ impl SecureComponent for FulltextKnowledge {
 }
 
 impl Knowledge for FulltextKnowledge {
-    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, String> {
+    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, MornError> {
         let lower = query.to_lowercase();
         let mut matched = BTreeSet::new();
         for word in lower.split_whitespace() {
@@ -116,7 +117,7 @@ impl Knowledge for FulltextKnowledge {
             .collect())
     }
 
-    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), String> {
+    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), MornError> {
         for item in items {
             self.add_document(&item.key, &item.value);
         }

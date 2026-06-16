@@ -1,5 +1,6 @@
 //! retry — Small shared retry helpers for network calls.
 
+use crate::core::error::MornError;
 use std::future::Future;
 use std::time::Duration;
 
@@ -67,7 +68,7 @@ mod tests {
         let mut operation = |_| {
             let current = attempts.fetch_add(1, Ordering::SeqCst) + 1;
             if current < 3 {
-                Err("not yet")
+                Err(MornError::Internal("not yet"))
             } else {
                 Ok("ok")
             }
@@ -88,7 +89,7 @@ mod tests {
             async move {
                 let current = attempts.fetch_add(1, Ordering::SeqCst) + 1;
                 if current < 2 {
-                    Err("not yet")
+                    Err(MornError::Internal("not yet"))
                 } else {
                     Ok("ok")
                 }

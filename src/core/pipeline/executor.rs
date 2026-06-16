@@ -1,12 +1,13 @@
 //! Pipeline execution logic, including topological sort and node execution.
 
+use crate::core::error::MornError;
 use crate::core::pipeline::nodes::{
     Connection, PipelineContext, PipelineData, PipelineNode, PipelineNodeExecutor,
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-fn default_transform(operation: &str, input: &PipelineData) -> Result<PipelineData, String> {
+fn default_transform(operation: &str, input: &PipelineData) -> Result<PipelineData, MornError> {
     match operation {
         "to_upper" => {
             let text = input.as_text()?;
@@ -20,7 +21,7 @@ fn default_transform(operation: &str, input: &PipelineData) -> Result<PipelineDa
             let text = input.as_text()?;
             let n = text
                 .parse::<f64>()
-                .map_err(|e| format!("parse error: {}", e))?;
+                .map_err(|e| MornError::Internal(format!("parse error: {}", e)))?;
             Ok(PipelineData::Number(n))
         }
         "to_string" => {
@@ -35,7 +36,7 @@ fn default_transform(operation: &str, input: &PipelineData) -> Result<PipelineDa
             let text = input.as_text()?;
             Ok(PipelineData::Text(text + "_appended"))
         }
-        _ => Err(format!("unknown operation '{}'", operation)),
+        _ => Err(MornError::Internal(format!("unknown operation '{}'", operation))),
     }
 }
 
@@ -114,7 +115,7 @@ impl Pipeline {
             .collect()
     }
 
-    fn topological_sort(&self) -> Result<Vec<String>, String> {
+    fn topological_sort(&self) -> Result<Vec<String>, MornError> {
         let mut in_degree: HashMap<String, usize> = HashMap::new();
         let mut adj: HashMap<String, Vec<String>> = HashMap::new();
 
@@ -153,14 +154,14 @@ impl Pipeline {
         }
 
         if sorted.len() != self.nodes.len() {
-            return Err("cycle detected in pipeline graph".to_string());
+            return Err(MornError::Internal("cycle detected in pipeline graph".to_string()))
         }
 
         Ok(sorted)
     }
 
     /// Execute the pipeline with an optional input.
-    pub fn execute(&mut self, input: Option<PipelineData>) -> Result<(), String> {
+    pub fn execute(&mut self, input: Option<PipelineData>) -> Result<(), MornError> {
         self.context.started_at = Some(Instant::now());
 
         let order = self.topological_sort()?;
@@ -211,7 +212,7 @@ impl Pipeline {
                     }
                     PipelineNode::Timer { .. } => PipelineData::Text("timer_triggered".to_string()),
                     PipelineNode::Start { .. } | PipelineNode::End { .. } => {
-                        return Err("start/end node not implemented in simple chain".to_string())
+                        return Err(MornError::Internal("start/end node not implemented in simple chain".to_string()))
                     }
                     PipelineNode::LLM {
                         id: _,
@@ -235,7 +236,7 @@ impl Pipeline {
                     | PipelineNode::Webhook { .. }
                     | PipelineNode::Log { .. }
                     | PipelineNode::SubWorkflow { .. } => {
-                        return Err("node type not implemented in simple chain".to_string())
+                        return Err(MornError::Internal("node type not implemented in simple chain".to_string()))
                     }
                 }
             };
@@ -247,15 +248,15 @@ impl Pipeline {
     }
 
     /// Execute nodes as a simple chain and return the last node's output.
-    pub fn execute_simple_chain(&mut self, input: PipelineData) -> Result<PipelineData, String> {
+    pub fn execute_simple_chain(&mut self, input: PipelineData) -> Result<PipelineData, MornError> {
         self.execute(Some(input))?;
 
-        let last_node = self.nodes.last().ok_or("no nodes in pipeline")?;
-        self.context
+        let last_node = self.nodes.last().ok_or_else(|| MornError::Internal("no nodes in pipeline".to_string()))?;
+        Ok(self.context
             .node_outputs
             .get(last_node.id())
             .cloned()
-            .ok_or_else(|| "no output produced".to_string())
+            .ok_or_else(|| MornError::Internal("no output produced".to_string()))?)
     }
 
     /// Reset the pipeline context to its initial state.

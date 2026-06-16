@@ -1,4 +1,5 @@
 //! a2a_discovery — Discovers peer agents and exchanges A2A agent cards.
+use crate::core::error::MornError;
 use crate::bridge::a2a::{A2AMessage, A2AProtocol, AgentCard};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -26,7 +27,7 @@ impl A2ADiscovery {
         self.peer_endpoints.push(endpoint.to_string());
     }
 
-    pub fn discover_peers(&self) -> Result<Vec<AgentCard>, String> {
+    pub fn discover_peers(&self) -> Result<Vec<AgentCard>, MornError> {
         let mut discovered = Vec::new();
         for endpoint in &self.peer_endpoints {
             let discovery_msg = A2AMessage::AgentDiscovery {
@@ -38,7 +39,7 @@ impl A2ADiscovery {
                         let id = agent.id.clone();
                         {
                             let mut agents =
-                                self.remote_agents.lock().map_err(|e| e.to_string())?;
+                                self.remote_agents.lock().map_err(|e| MornError::Internal(e.to_string()))?;
                             agents.insert(id, agent.clone());
                         }
                         discovered.push(agent);
@@ -51,7 +52,7 @@ impl A2ADiscovery {
         Ok(discovered)
     }
 
-    pub fn send_heartbeat(&self, endpoint: &str) -> Result<bool, String> {
+    pub fn send_heartbeat(&self, endpoint: &str) -> Result<bool, MornError> {
         match A2AProtocol::send(endpoint, &A2AMessage::Heartbeat) {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),
@@ -64,7 +65,7 @@ impl A2ADiscovery {
         task_id: &str,
         input: &str,
         max_tokens: u32,
-    ) -> Result<A2AMessage, String> {
+    ) -> Result<A2AMessage, MornError> {
         let msg = A2AMessage::TaskAssign {
             task_id: task_id.to_string(),
             input: input.to_string(),
@@ -73,7 +74,7 @@ impl A2ADiscovery {
         A2AProtocol::send(endpoint, &msg)
     }
 
-    pub fn poll_task_status(&self, endpoint: &str, task_id: &str) -> Result<A2AMessage, String> {
+    pub fn poll_task_status(&self, endpoint: &str, task_id: &str) -> Result<A2AMessage, MornError> {
         let msg = A2AMessage::TaskStatus {
             task_id: task_id.to_string(),
             status: "polling".into(),
@@ -82,8 +83,8 @@ impl A2ADiscovery {
         A2AProtocol::send(endpoint, &msg)
     }
 
-    pub fn get_remote_agents(&self) -> Result<Vec<AgentCard>, String> {
-        let agents = self.remote_agents.lock().map_err(|e| e.to_string())?;
+    pub fn get_remote_agents(&self) -> Result<Vec<AgentCard>, MornError> {
+        let agents = self.remote_agents.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(agents.values().cloned().collect())
     }
 }

@@ -1,10 +1,11 @@
 //! Node execution types — executor trait and pipeline context.
+use crate::core::error::MornError;
 use crate::core::pipeline::nodes::PipelineData;
 use std::collections::HashMap;
 use std::time::Instant;
 
 pub trait PipelineNodeExecutor: Send {
-    fn execute(&self, input: PipelineData) -> Result<PipelineData, String>;
+    fn execute(&self, input: PipelineData) -> Result<PipelineData, MornError>;
 }
 
 pub struct PipelineContext {

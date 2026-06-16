@@ -1,4 +1,5 @@
 //! perception — Provides screen and environment perception for computer operations.
+use crate::core::error::MornError;
 pub mod accessibility;
 pub mod ocr;
 pub mod screenshot;

@@ -1,5 +1,6 @@
 //! pipeline — Pipeline editor with stage management (add, update, remove, reorder).
 
+use crate::core::error::MornError;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PipelineStage {
     pub id: String,
@@ -33,7 +34,7 @@ impl PipelineEditor {
         }
     }
 
-    pub fn save(&self) -> Result<(), String> {
+    pub fn save(&self) -> Result<(), MornError> {
         Ok(())
     }
 
@@ -45,7 +46,7 @@ impl PipelineEditor {
         &mut self,
         stage_id: &str,
         config: serde_json::Value,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         let stage = self
             .stages
             .iter_mut()
@@ -55,7 +56,7 @@ impl PipelineEditor {
         Ok(())
     }
 
-    pub fn remove_stage(&mut self, stage_id: &str) -> Result<PipelineStage, String> {
+    pub fn remove_stage(&mut self, stage_id: &str) -> Result<PipelineStage, MornError> {
         let index = self
             .stages
             .iter()
@@ -64,9 +65,9 @@ impl PipelineEditor {
         Ok(self.stages.remove(index))
     }
 
-    pub fn move_stage(&mut self, stage_id: &str, new_index: usize) -> Result<(), String> {
+    pub fn move_stage(&mut self, stage_id: &str, new_index: usize) -> Result<(), MornError> {
         if new_index >= self.stages.len() {
-            return Err(format!("stage index {} out of range", new_index));
+            return Err(MornError::Internal(format!("stage index {} out of range", new_index)));
         }
         let index = self
             .stages

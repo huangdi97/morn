@@ -2,6 +2,7 @@
 //! Use --cli flag to force CLI mode; otherwise defaults to CLI.
 //! Tauri mode is activated when launched via src-tauri.
 
+use crate::core::error::MornError;
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -35,7 +36,7 @@ use morn::org::team::TeamManager;
 use morn::protocol::a2a::router::A2ARouter;
 use morn::studio::manager::StudioManager;
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), MornError> {
     let args: Vec<String> = env::args().collect();
     let is_daemon = args.iter().any(|a| a == "--daemon");
 
@@ -43,7 +44,7 @@ fn main() -> Result<(), String> {
         let mut task_json = String::new();
         std::io::stdin()
             .read_to_string(&mut task_json)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let task = serde_json::from_str::<serde_json::Value>(&task_json)
             .unwrap_or_else(|_| serde_json::json!({ "raw": task_json }));
         let result = serde_json::json!({
@@ -122,10 +123,10 @@ fn main() -> Result<(), String> {
 
             let supervisor = Supervisor::new(storage.clone(), None).with_model_router(router);
             let _assembler =
-                AgentAssembler::new(Some(registry.lock().map_err(|e| e.to_string())?.clone()));
+                AgentAssembler::new(Some(registry.lock().map_err(|e| MornError::Internal(e.to_string()))?.clone()));
 
             let chat_fn = Arc::new(
-                move |prompt: &str, system: &str| -> Result<String, String> {
+                move |prompt: &str, system: &str| -> Result<String, MornError> {
                     chat_agent.chat(prompt, system)
                 },
             );
@@ -147,7 +148,7 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn run_daemon(config: MornConfig) -> Result<(), String> {
+fn run_daemon(config: MornConfig) -> Result<(), MornError> {
     let api_key = config
         .model
         .api_key
@@ -161,7 +162,7 @@ fn run_daemon(config: MornConfig) -> Result<(), String> {
 
     if let Some(parent) = config.daemon.pid_file.parent() {
         fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create PID directory {}: {}", parent.display(), e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to create PID directory {}: {}", parent.display(), e)))?;
     }
 
     fs::write(&config.daemon.pid_file, std::process::id().to_string()).map_err(|e| {
@@ -175,7 +176,7 @@ fn run_daemon(config: MornConfig) -> Result<(), String> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .map_err(|e| format!("Failed to initialize daemon runtime: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to initialize daemon runtime: {}", e)))?;
 
     let pid_file = config.daemon.pid_file.clone();
     let result = runtime.block_on(async move {
@@ -204,7 +205,7 @@ fn run_daemon(config: MornConfig) -> Result<(), String> {
             &config.model.name,
         );
         let chat_fn: ChatFn = Arc::new(
-            move |prompt: &str, system: &str| -> Result<String, String> {
+            move |prompt: &str, system: &str| -> Result<String, MornError> {
                 chat_agent.chat(prompt, system)
             },
         );
@@ -374,24 +375,24 @@ fn run_daemon(config: MornConfig) -> Result<(), String> {
 }
 
 #[cfg(unix)]
-async fn wait_for_sigterm() -> Result<(), String> {
+async fn wait_for_sigterm() -> Result<(), MornError> {
     let mut signal = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-        .map_err(|e| format!("Failed to register SIGTERM handler: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to register SIGTERM handler: {}", e)))?;
     signal.recv().await;
     println!("[Morn] SIGTERM received, shutting down daemon");
     Ok(())
 }
 
 #[cfg(not(unix))]
-async fn wait_for_sigterm() -> Result<(), String> {
+async fn wait_for_sigterm() -> Result<(), MornError> {
     tokio::signal::ctrl_c()
         .await
-        .map_err(|e| format!("Failed to wait for shutdown signal: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to wait for shutdown signal: {}", e)))?;
     println!("[Morn] Shutdown signal received, stopping daemon");
     Ok(())
 }
 
-type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, String> + Send + Sync>;
+type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, MornError> + Send + Sync>;
 
 fn run_cli(
     supervisor: Supervisor,
@@ -400,7 +401,7 @@ fn run_cli(
     storage: Option<Storage>,
     registry: Arc<Mutex<Registry>>,
     _config: MornConfig,
-) -> Result<(), String> {
+) -> Result<(), MornError> {
     let args: Vec<String> = env::args().collect();
     if args.len() > 2 {
         let sub = &args[2];
@@ -435,8 +436,8 @@ fn run_cli(
                     return Ok(());
                 }
                 "move" if args.len() > 4 => {
-                    let x: i32 = args[3].parse().map_err(|e| format!("Invalid x: {}", e))?;
-                    let y: i32 = args[4].parse().map_err(|e| format!("Invalid y: {}", e))?;
+                    let x: i32 = args[3].parse().map_err(|e| MornError::Internal(format!("Invalid x: {}", e)))?;
+                    let y: i32 = args[4].parse().map_err(|e| MornError::Internal(format!("Invalid y: {}", e)))?;
                     let result = mouse::mouse_move(x, y);
                     println!("{}", result.data);
                     return Ok(());

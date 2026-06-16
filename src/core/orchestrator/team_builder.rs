@@ -1,11 +1,12 @@
 //! team_builder — Converts short natural-language requests into team definitions.
+use crate::core::error::MornError;
 use super::{team_presets, CollaborationMode, ConsensusMechanism, TeamDef};
 
 /// Builds a team from a natural-language description using preset keyword matching.
-pub fn nl_to_team(input: &str) -> Result<TeamDef, String> {
+pub fn nl_to_team(input: &str) -> Result<TeamDef, MornError> {
     let normalized = input.trim().to_lowercase();
     if normalized.is_empty() {
-        return Err("team description is empty".to_string());
+        return Err(MornError::Internal("team description is empty".to_string()))
     }
 
     if let Some(team) = team_presets::find_preset(&normalized) {

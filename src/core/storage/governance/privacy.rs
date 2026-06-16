@@ -1,5 +1,6 @@
 //! Privacy rule storage operations.
 
+use crate::core::error::MornError;
 use rusqlite::params;
 
 use super::super::Storage;
@@ -11,22 +12,22 @@ impl Storage {
         pattern: &str,
         sensitivity: &str,
         action: &str,
-    ) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    ) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT INTO privacy_rules (pattern, sensitivity, action) VALUES (?1, ?2, ?3)",
             params![pattern, sensitivity, action],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     /// Lists privacy rules as id, pattern, sensitivity, and action tuples.
-    pub fn list_privacy_rules(&self) -> Result<Vec<(i64, String, String, String)>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_privacy_rules(&self) -> Result<Vec<(i64, String, String, String)>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, pattern, sensitivity, action FROM privacy_rules")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
                 Ok((
@@ -36,10 +37,10 @@ impl Storage {
                     row.get::<_, String>(3)?,
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut rules = Vec::new();
         for row in rows {
-            rules.push(row.map_err(|e| e.to_string())?);
+            rules.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(rules)
     }

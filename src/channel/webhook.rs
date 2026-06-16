@@ -2,6 +2,7 @@
 //! 配置方式：设置接收 HTTP POST 的回调地址
 //! 环境变量：WEBHOOK_LISTEN_URL
 
+use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 pub struct WebhookReceiver {
@@ -13,7 +14,7 @@ impl WebhookReceiver {
         WebhookReceiver { adapter }
     }
 
-    pub fn handle_event(&mut self, event_type: &str, payload: &str) -> Result<String, String> {
+    pub fn handle_event(&mut self, event_type: &str, payload: &str) -> Result<String, MornError> {
         if let Some(ref mut adapter) = self.adapter {
             let msg = ChannelMessage {
                 content: format!("[{}] {}", event_type, payload),

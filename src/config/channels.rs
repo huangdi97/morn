@@ -1,4 +1,5 @@
 //! channel — Channel configuration types and default settings.
+use crate::core::error::MornError;
 use serde::Deserialize;
 use std::env;
 use std::path::PathBuf;

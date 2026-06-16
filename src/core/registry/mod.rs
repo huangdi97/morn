@@ -1,4 +1,5 @@
 //! registry — Stores agent capability registrations and lookup indexes.
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -81,12 +82,12 @@ impl Registry {
     }
 
     /// Registers a new dynamic capability or returns an error when the id already exists.
-    pub fn register_dynamic(&mut self, capability: Capability) -> Result<(), String> {
+    pub fn register_dynamic(&mut self, capability: Capability) -> Result<(), MornError> {
         if let Some(existing) = self.capabilities.get(&capability.id) {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "capability '{}' already registered with version '{}' and name '{}'",
                 existing.id, existing.version, existing.name
-            ));
+            )));
         }
 
         if let Some(ref bus) = self.event_bus {
@@ -110,14 +111,14 @@ impl Registry {
         &mut self,
         name: &str,
         component_type: &str,
-    ) -> Result<Capability, String> {
+    ) -> Result<Capability, MornError> {
         let name = name.trim();
         let component_type = component_type.trim().to_lowercase();
         if name.is_empty() {
-            return Err("component skeleton name cannot be empty".to_string());
+            return Err(MornError::Internal("component skeleton name cannot be empty".to_string()))
         }
         if component_type.is_empty() {
-            return Err("component skeleton type cannot be empty".to_string());
+            return Err(MornError::Internal("component skeleton type cannot be empty".to_string()))
         }
 
         let slug = name
@@ -217,29 +218,29 @@ impl Registry {
     }
 
     /// Hot-loads capability JSON files from a directory and replaces existing ids.
-    pub fn watch_directory<P: AsRef<Path>>(&mut self, directory: P) -> Result<Vec<String>, String> {
+    pub fn watch_directory<P: AsRef<Path>>(&mut self, directory: P) -> Result<Vec<String>, MornError> {
         let directory = directory.as_ref();
         if !directory.exists() {
-            return Err(format!("registry directory {:?} does not exist", directory));
+            return Err(MornError::Internal(format!("registry directory {:?} does not exist", directory)));
         }
         if !directory.is_dir() {
-            return Err(format!("registry path {:?} is not a directory", directory));
+            return Err(MornError::Internal(format!("registry path {:?} is not a directory", directory)));
         }
 
         let mut loaded = Vec::new();
         let entries = fs::read_dir(directory)
-            .map_err(|e| format!("Cannot read registry directory {:?}: {}", directory, e))?;
+            .map_err(|e| MornError::Internal(format!("Cannot read registry directory {:?}: {}", directory, e)))?;
         for entry in entries {
-            let entry = entry.map_err(|e| format!("Registry directory entry error: {}", e))?;
+            let entry = entry.map_err(|e| MornError::Internal(format!("Registry directory entry error: {}", e)))?;
             let path = entry.path();
             if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("json") {
                 continue;
             }
 
             let content = fs::read_to_string(&path)
-                .map_err(|e| format!("Cannot read registry file {:?}: {}", path, e))?;
+                .map_err(|e| MornError::Internal(format!("Cannot read registry file {:?}: {}", path, e)))?;
             let capability: Capability = serde_json::from_str(&content)
-                .map_err(|e| format!("Cannot parse registry file {:?}: {}", path, e))?;
+                .map_err(|e| MornError::Internal(format!("Cannot parse registry file {:?}: {}", path, e)))?;
             let id = capability.id.clone();
             self.register(capability);
             loaded.push(id);

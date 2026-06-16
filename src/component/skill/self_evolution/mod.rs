@@ -1,4 +1,5 @@
 //! self_evolution — Defines the built-in skill for project self-improvement scans.
+use crate::core::error::MornError;
 use crate::component::skill::{Skill, SkillStep};
 use crate::core::component::{Component, Data, HealthStatus, IOComponent, Port, PortDirection};
 
@@ -44,19 +45,19 @@ impl Component for SelfEvolutionSkill {
         "skill"
     }
 
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
 
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
 
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
 
@@ -83,11 +84,11 @@ impl IOComponent for SelfEvolutionSkill {
         ]
     }
 
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
 
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }
@@ -97,7 +98,7 @@ impl Skill for SelfEvolutionSkill {
         self.steps.clone()
     }
 
-    fn execute(&mut self, _input: Data) -> Result<Data, String> {
+    fn execute(&mut self, _input: Data) -> Result<Data, MornError> {
         let report = Self::report();
         Ok(Data::text(&format!(
             "[self_evolution] scan complete: {} issue(s), {} fix(es) applied, {} failed",

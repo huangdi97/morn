@@ -1,4 +1,5 @@
 //! event_bus — Publishes and subscribes to internal application events.
+use crate::core::error::MornError;
 use serde_json::Value;
 use std::collections::HashMap;
 

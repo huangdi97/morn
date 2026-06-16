@@ -1,4 +1,5 @@
 //! sop_template — Defines standard operating procedure templates for repeatable workflows.
+use crate::core::error::MornError;
 use serde_json::Value;
 use std::path::Path;
 
@@ -50,10 +51,10 @@ impl SOPTemplate {
         prompt
     }
 
-    pub fn from_file(path: &Path) -> Result<Self, String> {
-        let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    pub fn from_file(path: &Path) -> Result<Self, MornError> {
+        let content = std::fs::read_to_string(path).map_err(|e| MornError::Internal(e.to_string()))?;
         let template: SOPTemplate =
-            serde_json::from_str(&content).map_err(|e| format!("Parse error: {}", e))?;
+            serde_json::from_str(&content).map_err(|e| MornError::Internal(format!("Parse error: {}", e)))?;
         Ok(template)
     }
 

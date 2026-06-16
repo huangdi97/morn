@@ -1,4 +1,5 @@
 //! Workflow engine tests.
+use crate::core::error::MornError;
 use super::{ControlFlowNode, WorkflowAction, WorkflowEngine, WorkflowStep};
 use crate::core::thread_pool::TaskPool;
 use std::collections::HashMap;

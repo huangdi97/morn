@@ -1,4 +1,5 @@
 //! marketplace — Lists, installs, and manages marketplace capabilities.
+use crate::core::error::MornError;
 use crate::core::component_type::ComponentTypeDef;
 use crate::core::registry::{Capability, Registry};
 use crate::core::storage::Storage;
@@ -198,7 +199,7 @@ impl Marketplace {
         self.storage.get_listing(id).ok().flatten()
     }
 
-    pub fn purchase(&self, listing_id: &str, user_id: &str) -> Result<License, String> {
+    pub fn purchase(&self, listing_id: &str, user_id: &str) -> Result<License, MornError> {
         let listing = self
             .storage
             .get_listing(listing_id)?
@@ -228,20 +229,20 @@ impl Marketplace {
         Ok(license)
     }
 
-    pub fn publish(&self, listing: Listing) -> Result<(), String> {
+    pub fn publish(&self, listing: Listing) -> Result<(), MornError> {
         if self.storage.get_listing(&listing.id)?.is_some() {
-            return Err("Listing already exists".to_string());
+            return Err(MornError::Internal("Listing already exists".to_string()))
         }
         self.storage.save_listing(&listing)
     }
 
-    pub fn install(&self, listing_id: &str, user_id: &str) -> Result<(), String> {
+    pub fn install(&self, listing_id: &str, user_id: &str) -> Result<(), MornError> {
         self.storage
             .get_listing(listing_id)?
             .ok_or("Listing not found")?;
         let user_licenses = self.storage.get_user_licenses(user_id)?;
         if !user_licenses.iter().any(|l| l.listing_id == listing_id) {
-            return Err("User has not purchased this listing".to_string());
+            return Err(MornError::Internal("User has not purchased this listing".to_string()))
         }
         Ok(())
     }
@@ -252,7 +253,7 @@ impl Marketplace {
         _user_id: &str,
         score: u8,
         _review: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         let listing = self
             .storage
             .get_listing(listing_id)?
@@ -291,7 +292,7 @@ impl Marketplace {
         &self,
         listing_id: &str,
         registry: &mut Registry,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         let listing = self
             .storage
             .get_listing(listing_id)?
@@ -320,7 +321,7 @@ impl Marketplace {
         &self,
         type_def: ComponentTypeDef,
         user_id: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, MornError> {
         let id = format!("listing-ctype-{}", uuid::Uuid::new_v4());
         let listing = Listing {
             id: id.clone(),
@@ -344,13 +345,13 @@ impl Marketplace {
         &self,
         listing_id: &str,
         registry: &mut Registry,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         let listing = self
             .storage
             .get_listing(listing_id)?
             .ok_or("Listing not found")?;
         if listing.item_type != ListingType::ComponentTypeDef.as_str() {
-            return Err("Listing is not a ComponentTypeDef".to_string());
+            return Err(MornError::Internal("Listing is not a ComponentTypeDef".to_string()))
         }
         let cap = Capability {
             id: format!("market-{}", listing.id),
@@ -378,7 +379,7 @@ impl Marketplace {
         version: &str,
         data_json: &str,
         changelog: &str,
-    ) -> Result<AgentVersion, String> {
+    ) -> Result<AgentVersion, MornError> {
         let ver = AgentVersion {
             id: format!("ver-{}", uuid::Uuid::new_v4()),
             listing_id: listing_id.to_string(),
@@ -401,12 +402,12 @@ impl Marketplace {
         &self,
         listing_id: &str,
         version: &str,
-    ) -> Result<serde_json::Value, String> {
+    ) -> Result<serde_json::Value, MornError> {
         let ver = self
             .storage
             .get_agent_version(listing_id, version)?
             .ok_or_else(|| format!("Version {} not found for listing {}", version, listing_id))?;
-        serde_json::from_str(&ver.data_json).map_err(|e| e.to_string())
+        serde_json::from_str(&ver.data_json).map_err(|e| MornError::Internal(e.to_string()))
     }
 
     pub fn publish_new_version(
@@ -414,7 +415,7 @@ impl Marketplace {
         listing_id: &str,
         data_json: &str,
         changelog: &str,
-    ) -> Result<AgentVersion, String> {
+    ) -> Result<AgentVersion, MornError> {
         let _listing = self
             .storage
             .get_listing(listing_id)?

@@ -1,4 +1,5 @@
 //! repo_map — Builds repository maps for code understanding and navigation.
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -38,25 +39,25 @@ impl RepoMap {
         self
     }
 
-    pub fn scan(&mut self) -> Result<(), String> {
+    pub fn scan(&mut self) -> Result<(), MornError> {
         let root_path = Path::new(&self.root);
         if !root_path.exists() {
-            return Err(format!("Path does not exist: {}", self.root));
+            return Err(MornError::Internal(format!("Path does not exist: {}", self.root)));
         }
         self.tree = self.scan_dir(root_path, 0)?;
         Ok(())
     }
 
-    fn scan_dir(&self, dir: &Path, depth: usize) -> Result<Vec<RepoNode>, String> {
+    fn scan_dir(&self, dir: &Path, depth: usize) -> Result<Vec<RepoNode>, MornError> {
         if depth > self.max_depth {
             return Ok(Vec::new());
         }
 
         let mut nodes = Vec::new();
-        let entries = std::fs::read_dir(dir).map_err(|e| e.to_string())?;
+        let entries = std::fs::read_dir(dir).map_err(|e| MornError::Internal(e.to_string()))?;
 
         for entry in entries {
-            let entry = entry.map_err(|e| e.to_string())?;
+            let entry = entry.map_err(|e| MornError::Internal(e.to_string()))?;
             let path = entry.path();
 
             let name = entry.file_name().to_str().unwrap_or("").to_string();
@@ -65,7 +66,7 @@ impl RepoMap {
                 continue;
             }
 
-            let metadata = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+            let metadata = std::fs::metadata(&path).map_err(|e| MornError::Internal(e.to_string()))?;
             let size = metadata.len();
 
             if path.is_dir() {

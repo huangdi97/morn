@@ -3,6 +3,7 @@
 //! Figma code generation tool — generates React/TSX component code from a Figma design token.
 //! Includes TSX templates, Tailwind CSS styles, and TypeScript type definitions.
 
+use crate::core::error::MornError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

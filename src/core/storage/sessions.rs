@@ -1,4 +1,5 @@
 //! sessions — Persists conversation sessions and their message history.
+use crate::core::error::MornError;
 use rusqlite::params;
 
 use super::Storage;
@@ -12,8 +13,8 @@ impl Storage {
         user_id: &str,
         agent_id: Option<&str>,
         context_json: &str,
-    ) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    ) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT OR REPLACE INTO sessions (id, user_id, agent_id, status, context_json, created_at, updated_at)
              VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?5)",
@@ -22,46 +23,46 @@ impl Storage {
                 chrono::Utc::now().to_rfc3339()
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
-    pub fn get_session(&self, id: &str) -> Result<Option<SessionRow>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn get_session(&self, id: &str) -> Result<Option<SessionRow>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, user_id, agent_id, context_json, status FROM sessions WHERE id = ?1",
             )
-            .map_err(|e| e.to_string())?;
-        let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
-        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut rows = stmt.query(params![id]).map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
             Ok(Some((
-                row.get(0).map_err(|e| e.to_string())?,
-                row.get(1).map_err(|e| e.to_string())?,
-                row.get(2).map_err(|e| e.to_string())?,
-                row.get(3).map_err(|e| e.to_string())?,
-                row.get(4).map_err(|e| e.to_string())?,
+                row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
+                row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,
+                row.get(2).map_err(|e| MornError::Internal(e.to_string()))?,
+                row.get(3).map_err(|e| MornError::Internal(e.to_string()))?,
+                row.get(4).map_err(|e| MornError::Internal(e.to_string()))?,
             )))
         } else {
             Ok(None)
         }
     }
 
-    pub fn update_session_context(&self, id: &str, context_json: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn update_session_context(&self, id: &str, context_json: &str) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "UPDATE sessions SET context_json = ?1, updated_at = ?2 WHERE id = ?3",
             params![context_json, chrono::Utc::now().to_rfc3339(), id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
-    pub fn list_sessions(&self) -> Result<Vec<SessionRow>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_sessions(&self) -> Result<Vec<SessionRow>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, user_id, agent_id, context_json, status FROM sessions ORDER BY created_at DESC")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
                 Ok((
@@ -72,10 +73,10 @@ impl Storage {
                     row.get::<_, String>(4)?,
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut sessions = Vec::new();
         for row in rows {
-            sessions.push(row.map_err(|e| e.to_string())?);
+            sessions.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(sessions)
     }

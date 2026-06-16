@@ -1,4 +1,5 @@
 //! web_research — Defines the built-in skill for web research workflows.
+use crate::core::error::MornError;
 use crate::component::skill::{Skill, SkillStep};
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
@@ -54,16 +55,16 @@ impl Component for WebResearchSkill {
     fn type_name(&self) -> &str {
         "skill"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -88,10 +89,10 @@ impl IOComponent for WebResearchSkill {
             },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }
@@ -106,7 +107,7 @@ impl Skill for WebResearchSkill {
     fn steps(&self) -> Vec<SkillStep> {
         self.steps.clone()
     }
-    fn execute(&mut self, input: Data) -> Result<Data, String> {
+    fn execute(&mut self, input: Data) -> Result<Data, MornError> {
         let topic = input.content.as_str().unwrap_or("").to_string();
         let mut search_tool = crate::component::tool::get_tool_by_name("web_search")
             .ok_or("web_search tool not found")?;

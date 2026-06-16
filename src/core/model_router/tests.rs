@@ -1,4 +1,5 @@
 //! Model router tests.
+use crate::core::error::MornError;
 use super::*;
 use crate::config::{CustomProviderConfig, HybridConfig, ModelConfig};
 use std::collections::HashMap;

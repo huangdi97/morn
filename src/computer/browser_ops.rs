@@ -1,22 +1,23 @@
 //! browser_ops — Provides browser automation operations for web interaction.
+use crate::core::error::MornError;
 use super::{ComputerOpResult, SecurityLevel};
 
-fn open_url(url: &str) -> Result<(), String> {
+fn open_url(url: &str) -> Result<(), MornError> {
     if cfg!(target_os = "windows") {
         std::process::Command::new("cmd")
             .args(["/c", "start", url])
             .output()
-            .map_err(|e| format!("Failed to open URL: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to open URL: {}", e)))?;
     } else if cfg!(target_os = "linux") {
         std::process::Command::new("xdg-open")
             .arg(url)
             .output()
-            .map_err(|e| format!("Failed to open URL: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to open URL: {}", e)))?;
     } else if cfg!(target_os = "macos") {
         std::process::Command::new("open")
             .arg(url)
             .output()
-            .map_err(|e| format!("Failed to open URL: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to open URL: {}", e)))?;
     }
     Ok(())
 }
@@ -31,7 +32,7 @@ pub fn navigate(url: &str) -> ComputerOpResult {
         },
         Err(e) => ComputerOpResult {
             success: false,
-            data: e,
+            data: e.to_string(),
             security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
             approval_required: false,
         },
@@ -82,51 +83,53 @@ pub fn form_fill(selector: &str, value: &str) -> ComputerOpResult {
 }
 
 pub fn content_extract(url: &str) -> ComputerOpResult {
-    let client = reqwest::blocking::Client::builder()
+    let client = match reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e));
-
-    match client {
-        Ok(client) => match client.get(url).send() {
-            Ok(response) => {
-                if response.status().is_success() {
-                    match response.text() {
-                        Ok(html_str) => {
-                            let text = strip_html_tags(&html_str);
-                            ComputerOpResult {
-                                success: true,
-                                data: text,
-                                security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
-                                approval_required: false,
-                            }
-                        }
-                        Err(e) => ComputerOpResult {
-                            success: false,
-                            data: format!("Failed to read response body: {}", e),
-                            security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
-                            approval_required: false,
-                        },
-                    }
-                } else {
-                    ComputerOpResult {
-                        success: false,
-                        data: format!("HTTP error: {}", response.status()),
-                        security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
-                        approval_required: false,
-                    }
-                }
-            }
-            Err(e) => ComputerOpResult {
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return ComputerOpResult {
                 success: false,
-                data: format!("Request failed: {}", e),
+                data: format!("Failed to create HTTP client: {}", e),
                 security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
                 approval_required: false,
-            },
-        },
+            }
+        }
+    };
+
+    match client.get(url).send() {
+        Ok(response) => {
+            if response.status().is_success() {
+                match response.text() {
+                    Ok(html_str) => {
+                        let text = strip_html_tags(&html_str);
+                        ComputerOpResult {
+                            success: true,
+                            data: text,
+                            security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
+                            approval_required: false,
+                        }
+                    }
+                    Err(e) => ComputerOpResult {
+                        success: false,
+                        data: format!("Failed to read response body: {}", e),
+                        security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
+                        approval_required: false,
+                    },
+                }
+            } else {
+                ComputerOpResult {
+                    success: false,
+                    data: format!("HTTP error: {}", response.status()),
+                    security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
+                    approval_required: false,
+                }
+            }
+        }
         Err(e) => ComputerOpResult {
             success: false,
-            data: e,
+            data: format!("Request failed: {}", e),
             security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
             approval_required: false,
         },

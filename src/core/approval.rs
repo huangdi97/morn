@@ -1,4 +1,5 @@
 //! approval — Manages approval requests, responses, and policy decisions.
+use crate::core::error::MornError;
 use crate::core::event_bus::{SimpleEventBus, EVENT_APPROVAL_REQUESTED, EVENT_APPROVAL_RESPONDED};
 use crate::core::storage::Storage;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -82,7 +83,7 @@ impl ApprovalManager {
         action: &str,
         level: ApprovalLevel,
         context: &serde_json::Value,
-    ) -> Result<ApprovalRequest, String> {
+    ) -> Result<ApprovalRequest, MornError> {
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
 
@@ -90,7 +91,7 @@ impl ApprovalManager {
             &id,
             action,
             level.as_str(),
-            Some(&serde_json::to_string(context).map_err(|e| e.to_string())?),
+            Some(&serde_json::to_string(context).map_err(|e| MornError::Internal(e.to_string()))?),
             None,
         )?;
 
@@ -123,12 +124,12 @@ impl ApprovalManager {
     }
 
     /// Records a non-pending response for an approval request id.
-    pub fn respond(&self, id: &str, status: ApprovalStatus) -> Result<(), String> {
+    pub fn respond(&self, id: &str, status: ApprovalStatus) -> Result<(), MornError> {
         let (status_str, response_text) = match &status {
             ApprovalStatus::Approved => ("approved", None),
             ApprovalStatus::Rejected => ("rejected", None),
             ApprovalStatus::Modified(val) => ("modified", Some(val.to_string())),
-            ApprovalStatus::Pending => return Err("Cannot respond with pending status".to_string()),
+            ApprovalStatus::Pending => return Err(MornError::Internal("Cannot respond with pending status".to_string()))
         };
         self.storage
             .update_approval_response(id, status_str, response_text.as_deref())?;
@@ -153,7 +154,7 @@ impl ApprovalManager {
         &self,
         id: &str,
         timeout_secs: u64,
-    ) -> Result<ApprovalStatus, String> {
+    ) -> Result<ApprovalStatus, MornError> {
         let completed = Arc::new(AtomicBool::new(false));
         let started = std::time::Instant::now();
 
@@ -184,7 +185,7 @@ impl ApprovalManager {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
 
-        Err("Approval wait interrupted".to_string())
+        Err(MornError::Internal("Approval wait interrupted".to_string()))
     }
 
     /// Scores action text for approval risk and returns a value between low and high risk ranges.
@@ -230,7 +231,7 @@ impl ApprovalManager {
     }
 
     /// Lists ids for pending approval requests.
-    pub fn list_pending(&self) -> Result<Vec<String>, String> {
+    pub fn list_pending(&self) -> Result<Vec<String>, MornError> {
         self.storage.list_pending_approvals()
     }
 }

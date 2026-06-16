@@ -1,5 +1,6 @@
 //! model — Model editor with provider, parameters, fallback, and cost tier configuration.
 
+use crate::core::error::MornError;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CostTier(pub String);
 

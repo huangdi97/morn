@@ -1,4 +1,5 @@
 //! permissions — Manages organization permission grants for agents and users.
+use crate::core::error::MornError;
 use crate::core::storage::{AgentPermissionRecord, Storage};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -44,7 +45,7 @@ impl PermissionChecker {
         PermissionChecker { storage }
     }
 
-    pub fn check(&self, user_id: &str, action: &str, target: &str) -> Result<bool, String> {
+    pub fn check(&self, user_id: &str, action: &str, target: &str) -> Result<bool, MornError> {
         let user = self
             .storage
             .get_user(user_id)?
@@ -59,7 +60,7 @@ impl PermissionChecker {
             "use" | "call" => PermissionLevel::Use,
             "update" | "modify" | "configure" => PermissionLevel::Manage,
             "delete" | "transfer" | "grant" | "revoke" => PermissionLevel::Admin,
-            _ => return Err(format!("Unknown action: {}", action)),
+            _ => return Err(MornError::Internal(format!("Unknown action: {}", action))),
         };
 
         let perm = self.storage.get_agent_permission(target, user_id)?;
@@ -94,13 +95,13 @@ impl PermissionChecker {
         agent_id: &str,
         permission: &str,
         team_id: Option<&str>,
-    ) -> Result<AgentPermissionRecord, String> {
+    ) -> Result<AgentPermissionRecord, MornError> {
         let valid_perms = ["read", "use", "manage", "admin"];
         if !valid_perms.contains(&permission) {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "Invalid permission: {}. Must be read, use, manage, or admin",
                 permission
-            ));
+            )));
         }
 
         self.storage
@@ -119,12 +120,12 @@ impl PermissionChecker {
         Ok(perm)
     }
 
-    pub fn revoke(&self, user_id: &str, agent_id: &str) -> Result<(), String> {
+    pub fn revoke(&self, user_id: &str, agent_id: &str) -> Result<(), MornError> {
         self.storage
             .delete_agent_permissions_for_user(agent_id, user_id)
     }
 
-    pub fn list_permissions(&self, agent_id: &str) -> Result<Vec<AgentPermissionRecord>, String> {
+    pub fn list_permissions(&self, agent_id: &str) -> Result<Vec<AgentPermissionRecord>, MornError> {
         self.storage.list_agent_permissions(agent_id)
     }
 }

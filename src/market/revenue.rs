@@ -1,4 +1,5 @@
 //! 创作者收益管理 — 收益记录、自动入账、结算查询
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

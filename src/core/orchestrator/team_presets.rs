@@ -1,5 +1,6 @@
 //! Pre-built team templates for rapid team composition.
 
+use crate::core::error::MornError;
 use super::{CollaborationMode, ConsensusMechanism, TeamDef};
 
 pub struct TeamPreset {

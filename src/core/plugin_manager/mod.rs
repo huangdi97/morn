@@ -1,4 +1,5 @@
 //! plugin_manager — Scan, load, activate, and deactivate plugins.
+use crate::core::error::MornError;
 pub mod error;
 pub use error::PluginError;
 
@@ -231,10 +232,10 @@ impl PluginManager {
             .collect()
     }
 
-    pub fn load_plugin_sandboxed(&self, path: &str) -> Result<(), String> {
+    pub fn load_plugin_sandboxed(&self, path: &str) -> Result<(), MornError> {
         let manifest_path = format!("{}/manifest.json", path);
         if !std::path::Path::new(&manifest_path).exists() {
-            return Err(format!("Manifest not found: {}", manifest_path));
+            return Err(MornError::Internal(format!("Manifest not found: {}", manifest_path)));
         }
         Ok(())
     }

@@ -2,6 +2,7 @@
 //! 配置方式：在 QQ 开放平台创建机器人，获取 Bot ID 和 Token
 //! 环境变量：QQBOT_ID, QQBOT_TOKEN
 
+use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 pub struct QqBotChannel {
@@ -17,31 +18,31 @@ impl QqBotChannel {
         }
     }
 
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env() -> Result<Self, MornError> {
         let bot_id = std::env::var("QQBOT_ID").map_err(|_| "QQBOT_ID not set".to_string())?;
         let token = std::env::var("QQBOT_TOKEN").map_err(|_| "QQBOT_TOKEN not set".to_string())?;
         Ok(QqBotChannel::new(&bot_id, &token))
     }
 
-    pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {
+    pub fn send(&self, msg: &ChannelMessage) -> Result<(), MornError> {
         let payload = Self::build_payload(msg);
         let url = format!("https://api.qq.com/v1/robots/{}/messages", self.bot_id);
         let auth_value = format!("Bot {}.{}", self.bot_id, self.token);
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
         let resp = client
             .post(&url)
             .header("Authorization", &auth_value)
             .json(&payload)
             .send()
-            .map_err(|e| format!("Failed to send QQ Bot message: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to send QQ Bot message: {}", e)))?;
         if !resp.status().is_success() {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "QQ Bot API returned non-200 status: {}",
                 resp.status()
-            ));
+            )));
         }
         Ok(())
     }
@@ -59,7 +60,7 @@ impl QqBotChannel {
         })
     }
 
-    pub fn receive(&self) -> Result<Option<ChannelMessage>, String> {
+    pub fn receive(&self) -> Result<Option<ChannelMessage>, MornError> {
         Ok(None)
     }
 }
@@ -73,7 +74,7 @@ impl QqBotServer {
         QqBotServer { adapter }
     }
 
-    pub fn handle_event(&mut self, text: &str) -> Result<String, String> {
+    pub fn handle_event(&mut self, text: &str) -> Result<String, MornError> {
         if let Some(ref mut adapter) = self.adapter {
             let msg = ChannelMessage {
                 content: text.to_string(),

@@ -1,4 +1,5 @@
 //! builtins — Built-in tool implementations organized by tool type.
+use crate::core::error::MornError;
 pub mod calc;
 pub mod http;
 pub mod msg;

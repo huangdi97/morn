@@ -1,6 +1,7 @@
 //! Seeds the marketplace hub with initial workflow templates, agent templates,
 //! and preset agent definitions during first-time setup or when listings are missing.
 
+use crate::core::error::MornError;
 use crate::core::agent_templates::AGENT_TEMPLATES;
 use crate::core::storage::Storage;
 use crate::core::supervisor::presets::preset_agent_defs;

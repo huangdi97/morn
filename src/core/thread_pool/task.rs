@@ -1,4 +1,5 @@
 //! task — TaskPool, TaskDef, and pipeline task execution.
+use crate::core::error::MornError;
 use crate::core::pipeline::PipelineTask;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -39,15 +40,15 @@ impl std::fmt::Debug for TaskPool {
 }
 
 impl TaskPool {
-    pub fn new(config: TaskPoolConfig) -> Result<Self, String> {
+    pub fn new(config: TaskPoolConfig) -> Result<Self, MornError> {
         if config.min_threads == 0 {
-            return Err("min_threads must be greater than zero".to_string());
+            return Err(MornError::Internal("min_threads must be greater than zero".to_string()))
         }
         if config.max_threads < config.min_threads {
-            return Err("max_threads must be greater than or equal to min_threads".to_string());
+            return Err(MornError::Internal("max_threads must be greater than or equal to min_threads".to_string()))
         }
         if config.queue_size == 0 {
-            return Err("queue_size must be greater than zero".to_string());
+            return Err(MornError::Internal("queue_size must be greater than zero".to_string()))
         }
         let (sender, receiver) = mpsc::channel();
         Ok(TaskPool {
@@ -57,15 +58,15 @@ impl TaskPool {
         })
     }
 
-    pub fn with_sender(config: TaskPoolConfig, sender: TaskSender) -> Result<Self, String> {
+    pub fn with_sender(config: TaskPoolConfig, sender: TaskSender) -> Result<Self, MornError> {
         if config.min_threads == 0 {
-            return Err("min_threads must be greater than zero".to_string());
+            return Err(MornError::Internal("min_threads must be greater than zero".to_string()))
         }
         if config.max_threads < config.min_threads {
-            return Err("max_threads must be greater than or equal to min_threads".to_string());
+            return Err(MornError::Internal("max_threads must be greater than or equal to min_threads".to_string()))
         }
         if config.queue_size == 0 {
-            return Err("queue_size must be greater than zero".to_string());
+            return Err(MornError::Internal("queue_size must be greater than zero".to_string()))
         }
         Ok(TaskPool {
             config,
@@ -83,15 +84,15 @@ impl TaskPool {
         &self.config
     }
 
-    pub fn execute(&self, task: TaskDef) -> tokio::task::JoinHandle<Result<(), String>> {
+    pub fn execute(&self, task: TaskDef) -> tokio::task::JoinHandle<Result<(), MornError>> {
         let sender = self.sender.clone();
         tokio::spawn(async move {
             if task.id.trim().is_empty() {
-                return Err("task id cannot be empty".to_string());
+                return Err(MornError::Internal("task id cannot be empty".to_string()))
             }
             sender
                 .send(task)
-                .map_err(|e| format!("failed to enqueue task: {}", e))
+                .map_err(|e| MornError::Internal(format!("failed to enqueue task: {}", e)))
         })
     }
 }
@@ -102,16 +103,16 @@ impl Default for TaskPool {
     }
 }
 
-pub(crate) fn execute_pipeline_task(task: PipelineTask) -> Result<(), String> {
+pub(crate) fn execute_pipeline_task(task: PipelineTask) -> Result<(), MornError> {
     use crate::core::pipeline::agentless::{AgentlessPipeline, PipelineStep};
     use crate::core::workflow::WorkflowAction;
 
     if task.id.trim().is_empty() {
-        return Err("task id cannot be empty".to_string());
+        return Err(MornError::Internal("task id cannot be empty".to_string()))
     }
     if let WorkflowAction::PipelineExec { pipeline_json } = &task.action {
         let steps: Vec<PipelineStep> = serde_json::from_value(pipeline_json.clone())
-            .map_err(|e| format!("invalid pipeline steps: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("invalid pipeline steps: {}", e)))?;
         let mut pipeline = AgentlessPipeline::new(steps);
         pipeline.execute()?;
     }

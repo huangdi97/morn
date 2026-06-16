@@ -1,4 +1,5 @@
 //! traits — Adapts personas to shared component and execution traits.
+use crate::core::error::MornError;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
@@ -12,16 +13,16 @@ impl Component for Persona {
     fn type_name(&self) -> &str {
         "persona"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -46,10 +47,10 @@ impl IOComponent for Persona {
             },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }

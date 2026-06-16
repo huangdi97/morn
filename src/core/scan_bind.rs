@@ -1,5 +1,6 @@
 //! QR code scanning and device binding for session pairing.
 
+use crate::core::error::MornError;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -59,7 +60,7 @@ impl ScanBindManager {
         session.status
     }
 
-    pub fn confirm_bind(&mut self, token: &str, _config_json: &str) -> Result<(), String> {
+    pub fn confirm_bind(&mut self, token: &str, _config_json: &str) -> Result<(), MornError> {
         let session = self
             .active_sessions
             .get_mut(token)
@@ -67,7 +68,7 @@ impl ScanBindManager {
 
         if is_expired(&session.expires_at) {
             session.status = BindStatus::Expired;
-            return Err("Bind session is expired".to_string());
+            return Err(MornError::Internal("Bind session is expired".to_string()));
         }
 
         match session.status {
@@ -75,12 +76,12 @@ impl ScanBindManager {
                 session.status = BindStatus::Confirmed;
                 Ok(())
             }
-            BindStatus::Confirmed => Err("Bind session is already confirmed".to_string()),
-            BindStatus::Expired => Err("Bind session is expired".to_string()),
+            BindStatus::Confirmed => Err(MornError::Internal("Bind session is already confirmed".to_string())),
+            BindStatus::Expired => Err(MornError::Internal("Bind session is expired".to_string())),
         }
     }
 
-    pub fn mark_scanned(&mut self, token: &str) -> Result<(), String> {
+    pub fn mark_scanned(&mut self, token: &str) -> Result<(), MornError> {
         let session = self
             .active_sessions
             .get_mut(token)
@@ -88,7 +89,7 @@ impl ScanBindManager {
 
         if is_expired(&session.expires_at) {
             session.status = BindStatus::Expired;
-            return Err("Bind session is expired".to_string());
+            return Err(MornError::Internal("Bind session is expired".to_string()));
         }
 
         match session.status {
@@ -97,8 +98,8 @@ impl ScanBindManager {
                 Ok(())
             }
             BindStatus::Scanned => Ok(()),
-            BindStatus::Confirmed => Err("Bind session is already confirmed".to_string()),
-            BindStatus::Expired => Err("Bind session is expired".to_string()),
+            BindStatus::Confirmed => Err(MornError::Internal("Bind session is already confirmed".to_string())),
+            BindStatus::Expired => Err(MornError::Internal("Bind session is expired".to_string())),
         }
     }
 

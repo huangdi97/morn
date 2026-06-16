@@ -1,3 +1,4 @@
+use crate::MornError;
 use crate::AppState;
 use tauri::State;
 
@@ -8,7 +9,7 @@ pub(crate) async fn mcp_connect(
     name: String,
     url: String,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, MornError> {
     let client = reqwest::Client::new();
     let tools_url = format!("{}/list_tools", url.trim_end_matches('/'));
     let resp = client
@@ -27,15 +28,15 @@ pub(crate) async fn mcp_connect(
         tools,
     };
 
-    let mut mgr = state.mcp_manager.lock().map_err(|e| e.to_string())?;
+    let mut mgr = state.mcp_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     mgr.retain(|s| s.name != name);
     mgr.push(server);
     Ok(format!("Connected to '{}' with {} tools", name, mgr.last().map_or(0, |s| s.tools.len())))
 }
 
 #[tauri::command]
-pub(crate) fn mcp_disconnect(name: String, state: State<AppState>) -> Result<String, String> {
-    let mut mgr = state.mcp_manager.lock().map_err(|e| e.to_string())?;
+pub(crate) fn mcp_disconnect(name: String, state: State<AppState>) -> Result<String, MornError> {
+    let mut mgr = state.mcp_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let len_before = mgr.len();
     mgr.retain(|s| s.name != name);
     if mgr.len() < len_before {
@@ -46,8 +47,8 @@ pub(crate) fn mcp_disconnect(name: String, state: State<AppState>) -> Result<Str
 }
 
 #[tauri::command]
-pub(crate) fn mcp_list_servers(state: State<AppState>) -> Result<Vec<MCPServer>, String> {
-    let mgr = state.mcp_manager.lock().map_err(|e| e.to_string())?;
+pub(crate) fn mcp_list_servers(state: State<AppState>) -> Result<Vec<MCPServer>, MornError> {
+    let mgr = state.mcp_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     Ok(mgr.clone())
 }
 
@@ -57,9 +58,9 @@ pub(crate) async fn mcp_call_tool(
     tool: String,
     args: serde_json::Value,
     state: State<'_, AppState>,
-) -> Result<MCPResponse, String> {
+) -> Result<MCPResponse, MornError> {
     let url = {
-        let mgr = state.mcp_manager.lock().map_err(|e| e.to_string())?;
+        let mgr = state.mcp_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let srv = mgr
             .iter()
             .find(|s| s.name == server)
@@ -86,6 +87,6 @@ pub(crate) async fn mcp_call_tool(
 }
 
 #[tauri::command]
-pub(crate) fn mcp_serve(port: u16) -> Result<String, String> {
+pub(crate) fn mcp_serve(port: u16) -> Result<String, MornError> {
     Ok(format!("MCP server started on port {}", port))
 }

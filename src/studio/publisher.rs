@@ -1,4 +1,5 @@
 //! publisher — Publishes studio capabilities into registries and marketplaces.
+use crate::core::error::MornError;
 use crate::core::component_type::TypeRegistry;
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
@@ -51,7 +52,7 @@ impl StudioPublisher {
         }
     }
 
-    pub fn publish_agent(&self, agent_id: &str) -> Result<(), String> {
+    pub fn publish_agent(&self, agent_id: &str) -> Result<(), MornError> {
         if self.storage.is_none() {
             return Ok(());
         }
@@ -59,17 +60,17 @@ impl StudioPublisher {
         self.publish_component(agent_id).map(|_| ())
     }
 
-    pub fn unpublish_agent(&self, agent_id: &str) -> Result<(), String> {
+    pub fn unpublish_agent(&self, agent_id: &str) -> Result<(), MornError> {
         if let Some(ref storage) = self.storage {
             if storage.get_agent(agent_id)?.is_none() {
-                return Err(format!("agent '{}' not found", agent_id));
+                return Err(MornError::Internal(format!("agent '{}' not found", agent_id)));
             }
             storage.update_agent_status(agent_id, "inactive")?;
         }
         Ok(())
     }
 
-    pub fn publish_component(&self, component_id: &str) -> Result<PublishReceipt, String> {
+    pub fn publish_component(&self, component_id: &str) -> Result<PublishReceipt, MornError> {
         let mut stages = Vec::new();
         self.validate(component_id)?;
         stages.push(PublishStage::Validated);
@@ -107,7 +108,7 @@ impl StudioPublisher {
         })
     }
 
-    fn validate(&self, component_id: &str) -> Result<(), String> {
+    fn validate(&self, component_id: &str) -> Result<(), MornError> {
         if component_id.trim().is_empty() {
             return Err("component id cannot be empty".into());
         }
@@ -116,16 +117,16 @@ impl StudioPublisher {
                 .get_agent(component_id)?
                 .ok_or_else(|| format!("component '{}' not found", component_id))?;
             if agent.name.trim().is_empty() {
-                return Err(format!("component '{}' has empty name", component_id));
+                return Err(MornError::Internal(format!("component '{}' has empty name", component_id)));
             }
             if agent.component_type.trim().is_empty() {
-                return Err(format!("component '{}' has empty type", component_id));
+                return Err(MornError::Internal(format!("component '{}' has empty type", component_id)));
             }
         }
         Ok(())
     }
 
-    fn package(&self, component_id: &str) -> Result<PublishArtifact, String> {
+    fn package(&self, component_id: &str) -> Result<PublishArtifact, MornError> {
         let (component_type, name, status, config_json) = if let Some(ref storage) = self.storage {
             let agent = storage
                 .get_agent(component_id)?
@@ -159,7 +160,7 @@ impl StudioPublisher {
             "config": serde_json::from_str::<serde_json::Value>(&config_json)
                 .unwrap_or_else(|_| serde_json::json!({"raw": config_json})),
         });
-        let payload = serde_json::to_string(&manifest).map_err(|e| e.to_string())?;
+        let payload = serde_json::to_string(&manifest).map_err(|e| MornError::Internal(e.to_string()))?;
         let mut hasher = DefaultHasher::new();
         payload.hash(&mut hasher);
 
@@ -173,9 +174,9 @@ impl StudioPublisher {
         })
     }
 
-    fn upload(&self, artifact: &PublishArtifact) -> Result<String, String> {
+    fn upload(&self, artifact: &PublishArtifact) -> Result<String, MornError> {
         if artifact.bytes == 0 {
-            return Err(format!("artifact '{}' is empty", artifact.component_id));
+            return Err(MornError::Internal(format!("artifact '{}' is empty", artifact.component_id)));
         }
         Ok(format!(
             "morn://studio/packages/{}/{}",
@@ -183,12 +184,12 @@ impl StudioPublisher {
         ))
     }
 
-    fn notify(&self, artifact: &PublishArtifact, upload_url: &str) -> Result<(), String> {
+    fn notify(&self, artifact: &PublishArtifact, upload_url: &str) -> Result<(), MornError> {
         if upload_url.trim().is_empty() {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "upload url for '{}' is empty",
                 artifact.component_id
-            ));
+            )));
         }
         Ok(())
     }

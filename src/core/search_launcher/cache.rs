@@ -1,4 +1,5 @@
 //! cache — Stores cached launcher search items for fast retrieval.
+use crate::core::error::MornError;
 use super::{SearchCategory, SearchItem};
 use std::collections::HashMap;
 

@@ -1,5 +1,6 @@
 //! Knowledge-oriented memory layers: SemanticMemory and GraphMemory.
 
+use crate::core::error::MornError;
 use std::collections::{HashMap, VecDeque};
 
 use serde_json::Value;
@@ -51,7 +52,7 @@ impl MemoryLayer for SemanticMemory {
         "Semantic Memory"
     }
 
-    fn store(&mut self, key: &str, mut record: MemoryRecord) -> Result<(), String> {
+    fn store(&mut self, key: &str, mut record: MemoryRecord) -> Result<(), MornError> {
         record.metadata.insert(
             "fact_type".to_string(),
             Value::String("factual".to_string()),
@@ -60,16 +61,16 @@ impl MemoryLayer for SemanticMemory {
         Ok(())
     }
 
-    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, String> {
+    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, MornError> {
         Ok(self.facts.get(key).cloned())
     }
 
-    fn forget(&mut self, key: &str) -> Result<(), String> {
+    fn forget(&mut self, key: &str) -> Result<(), MornError> {
         self.facts.remove(key);
         Ok(())
     }
 
-    fn compress(&mut self) -> Result<usize, String> {
+    fn compress(&mut self) -> Result<usize, MornError> {
         let before = self.facts.len();
         if self.facts.len() > 1000 {
             let to_remove = self.facts.len() - 1000;
@@ -203,7 +204,7 @@ impl MemoryLayer for GraphMemory {
         "Graph Memory"
     }
 
-    fn store(&mut self, key: &str, record: MemoryRecord) -> Result<(), String> {
+    fn store(&mut self, key: &str, record: MemoryRecord) -> Result<(), MornError> {
         self.add_node(key, record.content.as_str().unwrap_or("unknown"));
         if let Some(rels) = record.metadata.get("relations") {
             if let Some(arr) = rels.as_array() {
@@ -221,7 +222,7 @@ impl MemoryLayer for GraphMemory {
         Ok(())
     }
 
-    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, String> {
+    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, MornError> {
         Ok(self.nodes.get(key).map(|n| {
             MemoryRecord::new(&n.id, Value::String(n.label.clone())).with_metadata(
                 "properties",
@@ -235,13 +236,13 @@ impl MemoryLayer for GraphMemory {
         }))
     }
 
-    fn forget(&mut self, key: &str) -> Result<(), String> {
+    fn forget(&mut self, key: &str) -> Result<(), MornError> {
         self.nodes.remove(key);
         self.edges.retain(|e| e.from != key && e.to != key);
         Ok(())
     }
 
-    fn compress(&mut self) -> Result<usize, String> {
+    fn compress(&mut self) -> Result<usize, MornError> {
         Ok(0)
     }
 

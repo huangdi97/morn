@@ -1,4 +1,5 @@
 //! Trust scorer tests.
+use crate::core::error::MornError;
 use super::*;
 
 #[test]

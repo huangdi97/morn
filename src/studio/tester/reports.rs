@@ -1,4 +1,5 @@
 //! reports — Builds studio test reports from executed test results.
+use crate::core::error::MornError;
 use super::{StudioTester, TestResult};
 
 impl StudioTester {

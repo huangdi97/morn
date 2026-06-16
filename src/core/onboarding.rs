@@ -1,5 +1,6 @@
 //! First-run onboarding wizard, setup flow, and user journey.
 
+use crate::core::error::MornError;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -79,20 +80,20 @@ impl Onboarding {
         self.current_step = next_step;
     }
 
-    pub fn set_api_key(&mut self, api_key: impl Into<String>) -> Result<(), String> {
+    pub fn set_api_key(&mut self, api_key: impl Into<String>) -> Result<(), MornError> {
         let api_key = api_key.into();
         if api_key.trim().is_empty() {
-            return Err("API key cannot be empty".to_string());
+            return Err(MornError::Internal("API key cannot be empty".to_string()))
         }
         self.draft.api_key = Some(api_key);
         self.current_step = OnboardingStep::ConfigureChannel;
         Ok(())
     }
 
-    pub fn select_channel(&mut self, channel: impl Into<String>) -> Result<(), String> {
+    pub fn select_channel(&mut self, channel: impl Into<String>) -> Result<(), MornError> {
         let channel = channel.into();
         if !is_supported_channel(&channel) {
-            return Err(format!("Unsupported channel: {}", channel));
+            return Err(MornError::Internal(format!("Unsupported channel: {}", channel)));
         }
         self.draft.channel = Some(channel);
         self.current_step = OnboardingStep::SelectModel;
@@ -103,11 +104,11 @@ impl Onboarding {
         &mut self,
         provider: impl Into<String>,
         model: impl Into<String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         let provider = provider.into();
         let model = model.into();
         if provider.trim().is_empty() || model.trim().is_empty() {
-            return Err("Provider and model cannot be empty".to_string());
+            return Err(MornError::Internal("Provider and model cannot be empty".to_string()))
         }
         self.draft.provider = Some(provider);
         self.draft.model = Some(model);
@@ -118,7 +119,7 @@ impl Onboarding {
         &self.draft
     }
 
-    pub fn complete(&mut self) -> Result<(), String> {
+    pub fn complete(&mut self) -> Result<(), MornError> {
         self.validate()?;
         if !self.completed {
             self.completed = true;
@@ -129,7 +130,7 @@ impl Onboarding {
         Ok(())
     }
 
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), MornError> {
         if self
             .draft
             .api_key
@@ -138,7 +139,7 @@ impl Onboarding {
             .trim()
             .is_empty()
         {
-            return Err("API key is required before completing onboarding".to_string());
+            return Err(MornError::Internal("API key is required before completing onboarding".to_string()))
         }
         if self
             .draft
@@ -148,7 +149,7 @@ impl Onboarding {
             .trim()
             .is_empty()
         {
-            return Err("Channel selection is required before completing onboarding".to_string());
+            return Err(MornError::Internal("Channel selection is required before completing onboarding".to_string()))
         }
         if self
             .draft
@@ -159,7 +160,7 @@ impl Onboarding {
             .is_empty()
             || self.draft.model.as_deref().unwrap_or("").trim().is_empty()
         {
-            return Err("Model selection is required before completing onboarding".to_string());
+            return Err(MornError::Internal("Model selection is required before completing onboarding".to_string()))
         }
         Ok(())
     }
@@ -181,7 +182,7 @@ fn config_path() -> PathBuf {
         .join("config.toml")
 }
 
-fn persist_onboarding_config(draft: &OnboardingDraft) -> Result<(), String> {
+fn persist_onboarding_config(draft: &OnboardingDraft) -> Result<(), MornError> {
     let path = config_path();
 
     if let Some(parent) = path.parent() {
@@ -247,10 +248,10 @@ fn persist_onboarding_config(draft: &OnboardingDraft) -> Result<(), String> {
     };
 
     let content = toml::to_string_pretty(&persisted)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
-    fs::write(&path, &content).map_err(|e| format!("Failed to write onboarding config: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to serialize config: {}", e)))?;
+    fs::write(&path, &content).map_err(|e| MornError::Internal(format!("Failed to write onboarding config: {}", e)))?;
 
-    fs::metadata(&path).map_err(|e| format!("Failed to verify config write: {}", e))?;
+    fs::metadata(&path).map_err(|e| MornError::Internal(format!("Failed to verify config write: {}", e)))?;
 
     Ok(())
 }

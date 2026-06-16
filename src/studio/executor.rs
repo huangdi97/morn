@@ -1,5 +1,6 @@
 //! Node execution logic: topological sort, input collection, and per-node-type execution.
 
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 use super::types::{ExecutionResult, NodeDefinition, NodeEdge, NodeGraph, NodeType};
@@ -8,7 +9,7 @@ use super::types::{ExecutionResult, NodeDefinition, NodeEdge, NodeGraph, NodeTyp
 pub struct NodeExecutor;
 
 impl NodeExecutor {
-    pub fn execute(graph: &NodeGraph) -> Result<Vec<ExecutionResult>, String> {
+    pub fn execute(graph: &NodeGraph) -> Result<Vec<ExecutionResult>, MornError> {
         let node_map: HashMap<&str, &NodeDefinition> =
             graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
@@ -51,7 +52,7 @@ impl NodeExecutor {
         node_map: &HashMap<&str, &NodeDefinition>,
         order: &mut Vec<String>,
         visited: &mut std::collections::HashSet<String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         if visited.contains(start) {
             return Ok(());
         }

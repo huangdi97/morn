@@ -1,5 +1,6 @@
 //! Security guard — policy enforcement, action checking, and profile management.
 
+use crate::core::error::MornError;
 use serde_json::Value;
 use std::collections::HashMap;
 use tracing;
@@ -122,12 +123,12 @@ impl SecurityGuard {
     }
 
     /// Validates whether an action is allowed and returns an error for blocked or approval-required actions.
-    pub fn is_allowed(&self, action: &str, params: &Value) -> Result<(), String> {
+    pub fn is_allowed(&self, action: &str, params: &Value) -> Result<(), MornError> {
         let level = self.check(action, params);
         self.enforce_level(action, &level)
     }
 
-    pub fn authorize(&self, operation: &str, agent_id: &str, user_id: &str) -> Result<(), String> {
+    pub fn authorize(&self, operation: &str, agent_id: &str, user_id: &str) -> Result<(), MornError> {
         let level = self.authorization_level(operation, agent_id, user_id);
         self.enforce_level(operation, &level)
     }
@@ -141,14 +142,14 @@ impl SecurityGuard {
             .unwrap_or_else(|| self.check(operation, &serde_json::json!({})))
     }
 
-    fn enforce_level(&self, action: &str, level: &SecurityLevel) -> Result<(), String> {
+    fn enforce_level(&self, action: &str, level: &SecurityLevel) -> Result<(), MornError> {
         match level {
             SecurityLevel::L1HardBlocked => {
                 if self.block_enabled {
-                    Err(format!(
+                    Err(MornError::Internal(format!(
                         "[SECURITY BLOCKED] Action '{}' is hard-blocked by security policy",
                         action
-                    ))
+                    )))
                 } else {
                     tracing::info!(
                         "[SECURITY] Action '{}' is hard-blocked (bypass enabled)",
@@ -159,10 +160,10 @@ impl SecurityGuard {
             }
             SecurityLevel::L2NeedApproval => {
                 if self.block_enabled {
-                    Err(format!(
+                    Err(MornError::Internal(format!(
                         "[SECURITY APPROVAL REQUIRED] Action '{}' requires user approval",
                         action
-                    ))
+                    )))
                 } else {
                     tracing::info!(
                         "[SECURITY] Action '{}' requires approval (bypass enabled)",

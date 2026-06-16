@@ -1,4 +1,5 @@
 //! orchestrator — Coordinates multi-agent teams, routing modes, and shared execution.
+use crate::core::error::MornError;
 use crate::bridge::a2a_discovery::A2ADiscovery;
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
@@ -111,21 +112,21 @@ impl Orchestrator {
     }
 
     /// Registers an expert specification and returns its id on success.
-    pub fn register_expert(&mut self, expert: ExpertSpec) -> Result<String, String> {
+    pub fn register_expert(&mut self, expert: ExpertSpec) -> Result<String, MornError> {
         let id = expert.id.clone();
         if self.experts.contains_key(&id) {
-            return Err(format!("Expert '{}' already registered", id));
+            return Err(MornError::Internal(format!("Expert '{}' already registered", id)));
         }
         self.experts.insert(id.clone(), expert);
         Ok(id)
     }
 
     /// Removes an expert by id and returns an error if it is not registered.
-    pub fn unregister_expert(&mut self, id: &str) -> Result<(), String> {
-        self.experts
+    pub fn unregister_expert(&mut self, id: &str) -> Result<(), MornError> {
+        Ok(self.experts
             .remove(id)
-            .ok_or_else(|| format!("Expert '{}' not found", id))
-            .map(|_| ())
+            .ok_or_else(|| MornError::Internal(format!("Expert '{}' not found", id)))
+            .map(|_| ())?)
     }
 
     /// Returns references to all registered experts.
@@ -134,10 +135,10 @@ impl Orchestrator {
     }
 
     /// Creates a team definition and returns its id when no duplicate exists.
-    pub fn create_team(&mut self, def: TeamDef) -> Result<String, String> {
+    pub fn create_team(&mut self, def: TeamDef) -> Result<String, MornError> {
         let id = def.id.clone();
         if self.teams.contains_key(&id) {
-            return Err(format!("Team '{}' already exists", id));
+            return Err(MornError::Internal(format!("Team '{}' already exists", id)));
         }
         self.teams.insert(id.clone(), def);
         if let Some(ref bus) = self.event_bus {
@@ -161,15 +162,15 @@ impl Orchestrator {
     }
 
     /// Deletes a team by id and returns an error if it does not exist.
-    pub fn delete_team(&mut self, id: &str) -> Result<(), String> {
-        self.teams
+    pub fn delete_team(&mut self, id: &str) -> Result<(), MornError> {
+        Ok(self.teams
             .remove(id)
-            .ok_or_else(|| format!("Team '{}' not found", id))
-            .map(|_| ())
+            .ok_or_else(|| MornError::Internal(format!("Team '{}' not found", id)))
+            .map(|_| ())?)
     }
 
     /// Runs a team against input text and returns member outputs plus the consensus result.
-    pub fn run_team(&self, team_id: &str, input: &str) -> Result<TeamResult, String> {
+    pub fn run_team(&self, team_id: &str, input: &str) -> Result<TeamResult, MornError> {
         let team = self
             .teams
             .get(team_id)

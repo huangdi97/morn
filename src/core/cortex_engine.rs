@@ -1,4 +1,5 @@
 //! cortex_engine — Coordinates high-level cognitive processing across agents and tasks.
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -109,25 +110,25 @@ impl CortexEngine {
             .clone()
     }
 
-    pub fn mcp_market(&self, registry_url: Option<&str>) -> Result<Vec<MCPMarketPlugin>, String> {
+    pub fn mcp_market(&self, registry_url: Option<&str>) -> Result<Vec<MCPMarketPlugin>, MornError> {
         let url = registry_url.unwrap_or(&self.mcp_registry_url);
 
         let response = reqwest::blocking::get(url)
-            .map_err(|e| format!("Failed to fetch MCP market from '{}': {}", url, e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to fetch MCP market from '{}': {}", url, e)))?;
 
         if !response.status().is_success() {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "MCP market registry returned HTTP {} from '{}'",
                 response.status(),
                 url
-            ));
+            )));
         }
 
         let plugins: Vec<MCPMarketPlugin> = response
             .json()
-            .map_err(|e| format!("Failed to parse MCP market response: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to parse MCP market response: {}", e)))?;
 
-        let mut installed = self.mcp_plugins.lock().map_err(|e| e.to_string())?;
+        let mut installed = self.mcp_plugins.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         *installed = plugins.clone();
 
         Ok(plugins)

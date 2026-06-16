@@ -1,4 +1,5 @@
 //! a2a — Defines Agent-to-Agent protocol messages and transport helpers.
+use crate::core::error::MornError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,29 +46,29 @@ pub enum A2AMessage {
 pub struct A2AProtocol;
 
 impl A2AProtocol {
-    pub fn serialize(msg: &A2AMessage) -> Result<String, String> {
-        serde_json::to_string(msg).map_err(|e| format!("A2A serialize error: {}", e))
+    pub fn serialize(msg: &A2AMessage) -> Result<String, MornError> {
+        serde_json::to_string(msg).map_err(|e| MornError::Internal(format!("A2A serialize error: {}", e)))
     }
 
-    pub fn deserialize(data: &str) -> Result<A2AMessage, String> {
-        serde_json::from_str(data).map_err(|e| format!("A2A deserialize error: {}", e))
+    pub fn deserialize(data: &str) -> Result<A2AMessage, MornError> {
+        serde_json::from_str(data).map_err(|e| MornError::Internal(format!("A2A deserialize error: {}", e)))
     }
 
-    pub fn send(endpoint: &str, msg: &A2AMessage) -> Result<A2AMessage, String> {
+    pub fn send(endpoint: &str, msg: &A2AMessage) -> Result<A2AMessage, MornError> {
         let payload = Self::serialize(msg)?;
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
         let resp = client
             .post(endpoint)
             .header("Content-Type", "application/json")
             .body(payload)
             .send()
-            .map_err(|e| format!("A2A send error: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("A2A send error: {}", e)))?;
         let body = resp
             .text()
-            .map_err(|e| format!("A2A read response error: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("A2A read response error: {}", e)))?;
         Self::deserialize(&body)
     }
 }

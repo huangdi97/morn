@@ -1,4 +1,5 @@
 //! governance — Provides console commands for governance and security controls.
+use crate::core::error::MornError;
 use crate::core::security::SecurityGuard;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -109,7 +110,7 @@ impl Governance {
         self.trust_threshold = threshold.clamp(0.0, 100.0);
     }
 
-    pub fn approve_item(&mut self, id: &str) -> Result<(), String> {
+    pub fn approve_item(&mut self, id: &str) -> Result<(), MornError> {
         let idx = self
             .approval_queue
             .iter()
@@ -119,7 +120,7 @@ impl Governance {
         Ok(())
     }
 
-    pub fn reject_item(&mut self, id: &str) -> Result<(), String> {
+    pub fn reject_item(&mut self, id: &str) -> Result<(), MornError> {
         let idx = self
             .approval_queue
             .iter()

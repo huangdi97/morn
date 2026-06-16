@@ -1,15 +1,16 @@
 //! Core memory storage types: MemoryRecord and the MemoryLayer trait.
 
+use crate::core::error::MornError;
 use serde_json::Value;
 use std::collections::HashMap;
 
 pub trait MemoryLayer: Send {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
-    fn store(&mut self, key: &str, data: MemoryRecord) -> Result<(), String>;
-    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, String>;
-    fn forget(&mut self, key: &str) -> Result<(), String>;
-    fn compress(&mut self) -> Result<usize, String>;
+    fn store(&mut self, key: &str, data: MemoryRecord) -> Result<(), MornError>;
+    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, MornError>;
+    fn forget(&mut self, key: &str) -> Result<(), MornError>;
+    fn compress(&mut self) -> Result<usize, MornError>;
     fn search(&self, query: &str, limit: usize) -> Vec<MemoryRecord>;
     fn size(&self) -> usize;
 }

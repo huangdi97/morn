@@ -1,4 +1,5 @@
 //! 多 Agent 协作模式 — 投票/路由/AgentAsTool/黑板等 7 种模式
+use crate::core::error::MornError;
 pub struct DebateMode {
     pub agents: Vec<String>,
     pub rounds: u32,
@@ -22,25 +23,25 @@ pub struct SwarmMode {
 }
 
 impl DebateMode {
-    pub fn execute(&self, task: &str) -> Result<String, String> {
+    pub fn execute(&self, task: &str) -> Result<String, MornError> {
         Ok(format!("DebateMode executed: {task}"))
     }
 }
 
 impl VotingMode {
-    pub fn execute(&self, task: &str) -> Result<String, String> {
+    pub fn execute(&self, task: &str) -> Result<String, MornError> {
         Ok(format!("VotingMode executed: {task}"))
     }
 }
 
 impl HierarchyMode {
-    pub fn execute(&self, task: &str) -> Result<String, String> {
+    pub fn execute(&self, task: &str) -> Result<String, MornError> {
         Ok(format!("HierarchyMode executed: {task}"))
     }
 }
 
 impl SwarmMode {
-    pub fn execute(&self, task: &str) -> Result<String, String> {
+    pub fn execute(&self, task: &str) -> Result<String, MornError> {
         Ok(format!("SwarmMode executed: {task}"))
     }
 }

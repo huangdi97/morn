@@ -1,5 +1,6 @@
 //! Component assembly module — types for building, validating, and wiring agent components.
 
+use crate::core::error::MornError;
 mod builder;
 mod graph;
 pub mod rules;

@@ -1,5 +1,6 @@
 //! types — Supervisor type definitions including NLAgentDef, DecisionLevel, and TaskPlan.
 
+use crate::core::error::MornError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

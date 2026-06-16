@@ -1,4 +1,5 @@
 //! storage — Defines serializable memory entries and storage records.
+use crate::core::error::MornError;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MemoryItem {
     pub key: String,
@@ -45,7 +46,7 @@ impl CoreMemory {
         block
     }
 
-    pub fn apply_changes(&mut self, changes: Vec<MemoryChange>) -> Result<(), String> {
+    pub fn apply_changes(&mut self, changes: Vec<MemoryChange>) -> Result<(), MornError> {
         for change in changes {
             match change.operation.as_str() {
                 "add" => self.add(&change.key, &change.value),
@@ -54,7 +55,7 @@ impl CoreMemory {
                     self.add(&change.key, &change.value);
                 }
                 "remove" | "delete" => self.remove(&change.key),
-                _ => return Err(format!("Unknown memory operation: {}", change.operation)),
+                _ => return Err(MornError::Internal(format!("Unknown memory operation: {}", change.operation))),
             }
         }
         Ok(())
@@ -189,7 +190,7 @@ impl MemoryManager {
         block
     }
 
-    pub fn search(&self, query: &str) -> Result<Vec<MemoryItem>, String> {
+    pub fn search(&self, query: &str) -> Result<Vec<MemoryItem>, MornError> {
         let mut results = Vec::new();
         for item in self.recall.search(query) {
             results.push(item.clone());
@@ -200,7 +201,7 @@ impl MemoryManager {
         Ok(results)
     }
 
-    pub fn store_archival(&self, _content: &str) -> Result<(), String> {
+    pub fn store_archival(&self, _content: &str) -> Result<(), MornError> {
         Ok(())
     }
 
@@ -212,14 +213,14 @@ impl MemoryManager {
         self.core.add(key, value);
     }
 
-    pub async fn agent_edit_core(&mut self, changes: Vec<MemoryChange>) -> Result<(), String> {
+    pub async fn agent_edit_core(&mut self, changes: Vec<MemoryChange>) -> Result<(), MornError> {
         self.core.apply_changes(changes)
     }
 
     pub async fn extract_memories(
         &mut self,
         conversation: &[ConversationMessage],
-    ) -> Result<Vec<MemoryItem>, String> {
+    ) -> Result<Vec<MemoryItem>, MornError> {
         let mut extracted = Vec::new();
         for msg in conversation {
             let content_lower = msg.content.to_lowercase();

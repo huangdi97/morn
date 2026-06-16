@@ -1,4 +1,5 @@
 //! registry — Maintains persona registration, lookup, and default selection.
+use crate::core::error::MornError;
 use super::*;
 
 pub fn get_persona(id: &str) -> Option<Persona> {
@@ -36,7 +37,7 @@ pub fn get_preset_persona(name: &str) -> Option<Persona> {
     presets::get_preset_persona(name)
 }
 
-pub fn compose(id1: &str, id2: &str, ratio: f32) -> Result<Persona, String> {
+pub fn compose(id1: &str, id2: &str, ratio: f32) -> Result<Persona, MornError> {
     let primary = lookup_persona(id1).ok_or_else(|| format!("Persona not found: {}", id1))?;
     let secondary = lookup_persona(id2).ok_or_else(|| format!("Persona not found: {}", id2))?;
     let primary_weight = ratio.clamp(0.0, 1.0) as f64;

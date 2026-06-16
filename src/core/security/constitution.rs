@@ -1,5 +1,6 @@
 //! Security constitution — security levels, policy definitions, and the Merkle audit chain.
 
+use crate::core::error::MornError;
 use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -157,7 +158,7 @@ impl AuditLog {
             .unwrap_or(false)
     }
 
-    pub fn tamper(&mut self, index: usize, new_data: &str) -> Result<(), String> {
+    pub fn tamper(&mut self, index: usize, new_data: &str) -> Result<(), MornError> {
         let entry = self
             .entries
             .get_mut(index)

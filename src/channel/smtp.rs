@@ -1,4 +1,5 @@
 //! smtp — Sends and receives channel messages through email transport.
+use crate::core::error::MornError;
 use crate::channel::adapter::ChannelMessage;
 
 pub struct SmtpChannel {
@@ -26,12 +27,12 @@ impl SmtpChannel {
         }
     }
 
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env() -> Result<Self, MornError> {
         let host = std::env::var("SMTP_HOST").map_err(|_| "SMTP_HOST not set".to_string())?;
         let port = std::env::var("SMTP_PORT")
             .unwrap_or_else(|_| "587".to_string())
             .parse::<u16>()
-            .map_err(|e| format!("Invalid SMTP_PORT: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Invalid SMTP_PORT: {}", e)))?;
         let username =
             std::env::var("SMTP_USERNAME").map_err(|_| "SMTP_USERNAME not set".to_string())?;
         let password =
@@ -40,7 +41,7 @@ impl SmtpChannel {
         Ok(Self::new(&host, port, &username, &password, &from))
     }
 
-    pub fn send_report(&self, to: &str, subject: &str, body: &str) -> Result<(), String> {
+    pub fn send_report(&self, to: &str, subject: &str, body: &str) -> Result<(), MornError> {
         use lettre::message::header::ContentType;
         use lettre::transport::smtp::authentication::Credentials;
         use lettre::{Message, SmtpTransport, Transport};
@@ -59,24 +60,24 @@ impl SmtpChannel {
             .subject(subject)
             .header(ContentType::TEXT_PLAIN)
             .body(body.to_string())
-            .map_err(|e| format!("Failed to build email: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to build email: {}", e)))?;
 
         let creds = Credentials::new(self.username.clone(), self.password.clone());
 
         let mailer = SmtpTransport::starttls_relay(&self.smtp_host)
-            .map_err(|e| format!("SMTP relay config error: {}", e))?
+            .map_err(|e| MornError::Internal(format!("SMTP relay config error: {}", e)))?
             .port(self.smtp_port)
             .credentials(creds)
             .build();
 
         mailer
             .send(&email)
-            .map_err(|e| format!("Failed to send email: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to send email: {}", e)))?;
 
         Ok(())
     }
 
-    pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {
+    pub fn send(&self, msg: &ChannelMessage) -> Result<(), MornError> {
         let to = msg
             .metadata
             .get("to")

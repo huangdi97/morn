@@ -1,4 +1,5 @@
 //! chat_agent — Adapts chat model calls into the bridge agent interface.
+use crate::core::error::MornError;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing;
@@ -56,25 +57,25 @@ impl ChatAgent {
         }
     }
 
-    pub fn from_router(router: &ModelRouter, request: &str) -> Result<Self, String> {
+    pub fn from_router(router: &ModelRouter, request: &str) -> Result<Self, MornError> {
         let route = router.route(request)?;
         Self::from_route(&route)
     }
 
-    pub fn from_route(route: &RoutedModel) -> Result<Self, String> {
+    pub fn from_route(route: &RoutedModel) -> Result<Self, MornError> {
         if route.base_url.trim().is_empty() {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "Routed model '{}' from provider '{}' has no chat endpoint",
                 route.name, route.provider
-            ));
+            )));
         }
 
         let api_key = route.api_key.clone().unwrap_or_default();
         if route.model_type == ModelType::Cloud && api_key.trim().is_empty() {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "Routed cloud model '{}' from provider '{}' is missing an API key",
                 route.name, route.provider
-            ));
+            )));
         }
 
         Ok(ChatAgent {
@@ -100,12 +101,12 @@ impl ChatAgent {
         &self.api_url
     }
 
-    pub fn chat(&self, prompt: &str, system_prompt: &str) -> Result<String, String> {
-        let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+    pub fn chat(&self, prompt: &str, system_prompt: &str) -> Result<String, MornError> {
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| MornError::Internal(e.to_string()))?;
         runtime.block_on(self.chat_async(prompt, system_prompt))
     }
 
-    pub async fn chat_async(&self, prompt: &str, system_prompt: &str) -> Result<String, String> {
+    pub async fn chat_async(&self, prompt: &str, system_prompt: &str) -> Result<String, MornError> {
         let request = ChatRequest {
             model: self.model.clone(),
             messages: vec![
@@ -154,7 +155,7 @@ impl ChatAgent {
                     let chat_response: ChatResponse = response
                         .json()
                         .await
-                        .map_err(|e| format!("JSON parse error: {}", e))?;
+                        .map_err(|e| MornError::Internal(format!("JSON parse error: {}", e)))?;
 
                     let content = chat_response
                         .choices
@@ -188,7 +189,7 @@ impl ChatAgent {
             }
         }
 
-        Err(format!("ChatAgent failed after 3 retries: {}", last_error))
+        Err(MornError::Internal(format!("ChatAgent failed after 3 retries: {}", last_error)))
     }
 }
 

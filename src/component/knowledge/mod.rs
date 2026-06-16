@@ -1,5 +1,6 @@
 //! Knowledge module — shared types, trait, and module aggregator.
 
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 use crate::core::component::IOComponent;
@@ -29,8 +30,8 @@ pub enum UpdateStrategy {
 }
 
 pub trait Knowledge: IOComponent {
-    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, String>;
-    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), String>;
+    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, MornError>;
+    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), MornError>;
 }
 
 pub fn create_default_knowledge() -> Vec<Box<dyn Knowledge>> {

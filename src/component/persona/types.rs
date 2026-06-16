@@ -1,4 +1,5 @@
 //! types — Defines persona data structures, prompt layers, and tuning parameters.
+use crate::core::error::MornError;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PersonaParameters {
     pub temperature: f64,

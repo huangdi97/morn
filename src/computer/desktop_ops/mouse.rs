@@ -1,5 +1,6 @@
 //! Mouse operations — move, click, and click-at via OS APIs or simulation.
 
+use crate::core::error::MornError;
 use super::run_ps;
 use super::{ComputerOpResult, SecurityLevel};
 
@@ -19,7 +20,7 @@ pub fn mouse_move(x: i32, y: i32) -> ComputerOpResult {
             },
             Err(e) => ComputerOpResult {
                 success: false,
-                data: e,
+                data: e.to_string(),
                 security_level: SecurityLevel::L2Local.as_str().to_string(),
                 approval_required: false,
             },
@@ -59,7 +60,7 @@ pub fn mouse_click(button: &str) -> ComputerOpResult {
             },
             Err(e) => ComputerOpResult {
                 success: false,
-                data: e,
+                data: e.to_string(),
                 security_level: SecurityLevel::L2Local.as_str().to_string(),
                 approval_required: false,
             },

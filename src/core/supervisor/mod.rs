@@ -1,4 +1,5 @@
 //! supervisor — Oversees task execution decisions, plans, and risk controls.
+use crate::core::error::MornError;
 pub mod auto_hands;
 mod decision;
 mod execution;
@@ -30,7 +31,7 @@ use crate::core::supervisor::execution::scheduler::Scheduler;
 use crate::core::thread_pool::TaskPool;
 use crate::core::trust_scorer::scorer::TrustScorer;
 
-pub type ChatFn = dyn Fn(&str, &str) -> Result<String, String>;
+pub type ChatFn = dyn Fn(&str, &str) -> Result<String, MornError>;
 
 pub struct Supervisor {
     storage: Option<Storage>,
@@ -245,7 +246,7 @@ impl Supervisor {
     }
 
     /// Queries all memory layers with the given context for decision support.
-    pub fn query_memory(&mut self, context: &str) -> Result<(), String> {
+    pub fn query_memory(&mut self, context: &str) -> Result<(), MornError> {
         if let Some(ref mut mem) = self.memory_orchestrator {
             mem.decide_with_memory(context)?;
         }
@@ -253,7 +254,7 @@ impl Supervisor {
     }
 
     /// Builds a team from natural language using local keyword presets.
-    pub fn build_team_from_nl(&self, nl: &str) -> Result<TeamDef, String> {
+    pub fn build_team_from_nl(&self, nl: &str) -> Result<TeamDef, MornError> {
         crate::core::orchestrator::team_builder::nl_to_team(nl)
     }
 }

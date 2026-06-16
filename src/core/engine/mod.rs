@@ -1,4 +1,5 @@
 //! engine — Defines task execution engines and workflow execution primitives.
+use crate::core::error::MornError;
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::storage::Storage;
 
@@ -40,7 +41,7 @@ mod tests {
             approval_required: false,
         };
 
-        let mut execute_fn = |_plan: &TaskPlan| -> Result<TaskResult, String> {
+        let mut execute_fn = |_plan: &TaskPlan| -> Result<TaskResult, MornError> {
             Ok(TaskResult {
                 task_id: "test-1".to_string(),
                 subtask_results: vec![SubTaskResult {
@@ -139,7 +140,7 @@ mod tests {
             approval_required: false,
         };
 
-        let execute = |sub: &SubTaskDef| -> Result<String, String> {
+        let execute = |sub: &SubTaskDef| -> Result<String, MornError> {
             match sub.id.as_str() {
                 "s1" => Ok("search results".into()),
                 "s2" => Ok("summary".into()),

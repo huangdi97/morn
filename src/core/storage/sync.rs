@@ -1,4 +1,5 @@
 //! sync — Persists device sync metadata and synchronization events.
+use crate::core::error::MornError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
@@ -25,8 +26,8 @@ pub struct DeviceRecord {
 }
 
 impl Storage {
-    pub fn insert_sync_event(&self, event: &SyncEventRecord) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn insert_sync_event(&self, event: &SyncEventRecord) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT INTO sync_events (id, entity_type, entity_id, action, data_json, timestamp, device_id, synced)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -35,15 +36,15 @@ impl Storage {
                 event.data_json, event.timestamp, event.device_id, event.synced as i32
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
-    pub fn list_unsynced_events(&self) -> Result<Vec<SyncEventRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_unsynced_events(&self) -> Result<Vec<SyncEventRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, entity_type, entity_id, action, data_json, timestamp, device_id, synced FROM sync_events WHERE synced = 0 ORDER BY timestamp ASC")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
                 let synced_int: i32 = row.get(7)?;
@@ -58,30 +59,30 @@ impl Storage {
                     synced: synced_int != 0,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut events = Vec::new();
         for row in rows {
-            events.push(row.map_err(|e| e.to_string())?);
+            events.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(events)
     }
 
-    pub fn get_sync_event(&self, id: &str) -> Result<Option<SyncEventRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn get_sync_event(&self, id: &str) -> Result<Option<SyncEventRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, entity_type, entity_id, action, data_json, timestamp, device_id, synced FROM sync_events WHERE id = ?1")
-            .map_err(|e| e.to_string())?;
-        let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
-        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
-            let synced_int: i32 = row.get(7).map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut rows = stmt.query(params![id]).map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+            let synced_int: i32 = row.get(7).map_err(|e| MornError::Internal(e.to_string()))?;
             Ok(Some(SyncEventRecord {
-                id: row.get(0).map_err(|e| e.to_string())?,
-                entity_type: row.get(1).map_err(|e| e.to_string())?,
-                entity_id: row.get(2).map_err(|e| e.to_string())?,
-                action: row.get(3).map_err(|e| e.to_string())?,
-                data_json: row.get(4).map_err(|e| e.to_string())?,
-                timestamp: row.get(5).map_err(|e| e.to_string())?,
-                device_id: row.get(6).map_err(|e| e.to_string())?,
+                id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
+                entity_type: row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,
+                entity_id: row.get(2).map_err(|e| MornError::Internal(e.to_string()))?,
+                action: row.get(3).map_err(|e| MornError::Internal(e.to_string()))?,
+                data_json: row.get(4).map_err(|e| MornError::Internal(e.to_string()))?,
+                timestamp: row.get(5).map_err(|e| MornError::Internal(e.to_string()))?,
+                device_id: row.get(6).map_err(|e| MornError::Internal(e.to_string()))?,
                 synced: synced_int != 0,
             }))
         } else {
@@ -89,8 +90,8 @@ impl Storage {
         }
     }
 
-    pub fn insert_remote_sync_event(&self, event: &SyncEventRecord) -> Result<bool, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn insert_remote_sync_event(&self, event: &SyncEventRecord) -> Result<bool, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let changed = conn
             .execute(
                 "INSERT OR IGNORE INTO sync_events (id, entity_type, entity_id, action, data_json, timestamp, device_id, synced)
@@ -105,51 +106,51 @@ impl Storage {
                     event.device_id
                 ],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(changed > 0)
     }
 
-    pub fn mark_event_synced(&self, id: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn mark_event_synced(&self, id: &str) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "UPDATE sync_events SET synced = 1 WHERE id = ?1",
             params![id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
-    pub fn mark_events_synced(&self, ids: &[String]) -> Result<(), String> {
+    pub fn mark_events_synced(&self, ids: &[String]) -> Result<(), MornError> {
         for id in ids {
             self.mark_event_synced(id)?;
         }
         Ok(())
     }
 
-    pub fn clear_synced_events(&self) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn clear_synced_events(&self) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute("DELETE FROM sync_events WHERE synced = 1", [])
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     // Devices CRUD
-    pub fn upsert_device(&self, device: &DeviceRecord) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn upsert_device(&self, device: &DeviceRecord) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT OR REPLACE INTO devices (id, name, last_seen, public_key)
              VALUES (?1, ?2, ?3, ?4)",
             params![device.id, device.name, device.last_seen, device.public_key],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
-    pub fn list_devices(&self) -> Result<Vec<DeviceRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_devices(&self) -> Result<Vec<DeviceRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, name, last_seen, public_key FROM devices ORDER BY last_seen DESC")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
                 Ok(DeviceRecord {
@@ -159,18 +160,18 @@ impl Storage {
                     public_key: row.get(3)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut devices = Vec::new();
         for row in rows {
-            devices.push(row.map_err(|e| e.to_string())?);
+            devices.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(devices)
     }
 
-    pub fn delete_device(&self, id: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn delete_device(&self, id: &str) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute("DELETE FROM devices WHERE id = ?1", params![id])
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 }

@@ -1,9 +1,10 @@
 //! 数据转换器 — 流水线中数据格式转换与校验
+use crate::core::error::MornError;
 use serde_json::{Map, Value};
 
 pub trait DataTransformer {
     fn name(&self) -> &str;
-    fn transform(&self, input: Value) -> Result<Value, String>;
+    fn transform(&self, input: Value) -> Result<Value, MornError>;
     fn input_schema(&self) -> Value;
     fn output_schema(&self) -> Value;
 }
@@ -21,7 +22,7 @@ impl TransformPipeline {
         self.stages.push(stage);
     }
 
-    pub fn execute(&self, input: Value) -> Result<Value, String> {
+    pub fn execute(&self, input: Value) -> Result<Value, MornError> {
         let mut current = input;
         for stage in &self.stages {
             current = stage.transform(current)?;
@@ -59,7 +60,7 @@ impl DataTransformer for FieldMapper {
         &self.name
     }
 
-    fn transform(&self, input: Value) -> Result<Value, String> {
+    fn transform(&self, input: Value) -> Result<Value, MornError> {
         let obj = input
             .as_object()
             .ok_or_else(|| "input must be a JSON object".to_string())?;

@@ -1,4 +1,5 @@
 //! types — Type definitions for the Component system.
+use crate::core::error::MornError;
 use serde_json::Value;
 use std::fmt;
 

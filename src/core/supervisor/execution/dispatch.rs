@@ -1,4 +1,5 @@
 //! dispatch — Task execution, lifecycle events, and inline chat dispatch.
+use crate::core::error::MornError;
 use crate::bridge::chat_agent::ChatAgent;
 use crate::core::storage::{DecisionRecord, TaskRecord};
 use tracing;
@@ -16,8 +17,8 @@ impl Supervisor {
     pub fn execute_plan(
         &mut self,
         plan: &TaskPlan,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    ) -> Result<TaskResult, String> {
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
+    ) -> Result<TaskResult, MornError> {
         self.turn_count += 1;
 
         let tier = classify_execution_level(&plan.decision_level)
@@ -117,7 +118,7 @@ impl Supervisor {
                     }
                 }
                 if let Some(ref bus) = self.event_bus {
-                    publish_plan_failed_events(bus, &plan.task_id, &err);
+                    publish_plan_failed_events(bus, &plan.task_id, &err.to_string());
                 }
                 self.audit_log.append(
                     "supervisor",
@@ -167,8 +168,8 @@ impl Supervisor {
     pub fn execute_chat(
         &mut self,
         input: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
-    ) -> Result<String, String> {
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
+    ) -> Result<String, MornError> {
         let task_id = format!("task-{}", uuid::Uuid::new_v4());
         let (inline_override, clean_input) = match DecisionOverride::parse_prefixed(input) {
             Some((override_, clean_input)) => (Some(override_), clean_input),
@@ -226,7 +227,7 @@ impl Supervisor {
             decision_level: level.as_str().to_string(),
             approval_required: false,
         };
-        let routed_chat_fn = |context: &str, system: &str| -> Result<String, String> {
+        let routed_chat_fn = |context: &str, system: &str| -> Result<String, MornError> {
             if let Some(agent) = &routed_agent {
                 agent.chat(context, system)
             } else {

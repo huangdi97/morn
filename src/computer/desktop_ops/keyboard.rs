@@ -1,5 +1,6 @@
 //! Keyboard operations — typing, hotkeys, and clipboard management via OS APIs or simulation.
 
+use crate::core::error::MornError;
 use super::run_ps;
 use super::{ComputerOpResult, SecurityLevel};
 
@@ -20,7 +21,7 @@ pub fn keyboard_type(text: &str) -> ComputerOpResult {
             },
             Err(e) => ComputerOpResult {
                 success: false,
-                data: e,
+                data: e.to_string(),
                 security_level: SecurityLevel::L2Local.as_str().to_string(),
                 approval_required: false,
             },
@@ -53,7 +54,7 @@ pub fn keyboard_hotkey(keys: &[&str]) -> ComputerOpResult {
             },
             Err(e) => ComputerOpResult {
                 success: false,
-                data: e,
+                data: e.to_string(),
                 security_level: SecurityLevel::L2Local.as_str().to_string(),
                 approval_required: false,
             },
@@ -86,7 +87,7 @@ pub fn clipboard_copy(text: &str) -> ComputerOpResult {
             },
             Err(e) => ComputerOpResult {
                 success: false,
-                data: e,
+                data: e.to_string(),
                 security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
                 approval_required: false,
             },
@@ -115,7 +116,7 @@ pub fn clipboard_paste() -> ComputerOpResult {
             },
             Err(e) => ComputerOpResult {
                 success: false,
-                data: e,
+                data: e.to_string(),
                 security_level: SecurityLevel::L1Sandbox.as_str().to_string(),
                 approval_required: false,
             },

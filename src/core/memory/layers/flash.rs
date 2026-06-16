@@ -1,4 +1,5 @@
 //! Flash memory — priority-tagged instant recall.
+use crate::core::error::MornError;
 use std::collections::VecDeque;
 use std::time::Duration;
 
@@ -46,7 +47,7 @@ impl MemoryLayer for FlashMemory {
         "Flash Memory"
     }
 
-    fn store(&mut self, _key: &str, mut record: MemoryRecord) -> Result<(), String> {
+    fn store(&mut self, _key: &str, mut record: MemoryRecord) -> Result<(), MornError> {
         if record.ttl_secs.is_none() {
             record.ttl_secs = Some(self.default_ttl.as_secs());
         }
@@ -60,16 +61,16 @@ impl MemoryLayer for FlashMemory {
         Ok(())
     }
 
-    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, String> {
+    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, MornError> {
         Ok(self.items.iter().find(|i| i.key == key).cloned())
     }
 
-    fn forget(&mut self, key: &str) -> Result<(), String> {
+    fn forget(&mut self, key: &str) -> Result<(), MornError> {
         self.items.retain(|i| i.key != key);
         Ok(())
     }
 
-    fn compress(&mut self) -> Result<usize, String> {
+    fn compress(&mut self) -> Result<usize, MornError> {
         let before = self.items.len();
         self.evict_expired();
         if self.items.len() > self.max_capacity {

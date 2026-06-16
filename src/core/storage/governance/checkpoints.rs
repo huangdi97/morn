@@ -1,5 +1,6 @@
 //! Checkpoint storage operations.
 
+use crate::core::error::MornError;
 use rusqlite::params;
 
 use super::super::Storage;
@@ -18,8 +19,8 @@ pub struct SaveCheckpointArgs<'a> {
 
 impl Storage {
     /// Saves a checkpoint using grouped arguments and returns success when the row is stored.
-    pub fn save_checkpoint_args(&self, args: SaveCheckpointArgs<'_>) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn save_checkpoint_args(&self, args: SaveCheckpointArgs<'_>) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT INTO checkpoints (id, session_id, step_index, step_name, state_json, metadata_json, parent_id, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -34,7 +35,7 @@ impl Storage {
                 chrono::Utc::now().to_rfc3339()
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
@@ -49,7 +50,7 @@ impl Storage {
         state_json: &str,
         metadata_json: &str,
         parent_id: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         self.save_checkpoint_args(SaveCheckpointArgs {
             id,
             session_id,
@@ -65,21 +66,21 @@ impl Storage {
     pub fn load_latest_checkpoint(
         &self,
         session_id: &str,
-    ) -> Result<Option<CheckpointRow>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    ) -> Result<Option<CheckpointRow>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, session_id, step_index, step_name, state_json, metadata_json, parent_id FROM checkpoints WHERE session_id = ?1 ORDER BY step_index DESC LIMIT 1")
-            .map_err(|e| e.to_string())?;
-        let mut rows = stmt.query(params![session_id]).map_err(|e| e.to_string())?;
-        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut rows = stmt.query(params![session_id]).map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
             Ok(Some((
-                row.get(0).map_err(|e| e.to_string())?,
-                row.get(1).map_err(|e| e.to_string())?,
-                row.get(2).map_err(|e| e.to_string())?,
-                row.get(3).map_err(|e| e.to_string())?,
-                row.get(4).map_err(|e| e.to_string())?,
-                row.get(5).map_err(|e| e.to_string())?,
-                row.get(6).map_err(|e| e.to_string())?,
+                row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
+                row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,
+                row.get(2).map_err(|e| MornError::Internal(e.to_string()))?,
+                row.get(3).map_err(|e| MornError::Internal(e.to_string()))?,
+                row.get(4).map_err(|e| MornError::Internal(e.to_string()))?,
+                row.get(5).map_err(|e| MornError::Internal(e.to_string()))?,
+                row.get(6).map_err(|e| MornError::Internal(e.to_string()))?,
             )))
         } else {
             Ok(None)
@@ -90,11 +91,11 @@ impl Storage {
     pub fn list_checkpoints(
         &self,
         session_id: &str,
-    ) -> Result<Vec<(String, i32, String, String)>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    ) -> Result<Vec<(String, i32, String, String)>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, step_index, step_name, created_at FROM checkpoints WHERE session_id = ?1 ORDER BY step_index ASC")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![session_id], |row| {
                 Ok((
@@ -104,10 +105,10 @@ impl Storage {
                     row.get::<_, String>(3)?,
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut checkpoints = Vec::new();
         for row in rows {
-            checkpoints.push(row.map_err(|e| e.to_string())?);
+            checkpoints.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(checkpoints)
     }
@@ -118,14 +119,14 @@ impl Storage {
         cp_id: &str,
         new_id: &str,
         new_session_id: &str,
-    ) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    ) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT INTO checkpoints (id, session_id, step_index, step_name, state_json, metadata_json, parent_id, created_at)
              SELECT ?1, ?2, step_index, step_name, state_json, metadata_json, parent_id, ?3 FROM checkpoints WHERE id = ?4",
             params![new_id, new_session_id, chrono::Utc::now().to_rfc3339(), cp_id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 }

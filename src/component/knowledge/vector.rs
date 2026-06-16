@@ -1,5 +1,6 @@
 //! Vector knowledge representation with cosine-similarity search.
 
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 use crate::core::component::{
@@ -42,42 +43,42 @@ impl VectorKnowledge {
     }
 
     /// Generates an embedding vector for the given text using a local embedding model (Ollama).
-    pub fn embed(text: &str) -> Result<Vec<f32>, String> {
+    pub fn embed(text: &str) -> Result<Vec<f32>, MornError> {
         let client = reqwest::blocking::Client::new();
         let resp = client
             .post("http://localhost:11434/api/embeddings")
             .json(&serde_json::json!({"model": "nomic-embed-text", "prompt": text}))
             .send()
-            .map_err(|e| format!("Embedding API call failed: {}", e))?;
-        let body: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(format!("Embedding API call failed: {}", e)))?;
+        let body: serde_json::Value = resp.json().map_err(|e| MornError::Internal(e.to_string()))?;
         let embedding: Vec<f32> =
-            serde_json::from_value(body["embedding"].clone()).map_err(|e| e.to_string())?;
+            serde_json::from_value(body["embedding"].clone()).map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(embedding)
     }
 
-    pub fn persist(&self, path: &str) -> Result<(), String> {
-        let db = sled::open(path).map_err(|e| e.to_string())?;
+    pub fn persist(&self, path: &str) -> Result<(), MornError> {
+        let db = sled::open(path).map_err(|e| MornError::Internal(e.to_string()))?;
         let snapshot = PersistedVectorKnowledge {
             id: self.id.clone(),
             name: self._name.clone(),
             vectors: self.vectors.clone(),
             texts: self.texts.clone(),
         };
-        let val = bincode::serialize(&snapshot).map_err(|e| e.to_string())?;
+        let val = bincode::serialize(&snapshot).map_err(|e| MornError::Internal(e.to_string()))?;
         db.insert(b"vector_knowledge", val)
-            .map_err(|e| e.to_string())?;
-        db.flush().map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        db.flush().map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
-    pub fn load(path: &str) -> Result<Self, String> {
-        let db = sled::open(path).map_err(|e| e.to_string())?;
+    pub fn load(path: &str) -> Result<Self, MornError> {
+        let db = sled::open(path).map_err(|e| MornError::Internal(e.to_string()))?;
         let val = db
             .get(b"vector_knowledge")
-            .map_err(|e| e.to_string())?
+            .map_err(|e| MornError::Internal(e.to_string()))?
             .ok_or_else(|| "No vector knowledge snapshot found".to_string())?;
         let snapshot: PersistedVectorKnowledge =
-            bincode::deserialize(&val).map_err(|e| e.to_string())?;
+            bincode::deserialize(&val).map_err(|e| MornError::Internal(e.to_string()))?;
 
         Ok(VectorKnowledge {
             id: snapshot.id,
@@ -107,16 +108,16 @@ impl Component for VectorKnowledge {
     fn type_name(&self) -> &str {
         "knowledge"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -141,10 +142,10 @@ impl IOComponent for VectorKnowledge {
             },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }
@@ -156,7 +157,7 @@ impl SecureComponent for VectorKnowledge {
 }
 
 impl Knowledge for VectorKnowledge {
-    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, String> {
+    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, MornError> {
         if !self.texts.contains_key(query) && !self.vectors.contains_key(query) {
             return Ok(vec![]);
         }
@@ -183,7 +184,7 @@ impl Knowledge for VectorKnowledge {
             .collect())
     }
 
-    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), String> {
+    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), MornError> {
         for item in items {
             self.texts.insert(item.key.clone(), item.value);
         }

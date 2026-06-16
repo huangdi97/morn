@@ -1,4 +1,5 @@
 //! skill — Defines executable skills and their component integration.
+use crate::core::error::MornError;
 use crate::core::component::{Data, IOComponent};
 use std::collections::HashMap;
 
@@ -23,7 +24,7 @@ pub struct SkillStep {
 
 pub trait Skill: IOComponent {
     fn steps(&self) -> Vec<SkillStep>;
-    fn execute(&mut self, input: Data) -> Result<Data, String>;
+    fn execute(&mut self, input: Data) -> Result<Data, MornError>;
 }
 
 #[cfg(test)]

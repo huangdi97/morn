@@ -1,4 +1,5 @@
 //! worker — Runs background worker tasks and dispatches queued work.
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -21,22 +22,22 @@ impl WorkerPool {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), String> {
-        let mut running = self.running.lock().map_err(|e| e.to_string())?;
+    pub fn start(&mut self) -> Result<(), MornError> {
+        let mut running = self.running.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         *running = true;
         Ok(())
     }
 
-    pub fn shutdown(&mut self) -> Result<(), String> {
-        let mut running = self.running.lock().map_err(|e| e.to_string())?;
+    pub fn shutdown(&mut self) -> Result<(), MornError> {
+        let mut running = self.running.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         *running = false;
-        let mut workers = self.workers.lock().map_err(|e| e.to_string())?;
+        let mut workers = self.workers.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         workers.clear();
         Ok(())
     }
 
-    pub fn assign(&self, channel_id: &str) -> Result<(), String> {
-        let mut workers = self.workers.lock().map_err(|e| e.to_string())?;
+    pub fn assign(&self, channel_id: &str) -> Result<(), MornError> {
+        let mut workers = self.workers.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         workers.insert(
             channel_id.to_string(),
             WorkerHandle {
@@ -47,8 +48,8 @@ impl WorkerPool {
         Ok(())
     }
 
-    pub fn remove(&self, channel_id: &str) -> Result<(), String> {
-        let mut workers = self.workers.lock().map_err(|e| e.to_string())?;
+    pub fn remove(&self, channel_id: &str) -> Result<(), MornError> {
+        let mut workers = self.workers.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         workers.remove(channel_id);
         Ok(())
     }

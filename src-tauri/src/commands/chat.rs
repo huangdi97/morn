@@ -1,3 +1,4 @@
+use crate::MornError;
 use crate::AppState;
 use tauri::State;
 
@@ -5,13 +6,13 @@ const DEFAULT_API_KEY: &str = "sk-zcFNOoh23DWQZxNdmCgXQnomTvc1jmPt";
 const SENSENOVA_BASE_URL: &str = "https://token.sensenova.cn/v1";
 
 #[tauri::command]
-pub(crate) fn send_message(text: String, state: State<AppState>) -> Result<String, String> {
+pub(crate) fn send_message(text: String, state: State<AppState>) -> Result<String, MornError> {
     if text.trim().starts_with("/clear") {
-        let mut supervisor = state.supervisor.lock().map_err(|e| e.to_string())?;
+        let mut supervisor = state.supervisor.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         if let Some(ref mut sup) = *supervisor {
             sup.clear_history();
         }
-        let mut turn = state.turn_count.lock().map_err(|e| e.to_string())?;
+        let mut turn = state.turn_count.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         *turn = 0;
         return Ok("History cleared.".to_string());
     }
@@ -21,7 +22,7 @@ pub(crate) fn send_message(text: String, state: State<AppState>) -> Result<Strin
     let chat_agent =
         morn::bridge::chat_agent::ChatAgent::new(&api_key, SENSENOVA_BASE_URL, "deepseek-chat");
 
-    let mut supervisor = state.supervisor.lock().map_err(|e| e.to_string())?;
+    let mut supervisor = state.supervisor.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     let sup = supervisor
         .as_mut()
         .ok_or_else(|| "Supervisor not initialized.".to_string())?;
@@ -30,7 +31,7 @@ pub(crate) fn send_message(text: String, state: State<AppState>) -> Result<Strin
 
     match sup.execute_chat(&text, &chat_fn) {
         Ok(response) => {
-            let mut turn = state.turn_count.lock().map_err(|e| e.to_string())?;
+            let mut turn = state.turn_count.lock().map_err(|e| MornError::Internal(e.to_string()))?;
             *turn = sup.turn_count();
             Ok(response)
         }
@@ -40,7 +41,7 @@ pub(crate) fn send_message(text: String, state: State<AppState>) -> Result<Strin
                 Ok(fallback) => {
                     sup.record_turn("user", &text);
                     sup.record_turn("assistant", &fallback);
-                    let mut turn = state.turn_count.lock().map_err(|e| e.to_string())?;
+                    let mut turn = state.turn_count.lock().map_err(|e| MornError::Internal(e.to_string()))?;
                     *turn = sup.turn_count();
                     Ok(fallback)
                 }
@@ -54,8 +55,8 @@ pub(crate) fn send_message(text: String, state: State<AppState>) -> Result<Strin
 }
 
 #[tauri::command]
-pub(crate) fn get_status(state: State<AppState>) -> Result<serde_json::Value, String> {
-    let turn = state.turn_count.lock().map_err(|e| e.to_string())?;
+pub(crate) fn get_status(state: State<AppState>) -> Result<serde_json::Value, MornError> {
+    let turn = state.turn_count.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     Ok(serde_json::json!({
         "turn_count": *turn,
         "version": "0.1.0"
@@ -63,12 +64,12 @@ pub(crate) fn get_status(state: State<AppState>) -> Result<serde_json::Value, St
 }
 
 #[tauri::command]
-pub(crate) fn clear_history(state: State<AppState>) -> Result<(), String> {
-    let mut supervisor = state.supervisor.lock().map_err(|e| e.to_string())?;
+pub(crate) fn clear_history(state: State<AppState>) -> Result<(), MornError> {
+    let mut supervisor = state.supervisor.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     if let Some(ref mut sup) = *supervisor {
         sup.clear_history();
     }
-    let mut turn = state.turn_count.lock().map_err(|e| e.to_string())?;
+    let mut turn = state.turn_count.lock().map_err(|e| MornError::Internal(e.to_string()))?;
     *turn = 0;
     Ok(())
 }

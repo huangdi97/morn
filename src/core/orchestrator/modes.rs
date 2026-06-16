@@ -1,5 +1,6 @@
 //! modes — Orchestrator collaboration mode implementations (debate, voting, round-robin, broadcast, consensus, swarm).
 
+use crate::core::error::MornError;
 use crate::component::model::ModelConfig;
 use crate::component::persona;
 use crate::core::assembler::{AgentAssembler, AgentDef};
@@ -14,9 +15,9 @@ impl Orchestrator {
         &self,
         members: &[String],
         input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         if members.len() < 2 {
-            return Err("Debate mode requires at least 2 members".to_string());
+            return Err(MornError::Internal("Debate mode requires at least 2 members".to_string()))
         }
         let mut transcript = input.to_string();
         let mut outputs = Vec::new();
@@ -38,7 +39,7 @@ impl Orchestrator {
         &self,
         members: &[String],
         input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         self.check_quorum(members)?;
         let mut outputs = Vec::new();
         for member in members {
@@ -49,7 +50,7 @@ impl Orchestrator {
     }
 
     /// Submit a single vote from a member.
-    pub fn submit_vote(&self, member: &str, input: &str) -> Result<TeamMemberOutput, String> {
+    pub fn submit_vote(&self, member: &str, input: &str) -> Result<TeamMemberOutput, MornError> {
         self.dispatch_agent(member, &format!("[EVALUATE] {}", input))
     }
 
@@ -63,9 +64,9 @@ impl Orchestrator {
     }
 
     /// Check that the member list meets the minimum quorum (at least 3).
-    pub fn check_quorum(&self, members: &[String]) -> Result<(), String> {
+    pub fn check_quorum(&self, members: &[String]) -> Result<(), MornError> {
         if members.len() < 3 {
-            return Err("Voting mode requires at least 3 members".to_string());
+            return Err(MornError::Internal("Voting mode requires at least 3 members".to_string()))
         }
         Ok(())
     }
@@ -79,7 +80,7 @@ impl Orchestrator {
         &self,
         members: &[String],
         input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         let mut board = format!("[Blackboard] Initial: {}\n", input);
         let mut outputs = Vec::new();
         for member in members {
@@ -115,9 +116,9 @@ impl Orchestrator {
         &self,
         members: &[String],
         input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         if members.is_empty() {
-            return Err("Round-robin mode requires at least 1 member".to_string());
+            return Err(MornError::Internal("Round-robin mode requires at least 1 member".to_string()))
         }
         let mut outputs = Vec::new();
         for (idx, member) in members.iter().enumerate() {
@@ -133,9 +134,9 @@ impl Orchestrator {
         &self,
         members: &[String],
         input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         if members.is_empty() {
-            return Err("No members in chain".to_string());
+            return Err(MornError::Internal("No members in chain".to_string()))
         }
         let mut outputs = Vec::new();
         let mut current = input.to_string();
@@ -155,7 +156,7 @@ impl Orchestrator {
         &self,
         members: &[String],
         input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         let mut outputs = Vec::new();
         for member in members {
             let result = self.dispatch_agent(member, &format!("[BROADCAST] {}", input))?;
@@ -172,9 +173,9 @@ impl Orchestrator {
         &self,
         members: &[String],
         input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         let primary = if members.is_empty() {
-            return Err("No members".to_string());
+            return Err(MornError::Internal("No members".to_string()))
         } else {
             &members[0]
         };
@@ -184,7 +185,7 @@ impl Orchestrator {
         Ok(outputs)
     }
 
-    pub fn register_tool(&self, agent_id: &str, input: &str) -> Result<TeamMemberOutput, String> {
+    pub fn register_tool(&self, agent_id: &str, input: &str) -> Result<TeamMemberOutput, MornError> {
         self.dispatch_agent(agent_id, input)
     }
 
@@ -193,7 +194,7 @@ impl Orchestrator {
         tool_agents: &[String],
         input: &str,
         primary: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         let mut outputs = Vec::new();
         for tool_agent in tool_agents {
             let result = self.dispatch_agent(
@@ -213,9 +214,9 @@ impl Orchestrator {
         &self,
         members: &[String],
         input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         if members.is_empty() {
-            return Err("Consensus mode requires at least 1 member".to_string());
+            return Err(MornError::Internal("Consensus mode requires at least 1 member".to_string()))
         }
         let mut outputs = self.run_broadcast(members, input)?;
         let synthesis = self.compute_consensus(&outputs, &ConsensusMechanism::AutoSynthesis);
@@ -229,9 +230,9 @@ impl Orchestrator {
         &self,
         members: &[String],
         input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         if members.is_empty() {
-            return Err("Swarm mode requires at least 1 member".to_string());
+            return Err(MornError::Internal("Swarm mode requires at least 1 member".to_string()))
         }
         let mut outputs = Vec::new();
         for iteration in 0..3 {
@@ -272,7 +273,7 @@ impl Orchestrator {
         &self,
         members: &[String],
         input: &str,
-    ) -> Result<Vec<TeamMemberOutput>, String> {
+    ) -> Result<Vec<TeamMemberOutput>, MornError> {
         let selected = self.route_to_agent(members, input)?;
         let result = self.dispatch_agent(selected, &format!("[ROUTED] {}", input))?;
         Ok(vec![result])
@@ -282,15 +283,15 @@ impl Orchestrator {
         &self,
         members: &'a [String],
         input: &str,
-    ) -> Result<&'a str, String> {
+    ) -> Result<&'a str, MornError> {
         if members.is_empty() {
-            return Err("No members for routing".to_string());
+            return Err(MornError::Internal("No members for routing".to_string()))
         }
         let idx = input.len() % members.len();
         Ok(&members[idx])
     }
 
-    pub fn dispatch_agent(&self, agent_id: &str, input: &str) -> Result<TeamMemberOutput, String> {
+    pub fn dispatch_agent(&self, agent_id: &str, input: &str) -> Result<TeamMemberOutput, MornError> {
         if let Some(ref registry) = self.registry {
             if let Some(template) = registry.get_template(agent_id) {
                 let persona = persona::get_preset_persona(&template.persona)

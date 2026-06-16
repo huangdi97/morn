@@ -1,4 +1,5 @@
 //! helpers — Shared helper methods for orchestration types.
+use crate::core::error::MornError;
 use super::*;
 
 impl CollaborationMode {

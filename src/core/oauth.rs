@@ -1,4 +1,5 @@
 //! oauth — Manages OAuth token persistence and provider authorization state.
+use crate::core::error::MornError;
 use crate::core::storage::{SaveOAuthTokenArgs, Storage};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -88,12 +89,12 @@ impl OAuthManager {
         );
     }
 
-    pub fn register_provider(&mut self, name: &str, config: OAuthConfig) -> Result<(), String> {
+    pub fn register_provider(&mut self, name: &str, config: OAuthConfig) -> Result<(), MornError> {
         self.providers.insert(name.to_string(), config);
         Ok(())
     }
 
-    pub fn get_auth_url(&self, provider: &str) -> Result<String, String> {
+    pub fn get_auth_url(&self, provider: &str) -> Result<String, MornError> {
         let config = self
             .providers
             .get(provider)
@@ -105,7 +106,7 @@ impl OAuthManager {
         ))
     }
 
-    pub fn handle_callback(&self, provider: &str, code: &str) -> Result<OAuthToken, String> {
+    pub fn handle_callback(&self, provider: &str, code: &str) -> Result<OAuthToken, MornError> {
         let token = OAuthToken {
             access_token: format!("mock_{}_token_{}", provider, code),
             refresh_token: Some(format!("mock_refresh_{}", code)),
@@ -128,7 +129,7 @@ impl OAuthManager {
         Ok(token)
     }
 
-    pub fn get_token(&self, provider: &str, user_id: &str) -> Result<OAuthToken, String> {
+    pub fn get_token(&self, provider: &str, user_id: &str) -> Result<OAuthToken, MornError> {
         let row = self
             .storage
             .get_oauth_token(provider, user_id)?

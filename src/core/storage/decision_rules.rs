@@ -1,13 +1,14 @@
 //! SQLite storage implementation for DecisionRuleStore.
 
+use crate::core::error::MornError;
 use crate::core::decision_rules::{parse_decision_level, DecisionRule, DecisionRuleStore};
 use rusqlite::params;
 
 use super::Storage;
 
 impl Storage {
-    pub fn init_decision_rule_store(&self) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn init_decision_rule_store(&self) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS decision_rule_store (
                 id TEXT PRIMARY KEY,
@@ -18,7 +19,7 @@ impl Storage {
                 created_at TEXT NOT NULL
             );",
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 }
@@ -47,9 +48,9 @@ fn row_to_rule(row: &rusqlite::Row<'_>) -> rusqlite::Result<DecisionRule> {
 }
 
 impl DecisionRuleStore for Storage {
-    fn add_rule(&self, rule: DecisionRule) -> Result<(), String> {
+    fn add_rule(&self, rule: DecisionRule) -> Result<(), MornError> {
         self.init_decision_rule_store()?;
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT OR REPLACE INTO decision_rule_store (id, action, level, condition, effect, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
@@ -61,50 +62,50 @@ impl DecisionRuleStore for Storage {
                 rule.created_at
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
-    fn remove_rule(&self, id: &str) -> Result<(), String> {
+    fn remove_rule(&self, id: &str) -> Result<(), MornError> {
         self.init_decision_rule_store()?;
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let affected = conn
             .execute("DELETE FROM decision_rule_store WHERE id = ?1", params![id])
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         if affected == 0 {
-            return Err(format!("Rule '{}' not found", id));
+            return Err(MornError::Internal(format!("Rule '{}' not found", id)));
         }
         Ok(())
     }
 
-    fn list_rules(&self) -> Result<Vec<DecisionRule>, String> {
+    fn list_rules(&self) -> Result<Vec<DecisionRule>, MornError> {
         self.init_decision_rule_store()?;
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, action, level, condition, effect, created_at FROM decision_rule_store",
             )
-            .map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], row_to_rule).map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let rows = stmt.query_map([], row_to_rule).map_err(|e| MornError::Internal(e.to_string()))?;
         let mut rules = Vec::new();
         for row in rows {
-            rules.push(row.map_err(|e| e.to_string())?);
+            rules.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(rules)
     }
 
-    fn find_rule(&self, action: &str) -> Result<Option<DecisionRule>, String> {
+    fn find_rule(&self, action: &str) -> Result<Option<DecisionRule>, MornError> {
         self.init_decision_rule_store()?;
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, action, level, condition, effect, created_at FROM decision_rule_store WHERE action = ?1")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut rows = stmt
             .query_map(params![action], row_to_rule)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         match rows.next() {
             Some(Ok(rule)) => Ok(Some(rule)),
-            Some(Err(e)) => Err(e.to_string()),
+            Some(Err(e)) => Err(MornError::Internal(e.to_string())),
             None => Ok(None),
         }
     }

@@ -1,4 +1,5 @@
 //! model — Defines model configuration and model invocation components.
+use crate::core::error::MornError;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
@@ -57,7 +58,7 @@ impl ModelComponent {
         &self.config
     }
 
-    pub fn chat(&self, _prompt: &str, _system: &str) -> Result<String, String> {
+    pub fn chat(&self, _prompt: &str, _system: &str) -> Result<String, MornError> {
         let model = &self.config.model_name;
         let provider = &self.config.provider;
         Ok(format!("[{}:{}] (simulated response)", provider, model))
@@ -71,16 +72,16 @@ impl Component for ModelComponent {
     fn type_name(&self) -> &str {
         "model"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -105,10 +106,10 @@ impl IOComponent for ModelComponent {
             },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }

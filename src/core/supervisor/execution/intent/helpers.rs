@@ -1,3 +1,4 @@
+use crate::core::error::MornError;
 use serde::de::DeserializeOwned;
 
 use crate::component::persona::PromptLayers;
@@ -17,22 +18,22 @@ fn clean_json_response(response: &str) -> &str {
         .trim()
 }
 
-pub(super) fn parse_step<T: DeserializeOwned>(step: &str, response: &str) -> Result<T, String> {
+pub(super) fn parse_step<T: DeserializeOwned>(step: &str, response: &str) -> Result<T, MornError> {
     let cleaned = clean_json_response(response);
-    serde_json::from_str::<T>(cleaned).map_err(|e| {
-        format!(
+    Ok(serde_json::from_str::<T>(cleaned).map_err(|e| {
+        MornError::Internal(format!(
             "Failed to parse {} response as JSON: {}. Raw: {}",
             step, e, cleaned
-        )
-    })
+        ))
+    })?)
 }
 
 pub(super) fn call_json_step<T: DeserializeOwned>(
-    chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+    chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
     step: &str,
     prompt: &str,
     system_prompt: &str,
-) -> Result<(T, String), String> {
+) -> Result<(T, String), MornError> {
     let response = chat_fn(prompt, system_prompt)?;
     let cleaned = clean_json_response(&response).to_string();
     let parsed = parse_step::<T>(step, &response)?;

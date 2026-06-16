@@ -1,4 +1,5 @@
 //! capability — Defines registered agent capabilities and their usage metrics.
+use crate::core::error::MornError;
 #[allow(dead_code)] /* 预留：能力市场和路由统计字段 */
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Capability {

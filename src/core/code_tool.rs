@@ -1,4 +1,5 @@
 //! code_tool — Provides code-oriented file inspection and execution helpers.
+use crate::core::error::MornError;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -73,20 +74,20 @@ impl CodeToolExecutor {
         self.forbidden_patterns.push(pattern.to_string());
     }
 
-    pub fn execute(&self, code: &str, language: &str) -> Result<CodeToolResult, String> {
+    pub fn execute(&self, code: &str, language: &str) -> Result<CodeToolResult, MornError> {
         let ext = match language {
             "python" | "py" => "py",
             "shell" | "sh" | "bash" => "sh",
-            other => return Err(format!("unsupported language: {}", other)),
+            other => return Err(MornError::Internal(format!("unsupported language: {}", other))),
         };
 
         let code_lower = code.to_lowercase();
         for pattern in &self.forbidden_patterns {
             if code_lower.contains(&pattern.to_lowercase()) {
-                return Err(format!(
+                return Err(MornError::Internal(format!(
                     "dangerous pattern detected: '{}' is not allowed",
                     pattern
-                ));
+                )));
             }
         }
 
@@ -111,13 +112,13 @@ impl CodeToolExecutor {
 
         let file_name = format!("code_tool_{}.{}", Uuid::new_v4(), ext);
         let temp_dir = std::env::temp_dir().join("morn_code_tool");
-        fs::create_dir_all(&temp_dir).map_err(|e| format!("failed to create temp dir: {}", e))?;
+        fs::create_dir_all(&temp_dir).map_err(|e| MornError::Internal(format!("failed to create temp dir: {}", e)))?;
         let file_path = temp_dir.join(&file_name);
 
         let mut file = fs::File::create(&file_path)
-            .map_err(|e| format!("failed to create temp file: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("failed to create temp file: {}", e)))?;
         file.write_all(code.as_bytes())
-            .map_err(|e| format!("failed to write code to temp file: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("failed to write code to temp file: {}", e)))?;
         drop(file);
 
         let result = if ext == "py" {
@@ -136,7 +137,7 @@ impl CodeToolExecutor {
         &self,
         interpreter: &str,
         file_path: &Path,
-    ) -> Result<CodeToolResult, String> {
+    ) -> Result<CodeToolResult, MornError> {
         let mem_limit_kb = self.max_memory_mb * 1024;
 
         let output = Command::new("timeout")
@@ -150,7 +151,7 @@ impl CodeToolExecutor {
                 file_path.to_string_lossy()
             ))
             .output()
-            .map_err(|e| format!("failed to execute code: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("failed to execute code: {}", e)))?;
 
         let exit_code = output.status.code().unwrap_or(-1);
         let timed_out = exit_code == 124;

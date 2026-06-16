@@ -1,5 +1,6 @@
 //! Memory orchestration: Experience-based memory, MemoryHub, and MemoryOrchestrator.
 
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 use serde_json::Value;
@@ -63,7 +64,7 @@ impl MemoryLayer for ExperientialMemory {
         "Experiential Memory"
     }
 
-    fn store(&mut self, _key: &str, record: MemoryRecord) -> Result<(), String> {
+    fn store(&mut self, _key: &str, record: MemoryRecord) -> Result<(), MornError> {
         let pattern = record.content.as_str().unwrap_or(&record.key).to_string();
         let outcome = record
             .metadata
@@ -74,7 +75,7 @@ impl MemoryLayer for ExperientialMemory {
         Ok(())
     }
 
-    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, String> {
+    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, MornError> {
         Ok(self
             .experiences
             .iter()
@@ -86,12 +87,12 @@ impl MemoryLayer for ExperientialMemory {
             }))
     }
 
-    fn forget(&mut self, key: &str) -> Result<(), String> {
+    fn forget(&mut self, key: &str) -> Result<(), MornError> {
         self.experiences.retain(|e| e.id != key && e.pattern != key);
         Ok(())
     }
 
-    fn compress(&mut self) -> Result<usize, String> {
+    fn compress(&mut self) -> Result<usize, MornError> {
         let before = self.experiences.len();
         if self.experiences.len() > self.compression_threshold {
             self.experiences.sort_by_key(|a| a.frequency);
@@ -160,7 +161,7 @@ impl MemoryHub {
         Some(layer.as_mut())
     }
 
-    pub fn store_all(&mut self, key: &str, record: MemoryRecord) -> Vec<Result<(), String>> {
+    pub fn store_all(&mut self, key: &str, record: MemoryRecord) -> Vec<Result<(), MornError>> {
         self.layers
             .iter_mut()
             .map(|(_, layer)| layer.store(key, record.clone()))

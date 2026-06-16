@@ -1,5 +1,6 @@
 //! editor_base — Base editor types including EditorPosition, NodeEditorFields, and the make_editor! macro.
 
+use crate::core::error::MornError;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct EditorPosition {
     pub x: f64,
@@ -85,7 +86,7 @@ macro_rules! make_editor {
                 }
             }
 
-            pub fn save(&self) -> Result<(), String> {
+            pub fn save(&self) -> Result<(), MornError> {
                 Ok(())
             }
 

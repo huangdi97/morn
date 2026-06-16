@@ -1,4 +1,5 @@
 //! engine — Executes workflow control-flow nodes without replacing template storage.
+use crate::core::error::MornError;
 use crate::core::approval::{ApprovalStatus, WorkflowApproval};
 use crate::core::thread_pool::{TaskDef, TaskPool};
 use crate::core::workflow::{JoinCondition, WorkflowAction, WorkflowTemplate};
@@ -62,7 +63,7 @@ impl WorkflowEngine {
         step_id: &str,
         approved: bool,
         comment: Option<String>,
-    ) -> Result<WorkflowApproval, String> {
+    ) -> Result<WorkflowApproval, MornError> {
         let approval = self
             .approvals
             .iter_mut()
@@ -81,7 +82,7 @@ impl WorkflowEngine {
     pub async fn execute_template(
         &mut self,
         template: &WorkflowTemplate,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Vec<String>, MornError> {
         self.execute_node(
             &template.id,
             &ControlFlowNode::Sequential(template.steps.clone()),
@@ -93,7 +94,7 @@ impl WorkflowEngine {
         &mut self,
         workflow_id: &str,
         node: &ControlFlowNode,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Vec<String>, MornError> {
         match node {
             ControlFlowNode::Sequential(tasks) => self.execute_tasks(workflow_id, tasks).await,
             ControlFlowNode::Parallel(branches) => {
@@ -147,7 +148,7 @@ impl WorkflowEngine {
         &mut self,
         workflow_id: &str,
         tasks: &[TaskDef],
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Vec<String>, MornError> {
         let mut executed = Vec::new();
         for task in tasks {
             self.execute_task(workflow_id, task).await?;
@@ -160,7 +161,7 @@ impl WorkflowEngine {
         &mut self,
         workflow_id: &str,
         branches: &[Vec<TaskDef>],
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Vec<String>, MornError> {
         let mut handles = Vec::new();
         for branch in branches {
             for task in branch {
@@ -171,21 +172,21 @@ impl WorkflowEngine {
 
         let mut executed = Vec::new();
         for (task_id, handle) in handles {
-            handle.await.map_err(|e| e.to_string())??;
+            handle.await.map_err(|e| MornError::Internal(e.to_string()))??;
             executed.push(task_id);
         }
         Ok(executed)
     }
 
-    async fn execute_task(&mut self, workflow_id: &str, task: &TaskDef) -> Result<(), String> {
+    async fn execute_task(&mut self, workflow_id: &str, task: &TaskDef) -> Result<(), MornError> {
         self.ensure_approval(workflow_id, task)?;
         self.task_pool
             .execute(task.clone())
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(|e| MornError::Internal(e.to_string()))?
     }
 
-    fn ensure_approval(&mut self, workflow_id: &str, task: &TaskDef) -> Result<(), String> {
+    fn ensure_approval(&mut self, workflow_id: &str, task: &TaskDef) -> Result<(), MornError> {
         if !task.approval_required {
             return Ok(());
         }
@@ -211,7 +212,7 @@ impl WorkflowEngine {
                 comment: None,
             });
         }
-        Err(format!("Workflow step '{}' is pending approval", task.id))
+        Err(MornError::Internal(format!("Workflow step '{}' is pending approval", task.id)))
     }
 
     async fn execute_fork_join(
@@ -219,8 +220,8 @@ impl WorkflowEngine {
         workflow_id: &str,
         branches: &[Vec<TaskDef>],
         join_condition: &JoinCondition,
-    ) -> Result<Vec<String>, String> {
-        let mut handles: Vec<(String, tokio::task::JoinHandle<Result<(), String>>)> = Vec::new();
+    ) -> Result<Vec<String>, MornError> {
+        let mut handles: Vec<(String, tokio::task::JoinHandle<Result<(), MornError>>)> = Vec::new();
         for branch in branches {
             for task in branch {
                 self.ensure_approval(workflow_id, task)?;
@@ -231,7 +232,7 @@ impl WorkflowEngine {
         let mut results = Vec::new();
         let mut errors = Vec::new();
         for (task_id, handle) in handles {
-            match handle.await.map_err(|e| e.to_string())? {
+            match handle.await.map_err(|e| MornError::Internal(e.to_string()))? {
                 Ok(()) => results.push(task_id),
                 Err(e) => errors.push((task_id, e)),
             }
@@ -240,7 +241,7 @@ impl WorkflowEngine {
         match join_condition {
             JoinCondition::All => {
                 if let Some((id, e)) = errors.into_iter().next() {
-                    return Err(format!("ForkJoin branch task '{}' failed: {}", id, e));
+                    return Err(MornError::Internal(format!("ForkJoin branch task '{}' failed: {}", id, e)));
                 }
                 Ok(results)
             }
@@ -250,10 +251,10 @@ impl WorkflowEngine {
                         .into_iter()
                         .next()
                         .ok_or_else(|| "unexpected: errors vec was empty".to_string())?;
-                    return Err(format!(
+                    return Err(MornError::Internal(format!(
                         "ForkJoin all branches failed, last error from '{}': {}",
                         id, e
-                    ));
+                    )));
                 }
                 Ok(results)
             }
@@ -264,12 +265,12 @@ impl WorkflowEngine {
                         .into_iter()
                         .map(|(id, e)| format!("{}: {}", id, e))
                         .collect();
-                    return Err(format!(
+                    return Err(MornError::Internal(format!(
                         "ForkJoin needed {} successful branches, got {}: [{}]",
                         needed,
                         results.len(),
                         errs.join(", ")
-                    ));
+                    )));
                 }
                 Ok(results)
             }
@@ -282,7 +283,7 @@ impl WorkflowEngine {
         expression: &str,
         cases: &HashMap<String, Vec<TaskDef>>,
         default: &Option<Vec<TaskDef>>,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Vec<String>, MornError> {
         let value = self.evaluate_expression(expression);
         if let Some(tasks) = cases.get(&value) {
             self.execute_tasks(workflow_id, tasks).await

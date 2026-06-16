@@ -1,4 +1,5 @@
 //! app_ops — Provides computer operations for launching and controlling applications.
+use crate::core::error::MornError;
 pub mod launch;
 pub mod list;
 
@@ -43,13 +44,13 @@ pub fn list_all_apps() -> Vec<AppInfo> {
     apps
 }
 
-pub fn uninstall_app(id: &str) -> Result<(), String> {
+pub fn uninstall_app(id: &str) -> Result<(), MornError> {
     let normalized = id.trim();
     if normalized.is_empty() {
-        return Err("app id is empty".to_string());
+        return Err(MornError::Internal("app id is empty".to_string()))
     }
     if normalized.contains('\0') {
-        return Err("app id contains invalid character".to_string());
+        return Err(MornError::Internal("app id contains invalid character".to_string()))
     }
     tracing::info!("simulated uninstall request for app '{}'", normalized);
     Ok(())

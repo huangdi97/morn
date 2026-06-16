@@ -1,4 +1,5 @@
 //! launcher — SearchLauncherTool for app/file/command/skill search.
+use crate::core::error::MornError;
 use super::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
@@ -46,16 +47,16 @@ impl Component for SearchLauncherTool {
     fn type_name(&self) -> &str {
         "tool"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -80,13 +81,13 @@ impl IOComponent for SearchLauncherTool {
             },
         ]
     }
-    fn send(&mut self, port: &str, _data: Data) -> Result<(), String> {
-        Err(format!(
+    fn send(&mut self, port: &str, _data: Data) -> Result<(), MornError> {
+        Err(MornError::Internal(format!(
             "SearchLauncherTool cannot receive on port {}",
             port
-        ))
+        )))
     }
-    fn recv(&mut self, port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, port: &str) -> Result<Option<Data>, MornError> {
         if port == "output" {
             Ok(Some(Data::text("")))
         } else {
@@ -102,7 +103,7 @@ impl SecureComponent for SearchLauncherTool {
 }
 
 impl Tool for SearchLauncherTool {
-    fn execute(&mut self, input: Data) -> Result<Data, String> {
+    fn execute(&mut self, input: Data) -> Result<Data, MornError> {
         let query = input.content.as_str().unwrap_or("").to_string();
         let results = self.launcher.search(&query);
         let summary = results

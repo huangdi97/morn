@@ -1,4 +1,5 @@
 //! Episodic memory — session-level event recall.
+use crate::core::error::MornError;
 use serde_json::Value;
 
 use super::super::storage::{MemoryLayer, MemoryRecord};
@@ -31,7 +32,7 @@ impl MemoryLayer for EpisodicMemory {
         "Episodic Memory"
     }
 
-    fn store(&mut self, _key: &str, mut record: MemoryRecord) -> Result<(), String> {
+    fn store(&mut self, _key: &str, mut record: MemoryRecord) -> Result<(), MornError> {
         record.metadata.insert(
             "episode_type".to_string(),
             Value::String("event_sequence".to_string()),
@@ -43,16 +44,16 @@ impl MemoryLayer for EpisodicMemory {
         Ok(())
     }
 
-    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, String> {
+    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, MornError> {
         Ok(self.episodes.iter().find(|e| e.key == key).cloned())
     }
 
-    fn forget(&mut self, key: &str) -> Result<(), String> {
+    fn forget(&mut self, key: &str) -> Result<(), MornError> {
         self.episodes.retain(|e| e.key != key);
         Ok(())
     }
 
-    fn compress(&mut self) -> Result<usize, String> {
+    fn compress(&mut self) -> Result<usize, MornError> {
         let before = self.episodes.len();
         if self.episodes.len() > self.max_episodes {
             let to_remove = self.episodes.len() - self.max_episodes;

@@ -1,5 +1,6 @@
 //! Builder/construction logic for component assembly.
 
+use crate::core::error::MornError;
 use crate::core::assembler::AgentDef;
 use crate::core::assembly::graph::{AtomicComponentType, ComponentGraph, ConnectionValidator};
 use crate::core::assembly::validator::AssemblyValidator;
@@ -93,7 +94,7 @@ impl AssemblyBuilder {
     pub fn with_registry(registry: TypeRegistry) -> Self {
         AssemblyBuilder { registry }
     }
-    pub fn build(selector: &ComponentSelector) -> Result<AgentDef, String> {
+    pub fn build(selector: &ComponentSelector) -> Result<AgentDef, MornError> {
         AssemblyValidator::validate(selector).map_err(|errs| errs.join("; "))?;
 
         let persona_id = selector
@@ -140,17 +141,17 @@ impl AssemblyBuilder {
         })
     }
 
-    pub fn from_description(description: &str) -> Result<AgentDef, String> {
+    pub fn from_description(description: &str) -> Result<AgentDef, MornError> {
         match crate::core::assembler::AgentAssembler::natural_language_build(description)? {
             crate::core::assembler::AfterBuildAction::Save(def)
             | crate::core::assembler::AfterBuildAction::Preview(def) => Ok(def),
             crate::core::assembler::AfterBuildAction::Modify(_, _) => {
-                Err("Natural language build returned a modification request".to_string())
+                Err(MornError::Internal("Natural language build returned a modification request".to_string()))
             }
         }
     }
 
-    pub fn guided_build(steps: GuidedBuildSteps) -> Result<AgentDef, String> {
+    pub fn guided_build(steps: GuidedBuildSteps) -> Result<AgentDef, MornError> {
         let mut selector = ComponentSelector::new();
 
         selector.memory_ids = steps.memory_ids;
@@ -164,13 +165,13 @@ impl AssemblyBuilder {
         AssemblyBuilder::build(&selector)
     }
 
-    pub fn canvas_build(components: ComponentSelector) -> Result<AgentDef, String> {
+    pub fn canvas_build(components: ComponentSelector) -> Result<AgentDef, MornError> {
         let mut selector = components;
         DefaultCompleter::complete(&mut selector);
         AssemblyBuilder::build(&selector)
     }
 
-    pub fn build_from_graph(&self, graph: &ComponentGraph) -> Result<AgentDef, String> {
+    pub fn build_from_graph(&self, graph: &ComponentGraph) -> Result<AgentDef, MornError> {
         ConnectionValidator::validate(graph).map_err(|errs| errs.join("; "))?;
 
         let mut selector = ComponentSelector::new();
@@ -213,11 +214,11 @@ impl AssemblyBuilder {
         AssemblyBuilder::build(&selector)
     }
 
-    pub fn export_graph(graph: &ComponentGraph) -> Result<String, String> {
+    pub fn export_graph(graph: &ComponentGraph) -> Result<String, MornError> {
         graph.to_json()
     }
 
-    pub fn import_graph(json: &str) -> Result<ComponentGraph, String> {
+    pub fn import_graph(json: &str) -> Result<ComponentGraph, MornError> {
         let graph = ComponentGraph::from_json(json)?;
         ConnectionValidator::validate(&graph).map_err(|errs| errs.join("; "))?;
         Ok(graph)

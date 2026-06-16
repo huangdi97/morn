@@ -1,4 +1,5 @@
 //! Agent builder — constructs agents from intent using DESIGN.md §3.1 6-step inference chain.
+use crate::core::error::MornError;
 use serde::Deserialize;
 
 use crate::core::registry::Registry;
@@ -65,9 +66,9 @@ impl Supervisor {
     fn domain_recognition(
         &self,
         context: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
         system_prompt: &str,
-    ) -> Result<(DomainStep, String), String> {
+    ) -> Result<(DomainStep, String), MornError> {
         let prompt = format!(
             r#"{}
 
@@ -91,9 +92,9 @@ Return exactly:
     fn role_inference(
         &self,
         context: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
         system_prompt: &str,
-    ) -> Result<(RoleStep, String), String> {
+    ) -> Result<(RoleStep, String), MornError> {
         let prompt = format!(
             r#"{}
 
@@ -114,9 +115,9 @@ Return exactly:
     fn capability_inference(
         &self,
         context: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
         system_prompt: &str,
-    ) -> Result<(CapabilitiesStep, String), String> {
+    ) -> Result<(CapabilitiesStep, String), MornError> {
         let prompt = format!(
             r#"{}
 
@@ -141,10 +142,10 @@ Return exactly:
     fn tool_inference(
         &self,
         context: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
         system_prompt: &str,
         registry: Option<&Registry>,
-    ) -> Result<(ToolsStep, String), String> {
+    ) -> Result<(ToolsStep, String), MornError> {
         let tool_list = if let Some(reg) = registry {
             list_registry_tools(reg).join(", ")
         } else {
@@ -171,10 +172,10 @@ Return exactly:
     fn knowledge_inference(
         &self,
         context: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
         system_prompt: &str,
         registry: Option<&Registry>,
-    ) -> Result<(KnowledgeStep, String), String> {
+    ) -> Result<(KnowledgeStep, String), MornError> {
         let knowledge_list = if let Some(reg) = registry {
             list_registry_knowledge(reg).join(", ")
         } else {
@@ -208,10 +209,10 @@ Return exactly:
     fn persona_inference(
         &self,
         context: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
         system_prompt: &str,
         registry: Option<&Registry>,
-    ) -> Result<(PersonaStep, String), String> {
+    ) -> Result<(PersonaStep, String), MornError> {
         let persona_list = if let Some(reg) = registry {
             list_registry_personas(reg).join(", ")
         } else {
@@ -267,9 +268,9 @@ Return exactly:
     pub fn create_agent_from_nl(
         &self,
         nl: &str,
-        chat_fn: &dyn Fn(&str, &str) -> Result<String, String>,
+        chat_fn: &dyn Fn(&str, &str) -> Result<String, MornError>,
         registry: Option<&Registry>,
-    ) -> Result<NLAgentDef, String> {
+    ) -> Result<NLAgentDef, MornError> {
         let system_prompt = "You are a COO agent configuration planner. Complete exactly the requested step. Only return valid JSON, no markdown, no explanation.";
 
         let mut suggestions: Vec<String> = Vec::new();

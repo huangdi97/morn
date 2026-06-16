@@ -1,4 +1,5 @@
 //! telegram — Adapts Telegram messages into the shared channel interface.
+use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 pub struct TelegramChannel {
@@ -20,14 +21,14 @@ impl TelegramChannel {
         }
     }
 
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env() -> Result<Self, MornError> {
         let token = std::env::var("TELEGRAM_BOT_TOKEN")
             .map_err(|_| "TELEGRAM_BOT_TOKEN not set".to_string())?;
         let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_else(|_| "0".to_string());
         Ok(Self::new(&token, &chat_id))
     }
 
-    pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {
+    pub fn send(&self, msg: &ChannelMessage) -> Result<(), MornError> {
         let parse_mode = msg
             .metadata
             .get("parse_mode")
@@ -36,7 +37,7 @@ impl TelegramChannel {
         self.send_message(&msg.content, Some(parse_mode))
     }
 
-    pub fn send_message(&self, text: &str, parse_mode: Option<&str>) -> Result<(), String> {
+    pub fn send_message(&self, text: &str, parse_mode: Option<&str>) -> Result<(), MornError> {
         let url = format!("https://api.telegram.org/bot{}/sendMessage", self.bot_token);
 
         let mut body = serde_json::json!({
@@ -53,12 +54,12 @@ impl TelegramChannel {
             .post(&url)
             .json(&body)
             .send()
-            .map_err(|e| format!("Telegram API request failed: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Telegram API request failed: {}", e)))?;
 
         let status = response.status();
         let response_body: serde_json::Value = response
             .json()
-            .map_err(|e| format!("Failed to parse Telegram response: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to parse Telegram response: {}", e)))?;
 
         if status.is_success() {
             if response_body
@@ -72,22 +73,22 @@ impl TelegramChannel {
                     .get("description")
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown error");
-                Err(format!("Telegram API error: {}", desc))
+                Err(MornError::Internal(format!("Telegram API error: {}", desc)))
             }
         } else {
             let desc = response_body
                 .get("description")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown error");
-            Err(format!(
+            Err(MornError::Internal(format!(
                 "Telegram API error ({}): {}",
                 status.as_u16(),
                 desc
-            ))
+            )))
         }
     }
 
-    pub fn receive(&self) -> Result<Option<ChannelMessage>, String> {
+    pub fn receive(&self) -> Result<Option<ChannelMessage>, MornError> {
         Ok(Some(ChannelMessage {
             content: "[Telegram] simulated incoming message".into(),
             source: "telegram".into(),
@@ -147,7 +148,7 @@ impl TelegramChannel {
         }
     }
 
-    pub fn set_webhook(&self, url: &str) -> Result<(), String> {
+    pub fn set_webhook(&self, url: &str) -> Result<(), MornError> {
         let api_url = format!("https://api.telegram.org/bot{}/setWebhook", self.bot_token);
 
         let response = self
@@ -155,12 +156,12 @@ impl TelegramChannel {
             .post(&api_url)
             .json(&serde_json::json!({"url": url}))
             .send()
-            .map_err(|e| format!("Telegram setWebhook request failed: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Telegram setWebhook request failed: {}", e)))?;
 
         let status = response.status();
         let response_body: serde_json::Value = response
             .json()
-            .map_err(|e| format!("Failed to parse Telegram response: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to parse Telegram response: {}", e)))?;
 
         if status.is_success() {
             let ok = response_body
@@ -174,24 +175,24 @@ impl TelegramChannel {
                     .get("description")
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown error");
-                Err(format!("Telegram setWebhook error: {}", desc))
+                Err(MornError::Internal(format!("Telegram setWebhook error: {}", desc)))
             }
         } else {
             let desc = response_body
                 .get("description")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown error");
-            Err(format!(
+            Err(MornError::Internal(format!(
                 "Telegram setWebhook error ({}): {}",
                 status.as_u16(),
                 desc
-            ))
+            )))
         }
     }
 
-    pub fn handle_update(&self, update_json: &str) -> Result<String, String> {
+    pub fn handle_update(&self, update_json: &str) -> Result<String, MornError> {
         let update: serde_json::Value = serde_json::from_str(update_json)
-            .map_err(|e| format!("Invalid Telegram update JSON: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Invalid Telegram update JSON: {}", e)))?;
 
         let message_text = update
             .get("message")

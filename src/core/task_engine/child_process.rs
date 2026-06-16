@@ -1,5 +1,6 @@
 //! child_process — Spawns and manages long-running child process tasks.
 
+use crate::core::error::MornError;
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -41,8 +42,8 @@ impl ChildProcess {
         &mut self,
         task_json: &str,
         timeout_secs: u64,
-    ) -> Result<serde_json::Value, String> {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    ) -> Result<serde_json::Value, MornError> {
+        let exe = std::env::current_exe().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut child = Command::new(exe)
             .arg("--execute-task")
             .env_remove("EXECUTE_TASK")
@@ -50,27 +51,27 @@ impl ChildProcess {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
 
         if let Some(mut stdin) = child.stdin.take() {
             stdin
                 .write_all(task_json.as_bytes())
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| MornError::Internal(e.to_string()))?;
         }
 
         self.handle = Some(child);
         let output = self.wait(timeout_secs)?;
-        serde_json::from_str(output.trim()).map_err(|e| e.to_string())
+        serde_json::from_str(output.trim()).map_err(|e| MornError::Internal(e.to_string()))
     }
 
-    pub fn wait(&mut self, timeout_secs: u64) -> Result<String, String> {
+    pub fn wait(&mut self, timeout_secs: u64) -> Result<String, MornError> {
         let mut child = self.handle.take().ok_or("No child process")?;
         let start = std::time::Instant::now();
 
         loop {
             if start.elapsed() > Duration::from_secs(timeout_secs) {
                 let _ = child.kill();
-                return Err("Timeout".to_string());
+                return Err(MornError::Internal("Timeout".to_string()))
             }
             match child.try_wait() {
                 Ok(Some(_)) => {
@@ -84,14 +85,14 @@ impl ChildProcess {
                     return Ok(output);
                 }
                 Ok(None) => std::thread::sleep(Duration::from_millis(50)),
-                Err(e) => return Err(e.to_string()),
+                Err(e) => return Err(MornError::Internal(e.to_string())),
             }
         }
     }
 
-    pub fn kill(&mut self) -> Result<(), String> {
+    pub fn kill(&mut self) -> Result<(), MornError> {
         if let Some(ref mut child) = self.handle {
-            child.kill().map_err(|e| e.to_string())?;
+            child.kill().map_err(|e| MornError::Internal(e.to_string()))?;
             child.wait().ok();
         }
         Ok(())

@@ -1,4 +1,5 @@
 //! tasks — Persists task records, workflow state, and checkpoints.
+use crate::core::error::MornError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
@@ -52,8 +53,8 @@ pub struct DecisionRecord {
 
 impl Storage {
     /// Inserts a task record and returns success when the row is stored.
-    pub fn insert_task(&self, task: &TaskRecord) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn insert_task(&self, task: &TaskRecord) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT INTO tasks (id, user_input, plan_json, status, created_at, completed_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -66,25 +67,25 @@ impl Storage {
                 task.completed_at
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     /// Fetches a task by id and returns `None` when no row exists.
-    pub fn get_task(&self, id: &str) -> Result<Option<TaskRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn get_task(&self, id: &str) -> Result<Option<TaskRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, user_input, plan_json, status, created_at, completed_at FROM tasks WHERE id = ?1")
-            .map_err(|e| e.to_string())?;
-        let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
-        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut rows = stmt.query(params![id]).map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
             Ok(Some(TaskRecord {
-                id: row.get(0).map_err(|e| e.to_string())?,
-                user_input: row.get(1).map_err(|e| e.to_string())?,
-                plan_json: row.get(2).map_err(|e| e.to_string())?,
-                status: row.get(3).map_err(|e| e.to_string())?,
-                created_at: row.get(4).map_err(|e| e.to_string())?,
-                completed_at: row.get(5).map_err(|e| e.to_string())?,
+                id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
+                user_input: row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,
+                plan_json: row.get(2).map_err(|e| MornError::Internal(e.to_string()))?,
+                status: row.get(3).map_err(|e| MornError::Internal(e.to_string()))?,
+                created_at: row.get(4).map_err(|e| MornError::Internal(e.to_string()))?,
+                completed_at: row.get(5).map_err(|e| MornError::Internal(e.to_string()))?,
             }))
         } else {
             Ok(None)
@@ -92,11 +93,11 @@ impl Storage {
     }
 
     /// Lists task records ordered by newest creation time first.
-    pub fn list_tasks(&self) -> Result<Vec<TaskRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_tasks(&self) -> Result<Vec<TaskRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, user_input, plan_json, status, created_at, completed_at FROM tasks ORDER BY created_at DESC")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
                 Ok(TaskRecord {
@@ -108,17 +109,17 @@ impl Storage {
                     completed_at: row.get(5)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut tasks = Vec::new();
         for row in rows {
-            tasks.push(row.map_err(|e| e.to_string())?);
+            tasks.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(tasks)
     }
 
     /// Updates a task status by id and sets completion time for terminal statuses.
-    pub fn update_task_status(&self, id: &str, status: &str) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn update_task_status(&self, id: &str, status: &str) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let completed_at = if status == "completed" || status == "failed" {
             Some(chrono::Utc::now().to_rfc3339())
         } else {
@@ -128,14 +129,14 @@ impl Storage {
             "UPDATE tasks SET status = ?1, completed_at = ?2 WHERE id = ?3",
             params![status, completed_at, id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     // Subtasks CRUD
     /// Inserts a subtask record and returns success when the row is stored.
-    pub fn insert_subtask(&self, subtask: &SubtaskRecord) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn insert_subtask(&self, subtask: &SubtaskRecord) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT INTO subtasks (id, task_id, agent_id, action, params_json, status, result_json, started_at, finished_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -145,16 +146,16 @@ impl Storage {
                 subtask.started_at, subtask.finished_at
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     /// Lists subtasks for a task id and returns the matching records.
-    pub fn list_subtasks(&self, task_id: &str) -> Result<Vec<SubtaskRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_subtasks(&self, task_id: &str) -> Result<Vec<SubtaskRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, task_id, agent_id, action, params_json, status, result_json, started_at, finished_at FROM subtasks WHERE task_id = ?1")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![task_id], |row| {
                 Ok(SubtaskRecord {
@@ -169,10 +170,10 @@ impl Storage {
                     finished_at: row.get(8)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut subtasks = Vec::new();
         for row in rows {
-            subtasks.push(row.map_err(|e| e.to_string())?);
+            subtasks.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(subtasks)
     }
@@ -183,8 +184,8 @@ impl Storage {
         id: &str,
         status: &str,
         result_json: Option<&str>,
-    ) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    ) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let finished_at = if status == "completed" || status == "failed" {
             Some(chrono::Utc::now().to_rfc3339())
         } else {
@@ -194,14 +195,14 @@ impl Storage {
             "UPDATE subtasks SET status = ?1, result_json = ?2, finished_at = ?3 WHERE id = ?4",
             params![status, result_json, finished_at, id],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     // Executions CRUD
     /// Inserts an execution record and returns success when the row is stored.
-    pub fn insert_execution(&self, exec: &ExecutionRecord) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn insert_execution(&self, exec: &ExecutionRecord) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT INTO executions (id, agent_id, task_id, action, status, latency_ms, error_msg, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -210,16 +211,16 @@ impl Storage {
                 exec.status, exec.latency_ms, exec.error_msg, exec.created_at
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     /// Lists execution records associated with a task id.
-    pub fn list_executions(&self, task_id: &str) -> Result<Vec<ExecutionRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_executions(&self, task_id: &str) -> Result<Vec<ExecutionRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, created_at FROM executions WHERE task_id = ?1")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![task_id], |row| {
                 Ok(ExecutionRecord {
@@ -233,22 +234,22 @@ impl Storage {
                     created_at: row.get(7)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut executions = Vec::new();
         for row in rows {
-            executions.push(row.map_err(|e| e.to_string())?);
+            executions.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(executions)
     }
 
     /// Lists execution records created today by matching the date prefix.
-    pub fn list_today_executions(&self) -> Result<Vec<ExecutionRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_today_executions(&self) -> Result<Vec<ExecutionRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
         let pattern = format!("{}%", today);
         let mut stmt = conn
             .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, created_at FROM executions WHERE created_at LIKE ?1")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![pattern], |row| {
                 Ok(ExecutionRecord {
@@ -262,19 +263,19 @@ impl Storage {
                     created_at: row.get(7)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut executions = Vec::new();
         for row in rows {
-            executions.push(row.map_err(|e| e.to_string())?);
+            executions.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(executions)
     }
 
-    pub fn list_recent_executions(&self, limit: usize) -> Result<Vec<ExecutionRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_recent_executions(&self, limit: usize) -> Result<Vec<ExecutionRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, created_at FROM executions ORDER BY created_at DESC LIMIT ?1")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![limit as i64], |row| {
                 Ok(ExecutionRecord {
@@ -288,16 +289,16 @@ impl Storage {
                     created_at: row.get(7)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut executions = Vec::new();
         for row in rows {
-            executions.push(row.map_err(|e| e.to_string())?);
+            executions.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(executions)
     }
 
-    pub fn get_reliability_metrics(&self) -> Result<serde_json::Value, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn get_reliability_metrics(&self) -> Result<serde_json::Value, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let past_24h = (chrono::Utc::now() - chrono::Duration::hours(24))
             .format("%Y-%m-%dT%H:%M:%S")
             .to_string();
@@ -308,7 +309,7 @@ impl Storage {
                 params![past_24h],
                 |row| row.get(0),
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
 
         let success_count: i64 = conn
             .query_row(
@@ -316,7 +317,7 @@ impl Storage {
                 params![past_24h],
                 |row| row.get(0),
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
 
         let success_rate = if total > 0 {
             (success_count as f64 / total as f64) * 100.0
@@ -330,7 +331,7 @@ impl Storage {
                 params![past_24h],
                 |row| row.get(0),
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
 
         let sla_count: i64 = conn
             .query_row(
@@ -338,7 +339,7 @@ impl Storage {
                 params![past_24h],
                 |row| row.get(0),
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
 
         let sla_rate = if total > 0 {
             (sla_count as f64 / total as f64) * 100.0
@@ -350,12 +351,12 @@ impl Storage {
         if total > 0 {
             let mut stmt = conn
                 .prepare("SELECT latency_ms FROM executions WHERE created_at >= ?1 AND latency_ms IS NOT NULL ORDER BY latency_ms ASC")
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| MornError::Internal(e.to_string()))?;
             let rows = stmt
                 .query_map(params![past_24h], |row| row.get::<_, Option<i64>>(0))
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| MornError::Internal(e.to_string()))?;
             for row in rows {
-                if let Some(lat) = row.map_err(|e| e.to_string())? {
+                if let Some(lat) = row.map_err(|e| MornError::Internal(e.to_string()))? {
                     latencies.push(lat);
                 }
             }
@@ -388,8 +389,8 @@ impl Storage {
 
     // Decisions CRUD
     /// Inserts a decision record and returns success when the row is stored.
-    pub fn insert_decision(&self, decision: &DecisionRecord) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn insert_decision(&self, decision: &DecisionRecord) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT INTO decisions (id, task_id, decision_level, action, context_json, approved, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -398,16 +399,16 @@ impl Storage {
                 decision.action, decision.context_json, decision.approved, decision.created_at
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
     /// Lists decision records associated with a task id.
-    pub fn list_decisions(&self, task_id: &str) -> Result<Vec<DecisionRecord>, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn list_decisions(&self, task_id: &str) -> Result<Vec<DecisionRecord>, MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT id, task_id, decision_level, action, context_json, approved, created_at FROM decisions WHERE task_id = ?1")
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![task_id], |row| {
                 Ok(DecisionRecord {
@@ -420,10 +421,10 @@ impl Storage {
                     created_at: row.get(6)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut decisions = Vec::new();
         for row in rows {
-            decisions.push(row.map_err(|e| e.to_string())?);
+            decisions.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
         }
         Ok(decisions)
     }

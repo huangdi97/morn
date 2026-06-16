@@ -1,4 +1,5 @@
 //! decision — Evaluates supervisor decisions and required oversight levels.
+use crate::core::error::MornError;
 mod context;
 mod level;
 mod weighted;
@@ -17,7 +18,7 @@ pub struct Intent {
 }
 
 /// Parses user intent with an LLM and falls back to supervisor heuristics when the LLM is unavailable.
-pub fn parse_with_llm(text: &str, llm: &dyn Fn(&str, &str) -> Result<String, String>) -> Intent {
+pub fn parse_with_llm(text: &str, llm: &dyn Fn(&str, &str) -> Result<String, MornError>) -> Intent {
     let system_prompt = "You are a COO intent parser. Return only valid JSON with fields: intent_type, complexity, required_tools, target_agent. intent_type must be one of direct_answer, single_tool, single_agent, team, workflow, jump_studio. complexity is an integer from 1 to 10. required_tools is an array of strings. target_agent is a short routing id.";
     let prompt = format!(
         r#"Parse this user request into routing intent:
@@ -40,7 +41,7 @@ impl Supervisor {
     pub fn parse_with_llm(
         &self,
         text: &str,
-        llm: &dyn Fn(&str, &str) -> Result<String, String>,
+        llm: &dyn Fn(&str, &str) -> Result<String, MornError>,
     ) -> Intent {
         parse_with_llm(text, llm)
     }
@@ -298,7 +299,7 @@ mod tests {
 
     #[test]
     fn parse_with_llm_falls_back_to_rules() {
-        let llm = |_prompt: &str, _system: &str| Err("offline".to_string());
+        let llm = |_prompt: &str, _system: &str| Err(MornError::Internal("offline".to_string()));
 
         let intent = parse_with_llm("calculate 2 + 2", &llm);
 

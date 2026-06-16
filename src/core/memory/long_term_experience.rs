@@ -1,4 +1,5 @@
 //! 长期经验记忆 — 跨会话知识沉淀与模式学习
+use crate::core::error::MornError;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -100,7 +101,7 @@ impl MemoryLayer for LongTermExperience {
         "Long-Term Experience"
     }
 
-    fn store(&mut self, _key: &str, record: MemoryRecord) -> Result<(), String> {
+    fn store(&mut self, _key: &str, record: MemoryRecord) -> Result<(), MornError> {
         let summary = record.content.as_str().unwrap_or(&record.key).to_string();
         let importance = record
             .metadata
@@ -111,7 +112,7 @@ impl MemoryLayer for LongTermExperience {
         Ok(())
     }
 
-    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, String> {
+    fn recall(&self, key: &str) -> Result<Option<MemoryRecord>, MornError> {
         Ok(self
             .experiences
             .iter()
@@ -130,7 +131,7 @@ impl MemoryLayer for LongTermExperience {
             }))
     }
 
-    fn forget(&mut self, key: &str) -> Result<(), String> {
+    fn forget(&mut self, key: &str) -> Result<(), MornError> {
         if let Some(&idx) = self.index.get(key) {
             let removed = self.experiences.swap_remove(idx);
             self.index.remove(&removed.id);
@@ -141,7 +142,7 @@ impl MemoryLayer for LongTermExperience {
         Ok(())
     }
 
-    fn compress(&mut self) -> Result<usize, String> {
+    fn compress(&mut self) -> Result<usize, MornError> {
         let before = self.experiences.len();
         self.enforce_capacity();
         Ok(before.saturating_sub(self.experiences.len()))

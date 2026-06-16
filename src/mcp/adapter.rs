@@ -1,6 +1,7 @@
 //! MCP 适配器 — 提供组件端口与 MCP 工具之间的互相转换函数。
 //! MCP adapter — conversion functions between component ports and MCP tools.
 
+use crate::core::error::MornError;
 use crate::core::component::Port;
 use crate::core::mcp::MCPTool;
 

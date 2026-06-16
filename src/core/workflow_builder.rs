@@ -1,4 +1,5 @@
 //! workflow_builder — Builds executable workflows from registered capabilities and tasks.
+use crate::core::error::MornError;
 use crate::bridge::chat_agent::ChatAgent;
 use crate::core::model_router::ModelRouter;
 use crate::core::registry::Registry;
@@ -46,7 +47,7 @@ impl WorkflowBuilder {
         self
     }
 
-    pub async fn nl_to_workflow(&self, description: &str) -> Result<WorkflowPlan, String> {
+    pub async fn nl_to_workflow(&self, description: &str) -> Result<WorkflowPlan, MornError> {
         if let Some(ref router) = self.model_router {
             return self.nl_to_workflow_llm(router, description).await;
         }
@@ -57,7 +58,7 @@ impl WorkflowBuilder {
         &self,
         router: &ModelRouter,
         description: &str,
-    ) -> Result<WorkflowPlan, String> {
+    ) -> Result<WorkflowPlan, MornError> {
         let system_prompt = "\
 You are a workflow planner. Given a user's natural language request, produce a JSON object that represents a workflow plan.
 
@@ -97,14 +98,14 @@ Rules:
             .trim();
 
         serde_json::from_str::<WorkflowPlan>(json_str).map_err(|e| {
-            format!(
+            MornError::Internal(format!(
                 "LLM returned invalid WorkflowPlan JSON: {}\nRaw: {}",
                 e, trimmed
-            )
+            ))
         })
     }
 
-    fn nl_to_workflow_keyword(&self, description: &str) -> Result<WorkflowPlan, String> {
+    fn nl_to_workflow_keyword(&self, description: &str) -> Result<WorkflowPlan, MornError> {
         let lower = description.to_lowercase();
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
@@ -182,7 +183,7 @@ Rules:
         &self,
         workflow: &WorkflowPlan,
         error: &str,
-    ) -> Result<WorkflowPlan, String> {
+    ) -> Result<WorkflowPlan, MornError> {
         let mut fixed = workflow.clone();
         fixed.nodes.push(WorkflowNode {
             id: "fix".to_string(),
@@ -197,7 +198,7 @@ Rules:
         Ok(fixed)
     }
 
-    pub fn compile(&self, plan: &WorkflowPlan) -> Result<WorkflowTemplate, String> {
+    pub fn compile(&self, plan: &WorkflowPlan) -> Result<WorkflowTemplate, MornError> {
         let mut steps = Vec::new();
         for node in &plan.nodes {
             let action = match node.action_type.as_str() {

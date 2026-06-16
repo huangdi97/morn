@@ -1,5 +1,6 @@
 //! Window management — switch, find, and focus windows via OS APIs or simulation.
 
+use crate::core::error::MornError;
 use super::run_ps;
 use super::{ComputerOpResult, SecurityLevel};
 
@@ -22,7 +23,7 @@ $shell.Windows() | ForEach-Object {{ if ($_.Document.Title -like '*{}*') {{ $_.V
             },
             Err(e) => ComputerOpResult {
                 success: false,
-                data: e,
+                data: e.to_string(),
                 security_level: SecurityLevel::L2Local.as_str().to_string(),
                 approval_required: false,
             },
@@ -66,7 +67,7 @@ if (-not $found) {{ Write-Output "not found" }}
             },
             Err(e) => ComputerOpResult {
                 success: false,
-                data: e,
+                data: e.to_string(),
                 security_level: SecurityLevel::L2Local.as_str().to_string(),
                 approval_required: false,
             },

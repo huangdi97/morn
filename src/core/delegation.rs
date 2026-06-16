@@ -1,4 +1,5 @@
 //! delegation — Delegates tasks to suitable agents and tracks delegated work.
+use crate::core::error::MornError;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -45,7 +46,7 @@ impl DelegationManager {
         &self,
         from_agent: &str,
         task: DelegationTask,
-    ) -> Result<DelegationResult, String> {
+    ) -> Result<DelegationResult, MornError> {
         let best = self.find_best_agent(&task);
         let target = best.ok_or_else(|| {
             format!(

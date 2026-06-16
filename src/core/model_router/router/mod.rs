@@ -1,3 +1,4 @@
+use crate::core::error::MornError;
 use super::local_engine::LocalEngine;
 use super::{
     ConfiguredModel, HybridStrategy, ModelRouter, ModelSpec, ModelType, ProviderCatalogEntry,
@@ -201,7 +202,7 @@ impl ModelRouter {
         self.mode = mode;
     }
 
-    pub fn route(&self, prompt: &str) -> Result<RoutedModel, String> {
+    pub fn route(&self, prompt: &str) -> Result<RoutedModel, MornError> {
         let selected = self.select_model(prompt, &["chat"])?;
 
         if selected.model_type == ModelType::Cloud {
@@ -235,7 +236,7 @@ impl ModelRouter {
         models
     }
 
-    pub fn select_model(&self, prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, String> {
+    pub fn select_model(&self, prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, MornError> {
         match self.mode {
             RouterMode::CloudFirst => self.select_cloud(prompt, capabilities),
             RouterMode::LocalOnly => self.select_local(capabilities),
@@ -243,7 +244,7 @@ impl ModelRouter {
         }
     }
 
-    fn select_cloud(&self, _prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, String> {
+    fn select_cloud(&self, _prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, MornError> {
         let candidates: Vec<&ModelSpec> = self
             .cloud_models
             .iter()
@@ -256,13 +257,13 @@ impl ModelRouter {
         }) {
             return Ok(best);
         }
-        self.fallback_models
+        Ok(self.fallback_models
             .iter()
             .find(|m| m.is_available)
-            .ok_or_else(|| "no available model".to_string())
+            .ok_or_else(|| MornError::Internal("no available model".to_string()))?)
     }
 
-    fn select_local(&self, capabilities: &[&str]) -> Result<&ModelSpec, String> {
+    fn select_local(&self, capabilities: &[&str]) -> Result<&ModelSpec, MornError> {
         let candidates: Vec<&ModelSpec> = self
             .local_models
             .iter()
@@ -271,13 +272,13 @@ impl ModelRouter {
         if let Some(model) = candidates.first() {
             return Ok(model);
         }
-        self.fallback_models
+        Ok(self.fallback_models
             .iter()
             .find(|m| m.is_available)
-            .ok_or_else(|| "no local model available".to_string())
+            .ok_or_else(|| MornError::Internal("no local model available".to_string()))?)
     }
 
-    fn select_hybrid(&self, prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, String> {
+    fn select_hybrid(&self, prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, MornError> {
         let local_available = self.has_available_local_model(capabilities);
 
         match self.hybrid_strategy {

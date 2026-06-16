@@ -1,4 +1,5 @@
 //! presets_tech — Provides technical persona presets for engineering tasks.
+use crate::core::error::MornError;
 use super::{Persona, PersonaParameters, PromptLayers};
 
 pub fn preset_analyst() -> Persona {

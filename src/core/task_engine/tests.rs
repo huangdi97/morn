@@ -1,4 +1,5 @@
 //! Task engine tests.
+use crate::core::error::MornError;
 use super::child_process::{ChildProcess, ProcessStatus};
 
 #[test]

@@ -1,5 +1,6 @@
 //! Decision rules for configurable COO override behavior.
 
+use crate::core::error::MornError;
 use crate::core::supervisor::DecisionLevel;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -25,10 +26,10 @@ pub fn parse_decision_level(s: &str) -> Option<DecisionLevel> {
 }
 
 pub trait DecisionRuleStore {
-    fn add_rule(&self, rule: DecisionRule) -> Result<(), String>;
-    fn remove_rule(&self, id: &str) -> Result<(), String>;
-    fn list_rules(&self) -> Result<Vec<DecisionRule>, String>;
-    fn find_rule(&self, action: &str) -> Result<Option<DecisionRule>, String>;
+    fn add_rule(&self, rule: DecisionRule) -> Result<(), MornError>;
+    fn remove_rule(&self, id: &str) -> Result<(), MornError>;
+    fn list_rules(&self) -> Result<Vec<DecisionRule>, MornError>;
+    fn find_rule(&self, action: &str) -> Result<Option<DecisionRule>, MornError>;
 }
 
 #[cfg(test)]

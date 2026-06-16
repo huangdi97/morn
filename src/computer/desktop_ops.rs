@@ -9,6 +9,7 @@
 //! When the `desktop-real` feature is enabled, real OS-level operations are used
 //! (screenshot via `screenshots` crate, window management via OS APIs).
 
+use crate::core::error::MornError;
 pub mod keyboard;
 pub mod mouse;
 pub mod window;
@@ -25,16 +26,16 @@ pub struct Resolution {
     pub height: u32,
 }
 
-pub(crate) fn run_ps(command: &str) -> Result<String, String> {
+pub(crate) fn run_ps(command: &str) -> Result<String, MornError> {
     let output = std::process::Command::new("powershell.exe")
         .args(["-Command", command])
         .output()
-        .map_err(|e| format!("PowerShell error: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("PowerShell error: {}", e)))?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("PowerShell failed: {}", stderr))
+        Err(MornError::Internal(format!("PowerShell failed: {}", stderr)))
     }
 }
 
@@ -87,7 +88,7 @@ Write-Output $base64
         },
         Err(e) => ComputerOpResult {
             success: false,
-            data: e,
+            data: e.to_string(),
             security_level: SecurityLevel::L2Local.as_str().to_string(),
             approval_required: false,
         },
@@ -178,12 +179,12 @@ fn base64_engine(data: &[u8]) -> String {
     result
 }
 
-pub fn get_screen_resolution() -> Result<Resolution, String> {
+pub fn get_screen_resolution() -> Result<Resolution, MornError> {
     if cfg!(target_os = "windows") {
         let output = run_ps(
             "Add-Type -AssemblyName System.Windows.Forms; $b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; Write-Output \"$($b.Width)x$($b.Height)\"",
         )?;
-        return parse_resolution(&output).ok_or_else(|| "failed to parse resolution".to_string());
+        return Ok(parse_resolution(&output).ok_or_else(|| MornError::Internal("failed to parse resolution".to_string()))?);
     }
 
     if cfg!(target_os = "linux") {

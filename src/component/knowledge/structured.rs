@@ -1,5 +1,6 @@
 //! Structured knowledge with record-based field matching.
 
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 use crate::core::component::{
@@ -32,16 +33,16 @@ impl Component for StructuredKnowledge {
     fn type_name(&self) -> &str {
         "knowledge"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -66,10 +67,10 @@ impl IOComponent for StructuredKnowledge {
             },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }
@@ -81,7 +82,7 @@ impl SecureComponent for StructuredKnowledge {
 }
 
 impl Knowledge for StructuredKnowledge {
-    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, String> {
+    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, MornError> {
         let lower = query.to_lowercase();
         let mut results = Vec::new();
         for (i, record) in self.records.iter().enumerate() {
@@ -98,7 +99,7 @@ impl Knowledge for StructuredKnowledge {
         Ok(results)
     }
 
-    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), String> {
+    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), MornError> {
         let mut record = HashMap::new();
         for item in items {
             record.insert(item.key, item.value);

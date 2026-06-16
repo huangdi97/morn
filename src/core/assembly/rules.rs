@@ -6,6 +6,7 @@
 //! - Constraint: memory_layers × active_agents ≤ 5; tools ≤ 15/session
 //! - Compatibility: port mismatch auto-inserts Transformer middleware
 
+use crate::core::error::MornError;
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuleViolation {
     MissingMemory,

@@ -1,4 +1,5 @@
 //! model_router — Routes LLM requests to appropriate provider based on mode and capabilities.
+use crate::core::error::MornError;
 pub mod local_engine;
 pub mod providers;
 pub mod router;
@@ -15,7 +16,7 @@ pub enum RouterMode {
 }
 
 impl RouterMode {
-    pub fn route(&self, request: &str) -> Result<String, String> {
+    pub fn route(&self, request: &str) -> Result<String, MornError> {
         match self {
             RouterMode::CloudFirst => Ok("cloud".to_string()),
             RouterMode::LocalOnly => Ok("local".to_string()),
@@ -76,13 +77,13 @@ pub enum HybridStrategy {
 }
 
 impl HybridStrategy {
-    pub fn parse(value: &str) -> Result<Self, String> {
+    pub fn parse(value: &str) -> Result<Self, MornError> {
         match value.trim().to_ascii_lowercase().replace('-', "_").as_str() {
             "auto" => Ok(HybridStrategy::Auto),
             "local_first" | "localfirst" => Ok(HybridStrategy::LocalFirst),
             "cloud_only" | "cloudonly" => Ok(HybridStrategy::CloudOnly),
             "cost_save" | "costsave" => Ok(HybridStrategy::CostSave),
-            other => Err(format!("unknown hybrid strategy: {}", other)),
+            other => Err(MornError::Internal(format!("unknown hybrid strategy: {}", other))),
         }
     }
 }

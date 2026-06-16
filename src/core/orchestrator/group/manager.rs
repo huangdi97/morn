@@ -1,5 +1,6 @@
 //! Group execution manager — tracks registered groups, execution metrics, and cost estimates.
 
+use crate::core::error::MornError;
 use crate::core::orchestrator::group::modes;
 use crate::core::orchestrator::group::AgentGroup;
 use crate::core::orchestrator::CollaborationMode;
@@ -68,7 +69,7 @@ impl GroupExecutor {
     }
 
     /// Estimates the per-execution cost for a group based on its mode and agent count.
-    pub fn group_cost_estimate(&self, group_id: &str) -> Result<f64, String> {
+    pub fn group_cost_estimate(&self, group_id: &str) -> Result<f64, MornError> {
         let group = self
             .groups
             .get(group_id)
@@ -78,7 +79,7 @@ impl GroupExecutor {
     }
 
     /// Returns a supervisor-friendly summary string for a group.
-    pub fn group_summary(&self, group_id: &str) -> Result<String, String> {
+    pub fn group_summary(&self, group_id: &str) -> Result<String, MornError> {
         let group = self
             .groups
             .get(group_id)
@@ -96,7 +97,7 @@ impl GroupExecutor {
         ))
     }
 
-    pub fn execute_group(&mut self, group_id: &str, _input: &str) -> Result<Vec<String>, String> {
+    pub fn execute_group(&mut self, group_id: &str, _input: &str) -> Result<Vec<String>, MornError> {
         let cost_estimate = self.group_cost_estimate(group_id).ok();
         let agent_ids: Vec<String>;
         let mode: CollaborationMode;
@@ -124,7 +125,7 @@ impl GroupExecutor {
         result
     }
 
-    pub fn group_status(&self, group_id: &str) -> Result<String, String> {
+    pub fn group_status(&self, group_id: &str) -> Result<String, MornError> {
         let group = self
             .groups
             .get(group_id)

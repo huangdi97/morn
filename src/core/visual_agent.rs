@@ -1,4 +1,5 @@
 //! visual_agent — Drives agents that interpret screens and perform visual actions.
+use crate::core::error::MornError;
 use crate::core::visual_grounding::ScreenCoord;
 use std::collections::HashMap;
 
@@ -43,7 +44,7 @@ impl VisualAgent {
         VisualAgent
     }
 
-    pub async fn detect_all(&self, screenshot: &[u8]) -> Result<DetectionResult, String> {
+    pub async fn detect_all(&self, screenshot: &[u8]) -> Result<DetectionResult, MornError> {
         let buttons = self.detect_buttons(screenshot).await?;
         let text_fields = self.detect_text_fields(screenshot).await?;
         let images = self.detect_images(screenshot).await?;
@@ -56,7 +57,7 @@ impl VisualAgent {
         })
     }
 
-    pub async fn detect_buttons(&self, _screenshot: &[u8]) -> Result<Vec<DetectedButton>, String> {
+    pub async fn detect_buttons(&self, _screenshot: &[u8]) -> Result<Vec<DetectedButton>, MornError> {
         Ok(vec![
             DetectedButton {
                 label: "Submit".to_string(),
@@ -88,7 +89,7 @@ impl VisualAgent {
     pub async fn detect_text_fields(
         &self,
         _screenshot: &[u8],
-    ) -> Result<Vec<DetectedTextField>, String> {
+    ) -> Result<Vec<DetectedTextField>, MornError> {
         Ok(vec![
             DetectedTextField {
                 label: "Search".to_string(),
@@ -119,7 +120,7 @@ impl VisualAgent {
         ])
     }
 
-    pub async fn detect_images(&self, _screenshot: &[u8]) -> Result<Vec<DetectedImage>, String> {
+    pub async fn detect_images(&self, _screenshot: &[u8]) -> Result<Vec<DetectedImage>, MornError> {
         Ok(vec![
             DetectedImage {
                 label: "Logo".to_string(),
@@ -148,14 +149,14 @@ impl VisualAgent {
         ])
     }
 
-    pub async fn click_at(&self, coord: &ScreenCoord) -> Result<(), String> {
+    pub async fn click_at(&self, coord: &ScreenCoord) -> Result<(), MornError> {
         let center_x = coord.x + coord.width / 2.0;
         let center_y = coord.y + coord.height / 2.0;
         tracing::info!("[VisualAgent] Clicking at ({}, {})", center_x, center_y);
         Ok(())
     }
 
-    pub async fn type_at(&self, coord: &ScreenCoord, text: &str) -> Result<(), String> {
+    pub async fn type_at(&self, coord: &ScreenCoord, text: &str) -> Result<(), MornError> {
         let center_x = coord.x + coord.width / 2.0;
         let center_y = coord.y + coord.height / 2.0;
         tracing::info!(
@@ -167,7 +168,7 @@ impl VisualAgent {
         Ok(())
     }
 
-    pub async fn click_button(&self, button: &DetectedButton) -> Result<(), String> {
+    pub async fn click_button(&self, button: &DetectedButton) -> Result<(), MornError> {
         self.click_at(&button.bounding_box).await
     }
 
@@ -175,7 +176,7 @@ impl VisualAgent {
         &self,
         field: &DetectedTextField,
         text: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), MornError> {
         self.click_at(&field.bounding_box).await?;
         self.type_at(&field.bounding_box, text).await
     }

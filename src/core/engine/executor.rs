@@ -1,4 +1,5 @@
 //! executor — Runs task engine steps and emits execution results.
+use crate::core::error::MornError;
 use super::TaskEngine;
 use crate::core::event_bus::{
     EVENT_SUPERVISOR_PLAN_EXECUTING, EVENT_TASK_COMPLETED, EVENT_TASK_FAILED,
@@ -10,8 +11,8 @@ impl TaskEngine {
     pub fn run_plan(
         &self,
         plan: &TaskPlan,
-        execute_fn: &mut dyn FnMut(&TaskPlan) -> Result<TaskResult, String>,
-    ) -> Result<TaskResult, String> {
+        execute_fn: &mut dyn FnMut(&TaskPlan) -> Result<TaskResult, MornError>,
+    ) -> Result<TaskResult, MornError> {
         if let Some(ref bus) = self.event_bus {
             bus.publish_event(
                 EVENT_SUPERVISOR_PLAN_EXECUTING,
@@ -93,10 +94,10 @@ impl TaskEngine {
     pub fn run_dag_plan(
         &self,
         plan: &TaskPlan,
-        execute_fn: &dyn Fn(&SubTaskDef) -> Result<String, String>,
+        execute_fn: &dyn Fn(&SubTaskDef) -> Result<String, MornError>,
         _timeout_secs: Option<u64>,
         max_retries: Option<u32>,
-    ) -> Result<TaskResult, String> {
+    ) -> Result<TaskResult, MornError> {
         if let Some(ref bus) = self.event_bus {
             bus.publish_event(
                 EVENT_SUPERVISOR_PLAN_EXECUTING,
@@ -132,7 +133,7 @@ impl TaskEngine {
                             break;
                         }
                         Err(e) => {
-                            last_error = e;
+                            last_error = e.to_string();
                         }
                     }
                 }
@@ -276,7 +277,7 @@ mod tests {
     fn run_plan_propagates_task_failure() {
         let engine = TaskEngine::new(None, None);
         let plan = plan_with_subtasks(vec![subtask("main", vec![])]);
-        let mut execute_fn = |_p: &TaskPlan| Err("boom".to_string());
+        let mut execute_fn = |_p: &TaskPlan| Err(MornError::Internal("boom".to_string()));
 
         let err = engine.run_plan(&plan, &mut execute_fn).unwrap_err();
 
@@ -287,7 +288,7 @@ mod tests {
     fn run_dag_plan_marks_failed_subtask() {
         let engine = TaskEngine::new(None, None);
         let plan = plan_with_subtasks(vec![subtask("main", vec![])]);
-        let execute = |_subtask: &SubTaskDef| Err("failed".to_string());
+        let execute = |_subtask: &SubTaskDef| Err(MornError::Internal("failed".to_string()));
 
         let result = engine.run_dag_plan(&plan, &execute, None, Some(0)).unwrap();
 

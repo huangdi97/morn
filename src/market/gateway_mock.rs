@@ -1,4 +1,5 @@
 //! gateway_mock — Mock PaymentGateway for testing and development.
+use crate::core::error::MornError;
 use super::gateway::{PaymentError, PaymentGateway, PaymentStatus, PaymentUrl};
 
 pub struct MockPaymentGateway;

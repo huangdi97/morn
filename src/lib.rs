@@ -1,5 +1,6 @@
 //! Morn — A local-first, multi-agent AI operating system.
 
+use crate::core::error::MornError;
 pub mod bridge;
 pub mod channel;
 pub mod component;

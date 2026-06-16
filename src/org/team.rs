@@ -1,4 +1,5 @@
 //! team — Manages organization teams, members, and user records.
+use crate::core::error::MornError;
 use crate::core::storage::{Storage, TeamMemberRecord, TeamRecord, UserRecord};
 
 pub struct TeamManager {
@@ -15,7 +16,7 @@ impl TeamManager {
         name: &str,
         description: &str,
         owner_id: &str,
-    ) -> Result<TeamRecord, String> {
+    ) -> Result<TeamRecord, MornError> {
         let owner = self
             .storage
             .get_user(owner_id)?
@@ -47,7 +48,7 @@ impl TeamManager {
         team_id: &str,
         user_id: &str,
         role: &str,
-    ) -> Result<TeamMemberRecord, String> {
+    ) -> Result<TeamMemberRecord, MornError> {
         self.storage
             .get_team(team_id)?
             .ok_or_else(|| format!("Team {} not found", team_id))?;
@@ -57,10 +58,10 @@ impl TeamManager {
 
         let valid_roles = ["owner", "admin", "member"];
         if !valid_roles.contains(&role) {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "Invalid role: {}. Must be owner, admin, or member",
                 role
-            ));
+            )));
         }
 
         let member = TeamMemberRecord {
@@ -74,7 +75,7 @@ impl TeamManager {
         Ok(member)
     }
 
-    pub fn remove_member(&self, team_id: &str, user_id: &str) -> Result<(), String> {
+    pub fn remove_member(&self, team_id: &str, user_id: &str) -> Result<(), MornError> {
         let members = self.storage.list_team_members(team_id)?;
         let owner_count = members.iter().filter(|m| m.role == "owner").count();
         let target = members
@@ -83,21 +84,21 @@ impl TeamManager {
             .ok_or_else(|| format!("User {} is not a member of team {}", user_id, team_id))?;
 
         if target.role == "owner" && owner_count <= 1 {
-            return Err("Cannot remove the last owner from the team".to_string());
+            return Err(MornError::Internal("Cannot remove the last owner from the team".to_string()))
         }
 
         self.storage.remove_team_member(team_id, user_id)
     }
 
-    pub fn list_teams(&self, user_id: &str) -> Result<Vec<TeamRecord>, String> {
+    pub fn list_teams(&self, user_id: &str) -> Result<Vec<TeamRecord>, MornError> {
         self.storage.list_teams_for_user(user_id)
     }
 
-    pub fn list_members(&self, team_id: &str) -> Result<Vec<TeamMemberRecord>, String> {
+    pub fn list_members(&self, team_id: &str) -> Result<Vec<TeamMemberRecord>, MornError> {
         self.storage.list_team_members(team_id)
     }
 
-    pub fn transfer_ownership(&self, team_id: &str, new_owner_id: &str) -> Result<(), String> {
+    pub fn transfer_ownership(&self, team_id: &str, new_owner_id: &str) -> Result<(), MornError> {
         let team = self
             .storage
             .get_team(team_id)?
@@ -116,7 +117,7 @@ impl TeamManager {
         self.storage.update_team_owner(team_id, new_owner_id)
     }
 
-    pub fn delete_team(&self, team_id: &str) -> Result<(), String> {
+    pub fn delete_team(&self, team_id: &str) -> Result<(), MornError> {
         self.storage.delete_team(team_id)
     }
 }
@@ -135,21 +136,21 @@ impl UserManager {
         username: &str,
         display_name: &str,
         role: &str,
-    ) -> Result<UserRecord, String> {
+    ) -> Result<UserRecord, MornError> {
         if username.is_empty() {
-            return Err("Username cannot be empty".to_string());
+            return Err(MornError::Internal("Username cannot be empty".to_string()))
         }
         let valid_roles = ["admin", "user", "viewer"];
         let role = if role.is_empty() { "user" } else { role };
         if !valid_roles.contains(&role) {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "Invalid role: {}. Must be admin, user, or viewer",
                 role
-            ));
+            )));
         }
 
         if self.storage.get_user_by_username(username)?.is_some() {
-            return Err(format!("Username '{}' already exists", username));
+            return Err(MornError::Internal(format!("Username '{}' already exists", username)));
         }
 
         let user = UserRecord {
@@ -164,19 +165,19 @@ impl UserManager {
         Ok(user)
     }
 
-    pub fn get_user(&self, id: &str) -> Result<Option<UserRecord>, String> {
+    pub fn get_user(&self, id: &str) -> Result<Option<UserRecord>, MornError> {
         self.storage.get_user(id)
     }
 
-    pub fn get_user_by_username(&self, username: &str) -> Result<Option<UserRecord>, String> {
+    pub fn get_user_by_username(&self, username: &str) -> Result<Option<UserRecord>, MornError> {
         self.storage.get_user_by_username(username)
     }
 
-    pub fn list_users(&self) -> Result<Vec<UserRecord>, String> {
+    pub fn list_users(&self) -> Result<Vec<UserRecord>, MornError> {
         self.storage.list_users()
     }
 
-    pub fn delete_user(&self, id: &str) -> Result<(), String> {
+    pub fn delete_user(&self, id: &str) -> Result<(), MornError> {
         self.storage.delete_user(id)
     }
 }

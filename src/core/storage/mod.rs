@@ -1,4 +1,5 @@
 //! storage — Provides SQLite-backed persistence for agents, tasks, settings, and sync data.
+use crate::core::error::MornError;
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -29,12 +30,12 @@ pub use users::*;
 
 impl Storage {
     /// Opens or creates the default persistent SQLite database under the OS data directory.
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> Result<Self, MornError> {
         Self::with_path(default_database_path()?)
     }
 
     /// Opens or creates a SQLite database at `path` and returns initialized storage.
-    pub fn with_path(path: impl AsRef<Path>) -> Result<Self, String> {
+    pub fn with_path(path: impl AsRef<Path>) -> Result<Self, MornError> {
         if let Some(parent) = path.as_ref().parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
                 format!(
@@ -45,7 +46,7 @@ impl Storage {
             })?;
         }
 
-        let conn = Connection::open(path).map_err(|e| e.to_string())?;
+        let conn = Connection::open(path).map_err(|e| MornError::Internal(e.to_string()))?;
         let storage = Storage {
             conn: Arc::new(Mutex::new(conn)),
         };
@@ -54,8 +55,8 @@ impl Storage {
     }
 
     /// Creates an in-memory SQLite database and returns initialized storage for tests or ephemeral use.
-    pub fn new_in_memory() -> Result<Self, String> {
-        let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
+    pub fn new_in_memory() -> Result<Self, MornError> {
+        let conn = Connection::open_in_memory().map_err(|e| MornError::Internal(e.to_string()))?;
         let storage = Storage {
             conn: Arc::new(Mutex::new(conn)),
         };
@@ -63,8 +64,8 @@ impl Storage {
         Ok(storage)
     }
 
-    fn init_tables(&self) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    fn init_tables(&self) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         conn.execute_batch(
             "
             CREATE TABLE IF NOT EXISTS agents (
@@ -273,7 +274,7 @@ impl Storage {
             );
             ",
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 
@@ -281,20 +282,20 @@ impl Storage {
     ///
     /// Returns `Ok(())` when the database responds to a `PRAGMA quick_check`
     /// with the value `"ok"`, and an error otherwise.
-    pub fn check_health(&self) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+    pub fn check_health(&self) -> Result<(), MornError> {
+        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let result: String = conn
             .pragma_query_value(None, "quick_check", |row| row.get(0))
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         if result == "ok" {
             Ok(())
         } else {
-            Err(format!("Database integrity issue: {}", result))
+            Err(MornError::Internal(format!("Database integrity issue: {}", result)))
         }
     }
 }
 
-fn default_database_path() -> Result<PathBuf, String> {
+fn default_database_path() -> Result<PathBuf, MornError> {
     let data_dir = dirs::data_dir()
         .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("."))

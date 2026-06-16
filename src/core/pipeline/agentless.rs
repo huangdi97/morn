@@ -1,8 +1,9 @@
 //! 无 Agent 流水线 — 无需 Agent 参与的自动步骤处理
+use crate::core::error::MornError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-type ToolFn = Box<dyn Fn(&str) -> Result<String, String>>;
+type ToolFn = Box<dyn Fn(&str) -> Result<String, MornError>>;
 type ToolRegistry = HashMap<String, ToolFn>;
 
 #[derive(Serialize, Deserialize)]
@@ -58,7 +59,7 @@ impl AgentlessPipeline {
         self.steps.push(step);
     }
 
-    pub fn execute(&mut self) -> Result<Vec<String>, String> {
+    pub fn execute(&mut self) -> Result<Vec<String>, MornError> {
         let mut outputs = Vec::new();
         for step in &self.steps {
             if let Some(ref registry) = self.tool_registry {

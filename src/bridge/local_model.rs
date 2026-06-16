@@ -1,4 +1,5 @@
 //! local_model — OpenAI-compatible local LLM client for Ollama and similar endpoints.
+use crate::core::error::MornError;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -55,12 +56,12 @@ impl LocalLlmClient {
         }
     }
 
-    pub fn chat(&self, prompt: &str, system_prompt: &str) -> Result<String, String> {
-        let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+    pub fn chat(&self, prompt: &str, system_prompt: &str) -> Result<String, MornError> {
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| MornError::Internal(e.to_string()))?;
         runtime.block_on(self.chat_async(prompt, system_prompt))
     }
 
-    pub async fn chat_async(&self, prompt: &str, system_prompt: &str) -> Result<String, String> {
+    pub async fn chat_async(&self, prompt: &str, system_prompt: &str) -> Result<String, MornError> {
         let request = LocalChatRequest {
             model: self.config.model_name.clone(),
             messages: vec![
@@ -87,25 +88,25 @@ impl LocalLlmClient {
             .timeout(std::time::Duration::from_secs(120))
             .send()
             .await
-            .map_err(|e| format!("Local LLM request error: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Local LLM request error: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(format!("Local LLM API error {}: {}", status, body));
+            return Err(MornError::Internal(format!("Local LLM API error {}: {}", status, body)));
         }
 
         let chat_response: LocalChatResponse = response
             .json()
             .await
-            .map_err(|e| format!("Local LLM JSON parse error: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Local LLM JSON parse error: {}", e)))?;
 
         chat_response
             .choices
             .into_iter()
             .next()
             .map(|choice| choice.message.content)
-            .ok_or_else(|| "Local LLM response contained no choices".to_string())
+            .ok_or_else(|| MornError::Internal("Local LLM response contained no choices".to_string()))
     }
 
     pub fn get_config(&self) -> &LocalModelConfig {

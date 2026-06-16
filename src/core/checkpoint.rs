@@ -1,4 +1,5 @@
 //! checkpoint — Saves and restores execution checkpoints for resumable tasks.
+use crate::core::error::MornError;
 use crate::core::storage::{SaveCheckpointArgs, Storage};
 use serde_json::Value;
 use std::sync::Arc;
@@ -35,9 +36,9 @@ impl CheckpointManager {
     }
 
     /// Saves a checkpoint and serializes its state and metadata to storage.
-    pub fn save(&self, cp: &Checkpoint) -> Result<(), String> {
-        let state_json = serde_json::to_string(&cp.state).map_err(|e| e.to_string())?;
-        let metadata_json = serde_json::to_string(&cp.metadata).map_err(|e| e.to_string())?;
+    pub fn save(&self, cp: &Checkpoint) -> Result<(), MornError> {
+        let state_json = serde_json::to_string(&cp.state).map_err(|e| MornError::Internal(e.to_string()))?;
+        let metadata_json = serde_json::to_string(&cp.metadata).map_err(|e| MornError::Internal(e.to_string()))?;
         self.storage.save_checkpoint_args(SaveCheckpointArgs {
             id: &cp.id,
             session_id: &cp.session_id,
@@ -50,13 +51,13 @@ impl CheckpointManager {
     }
 
     /// Loads the latest checkpoint for a session id and deserializes its stored JSON fields.
-    pub fn load_latest(&self, session_id: &str) -> Result<Option<Checkpoint>, String> {
+    pub fn load_latest(&self, session_id: &str) -> Result<Option<Checkpoint>, MornError> {
         let row = self.storage.load_latest_checkpoint(session_id)?;
         match row {
             Some((id, sid, step_idx, step_name, state_json, metadata_json, parent_id)) => {
-                let state: Value = serde_json::from_str(&state_json).map_err(|e| e.to_string())?;
+                let state: Value = serde_json::from_str(&state_json).map_err(|e| MornError::Internal(e.to_string()))?;
                 let metadata: Value =
-                    serde_json::from_str(&metadata_json).map_err(|e| e.to_string())?;
+                    serde_json::from_str(&metadata_json).map_err(|e| MornError::Internal(e.to_string()))?;
                 Ok(Some(Checkpoint {
                     id,
                     session_id: sid,
@@ -73,7 +74,7 @@ impl CheckpointManager {
     }
 
     /// Lists checkpoint summaries for a session id.
-    pub fn list(&self, session_id: &str) -> Result<Vec<Checkpoint>, String> {
+    pub fn list(&self, session_id: &str) -> Result<Vec<Checkpoint>, MornError> {
         let rows = self.storage.list_checkpoints(session_id)?;
         let mut checkpoints = Vec::new();
         for (id, step_idx, step_name, created_at) in rows {
@@ -92,19 +93,19 @@ impl CheckpointManager {
     }
 
     /// Restores an agent state from a checkpoint's serialized state value.
-    pub fn restore(&self, cp: &Checkpoint) -> Result<AgentState, String> {
+    pub fn restore(&self, cp: &Checkpoint) -> Result<AgentState, MornError> {
         let state: AgentState =
-            serde_json::from_value(cp.state.clone()).map_err(|e| e.to_string())?;
+            serde_json::from_value(cp.state.clone()).map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(state)
     }
 
     /// Forks a checkpoint into a new session id and returns the latest checkpoint for that session.
-    pub fn fork(&self, cp_id: &str, new_session_id: &str) -> Result<Checkpoint, String> {
+    pub fn fork(&self, cp_id: &str, new_session_id: &str) -> Result<Checkpoint, MornError> {
         let new_id = uuid::Uuid::new_v4().to_string();
         self.storage
             .fork_checkpoint(cp_id, &new_id, new_session_id)?;
-        self.load_latest(new_session_id)?
-            .ok_or_else(|| "Forked checkpoint not found".to_string())
+        Ok(self.load_latest(new_session_id)?
+            .ok_or_else(|| MornError::Internal("Forked checkpoint not found".to_string()))?)
     }
 }
 

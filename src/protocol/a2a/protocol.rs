@@ -1,4 +1,5 @@
 //! A2A 协议核心 — 消息信封、序列化、路由寻址
+use crate::core::error::MornError;
 use serde::{Deserialize, Serialize};
 
 /// Supported content types for A2A messages.

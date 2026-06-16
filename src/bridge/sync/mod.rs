@@ -1,4 +1,5 @@
 //! sync — Coordinates device sync records and cross-instance state events.
+use crate::core::error::MornError;
 pub mod events;
 
 use crate::core::storage::{Storage, SyncEventRecord};
@@ -81,7 +82,7 @@ impl SyncEngine {
         self
     }
 
-    pub fn push_changes(&self) -> Result<usize, String> {
+    pub fn push_changes(&self) -> Result<usize, MornError> {
         tracing::debug!(
             "pushing storage sync changes for device '{}'",
             self.device_id
@@ -90,7 +91,7 @@ impl SyncEngine {
             .storage
             .as_ref()
             .ok_or("SyncEngine: no storage configured")?;
-        let storage = storage.lock().map_err(|e| e.to_string())?;
+        let storage = storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
         let events = storage.list_unsynced_events()?;
         let count = events.len();
 
@@ -108,23 +109,23 @@ impl SyncEngine {
             let client = reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(15))
                 .build()
-                .map_err(|e| format!("Sync push HTTP client error: {}", e))?;
+                .map_err(|e| MornError::Internal(format!("Sync push HTTP client error: {}", e)))?;
             let resp = client
                 .post(Self::endpoint_url(server_url, "/sync/push"))
                 .json(&payload)
                 .send()
-                .map_err(|e| format!("Sync push error: {}", e))?;
+                .map_err(|e| MornError::Internal(format!("Sync push error: {}", e)))?;
             if resp.status().is_success() {
                 storage.mark_events_synced(&event_ids)?;
             } else {
-                return Err(format!("Sync push returned status: {}", resp.status()));
+                return Err(MornError::Internal(format!("Sync push returned status: {}", resp.status())));
             }
         }
 
         Ok(count)
     }
 
-    pub fn pull_changes(&self) -> Result<Vec<SyncEventRecord>, String> {
+    pub fn pull_changes(&self) -> Result<Vec<SyncEventRecord>, MornError> {
         tracing::debug!(
             "pulling remote sync changes for device '{}'",
             self.device_id
@@ -136,7 +137,7 @@ impl SyncEngine {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(15))
             .build()
-            .map_err(|e| format!("Sync pull HTTP client error: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Sync pull HTTP client error: {}", e)))?;
         let mut query = vec![("device_id", self.device_id.as_str())];
         if !self.state.last_sync_key.is_empty() {
             query.push(("since", self.state.last_sync_key.as_str()));
@@ -145,13 +146,13 @@ impl SyncEngine {
             .get(Self::endpoint_url(server_url, "/sync/pull"))
             .query(&query)
             .send()
-            .map_err(|e| format!("Sync pull error: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Sync pull error: {}", e)))?;
         if !resp.status().is_success() {
-            return Err(format!("Sync pull returned status: {}", resp.status()));
+            return Err(MornError::Internal(format!("Sync pull returned status: {}", resp.status())));
         }
         let body = resp
             .text()
-            .map_err(|e| format!("Sync pull read error: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Sync pull read error: {}", e)))?;
         Self::parse_pull_events(&body)
     }
 
@@ -173,12 +174,12 @@ impl SyncEngine {
         &self.state.pending_changes
     }
 
-    pub fn sync_local_state(&mut self) -> Result<usize, String> {
+    pub fn sync_local_state(&mut self) -> Result<usize, MornError> {
         let count = self.state.pending_changes.len();
         let now = chrono::Utc::now().to_rfc3339();
         tracing::info!("syncing {} pending local change(s)", count);
         if let Some(storage) = &self.storage {
-            let storage = storage.lock().map_err(|e| e.to_string())?;
+            let storage = storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
             for change in &self.state.pending_changes {
                 let event = SyncEventRecord {
                     id: uuid::Uuid::new_v4().to_string(),
@@ -186,7 +187,7 @@ impl SyncEngine {
                     entity_id: change.key.clone(),
                     action: change.change_type.clone(),
                     data_json: serde_json::to_string(&change.value)
-                        .map_err(|e| format!("Sync state encode error: {}", e))?,
+                        .map_err(|e| MornError::Internal(format!("Sync state encode error: {}", e)))?,
                     timestamp: change.timestamp.clone(),
                     device_id: self.device_id.clone(),
                     synced: false,
@@ -200,7 +201,7 @@ impl SyncEngine {
         Ok(count)
     }
 
-    pub fn sync_once(&mut self) -> Result<SyncReport, String> {
+    pub fn sync_once(&mut self) -> Result<SyncReport, MornError> {
         let persisted_state_changes = self.sync_local_state()?;
         let pushed_events = self.push_changes()?;
         let pulled = if self.sync_server_url.is_some() {

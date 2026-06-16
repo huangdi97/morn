@@ -1,4 +1,5 @@
 //! Morn 配置系统 — TOML 配置加载、合并、校验、环境变量注入
+use crate::core::error::MornError;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,7 +28,7 @@ pub struct MornConfig {
 }
 
 impl MornConfig {
-    pub fn load() -> Result<Self, String> {
+    pub fn load() -> Result<Self, MornError> {
         for path in Self::candidate_paths() {
             if path.exists() {
                 return Self::from_file(&path);
@@ -61,12 +62,12 @@ impl MornConfig {
         paths
     }
 
-    fn from_file(path: &Path) -> Result<Self, String> {
+    fn from_file(path: &Path) -> Result<Self, MornError> {
         let config = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read config {}: {}", path.display(), e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to read config {}: {}", path.display(), e)))?;
 
         toml::from_str::<Self>(&config)
-            .map_err(|e| format!("Failed to parse config {}: {}", path.display(), e))
+            .map_err(|e| MornError::Internal(format!("Failed to parse config {}: {}", path.display(), e)))
     }
 }
 

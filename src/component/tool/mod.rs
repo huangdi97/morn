@@ -1,8 +1,9 @@
 //! tool — Defines executable tools and their component integration.
+use crate::core::error::MornError;
 use crate::core::component::{Data, IOComponent};
 
 pub trait Tool: IOComponent {
-    fn execute(&mut self, input: Data) -> Result<Data, String>;
+    fn execute(&mut self, input: Data) -> Result<Data, MornError>;
 }
 
 pub mod builtins;

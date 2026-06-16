@@ -1,5 +1,6 @@
 //! Persistent knowledge implementations (static, file, SQLite).
 
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 use crate::core::component::{
@@ -32,16 +33,16 @@ impl Component for StaticKnowledge {
     fn type_name(&self) -> &str {
         "knowledge"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -66,10 +67,10 @@ impl IOComponent for StaticKnowledge {
             },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }
@@ -81,7 +82,7 @@ impl SecureComponent for StaticKnowledge {
 }
 
 impl Knowledge for StaticKnowledge {
-    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, String> {
+    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, MornError> {
         let mut results = Vec::new();
         for (k, v) in &self.data {
             if k.contains(query) || query.is_empty() {
@@ -94,7 +95,7 @@ impl Knowledge for StaticKnowledge {
         }
         Ok(results)
     }
-    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), String> {
+    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), MornError> {
         for item in items {
             self.data.insert(item.key, item.value);
         }
@@ -128,16 +129,16 @@ impl Component for FileKnowledge {
     fn type_name(&self) -> &str {
         "knowledge"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -162,10 +163,10 @@ impl IOComponent for FileKnowledge {
             },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }
@@ -177,7 +178,7 @@ impl SecureComponent for FileKnowledge {
 }
 
 impl Knowledge for FileKnowledge {
-    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, String> {
+    fn query(&self, query: &str) -> Result<Vec<KnowledgeItem>, MornError> {
         let mut results = Vec::new();
         for (k, v) in &self.data {
             if k.contains(query) || query.is_empty() {
@@ -190,7 +191,7 @@ impl Knowledge for FileKnowledge {
         }
         Ok(results)
     }
-    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), String> {
+    fn update(&mut self, items: Vec<KnowledgeItem>) -> Result<(), MornError> {
         for item in items {
             self.data.insert(item.key, item.value);
         }
@@ -224,16 +225,16 @@ impl Component for SqliteKnowledge {
     fn type_name(&self) -> &str {
         "knowledge"
     }
-    fn init(&mut self) -> Result<(), String> {
+    fn init(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn run(&mut self) -> Result<(), String> {
+    fn run(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn pause(&mut self) -> Result<(), String> {
+    fn pause(&mut self) -> Result<(), MornError> {
         Ok(())
     }
-    fn stop(&mut self) -> Result<(), String> {
+    fn stop(&mut self) -> Result<(), MornError> {
         Ok(())
     }
     fn health_check(&self) -> HealthStatus {
@@ -258,10 +259,10 @@ impl IOComponent for SqliteKnowledge {
             },
         ]
     }
-    fn send(&mut self, _port: &str, _data: Data) -> Result<(), String> {
+    fn send(&mut self, _port: &str, _data: Data) -> Result<(), MornError> {
         Ok(())
     }
-    fn recv(&mut self, _port: &str) -> Result<Option<Data>, String> {
+    fn recv(&mut self, _port: &str) -> Result<Option<Data>, MornError> {
         Ok(None)
     }
 }
@@ -273,10 +274,10 @@ impl SecureComponent for SqliteKnowledge {
 }
 
 impl Knowledge for SqliteKnowledge {
-    fn query(&self, _query: &str) -> Result<Vec<KnowledgeItem>, String> {
+    fn query(&self, _query: &str) -> Result<Vec<KnowledgeItem>, MornError> {
         Ok(vec![])
     }
-    fn update(&mut self, _items: Vec<KnowledgeItem>) -> Result<(), String> {
+    fn update(&mut self, _items: Vec<KnowledgeItem>) -> Result<(), MornError> {
         Ok(())
     }
 }

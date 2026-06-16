@@ -3,6 +3,7 @@
 //! 定义市场交易的计费计划、订单、发票以及支付网关。
 //! Defines billing plans, orders, invoices, and the payment gateway for marketplace transactions.
 
+use crate::core::error::MornError;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 /// 计费计划枚举 — Billing plan variants
 ///
@@ -79,7 +80,7 @@ impl PaymentGateway {
     ///
     /// 如果支付成功则返回 `Invoice`，否则返回错误信息。
     /// Returns `Ok(Invoice)` on success, or `Err` with a description on failure.
-    pub fn process_payment(order: &Order) -> Result<Invoice, String> {
+    pub fn process_payment(order: &Order) -> Result<Invoice, MornError> {
         let invoice = Invoice {
             id: format!("inv-{}", uuid::Uuid::new_v4()),
             order_id: order.id.clone(),
@@ -95,9 +96,9 @@ impl PaymentGateway {
     ///
     /// `amount` 必须为正数，否则返回错误。
     /// `amount` must be positive; returns an error otherwise.
-    pub fn refund(_invoice_id: &str, amount: f64) -> Result<(), String> {
+    pub fn refund(_invoice_id: &str, amount: f64) -> Result<(), MornError> {
         if amount <= 0.0 {
-            return Err("Refund amount must be positive".to_string());
+            return Err(MornError::Internal("Refund amount must be positive".to_string()))
         }
         Ok(())
     }
@@ -109,7 +110,7 @@ impl PaymentGateway {
 pub fn activate_subscription(
     plan: &crate::market::gateway::SubscriptionPlan,
     gateway: &impl crate::market::gateway::PaymentGateway,
-) -> Result<crate::market::gateway::PaymentUrl, String> {
+) -> Result<crate::market::gateway::PaymentUrl, MornError> {
     let (amount, currency) = match plan {
         crate::market::gateway::SubscriptionPlan::Free => {
             return Ok(crate::market::gateway::PaymentUrl {
@@ -131,7 +132,7 @@ pub fn activate_subscription(
     let description = format!("Subscription: {:?}", plan);
     gateway
         .create_payment(amount, currency, &description)
-        .map_err(|e| e.to_string())
+        .map_err(|e| MornError::Internal(e.to_string()))
 }
 
 #[cfg(test)]

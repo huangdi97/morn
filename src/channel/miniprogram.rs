@@ -2,6 +2,7 @@
 //! 配置方式：在微信公众平台注册小程序，获取 AppID
 //! 环境变量：MINIPROGRAM_APPID, MINIPROGRAM_SECRET
 
+use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 #[allow(dead_code)] /* 预留：微信小程序通道真实接入 */
@@ -31,7 +32,7 @@ impl MiniProgramChannel {
         }
     }
 
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env() -> Result<Self, MornError> {
         let app_id = std::env::var("MINIPROGRAM_APPID")
             .map_err(|_| "MINIPROGRAM_APPID not set".to_string())?;
         let app_secret = std::env::var("MINIPROGRAM_SECRET")
@@ -40,7 +41,7 @@ impl MiniProgramChannel {
         Ok(MiniProgramChannel::with_token(&app_id, &app_secret, token))
     }
 
-    pub fn get_access_token(&mut self) -> Result<String, String> {
+    pub fn get_access_token(&mut self) -> Result<String, MornError> {
         if let Some(ref token) = self.access_token {
             return Ok(token.clone());
         }
@@ -52,14 +53,14 @@ impl MiniProgramChannel {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
         let resp = client
             .get(&url)
             .send()
-            .map_err(|e| format!("Failed to get access token: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to get access token: {}", e)))?;
         let body: serde_json::Value = resp
             .json()
-            .map_err(|e| format!("Failed to parse token response: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to parse token response: {}", e)))?;
         let token = body["access_token"]
             .as_str()
             .ok_or_else(|| format!("access_token not found in response: {}", body))?
@@ -68,7 +69,7 @@ impl MiniProgramChannel {
         Ok(token)
     }
 
-    pub fn send(&mut self, msg: &ChannelMessage) -> Result<(), String> {
+    pub fn send(&mut self, msg: &ChannelMessage) -> Result<(), MornError> {
         let touser = msg.metadata["touser"]
             .as_str()
             .ok_or_else(|| "Missing 'touser' in message metadata".to_string())?;
@@ -90,29 +91,29 @@ impl MiniProgramChannel {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
         let resp = client
             .post(&url)
             .json(&payload)
             .send()
-            .map_err(|e| format!("Failed to send MiniProgram message: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to send MiniProgram message: {}", e)))?;
         let body: serde_json::Value = resp
             .json()
-            .map_err(|e| format!("Failed to parse send response: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to parse send response: {}", e)))?;
         if body["errcode"].as_i64() != Some(0) {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "MiniProgram API error: {} - {}",
                 body["errcode"], body["errmsg"]
-            ));
+            )));
         }
         Ok(())
     }
 
-    pub fn receive(&mut self) -> Result<Option<ChannelMessage>, String> {
+    pub fn receive(&mut self) -> Result<Option<ChannelMessage>, MornError> {
         Ok(self.fetch_messages()?.into_iter().next())
     }
 
-    pub fn poll_messages(&mut self, adapter: &mut ChannelAdapter) -> Result<(), String> {
+    pub fn poll_messages(&mut self, adapter: &mut ChannelAdapter) -> Result<(), MornError> {
         loop {
             match self.fetch_messages() {
                 Ok(messages) => {
@@ -145,7 +146,7 @@ impl MiniProgramChannel {
         }
     }
 
-    fn fetch_messages(&mut self) -> Result<Vec<ChannelMessage>, String> {
+    fn fetch_messages(&mut self) -> Result<Vec<ChannelMessage>, MornError> {
         let access_token = self.get_access_token()?;
         let url = format!(
             "https://api.weixin.qq.com/cgi-bin/message/custom/get?access_token={}",
@@ -154,30 +155,30 @@ impl MiniProgramChannel {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
         let resp = client
             .get(&url)
             .send()
-            .map_err(|e| format!("Failed to poll MiniProgram messages: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to poll MiniProgram messages: {}", e)))?;
 
         let status = resp.status();
         let body: serde_json::Value = resp
             .json()
-            .map_err(|e| format!("Failed to parse MiniProgram poll response: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to parse MiniProgram poll response: {}", e)))?;
 
         if !status.is_success() {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "MiniProgram API returned non-200 status {}: {}",
                 status, body
-            ));
+            )));
         }
 
         if body.get("errcode").and_then(|v| v.as_i64()).unwrap_or(0) != 0 {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "MiniProgram API error: {} - {}",
                 body.get("errcode").unwrap_or(&serde_json::Value::Null),
                 body.get("errmsg").unwrap_or(&serde_json::Value::Null)
-            ));
+            )));
         }
 
         let values = body
@@ -211,7 +212,7 @@ pub struct MiniProgramServer {
 
 fn json_value_to_channel_message(
     value: serde_json::Value,
-) -> Result<Option<ChannelMessage>, String> {
+) -> Result<Option<ChannelMessage>, MornError> {
     let content = match extract_text_content(&value) {
         Some(content) if !content.trim().is_empty() => content,
         _ => return Ok(None),
@@ -260,9 +261,9 @@ fn extract_text_content(value: &serde_json::Value) -> Option<String> {
 }
 
 #[cfg(test)]
-fn parse_miniprogram_json_message(body: &str) -> Result<Option<ChannelMessage>, String> {
+fn parse_miniprogram_json_message(body: &str) -> Result<Option<ChannelMessage>, MornError> {
     let value: serde_json::Value = serde_json::from_str(body)
-        .map_err(|e| format!("Failed to parse MiniProgram message JSON: {}", e))?;
+        .map_err(|e| MornError::Internal(format!("Failed to parse MiniProgram message JSON: {}", e)))?;
     json_value_to_channel_message(value)
 }
 
@@ -271,7 +272,7 @@ impl MiniProgramServer {
         MiniProgramServer { adapter }
     }
 
-    pub fn handle_message(&mut self, text: &str) -> Result<String, String> {
+    pub fn handle_message(&mut self, text: &str) -> Result<String, MornError> {
         if let Some(ref mut adapter) = self.adapter {
             let msg = ChannelMessage {
                 content: text.to_string(),

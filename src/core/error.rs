@@ -5,7 +5,7 @@ use std::fmt;
 
 pub type MornResult<T> = Result<T, MornError>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub enum MornError {
     Config(String),
     Storage(String),

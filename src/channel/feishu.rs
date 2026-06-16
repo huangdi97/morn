@@ -2,6 +2,7 @@
 //! 配置方式：在飞书开放平台创建应用，获取 Webhook URL
 //! 环境变量：FEISHU_WEBHOOK_URL
 
+use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 
 pub struct FeishuChannel {
@@ -15,28 +16,28 @@ impl FeishuChannel {
         }
     }
 
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env() -> Result<Self, MornError> {
         let url = std::env::var("FEISHU_WEBHOOK_URL")
             .map_err(|_| "FEISHU_WEBHOOK_URL not set".to_string())?;
         Ok(FeishuChannel::new(&url))
     }
 
-    pub fn send(&self, msg: &ChannelMessage) -> Result<(), String> {
+    pub fn send(&self, msg: &ChannelMessage) -> Result<(), MornError> {
         let payload = Self::build_payload(msg);
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
         let resp = client
             .post(&self.webhook_url)
             .json(&payload)
             .send()
-            .map_err(|e| format!("Failed to send Feishu message: {}", e))?;
+            .map_err(|e| MornError::Internal(format!("Failed to send Feishu message: {}", e)))?;
         if !resp.status().is_success() {
-            return Err(format!(
+            return Err(MornError::Internal(format!(
                 "Feishu webhook returned non-200 status: {}",
                 resp.status()
-            ));
+            )));
         }
         Ok(())
     }
@@ -50,7 +51,7 @@ impl FeishuChannel {
         })
     }
 
-    pub fn receive(&self) -> Result<Option<ChannelMessage>, String> {
+    pub fn receive(&self) -> Result<Option<ChannelMessage>, MornError> {
         Ok(None)
     }
 }
@@ -64,7 +65,7 @@ impl FeishuServer {
         FeishuServer { adapter }
     }
 
-    pub fn handle_event(&mut self, text: &str) -> Result<String, String> {
+    pub fn handle_event(&mut self, text: &str) -> Result<String, MornError> {
         if let Some(ref mut adapter) = self.adapter {
             let msg = ChannelMessage {
                 content: text.to_string(),

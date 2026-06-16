@@ -1,4 +1,5 @@
 //! A2A 消息路由器 — Agent 注册发现、消息转发、广播中继
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 use super::protocol::{A2AEnvelope, AgentCapability, RoutingMode};
@@ -35,7 +36,7 @@ impl A2ARouter {
     }
 
     /// Route an A2A envelope to the appropriate recipient(s).
-    pub fn route(&mut self, envelope: A2AEnvelope) -> Result<Vec<A2AEnvelope>, String> {
+    pub fn route(&mut self, envelope: A2AEnvelope) -> Result<Vec<A2AEnvelope>, MornError> {
         let delivered = match envelope.routing_mode {
             RoutingMode::Direct => self.route_direct(&envelope)?,
             RoutingMode::Relay => self.route_relay(&envelope)?,
@@ -46,20 +47,20 @@ impl A2ARouter {
         Ok(delivered)
     }
 
-    fn route_direct(&self, envelope: &A2AEnvelope) -> Result<Vec<A2AEnvelope>, String> {
+    fn route_direct(&self, envelope: &A2AEnvelope) -> Result<Vec<A2AEnvelope>, MornError> {
         let recipient_id = envelope
             .recipient_id
             .as_deref()
             .ok_or("Direct routing requires a recipient_id")?;
 
         if !self.agents.contains_key(recipient_id) {
-            return Err(format!("Recipient agent '{}' not found", recipient_id));
+            return Err(MornError::Internal(format!("Recipient agent '{}' not found", recipient_id)));
         }
 
         Ok(vec![envelope.clone()])
     }
 
-    fn route_relay(&self, envelope: &A2AEnvelope) -> Result<Vec<A2AEnvelope>, String> {
+    fn route_relay(&self, envelope: &A2AEnvelope) -> Result<Vec<A2AEnvelope>, MornError> {
         let recipient_id = envelope
             .recipient_id
             .as_deref()
@@ -67,18 +68,18 @@ impl A2ARouter {
 
         for hop in &envelope.relay_path {
             if !self.agents.contains_key(hop) {
-                return Err(format!("Relay hop agent '{}' not found", hop));
+                return Err(MornError::Internal(format!("Relay hop agent '{}' not found", hop)));
             }
         }
 
         if !self.agents.contains_key(recipient_id) {
-            return Err(format!("Recipient agent '{}' not found", recipient_id));
+            return Err(MornError::Internal(format!("Recipient agent '{}' not found", recipient_id)));
         }
 
         Ok(vec![envelope.clone()])
     }
 
-    fn route_broadcast(&self, envelope: &A2AEnvelope) -> Result<Vec<A2AEnvelope>, String> {
+    fn route_broadcast(&self, envelope: &A2AEnvelope) -> Result<Vec<A2AEnvelope>, MornError> {
         let sender_id = &envelope.sender_id;
         let recipients: Vec<A2AEnvelope> = self
             .agents
