@@ -64,6 +64,6 @@ mod tests {
         let s = Scheduler::new();
         let result = s.schedule("wf1", &make_plan(vec![]));
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "no subtasks to schedule");
+        assert_eq!(result.unwrap_err(), MornError::Internal("no subtasks to schedule".to_string()));
     }
 }

@@ -1,4 +1,3 @@
-use crate::core::error::MornError;
 use super::super::{ModelSpec, ProviderCatalogEntry};
 
 pub(super) fn has_all_capabilities(model: &ModelSpec, required: &[&str]) -> bool {

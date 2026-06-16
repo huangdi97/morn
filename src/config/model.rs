@@ -1,5 +1,4 @@
 //! model — Model configuration and provider settings.
-use crate::core::error::MornError;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;

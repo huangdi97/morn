@@ -1,5 +1,4 @@
 //! Component type definition and trait implementations.
-use crate::core::error::MornError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

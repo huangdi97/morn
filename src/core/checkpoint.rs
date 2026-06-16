@@ -104,8 +104,8 @@ impl CheckpointManager {
         let new_id = uuid::Uuid::new_v4().to_string();
         self.storage
             .fork_checkpoint(cp_id, &new_id, new_session_id)?;
-        Ok(self.load_latest(new_session_id)?
-            .ok_or_else(|| MornError::Internal("Forked checkpoint not found".to_string()))?)
+        self.load_latest(new_session_id)?
+            .ok_or_else(|| MornError::Internal("Forked checkpoint not found".to_string()))
     }
 }
 

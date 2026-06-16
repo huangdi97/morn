@@ -157,10 +157,10 @@ impl VncManager {
     /// Get a session by ID.
     pub fn get_session(&self, session_id: &str) -> Result<VncSession, MornError> {
         let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
-        Ok(sessions
+        sessions
             .get(session_id)
             .cloned()
-            .ok_or_else(|| MornError::Internal(format!("Session not found: {}", session_id)))?)
+            .ok_or_else(|| MornError::Internal(format!("Session not found: {}", session_id)))
     }
 
     /// List all sessions for a given agent.

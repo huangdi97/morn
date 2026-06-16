@@ -1,5 +1,4 @@
 //! gateway_stripe — Stripe PaymentGateway integration skeleton.
-use crate::core::error::MornError;
 use super::gateway::{PaymentError, PaymentGateway, PaymentStatus, PaymentUrl};
 
 #[derive(Debug)]

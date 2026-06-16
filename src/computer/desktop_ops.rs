@@ -184,7 +184,7 @@ pub fn get_screen_resolution() -> Result<Resolution, MornError> {
         let output = run_ps(
             "Add-Type -AssemblyName System.Windows.Forms; $b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; Write-Output \"$($b.Width)x$($b.Height)\"",
         )?;
-        return Ok(parse_resolution(&output).ok_or_else(|| MornError::Internal("failed to parse resolution".to_string()))?);
+        return parse_resolution(&output).ok_or_else(|| MornError::Internal("failed to parse resolution".to_string()));
     }
 
     if cfg!(target_os = "linux") {

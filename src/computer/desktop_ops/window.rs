@@ -1,6 +1,5 @@
 //! Window management — switch, find, and focus windows via OS APIs or simulation.
 
-use crate::core::error::MornError;
 use super::run_ps;
 use super::{ComputerOpResult, SecurityLevel};
 

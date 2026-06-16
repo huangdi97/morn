@@ -4,7 +4,6 @@
 //! MCP (Model Context Protocol) module — bidirectional conversion between component ports and MCP tools.
 //! Submodules: `adapter` for conversion logic, `tools` for built-in MCP tool implementations.
 
-use crate::core::error::MornError;
 /// MCP 适配器模块：Port ↔ MCPTool 转换。
 /// MCP adapter module: Port ↔ MCPTool conversion.
 pub mod adapter;

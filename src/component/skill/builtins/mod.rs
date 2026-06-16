@@ -1,5 +1,4 @@
 //! builtins — Collects built-in skills available to the skill registry.
-use crate::core::error::MornError;
 mod code_review;
 mod data_analysis;
 mod report_generation;

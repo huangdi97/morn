@@ -252,11 +252,11 @@ impl Pipeline {
         self.execute(Some(input))?;
 
         let last_node = self.nodes.last().ok_or_else(|| MornError::Internal("no nodes in pipeline".to_string()))?;
-        Ok(self.context
+        self.context
             .node_outputs
             .get(last_node.id())
             .cloned()
-            .ok_or_else(|| MornError::Internal("no output produced".to_string()))?)
+            .ok_or_else(|| MornError::Internal("no output produced".to_string()))
     }
 
     /// Reset the pipeline context to its initial state.

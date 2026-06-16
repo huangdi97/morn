@@ -1,5 +1,4 @@
 //! market — Marketplace listings, billing, payments, and creator revenue.
-use crate::core::error::MornError;
 pub mod billing;
 pub mod gateway;
 pub mod gateway_mock;

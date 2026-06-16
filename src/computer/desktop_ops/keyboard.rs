@@ -1,6 +1,5 @@
 //! Keyboard operations — typing, hotkeys, and clipboard management via OS APIs or simulation.
 
-use crate::core::error::MornError;
 use super::run_ps;
 use super::{ComputerOpResult, SecurityLevel};
 

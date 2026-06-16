@@ -1,5 +1,4 @@
 //! security — Renders security state for console surfaces.
-use crate::core::error::MornError;
 use crate::core::dual_llm::DualLlmGuard;
 use crate::core::security::SecurityPolicy;
 

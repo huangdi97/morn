@@ -119,10 +119,10 @@ impl AgentPool {
     }
 
     pub fn unregister_agent(&mut self, id: &str) -> Result<(), MornError> {
-        Ok(self.agents
+        self.agents
             .remove(id)
             .ok_or_else(|| MornError::Internal(format!("Agent '{}' not found", id)))
-            .map(|_| ())?)
+            .map(|_| ())
     }
 
     pub fn submit_task(&mut self, task: AgentTask) -> Result<String, MornError> {

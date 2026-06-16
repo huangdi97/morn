@@ -1,6 +1,5 @@
 //! Agent security profile types — per-agent sandbox level, permissions, and approval rules.
 
-use crate::core::error::MornError;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SecurityProfile {
     pub agent_id: String,

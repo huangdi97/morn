@@ -1,6 +1,5 @@
 //! Security subsystem — profiles, constitution, and enforcement.
 
-use crate::core::error::MornError;
 pub mod constitution;
 pub mod guard;
 pub mod profile;

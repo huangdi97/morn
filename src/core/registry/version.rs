@@ -1,5 +1,4 @@
 //! version — Compares semantic capability versions for registry selection.
-use crate::core::error::MornError;
 use std::cmp::Ordering;
 
 use super::{Capability, Registry};

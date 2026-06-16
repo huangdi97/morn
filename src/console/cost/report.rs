@@ -1,6 +1,5 @@
 //! report — Cost report generation and trend data.
 
-use crate::core::error::MornError;
 /// 成本报告 — 包含总成本、按 Agent/工具/模型细分、趋势及预算。
 /// Cost report with total cost, breakdowns by agent/tool/model, trends, and budget.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

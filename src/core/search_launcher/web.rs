@@ -1,5 +1,4 @@
 //! web — Searches web sources for launcher suggestions and results.
-use crate::core::error::MornError;
 use super::{SearchCategory, SearchItem, SearchLauncher};
 
 impl SearchLauncher {

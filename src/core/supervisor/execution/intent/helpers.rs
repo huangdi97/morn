@@ -20,12 +20,12 @@ fn clean_json_response(response: &str) -> &str {
 
 pub(super) fn parse_step<T: DeserializeOwned>(step: &str, response: &str) -> Result<T, MornError> {
     let cleaned = clean_json_response(response);
-    Ok(serde_json::from_str::<T>(cleaned).map_err(|e| {
+    serde_json::from_str::<T>(cleaned).map_err(|e| {
         MornError::Internal(format!(
             "Failed to parse {} response as JSON: {}. Raw: {}",
             step, e, cleaned
         ))
-    })?)
+    })
 }
 
 pub(super) fn call_json_step<T: DeserializeOwned>(

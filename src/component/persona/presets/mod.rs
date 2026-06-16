@@ -1,5 +1,4 @@
 //! 预设人格集合 — 内置的行业/通用/创意三类预设
-use crate::core::error::MornError;
 use super::Persona;
 
 const PRESET_NAMES: &[(&str, &str, &str)] = &[

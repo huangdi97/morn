@@ -1,5 +1,4 @@
 //! tester — Provides studio test execution and result collection.
-use crate::core::error::MornError;
 use std::sync::Arc;
 
 use crate::core::component::Data;
@@ -135,6 +134,7 @@ impl Default for StudioTester {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::error::MornError;
 
     #[test]
     fn test_test_step_new_fields() {

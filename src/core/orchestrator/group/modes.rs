@@ -1,6 +1,5 @@
 //! Collaboration mode helpers — mode catalog, descriptions, and lightweight handlers.
 
-use crate::core::error::MornError;
 use crate::core::orchestrator::CollaborationMode;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

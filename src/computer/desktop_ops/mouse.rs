@@ -1,6 +1,5 @@
 //! Mouse operations — move, click, and click-at via OS APIs or simulation.
 
-use crate::core::error::MornError;
 use super::run_ps;
 use super::{ComputerOpResult, SecurityLevel};
 

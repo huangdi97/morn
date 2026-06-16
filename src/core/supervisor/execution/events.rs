@@ -1,5 +1,4 @@
 //! events — Supervisor execution lifecycle event publishers.
-use crate::core::error::MornError;
 use crate::core::event_bus::{
     SimpleEventBus, EVENT_AGENT_CREATED, EVENT_AGENT_DESTROYED, EVENT_SUPERVISOR_PLAN_CREATED,
     EVENT_TASK_COMPLETED, EVENT_TASK_FAILED, EVENT_WORKFLOW_COMPLETED, EVENT_WORKFLOW_FAILED,

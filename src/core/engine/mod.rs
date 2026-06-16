@@ -1,5 +1,4 @@
 //! engine — Defines task execution engines and workflow execution primitives.
-use crate::core::error::MornError;
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::storage::Storage;
 
@@ -20,6 +19,7 @@ impl TaskEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::error::MornError;
     use crate::core::supervisor::{SubTaskDef, SubTaskResult, TaskPlan, TaskResult};
     use serde_json::json;
 

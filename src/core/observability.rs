@@ -1,5 +1,4 @@
 //! observability — Tracks trace spans and token usage for runtime workflows.
-use crate::core::error::MornError;
 use crate::core::event_bus::{Event, SimpleEventBus};
 use serde_json::Value;
 use std::collections::HashMap;

@@ -1,6 +1,7 @@
 //! Pipeline basic functionality tests.
 #![cfg(test)]
 
+use crate::core::error::MornError;
 use crate::core::pipeline::*;
 use serde_json::Value;
 
@@ -148,10 +149,10 @@ fn test_custom_executor() {
     struct AppendEx;
 
     impl PipelineNodeExecutor for AppendEx {
-        fn execute(&self, input: PipelineData) -> Result<PipelineData, String> {
+        fn execute(&self, input: PipelineData) -> Result<PipelineData, MornError> {
             match input {
                 PipelineData::Text(t) => Ok(PipelineData::Text(t + "_custom")),
-                _ => Err("expected text".to_string()),
+                _ => Err(MornError::Internal("expected text".to_string())),
             }
         }
     }

@@ -1,6 +1,5 @@
 //! agent_templates — Pre-configured Agent definitions from DESIGN.md §3.7.
 
-use crate::core::error::MornError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AgentTemplate {
     pub name: &'static str,

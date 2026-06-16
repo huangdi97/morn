@@ -281,7 +281,7 @@ mod tests {
 
         let err = engine.run_plan(&plan, &mut execute_fn).unwrap_err();
 
-        assert_eq!(err, "boom");
+        assert_eq!(err, MornError::Internal("boom".to_string()));
     }
 
     #[test]
@@ -294,7 +294,7 @@ mod tests {
 
         assert_eq!(result.subtask_results.len(), 1);
         assert!(!result.subtask_results[0].success);
-        assert_eq!(result.subtask_results[0].error.as_deref(), Some("failed"));
+        assert_eq!(result.subtask_results[0].error.as_deref(), Some("internal error: failed"));
     }
 
     #[test]

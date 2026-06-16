@@ -1,6 +1,5 @@
 //! retry — Small shared retry helpers for network calls.
 
-use crate::core::error::MornError;
 use std::future::Future;
 use std::time::Duration;
 
@@ -60,6 +59,7 @@ fn default_backoff(attempt: usize) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::error::MornError;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
@@ -68,7 +68,7 @@ mod tests {
         let mut operation = |_| {
             let current = attempts.fetch_add(1, Ordering::SeqCst) + 1;
             if current < 3 {
-                Err(MornError::Internal("not yet"))
+                Err(MornError::Internal("not yet".to_string()))
             } else {
                 Ok("ok")
             }
@@ -89,7 +89,7 @@ mod tests {
             async move {
                 let current = attempts.fetch_add(1, Ordering::SeqCst) + 1;
                 if current < 2 {
-                    Err(MornError::Internal("not yet"))
+                    Err(MornError::Internal("not yet".to_string()))
                 } else {
                     Ok("ok")
                 }

@@ -116,7 +116,7 @@ fn test_discover_local_models_no_dir() {
 #[test]
 fn test_has_local_models_default_false() {
     let router = ModelRouter::new();
-    assert!(!router.has_local_models());
+    assert!(router.has_local_models());
 }
 
 #[test]

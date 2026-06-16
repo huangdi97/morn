@@ -1,5 +1,4 @@
 //! selector — Selects suitable pooled agents for incoming tasks.
-use crate::core::error::MornError;
 use super::{AgentInstance, AgentPool};
 
 impl AgentPool {

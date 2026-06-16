@@ -1,5 +1,4 @@
 //! visibility — Applies capability visibility rules for owners, teams, and public access.
-use crate::core::error::MornError;
 use super::Capability;
 
 pub(super) fn is_capability_visible(

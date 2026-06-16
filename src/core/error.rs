@@ -24,6 +24,12 @@ impl MornError {
     pub fn internal(message: impl Into<String>) -> Self {
         MornError::Internal(message.into())
     }
+
+    /// Check if the error's display message contains the given pattern.
+    /// Useful in tests: `assert!(err.contains("expected message"))`
+    pub fn contains(&self, pattern: &str) -> bool {
+        self.to_string().contains(pattern)
+    }
 }
 
 impl fmt::Display for MornError {

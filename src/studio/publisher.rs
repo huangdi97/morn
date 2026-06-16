@@ -210,6 +210,8 @@ mod tests {
                 config_json: None,
                 status: status.into(),
                 trust_score: 70.0,
+                current_version: "1.0.0".into(),
+                update_available: false,
                 created_at: chrono::Utc::now().to_rfc3339(),
                 updated_at: None,
             })

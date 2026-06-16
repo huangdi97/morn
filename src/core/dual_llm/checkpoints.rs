@@ -1,7 +1,6 @@
 //! 检查点枚举与结果类型 — Checkpoint, CheckResult, InjectionRisk
 //! 定义双 LLM 安全检查点的阶段、结果和风险等级。
 
-use crate::core::error::MornError;
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Checkpoint {
     Auth,

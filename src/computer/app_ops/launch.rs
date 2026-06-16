@@ -1,5 +1,4 @@
 //! launch — Application launch and close operations.
-use crate::core::error::MornError;
 use super::{ComputerOpResult, SecurityLevel};
 
 pub fn launch(app_name: &str) -> ComputerOpResult {

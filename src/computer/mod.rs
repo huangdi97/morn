@@ -1,5 +1,4 @@
 //! computer — Exposes controlled computer operations and perception helpers.
-use crate::core::error::MornError;
 pub mod app_ops;
 pub mod browser_ops;
 pub mod desktop_ops;

@@ -80,10 +80,10 @@ impl VariableStore {
     }
 
     pub fn get(&self, name: &str) -> Result<Variable, MornError> {
-        Ok(self.variables
+        self.variables
             .get(name)
             .cloned()
-            .ok_or_else(|| MornError::Internal(format!("Variable '{}' not found", name)))?)
+            .ok_or_else(|| MornError::Internal(format!("Variable '{}' not found", name)))
     }
 
     pub fn convert(&self, value: &Variable, target_type: VarType) -> Result<Variable, MornError> {

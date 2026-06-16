@@ -1,5 +1,4 @@
 //! Memory layers — multi-tier memory system.
-use crate::core::error::MornError;
 pub mod episodic;
 pub mod flash;
 pub mod working;

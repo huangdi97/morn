@@ -257,10 +257,10 @@ impl ModelRouter {
         }) {
             return Ok(best);
         }
-        Ok(self.fallback_models
+        self.fallback_models
             .iter()
             .find(|m| m.is_available)
-            .ok_or_else(|| MornError::Internal("no available model".to_string()))?)
+            .ok_or_else(|| MornError::Internal("no available model".to_string()))
     }
 
     fn select_local(&self, capabilities: &[&str]) -> Result<&ModelSpec, MornError> {
@@ -272,10 +272,10 @@ impl ModelRouter {
         if let Some(model) = candidates.first() {
             return Ok(model);
         }
-        Ok(self.fallback_models
+        self.fallback_models
             .iter()
             .find(|m| m.is_available)
-            .ok_or_else(|| MornError::Internal("no local model available".to_string()))?)
+            .ok_or_else(|| MornError::Internal("no local model available".to_string()))
     }
 
     fn select_hybrid(&self, prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, MornError> {

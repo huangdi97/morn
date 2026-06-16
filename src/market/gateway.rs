@@ -1,5 +1,4 @@
 //! gateway — PaymentGateway trait and payment-related data types.
-use crate::core::error::MornError;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum SubscriptionPlan {
     Free,

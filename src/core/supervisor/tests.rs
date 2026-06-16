@@ -113,7 +113,7 @@ fn test_live_suggestion_uses_recent_user_turn_in_proactive_mode() {
 fn test_decide_reasoning() {
     let supervisor = Supervisor::new(None, None);
     let (level, _reasoning) = supervisor.decide("complex multi-step task");
-    assert_eq!(level, DecisionLevel::L4Team);
+    assert_eq!(level, DecisionLevel::L5Workflow);
 }
 
 #[test]

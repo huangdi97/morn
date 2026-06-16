@@ -14,6 +14,8 @@ fn test_storage_crud() {
         config_json: Some("{}".to_string()),
         status: "active".to_string(),
         trust_score: 70.0,
+        current_version: "1.0.0".into(),
+        update_available: false,
         created_at: chrono::Utc::now().to_rfc3339(),
         updated_at: None,
     };

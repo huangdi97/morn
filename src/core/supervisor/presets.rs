@@ -1,6 +1,5 @@
 //! Built-in preset agent definitions and seeding logic used during first-time setup.
 
-use crate::core::error::MornError;
 use crate::core::storage::Storage;
 use crate::core::supervisor::types::{NLAgentDef, NLPersonaConfig};
 use crate::studio::manager::{CreateComponentDef, StudioManager};

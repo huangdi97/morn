@@ -1,5 +1,4 @@
 //! browser_ext — WebSocket channel for browser extension communication.
-use crate::core::error::MornError;
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};

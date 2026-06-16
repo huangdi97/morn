@@ -1,5 +1,4 @@
 //! builtin — Provides built-in persona definitions for common agent roles.
-use crate::core::error::MornError;
 use super::{Persona, PersonaParameters, PromptLayers};
 
 pub fn create_analyst_persona() -> Persona {

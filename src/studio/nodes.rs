@@ -1,6 +1,5 @@
 //! Node system: types, executor, and registry. This module re-exports all public items from sibling modules.
 
-use crate::core::error::MornError;
 pub use super::executor::NodeExecutor;
 pub use super::registry::NodeRegistry;
 pub use super::types::{

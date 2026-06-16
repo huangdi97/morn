@@ -1,5 +1,4 @@
 //! persona — Defines persona types, registries, presets, and component adapters.
-use crate::core::error::MornError;
 mod builtin;
 pub mod presets;
 mod registry;

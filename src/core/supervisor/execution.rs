@@ -1,5 +1,4 @@
 //! execution — Supervises execution plans and emits task lifecycle events.
-use crate::core::error::MornError;
 mod dispatch;
 pub mod dual_llm;
 pub mod events;
@@ -36,6 +35,7 @@ pub fn classify_execution_time(estimated_secs: u64) -> ExecutionTier {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::error::MornError;
     use crate::core::event_bus::{
         Event, SimpleEventBus, EVENT_AGENT_CREATED, EVENT_AGENT_DESTROYED, EVENT_TASK_FAILED,
         EVENT_WORKFLOW_COMPLETED, EVENT_WORKFLOW_FAILED, EVENT_WORKFLOW_STARTED,
@@ -156,7 +156,7 @@ mod tests {
             .execute_plan(&plan("workflow"), &|_, _| Err(MornError::Internal("model failed".to_string())))
             .unwrap_err();
 
-        assert_eq!(err, "model failed");
+        assert_eq!(err, MornError::Internal("model failed".to_string()));
         assert_eq!(supervisor.turn_count(), 1);
         assert!(supervisor.history().is_empty());
     }
@@ -255,7 +255,7 @@ mod tests {
             )
             .unwrap_err();
 
-        assert_eq!(err, "model failed");
+        assert_eq!(err, MornError::Internal("model failed".to_string()));
         assert_eq!(WORKFLOW_STARTED_CALLS.load(Ordering::SeqCst), 1);
         assert_eq!(AGENT_CREATED_CALLS.load(Ordering::SeqCst), 1);
         assert_eq!(AGENT_DESTROYED_CALLS.load(Ordering::SeqCst), 1);

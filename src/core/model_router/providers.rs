@@ -1,5 +1,4 @@
 //! 模型提供者注册表 — API/本地/Ollama 等 provider 定义
-use crate::core::error::MornError;
 #[derive(Debug, Clone)]
 pub struct ProviderConfig {
     pub name: &'static str,

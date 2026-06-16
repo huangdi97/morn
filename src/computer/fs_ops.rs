@@ -1,5 +1,4 @@
 //! fs_ops — Provides filesystem operations for the computer control layer.
-use crate::core::error::MornError;
 use super::{ComputerOpResult, SecurityLevel};
 
 pub fn read(path: &str) -> ComputerOpResult {

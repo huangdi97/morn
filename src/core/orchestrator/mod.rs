@@ -123,10 +123,10 @@ impl Orchestrator {
 
     /// Removes an expert by id and returns an error if it is not registered.
     pub fn unregister_expert(&mut self, id: &str) -> Result<(), MornError> {
-        Ok(self.experts
+        self.experts
             .remove(id)
             .ok_or_else(|| MornError::Internal(format!("Expert '{}' not found", id)))
-            .map(|_| ())?)
+            .map(|_| ())
     }
 
     /// Returns references to all registered experts.
@@ -163,10 +163,10 @@ impl Orchestrator {
 
     /// Deletes a team by id and returns an error if it does not exist.
     pub fn delete_team(&mut self, id: &str) -> Result<(), MornError> {
-        Ok(self.teams
+        self.teams
             .remove(id)
             .ok_or_else(|| MornError::Internal(format!("Team '{}' not found", id)))
-            .map(|_| ())?)
+            .map(|_| ())
     }
 
     /// Runs a team against input text and returns member outputs plus the consensus result.

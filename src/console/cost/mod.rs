@@ -1,6 +1,5 @@
 //! cost — Defines console-facing cost tracking and reporting data.
 
-use crate::core::error::MornError;
 pub mod budget;
 pub mod report;
 

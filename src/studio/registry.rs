@@ -405,9 +405,9 @@ impl StudioRegistry {
     }
 
     pub fn unregister_component(&mut self, id: &str) -> Result<Capability, MornError> {
-        Ok(self.registry
+        self.registry
             .unregister(id)
-            .ok_or_else(|| MornError::Internal(format!("component '{}' is not registered", id)))?)
+            .ok_or_else(|| MornError::Internal(format!("component '{}' is not registered", id)))
     }
 
     pub fn get_component(&self, id: &str) -> Option<&Capability> {

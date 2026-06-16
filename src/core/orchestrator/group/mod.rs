@@ -1,6 +1,5 @@
 //! Group management — defines agent groups, workspaces, projects, and their lifecycle.
 
-use crate::core::error::MornError;
 use crate::core::orchestrator::CollaborationMode;
 
 pub mod manager;

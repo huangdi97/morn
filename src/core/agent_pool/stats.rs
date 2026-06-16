@@ -1,5 +1,4 @@
 //! stats — Calculates utilization and performance statistics for agent pools.
-use crate::core::error::MornError;
 use super::{AgentPool, AgentTask};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

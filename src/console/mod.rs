@@ -1,5 +1,4 @@
 //! console — Exposes console modules for governance and cost visibility.
-use crate::core::error::MornError;
 pub mod cost;
 pub mod governance;
 pub mod security;

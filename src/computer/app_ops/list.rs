@@ -1,5 +1,4 @@
 //! list — Application listing and search operations.
-use crate::core::error::MornError;
 use super::{ComputerOpResult, SecurityLevel};
 
 pub fn list() -> ComputerOpResult {
