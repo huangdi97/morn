@@ -1,5 +1,6 @@
 interface WelcomeReadyProps {
   onSend: (text: string) => void;
+  onDismiss?: () => void;
 }
 
 const EXAMPLES = [
@@ -9,7 +10,7 @@ const EXAMPLES = [
   { emoji: "📊", text: "分析这组数据" },
 ];
 
-export default function WelcomeReady({ onSend }: WelcomeReadyProps) {
+export default function WelcomeReady({ onSend, onDismiss }: WelcomeReadyProps) {
   return (
     <div style={{
       minHeight: "100vh",
@@ -48,9 +49,23 @@ export default function WelcomeReady({ onSend }: WelcomeReadyProps) {
           </button>
         ))}
       </div>
-      <p style={{ color: "#8b949e", fontSize: "13px", marginTop: "24px" }}>
-        或者去 Store 安装预置 Bot
-      </p>
+      <div style={{ display: "flex", gap: "12px", marginTop: "32px", alignItems: "center" }}>
+        <p style={{ color: "#8b949e", fontSize: "13px", margin: 0 }}>
+          或者去 Store 安装预置 Bot
+        </p>
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            style={{
+              background: "#21262d", color: "#e6edf3", border: "1px solid #30363d",
+              borderRadius: "6px", padding: "8px 16px", fontSize: "13px",
+              fontWeight: 500, cursor: "pointer",
+            }}
+          >
+            🔑 配置 API Key
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -4,17 +4,16 @@ interface WelcomeNoKeyProps {
 }
 
 export default function WelcomeNoKey({ onDismiss, onReady }: WelcomeNoKeyProps) {
-  const isTauri = typeof window.__TAURI__ !== "undefined";
-
   const handleGotKey = () => {
     localStorage.setItem("morn_welcomed", "true");
     onDismiss();
   };
 
-  const handleProxy = () => {
+  const handleNoKey = () => {
+    // Set an empty key so WelcomeGuide transitions to "ready" state,
+    // which shows the WelcomeReady screen with a "配置 Key" option.
     localStorage.setItem("morn_api_config", JSON.stringify({
-      mode: "remote",
-      serverUrl: "https://api.morn.ai",
+      mode: "local",
       apiKey: "",
     }));
     onReady();
@@ -50,21 +49,16 @@ export default function WelcomeNoKey({ onDismiss, onReady }: WelcomeNoKeyProps) 
           🔑 我有 API Key → 打开设置页
         </button>
         <button
-          onClick={handleProxy}
+          onClick={handleNoKey}
           style={{
             background: "#21262d", color: "#e6edf3", border: "1px solid #30363d",
             borderRadius: "6px", padding: "12px 24px", fontSize: "15px",
             fontWeight: 500, cursor: "pointer",
           }}
         >
-          ⚡ 使用内置中转（推荐）
+          ⚡ 先逛逛，稍后配置
         </button>
       </div>
-      {!isTauri && (
-        <p style={{ color: "#8b949e", fontSize: "12px", marginTop: "12px" }}>
-          ℹ️ 内置中转仅在生产 build 中可用
-        </p>
-      )}
       <p style={{ color: "#8b949e", fontSize: "13px", marginTop: "24px" }}>
         或者先逛逛：🏪 Store · 📖 Studio · ⚙️ 设置
       </p>

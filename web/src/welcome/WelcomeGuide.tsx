@@ -21,9 +21,13 @@ export default function WelcomeGuide({ onDismiss, onSend }: WelcomeGuideProps) {
     }
   }, []);
 
+  const handleBackToNoKey = () => {
+    setState("no_key");
+  };
+
   switch (state) {
     case "ready":
-      return <WelcomeReady onSend={onSend || (() => {})} />;
+      return <WelcomeReady onSend={onSend || (() => {})} onDismiss={handleBackToNoKey} />;
     case "error":
       return <WelcomeError onDismiss={onDismiss} />;
     case "no_key":
