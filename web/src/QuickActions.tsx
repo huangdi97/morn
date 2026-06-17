@@ -20,17 +20,7 @@ export function QuickActions({ onSend }: QuickActionsProps) {
         <button
           key={action.label}
           onClick={() => onSend(action.prompt)}
-          style={{
-            display: "flex", alignItems: "center", gap: "6px",
-            padding: "6px 14px", borderRadius: "20px",
-            border: "1px solid var(--border)",
-            background: "var(--bg-tertiary)",
-            color: "var(--text-primary)",
-            cursor: "pointer", fontSize: "13px",
-            transition: "all 0.15s ease",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.color = "#fff"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-tertiary)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+          className="quick-action-btn"
         >
           <span>{action.emoji}</span>
           <span>{action.label}</span>

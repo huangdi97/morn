@@ -6,27 +6,27 @@
 
 .dashboard-card {
   background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
   transition: all var(--transition-normal);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   position: relative;
   overflow: hidden;
 }
 
 .dashboard-card:hover {
   background: rgba(255,255,255,0.04);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
-  border-color: rgba(255,255,255,0.12);
+  transform: translateY(-2px);
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 12px rgba(0, 240, 255, 0.15);
 }
 
 .dashboard-card-label {
   font-size: 13px;
   color: var(--text-tertiary);
   font-weight: 500;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .dashboard-card-value {
@@ -34,6 +34,11 @@
   font-weight: 510;
   color: var(--text-primary);
   letter-spacing: -0.02em;
+  transition: color var(--transition-normal);
+}
+
+.dashboard-card:hover .dashboard-card-value {
+  color: var(--accent);
 }
 
 .dashboard-card.accent-blue {
@@ -70,16 +75,18 @@
 
 .dashboard-chart-card {
   background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
   min-height: 210px;
   transition: all var(--transition-normal);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .dashboard-chart-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  transform: translateY(-2px);
+  border-color: rgba(0, 240, 255, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 8px rgba(0, 240, 255, 0.1);
 }
 
 .dashboard-chart-grid {

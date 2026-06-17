@@ -41,6 +41,7 @@ const categories = ["all", "analysis", "research", "writing", "coding", "transla
 const priceFilters = ["all", "free", "paid"] as const;
 
 export default function BotStore() {
+  const [loading, setLoading] = useState(true);
   const [bots, setBots] = useState<BotListing[]>(hardcodedBots);
   const [category, setCategory] = useState("all");
   const [priceFilter, setPriceFilter] = useState<string>("all");
@@ -53,8 +54,12 @@ export default function BotStore() {
   const [publishStatus, setPublishStatus] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    api.listBotStore().then(setBots).catch(() => {
+    api.listBotStore().then((res) => {
+      setBots(res);
+      setLoading(false);
+    }).catch(() => {
       setBots(hardcodedBots);
+      setLoading(false);
     });
   }, []);
 
@@ -156,6 +161,10 @@ export default function BotStore() {
     };
     return colors[cat] || "#8b949e";
   };
+
+  if (loading) {
+    return <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>正在加载商店…</div>;
+  }
 
   return (
     <div>

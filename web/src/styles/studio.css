@@ -20,7 +20,7 @@
 
 .studio-tabs button:hover {
   color: var(--text-primary);
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
 }
 
 .studio-tabs button.active {
@@ -39,7 +39,7 @@
 .studio-content, .console-content {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: var(--space-md);
 }
 
 /* Component editor styles */
@@ -67,7 +67,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-primary);
-  padding: 8px 12px;
+  padding: var(--space-sm) 12px;
   font-size: 14px;
   outline: none;
   font-family: inherit;
@@ -83,7 +83,7 @@
   background: var(--accent);
   color: #fff;
   border: none;
-  padding: 8px 20px;
+  padding: var(--space-sm) var(--space-lg);
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
@@ -131,7 +131,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-primary);
-  padding: 8px 12px;
+  padding: var(--space-sm) 12px;
   font-size: 14px;
   outline: none;
 }
@@ -149,14 +149,14 @@
 
 .steps-indicator {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   margin: 12px 0;
 }
 
 .steps-indicator span {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  padding: 4px 12px;
+  padding: var(--space-xs) 12px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
@@ -196,7 +196,7 @@
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   color: var(--text-primary);
-  padding: 8px 16px;
+  padding: var(--space-sm) var(--space-md);
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
@@ -241,7 +241,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-primary);
-  padding: 8px 12px;
+  padding: var(--space-sm) 12px;
   font-size: 14px;
   outline: none;
 }
@@ -255,7 +255,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-primary);
-  padding: 8px 12px;
+  padding: var(--space-sm) 12px;
   font-size: 14px;
   resize: vertical;
   outline: none;
@@ -270,7 +270,7 @@
   background: var(--accent);
   color: #fff;
   border: none;
-  padding: 8px 20px;
+  padding: var(--space-sm) var(--space-lg);
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
@@ -366,7 +366,7 @@
 
 .trace-step-detail pre {
   background: #111318;
-  padding: 8px;
+  padding: var(--space-sm);
   border-radius: 4px;
   overflow-x: auto;
   white-space: pre-wrap;
@@ -405,7 +405,7 @@
   background: var(--accent);
   color: #fff;
   border: none;
-  padding: 4px 12px;
+  padding: var(--space-xs) 12px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -420,7 +420,7 @@
   background: var(--bg-tertiary);
   color: var(--text-primary);
   border: 1px solid var(--border);
-  padding: 4px 12px;
+  padding: var(--space-xs) 12px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -436,7 +436,7 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-primary);
-  padding: 8px;
+  padding: var(--space-sm);
   font-size: 12px;
   font-family: monospace;
   resize: vertical;
@@ -477,7 +477,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 16px;
+  padding: var(--space-md);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -608,7 +608,7 @@
   background: transparent;
   border: 1px solid var(--danger);
   color: var(--danger);
-  padding: 4px 10px;
+  padding: var(--space-xs) 10px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;

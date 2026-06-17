@@ -29,12 +29,13 @@ function isRemote(): boolean {
 }
 
 export const api = {
-  async sendMessage(text: string): Promise<any> {
+  async sendMessage(text: string, signal?: AbortSignal): Promise<any> {
     if (isRemote()) {
       const res = await fetch(`${getBaseUrl()}/api/chat`, {
         method: "POST",
         headers: getApiHeaders(),
         body: JSON.stringify({ message: text }),
+        signal,
       });
       return res.json();
     }
@@ -46,6 +47,7 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text }),
+      signal,
     });
     return res.json();
   },

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { api } from "./api";
 import { ComponentEditor } from "./studio/ComponentEditor";
 import { AgentBuilder } from "./studio/AgentBuilder";
@@ -34,6 +34,7 @@ import BotStore from "./store/BotStore";
 import { Settings } from "./Settings";
 import StatusBar from "./StatusBar";
 import ExecutionFlow from "./components/ExecutionFlow";
+import { ToastItem } from "./components/Toast";
 import "./styles/base.css";
 import "./styles/skeleton.css";
 import "./styles/dashboard.css";
@@ -76,6 +77,44 @@ function App() {
   const [workLogs, setWorkLogs] = useState<any[]>([]);
   const workLogsEndRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const chatAreaRef = useRef<HTMLDivElement>(null);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [feedback, setFeedback] = useState<Record<string, "like" | "dislike">>(() => {
+    try {
+      const saved = localStorage.getItem("morn_feedback");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const mainTabsRef = useRef<HTMLDivElement>(null);
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+  const [confirmClear, setConfirmClear] = useState(false);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [toasts, setToasts] = useState<Array<{ id: number; type: "success" | "error" | "info"; message: string }>>([]);
+  const toastIdRef = useRef(0);
+
+  const showToast = (type: "success" | "error" | "info", message: string) => {
+    const id = ++toastIdRef.current;
+    setToasts(prev => [...prev, { id, type, message }]);
+  };
+
+  const removeToast = (id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  useEffect(() => {
+    const nav = mainTabsRef.current;
+    if (!nav) return;
+    const activeBtn = nav.querySelector('button.active') as HTMLElement;
+    if (activeBtn) {
+      setIndicatorStyle({
+        left: activeBtn.offsetLeft,
+        width: activeBtn.offsetWidth,
+      });
+    }
+  }, [view]);
 
   useEffect(() => {
     localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
@@ -84,6 +123,21 @@ function App() {
   useEffect(() => {
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem("morn_feedback", JSON.stringify(feedback));
+  }, [feedback]);
+
+  useEffect(() => {
+    const el = chatAreaRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollBtn(dist > 200);
+    };
+    el.addEventListener("scroll", handleScroll);
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     const handler = (e: StorageEvent) => {
@@ -160,6 +214,7 @@ function App() {
       setMessages([]);
       const s: any = await api.getStatus();
       setStatus(`v${s.version} | ${s.turn_count} turns`);
+      showToast("info", "对话历史已清除");
       return;
     }
 
@@ -170,9 +225,13 @@ function App() {
       return next;
     });
     setIsTyping(true);
+    setShowScrollBtn(false);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
-      const response = await api.sendMessage(text);
+      const response = await api.sendMessage(text, controller.signal);
       const assistantMsg: Message = { role: "assistant", content: response.text ?? response, timestamp: Date.now() };
       setMessages((prev) => [...prev, assistantMsg]);
 
@@ -191,6 +250,7 @@ function App() {
       setWorkVisible(true);
       setTimeout(() => setWorkVisible(false), 30000);
     } catch (e: any) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       const errorMsg: Message = {
         role: "assistant",
         content: `Error: ${e}`,
@@ -199,6 +259,7 @@ function App() {
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsTyping(false);
+      abortControllerRef.current = null;
       setTimeout(() => setSendingIndex(null), 500);
     }
   };
@@ -208,7 +269,31 @@ function App() {
     setMessages([]);
     const s: any = await api.getStatus();
     setStatus(`v${s.version} | ${s.turn_count} turns`);
+    showToast("info", "对话历史已清除");
   };
+
+  const handleClearClick = () => {
+    if (confirmClear) {
+      clearHistory();
+      setConfirmClear(false);
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    } else {
+      setConfirmClear(true);
+      confirmTimerRef.current = setTimeout(() => setConfirmClear(false), 3000);
+    }
+  };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (confirmClear && !target.closest('.clear-btn')) {
+        setConfirmClear(false);
+        if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+      }
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [confirmClear]);
 
   const sendQuickAction = async (text: string) => {
     setInput(text);
@@ -220,6 +305,39 @@ function App() {
       sendMessage();
     }
   };
+
+  const handleStop = () => {
+    abortControllerRef.current?.abort();
+  };
+
+  const retryMessage = (msgIndex: number) => {
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        const text = messages[i].content;
+        setInput(text);
+        setTimeout(() => sendMessage(), 0);
+        return;
+      }
+    }
+  };
+
+  const scrollToBottom = () => {
+    chatAreaRef.current?.scrollTo({ top: chatAreaRef.current.scrollHeight, behavior: "smooth" });
+  };
+
+  const toggleFeedback = (msgIndex: number, type: "like" | "dislike") => {
+    const key = `morn_feedback_${msgIndex}`;
+    setFeedback((prev) => {
+      if (prev[key] === type) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: type };
+    });
+  };
+
+  const isError = (content: string) => content.startsWith("Error: ");
 
   const formatTime = (ts: number) => {
     const d = new Date(ts);
@@ -245,7 +363,7 @@ function App() {
   const SkeletonStudio = () => (
     <div className="skeleton-studio">
       <div className="skeleton-studio-nav">
-        {[1, 2, 3].map(i => <div key={i} className="skeleton skeleton-studio-nav-item" />)}
+        {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className="skeleton skeleton-studio-nav-item" />)}
       </div>
       <div className="skeleton-studio-body">
         <div className="skeleton-studio-sidebar">
@@ -286,16 +404,19 @@ function App() {
     { name: "Analyst", active: false },
   ];
 
-  function AgentBar() {
+  function AgentBar({ isTyping }: { isTyping: boolean }) {
     const maxVisible = 6;
     const visible = AGENTS.slice(0, maxVisible);
     const extra = AGENTS.length - maxVisible;
 
     return (
       <div className="agent-bar">
-        {visible.map(agent => (
+        {visible.map((agent, i) => (
           <span key={agent.name} className="agent-item">
-            <span className={`agent-dot ${agent.active ? "active" : "inactive"}`} />
+            <span
+              className={`agent-dot ${agent.active ? "active" : "inactive"}${agent.active && isTyping ? " typing" : ""}`}
+              style={agent.active && isTyping ? { animationDelay: `${i * 0.2}s` } : {}}
+            />
             {agent.name}
           </span>
         ))}
@@ -323,14 +444,14 @@ function App() {
             {studioTab === "builder" && <AgentBuilder />}
             {studioTab === "teams" && (
               <TeamTemplateSelector
-                onSelect={async (template) => {
-                  try {
-                    await api.createTeam(template.name, template.description, "default-user");
-                    alert(`团队 "${template.name}" 创建成功`);
-                  } catch (e: any) {
-                    alert(`创建失败: ${e}`);
-                  }
-                }}
+onSelect={async (template) => {
+                    try {
+                      await api.createTeam(template.name, template.description, "default-user");
+                      showToast("success", `团队 "${template.name}" 创建成功`);
+                    } catch (e: any) {
+                      showToast("error", `创建失败: ${e}`);
+                    }
+                  }}
               />
             )}
             {studioTab === "team" && <TeamBuilder />}
@@ -404,18 +525,18 @@ function App() {
       <header className="header">
         <h1>Morn</h1>
         <span className="status">{status}</span>
-        <button className="clear-btn" onClick={clearHistory}>
-          Clear
+        <button className={`clear-btn${confirmClear ? ' confirming' : ''}`} onClick={handleClearClick}>
+          {confirmClear ? '确认清除？' : 'Clear'}
         </button>
         <button className="settings-btn" onClick={() => setShowSettings(true)}>
           ⚙
         </button>
       </header>
 
-      <AgentBar />
+      <AgentBar isTyping={isTyping} />
       <ExecutionFlow logs={workLogs} visible={workVisible} />
 
-      <main className="chat-area">
+      <main className="chat-area" ref={chatAreaRef}>
         {loading.workbench && messages.length === 0 ? <SkeletonChat /> : (
           <>
         {messages.length === 0 && (
@@ -426,29 +547,66 @@ function App() {
             <QuickActions onSend={sendQuickAction} />
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} className={`message ${msg.role}${i === sendingIndex ? ' sending' : ''}`}>
-            <div className="avatar">{msg.role === "user" ? "U" : "M"}</div>
-            <div className="bubble">
-              <div className="bubble-text">{msg.content}</div>
-              <span className="timestamp">{formatTime(msg.timestamp)}</span>
-            </div>
-          </div>
-        ))}
+        {messages.map((msg, i) => {
+          const showSeparator = i > 0 && (msg.timestamp - messages[i - 1].timestamp) > 5 * 60 * 1000;
+          const isErr = isError(msg.content);
+          const feedbackKey = `morn_feedback_${i}`;
+          const fb = feedback[feedbackKey];
+          return (
+            <React.Fragment key={i}>
+              {showSeparator && <div className="time-separator">{formatTime(msg.timestamp)}</div>}
+              <div
+                className={`message ${msg.role}${i === sendingIndex ? ' sending' : ''}${isErr ? ' error' : ''}`}
+                style={{ "--msg-index": i } as React.CSSProperties}
+              >
+                <div className="avatar">{isErr ? "⚠️" : msg.role === "user" ? "👤" : "🤖"}</div>
+                <div>
+                  <div className="bubble">
+                    <div className="bubble-text">{msg.content}</div>
+                    <span className="timestamp">{formatTime(msg.timestamp)}</span>
+                  </div>
+                  {isErr && (
+                    <button className="retry-btn" onClick={() => retryMessage(i)} title="Retry">↻</button>
+                  )}
+                  {msg.role === "assistant" && !isErr && (
+                    <div className="feedback-btns">
+                      <button
+                        className={`feedback-btn${fb === "like" ? " liked" : ""}`}
+                        onClick={() => toggleFeedback(i, "like")}
+                      >
+                        👍
+                      </button>
+                      <button
+                        className={`feedback-btn${fb === "dislike" ? " disliked" : ""}`}
+                        onClick={() => toggleFeedback(i, "dislike")}
+                      >
+                        👎
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </React.Fragment>
+          );
+        })}
         {isTyping && (
           <div className="message assistant">
-            <div className="avatar">M</div>
+            <div className="avatar">🤖</div>
             <div className="bubble typing-indicator">
               <span></span><span></span><span></span>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
+        {showScrollBtn && (
+          <button className="scroll-bottom-btn" onClick={scrollToBottom}>↓</button>
+        )}
           </>
         )}
       </main>
 
       <footer className="input-bar">
+        <div className="input-wrap">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -456,39 +614,50 @@ function App() {
           placeholder="Type a message..."
           rows={1}
         />
-        <button onClick={sendMessage} disabled={!input.trim()}>
-          Send
-        </button>
+        </div>
+        {isTyping ? (
+          <button className="stop-btn" onClick={handleStop}>■ Stop</button>
+        ) : (
+          <button onClick={(e) => { (e.currentTarget as HTMLElement).classList.add('pressing'); setTimeout(() => (e.currentTarget as HTMLElement).classList.remove('pressing'), 250); sendMessage(); }} disabled={!input.trim()}>
+            Send
+          </button>
+        )}
       </footer>
     </>
   );
 
   return (
     <div className="app" data-theme={theme}>
-      <nav className="main-tabs">
-        <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")}>
+      <nav className="main-tabs" ref={mainTabsRef}>
+        <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")} data-tooltip="工作台">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <span>Workbench</span>
         </button>
-        <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")}>
+        <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")} data-tooltip="工作室">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="16 3 21 8 8 21 3 21 3 16 16 3"/></svg>
           <span>Studio</span>
         </button>
-        <button className={view === "store" ? "active" : ""} onClick={() => setView("store")}>
+        <button className={view === "store" ? "active" : ""} onClick={() => setView("store")} data-tooltip="商店">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
           <span>Store</span>
         </button>
-        <button className={view === "console" ? "active" : ""} onClick={() => setView("console")}>
+        <button className={view === "console" ? "active" : ""} onClick={() => setView("console")} data-tooltip="控制台">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span>Console</span>
         </button>
+        <div className="main-tab-indicator" style={{ left: indicatorStyle.left, width: indicatorStyle.width }} />
       </nav>
       {view === "workbench" && renderWorkbench()}
       {view === "studio" && renderStudio()}
       {view === "store" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}
       {view === "console" && renderConsole()}
-      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} showToast={showToast} />}
       <StatusBar />
+      <div className="toast-container">
+        {toasts.map(t => (
+          <ToastItem key={t.id} toast={t} onRemove={removeToast} />
+        ))}
+      </div>
     </div>
   );
 }

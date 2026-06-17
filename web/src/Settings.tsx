@@ -30,9 +30,10 @@ function saveApiConfig(config: ApiConfig) {
 
 interface SettingsProps {
   onClose: () => void;
+  showToast?: (type: "success" | "error" | "info", message: string) => void;
 }
 
-export function Settings({ onClose }: SettingsProps) {
+export function Settings({ onClose, showToast }: SettingsProps) {
   const [config, setConfig] = useState<ApiConfig>(getApiConfig);
   const [themes, setThemes] = useState<string[]>([]);
   const [selectedTheme, setSelectedTheme] = useState(localStorage.getItem('morn-theme') || '');
@@ -45,6 +46,16 @@ export function Settings({ onClose }: SettingsProps) {
   const [notifyUpdateAvailable, setNotifyUpdateAvailable] = useState(() => localStorage.getItem('morn_notify_update_available') === 'true');
   const [provider, setProvider] = useState(() => localStorage.getItem('morn_model_provider') || 'sensenova');
   const [modelApiKey, setModelApiKey] = useState(() => localStorage.getItem('morn_model_api_key') || '');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+
+  // Escape 关闭弹窗
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
 
   useEffect(() => {
     (async () => {
@@ -91,7 +102,17 @@ export function Settings({ onClose }: SettingsProps) {
   };
 
   const handleSave = () => {
-    saveApiConfig(config);
+    setSaveStatus('saving');
+    try {
+      saveApiConfig(config);
+      setSaveStatus('success');
+      showToast?.('success', '设置已保存');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    } catch {
+      setSaveStatus('error');
+      showToast?.('error', '保存失败');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
     onClose();
   };
 
@@ -342,8 +363,11 @@ export function Settings({ onClose }: SettingsProps) {
         </div>
 
         <div className="settings-footer">
-          <button className="settings-btn settings-btn-primary" onClick={handleSave}>
-            Save
+          {saveStatus === 'success' && <span className="settings-feedback success">✅ 已保存</span>}
+          {saveStatus === 'error' && <span className="settings-feedback error">❌ 保存失败</span>}
+          {saveStatus === 'saving' && <span className="settings-feedback">⏳ 保存中…</span>}
+          <button className={`settings-btn settings-btn-primary${saveStatus === 'success' ? ' saved' : ''}`} onClick={handleSave} disabled={saveStatus === 'saving'}>
+            {saveStatus === 'saving' ? '保存中…' : 'Save'}
           </button>
         </div>
       </div>

@@ -168,6 +168,19 @@ export function ComponentEditor() {
     }
   };
 
+    if (error) {
+    return (
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        <div style={{ color: 'var(--danger)', fontSize: '14px', marginBottom: '12px' }}>
+          ⚠️ {error}
+        </div>
+        <button onClick={loadComponents} className="welcome-btn-primary" style={{ display: 'inline-flex' }}>
+          重试
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="component-editor" style={{ display: "flex", gap: "16px" }}>
       <div className="component-list" style={{ width: "250px", flexShrink: 0 }}>
