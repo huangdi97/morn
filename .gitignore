@@ -4,4 +4,9 @@ web/dist/
 .DS_Store
 *.swp
 *.swo
-tests/
+# tests/ 的集成测试需要被 git 追踪，不移除 .gitignore 行
+# 改为只忽略 tests/ 下的非 .rs 文件
+tests/*.log
+tests/*.tmp
+# Updater keys (keep private!)
+updater-keypair/
