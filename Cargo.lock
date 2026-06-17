@@ -2908,7 +2908,7 @@ dependencies = [
 
 [[package]]
 name = "morn"
-version = "0.3.0"
+version = "0.1.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -2939,7 +2939,7 @@ dependencies = [
 
 [[package]]
 name = "morn-desktop"
-version = "0.3.0"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "dirs 5.0.1",

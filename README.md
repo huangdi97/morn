@@ -1,26 +1,37 @@
 # Morn
 
-[![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
-[![build](https://img.shields.io/badge/tests-1417_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
+[![CI](https://github.com/huangdi97/morn/actions/workflows/ci.yml/badge.svg)](https://github.com/huangdi97/morn/actions/workflows/ci.yml)
+[![Release](https://github.com/huangdi97/morn/actions/workflows/release.yml/badge.svg)](https://github.com/huangdi97/morn/actions/workflows/release.yml)
+[![tests](https://img.shields.io/badge/tests-1466_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/huangdi97/morn?logo=github&color=blue)](https://github.com/huangdi97/morn/releases)
 
-> **你的桌面 AI 创作系统** — From一个人的工位开始
+> **你的桌面 AI 创作系统** — From 一个人的工位开始
 
-Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对话交互）、**创作台**（组件搭建）、**管理台**（运营监控）于一体。
-
-支持从原子组件到多 Agent 团队的四层组合，以及完整的市场生态。
+Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对话交互）、**创作台**（组件搭建）、**管理台**（运营监控）于一体。支持从原子组件到多 Agent 团队的四层组合，以及完整的市场生态。
 
 ---
+
+## 🚀 快速开始（Windows）
+
+### 一键安装
+
+1. 去 [GitHub Releases](https://github.com/huangdi97/morn/releases) 下载最新版安装包
+2. 运行 `Morn_x64-setup.exe`（NSIS 安装器）或 `Morn_x64_en-US.msi`
+3. 启动 Morn，按欢迎页引导配置 API Key 即可开始使用
+
+### 内置中转
+
+Morn 内置了免费的中转 API（sensenova），开箱即可聊天，无需自己配 Key。
 
 ---
 
 ## 功能矩阵
 
 ### 三台一体
-- **🛠 工作台** — NL 对话交互，一句话指挥 COO 拆任务、派活、跟进度
-- **🎨 创作台** — 拖拽式 Agent 组装 + 组件管理 + 即时测试
-- **📋 管理台** — 系统监控、拓扑可视化、成本中心、治理策略
+- **🛠 工作台** — NL 对话交互，一句话指挥 COO 拆任务、派活、跟进度，支持执行日志实时可视化
+- **🎨 创作台** — 拖拽式 Agent 组装 + 一句话构建 + 组件管理 + 即时测试
+- **📋 管理台** — 系统监控、拓扑可视化、成本中心、治理策略、安全事件、市场数据
 
 ### 四层组合架构
 | 层 | 描述 |
@@ -31,7 +42,6 @@ Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对
 | ④ 工作流 | NL→Workflow 自动编排，支持变量系统、模板商店 |
 
 ### 7 大模块集群
-
 | 模块 | 功能 |
 |------|------|
 | **核心运行时** | COO 主管决策树、DAG 引擎、事件总线、Registry 注册中心 |
@@ -42,101 +52,66 @@ Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对
 | **记忆系统** | 三层记忆(Working/Episodic/Semantic) + 自编辑记忆 |
 | **平台功能** | REST API、看板调度、Code-as-Tool、搜索启动器、模板商店 |
 
-## 快速开始
+## 从源码构建
 
 ```bash
 # 1. 克隆
 git clone https://github.com/huangdi97/morn.git
 cd morn-desktop
 
-# 2. 构建 CLI
-cargo build --release --bin morn
+# 2. 前端构建
+cd web && npm install && npm run build && cd ..
 
-# 3. 运行（需要 API Key）
-MORN_API_KEY=sk-xxx cargo run --release -- cli
+# 3. 桌面应用构建（Windows 需要 WebView2，预装）
+cargo tauri build --bundles nsis,msi -p morn-desktop
 
-# 4. 直接输入文本对话
-
-# 5. 以守护进程模式启动（支持多渠道接入）
-MORN_API_KEY=sk-xxx cargo run --release -- daemon
+# 构建产物在 src-tauri/target/release/bundle/nsis/ 和 msi/
 ```
 
-### CLI 命令
-
-| 命令 | 功能 |
-|------|------|
-| 直接输入文本 | 对话 |
-| `/exit` | 退出 |
-| `/clear` | 清除历史 |
-| `/status` | 显示会话状态 |
-| `/mode` | 设置 COO 模式 (active/safe/auto) |
-| `/market` | 浏览组件市场 |
-| `/help` | 帮助 |
-
-### 桌面端 (Tauri)
-
-完整桌面端需要 WSL/Windows 上的 GTK 系统库，或直接在 Windows 上构建：
+### CLI 模式（无 GUI）
 
 ```bash
-# 前端构建
-cd web && npm run build
+# 构建 CLI
+cargo build --release --bin morn
 
-# 完整桌面构建（需系统依赖）
-cargo build --workspace --release
+# 运行
+MORN_API_KEY=sk-xxx cargo run --release -- cli
 ```
+
+CLI 命令：直接输入文本对话 | `/exit` 退出 | `/clear` 清历史 | `/status` 会话状态 | `/help` 帮助
 
 ## 项目结构
 
 ```
 morn-desktop/
-├── src/                          # Rust 核心库 (lib)
-│   ├── main.rs                   # CLI 入口
-│   ├── lib.rs                    # 模块声明
-│   ├── core/                     # 内核 (30+ 模块)
-│   │   ├── supervisor/           # COO 主管决策树 (types, decision, execution)
-│   │   ├── registry.rs           # 能力注册中心
-│   │   ├── storage/              # SQLite 存储 (agents, governance, market,
-│   │   │                         #   oauth, sessions, settings, sync, tasks, users)
-│   │   ├── event_bus.rs          # 事件总线
-│   │   ├── security.rs           # 四层安全宪法
-│   │   ├── orchestrator.rs       # 多 Agent 团队编排
-│   │   ├── workflow/             # 工作流引擎 (runner, storage, templates/)
-│   │   ├── mcp.rs                # MCP 协议通信
-│   │   ├── hitl.rs               # Human-in-the-Loop 审批
-│   │   ├── checkpoint.rs         # 任务持久化
-│   │   ├── agent_pool/           # Agent 集群管理
-│   │   ├── consensus.rs          # 共识协作机制
-│   │   └── ... (20+ 更多模块)
+├── src/                          # Rust 核心库 (57K+ 行)
+│   ├── core/                     # 内核 (Supervisor/Registry/Storage/Security...)
 │   ├── component/                # 6 类原子组件
 │   ├── bridge/                   # LLM API 适配器
 │   ├── channel/                  # 多渠道适配
 │   ├── studio/                   # 创作台后端
 │   ├── console/                  # 管理台后端
-│   ├── api/                      # REST API
-│   ├── computer/                 # 电脑操控
-│   └── market/                   # 组件市场
-├── src-tauri/                    # Tauri 桌面入口 (NSIS 安装器 + 自动更新)
-│   ├── src/lib.rs                # 28 个 Tauri 命令
-│   └── tauri.conf.json           # 桌面配置
+│   ├── market/                   # 组件市场
+│   └── computer/                 # 电脑操控
+├── src-tauri/                    # Tauri 桌面入口 (86 个 Tauri 命令)
+│   └── src/lib.rs                # 命令注册 + 系统托盘 + 自动更新
 ├── web/                          # React + TypeScript + Vite 前端
 │   └── src/
 │       ├── App.tsx               # 工作台聊天界面
-│       ├── studio/               # 创作台 UI (AgentBuilder + TestPanel)
-│       ├── dashboard/            # 仪表盘
-│       ├── store/                # BotStore
+│       ├── studio/               # 创作台 UI
+│       ├── store/                # Bot Store
 │       └── console/              # 管理台 UI
-└── DESIGN.md                     # 设计总纲（1212 行，本地专属）
+└── DESIGN.md                     # 设计总纲（本地专属）
 ```
 
 ## 技术栈
 
 - **语言**: Rust (edition 2021)
-- **桌面框架**: Tauri v2 (NSIS 安装器)
+- **桌面框架**: Tauri v2 (NSIS/MSI 安装器)
 - **前端**: React 18 + TypeScript + Vite 5
 - **LLM**: OpenAI 兼容 API（默认 DeepSeek）
 - **存储**: SQLite (rusqlite)
-- **HTTP**: reqwest + axum
-- **协议**: MCP (Model Context Protocol)
+- **CI/CD**: GitHub Actions（自动构建 Windows 安装包）
 
 ---
 
