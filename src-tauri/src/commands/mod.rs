@@ -10,7 +10,6 @@ pub mod cost;
 pub mod earnings;
 pub mod errors;
 pub(crate) use earnings::get_creator_earnings;
-pub(crate) use errors::CommandError;
 pub mod execution;
 pub mod journey;
 pub mod local_model;
@@ -61,8 +60,6 @@ pub(crate) use org::{
     remove_member, revoke_permission,
 };
 pub(crate) use plugin_manager::plugin_install;
-pub(crate) use proactive::{list_proactive_rules, toggle_proactive_rule};
-pub(crate) use recovery::{get_last_error, retry_last_operation};
 pub(crate) use studio::{
     assemble_agent, create_component, delete_component, get_component, list_agent_templates,
     list_components, publish_component, test_component, test_component_rerun, update_component,
