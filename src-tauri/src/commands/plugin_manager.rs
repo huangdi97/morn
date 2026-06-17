@@ -7,7 +7,7 @@ use tauri::State;
 pub(crate) fn plugin_install(path: String, state: State<AppState>) -> Result<(), MornError> {
     let src = Path::new(&path);
     let src = std::fs::canonicalize(src)
-        .map_err(|e| format!("Failed to resolve path '{}': {}", path, e).into())?;
+        .map_err(|e| MornError::Internal(format!("Failed to resolve path '{}': {}", path, e)))?;
 
     if !src.is_dir() {
         return Err(format!("Path '{}' is not a directory", src.display()).into());

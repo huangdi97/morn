@@ -94,11 +94,11 @@ pub(crate) async fn mcp_call_tool(
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("RPC call failed: {}", e).into())?;
+        .map_err(|e| MornError::Internal(format!("RPC call failed: {}", e)))?;
     let result: MCPResponse = resp
         .json()
         .await
-        .map_err(|e| format!("Failed to decode response: {}", e).into())?;
+        .map_err(|e| MornError::Internal(format!("Failed to decode response: {}", e)))?;
     Ok(result)
 }
 
