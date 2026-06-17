@@ -44,7 +44,7 @@ pub(crate) fn unregister_component_type(
     if removed {
         Ok(serde_json::json!({ "status": "removed" }))
     } else {
-        Err(format!("type '{}' not found or is a built-in", type_name))
+        Err(format!("type '{}' not found or is a built-in", type_name).into())
     }
 }
 

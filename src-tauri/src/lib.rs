@@ -6,6 +6,7 @@ use tauri::Manager;
 
 use morn::console::ConsoleBackend;
 use morn::core::component_type::registry::TypeRegistry;
+pub use morn::core::error::MornError;
 use morn::core::hub_seeder::seed_hub_data;
 use morn::core::mcp::MCPServer;
 use morn::core::plugin_manager::PluginManager;
@@ -16,7 +17,6 @@ use morn::core::supervisor::Supervisor;
 use morn::studio::manager::StudioManager;
 use morn::studio::publisher::StudioPublisher;
 use morn::studio::tester::StudioTester;
-pub use morn::core::error::MornError;
 
 mod autostart;
 mod commands;
@@ -175,7 +175,7 @@ pub fn run() {
             commands::studio::assemble_agent,
             commands::studio::test_component,
             commands::studio::test_component_rerun,
-            commands::studio::list_component_types,
+            commands::component_type::list_component_types,
             commands::studio::publish_component,
             commands::console::get_system_status,
             commands::console::get_component_topology,

@@ -201,7 +201,6 @@ pub(crate) fn test_component_rerun(
     Ok(serde_json::to_value(step).map_err(|e| MornError::Internal(e.to_string()))?)
 }
 
-#[tauri::command]
 pub(crate) fn list_component_types() -> Vec<serde_json::Value> {
     vec![
         serde_json::json!({"type": "agent", "label": "Agent", "icon": "🤖"}),

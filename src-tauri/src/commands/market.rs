@@ -37,7 +37,7 @@ pub(crate) fn apply_theme(name: String, state: State<AppState>) -> Result<String
         .map_err(|e| MornError::Internal(e.to_string()))?;
     mgr.get_theme_css(&name)
         .map(|s| s.to_string())
-        .ok_or_else(|| format!("No CSS cached for theme '{}'", name))
+        .ok_or_else(|| format!("No CSS cached for theme '{}'", name).into())
 }
 
 #[tauri::command]
@@ -163,7 +163,7 @@ pub(crate) fn get_preset_persona(name: String) -> Result<serde_json::Value, Morn
         Some(persona) => {
             serde_json::to_value(persona).map_err(|e| MornError::Internal(e.to_string()))
         }
-        None => Err(format!("Preset persona '{}' not found", name)),
+        None => Err(format!("Preset persona '{}' not found", name).into()),
     }
 }
 
@@ -177,7 +177,8 @@ pub(crate) fn create_agent_from_description(
     nl: String,
     state: State<AppState>,
 ) -> Result<String, MornError> {
-    let api_key = std::env::var("MORN_API_KEY").map_err(|_| "MORN_API_KEY not set".to_string())?;
+    let api_key = std::env::var("MORN_API_KEY")
+        .map_err(|_| MornError::Internal("MORN_API_KEY not set".to_string()))?;
     let chat_agent = morn::bridge::chat_agent::ChatAgent::new(
         &api_key,
         "https://api.deepseek.com",

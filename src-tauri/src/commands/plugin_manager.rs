@@ -7,15 +7,15 @@ use tauri::State;
 pub(crate) fn plugin_install(path: String, state: State<AppState>) -> Result<(), MornError> {
     let src = Path::new(&path);
     let src = std::fs::canonicalize(src)
-        .map_err(|e| format!("Failed to resolve path '{}': {}", path, e))?;
+        .map_err(|e| format!("Failed to resolve path '{}': {}", path, e).into())?;
 
     if !src.is_dir() {
-        return Err(format!("Path '{}' is not a directory", src.display()));
+        return Err(format!("Path '{}' is not a directory", src.display()).into());
     }
 
     let manifest_path = src.join("manifest.json");
     if !manifest_path.exists() {
-        return Err(format!("No manifest.json found in '{}'", src.display()));
+        return Err(format!("No manifest.json found in '{}'", src.display()).into());
     }
 
     let plugin_dir = {

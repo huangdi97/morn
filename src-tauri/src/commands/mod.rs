@@ -65,8 +65,7 @@ pub(crate) use proactive::{list_proactive_rules, toggle_proactive_rule};
 pub(crate) use recovery::{get_last_error, retry_last_operation};
 pub(crate) use studio::{
     assemble_agent, create_component, delete_component, get_component, list_agent_templates,
-    list_component_types, list_components, publish_component, test_component, test_component_rerun,
-    update_component,
+    list_components, publish_component, test_component, test_component_rerun, update_component,
 };
 pub(crate) use team_templates::list_team_templates;
 pub(crate) use whisper::{list_audio_devices, transcribe_audio};

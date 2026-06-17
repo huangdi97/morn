@@ -16,11 +16,11 @@ pub(crate) async fn mcp_connect(
         .get(&tools_url)
         .send()
         .await
-        .map_err(|e| format!("Failed to connect to MCP server at {}: {}", url, e))?;
+        .map_err(|e| format!("Failed to connect to MCP server at {}: {}", url, e).into())?;
     let tools: Vec<MCPTool> = resp
         .json()
         .await
-        .map_err(|e| format!("Failed to parse tool list from {}: {}", url, e))?;
+        .map_err(|e| format!("Failed to parse tool list from {}: {}", url, e).into())?;
 
     let server = MCPServer {
         name: name.clone(),
@@ -52,7 +52,7 @@ pub(crate) fn mcp_disconnect(name: String, state: State<AppState>) -> Result<Str
     if mgr.len() < len_before {
         Ok(format!("Disconnected '{}'", name))
     } else {
-        Err(format!("Server '{}' not found", name))
+        Err(format!("Server '{}' not found", name).into())
     }
 }
 
@@ -80,9 +80,9 @@ pub(crate) async fn mcp_call_tool(
         let srv = mgr
             .iter()
             .find(|s| s.name == server)
-            .ok_or_else(|| format!("Server '{}' not found", server))?;
+            .ok_or_else(|| format!("Server '{}' not found", server).into())?;
         if !srv.tools.iter().any(|t| t.name == tool) {
-            return Err(format!("Tool '{}' not found on server '{}'", tool, server));
+            return Err(format!("Tool '{}' not found on server '{}'", tool, server).into());
         }
         format!("{}/call", srv.url.trim_end_matches('/'))
     };
@@ -94,11 +94,11 @@ pub(crate) async fn mcp_call_tool(
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("RPC call failed: {}", e))?;
+        .map_err(|e| format!("RPC call failed: {}", e).into())?;
     let result: MCPResponse = resp
         .json()
         .await
-        .map_err(|e| format!("Failed to decode response: {}", e))?;
+        .map_err(|e| format!("Failed to decode response: {}", e).into())?;
     Ok(result)
 }
 
