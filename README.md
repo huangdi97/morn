@@ -20,9 +20,11 @@ Morn 是一个跑在 Windows 桌面的 AI 操作系统。集 **工作台**（对
 2. 运行 `Morn_x64-setup.exe`（NSIS 安装器）或 `Morn_x64_en-US.msi`
 3. 启动 Morn，按欢迎页引导配置 API Key 即可开始使用
 
-### 内置中转
+### 配置 API Key
 
-Morn 内置了免费的中转 API（sensenova），开箱即可聊天，无需自己配 Key。
+Morn 需要配置一个 OpenAI 兼容的 API Key 才能使用。启动后按欢迎页引导填写即可。
+
+> 如果你没有 API Key，可以自行搜索「DeepSeek API」或「OpenAI 兼容 API」，有很多低价/免费方案可选。
 
 ---
 
