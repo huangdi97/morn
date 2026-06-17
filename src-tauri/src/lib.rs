@@ -248,6 +248,7 @@ pub fn run() {
             commands::scheduler::cancel_task,
             commands::execution::get_recent_logs,
             commands::team_templates::list_team_templates,
+            commands::market::rollback_agent,
             commands::plugin_manager::plugin_install,
         ])
         .run(tauri::generate_context!())
