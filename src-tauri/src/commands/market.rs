@@ -37,7 +37,7 @@ pub(crate) fn apply_theme(name: String, state: State<AppState>) -> Result<String
         .map_err(|e| MornError::Internal(e.to_string()))?;
     mgr.get_theme_css(&name)
         .map(|s| s.to_string())
-        .ok_or_else(|| format!("No CSS cached for theme '{}'", name).into())
+        .ok_or_else(|| MornError::Internal(format!("No CSS cached for theme '{}'", name)))
 }
 
 #[tauri::command]

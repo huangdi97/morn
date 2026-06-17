@@ -12,15 +12,12 @@ pub(crate) async fn mcp_connect(
 ) -> Result<String, MornError> {
     let client = reqwest::Client::new();
     let tools_url = format!("{}/list_tools", url.trim_end_matches('/'));
-    let resp = client
-        .get(&tools_url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to connect to MCP server at {}: {}", url, e).into())?;
-    let tools: Vec<MCPTool> = resp
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse tool list from {}: {}", url, e).into())?;
+    let resp = client.get(&tools_url).send().await.map_err(|e| {
+        MornError::Internal(format!("Failed to connect to MCP server at {}: {}", url, e))
+    })?;
+    let tools: Vec<MCPTool> = resp.json().await.map_err(|e| {
+        MornError::Internal(format!("Failed to parse tool list from {}: {}", url, e))
+    })?;
 
     let server = MCPServer {
         name: name.clone(),
@@ -80,7 +77,7 @@ pub(crate) async fn mcp_call_tool(
         let srv = mgr
             .iter()
             .find(|s| s.name == server)
-            .ok_or_else(|| format!("Server '{}' not found", server).into())?;
+            .ok_or_else(|| MornError::Internal(format!("Server '{}' not found", server)))?;
         if !srv.tools.iter().any(|t| t.name == tool) {
             return Err(format!("Tool '{}' not found on server '{}'", tool, server).into());
         }
