@@ -125,7 +125,10 @@ impl PermissionChecker {
             .delete_agent_permissions_for_user(agent_id, user_id)
     }
 
-    pub fn list_permissions(&self, agent_id: &str) -> Result<Vec<AgentPermissionRecord>, MornError> {
+    pub fn list_permissions(
+        &self,
+        agent_id: &str,
+    ) -> Result<Vec<AgentPermissionRecord>, MornError> {
         self.storage.list_agent_permissions(agent_id)
     }
 }

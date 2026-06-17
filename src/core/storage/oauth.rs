@@ -79,7 +79,10 @@ impl Storage {
         let mut rows = stmt
             .query(params![provider, user_id])
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             Ok(Some((
                 row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
                 row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,

@@ -102,7 +102,8 @@ impl ChatAgent {
     }
 
     pub fn chat(&self, prompt: &str, system_prompt: &str) -> Result<String, MornError> {
-        let runtime = tokio::runtime::Runtime::new().map_err(|e| MornError::Internal(e.to_string()))?;
+        let runtime =
+            tokio::runtime::Runtime::new().map_err(|e| MornError::Internal(e.to_string()))?;
         runtime.block_on(self.chat_async(prompt, system_prompt))
     }
 
@@ -189,7 +190,10 @@ impl ChatAgent {
             }
         }
 
-        Err(MornError::Internal(format!("ChatAgent failed after 3 retries: {}", last_error)))
+        Err(MornError::Internal(format!(
+            "ChatAgent failed after 3 retries: {}",
+            last_error
+        )))
     }
 }
 

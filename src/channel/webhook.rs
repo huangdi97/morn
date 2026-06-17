@@ -2,8 +2,8 @@
 //! 配置方式：设置接收 HTTP POST 的回调地址
 //! 环境变量：WEBHOOK_LISTEN_URL
 
-use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
+use crate::core::error::MornError;
 
 pub struct WebhookReceiver {
     adapter: Option<ChannelAdapter>,

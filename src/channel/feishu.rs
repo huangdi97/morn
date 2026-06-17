@@ -2,8 +2,8 @@
 //! 配置方式：在飞书开放平台创建应用，获取 Webhook URL
 //! 环境变量：FEISHU_WEBHOOK_URL
 
-use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
+use crate::core::error::MornError;
 
 pub struct FeishuChannel {
     webhook_url: String,

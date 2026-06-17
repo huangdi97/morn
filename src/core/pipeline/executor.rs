@@ -36,7 +36,10 @@ fn default_transform(operation: &str, input: &PipelineData) -> Result<PipelineDa
             let text = input.as_text()?;
             Ok(PipelineData::Text(text + "_appended"))
         }
-        _ => Err(MornError::Internal(format!("unknown operation '{}'", operation))),
+        _ => Err(MornError::Internal(format!(
+            "unknown operation '{}'",
+            operation
+        ))),
     }
 }
 
@@ -154,7 +157,9 @@ impl Pipeline {
         }
 
         if sorted.len() != self.nodes.len() {
-            return Err(MornError::Internal("cycle detected in pipeline graph".to_string()))
+            return Err(MornError::Internal(
+                "cycle detected in pipeline graph".to_string(),
+            ));
         }
 
         Ok(sorted)
@@ -212,7 +217,9 @@ impl Pipeline {
                     }
                     PipelineNode::Timer { .. } => PipelineData::Text("timer_triggered".to_string()),
                     PipelineNode::Start { .. } | PipelineNode::End { .. } => {
-                        return Err(MornError::Internal("start/end node not implemented in simple chain".to_string()))
+                        return Err(MornError::Internal(
+                            "start/end node not implemented in simple chain".to_string(),
+                        ))
                     }
                     PipelineNode::LLM {
                         id: _,
@@ -236,7 +243,9 @@ impl Pipeline {
                     | PipelineNode::Webhook { .. }
                     | PipelineNode::Log { .. }
                     | PipelineNode::SubWorkflow { .. } => {
-                        return Err(MornError::Internal("node type not implemented in simple chain".to_string()))
+                        return Err(MornError::Internal(
+                            "node type not implemented in simple chain".to_string(),
+                        ))
                     }
                 }
             };
@@ -251,7 +260,10 @@ impl Pipeline {
     pub fn execute_simple_chain(&mut self, input: PipelineData) -> Result<PipelineData, MornError> {
         self.execute(Some(input))?;
 
-        let last_node = self.nodes.last().ok_or_else(|| MornError::Internal("no nodes in pipeline".to_string()))?;
+        let last_node = self
+            .nodes
+            .last()
+            .ok_or_else(|| MornError::Internal("no nodes in pipeline".to_string()))?;
         self.context
             .node_outputs
             .get(last_node.id())

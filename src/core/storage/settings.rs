@@ -20,9 +20,16 @@ impl Storage {
         let mut stmt = conn
             .prepare("SELECT value FROM settings WHERE key = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let mut rows = stmt.query(params![key]).map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
-            Ok(Some(row.get(0).map_err(|e| MornError::Internal(e.to_string()))?))
+        let mut rows = stmt
+            .query(params![key])
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
+            Ok(Some(
+                row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
+            ))
         } else {
             Ok(None)
         }

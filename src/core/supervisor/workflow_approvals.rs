@@ -1,6 +1,6 @@
 //! workflow_approvals — Tracks pending workflow approval gates in Supervisor.
-use crate::core::error::MornError;
 use crate::core::approval::{ApprovalStatus, WorkflowApproval};
+use crate::core::error::MornError;
 
 use super::Supervisor;
 

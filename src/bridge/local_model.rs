@@ -57,7 +57,8 @@ impl LocalLlmClient {
     }
 
     pub fn chat(&self, prompt: &str, system_prompt: &str) -> Result<String, MornError> {
-        let runtime = tokio::runtime::Runtime::new().map_err(|e| MornError::Internal(e.to_string()))?;
+        let runtime =
+            tokio::runtime::Runtime::new().map_err(|e| MornError::Internal(e.to_string()))?;
         runtime.block_on(self.chat_async(prompt, system_prompt))
     }
 
@@ -93,7 +94,10 @@ impl LocalLlmClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(MornError::Internal(format!("Local LLM API error {}: {}", status, body)));
+            return Err(MornError::Internal(format!(
+                "Local LLM API error {}: {}",
+                status, body
+            )));
         }
 
         let chat_response: LocalChatResponse = response
@@ -106,7 +110,9 @@ impl LocalLlmClient {
             .into_iter()
             .next()
             .map(|choice| choice.message.content)
-            .ok_or_else(|| MornError::Internal("Local LLM response contained no choices".to_string()))
+            .ok_or_else(|| {
+                MornError::Internal("Local LLM response contained no choices".to_string())
+            })
     }
 
     pub fn get_config(&self) -> &LocalModelConfig {

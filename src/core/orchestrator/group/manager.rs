@@ -97,7 +97,11 @@ impl GroupExecutor {
         ))
     }
 
-    pub fn execute_group(&mut self, group_id: &str, _input: &str) -> Result<Vec<String>, MornError> {
+    pub fn execute_group(
+        &mut self,
+        group_id: &str,
+        _input: &str,
+    ) -> Result<Vec<String>, MornError> {
         let cost_estimate = self.group_cost_estimate(group_id).ok();
         let agent_ids: Vec<String>;
         let mode: CollaborationMode;

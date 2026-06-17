@@ -134,10 +134,14 @@ impl Registry {
         let name = name.trim();
         let component_type = component_type.trim().to_lowercase();
         if name.is_empty() {
-            return Err(MornError::Internal("component skeleton name cannot be empty".to_string()))
+            return Err(MornError::Internal(
+                "component skeleton name cannot be empty".to_string(),
+            ));
         }
         if component_type.is_empty() {
-            return Err(MornError::Internal("component skeleton type cannot be empty".to_string()))
+            return Err(MornError::Internal(
+                "component skeleton type cannot be empty".to_string(),
+            ));
         }
 
         let slug = name
@@ -237,29 +241,46 @@ impl Registry {
     }
 
     /// Hot-loads capability JSON files from a directory and replaces existing ids.
-    pub fn watch_directory<P: AsRef<Path>>(&mut self, directory: P) -> Result<Vec<String>, MornError> {
+    pub fn watch_directory<P: AsRef<Path>>(
+        &mut self,
+        directory: P,
+    ) -> Result<Vec<String>, MornError> {
         let directory = directory.as_ref();
         if !directory.exists() {
-            return Err(MornError::Internal(format!("registry directory {:?} does not exist", directory)));
+            return Err(MornError::Internal(format!(
+                "registry directory {:?} does not exist",
+                directory
+            )));
         }
         if !directory.is_dir() {
-            return Err(MornError::Internal(format!("registry path {:?} is not a directory", directory)));
+            return Err(MornError::Internal(format!(
+                "registry path {:?} is not a directory",
+                directory
+            )));
         }
 
         let mut loaded = Vec::new();
-        let entries = fs::read_dir(directory)
-            .map_err(|e| MornError::Internal(format!("Cannot read registry directory {:?}: {}", directory, e)))?;
+        let entries = fs::read_dir(directory).map_err(|e| {
+            MornError::Internal(format!(
+                "Cannot read registry directory {:?}: {}",
+                directory, e
+            ))
+        })?;
         for entry in entries {
-            let entry = entry.map_err(|e| MornError::Internal(format!("Registry directory entry error: {}", e)))?;
+            let entry = entry.map_err(|e| {
+                MornError::Internal(format!("Registry directory entry error: {}", e))
+            })?;
             let path = entry.path();
             if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("json") {
                 continue;
             }
 
-            let content = fs::read_to_string(&path)
-                .map_err(|e| MornError::Internal(format!("Cannot read registry file {:?}: {}", path, e)))?;
-            let capability: Capability = serde_json::from_str(&content)
-                .map_err(|e| MornError::Internal(format!("Cannot parse registry file {:?}: {}", path, e)))?;
+            let content = fs::read_to_string(&path).map_err(|e| {
+                MornError::Internal(format!("Cannot read registry file {:?}: {}", path, e))
+            })?;
+            let capability: Capability = serde_json::from_str(&content).map_err(|e| {
+                MornError::Internal(format!("Cannot parse registry file {:?}: {}", path, e))
+            })?;
             let id = capability.id.clone();
             self.register(capability);
             loaded.push(id);

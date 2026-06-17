@@ -89,7 +89,10 @@ impl VariableStore {
     pub fn convert(&self, value: &Variable, target_type: VarType) -> Result<Variable, MornError> {
         let converted_value = match (&value.var_type, &target_type) {
             (VarType::String, VarType::Number) => {
-                let s = value.value.as_str().ok_or_else(|| MornError::Internal("expected string".to_string()))?;
+                let s = value
+                    .value
+                    .as_str()
+                    .ok_or_else(|| MornError::Internal("expected string".to_string()))?;
                 let n: f64 = s
                     .parse()
                     .map_err(|e| MornError::Internal(format!("cannot parse as number: {}", e)))?;
@@ -98,7 +101,10 @@ impl VariableStore {
                 )
             }
             (VarType::String, VarType::Boolean) => {
-                let s = value.value.as_str().ok_or_else(|| MornError::Internal("expected string".to_string()))?;
+                let s = value
+                    .value
+                    .as_str()
+                    .ok_or_else(|| MornError::Internal("expected string".to_string()))?;
                 Value::Bool(s == "true" || s == "1" || s == "yes")
             }
             (VarType::Number, VarType::String) => Value::String(value.value.to_string()),

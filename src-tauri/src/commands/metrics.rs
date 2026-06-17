@@ -1,10 +1,15 @@
-use crate::MornError;
 use crate::AppState;
+use crate::MornError;
 use tauri::State;
 
 #[tauri::command]
-pub(crate) fn get_reliability_metrics(state: State<AppState>) -> Result<serde_json::Value, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+pub(crate) fn get_reliability_metrics(
+    state: State<AppState>,
+) -> Result<serde_json::Value, MornError> {
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;

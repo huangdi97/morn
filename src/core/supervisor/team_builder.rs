@@ -14,7 +14,9 @@ impl Supervisor {
         let trimmed = response.trim().to_uppercase();
 
         if trimmed.starts_with("SINGLE") {
-            return Err(MornError::Internal("Single agent sufficient, no team needed".to_string()))
+            return Err(MornError::Internal(
+                "Single agent sufficient, no team needed".to_string(),
+            ));
         }
 
         if let Some(preset) = team_presets::find_preset(nl) {
@@ -48,8 +50,12 @@ Example:
             consensus: String,
         }
 
-        let gen: GenTeamDef = serde_json::from_str(cleaned)
-            .map_err(|e| MornError::Internal(format!("Failed to parse LLM team response: {}. Raw: {}", e, cleaned)))?;
+        let gen: GenTeamDef = serde_json::from_str(cleaned).map_err(|e| {
+            MornError::Internal(format!(
+                "Failed to parse LLM team response: {}. Raw: {}",
+                e, cleaned
+            ))
+        })?;
 
         let mode = match gen.mode.to_lowercase().as_str() {
             "chain" => CollaborationMode::Chain,

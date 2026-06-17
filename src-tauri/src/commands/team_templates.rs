@@ -17,7 +17,7 @@ pub(crate) fn list_team_templates() -> Result<Vec<TeamTemplate>, String> {
         .into_iter()
         .map(|p| TeamTemplate {
             id: p.team.id,
-            name: p.team.name,
+            name: p.team.name.clone(),
             description: format!("Pre-built team template: {}", p.team.name),
             members: p.team.members,
             mode: format!("{:?}", p.team.mode),

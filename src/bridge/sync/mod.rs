@@ -91,7 +91,9 @@ impl SyncEngine {
             .storage
             .as_ref()
             .ok_or("SyncEngine: no storage configured")?;
-        let storage = storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let storage = storage
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let events = storage.list_unsynced_events()?;
         let count = events.len();
 
@@ -118,7 +120,10 @@ impl SyncEngine {
             if resp.status().is_success() {
                 storage.mark_events_synced(&event_ids)?;
             } else {
-                return Err(MornError::Internal(format!("Sync push returned status: {}", resp.status())));
+                return Err(MornError::Internal(format!(
+                    "Sync push returned status: {}",
+                    resp.status()
+                )));
             }
         }
 
@@ -148,7 +153,10 @@ impl SyncEngine {
             .send()
             .map_err(|e| MornError::Internal(format!("Sync pull error: {}", e)))?;
         if !resp.status().is_success() {
-            return Err(MornError::Internal(format!("Sync pull returned status: {}", resp.status())));
+            return Err(MornError::Internal(format!(
+                "Sync pull returned status: {}",
+                resp.status()
+            )));
         }
         let body = resp
             .text()
@@ -179,15 +187,18 @@ impl SyncEngine {
         let now = chrono::Utc::now().to_rfc3339();
         tracing::info!("syncing {} pending local change(s)", count);
         if let Some(storage) = &self.storage {
-            let storage = storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+            let storage = storage
+                .lock()
+                .map_err(|e| MornError::Internal(e.to_string()))?;
             for change in &self.state.pending_changes {
                 let event = SyncEventRecord {
                     id: uuid::Uuid::new_v4().to_string(),
                     entity_type: "state".to_string(),
                     entity_id: change.key.clone(),
                     action: change.change_type.clone(),
-                    data_json: serde_json::to_string(&change.value)
-                        .map_err(|e| MornError::Internal(format!("Sync state encode error: {}", e)))?,
+                    data_json: serde_json::to_string(&change.value).map_err(|e| {
+                        MornError::Internal(format!("Sync state encode error: {}", e))
+                    })?,
                     timestamp: change.timestamp.clone(),
                     device_id: self.device_id.clone(),
                     synced: false,

@@ -128,7 +128,12 @@ impl SecurityGuard {
         self.enforce_level(action, &level)
     }
 
-    pub fn authorize(&self, operation: &str, agent_id: &str, user_id: &str) -> Result<(), MornError> {
+    pub fn authorize(
+        &self,
+        operation: &str,
+        agent_id: &str,
+        user_id: &str,
+    ) -> Result<(), MornError> {
         let level = self.authorization_level(operation, agent_id, user_id);
         self.enforce_level(operation, &level)
     }

@@ -426,6 +426,9 @@ mod tests {
         .await
         .unwrap_err();
 
-        assert_eq!(err.0, serde_json::json!({"error": {"Internal": "chat failed"}}));
+        assert_eq!(
+            err.0,
+            serde_json::json!({"error": {"Internal": "chat failed"}})
+        );
     }
 }

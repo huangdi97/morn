@@ -34,10 +34,11 @@ impl SkillLoader {
             if !dir.exists() {
                 continue;
             }
-            let entries =
-                fs::read_dir(dir).map_err(|e| MornError::Internal(format!("Cannot read dir {:?}: {}", dir, e)))?;
+            let entries = fs::read_dir(dir)
+                .map_err(|e| MornError::Internal(format!("Cannot read dir {:?}: {}", dir, e)))?;
             for entry in entries {
-                let entry = entry.map_err(|e| MornError::Internal(format!("Entry error: {}", e)))?;
+                let entry =
+                    entry.map_err(|e| MornError::Internal(format!("Entry error: {}", e)))?;
                 let path = entry.path();
                 if path.is_dir() {
                     let skill_file = path.join("SKILL.md");
@@ -64,8 +65,8 @@ impl SkillLoader {
     }
 
     pub fn parse_file(&self, path: &Path) -> Result<SkillManifest, MornError> {
-        let content =
-            fs::read_to_string(path).map_err(|e| MornError::Internal(format!("Cannot read {:?}: {}", path, e)))?;
+        let content = fs::read_to_string(path)
+            .map_err(|e| MornError::Internal(format!("Cannot read {:?}: {}", path, e)))?;
 
         let frontmatter = parse_frontmatter(&content)?;
         let map: HashMap<String, String> = frontmatter.into_iter().collect();
@@ -127,7 +128,9 @@ impl SkillLoader {
 fn parse_frontmatter(content: &str) -> Result<Vec<(String, String)>, MornError> {
     let content = content.trim();
     if !content.starts_with("---") {
-        return Err(MornError::Internal("Missing frontmatter delimiters (---)".to_string()));
+        return Err(MornError::Internal(
+            "Missing frontmatter delimiters (---)".to_string(),
+        ));
     }
 
     let rest = &content[3..];
@@ -164,9 +167,11 @@ pub fn create_default_skill_md(
         id, name, description, name, description
     );
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| MornError::Internal(format!("Cannot create dir: {}", e)))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| MornError::Internal(format!("Cannot create dir: {}", e)))?;
     }
-    fs::write(path, &content).map_err(|e| MornError::Internal(format!("Cannot write {:?}: {}", path, e)))?;
+    fs::write(path, &content)
+        .map_err(|e| MornError::Internal(format!("Cannot write {:?}: {}", path, e)))?;
     Ok(())
 }
 

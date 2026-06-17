@@ -63,11 +63,13 @@ impl MornConfig {
     }
 
     fn from_file(path: &Path) -> Result<Self, MornError> {
-        let config = fs::read_to_string(path)
-            .map_err(|e| MornError::Internal(format!("Failed to read config {}: {}", path.display(), e)))?;
+        let config = fs::read_to_string(path).map_err(|e| {
+            MornError::Internal(format!("Failed to read config {}: {}", path.display(), e))
+        })?;
 
-        toml::from_str::<Self>(&config)
-            .map_err(|e| MornError::Internal(format!("Failed to parse config {}: {}", path.display(), e)))
+        toml::from_str::<Self>(&config).map_err(|e| {
+            MornError::Internal(format!("Failed to parse config {}: {}", path.display(), e))
+        })
     }
 }
 

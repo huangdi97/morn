@@ -52,10 +52,13 @@ impl TypeRegistry {
 
     pub fn register(&mut self, def: ComponentTypeDef) -> Result<(), MornError> {
         if def.type_name.trim().is_empty() {
-            return Err(MornError::Internal("type_name cannot be empty".to_string()))
+            return Err(MornError::Internal("type_name cannot be empty".to_string()));
         }
         if self.types.contains_key(&def.type_name) {
-            return Err(MornError::Internal(format!("type '{}' is already registered", def.type_name)));
+            return Err(MornError::Internal(format!(
+                "type '{}' is already registered",
+                def.type_name
+            )));
         }
         self.types.insert(def.type_name.clone(), def);
         Ok(())

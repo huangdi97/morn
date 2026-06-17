@@ -1,8 +1,8 @@
 //! 双 LLM 安全引擎 — DualLlmGuard 结构与安全检查逻辑
 //! 通过主/副 LLM 判断和检查点序列对输入进行安全检查。
 
-use crate::core::error::MornError;
 use crate::bridge::chat_agent::ChatAgent;
+use crate::core::error::MornError;
 use crate::core::security::{AuditLog, SecurityGuard, SecurityProfile};
 
 use super::checkpoints::{CheckResult, Checkpoint, InjectionRisk};
@@ -390,7 +390,9 @@ impl DualLlmGuard {
             }))
             .send()
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let body: serde_json::Value = resp.json().map_err(|e| MornError::Internal(e.to_string()))?;
+        let body: serde_json::Value = resp
+            .json()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(body["choices"][0]["message"]["content"]
             .as_str()
             .unwrap_or("")

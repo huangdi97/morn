@@ -1,6 +1,6 @@
 //! orchestrator — Coordinates multi-agent teams, routing modes, and shared execution.
-use crate::core::error::MornError;
 use crate::bridge::a2a_discovery::A2ADiscovery;
+use crate::core::error::MornError;
 use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
 use crate::core::supervisor::Supervisor;
@@ -115,7 +115,10 @@ impl Orchestrator {
     pub fn register_expert(&mut self, expert: ExpertSpec) -> Result<String, MornError> {
         let id = expert.id.clone();
         if self.experts.contains_key(&id) {
-            return Err(MornError::Internal(format!("Expert '{}' already registered", id)));
+            return Err(MornError::Internal(format!(
+                "Expert '{}' already registered",
+                id
+            )));
         }
         self.experts.insert(id.clone(), expert);
         Ok(id)

@@ -1,7 +1,7 @@
 //! Node registry and template catalog: all available node templates organized by category.
 
-use crate::core::error::MornError;
 use super::types::{NodeTemplate, NodeType};
+use crate::core::error::MornError;
 use crate::core::registry::{Capability, Registry};
 
 pub struct NodeRegistry;

@@ -1,6 +1,6 @@
 //! engine — Executes workflow control-flow nodes without replacing template storage.
-use crate::core::error::MornError;
 use crate::core::approval::{ApprovalStatus, WorkflowApproval};
+use crate::core::error::MornError;
 use crate::core::thread_pool::{TaskDef, TaskPool};
 use crate::core::workflow::{JoinCondition, WorkflowAction, WorkflowTemplate};
 use serde_json::Value;
@@ -172,7 +172,9 @@ impl WorkflowEngine {
 
         let mut executed = Vec::new();
         for (task_id, handle) in handles {
-            handle.await.map_err(|e| MornError::Internal(e.to_string()))??;
+            handle
+                .await
+                .map_err(|e| MornError::Internal(e.to_string()))??;
             executed.push(task_id);
         }
         Ok(executed)
@@ -212,7 +214,10 @@ impl WorkflowEngine {
                 comment: None,
             });
         }
-        Err(MornError::Internal(format!("Workflow step '{}' is pending approval", task.id)))
+        Err(MornError::Internal(format!(
+            "Workflow step '{}' is pending approval",
+            task.id
+        )))
     }
 
     async fn execute_fork_join(
@@ -232,7 +237,10 @@ impl WorkflowEngine {
         let mut results = Vec::new();
         let mut errors = Vec::new();
         for (task_id, handle) in handles {
-            match handle.await.map_err(|e| MornError::Internal(e.to_string()))? {
+            match handle
+                .await
+                .map_err(|e| MornError::Internal(e.to_string()))?
+            {
                 Ok(()) => results.push(task_id),
                 Err(e) => errors.push((task_id, e)),
             }
@@ -241,7 +249,10 @@ impl WorkflowEngine {
         match join_condition {
             JoinCondition::All => {
                 if let Some((id, e)) = errors.into_iter().next() {
-                    return Err(MornError::Internal(format!("ForkJoin branch task '{}' failed: {}", id, e)));
+                    return Err(MornError::Internal(format!(
+                        "ForkJoin branch task '{}' failed: {}",
+                        id, e
+                    )));
                 }
                 Ok(results)
             }

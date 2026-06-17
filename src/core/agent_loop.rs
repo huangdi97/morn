@@ -1,7 +1,7 @@
 //! agent_loop — Runs iterative agent turns with approvals, tools, and event streaming.
-use crate::core::error::MornError;
 use crate::core::approval::{ApprovalLevel, ApprovalManager, ApprovalStatus};
 use crate::core::checkpoint::{Checkpoint, CheckpointManager};
+use crate::core::error::MornError;
 use crate::core::event_bus::SimpleEventBus;
 use std::sync::Arc;
 
@@ -109,8 +109,12 @@ impl AgentLoop {
 
         match status {
             ApprovalStatus::Approved | ApprovalStatus::Modified(_) => Ok(plan),
-            ApprovalStatus::Rejected => Err(MornError::Internal("Plan rejected by user".to_string())),
-            ApprovalStatus::Pending => Err(MornError::Internal("Plan approval timed out".to_string())),
+            ApprovalStatus::Rejected => {
+                Err(MornError::Internal("Plan rejected by user".to_string()))
+            }
+            ApprovalStatus::Pending => {
+                Err(MornError::Internal("Plan approval timed out".to_string()))
+            }
         }
     }
 

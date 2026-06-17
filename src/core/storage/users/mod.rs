@@ -69,8 +69,13 @@ impl Storage {
         let mut stmt = conn
             .prepare("SELECT id, username, display_name, role, created_at, last_login FROM users WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let mut rows = stmt.query(params![id]).map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        let mut rows = stmt
+            .query(params![id])
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             Ok(Some(UserRecord {
                 id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
                 username: row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,
@@ -90,8 +95,13 @@ impl Storage {
         let mut stmt = conn
             .prepare("SELECT id, username, display_name, role, created_at, last_login FROM users WHERE username = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let mut rows = stmt.query(params![username]).map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        let mut rows = stmt
+            .query(params![username])
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             Ok(Some(UserRecord {
                 id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
                 username: row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,
@@ -174,8 +184,13 @@ impl Storage {
         let mut stmt = conn
             .prepare("SELECT id, name, description, owner_id, created_at FROM teams WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let mut rows = stmt.query(params![id]).map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        let mut rows = stmt
+            .query(params![id])
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             Ok(Some(TeamRecord {
                 id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
                 name: row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,
@@ -366,7 +381,10 @@ impl Storage {
         let mut rows = stmt
             .query(params![agent_id, user_id])
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             Ok(Some(AgentPermissionRecord {
                 id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
                 agent_id: row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,

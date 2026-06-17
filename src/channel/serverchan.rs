@@ -14,11 +14,10 @@ pub fn serverchan_push(token: &str, title: &str, content: &str) -> Result<(), Mo
         .build()
         .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
 
-    let response = client
-        .post(&url)
-        .json(&payload)
-        .send()
-        .map_err(|e| MornError::Internal(format!("Failed to send ServerChan message: {}", e)))?;
+    let response =
+        client.post(&url).json(&payload).send().map_err(|e| {
+            MornError::Internal(format!("Failed to send ServerChan message: {}", e))
+        })?;
 
     let status = response.status();
     let body: serde_json::Value = response
@@ -46,7 +45,10 @@ pub fn serverchan_push(token: &str, title: &str, content: &str) -> Result<(), Mo
             .or_else(|| body.get("msg"))
             .and_then(|v| v.as_str())
             .unwrap_or("unknown error");
-        return Err(MornError::Internal(format!("ServerChan API error {}: {}", code, message)));
+        return Err(MornError::Internal(format!(
+            "ServerChan API error {}: {}",
+            code, message
+        )));
     }
 
     Ok(())

@@ -71,7 +71,7 @@ impl ChildProcess {
         loop {
             if start.elapsed() > Duration::from_secs(timeout_secs) {
                 let _ = child.kill();
-                return Err(MornError::Internal("Timeout".to_string()))
+                return Err(MornError::Internal("Timeout".to_string()));
             }
             match child.try_wait() {
                 Ok(Some(_)) => {
@@ -92,7 +92,9 @@ impl ChildProcess {
 
     pub fn kill(&mut self) -> Result<(), MornError> {
         if let Some(ref mut child) = self.handle {
-            child.kill().map_err(|e| MornError::Internal(e.to_string()))?;
+            child
+                .kill()
+                .map_err(|e| MornError::Internal(e.to_string()))?;
             child.wait().ok();
         }
         Ok(())

@@ -50,9 +50,11 @@ impl VectorKnowledge {
             .json(&serde_json::json!({"model": "nomic-embed-text", "prompt": text}))
             .send()
             .map_err(|e| MornError::Internal(format!("Embedding API call failed: {}", e)))?;
-        let body: serde_json::Value = resp.json().map_err(|e| MornError::Internal(e.to_string()))?;
-        let embedding: Vec<f32> =
-            serde_json::from_value(body["embedding"].clone()).map_err(|e| MornError::Internal(e.to_string()))?;
+        let body: serde_json::Value = resp
+            .json()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let embedding: Vec<f32> = serde_json::from_value(body["embedding"].clone())
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(embedding)
     }
 

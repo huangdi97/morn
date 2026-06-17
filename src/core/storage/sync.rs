@@ -72,8 +72,13 @@ impl Storage {
         let mut stmt = conn
             .prepare("SELECT id, entity_type, entity_id, action, data_json, timestamp, device_id, synced FROM sync_events WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let mut rows = stmt.query(params![id]).map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        let mut rows = stmt
+            .query(params![id])
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             let synced_int: i32 = row.get(7).map_err(|e| MornError::Internal(e.to_string()))?;
             Ok(Some(SyncEventRecord {
                 id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,

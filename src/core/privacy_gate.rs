@@ -219,7 +219,9 @@ impl PrivacyGate {
             .decode(encoded)
             .map_err(|e| MornError::Internal(format!("invalid E2EE payload: {}", e)))?;
         if packed.len() <= 12 {
-            return Err(MornError::Internal("invalid E2EE payload length".to_string()))
+            return Err(MornError::Internal(
+                "invalid E2EE payload length".to_string(),
+            ));
         }
 
         let mut nonce_bytes = [0u8; 12];
@@ -250,13 +252,16 @@ fn validate_algorithm(algorithm: &str) -> Result<(), MornError> {
     if normalize_algorithm(algorithm) == "aes-256-gcm" {
         Ok(())
     } else {
-        Err(MornError::Internal(format!("unsupported E2EE algorithm '{}'", algorithm)))
+        Err(MornError::Internal(format!(
+            "unsupported E2EE algorithm '{}'",
+            algorithm
+        )))
     }
 }
 
 fn aead_key(config: &E2EEConfig) -> Result<LessSafeKey, MornError> {
     if config.key.is_empty() {
-        return Err(MornError::Internal("E2EE key is empty".to_string()))
+        return Err(MornError::Internal("E2EE key is empty".to_string()));
     }
 
     let decoded = BASE64_STANDARD.decode(&config.key).ok();

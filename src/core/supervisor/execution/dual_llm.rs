@@ -1,8 +1,8 @@
 //! dual_llm — Dual-LLM security check wiring within supervisor dispatch.
-use crate::core::error::MornError;
 use crate::core::dual_llm::{
     CheckResult, DualLlmExecutorDecision, DualLlmGuardDecision, DualLlmJudgeDecision,
 };
+use crate::core::error::MornError;
 use crate::core::supervisor::{DualLlmGuard, DualLlmLog, Supervisor, TaskPlan};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

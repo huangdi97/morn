@@ -1,6 +1,6 @@
 //! registry — Maintains persona registration, lookup, and default selection.
-use crate::core::error::MornError;
 use super::*;
+use crate::core::error::MornError;
 
 pub fn get_persona(id: &str) -> Option<Persona> {
     match id {

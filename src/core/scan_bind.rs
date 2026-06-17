@@ -76,7 +76,9 @@ impl ScanBindManager {
                 session.status = BindStatus::Confirmed;
                 Ok(())
             }
-            BindStatus::Confirmed => Err(MornError::Internal("Bind session is already confirmed".to_string())),
+            BindStatus::Confirmed => Err(MornError::Internal(
+                "Bind session is already confirmed".to_string(),
+            )),
             BindStatus::Expired => Err(MornError::Internal("Bind session is expired".to_string())),
         }
     }
@@ -98,7 +100,9 @@ impl ScanBindManager {
                 Ok(())
             }
             BindStatus::Scanned => Ok(()),
-            BindStatus::Confirmed => Err(MornError::Internal("Bind session is already confirmed".to_string())),
+            BindStatus::Confirmed => Err(MornError::Internal(
+                "Bind session is already confirmed".to_string(),
+            )),
             BindStatus::Expired => Err(MornError::Internal("Bind session is expired".to_string())),
         }
     }

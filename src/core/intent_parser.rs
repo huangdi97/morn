@@ -275,7 +275,8 @@ mod tests {
 
     #[test]
     fn parse_with_llm_error_falls_back_to_rule() {
-        let chat_fn = |_prompt: &str, _system: &str| Err(MornError::Internal("LLM unavailable".to_string()));
+        let chat_fn =
+            |_prompt: &str, _system: &str| Err(MornError::Internal("LLM unavailable".to_string()));
         let intent = IntentParser::parse_with_llm("search for AI news", &chat_fn);
         assert_eq!(intent.intent_type, IntentType::ToolCall);
     }

@@ -1,5 +1,5 @@
-use crate::MornError;
 use crate::AppState;
+use crate::MornError;
 use tauri::State;
 
 use morn::sandbox::wasm::Sandbox;
@@ -7,7 +7,9 @@ use morn::sandbox::wasm::Sandbox;
 #[tauri::command]
 pub(crate) fn run_in_sandbox(code: String) -> Result<String, MornError> {
     let sandbox = Sandbox::new().map_err(|e| format!("Sandbox init failed: {}", e))?;
-    sandbox.execute(&code).map_err(|e| MornError::Internal(e.to_string()))
+    sandbox
+        .execute(&code)
+        .map_err(|e| MornError::Internal(e.to_string()))
 }
 
 #[tauri::command]
@@ -15,7 +17,10 @@ pub(crate) fn load_plugin_sandboxed(
     path: String,
     state: State<AppState>,
 ) -> Result<String, MornError> {
-    let plugin_manager = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let plugin_manager = state
+        .plugin_manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = plugin_manager
         .as_ref()
         .ok_or("PluginManager not initialized")?;

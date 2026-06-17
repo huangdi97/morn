@@ -26,7 +26,9 @@ impl Storage {
             Some(_) => "SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category FROM market_listings WHERE item_type = ?1 ORDER BY created_at DESC",
             None => "SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category FROM market_listings ORDER BY created_at DESC",
         };
-        let mut stmt = conn.prepare(sql).map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(sql)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = if let Some(f) = filter {
             stmt.query_map(params![f], map_listing_row)
                 .map_err(|e| MornError::Internal(e.to_string()))?
@@ -46,8 +48,13 @@ impl Storage {
         let mut stmt = conn
             .prepare("SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category FROM market_listings WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let mut rows = stmt.query(params![id]).map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        let mut rows = stmt
+            .query(params![id])
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             Ok(Some(listing_from_row(row)?))
         } else {
             Ok(None)
@@ -228,7 +235,10 @@ impl Storage {
         let mut rows = stmt
             .query(params![listing_id, version])
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             Ok(Some(AgentVersion {
                 id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
                 listing_id: row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,
@@ -248,8 +258,12 @@ impl Storage {
             "INSERT INTO market_reviews (id, listing_id, user_id, rating, comment, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
-                review.id, review.listing_id, review.user_id, review.rating,
-                review.comment, review.created_at
+                review.id,
+                review.listing_id,
+                review.user_id,
+                review.rating,
+                review.comment,
+                review.created_at
             ],
         )
         .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -313,8 +327,12 @@ fn listing_from_row(row: &rusqlite::Row) -> Result<Listing, MornError> {
         downloads: row.get(7).map_err(|e| MornError::Internal(e.to_string()))?,
         created_at: row.get(8).map_err(|e| MornError::Internal(e.to_string()))?,
         version: row.get(9).map_err(|e| MornError::Internal(e.to_string()))?,
-        screenshots: row.get(10).map_err(|e| MornError::Internal(e.to_string()))?,
-        category: row.get(11).map_err(|e| MornError::Internal(e.to_string()))?,
+        screenshots: row
+            .get(10)
+            .map_err(|e| MornError::Internal(e.to_string()))?,
+        category: row
+            .get(11)
+            .map_err(|e| MornError::Internal(e.to_string()))?,
     })
 }
 

@@ -65,8 +65,13 @@ impl Storage {
         let mut stmt = conn
             .prepare("SELECT id, name, component_type, config_json, status, trust_score, created_at, updated_at, current_version, update_available FROM agents WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let mut rows = stmt.query(params![id]).map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        let mut rows = stmt
+            .query(params![id])
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             Ok(Some(AgentRecord {
                 id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
                 name: row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,

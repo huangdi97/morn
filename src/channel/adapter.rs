@@ -121,7 +121,9 @@ impl ChannelAdapter {
                 supervisor.set_mode(mode);
                 Ok(())
             }
-            None => Err(MornError::Internal("Supervisor not initialized. Please set MORN_API_KEY.".to_string())),
+            None => Err(MornError::Internal(
+                "Supervisor not initialized. Please set MORN_API_KEY.".to_string(),
+            )),
         }
     }
 

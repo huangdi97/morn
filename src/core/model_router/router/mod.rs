@@ -1,10 +1,10 @@
-use crate::core::error::MornError;
 use super::local_engine::LocalEngine;
 use super::{
     ConfiguredModel, HybridStrategy, ModelRouter, ModelSpec, ModelType, ProviderCatalogEntry,
     RoutedModel, RouterMode,
 };
 use crate::config::ModelConfig as AppModelConfig;
+use crate::core::error::MornError;
 
 pub mod qa_router;
 
@@ -236,7 +236,11 @@ impl ModelRouter {
         models
     }
 
-    pub fn select_model(&self, prompt: &str, capabilities: &[&str]) -> Result<&ModelSpec, MornError> {
+    pub fn select_model(
+        &self,
+        prompt: &str,
+        capabilities: &[&str],
+    ) -> Result<&ModelSpec, MornError> {
         match self.mode {
             RouterMode::CloudFirst => self.select_cloud(prompt, capabilities),
             RouterMode::LocalOnly => self.select_local(capabilities),

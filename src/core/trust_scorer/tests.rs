@@ -1,6 +1,6 @@
 //! Trust scorer tests.
-use crate::core::error::MornError;
 use super::*;
+use crate::core::error::MornError;
 
 #[test]
 fn test_calculate_score() {

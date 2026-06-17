@@ -1,9 +1,9 @@
 //! msg — SendMsgTool: send messages via configured channels.
-use crate::core::error::MornError;
 use crate::component::tool::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
+use crate::core::error::MornError;
 
 #[allow(dead_code)]
 pub struct SendMsgTool {
@@ -68,7 +68,10 @@ impl IOComponent for SendMsgTool {
         ]
     }
     fn send(&mut self, port: &str, _data: Data) -> Result<(), MornError> {
-        Err(MornError::Internal(format!("SendMsgTool cannot receive on port {}", port)))
+        Err(MornError::Internal(format!(
+            "SendMsgTool cannot receive on port {}",
+            port
+        )))
     }
     fn recv(&mut self, port: &str) -> Result<Option<Data>, MornError> {
         if port == "output" {

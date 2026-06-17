@@ -57,7 +57,10 @@ impl VisualAgent {
         })
     }
 
-    pub async fn detect_buttons(&self, _screenshot: &[u8]) -> Result<Vec<DetectedButton>, MornError> {
+    pub async fn detect_buttons(
+        &self,
+        _screenshot: &[u8],
+    ) -> Result<Vec<DetectedButton>, MornError> {
         Ok(vec![
             DetectedButton {
                 label: "Submit".to_string(),

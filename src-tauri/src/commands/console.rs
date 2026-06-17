@@ -1,10 +1,13 @@
-use crate::MornError;
 use crate::AppState;
+use crate::MornError;
 use tauri::State;
 
 #[tauri::command]
 pub(crate) fn get_system_status(state: State<AppState>) -> Result<serde_json::Value, MornError> {
-    let console = state.console.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let console = state
+        .console
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let con = console
         .as_ref()
         .ok_or_else(|| "ConsoleBackend not initialized".to_string())?;
@@ -17,8 +20,13 @@ pub(crate) fn get_system_status(state: State<AppState>) -> Result<serde_json::Va
 }
 
 #[tauri::command]
-pub(crate) fn get_component_topology(state: State<AppState>) -> Result<serde_json::Value, MornError> {
-    let console = state.console.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+pub(crate) fn get_component_topology(
+    state: State<AppState>,
+) -> Result<serde_json::Value, MornError> {
+    let console = state
+        .console
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let con = console
         .as_ref()
         .ok_or_else(|| "ConsoleBackend not initialized".to_string())?;

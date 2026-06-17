@@ -53,7 +53,10 @@ impl VncManager {
         let session_id = format!("vnc-{}", uuid::Uuid::new_v4());
 
         let session = if self.can_start_xvfb() {
-            let mut disp = self.next_display.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+            let mut disp = self
+                .next_display
+                .lock()
+                .map_err(|e| MornError::Internal(e.to_string()))?;
             *disp += 1;
             let display_str = format!(":{}", disp);
             let xvfb_args = [
@@ -83,7 +86,10 @@ impl VncManager {
             self.simulated_session(&session_id, agent_id, width, height)
         };
 
-        let mut sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         sessions.insert(session_id.clone(), session);
         Ok(session_id)
     }
@@ -119,7 +125,12 @@ impl VncManager {
     }
 
     /// Connect to a remote VNC server.
-    pub fn connect_remote(&self, agent_id: &str, host: &str, port: u16) -> Result<String, MornError> {
+    pub fn connect_remote(
+        &self,
+        agent_id: &str,
+        host: &str,
+        port: u16,
+    ) -> Result<String, MornError> {
         let session_id = format!("vnc-remote-{}", uuid::Uuid::new_v4());
 
         use std::net::TcpStream;
@@ -136,7 +147,10 @@ impl VncManager {
                     height: 1080,
                     connected: true,
                 };
-                let mut sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+                let mut sessions = self
+                    .sessions
+                    .lock()
+                    .map_err(|e| MornError::Internal(e.to_string()))?;
                 sessions.insert(session_id.clone(), session);
                 Ok(session_id)
             }
@@ -149,14 +163,20 @@ impl VncManager {
 
     /// Destroy a VNC session.
     pub fn destroy_session(&self, session_id: &str) -> Result<(), MornError> {
-        let mut sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         sessions.remove(session_id);
         Ok(())
     }
 
     /// Get a session by ID.
     pub fn get_session(&self, session_id: &str) -> Result<VncSession, MornError> {
-        let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         sessions
             .get(session_id)
             .cloned()

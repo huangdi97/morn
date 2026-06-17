@@ -102,10 +102,7 @@ fn workflow_template_match(text_lower: &str) -> Option<String> {
     for template in WorkflowTemplate::list_builtin() {
         if template.name.to_lowercase().contains(text_lower)
             || text_lower.contains(&template.name.to_lowercase())
-            || template
-                .description
-                .to_lowercase()
-                .contains(text_lower)
+            || template.description.to_lowercase().contains(text_lower)
         {
             return Some(template.id);
         }

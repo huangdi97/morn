@@ -20,8 +20,12 @@ pub fn call_http(
         req = req.header("Authorization", format!("Bearer {key}"));
     }
 
-    let resp = req.send().map_err(|e| MCPError(format!("HTTP request failed: {e}")))?;
-    let data: MCPResponse = resp.json().map_err(|e| MCPError(format!("JSON decode failed: {e}")))?;
+    let resp = req
+        .send()
+        .map_err(|e| MCPError(format!("HTTP request failed: {e}")))?;
+    let data: MCPResponse = resp
+        .json()
+        .map_err(|e| MCPError(format!("JSON decode failed: {e}")))?;
     Ok(data)
 }
 

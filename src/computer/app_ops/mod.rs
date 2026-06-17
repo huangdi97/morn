@@ -47,10 +47,12 @@ pub fn list_all_apps() -> Vec<AppInfo> {
 pub fn uninstall_app(id: &str) -> Result<(), MornError> {
     let normalized = id.trim();
     if normalized.is_empty() {
-        return Err(MornError::Internal("app id is empty".to_string()))
+        return Err(MornError::Internal("app id is empty".to_string()));
     }
     if normalized.contains('\0') {
-        return Err(MornError::Internal("app id contains invalid character".to_string()))
+        return Err(MornError::Internal(
+            "app id contains invalid character".to_string(),
+        ));
     }
     tracing::info!("simulated uninstall request for app '{}'", normalized);
     Ok(())

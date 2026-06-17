@@ -1,8 +1,8 @@
 //! traits — Adapts personas to shared component and execution traits.
-use crate::core::error::MornError;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
+use crate::core::error::MornError;
 
 use super::Persona;
 

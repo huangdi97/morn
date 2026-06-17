@@ -110,11 +110,15 @@ impl CortexEngine {
             .clone()
     }
 
-    pub fn mcp_market(&self, registry_url: Option<&str>) -> Result<Vec<MCPMarketPlugin>, MornError> {
+    pub fn mcp_market(
+        &self,
+        registry_url: Option<&str>,
+    ) -> Result<Vec<MCPMarketPlugin>, MornError> {
         let url = registry_url.unwrap_or(&self.mcp_registry_url);
 
-        let response = reqwest::blocking::get(url)
-            .map_err(|e| MornError::Internal(format!("Failed to fetch MCP market from '{}': {}", url, e)))?;
+        let response = reqwest::blocking::get(url).map_err(|e| {
+            MornError::Internal(format!("Failed to fetch MCP market from '{}': {}", url, e))
+        })?;
 
         if !response.status().is_success() {
             return Err(MornError::Internal(format!(
@@ -124,11 +128,14 @@ impl CortexEngine {
             )));
         }
 
-        let plugins: Vec<MCPMarketPlugin> = response
-            .json()
-            .map_err(|e| MornError::Internal(format!("Failed to parse MCP market response: {}", e)))?;
+        let plugins: Vec<MCPMarketPlugin> = response.json().map_err(|e| {
+            MornError::Internal(format!("Failed to parse MCP market response: {}", e))
+        })?;
 
-        let mut installed = self.mcp_plugins.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut installed = self
+            .mcp_plugins
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         *installed = plugins.clone();
 
         Ok(plugins)

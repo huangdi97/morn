@@ -84,7 +84,9 @@ impl TeamManager {
             .ok_or_else(|| format!("User {} is not a member of team {}", user_id, team_id))?;
 
         if target.role == "owner" && owner_count <= 1 {
-            return Err(MornError::Internal("Cannot remove the last owner from the team".to_string()))
+            return Err(MornError::Internal(
+                "Cannot remove the last owner from the team".to_string(),
+            ));
         }
 
         self.storage.remove_team_member(team_id, user_id)
@@ -138,7 +140,7 @@ impl UserManager {
         role: &str,
     ) -> Result<UserRecord, MornError> {
         if username.is_empty() {
-            return Err(MornError::Internal("Username cannot be empty".to_string()))
+            return Err(MornError::Internal("Username cannot be empty".to_string()));
         }
         let valid_roles = ["admin", "user", "viewer"];
         let role = if role.is_empty() { "user" } else { role };
@@ -150,7 +152,10 @@ impl UserManager {
         }
 
         if self.storage.get_user_by_username(username)?.is_some() {
-            return Err(MornError::Internal(format!("Username '{}' already exists", username)));
+            return Err(MornError::Internal(format!(
+                "Username '{}' already exists",
+                username
+            )));
         }
 
         let user = UserRecord {

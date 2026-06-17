@@ -57,7 +57,9 @@ impl LocalEngine {
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         } else {
-            Err(MornError::Internal(String::from_utf8_lossy(&output.stderr).to_string()))
+            Err(MornError::Internal(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ))
         }
     }
 
@@ -78,7 +80,10 @@ impl LocalEngine {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().unwrap_or_default();
-            return Err(MornError::Internal(format!("Ollama API error {}: {}", status, body)));
+            return Err(MornError::Internal(format!(
+                "Ollama API error {}: {}",
+                status, body
+            )));
         }
 
         let body: OllamaGenerateResponse = response
@@ -94,7 +99,9 @@ impl LocalEngine {
 
     #[cfg(not(feature = "channels-full"))]
     pub fn inference_ollama(&self, _prompt: &str, _model: &str) -> Result<String, MornError> {
-        Err(MornError::Internal("Ollama HTTP inference requires the channels-full feature".to_string()))
+        Err(MornError::Internal(
+            "Ollama HTTP inference requires the channels-full feature".to_string(),
+        ))
     }
 
     #[cfg(feature = "channels-full")]
@@ -119,7 +126,10 @@ impl LocalEngine {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().unwrap_or_default();
-            return Err(MornError::Internal(format!("LM Studio API error {}: {}", status, body)));
+            return Err(MornError::Internal(format!(
+                "LM Studio API error {}: {}",
+                status, body
+            )));
         }
 
         let body: LmStudioChatResponse = response
@@ -136,7 +146,9 @@ impl LocalEngine {
 
     #[cfg(not(feature = "channels-full"))]
     pub fn inference_lm_studio(&self, _prompt: &str) -> Result<String, MornError> {
-        Err(MornError::Internal("LM Studio HTTP inference requires the channels-full feature".to_string()))
+        Err(MornError::Internal(
+            "LM Studio HTTP inference requires the channels-full feature".to_string(),
+        ))
     }
 }
 

@@ -1,6 +1,6 @@
 //! dispatch — Task execution, lifecycle events, and inline chat dispatch.
-use crate::core::error::MornError;
 use crate::bridge::chat_agent::ChatAgent;
+use crate::core::error::MornError;
 use crate::core::storage::{DecisionRecord, TaskRecord};
 use tracing;
 

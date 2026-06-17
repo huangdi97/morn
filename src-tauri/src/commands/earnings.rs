@@ -1,11 +1,14 @@
-use crate::MornError;
 use crate::AppState;
-use tauri::State;
+use crate::MornError;
 use morn::market::revenue::CreatorEarnings;
+use tauri::State;
 
 #[tauri::command]
 pub(crate) fn get_creator_earnings(state: State<AppState>) -> Result<CreatorEarnings, MornError> {
-    let console = state.console.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let console = state
+        .console
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let _con = console
         .as_ref()
         .ok_or_else(|| MornError::Internal("ConsoleBackend not initialized".to_string()))?;

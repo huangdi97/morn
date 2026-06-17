@@ -23,21 +23,33 @@ impl WorkerPool {
     }
 
     pub fn start(&mut self) -> Result<(), MornError> {
-        let mut running = self.running.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut running = self
+            .running
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         *running = true;
         Ok(())
     }
 
     pub fn shutdown(&mut self) -> Result<(), MornError> {
-        let mut running = self.running.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut running = self
+            .running
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         *running = false;
-        let mut workers = self.workers.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut workers = self
+            .workers
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         workers.clear();
         Ok(())
     }
 
     pub fn assign(&self, channel_id: &str) -> Result<(), MornError> {
-        let mut workers = self.workers.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut workers = self
+            .workers
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         workers.insert(
             channel_id.to_string(),
             WorkerHandle {
@@ -49,7 +61,10 @@ impl WorkerPool {
     }
 
     pub fn remove(&self, channel_id: &str) -> Result<(), MornError> {
-        let mut workers = self.workers.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut workers = self
+            .workers
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         workers.remove(channel_id);
         Ok(())
     }

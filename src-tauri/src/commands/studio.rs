@@ -1,5 +1,5 @@
-use crate::MornError;
 use crate::AppState;
+use crate::MornError;
 use tauri::State;
 
 use morn::core::assembler::AgentDef;
@@ -10,7 +10,10 @@ pub(crate) fn list_components(
     type_filter: Option<String>,
     state: State<AppState>,
 ) -> Result<serde_json::Value, MornError> {
-    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let manager = state
+        .manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -23,7 +26,10 @@ pub(crate) fn get_component(
     id: String,
     state: State<AppState>,
 ) -> Result<serde_json::Value, MornError> {
-    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let manager = state
+        .manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -38,7 +44,10 @@ pub(crate) fn create_component(
     config_json: Option<String>,
     state: State<AppState>,
 ) -> Result<String, MornError> {
-    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let manager = state
+        .manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -58,7 +67,10 @@ pub(crate) fn update_component(
     status: Option<String>,
     state: State<AppState>,
 ) -> Result<(), MornError> {
-    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let manager = state
+        .manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -74,7 +86,10 @@ pub(crate) fn update_component(
 
 #[tauri::command]
 pub(crate) fn delete_component(id: String, state: State<AppState>) -> Result<(), MornError> {
-    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let manager = state
+        .manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -91,7 +106,10 @@ pub(crate) fn assemble_agent(
     skills: Vec<String>,
     state: State<AppState>,
 ) -> Result<serde_json::Value, MornError> {
-    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let manager = state
+        .manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -134,7 +152,10 @@ pub(crate) fn assemble_agent(
 
 #[tauri::command]
 pub(crate) fn list_agent_templates(state: State<AppState>) -> Result<serde_json::Value, MornError> {
-    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let manager = state
+        .manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -149,7 +170,10 @@ pub(crate) fn test_component(
     component_type: Option<String>,
     state: State<AppState>,
 ) -> Result<serde_json::Value, MornError> {
-    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let manager = state
+        .manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -166,7 +190,10 @@ pub(crate) fn test_component_rerun(
     new_input: String,
     state: State<AppState>,
 ) -> Result<serde_json::Value, MornError> {
-    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let manager = state
+        .manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -187,7 +214,10 @@ pub(crate) fn list_component_types() -> Vec<serde_json::Value> {
 
 #[tauri::command]
 pub(crate) fn publish_component(id: String, state: State<AppState>) -> Result<(), MornError> {
-    let publisher = state.publisher.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let publisher = state
+        .publisher
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let pubr = publisher
         .as_ref()
         .ok_or_else(|| "StudioPublisher not initialized".to_string())?;

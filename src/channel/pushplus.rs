@@ -46,7 +46,10 @@ pub fn pushplus_push(token: &str, title: &str, content: &str) -> MornResult<()> 
             .or_else(|| body.get("message"))
             .and_then(|v| v.as_str())
             .unwrap_or("unknown error");
-        return Err(MornError::Network(format!("PushPlus API error {}: {}", code, message)));
+        return Err(MornError::Network(format!(
+            "PushPlus API error {}: {}",
+            code, message
+        )));
     }
 
     Ok(())

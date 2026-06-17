@@ -1,6 +1,6 @@
 //! sys_ops — Provides system-level operations for shell and process control.
-use crate::core::error::MornError;
 use super::{ComputerOpResult, SecurityLevel};
+use crate::core::error::MornError;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NetworkConfig {
@@ -314,8 +314,8 @@ pub fn get_network_config() -> Result<NetworkConfig, MornError> {
         return Err(MornError::Internal(status.data));
     }
 
-    let data: serde_json::Value =
-        serde_json::from_str(&status.data).map_err(|e| MornError::Internal(format!("network status json: {}", e)))?;
+    let data: serde_json::Value = serde_json::from_str(&status.data)
+        .map_err(|e| MornError::Internal(format!("network status json: {}", e)))?;
     Ok(NetworkConfig {
         status: data
             .get("status")
@@ -336,13 +336,15 @@ pub fn get_network_config() -> Result<NetworkConfig, MornError> {
 pub fn set_proxy(url: &str) -> Result<(), MornError> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
-        return Err(MornError::Internal("proxy url is empty".to_string()))
+        return Err(MornError::Internal("proxy url is empty".to_string()));
     }
     if !(trimmed.starts_with("http://")
         || trimmed.starts_with("https://")
         || trimmed.starts_with("socks5://"))
     {
-        return Err(MornError::Internal("proxy url must start with http://, https://, or socks5://".to_string()))
+        return Err(MornError::Internal(
+            "proxy url must start with http://, https://, or socks5://".to_string(),
+        ));
     }
 
     #[cfg(target_os = "linux")]

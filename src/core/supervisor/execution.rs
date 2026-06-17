@@ -153,7 +153,9 @@ mod tests {
     fn execute_plan_propagates_chat_error() {
         let mut supervisor = Supervisor::new(None, None);
         let err = supervisor
-            .execute_plan(&plan("workflow"), &|_, _| Err(MornError::Internal("model failed".to_string())))
+            .execute_plan(&plan("workflow"), &|_, _| {
+                Err(MornError::Internal("model failed".to_string()))
+            })
             .unwrap_err();
 
         assert_eq!(err, MornError::Internal("model failed".to_string()));
@@ -249,10 +251,9 @@ mod tests {
         let mut supervisor = Supervisor::new(None, Some(lifecycle_bus()));
 
         let err = supervisor
-            .execute_plan(
-                &plan("single_tool"),
-                &|_, _| Err(MornError::Internal("model failed".to_string()))
-            )
+            .execute_plan(&plan("single_tool"), &|_, _| {
+                Err(MornError::Internal("model failed".to_string()))
+            })
             .unwrap_err();
 
         assert_eq!(err, MornError::Internal("model failed".to_string()));

@@ -47,11 +47,13 @@ pub struct A2AProtocol;
 
 impl A2AProtocol {
     pub fn serialize(msg: &A2AMessage) -> Result<String, MornError> {
-        serde_json::to_string(msg).map_err(|e| MornError::Internal(format!("A2A serialize error: {}", e)))
+        serde_json::to_string(msg)
+            .map_err(|e| MornError::Internal(format!("A2A serialize error: {}", e)))
     }
 
     pub fn deserialize(data: &str) -> Result<A2AMessage, MornError> {
-        serde_json::from_str(data).map_err(|e| MornError::Internal(format!("A2A deserialize error: {}", e)))
+        serde_json::from_str(data)
+            .map_err(|e| MornError::Internal(format!("A2A deserialize error: {}", e)))
     }
 
     pub fn send(endpoint: &str, msg: &A2AMessage) -> Result<A2AMessage, MornError> {

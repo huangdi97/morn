@@ -75,7 +75,10 @@ impl FeedbackSync {
                 };
                 channel.send(&msg)
             }
-            None => Err(MornError::Internal(format!("Channel '{}' not registered", channel_name))),
+            None => Err(MornError::Internal(format!(
+                "Channel '{}' not registered",
+                channel_name
+            ))),
         }
     }
 }

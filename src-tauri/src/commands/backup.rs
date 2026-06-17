@@ -1,12 +1,15 @@
-use crate::MornError;
 use crate::AppState;
+use crate::MornError;
 use tauri::State;
 
 use morn::core::storage::AgentRecord;
 
 #[tauri::command]
 pub(crate) fn export_mornpack(state: State<AppState>) -> Result<String, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -18,7 +21,10 @@ pub(crate) fn export_mornpack(state: State<AppState>) -> Result<String, MornErro
 
 #[tauri::command]
 pub(crate) fn import_mornpack(data: String, state: State<AppState>) -> Result<usize, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;

@@ -1,6 +1,6 @@
 //! publisher — Publishes studio capabilities into registries and marketplaces.
-use crate::core::error::MornError;
 use crate::core::component_type::TypeRegistry;
+use crate::core::error::MornError;
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 use std::cell::RefCell;
@@ -63,7 +63,10 @@ impl StudioPublisher {
     pub fn unpublish_agent(&self, agent_id: &str) -> Result<(), MornError> {
         if let Some(ref storage) = self.storage {
             if storage.get_agent(agent_id)?.is_none() {
-                return Err(MornError::Internal(format!("agent '{}' not found", agent_id)));
+                return Err(MornError::Internal(format!(
+                    "agent '{}' not found",
+                    agent_id
+                )));
             }
             storage.update_agent_status(agent_id, "inactive")?;
         }
@@ -117,10 +120,16 @@ impl StudioPublisher {
                 .get_agent(component_id)?
                 .ok_or_else(|| format!("component '{}' not found", component_id))?;
             if agent.name.trim().is_empty() {
-                return Err(MornError::Internal(format!("component '{}' has empty name", component_id)));
+                return Err(MornError::Internal(format!(
+                    "component '{}' has empty name",
+                    component_id
+                )));
             }
             if agent.component_type.trim().is_empty() {
-                return Err(MornError::Internal(format!("component '{}' has empty type", component_id)));
+                return Err(MornError::Internal(format!(
+                    "component '{}' has empty type",
+                    component_id
+                )));
             }
         }
         Ok(())
@@ -160,7 +169,8 @@ impl StudioPublisher {
             "config": serde_json::from_str::<serde_json::Value>(&config_json)
                 .unwrap_or_else(|_| serde_json::json!({"raw": config_json})),
         });
-        let payload = serde_json::to_string(&manifest).map_err(|e| MornError::Internal(e.to_string()))?;
+        let payload =
+            serde_json::to_string(&manifest).map_err(|e| MornError::Internal(e.to_string()))?;
         let mut hasher = DefaultHasher::new();
         payload.hash(&mut hasher);
 
@@ -176,7 +186,10 @@ impl StudioPublisher {
 
     fn upload(&self, artifact: &PublishArtifact) -> Result<String, MornError> {
         if artifact.bytes == 0 {
-            return Err(MornError::Internal(format!("artifact '{}' is empty", artifact.component_id)));
+            return Err(MornError::Internal(format!(
+                "artifact '{}' is empty",
+                artifact.component_id
+            )));
         }
         Ok(format!(
             "morn://studio/packages/{}/{}",

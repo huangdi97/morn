@@ -274,15 +274,17 @@ impl PipelineData {
             PipelineData::Text(t) => Ok(t.clone()),
             PipelineData::Json(v) => Ok(v.to_string()),
             PipelineData::Number(n) => Ok(n.to_string()),
-            _ => Err(MornError::Internal("cannot convert to text".to_string()))
+            _ => Err(MornError::Internal("cannot convert to text".to_string())),
         }
     }
 
     pub fn as_number(&self) -> Result<f64, MornError> {
         match self {
             PipelineData::Number(n) => Ok(*n),
-            PipelineData::Text(t) => t.parse::<f64>().map_err(|e| MornError::Internal(e.to_string())),
-            _ => Err(MornError::Internal("cannot convert to number".to_string()))
+            PipelineData::Text(t) => t
+                .parse::<f64>()
+                .map_err(|e| MornError::Internal(e.to_string())),
+            _ => Err(MornError::Internal("cannot convert to number".to_string())),
         }
     }
 }

@@ -1,5 +1,5 @@
-use crate::MornError;
 use crate::AppState;
+use crate::MornError;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
 
@@ -10,7 +10,10 @@ use morn::studio::manager::CreateComponentDef;
 
 #[tauri::command]
 pub(crate) fn list_themes(state: State<AppState>) -> Result<Vec<String>, MornError> {
-    let mgr = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let mgr = state
+        .plugin_manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = mgr
         .as_ref()
         .ok_or_else(|| "PluginManager not initialized".to_string())?;
@@ -23,11 +26,15 @@ pub(crate) fn list_themes(state: State<AppState>) -> Result<Vec<String>, MornErr
 
 #[tauri::command]
 pub(crate) fn apply_theme(name: String, state: State<AppState>) -> Result<String, MornError> {
-    let mut mgr = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let mut mgr = state
+        .plugin_manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = mgr
         .as_mut()
         .ok_or_else(|| "PluginManager not initialized".to_string())?;
-    mgr.activate(&name).map_err(|e| MornError::Internal(e.to_string()))?;
+    mgr.activate(&name)
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     mgr.get_theme_css(&name)
         .map(|s| s.to_string())
         .ok_or_else(|| format!("No CSS cached for theme '{}'", name))
@@ -39,7 +46,10 @@ pub(crate) fn get_market_listings(
     price_filter: Option<String>,
     state: State<AppState>,
 ) -> Result<serde_json::Value, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -75,7 +85,10 @@ pub(crate) fn install_bot_from_store(
     template_id: String,
     state: State<AppState>,
 ) -> Result<String, MornError> {
-    let manager = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let manager = state
+        .manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
@@ -117,7 +130,10 @@ pub(crate) fn hub_publish(
     category: String,
     state: State<AppState>,
 ) -> Result<String, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -144,7 +160,9 @@ pub(crate) fn hub_publish(
 #[tauri::command]
 pub(crate) fn get_preset_persona(name: String) -> Result<serde_json::Value, MornError> {
     match morn::component::persona::get_preset_persona(&name) {
-        Some(persona) => serde_json::to_value(persona).map_err(|e| MornError::Internal(e.to_string())),
+        Some(persona) => {
+            serde_json::to_value(persona).map_err(|e| MornError::Internal(e.to_string()))
+        }
         None => Err(format!("Preset persona '{}' not found", name)),
     }
 }
@@ -166,7 +184,10 @@ pub(crate) fn create_agent_from_description(
         "deepseek-chat",
     );
 
-    let supervisor = state.supervisor.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let supervisor = state
+        .supervisor
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let sup = supervisor
         .as_ref()
         .ok_or_else(|| "Supervisor not initialized.".to_string())?;
@@ -181,7 +202,10 @@ pub(crate) fn get_agent_versions(
     listing_id: String,
     state: State<AppState>,
 ) -> Result<serde_json::Value, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -197,7 +221,10 @@ pub(crate) fn publish_agent_version(
     changelog: String,
     state: State<AppState>,
 ) -> Result<serde_json::Value, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -212,7 +239,10 @@ pub(crate) fn rollback_agent(
     version: String,
     state: State<AppState>,
 ) -> Result<serde_json::Value, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -230,7 +260,10 @@ pub(crate) fn generate_plugin_from_nl(
     let chat_agent = ChatAgent::new(&api_key, "https://api.deepseek.com", "deepseek-chat");
 
     let plugin_dir = {
-        let plugin_manager = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let plugin_manager = state
+            .plugin_manager
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mgr = plugin_manager
             .as_ref()
             .ok_or_else(|| "PluginManager not initialized".to_string())?;
@@ -238,11 +271,14 @@ pub(crate) fn generate_plugin_from_nl(
     };
 
     let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
-    let path =
-        plugin_generator::generate_plugin_from_nl(&nl, &plugin_dir, &chat_fn).map_err(|e| MornError::Internal(e.to_string()))?;
+    let path = plugin_generator::generate_plugin_from_nl(&nl, &plugin_dir, &chat_fn)
+        .map_err(|e| MornError::Internal(e.to_string()))?;
 
     {
-        let mut plugin_manager = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut plugin_manager = state
+            .plugin_manager
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         if let Some(mgr) = plugin_manager.as_mut() {
             let _ = mgr.scan();
         }
@@ -253,7 +289,10 @@ pub(crate) fn generate_plugin_from_nl(
 
 #[tauri::command]
 pub(crate) fn sync_now(state: State<AppState>) -> Result<String, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;

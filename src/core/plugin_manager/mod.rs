@@ -235,7 +235,10 @@ impl PluginManager {
     pub fn load_plugin_sandboxed(&self, path: &str) -> Result<(), MornError> {
         let manifest_path = format!("{}/manifest.json", path);
         if !std::path::Path::new(&manifest_path).exists() {
-            return Err(MornError::Internal(format!("Manifest not found: {}", manifest_path)));
+            return Err(MornError::Internal(format!(
+                "Manifest not found: {}",
+                manifest_path
+            )));
         }
         Ok(())
     }

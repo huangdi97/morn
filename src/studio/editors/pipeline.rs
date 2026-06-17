@@ -67,7 +67,10 @@ impl PipelineEditor {
 
     pub fn move_stage(&mut self, stage_id: &str, new_index: usize) -> Result<(), MornError> {
         if new_index >= self.stages.len() {
-            return Err(MornError::Internal(format!("stage index {} out of range", new_index)));
+            return Err(MornError::Internal(format!(
+                "stage index {} out of range",
+                new_index
+            )));
         }
         let index = self
             .stages

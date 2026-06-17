@@ -118,7 +118,10 @@ impl MCPClient {
 
     /// Exports registry capabilities as MCP tool metadata.
     pub fn export_registry_as_mcp(&self) -> Result<Vec<MCPTool>, MornError> {
-        let registry = self.registry.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let registry = self
+            .registry
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(registry
             .list_all()
             .iter()

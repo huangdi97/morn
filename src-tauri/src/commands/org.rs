@@ -1,5 +1,5 @@
-use crate::MornError;
 use crate::AppState;
+use crate::MornError;
 use tauri::State;
 
 use morn::org::audit::AuditLogger;
@@ -13,7 +13,10 @@ pub(crate) fn create_user(
     role: String,
     state: State<AppState>,
 ) -> Result<String, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -24,7 +27,10 @@ pub(crate) fn create_user(
 
 #[tauri::command]
 pub(crate) fn list_users(state: State<AppState>) -> Result<serde_json::Value, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -40,7 +46,10 @@ pub(crate) fn create_team(
     owner_id: String,
     state: State<AppState>,
 ) -> Result<String, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -51,7 +60,10 @@ pub(crate) fn create_team(
 
 #[tauri::command]
 pub(crate) fn list_teams(state: State<AppState>) -> Result<serde_json::Value, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -66,7 +78,10 @@ pub(crate) fn add_member(
     role: String,
     state: State<AppState>,
 ) -> Result<String, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -81,7 +96,10 @@ pub(crate) fn remove_member(
     user_id: String,
     state: State<AppState>,
 ) -> Result<(), MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -97,7 +115,10 @@ pub(crate) fn grant_permission(
     team_id: Option<String>,
     state: State<AppState>,
 ) -> Result<String, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -112,7 +133,10 @@ pub(crate) fn revoke_permission(
     agent_id: String,
     state: State<AppState>,
 ) -> Result<(), MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
@@ -127,7 +151,10 @@ pub(crate) fn get_audit_log(
     limit: Option<u64>,
     state: State<AppState>,
 ) -> Result<serde_json::Value, MornError> {
-    let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;

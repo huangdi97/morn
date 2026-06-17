@@ -70,7 +70,11 @@ fn test_nl_to_team_code_review() {
 #[test]
 fn test_agent_templates_exist() {
     let all = all_templates();
-    assert!(all.len() >= 8, "Expected at least 8 templates, got {}", all.len());
+    assert!(
+        all.len() >= 8,
+        "Expected at least 8 templates, got {}",
+        all.len()
+    );
 }
 
 #[test]
@@ -137,7 +141,11 @@ fn test_registry_get_template() {
     let tpl = reg.get_template("general-assistant");
     assert!(tpl.is_some());
     let tpl = tpl.unwrap();
-    assert!(!tpl.version.is_empty(), "Template 'general-assistant' should have a non-empty version, got '{}'", tpl.version);
+    assert!(
+        !tpl.version.is_empty(),
+        "Template 'general-assistant' should have a non-empty version, got '{}'",
+        tpl.version
+    );
 }
 
 #[test]
@@ -145,7 +153,11 @@ fn test_registry_list_templates() {
     use morn::core::registry::Registry;
     let reg = Registry::new(None, None);
     let templates = reg.list_templates();
-    assert!(templates.len() >= 6, "Expected at least 6 templates, got {}", templates.len());
+    assert!(
+        templates.len() >= 6,
+        "Expected at least 6 templates, got {}",
+        templates.len()
+    );
 }
 
 #[test]
@@ -395,8 +407,15 @@ fn test_supervisor_build_team_from_nl() {
     let sup = Supervisor::new(None, None);
     let team = sup.build_team_from_nl("code review team").unwrap();
     assert!(!team.members.is_empty());
-    assert!(!team.members.is_empty(), "Expected team built from 'code review team' to have members");
-    assert!(team.id.contains("code-review") || team.id.contains("review"), "team.id should mention code-review or review, got '{}'", team.id);
+    assert!(
+        !team.members.is_empty(),
+        "Expected team built from 'code review team' to have members"
+    );
+    assert!(
+        team.id.contains("code-review") || team.id.contains("review"),
+        "team.id should mention code-review or review, got '{}'",
+        team.id
+    );
 }
 
 // ── Hub publish basic flow ─────────────────────────────────────────────────
@@ -491,10 +510,7 @@ fn test_config_update_existing() {
     let storage = Storage::new_in_memory().unwrap();
     storage.set_setting("lang", "en").unwrap();
     storage.set_setting("lang", "zh").unwrap();
-    assert_eq!(
-        storage.get_setting("lang").unwrap().as_deref(),
-        Some("zh")
-    );
+    assert_eq!(storage.get_setting("lang").unwrap().as_deref(), Some("zh"));
 }
 
 #[test]

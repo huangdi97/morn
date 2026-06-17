@@ -129,7 +129,11 @@ impl ApprovalManager {
             ApprovalStatus::Approved => ("approved", None),
             ApprovalStatus::Rejected => ("rejected", None),
             ApprovalStatus::Modified(val) => ("modified", Some(val.to_string())),
-            ApprovalStatus::Pending => return Err(MornError::Internal("Cannot respond with pending status".to_string()))
+            ApprovalStatus::Pending => {
+                return Err(MornError::Internal(
+                    "Cannot respond with pending status".to_string(),
+                ))
+            }
         };
         self.storage
             .update_approval_response(id, status_str, response_text.as_deref())?;

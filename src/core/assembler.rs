@@ -1,9 +1,9 @@
 //! assembler — Builds agents from persona, model, skill, and tool components.
-use crate::core::error::MornError;
 use crate::component::model::ModelConfig;
 use crate::component::persona::Persona;
 use crate::core::assembly::AssemblyBuilder;
 use crate::core::component::Component;
+use crate::core::error::MornError;
 use crate::core::registry::Registry;
 
 #[derive(Debug, Clone)]

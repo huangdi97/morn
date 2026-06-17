@@ -1,9 +1,9 @@
 //! launcher — SearchLauncherTool for app/file/command/skill search.
-use crate::core::error::MornError;
 use super::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
+use crate::core::error::MornError;
 
 #[allow(dead_code)] /* 预留：launcher 搜索工具注册入口 */
 pub struct SearchLauncherTool {

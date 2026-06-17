@@ -43,7 +43,10 @@ impl MDRMGraph {
 
     pub fn add_entity(&mut self, entity: Entity) -> Result<(), MornError> {
         if self.entities.contains_key(&entity.id) {
-            return Err(MornError::Internal(format!("Duplicate entity id: {}", entity.id)));
+            return Err(MornError::Internal(format!(
+                "Duplicate entity id: {}",
+                entity.id
+            )));
         }
 
         self.entities.insert(entity.id.clone(), entity);
@@ -61,10 +64,14 @@ impl MDRMGraph {
         let target_id = target_id.into();
 
         if !self.entities.contains_key(&source_id) {
-            return Err(MornError::Internal(format!("Unknown source entity id: {source_id}")));
+            return Err(MornError::Internal(format!(
+                "Unknown source entity id: {source_id}"
+            )));
         }
         if !self.entities.contains_key(&target_id) {
-            return Err(MornError::Internal(format!("Unknown target entity id: {target_id}")));
+            return Err(MornError::Internal(format!(
+                "Unknown target entity id: {target_id}"
+            )));
         }
 
         self.relations.push(Relation {

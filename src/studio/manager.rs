@@ -170,7 +170,10 @@ impl StudioManager {
         Ok(tester.rerun_step(component_type, component_id, step_index, new_input))
     }
 
-    pub fn assemble_agent(&self, def: crate::core::assembler::AgentDef) -> Result<String, MornError> {
+    pub fn assemble_agent(
+        &self,
+        def: crate::core::assembler::AgentDef,
+    ) -> Result<String, MornError> {
         if let Some(ref assembler) = self.assembler {
             let component = assembler.assemble(def)?;
             let agent_id = component.id().to_string();

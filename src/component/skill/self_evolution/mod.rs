@@ -1,7 +1,7 @@
 //! self_evolution — Defines the built-in skill for project self-improvement scans.
-use crate::core::error::MornError;
 use crate::component::skill::{Skill, SkillStep};
 use crate::core::component::{Component, Data, HealthStatus, IOComponent, Port, PortDirection};
+use crate::core::error::MornError;
 
 mod scan;
 

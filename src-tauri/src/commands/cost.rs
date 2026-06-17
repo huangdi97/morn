@@ -1,6 +1,6 @@
-use crate::MornError;
 use crate::commands::errors::CommandError;
 use crate::AppState;
+use crate::MornError;
 use tauri::State;
 
 fn price_per_1k(model: &str) -> f64 {
@@ -33,7 +33,7 @@ pub(crate) fn get_cost_summary(state: State<AppState>) -> Result<String, Command
         .ok_or_else(|| CommandError::Internal("Storage not available".to_string()))?;
     let executions = s
         .list_today_executions()
-        .map_err(|e| CommandError::Internal(e))?;
+        .map_err(|e| CommandError::Internal(e.to_string()))?;
     let calls = executions.len();
     let avg_tokens_per_call: u64 = 500;
     let total_tokens = calls as u64 * avg_tokens_per_call;

@@ -1,5 +1,5 @@
-use crate::MornError;
 use crate::AppState;
+use crate::MornError;
 use serde::Serialize;
 use sysinfo::System;
 use tauri::State;
@@ -17,13 +17,13 @@ pub(crate) fn run_system_check(state: State<AppState>) -> Result<Vec<CheckResult
 
     // Storage Status — verify SQLite connection
     {
-        let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let storage = state
+            .storage
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         match storage.as_ref() {
             Some(s) => {
-                let healthy = s
-                    .check_health()
-                    .map(|_| true)
-                    .unwrap_or(false);
+                let healthy = s.check_health().map(|_| true).unwrap_or(false);
                 results.push(CheckResult {
                     label: "Storage Status".into(),
                     status: if healthy { "ok" } else { "fail" }.into(),
@@ -46,7 +46,10 @@ pub(crate) fn run_system_check(state: State<AppState>) -> Result<Vec<CheckResult
 
     // API Connection — check supervisor model router has a default model
     {
-        let supervisor = state.supervisor.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let supervisor = state
+            .supervisor
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         match supervisor.as_ref() {
             Some(sup) => {
                 let router = sup.model_router();
@@ -82,13 +85,19 @@ pub(crate) fn run_system_check(state: State<AppState>) -> Result<Vec<CheckResult
         results.push(CheckResult {
             label: "Memory Usage".into(),
             status: status.into(),
-            value: Some(format!("{:.1} GB / {:.1} GB ({usage_pct}%)", used_gb, total_gb)),
+            value: Some(format!(
+                "{:.1} GB / {:.1} GB ({usage_pct}%)",
+                used_gb, total_gb
+            )),
         });
     }
 
     // Plugin Count
     {
-        let mgr = state.plugin_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mgr = state
+            .plugin_manager
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let count = mgr.as_ref().map(|m| m.list().len()).unwrap_or(0);
         results.push(CheckResult {
             label: "Plugin Count".into(),
@@ -99,7 +108,10 @@ pub(crate) fn run_system_check(state: State<AppState>) -> Result<Vec<CheckResult
 
     // Agent Count
     {
-        let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let storage = state
+            .storage
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let count = match storage.as_ref() {
             Some(s) => s.list_agents().map(|a| a.len()).unwrap_or(0),
             None => 0,
@@ -113,7 +125,10 @@ pub(crate) fn run_system_check(state: State<AppState>) -> Result<Vec<CheckResult
 
     // Workflow Templates
     {
-        let mgr = state.manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mgr = state
+            .manager
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let count = mgr.as_ref().map(|m| m.list_templates().len()).unwrap_or(0);
         results.push(CheckResult {
             label: "Workflow Templates".into(),

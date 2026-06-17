@@ -1,6 +1,6 @@
 //! Screenshot perception — screen capture and VLM-based analysis.
-use crate::core::error::MornError;
 use crate::computer::{ComputerOpResult, SecurityLevel};
+use crate::core::error::MornError;
 
 const DEFAULT_VLM_ENDPOINT: &str = "https://api.openai.com";
 
@@ -122,10 +122,10 @@ pub fn analyze_screen(
     vlm_api_key: &str,
 ) -> Result<String, MornError> {
     if screenshot_b64.trim().is_empty() {
-        return Err(MornError::Internal("Screenshot data is empty".to_string()))
+        return Err(MornError::Internal("Screenshot data is empty".to_string()));
     }
     if vlm_endpoint.trim().is_empty() {
-        return Err(MornError::Internal("VLM endpoint is empty".to_string()))
+        return Err(MornError::Internal("VLM endpoint is empty".to_string()));
     }
     if vlm_api_key.trim().is_empty() {
         return Err(MornError::Internal(
@@ -176,13 +176,17 @@ pub fn analyze_screen(
         .text()
         .map_err(|e| MornError::Internal(format!("Failed to read VLM response body: {}", e)))?;
     if !status.is_success() {
-        return Err(MornError::Internal(format!("VLM API error {}: {}", status, body)));
+        return Err(MornError::Internal(format!(
+            "VLM API error {}: {}",
+            status, body
+        )));
     }
 
     let parsed: serde_json::Value = serde_json::from_str(&body)
         .map_err(|e| MornError::Internal(format!("Failed to parse VLM response JSON: {}", e)))?;
-    let content = extract_vlm_content(&parsed)
-        .ok_or_else(|| MornError::Internal("VLM response contained no message content".to_string()))?;
+    let content = extract_vlm_content(&parsed).ok_or_else(|| {
+        MornError::Internal("VLM response contained no message content".to_string())
+    })?;
 
     Ok(format_structured_vlm_content(&content))
 }

@@ -98,7 +98,9 @@ impl PaymentGateway {
     /// `amount` must be positive; returns an error otherwise.
     pub fn refund(_invoice_id: &str, amount: f64) -> Result<(), MornError> {
         if amount <= 0.0 {
-            return Err(MornError::Internal("Refund amount must be positive".to_string()))
+            return Err(MornError::Internal(
+                "Refund amount must be positive".to_string(),
+            ));
         }
         Ok(())
     }

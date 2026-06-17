@@ -1,8 +1,8 @@
 //! Natural-language decision rule commands for Supervisor.
 
-use crate::core::error::MornError;
 use super::*;
 use crate::core::decision_rules::{DecisionRule, DecisionRuleStore};
+use crate::core::error::MornError;
 
 impl Supervisor {
     /// Parses a natural language instruction about decision rules (add/delete/update/list/find)
@@ -18,7 +18,9 @@ impl Supervisor {
         if lower.starts_with("add") || lower.starts_with("create") {
             let parts: Vec<&str> = nl.splitn(5, '|').collect();
             if parts.len() < 5 {
-                return Err(MornError::Internal("Format: add | <action> | <level> | <condition> | <effect>".to_string()))
+                return Err(MornError::Internal(
+                    "Format: add | <action> | <level> | <condition> | <effect>".to_string(),
+                ));
             }
             let level = crate::core::decision_rules::parse_decision_level(parts[2]).ok_or_else(|| {
                 format!(
@@ -48,7 +50,8 @@ impl Supervisor {
             Ok(format!("Rule '{}' deleted", id))
         } else if lower.starts_with("list") || lower.starts_with("all") {
             let rules = storage.list_rules()?;
-            let json = serde_json::to_string(&rules).map_err(|e| MornError::Internal(e.to_string()))?;
+            let json =
+                serde_json::to_string(&rules).map_err(|e| MornError::Internal(e.to_string()))?;
             Ok(json)
         } else if lower.starts_with("find") || lower.starts_with("search") {
             let action = nl
@@ -57,11 +60,12 @@ impl Supervisor {
                 .collect::<Vec<&str>>()
                 .join(" ");
             if action.is_empty() {
-                return Err(MornError::Internal("Usage: find <action>".to_string()))
+                return Err(MornError::Internal("Usage: find <action>".to_string()));
             }
             match storage.find_rule(&action)? {
                 Some(rule) => {
-                    let json = serde_json::to_string(&rule).map_err(|e| MornError::Internal(e.to_string()))?;
+                    let json = serde_json::to_string(&rule)
+                        .map_err(|e| MornError::Internal(e.to_string()))?;
                     Ok(json)
                 }
                 None => Ok(format!("No rule found for action '{}'", action)),

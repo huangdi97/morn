@@ -1,9 +1,9 @@
 //! file_ops — Provides tools for reading, writing, and managing files.
-use crate::core::error::MornError;
 use super::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
+use crate::core::error::MornError;
 
 #[allow(dead_code)] /* 预留：内置读文件工具注册入口 */
 pub struct ReadFileTool {
@@ -68,7 +68,10 @@ impl IOComponent for ReadFileTool {
         ]
     }
     fn send(&mut self, port: &str, _data: Data) -> Result<(), MornError> {
-        Err(MornError::Internal(format!("ReadFileTool cannot receive on port {}", port)))
+        Err(MornError::Internal(format!(
+            "ReadFileTool cannot receive on port {}",
+            port
+        )))
     }
     fn recv(&mut self, port: &str) -> Result<Option<Data>, MornError> {
         if port == "output" {
@@ -155,7 +158,10 @@ impl IOComponent for WriteFileTool {
         ]
     }
     fn send(&mut self, port: &str, _data: Data) -> Result<(), MornError> {
-        Err(MornError::Internal(format!("WriteFileTool cannot receive on port {}", port)))
+        Err(MornError::Internal(format!(
+            "WriteFileTool cannot receive on port {}",
+            port
+        )))
     }
     fn recv(&mut self, port: &str) -> Result<Option<Data>, MornError> {
         if port == "output" {

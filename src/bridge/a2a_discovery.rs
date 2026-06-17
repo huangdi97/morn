@@ -1,6 +1,6 @@
 //! a2a_discovery — Discovers peer agents and exchanges A2A agent cards.
-use crate::core::error::MornError;
 use crate::bridge::a2a::{A2AMessage, A2AProtocol, AgentCard};
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -39,14 +39,20 @@ impl A2ADiscovery {
                     for agent in agents {
                         let id = agent.id.clone();
                         {
-                            let mut agents =
-                                self.remote_agents.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+                            let mut agents = self
+                                .remote_agents
+                                .lock()
+                                .map_err(|e| MornError::Internal(e.to_string()))?;
                             agents.insert(id, agent.clone());
                         }
                         discovered.push(agent);
                     }
                 }
-                Ok(other) => tracing::warn!("[Discovery] unexpected response from {}: {:?}", endpoint, other),
+                Ok(other) => tracing::warn!(
+                    "[Discovery] unexpected response from {}: {:?}",
+                    endpoint,
+                    other
+                ),
                 Err(e) => tracing::warn!("[Discovery] peer unreachable at {}: {}", endpoint, e),
             }
         }
@@ -85,7 +91,10 @@ impl A2ADiscovery {
     }
 
     pub fn get_remote_agents(&self) -> Result<Vec<AgentCard>, MornError> {
-        let agents = self.remote_agents.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let agents = self
+            .remote_agents
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(agents.values().cloned().collect())
     }
 }

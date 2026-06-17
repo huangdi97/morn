@@ -4,7 +4,9 @@ use tauri::State;
 #[tauri::command]
 pub(crate) fn get_recent_logs(state: State<AppState>) -> Result<Vec<serde_json::Value>, String> {
     let storage = state.storage.lock().map_err(|e| e.to_string())?;
-    let s = storage.as_ref().ok_or_else(|| "Storage not initialized".to_string())?;
+    let s = storage
+        .as_ref()
+        .ok_or_else(|| "Storage not initialized".to_string())?;
     let execs = s.list_recent_executions(5).map_err(|e| e.to_string())?;
     let logs: Vec<_> = execs
         .into_iter()

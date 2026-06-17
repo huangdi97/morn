@@ -1,6 +1,6 @@
 //! executor — Runs task engine steps and emits execution results.
-use crate::core::error::MornError;
 use super::TaskEngine;
+use crate::core::error::MornError;
 use crate::core::event_bus::{
     EVENT_SUPERVISOR_PLAN_EXECUTING, EVENT_TASK_COMPLETED, EVENT_TASK_FAILED,
 };
@@ -294,7 +294,10 @@ mod tests {
 
         assert_eq!(result.subtask_results.len(), 1);
         assert!(!result.subtask_results[0].success);
-        assert_eq!(result.subtask_results[0].error.as_deref(), Some("internal error: failed"));
+        assert_eq!(
+            result.subtask_results[0].error.as_deref(),
+            Some("internal error: failed")
+        );
     }
 
     #[test]

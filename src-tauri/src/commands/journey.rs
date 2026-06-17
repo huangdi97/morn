@@ -1,5 +1,5 @@
-use crate::MornError;
 use crate::commands::errors::CommandError;
+use crate::MornError;
 
 #[tauri::command]
 pub(crate) fn get_user_journey() -> Result<serde_json::Value, CommandError> {

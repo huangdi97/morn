@@ -55,8 +55,12 @@ impl Storage {
     }
 
     /// Returns a locked connection handle with consistent error mapping.
-    pub(crate) fn conn(&self) -> Result<std::sync::MutexGuard<'_, rusqlite::Connection>, MornError> {
-        self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))
+    pub(crate) fn conn(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, rusqlite::Connection>, MornError> {
+        self.conn
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))
     }
 
     /// Creates an in-memory SQLite database and returns initialized storage for tests or ephemeral use.
@@ -297,7 +301,10 @@ impl Storage {
         if result == "ok" {
             Ok(())
         } else {
-            Err(MornError::Internal(format!("Database integrity issue: {}", result)))
+            Err(MornError::Internal(format!(
+                "Database integrity issue: {}",
+                result
+            )))
         }
     }
 }

@@ -1,6 +1,6 @@
 //! Event handling for device sync.
-use crate::core::error::MornError;
 use super::{DeviceInfo, PullResponse, SyncEngine};
+use crate::core::error::MornError;
 use crate::core::storage::{DeviceRecord, Storage, SyncEventRecord};
 
 impl SyncEngine {
@@ -33,7 +33,9 @@ impl SyncEngine {
             .storage
             .as_ref()
             .ok_or("SyncEngine: no storage configured")?;
-        let storage = storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let storage = storage
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let event = SyncEventRecord {
             id: uuid::Uuid::new_v4().to_string(),
             entity_type: entity_type.to_string(),
@@ -89,7 +91,9 @@ impl SyncEngine {
             }
 
             let inserted = {
-                let storage = storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+                let storage = storage
+                    .lock()
+                    .map_err(|e| MornError::Internal(e.to_string()))?;
                 storage.insert_remote_sync_event(event)?
             };
             if inserted {
@@ -125,8 +129,8 @@ impl SyncEngine {
             return Ok(events);
         }
 
-        let response: PullResponse =
-            serde_json::from_str(body).map_err(|e| MornError::Internal(format!("Sync pull JSON error: {}", e)))?;
+        let response: PullResponse = serde_json::from_str(body)
+            .map_err(|e| MornError::Internal(format!("Sync pull JSON error: {}", e)))?;
         Ok(response.events)
     }
 }

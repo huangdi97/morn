@@ -1,6 +1,6 @@
 //! marketplace — Lists, installs, and manages marketplace capabilities.
-use crate::core::error::MornError;
 use crate::core::component_type::ComponentTypeDef;
+use crate::core::error::MornError;
 use crate::core::registry::{Capability, Registry};
 use crate::core::storage::Storage;
 use tracing;
@@ -98,9 +98,8 @@ impl Marketplace {
     }
 
     fn list_builtin(&self) {
-        let builtin: Vec<Listing> = serde_json::from_str(
-            include_str!("builtin_listings.json")
-        ).expect("Failed to parse builtin_listings.json");
+        let builtin: Vec<Listing> = serde_json::from_str(include_str!("builtin_listings.json"))
+            .expect("Failed to parse builtin_listings.json");
         for listing in builtin {
             if self
                 .storage
@@ -156,7 +155,7 @@ impl Marketplace {
 
     pub fn publish(&self, listing: Listing) -> Result<(), MornError> {
         if self.storage.get_listing(&listing.id)?.is_some() {
-            return Err(MornError::Internal("Listing already exists".to_string()))
+            return Err(MornError::Internal("Listing already exists".to_string()));
         }
         self.storage.save_listing(&listing)
     }
@@ -167,7 +166,9 @@ impl Marketplace {
             .ok_or("Listing not found")?;
         let user_licenses = self.storage.get_user_licenses(user_id)?;
         if !user_licenses.iter().any(|l| l.listing_id == listing_id) {
-            return Err(MornError::Internal("User has not purchased this listing".to_string()))
+            return Err(MornError::Internal(
+                "User has not purchased this listing".to_string(),
+            ));
         }
         Ok(())
     }
@@ -279,7 +280,9 @@ impl Marketplace {
             .get_listing(listing_id)?
             .ok_or("Listing not found")?;
         if listing.item_type != ListingType::ComponentTypeDef.as_str() {
-            return Err(MornError::Internal("Listing is not a ComponentTypeDef".to_string()))
+            return Err(MornError::Internal(
+                "Listing is not a ComponentTypeDef".to_string(),
+            ));
         }
         let cap = Capability {
             id: format!("market-{}", listing.id),

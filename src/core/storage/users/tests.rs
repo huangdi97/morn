@@ -1,6 +1,6 @@
 //! User storage tests.
-use crate::core::error::MornError;
 use super::*;
+use crate::core::error::MornError;
 
 fn test_user() -> UserRecord {
     UserRecord {

@@ -1,10 +1,10 @@
 //! Builder/construction logic for component assembly.
 
-use crate::core::error::MornError;
 use crate::core::assembler::AgentDef;
 use crate::core::assembly::graph::{AtomicComponentType, ComponentGraph, ConnectionValidator};
 use crate::core::assembly::validator::AssemblyValidator;
 use crate::core::component_type::registry::TypeRegistry;
+use crate::core::error::MornError;
 
 #[derive(Debug, Clone)]
 pub struct ComponentSelector {
@@ -145,9 +145,9 @@ impl AssemblyBuilder {
         match crate::core::assembler::AgentAssembler::natural_language_build(description)? {
             crate::core::assembler::AfterBuildAction::Save(def)
             | crate::core::assembler::AfterBuildAction::Preview(def) => Ok(def),
-            crate::core::assembler::AfterBuildAction::Modify(_, _) => {
-                Err(MornError::Internal("Natural language build returned a modification request".to_string()))
-            }
+            crate::core::assembler::AfterBuildAction::Modify(_, _) => Err(MornError::Internal(
+                "Natural language build returned a modification request".to_string(),
+            )),
         }
     }
 

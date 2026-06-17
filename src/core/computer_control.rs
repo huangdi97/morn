@@ -75,7 +75,8 @@ impl ComputerControl {
             .map_err(|e| MornError::Internal(format!("invalid path: {}", e)))?;
         let mut results = Vec::new();
         let pattern = pattern.to_string();
-        visit_dirs(&base, &pattern, &mut results).map_err(|e| MornError::Internal(e.to_string()))?;
+        visit_dirs(&base, &pattern, &mut results)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(results)
     }
 
@@ -105,8 +106,10 @@ impl ComputerControl {
             .to_string_lossy();
         zip.start_file(name.as_ref(), options)
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        zip.write_all(&data).map_err(|e| MornError::Internal(e.to_string()))?;
-        zip.finish().map_err(|e| MornError::Internal(e.to_string()))?;
+        zip.write_all(&data)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        zip.finish()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
 }
@@ -214,7 +217,8 @@ impl ComputerControl {
                 .output()
                 .map_err(|e| MornError::Internal(format!("screenshot failed: {}", e)))?;
             if output.status.success() {
-                return std::fs::read(&screenshot_path).map_err(|e| MornError::Internal(e.to_string()));
+                return std::fs::read(&screenshot_path)
+                    .map_err(|e| MornError::Internal(e.to_string()));
             }
         }
         tracing::warn!("screenshot not implemented on this platform");

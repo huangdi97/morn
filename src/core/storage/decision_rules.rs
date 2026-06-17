@@ -1,7 +1,7 @@
 //! SQLite storage implementation for DecisionRuleStore.
 
-use crate::core::error::MornError;
 use crate::core::decision_rules::{parse_decision_level, DecisionRule, DecisionRuleStore};
+use crate::core::error::MornError;
 use rusqlite::params;
 
 use super::Storage;
@@ -86,7 +86,9 @@ impl DecisionRuleStore for Storage {
                 "SELECT id, action, level, condition, effect, created_at FROM decision_rule_store",
             )
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let rows = stmt.query_map([], row_to_rule).map_err(|e| MornError::Internal(e.to_string()))?;
+        let rows = stmt
+            .query_map([], row_to_rule)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut rules = Vec::new();
         for row in rows {
             rules.push(row.map_err(|e| MornError::Internal(e.to_string()))?);

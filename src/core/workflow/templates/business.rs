@@ -23,10 +23,11 @@ impl WorkflowTemplate {
     }
 
     fn load_template(id: &str) -> WorkflowTemplate {
-        let data: Vec<WorkflowTemplate> = serde_json::from_str(
-            include_str!("workflow_templates.json")
-        ).expect("Failed to parse workflow_templates.json");
-        data.into_iter().find(|t| t.id == id)
+        let data: Vec<WorkflowTemplate> =
+            serde_json::from_str(include_str!("workflow_templates.json"))
+                .expect("Failed to parse workflow_templates.json");
+        data.into_iter()
+            .find(|t| t.id == id)
             .unwrap_or_else(|| panic!("Template '{}' not found in workflow_templates.json", id))
     }
 }

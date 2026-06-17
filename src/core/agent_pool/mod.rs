@@ -99,7 +99,10 @@ impl AgentPool {
             )));
         }
         if self.agents.contains_key(id) {
-            return Err(MornError::Internal(format!("Agent '{}' already registered in pool", id)));
+            return Err(MornError::Internal(format!(
+                "Agent '{}' already registered in pool",
+                id
+            )));
         }
         let instance = AgentInstance {
             id: id.to_string(),
@@ -127,10 +130,13 @@ impl AgentPool {
 
     pub fn submit_task(&mut self, task: AgentTask) -> Result<String, MornError> {
         if !self.agents.contains_key(&task.agent_id) {
-            return Err(MornError::Internal(format!("Agent '{}' not found in pool", task.agent_id)));
+            return Err(MornError::Internal(format!(
+                "Agent '{}' not found in pool",
+                task.agent_id
+            )));
         }
         if self.tasks.len() >= self.config.queue_size {
-            return Err(MornError::Internal("Task queue full".to_string()))
+            return Err(MornError::Internal("Task queue full".to_string()));
         }
         let id = task.id.clone();
         self.tasks.push(task);

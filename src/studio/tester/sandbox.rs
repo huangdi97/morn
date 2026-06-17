@@ -69,10 +69,11 @@ mod tests {
 
     #[test]
     fn run_and_measure_returns_default_output_on_error() {
-        let (step, value) =
-            TestRunner::run_and_measure("sandbox", "cleanup", || -> Result<Vec<String>, MornError> {
-                Err("denied".into())
-            });
+        let (step, value) = TestRunner::run_and_measure(
+            "sandbox",
+            "cleanup",
+            || -> Result<Vec<String>, MornError> { Err("denied".into()) },
+        );
 
         assert!(!step.success);
         assert!(step.description.contains("denied"));

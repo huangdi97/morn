@@ -1,10 +1,16 @@
-use serde::{Deserialize, Serialize};
 use crate::core::mcp::MCPTool;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MCPTransport {
-    Stdio { command: String, args: Vec<String> },
-    Http { url: String, api_key: Option<String> },
+    Stdio {
+        command: String,
+        args: Vec<String>,
+    },
+    Http {
+        url: String,
+        api_key: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

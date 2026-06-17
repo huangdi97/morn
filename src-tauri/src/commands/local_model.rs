@@ -1,5 +1,5 @@
-use crate::MornError;
 use crate::commands::errors::CommandError;
+use crate::MornError;
 
 #[tauri::command]
 pub(crate) fn list_local_models() -> Result<Vec<String>, CommandError> {

@@ -1,6 +1,6 @@
 //! smtp — Sends and receives channel messages through email transport.
-use crate::core::error::MornError;
 use crate::channel::adapter::ChannelMessage;
+use crate::core::error::MornError;
 
 pub struct SmtpChannel {
     smtp_host: String,

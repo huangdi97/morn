@@ -45,7 +45,9 @@ impl Storage {
             (None, None) => "SELECT id, user_id, action, target_type, target_id, details_json, created_at FROM audit_log ORDER BY created_at DESC LIMIT ?1",
         };
 
-        let mut stmt = conn.prepare(sql).map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut stmt = conn
+            .prepare(sql)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = match (user_id, action_type) {
             (Some(uid), Some(act)) => stmt.query_map(params![uid, act, limit], map_audit_row),
             (Some(uid), None) => stmt.query_map(params![uid, limit], map_audit_row),

@@ -1,6 +1,6 @@
 //! memory — Defines memory components used to persist conversational context.
-use crate::core::error::MornError;
 use crate::core::component::IOComponent;
+use crate::core::error::MornError;
 
 pub mod mdrm;
 mod simple;

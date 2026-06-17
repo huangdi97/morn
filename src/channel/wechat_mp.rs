@@ -2,8 +2,8 @@
 //! 配置方式：在微信公众平台注册服务号，获取 AppID 和 AppSecret
 //! 环境变量：WECHAT_MP_APPID, WECHAT_MP_SECRET
 
-use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
+use crate::core::error::MornError;
 
 pub struct WeChatMpChannel {
     app_id: String,
@@ -44,9 +44,9 @@ impl WeChatMpChannel {
             .get(&url)
             .send()
             .map_err(|e| MornError::Internal(format!("Failed to get access token: {}", e)))?;
-        let body: serde_json::Value = resp
-            .json()
-            .map_err(|e| MornError::Internal(format!("Failed to parse access token response: {}", e)))?;
+        let body: serde_json::Value = resp.json().map_err(|e| {
+            MornError::Internal(format!("Failed to parse access token response: {}", e))
+        })?;
         if let Some(token) = body.get("access_token").and_then(|v| v.as_str()) {
             self.access_token = Some(token.to_string());
             Ok(token.to_string())
@@ -55,7 +55,10 @@ impl WeChatMpChannel {
                 .get("errmsg")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown error");
-            Err(MornError::Internal(format!("WeChat API error: {}", err_msg)))
+            Err(MornError::Internal(format!(
+                "WeChat API error: {}",
+                err_msg
+            )))
         }
     }
 
@@ -70,11 +73,10 @@ impl WeChatMpChannel {
             .timeout(std::time::Duration::from_secs(10))
             .build()
             .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
-        let resp = client
-            .post(&url)
-            .json(&payload)
-            .send()
-            .map_err(|e| MornError::Internal(format!("Failed to send WeChat MP message: {}", e)))?;
+        let resp =
+            client.post(&url).json(&payload).send().map_err(|e| {
+                MornError::Internal(format!("Failed to send WeChat MP message: {}", e))
+            })?;
         if !resp.status().is_success() {
             return Err(MornError::Internal(format!(
                 "WeChat MP API returned non-200 status: {}",

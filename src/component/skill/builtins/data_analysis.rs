@@ -1,9 +1,9 @@
 //! data_analysis — Defines the built-in skill for data analysis workflows.
-use crate::core::error::MornError;
 use crate::component::skill::{Skill, SkillStep};
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
+use crate::core::error::MornError;
 
 #[allow(dead_code)] /* 预留：内置 Data Analysis skill 注册入口 */
 pub struct DataAnalysisSkill {

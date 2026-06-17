@@ -122,8 +122,12 @@ fn main() -> Result<(), MornError> {
             );
 
             let supervisor = Supervisor::new(storage.clone(), None).with_model_router(router);
-            let _assembler =
-                AgentAssembler::new(Some(registry.lock().map_err(|e| MornError::Internal(e.to_string()))?.clone()));
+            let _assembler = AgentAssembler::new(Some(
+                registry
+                    .lock()
+                    .map_err(|e| MornError::Internal(e.to_string()))?
+                    .clone(),
+            ));
 
             let chat_fn = Arc::new(
                 move |prompt: &str, system: &str| -> Result<String, MornError> {
@@ -161,8 +165,13 @@ fn run_daemon(config: MornConfig) -> Result<(), MornError> {
     }
 
     if let Some(parent) = config.daemon.pid_file.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| MornError::Internal(format!("Failed to create PID directory {}: {}", parent.display(), e)))?;
+        fs::create_dir_all(parent).map_err(|e| {
+            MornError::Internal(format!(
+                "Failed to create PID directory {}: {}",
+                parent.display(),
+                e
+            ))
+        })?;
     }
 
     fs::write(&config.daemon.pid_file, std::process::id().to_string()).map_err(|e| {
@@ -436,8 +445,12 @@ fn run_cli(
                     return Ok(());
                 }
                 "move" if args.len() > 4 => {
-                    let x: i32 = args[3].parse().map_err(|e| MornError::Internal(format!("Invalid x: {}", e)))?;
-                    let y: i32 = args[4].parse().map_err(|e| MornError::Internal(format!("Invalid y: {}", e)))?;
+                    let x: i32 = args[3]
+                        .parse()
+                        .map_err(|e| MornError::Internal(format!("Invalid x: {}", e)))?;
+                    let y: i32 = args[4]
+                        .parse()
+                        .map_err(|e| MornError::Internal(format!("Invalid y: {}", e)))?;
                     let result = mouse::mouse_move(x, y);
                     println!("{}", result.data);
                     return Ok(());

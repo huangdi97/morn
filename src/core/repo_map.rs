@@ -42,7 +42,10 @@ impl RepoMap {
     pub fn scan(&mut self) -> Result<(), MornError> {
         let root_path = Path::new(&self.root);
         if !root_path.exists() {
-            return Err(MornError::Internal(format!("Path does not exist: {}", self.root)));
+            return Err(MornError::Internal(format!(
+                "Path does not exist: {}",
+                self.root
+            )));
         }
         self.tree = self.scan_dir(root_path, 0)?;
         Ok(())
@@ -66,7 +69,8 @@ impl RepoMap {
                 continue;
             }
 
-            let metadata = std::fs::metadata(&path).map_err(|e| MornError::Internal(e.to_string()))?;
+            let metadata =
+                std::fs::metadata(&path).map_err(|e| MornError::Internal(e.to_string()))?;
             let size = metadata.len();
 
             if path.is_dir() {

@@ -1,6 +1,6 @@
 //! skill — Defines executable skills and their component integration.
-use crate::core::error::MornError;
 use crate::core::component::{Data, IOComponent};
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 mod builtins;

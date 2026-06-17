@@ -78,7 +78,12 @@ impl CodeToolExecutor {
         let ext = match language {
             "python" | "py" => "py",
             "shell" | "sh" | "bash" => "sh",
-            other => return Err(MornError::Internal(format!("unsupported language: {}", other))),
+            other => {
+                return Err(MornError::Internal(format!(
+                    "unsupported language: {}",
+                    other
+                )))
+            }
         };
 
         let code_lower = code.to_lowercase();
@@ -112,13 +117,15 @@ impl CodeToolExecutor {
 
         let file_name = format!("code_tool_{}.{}", Uuid::new_v4(), ext);
         let temp_dir = std::env::temp_dir().join("morn_code_tool");
-        fs::create_dir_all(&temp_dir).map_err(|e| MornError::Internal(format!("failed to create temp dir: {}", e)))?;
+        fs::create_dir_all(&temp_dir)
+            .map_err(|e| MornError::Internal(format!("failed to create temp dir: {}", e)))?;
         let file_path = temp_dir.join(&file_name);
 
         let mut file = fs::File::create(&file_path)
             .map_err(|e| MornError::Internal(format!("failed to create temp file: {}", e)))?;
-        file.write_all(code.as_bytes())
-            .map_err(|e| MornError::Internal(format!("failed to write code to temp file: {}", e)))?;
+        file.write_all(code.as_bytes()).map_err(|e| {
+            MornError::Internal(format!("failed to write code to temp file: {}", e))
+        })?;
         drop(file);
 
         let result = if ext == "py" {

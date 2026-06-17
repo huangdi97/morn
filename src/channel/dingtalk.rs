@@ -2,8 +2,8 @@
 //! 配置方式：在钉钉开放平台创建应用，获取 Webhook URL
 //! 环境变量：DINGTALK_WEBHOOK_URL
 
-use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -81,7 +81,9 @@ impl DingTalkChannel {
     }
 
     pub fn receive(&self) -> Result<Option<ChannelMessage>, MornError> {
-        Err(MornError::Internal("DingTalk receive uses webhook_listen(adapter) for incoming callbacks".to_string()))
+        Err(MornError::Internal(
+            "DingTalk receive uses webhook_listen(adapter) for incoming callbacks".to_string(),
+        ))
     }
 
     pub fn webhook_listen(&self, adapter: &mut ChannelAdapter) -> Result<(), MornError> {
@@ -247,7 +249,9 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, MornError> {
             .read(&mut chunk)
             .map_err(|e| MornError::Internal(format!("Failed to read HTTP request: {}", e)))?;
         if bytes_read == 0 {
-            return Err(MornError::Internal("Connection closed before HTTP headers were complete".to_string()))
+            return Err(MornError::Internal(
+                "Connection closed before HTTP headers were complete".to_string(),
+            ));
         }
         buffer.extend_from_slice(&chunk[..bytes_read]);
     };
@@ -344,8 +348,8 @@ fn write_http_response(
 }
 
 fn parse_dingtalk_json(body: &str) -> Result<DingTalkIncomingMessage, MornError> {
-    let value: serde_json::Value =
-        serde_json::from_str(body).map_err(|e| MornError::Internal(format!("Invalid DingTalk JSON body: {}", e)))?;
+    let value: serde_json::Value = serde_json::from_str(body)
+        .map_err(|e| MornError::Internal(format!("Invalid DingTalk JSON body: {}", e)))?;
     let content = value
         .get("text")
         .and_then(|text| text.get("content"))

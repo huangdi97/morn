@@ -67,7 +67,8 @@ impl LongTaskEngine {
     }
 
     pub fn load_progress(json: &str) -> Result<Self, MornError> {
-        let task: TaskProgress = serde_json::from_str(json).map_err(|e| MornError::Internal(e.to_string()))?;
+        let task: TaskProgress =
+            serde_json::from_str(json).map_err(|e| MornError::Internal(e.to_string()))?;
         let now = chrono::Utc::now().timestamp();
         Ok(LongTaskEngine {
             task,
@@ -79,7 +80,8 @@ impl LongTaskEngine {
     }
 
     pub fn resume_from_checkpoint(&mut self, json: &str) -> Result<(), MornError> {
-        let saved: TaskProgress = serde_json::from_str(json).map_err(|e| MornError::Internal(e.to_string()))?;
+        let saved: TaskProgress =
+            serde_json::from_str(json).map_err(|e| MornError::Internal(e.to_string()))?;
         self.task.completed_steps = saved.completed_steps;
         self.task.current_step = saved.current_step;
         self.task.status = TaskStatus::Running;

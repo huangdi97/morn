@@ -77,8 +77,13 @@ impl Storage {
         let mut stmt = conn
             .prepare("SELECT id, user_input, plan_json, status, created_at, completed_at FROM tasks WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let mut rows = stmt.query(params![id]).map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        let mut rows = stmt
+            .query(params![id])
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             Ok(Some(TaskRecord {
                 id: row.get(0).map_err(|e| MornError::Internal(e.to_string()))?,
                 user_input: row.get(1).map_err(|e| MornError::Internal(e.to_string()))?,

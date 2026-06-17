@@ -37,8 +37,10 @@ impl CheckpointManager {
 
     /// Saves a checkpoint and serializes its state and metadata to storage.
     pub fn save(&self, cp: &Checkpoint) -> Result<(), MornError> {
-        let state_json = serde_json::to_string(&cp.state).map_err(|e| MornError::Internal(e.to_string()))?;
-        let metadata_json = serde_json::to_string(&cp.metadata).map_err(|e| MornError::Internal(e.to_string()))?;
+        let state_json =
+            serde_json::to_string(&cp.state).map_err(|e| MornError::Internal(e.to_string()))?;
+        let metadata_json =
+            serde_json::to_string(&cp.metadata).map_err(|e| MornError::Internal(e.to_string()))?;
         self.storage.save_checkpoint_args(SaveCheckpointArgs {
             id: &cp.id,
             session_id: &cp.session_id,
@@ -55,9 +57,10 @@ impl CheckpointManager {
         let row = self.storage.load_latest_checkpoint(session_id)?;
         match row {
             Some((id, sid, step_idx, step_name, state_json, metadata_json, parent_id)) => {
-                let state: Value = serde_json::from_str(&state_json).map_err(|e| MornError::Internal(e.to_string()))?;
-                let metadata: Value =
-                    serde_json::from_str(&metadata_json).map_err(|e| MornError::Internal(e.to_string()))?;
+                let state: Value = serde_json::from_str(&state_json)
+                    .map_err(|e| MornError::Internal(e.to_string()))?;
+                let metadata: Value = serde_json::from_str(&metadata_json)
+                    .map_err(|e| MornError::Internal(e.to_string()))?;
                 Ok(Some(Checkpoint {
                     id,
                     session_id: sid,
@@ -94,8 +97,8 @@ impl CheckpointManager {
 
     /// Restores an agent state from a checkpoint's serialized state value.
     pub fn restore(&self, cp: &Checkpoint) -> Result<AgentState, MornError> {
-        let state: AgentState =
-            serde_json::from_value(cp.state.clone()).map_err(|e| MornError::Internal(e.to_string()))?;
+        let state: AgentState = serde_json::from_value(cp.state.clone())
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(state)
     }
 

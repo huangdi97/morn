@@ -1,6 +1,6 @@
 //! browser_ops — Provides browser automation operations for web interaction.
-use crate::core::error::MornError;
 use super::{ComputerOpResult, SecurityLevel};
+use crate::core::error::MornError;
 
 fn open_url(url: &str) -> Result<(), MornError> {
     if cfg!(target_os = "windows") {

@@ -46,7 +46,10 @@ mod tests {
     fn test_call_stdio_success() {
         let result = call_stdio(
             "sh",
-            &["-c".to_string(), "cat > /dev/null; printf '{\"success\":true,\"data\":{}}'".to_string()],
+            &[
+                "-c".to_string(),
+                "cat > /dev/null; printf '{\"success\":true,\"data\":{}}'".to_string(),
+            ],
             "test_tool",
             &serde_json::json!({"key": "value"}),
         );
@@ -57,12 +60,7 @@ mod tests {
 
     #[test]
     fn test_call_stdio_command_not_found() {
-        let result = call_stdio(
-            "nonexistent_cmd_xyz",
-            &[],
-            "test",
-            &serde_json::json!({}),
-        );
+        let result = call_stdio("nonexistent_cmd_xyz", &[], "test", &serde_json::json!({}));
         assert!(result.is_err());
         assert!(result.unwrap_err().0.contains("Stdio command failed"));
     }

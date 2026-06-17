@@ -13,7 +13,7 @@ impl Scheduler {
         // 骨架：返回 plan 中的 subtask ids
         let ids: Vec<String> = plan.subtasks.iter().map(|s| s.id.clone()).collect();
         if ids.is_empty() {
-            return Err(MornError::Internal("no subtasks to schedule".to_string()))
+            return Err(MornError::Internal("no subtasks to schedule".to_string()));
         }
         Ok(ids)
     }
@@ -64,6 +64,9 @@ mod tests {
         let s = Scheduler::new();
         let result = s.schedule("wf1", &make_plan(vec![]));
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), MornError::Internal("no subtasks to schedule".to_string()));
+        assert_eq!(
+            result.unwrap_err(),
+            MornError::Internal("no subtasks to schedule".to_string())
+        );
     }
 }

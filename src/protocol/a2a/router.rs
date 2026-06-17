@@ -54,7 +54,10 @@ impl A2ARouter {
             .ok_or("Direct routing requires a recipient_id")?;
 
         if !self.agents.contains_key(recipient_id) {
-            return Err(MornError::Internal(format!("Recipient agent '{}' not found", recipient_id)));
+            return Err(MornError::Internal(format!(
+                "Recipient agent '{}' not found",
+                recipient_id
+            )));
         }
 
         Ok(vec![envelope.clone()])
@@ -68,12 +71,18 @@ impl A2ARouter {
 
         for hop in &envelope.relay_path {
             if !self.agents.contains_key(hop) {
-                return Err(MornError::Internal(format!("Relay hop agent '{}' not found", hop)));
+                return Err(MornError::Internal(format!(
+                    "Relay hop agent '{}' not found",
+                    hop
+                )));
             }
         }
 
         if !self.agents.contains_key(recipient_id) {
-            return Err(MornError::Internal(format!("Recipient agent '{}' not found", recipient_id)));
+            return Err(MornError::Internal(format!(
+                "Recipient agent '{}' not found",
+                recipient_id
+            )));
         }
 
         Ok(vec![envelope.clone()])

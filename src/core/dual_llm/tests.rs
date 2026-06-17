@@ -1,6 +1,6 @@
 //! Dual-LLM engine tests.
-use crate::core::error::MornError;
 use super::*;
+use crate::core::error::MornError;
 use crate::core::security::SecurityProfile;
 
 fn create_guard() -> DualLlmGuard {

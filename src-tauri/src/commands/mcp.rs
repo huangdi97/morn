@@ -1,5 +1,5 @@
-use crate::MornError;
 use crate::AppState;
+use crate::MornError;
 use tauri::State;
 
 use morn::core::mcp::{MCPResponse, MCPServer, MCPTool};
@@ -28,15 +28,25 @@ pub(crate) async fn mcp_connect(
         tools,
     };
 
-    let mut mgr = state.mcp_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let mut mgr = state
+        .mcp_manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     mgr.retain(|s| s.name != name);
     mgr.push(server);
-    Ok(format!("Connected to '{}' with {} tools", name, mgr.last().map_or(0, |s| s.tools.len())))
+    Ok(format!(
+        "Connected to '{}' with {} tools",
+        name,
+        mgr.last().map_or(0, |s| s.tools.len())
+    ))
 }
 
 #[tauri::command]
 pub(crate) fn mcp_disconnect(name: String, state: State<AppState>) -> Result<String, MornError> {
-    let mut mgr = state.mcp_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let mut mgr = state
+        .mcp_manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     let len_before = mgr.len();
     mgr.retain(|s| s.name != name);
     if mgr.len() < len_before {
@@ -48,7 +58,10 @@ pub(crate) fn mcp_disconnect(name: String, state: State<AppState>) -> Result<Str
 
 #[tauri::command]
 pub(crate) fn mcp_list_servers(state: State<AppState>) -> Result<Vec<MCPServer>, MornError> {
-    let mgr = state.mcp_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+    let mgr = state
+        .mcp_manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
     Ok(mgr.clone())
 }
 
@@ -60,7 +73,10 @@ pub(crate) async fn mcp_call_tool(
     state: State<'_, AppState>,
 ) -> Result<MCPResponse, MornError> {
     let url = {
-        let mgr = state.mcp_manager.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let mgr = state
+            .mcp_manager
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let srv = mgr
             .iter()
             .find(|s| s.name == server)

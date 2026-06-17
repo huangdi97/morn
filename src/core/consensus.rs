@@ -47,11 +47,15 @@ impl ConsensusManager {
         let file_name = format!("{}_{}_{}.consensus", session_id, agent_id, stage);
         let file_path = self.base_dir.join(&file_name);
 
-        let file_content = serde_json::to_string(&file).map_err(|e| MornError::Internal(e.to_string()))?;
+        let file_content =
+            serde_json::to_string(&file).map_err(|e| MornError::Internal(e.to_string()))?;
         fs::write(&file_path, &file_content).map_err(|e| MornError::Internal(e.to_string()))?;
 
         {
-            let mut sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+            let mut sessions = self
+                .sessions
+                .lock()
+                .map_err(|e| MornError::Internal(e.to_string()))?;
             sessions
                 .entry(session_id.to_string())
                 .or_default()
@@ -74,18 +78,26 @@ impl ConsensusManager {
             return Ok(None);
         }
 
-        let content = fs::read_to_string(&file_path).map_err(|e| MornError::Internal(e.to_string()))?;
-        let file: ConsensusFile = serde_json::from_str(&content).map_err(|e| MornError::Internal(e.to_string()))?;
+        let content =
+            fs::read_to_string(&file_path).map_err(|e| MornError::Internal(e.to_string()))?;
+        let file: ConsensusFile =
+            serde_json::from_str(&content).map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(Some(file))
     }
 
     pub fn get_session_chain(&self, session_id: &str) -> Result<Vec<ConsensusFile>, MornError> {
-        let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(sessions.get(session_id).cloned().unwrap_or_default())
     }
 
     pub fn replay_session(&self, session_id: &str) -> Result<String, MornError> {
-        let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let files = sessions.get(session_id);
         match files {
             None => Ok(format!("No consensus files for session '{}'", session_id)),
@@ -119,7 +131,10 @@ impl ConsensusManager {
     }
 
     pub fn find_consensus(&self, keywords: &[&str]) -> Result<Vec<ConsensusFile>, MornError> {
-        let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut results = Vec::new();
         for files in sessions.values() {
             for file in files {
@@ -132,7 +147,10 @@ impl ConsensusManager {
     }
 
     pub fn derive_summary(&self, session_id: &str) -> Result<String, MornError> {
-        let sessions = self.sessions.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let files = sessions.get(session_id);
         match files {
             None => Ok(String::new()),

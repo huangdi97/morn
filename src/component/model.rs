@@ -1,8 +1,8 @@
 //! model — Defines model configuration and model invocation components.
-use crate::core::error::MornError;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
+use crate::core::error::MornError;
 
 #[derive(Debug, Clone)]
 pub enum CostTier {

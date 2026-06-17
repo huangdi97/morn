@@ -1,9 +1,9 @@
 //! simple — Provides an in-memory implementation of the memory component.
-use crate::core::error::MornError;
 use super::Memory;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
+use crate::core::error::MornError;
 use std::collections::HashMap;
 
 #[allow(dead_code)] /* 预留：SQLite 持久化 memory 组件 */

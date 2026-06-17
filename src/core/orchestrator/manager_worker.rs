@@ -1,6 +1,6 @@
 //! manager_worker — Runs manager-worker orchestration and aggregates team results.
-use crate::core::error::MornError;
 use super::{Orchestrator, TeamMemberOutput, TeamResult};
+use crate::core::error::MornError;
 
 impl Orchestrator {
     pub(super) fn run_manager_worker(
@@ -9,7 +9,7 @@ impl Orchestrator {
         input: &str,
     ) -> Result<Vec<TeamMemberOutput>, MornError> {
         if members.is_empty() {
-            return Err(MornError::Internal("No members".to_string()))
+            return Err(MornError::Internal("No members".to_string()));
         }
         let mut outputs = Vec::new();
         let manager = &members[0];
@@ -23,10 +23,16 @@ impl Orchestrator {
         Ok(outputs)
     }
 
-    pub fn run_manager_expert(&self, manager_id: &str, task: &str) -> Result<TeamResult, MornError> {
+    pub fn run_manager_expert(
+        &self,
+        manager_id: &str,
+        task: &str,
+    ) -> Result<TeamResult, MornError> {
         let experts = self.find_experts_for_task(task, 5);
         if experts.is_empty() {
-            return Err(MornError::Internal("No suitable experts found for task".to_string()))
+            return Err(MornError::Internal(
+                "No suitable experts found for task".to_string(),
+            ));
         }
 
         let mut outputs = Vec::new();

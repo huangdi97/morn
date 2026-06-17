@@ -1,6 +1,6 @@
 //! telegram — Adapts Telegram messages into the shared channel interface.
-use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
+use crate::core::error::MornError;
 
 pub struct TelegramChannel {
     bot_token: String,
@@ -57,9 +57,9 @@ impl TelegramChannel {
             .map_err(|e| MornError::Internal(format!("Telegram API request failed: {}", e)))?;
 
         let status = response.status();
-        let response_body: serde_json::Value = response
-            .json()
-            .map_err(|e| MornError::Internal(format!("Failed to parse Telegram response: {}", e)))?;
+        let response_body: serde_json::Value = response.json().map_err(|e| {
+            MornError::Internal(format!("Failed to parse Telegram response: {}", e))
+        })?;
 
         if status.is_success() {
             if response_body
@@ -156,12 +156,14 @@ impl TelegramChannel {
             .post(&api_url)
             .json(&serde_json::json!({"url": url}))
             .send()
-            .map_err(|e| MornError::Internal(format!("Telegram setWebhook request failed: {}", e)))?;
+            .map_err(|e| {
+                MornError::Internal(format!("Telegram setWebhook request failed: {}", e))
+            })?;
 
         let status = response.status();
-        let response_body: serde_json::Value = response
-            .json()
-            .map_err(|e| MornError::Internal(format!("Failed to parse Telegram response: {}", e)))?;
+        let response_body: serde_json::Value = response.json().map_err(|e| {
+            MornError::Internal(format!("Failed to parse Telegram response: {}", e))
+        })?;
 
         if status.is_success() {
             let ok = response_body
@@ -175,7 +177,10 @@ impl TelegramChannel {
                     .get("description")
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown error");
-                Err(MornError::Internal(format!("Telegram setWebhook error: {}", desc)))
+                Err(MornError::Internal(format!(
+                    "Telegram setWebhook error: {}",
+                    desc
+                )))
             }
         } else {
             let desc = response_body

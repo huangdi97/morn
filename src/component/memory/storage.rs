@@ -55,7 +55,12 @@ impl CoreMemory {
                     self.add(&change.key, &change.value);
                 }
                 "remove" | "delete" => self.remove(&change.key),
-                _ => return Err(MornError::Internal(format!("Unknown memory operation: {}", change.operation))),
+                _ => {
+                    return Err(MornError::Internal(format!(
+                        "Unknown memory operation: {}",
+                        change.operation
+                    )))
+                }
             }
         }
         Ok(())

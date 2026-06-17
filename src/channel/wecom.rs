@@ -2,8 +2,8 @@
 //! 配置方式：在企业微信后台创建应用，获取 Webhook URL
 //! 环境变量：WECOM_WEBHOOK_URL
 
-use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
+use crate::core::error::MornError;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -81,7 +81,9 @@ impl WeComChannel {
     }
 
     pub fn receive(&self) -> Result<Option<ChannelMessage>, MornError> {
-        Err(MornError::Internal("WeCom receive uses webhook_listen(adapter) for incoming callbacks".to_string()))
+        Err(MornError::Internal(
+            "WeCom receive uses webhook_listen(adapter) for incoming callbacks".to_string(),
+        ))
     }
 
     pub fn webhook_listen(&self, adapter: &mut ChannelAdapter) -> Result<(), MornError> {
@@ -133,8 +135,12 @@ impl WeComChannel {
     }
 
     fn listen_addr(&self) -> Result<String, MornError> {
-        let url = reqwest::Url::parse(&self.webhook_url)
-            .map_err(|e| MornError::Internal(format!("Invalid WeCom webhook_url {}: {}", self.webhook_url, e)))?;
+        let url = reqwest::Url::parse(&self.webhook_url).map_err(|e| {
+            MornError::Internal(format!(
+                "Invalid WeCom webhook_url {}: {}",
+                self.webhook_url, e
+            ))
+        })?;
         let host = match url.host_str() {
             Some("localhost") | Some("127.0.0.1") | Some("0.0.0.0") => {
                 url.host_str().unwrap_or("localhost").to_string()
@@ -248,7 +254,9 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, MornError> {
             .read(&mut chunk)
             .map_err(|e| MornError::Internal(format!("Failed to read HTTP request: {}", e)))?;
         if bytes_read == 0 {
-            return Err(MornError::Internal("Connection closed before HTTP headers were complete".to_string()))
+            return Err(MornError::Internal(
+                "Connection closed before HTTP headers were complete".to_string(),
+            ));
         }
         buffer.extend_from_slice(&chunk[..bytes_read]);
     };

@@ -1,5 +1,5 @@
-use crate::MornError;
 use crate::commands::errors::CommandError;
+use crate::MornError;
 
 #[tauri::command]
 pub(crate) fn send_notification(title: String, body: String) -> Result<String, CommandError> {

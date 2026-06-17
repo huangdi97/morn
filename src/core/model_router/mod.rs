@@ -83,7 +83,10 @@ impl HybridStrategy {
             "local_first" | "localfirst" => Ok(HybridStrategy::LocalFirst),
             "cloud_only" | "cloudonly" => Ok(HybridStrategy::CloudOnly),
             "cost_save" | "costsave" => Ok(HybridStrategy::CostSave),
-            other => Err(MornError::Internal(format!("unknown hybrid strategy: {}", other))),
+            other => Err(MornError::Internal(format!(
+                "unknown hybrid strategy: {}",
+                other
+            ))),
         }
     }
 }

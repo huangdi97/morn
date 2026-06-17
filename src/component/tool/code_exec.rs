@@ -1,9 +1,9 @@
 //! code_exec — Provides a tool for running code execution tasks.
-use crate::core::error::MornError;
 use super::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
+use crate::core::error::MornError;
 
 #[allow(dead_code)] /* 预留：内置 Python 执行工具注册入口 */
 pub struct ExecPythonTool {
@@ -68,7 +68,10 @@ impl IOComponent for ExecPythonTool {
         ]
     }
     fn send(&mut self, port: &str, _data: Data) -> Result<(), MornError> {
-        Err(MornError::Internal(format!("ExecPythonTool cannot receive on port {}", port)))
+        Err(MornError::Internal(format!(
+            "ExecPythonTool cannot receive on port {}",
+            port
+        )))
     }
     fn recv(&mut self, port: &str) -> Result<Option<Data>, MornError> {
         if port == "output" {

@@ -57,11 +57,13 @@ impl AtomicComponentType {
 }
 impl ComponentGraph {
     pub fn to_json(&self) -> Result<String, MornError> {
-        serde_json::to_string_pretty(self).map_err(|e| MornError::Internal(format!("serialization error: {}", e)))
+        serde_json::to_string_pretty(self)
+            .map_err(|e| MornError::Internal(format!("serialization error: {}", e)))
     }
 
     pub fn from_json(json: &str) -> Result<Self, MornError> {
-        serde_json::from_str(json).map_err(|e| MornError::Internal(format!("deserialization error: {}", e)))
+        serde_json::from_str(json)
+            .map_err(|e| MornError::Internal(format!("deserialization error: {}", e)))
     }
 }
 

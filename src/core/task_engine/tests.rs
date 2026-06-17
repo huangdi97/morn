@@ -1,6 +1,6 @@
 //! Task engine tests.
-use crate::core::error::MornError;
 use super::child_process::{ChildProcess, ProcessStatus};
+use crate::core::error::MornError;
 
 #[test]
 fn test_child_process_new_is_idle() {

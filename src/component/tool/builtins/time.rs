@@ -1,9 +1,9 @@
 //! time — GetTimeTool: retrieve current date and time.
-use crate::core::error::MornError;
 use crate::component::tool::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
+use crate::core::error::MornError;
 
 #[allow(dead_code)]
 pub struct GetTimeTool {
@@ -60,7 +60,10 @@ impl IOComponent for GetTimeTool {
         }]
     }
     fn send(&mut self, port: &str, _data: Data) -> Result<(), MornError> {
-        Err(MornError::Internal(format!("GetTimeTool cannot receive on port {}", port)))
+        Err(MornError::Internal(format!(
+            "GetTimeTool cannot receive on port {}",
+            port
+        )))
     }
     fn recv(&mut self, port: &str) -> Result<Option<Data>, MornError> {
         if port == "output" {

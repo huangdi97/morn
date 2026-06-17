@@ -13,7 +13,9 @@ impl LearningEngine {
     ) -> Result<Vec<String>, MornError> {
         let component_name = component_name.trim();
         if component_name.is_empty() {
-            return Err(MornError::Internal("component preference name cannot be empty".to_string()))
+            return Err(MornError::Internal(
+                "component preference name cannot be empty".to_string(),
+            ));
         }
 
         let mut preferences = self.load_component_preferences()?;
@@ -65,7 +67,8 @@ impl LearningEngine {
         }
 
         if let Some(storage) = &self.storage {
-            let value = serde_json::to_string(preferences).map_err(|e| MornError::Internal(e.to_string()))?;
+            let value = serde_json::to_string(preferences)
+                .map_err(|e| MornError::Internal(e.to_string()))?;
             storage.set_setting(super::COMPONENT_PREFERENCES_KEY, &value)?;
         }
         Ok(())

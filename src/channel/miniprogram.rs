@@ -2,8 +2,8 @@
 //! 配置方式：在微信公众平台注册小程序，获取 AppID
 //! 环境变量：MINIPROGRAM_APPID, MINIPROGRAM_SECRET
 
-use crate::core::error::MornError;
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
+use crate::core::error::MornError;
 
 #[allow(dead_code)] /* 预留：微信小程序通道真实接入 */
 pub struct MiniProgramChannel {
@@ -92,11 +92,9 @@ impl MiniProgramChannel {
             .timeout(std::time::Duration::from_secs(10))
             .build()
             .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
-        let resp = client
-            .post(&url)
-            .json(&payload)
-            .send()
-            .map_err(|e| MornError::Internal(format!("Failed to send MiniProgram message: {}", e)))?;
+        let resp = client.post(&url).json(&payload).send().map_err(|e| {
+            MornError::Internal(format!("Failed to send MiniProgram message: {}", e))
+        })?;
         let body: serde_json::Value = resp
             .json()
             .map_err(|e| MornError::Internal(format!("Failed to parse send response: {}", e)))?;
@@ -156,15 +154,14 @@ impl MiniProgramChannel {
             .timeout(std::time::Duration::from_secs(10))
             .build()
             .map_err(|e| MornError::Internal(format!("Failed to create HTTP client: {}", e)))?;
-        let resp = client
-            .get(&url)
-            .send()
-            .map_err(|e| MornError::Internal(format!("Failed to poll MiniProgram messages: {}", e)))?;
+        let resp = client.get(&url).send().map_err(|e| {
+            MornError::Internal(format!("Failed to poll MiniProgram messages: {}", e))
+        })?;
 
         let status = resp.status();
-        let body: serde_json::Value = resp
-            .json()
-            .map_err(|e| MornError::Internal(format!("Failed to parse MiniProgram poll response: {}", e)))?;
+        let body: serde_json::Value = resp.json().map_err(|e| {
+            MornError::Internal(format!("Failed to parse MiniProgram poll response: {}", e))
+        })?;
 
         if !status.is_success() {
             return Err(MornError::Internal(format!(
@@ -262,8 +259,9 @@ fn extract_text_content(value: &serde_json::Value) -> Option<String> {
 
 #[cfg(test)]
 fn parse_miniprogram_json_message(body: &str) -> Result<Option<ChannelMessage>, MornError> {
-    let value: serde_json::Value = serde_json::from_str(body)
-        .map_err(|e| MornError::Internal(format!("Failed to parse MiniProgram message JSON: {}", e)))?;
+    let value: serde_json::Value = serde_json::from_str(body).map_err(|e| {
+        MornError::Internal(format!("Failed to parse MiniProgram message JSON: {}", e))
+    })?;
     json_value_to_channel_message(value)
 }
 

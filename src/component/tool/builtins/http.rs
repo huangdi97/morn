@@ -1,9 +1,9 @@
 //! http — HttpRequestTool: send HTTP GET requests.
-use crate::core::error::MornError;
 use crate::component::tool::Tool;
 use crate::core::component::{
     Component, Data, HealthStatus, IOComponent, Permission, Port, PortDirection, SecureComponent,
 };
+use crate::core::error::MornError;
 
 #[allow(dead_code)]
 pub struct HttpRequestTool {
@@ -68,7 +68,10 @@ impl IOComponent for HttpRequestTool {
         ]
     }
     fn send(&mut self, port: &str, _data: Data) -> Result<(), MornError> {
-        Err(MornError::Internal(format!("HttpRequestTool cannot receive on port {}", port)))
+        Err(MornError::Internal(format!(
+            "HttpRequestTool cannot receive on port {}",
+            port
+        )))
     }
     fn recv(&mut self, port: &str) -> Result<Option<Data>, MornError> {
         if port == "output" {

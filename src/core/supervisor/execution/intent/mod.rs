@@ -41,7 +41,11 @@ impl Supervisor {
     }
 
     /// Learns a decision rule from user feedback and returns success when storage updates complete.
-    pub fn learn_from_feedback(&mut self, user_input: &str, approved: bool) -> Result<(), MornError> {
+    pub fn learn_from_feedback(
+        &mut self,
+        user_input: &str,
+        approved: bool,
+    ) -> Result<(), MornError> {
         let user_id = self.user_id.as_deref().unwrap_or("default").to_string();
         let keywords = Self::extract_keywords(user_input);
         if keywords.is_empty() {
