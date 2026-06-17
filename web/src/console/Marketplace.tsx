@@ -9,15 +9,16 @@ interface Listing {
   price: number;
   author: string;
   rating: number;
+  reviewCount: number;
   downloads: number;
 }
 
 const hardcodedListings: Listing[] = [
-  { id: "l1", name: "Web Search Pro", item_type: "tool", description: "Advanced web search", price: 0.001, author: "Morn Labs", rating: 4.5, downloads: 1230 },
-  { id: "l2", name: "Stock Market Data", item_type: "knowledge", description: "Real-time stock quotes", price: 0.01, author: "Morn Labs", rating: 4.2, downloads: 890 },
-  { id: "l3", name: "Deep Research Skill", item_type: "skill", description: "Multi-step research", price: 0.01, author: "Morn Labs", rating: 4.8, downloads: 560 },
-  { id: "l4", name: "Research Agent", item_type: "agent", description: "Full-featured research agent", price: 0.05, author: "Morn Labs", rating: 4.6, downloads: 340 },
-  { id: "l5", name: "Weekly Report", item_type: "workflow", description: "Auto report generation", price: 0.03, author: "Morn Labs", rating: 4.1, downloads: 120 },
+  { id: "l1", name: "Web Search Pro", item_type: "tool", description: "Advanced web search", price: 0.001, author: "Morn Labs", rating: 4.5, reviewCount: 42, downloads: 1230 },
+  { id: "l2", name: "Stock Market Data", item_type: "knowledge", description: "Real-time stock quotes", price: 0.01, author: "Morn Labs", rating: 4.2, reviewCount: 28, downloads: 890 },
+  { id: "l3", name: "Deep Research Skill", item_type: "skill", description: "Multi-step research", price: 0.01, author: "Morn Labs", rating: 4.8, reviewCount: 15, downloads: 560 },
+  { id: "l4", name: "Research Agent", item_type: "agent", description: "Full-featured research agent", price: 0.05, author: "Morn Labs", rating: 4.6, reviewCount: 33, downloads: 340 },
+  { id: "l5", name: "Weekly Report", item_type: "workflow", description: "Auto report generation", price: 0.03, author: "Morn Labs", rating: 4.1, reviewCount: 8, downloads: 120 },
 ];
 
 export default function Marketplace() {
@@ -74,22 +75,27 @@ export default function Marketplace() {
               <span style={{ color: getTypeColor(listing.item_type), fontSize: "11px", textTransform: "uppercase" }}>
                 {listing.item_type}
               </span>
-              <span style={{ color: "#d29922", fontWeight: "bold" }}>★ {listing.rating.toFixed(1)}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ color: "#d29922", fontSize: "13px" }}>{"★".repeat(Math.round(listing.rating))}{"☆".repeat(5 - Math.round(listing.rating))}</span>
+                <span style={{ color: "#8b949e", fontSize: "11px" }}>({listing.reviewCount})</span>
+              </span>
             </div>
             <div style={{ color: "#e6edf3", fontWeight: "bold", marginTop: "8px" }}>{listing.name}</div>
             <div style={{ color: "#8b949e", fontSize: "13px", marginTop: "4px" }}>{listing.description}</div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "12px" }}>
               <span style={{ color: "#8b949e", fontSize: "12px" }}>By {listing.author} · {listing.downloads} downloads</span>
-              <span style={{ color: "#f85149", fontWeight: "bold" }}>
-                {listing.price === 0 ? "FREE" : `¥${listing.price.toFixed(3)}`}
-              </span>
+              {listing.price === 0 ? (
+                <span style={{ color: "#3fb950", fontSize: "11px", fontWeight: "bold", background: "rgba(63,185,80,0.15)", padding: "2px 8px", borderRadius: "4px" }}>免费</span>
+              ) : (
+                <span style={{ color: "#f85149", fontWeight: "bold", fontSize: "13px" }}>¥{listing.price.toFixed(3)}</span>
+              )}
             </div>
             <button style={{
               width: "100%", marginTop: "12px", padding: "6px",
               background: "#1f6feb", color: "#fff", border: "none",
               borderRadius: "4px", cursor: "pointer", fontSize: "13px",
             }}>
-              {listing.price === 0 ? "Install" : "Purchase"}
+              {listing.price === 0 ? "免费安装" : "Purchase"}
             </button>
           </div>
         ))}

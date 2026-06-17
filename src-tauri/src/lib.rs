@@ -55,7 +55,19 @@ pub fn run() {
     if let Some(ref manager) = manager {
         seed_preset_agents(&storage, manager);
     }
-    seed_hub_data(&storage);
+
+    // First-run seeding: only seed hub data if not already seeded.
+    let already_seeded = storage
+        .as_ref()
+        .and_then(|s| s.get_setting("morn_seeded").ok().flatten())
+        .is_some();
+    if !already_seeded {
+        seed_hub_data(&storage);
+        if let Some(ref s) = storage {
+            let _ = s.set_setting("morn_seeded", "true");
+        }
+    }
+
     let publisher = Some(StudioPublisher::new(
         registry.clone(),
         storage.clone(),
@@ -228,11 +240,15 @@ pub fn run() {
             commands::recovery::retry_last_operation,
             commands::proactive::list_proactive_rules,
             commands::proactive::toggle_proactive_rule,
+            commands::earnings::get_creator_earnings,
             commands::metrics::get_reliability_metrics,
             commands::checkup::run_system_check,
             commands::scheduler::schedule_task,
             commands::scheduler::list_scheduled_tasks,
             commands::scheduler::cancel_task,
+            commands::execution::get_recent_logs,
+            commands::team_templates::list_team_templates,
+            commands::plugin_manager::plugin_install,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

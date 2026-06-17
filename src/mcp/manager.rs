@@ -60,3 +60,73 @@ impl Default for MCPManager {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_stdio_server(name: &str) -> MCPServer {
+        MCPServer {
+            name: name.to_string(),
+            transport: MCPTransport::Stdio {
+                command: "echo".to_string(),
+                args: vec![],
+            },
+            tools: vec![MCPTool {
+                name: "greet".to_string(),
+                description: "greeting tool".to_string(),
+                input_schema: serde_json::json!({"type": "object"}),
+                server_url: None,
+            }],
+            status: ServerStatus::Connected,
+        }
+    }
+
+    #[test]
+    fn test_manager_new_empty() {
+        let manager = MCPManager::new();
+        assert_eq!(manager.discover_tools().len(), 0);
+    }
+
+    #[test]
+    fn test_manager_register_and_discover() {
+        let mut manager = MCPManager::new();
+        manager.register_server(make_stdio_server("s1"));
+        manager.register_server(make_stdio_server("s2"));
+        let tools = manager.discover_tools();
+        assert_eq!(tools.len(), 2);
+    }
+
+    #[test]
+    fn test_manager_call_tool_unknown_server() {
+        let manager = MCPManager::new();
+        let result = manager.call_tool("no-such", "greet", &serde_json::json!({}));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().0.contains("not found"));
+    }
+
+    #[test]
+    fn test_manager_call_tool_unknown_tool() {
+        let mut manager = MCPManager::new();
+        manager.register_server(make_stdio_server("s1"));
+        let result = manager.call_tool("s1", "no-such-tool", &serde_json::json!({}));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().0.contains("not found on server"));
+    }
+
+    #[test]
+    fn test_manager_disconnect() {
+        let mut manager = MCPManager::new();
+        manager.register_server(make_stdio_server("s1"));
+        manager.disconnect("s1");
+        let tools = manager.discover_tools();
+        // tools are still present (just status changed)
+        assert_eq!(tools.len(), 1);
+    }
+
+    #[test]
+    fn test_manager_default() {
+        let manager = MCPManager::default();
+        assert_eq!(manager.discover_tools().len(), 0);
+    }
+}

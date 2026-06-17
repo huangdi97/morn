@@ -1,14 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
-
-interface TeamTemplate {
-  id: string;
-  name: string;
-  description: string;
-  members: string[];
-  mode: string;
-  consensus: string;
-}
+import { TeamTemplate } from "./types";
 
 const FALLBACK_TEMPLATES: TeamTemplate[] = [
   { id: "preset-code-review", name: "Code Review Team", description: "Automated code review with reviewer and author agents", members: ["agent-reviewer", "agent-author"], mode: "Voting", consensus: "MungerVeto" },

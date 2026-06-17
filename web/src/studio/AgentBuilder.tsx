@@ -2,22 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../api";
 import { NodeCanvas } from "./NodeCanvas";
 import { StepWizard } from "./StepWizard";
-
-interface AgentDef {
-  name: string;
-  persona: string;
-  model: string;
-  tools: string[];
-  knowledge: string[];
-  skills: string[];
-}
-
-interface ComponentSummary {
-  id: string;
-  name: string;
-  component_type: string;
-  status: string;
-}
+import { AgentDef, ComponentSummary } from "./types";
 
 interface PresetInfo {
   id: string;

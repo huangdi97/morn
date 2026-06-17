@@ -9,9 +9,14 @@ export default function StudioPublisher() {
   const [itemType, setItemType] = useState("agent");
   const [price, setPrice] = useState(0);
   const [author, setAuthor] = useState("");
+  const [version, setVersion] = useState("1.0.0");
+  const [category, setCategory] = useState("general");
+  const [screenshots, setScreenshots] = useState("");
   const [isFree, setIsFree] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const CATEGORIES = ["analysis", "research", "writing", "coding", "assistant", "general"];
 
   const handlePublish = async () => {
     if (!name.trim() || !description.trim()) {
@@ -27,11 +32,18 @@ export default function StudioPublisher() {
         itemType,
         price: isFree ? 0 : price,
         author: author.trim() || "Anonymous",
+        version: version.trim() || "1.0.0",
+        category,
+        screenshots: screenshots.trim(),
       });
       setResult({ ok: true, msg: `Published successfully! ID: ${id}` });
       setName("");
       setDescription("");
       setPrice(0);
+      setVersion("1.0.0");
+      setCategory("general");
+      setScreenshots("");
+      setIsFree(true);
     } catch (e: any) {
       setResult({ ok: false, msg: `Publish failed: ${e}` });
     } finally {
@@ -60,6 +72,19 @@ export default function StudioPublisher() {
         <input type="text" placeholder="Author name" value={author}
           onChange={e => setAuthor(e.target.value)}
           style={inputStyle} />
+
+        <input type="text" placeholder="Version (e.g. 1.0.0)" value={version}
+          onChange={e => setVersion(e.target.value)}
+          style={inputStyle} />
+
+        <select value={category} onChange={e => setCategory(e.target.value)}
+          style={inputStyle}>
+          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+
+        <textarea placeholder="Screenshots (URLs, one per line)" value={screenshots}
+          onChange={e => setScreenshots(e.target.value)} rows={3}
+          style={{ ...inputStyle, resize: "vertical" }} />
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <label style={{ color: "#e6edf3", fontSize: "13px", display: "flex", alignItems: "center", gap: "4px" }}>

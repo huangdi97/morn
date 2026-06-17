@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import { ComponentSummary } from "./types";
 
 type ComponentType = "tool" | "knowledge" | "skill" | "persona" | "memory" | "model";
 
@@ -7,13 +8,6 @@ interface ComponentDef {
   name: string;
   type: ComponentType;
   config: string;
-}
-
-interface ComponentSummary {
-  id: string;
-  name: string;
-  component_type: string;
-  status: string;
 }
 
 export function ComponentEditor() {

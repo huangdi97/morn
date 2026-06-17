@@ -109,9 +109,9 @@ impl CostCenter {
 
     /// 检查成本并执行动作 — 累加成本，超预算则按配置动作响应。
     /// Checks cost and acts — accumulates cost, triggers action if over budget.
-    pub fn check_and_act(&mut self, cost: f64) -> Result<(), String> {
-        match self.check_budget(cost).map_err(|e| e.to_string())? {
-            BudgetDecision::PauseWorkflow { reason } => Err(reason),
+    pub fn check_and_act(&mut self, cost: f64) -> MornResult<()> {
+        match self.check_budget(cost)? {
+            BudgetDecision::PauseWorkflow { reason } => Err(MornError::Budget(reason)),
             _ => Ok(()),
         }
     }

@@ -1,6 +1,6 @@
 //! Memory orchestration: Experience-based memory, MemoryHub, and MemoryOrchestrator.
 
-use crate::core::error::MornError;
+use crate::core::error::{MornError, MornResult};
 use std::collections::HashMap;
 
 use serde_json::Value;
@@ -205,7 +205,7 @@ impl MemoryOrchestrator {
     pub fn decide_with_memory(
         &mut self,
         context: &str,
-    ) -> Result<HashMap<String, Vec<MemoryRecord>>, String> {
+    ) -> MornResult<HashMap<String, Vec<MemoryRecord>>> {
         let working = self.hub.get("working").map(|m| m.search(context, 10));
         let episodic = self.hub.get("episodic").map(|m| m.search(context, 5));
         let semantic = self.hub.get("semantic").map(|m| m.search(context, 5));

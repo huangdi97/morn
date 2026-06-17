@@ -39,6 +39,6 @@ pub(crate) fn list_proactive_rules() -> Result<Vec<ProactiveRule>, MornError> {
 
 #[tauri::command]
 pub(crate) fn toggle_proactive_rule(rule_id: String, enabled: bool) -> Result<(), MornError> {
-    println!("Proactive rule '{}' toggled to {}", rule_id, enabled);
+    tracing::info!("Proactive rule '{}' toggled to {}", rule_id, enabled);
     Ok(())
 }

@@ -1,16 +1,23 @@
 interface WelcomeNoKeyProps {
   onDismiss: () => void;
+  onReady: () => void;
 }
 
-export default function WelcomeNoKey({ onDismiss }: WelcomeNoKeyProps) {
+export default function WelcomeNoKey({ onDismiss, onReady }: WelcomeNoKeyProps) {
+  const isTauri = typeof window.__TAURI__ !== "undefined";
+
   const handleGotKey = () => {
     localStorage.setItem("morn_welcomed", "true");
     onDismiss();
   };
 
   const handleProxy = () => {
-    localStorage.setItem("morn_welcomed", "true");
-    onDismiss();
+    localStorage.setItem("morn_api_config", JSON.stringify({
+      mode: "remote",
+      serverUrl: "https://api.morn.ai",
+      apiKey: "",
+    }));
+    onReady();
   };
 
   return (
@@ -53,6 +60,11 @@ export default function WelcomeNoKey({ onDismiss }: WelcomeNoKeyProps) {
           ⚡ 使用内置中转（推荐）
         </button>
       </div>
+      {!isTauri && (
+        <p style={{ color: "#8b949e", fontSize: "12px", marginTop: "12px" }}>
+          ℹ️ 内置中转仅在生产 build 中可用
+        </p>
+      )}
       <p style={{ color: "#8b949e", fontSize: "13px", marginTop: "24px" }}>
         或者先逛逛：🏪 Store · 📖 Studio · ⚙️ 设置
       </p>

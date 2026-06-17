@@ -3,6 +3,7 @@
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
 [![build](https://img.shields.io/badge/tests-1417_✔_0_✗-brightgreen)](https://github.com/huangdi97/morn)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/huangdi97/morn?logo=github&color=blue)](https://github.com/huangdi97/morn/releases)
 
 > **你的桌面 AI 创作系统** — From一个人的工位开始
 

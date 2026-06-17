@@ -45,7 +45,7 @@ pub struct BindingRecord {
 impl Storage {
     /// Inserts an agent record and returns success when the row is stored.
     pub fn insert_agent(&self, agent: &AgentRecord) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO agents (id, name, component_type, config_json, status, trust_score, created_at, updated_at, current_version, update_available)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -61,7 +61,7 @@ impl Storage {
 
     /// Fetches an agent by id and returns `None` when no row exists.
     pub fn get_agent(&self, id: &str) -> Result<Option<AgentRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, name, component_type, config_json, status, trust_score, created_at, updated_at, current_version, update_available FROM agents WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -86,7 +86,7 @@ impl Storage {
 
     /// Lists agent records ordered by newest creation time first.
     pub fn list_agents(&self) -> Result<Vec<AgentRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, name, component_type, config_json, status, trust_score, created_at, updated_at, current_version, update_available FROM agents ORDER BY created_at DESC")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -115,7 +115,7 @@ impl Storage {
 
     /// Updates an agent status by id and records the update timestamp.
     pub fn update_agent_status(&self, id: &str, status: &str) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "UPDATE agents SET status = ?1, updated_at = ?2 WHERE id = ?3",
             params![status, chrono::Utc::now().to_rfc3339(), id],
@@ -126,7 +126,7 @@ impl Storage {
 
     /// Deletes an agent by id and returns success when the delete statement completes.
     pub fn delete_agent(&self, id: &str) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute("DELETE FROM agents WHERE id = ?1", params![id])
             .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
@@ -139,7 +139,7 @@ impl Storage {
         version: &str,
         update_available: bool,
     ) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "UPDATE agents SET current_version = ?1, update_available = ?2, updated_at = ?3 WHERE id = ?4",
             params![version, update_available, chrono::Utc::now().to_rfc3339(), id],
@@ -151,7 +151,7 @@ impl Storage {
     // Capabilities CRUD
     /// Inserts a capability record and returns success when the row is stored.
     pub fn insert_capability(&self, cap: &CapabilityRecord) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO capabilities (id, agent_id, name, domain, actions, description, trust_score)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -166,7 +166,7 @@ impl Storage {
 
     /// Lists all stored capability records.
     pub fn list_capabilities(&self) -> Result<Vec<CapabilityRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, agent_id, name, domain, actions, description, trust_score FROM capabilities")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -192,7 +192,7 @@ impl Storage {
 
     /// Deletes a capability by id and returns success when the delete statement completes.
     pub fn delete_capability(&self, id: &str) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute("DELETE FROM capabilities WHERE id = ?1", params![id])
             .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())

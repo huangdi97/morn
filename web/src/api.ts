@@ -476,7 +476,7 @@ export const api = {
     return res.json();
   },
 
-  async hubPublish(params: { name: string; description: string; itemType: string; price: number; author: string }): Promise<any> {
+  async hubPublish(params: { name: string; description: string; itemType: string; price: number; author: string; version: string; category: string; screenshots: string }): Promise<any> {
     if (isRemote()) {
       const res = await fetch(`${getBaseUrl()}/api/hub/publish`, {
         method: "POST",
@@ -493,6 +493,9 @@ export const api = {
         itemType: params.itemType,
         price: params.price,
         author: params.author,
+        version: params.version,
+        category: params.category,
+        screenshots: params.screenshots,
       });
     }
     const res = await fetch("/api/hub/publish", {
@@ -557,6 +560,21 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ listingId, rating, comment }),
     });
+    return res.json();
+  },
+
+  async getRecentLogs(): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/logs/recent`, {
+        headers: getApiHeaders(),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("get_recent_logs");
+    }
+    const res = await fetch("/api/logs/recent");
     return res.json();
   },
 

@@ -8,7 +8,7 @@ use super::Storage;
 
 impl Storage {
     pub fn init_decision_rule_store(&self) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS decision_rule_store (
                 id TEXT PRIMARY KEY,
@@ -50,7 +50,7 @@ fn row_to_rule(row: &rusqlite::Row<'_>) -> rusqlite::Result<DecisionRule> {
 impl DecisionRuleStore for Storage {
     fn add_rule(&self, rule: DecisionRule) -> Result<(), MornError> {
         self.init_decision_rule_store()?;
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT OR REPLACE INTO decision_rule_store (id, action, level, condition, effect, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
@@ -68,7 +68,7 @@ impl DecisionRuleStore for Storage {
 
     fn remove_rule(&self, id: &str) -> Result<(), MornError> {
         self.init_decision_rule_store()?;
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let affected = conn
             .execute("DELETE FROM decision_rule_store WHERE id = ?1", params![id])
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -80,7 +80,7 @@ impl DecisionRuleStore for Storage {
 
     fn list_rules(&self) -> Result<Vec<DecisionRule>, MornError> {
         self.init_decision_rule_store()?;
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, action, level, condition, effect, created_at FROM decision_rule_store",
@@ -96,7 +96,7 @@ impl DecisionRuleStore for Storage {
 
     fn find_rule(&self, action: &str) -> Result<Option<DecisionRule>, MornError> {
         self.init_decision_rule_store()?;
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, action, level, condition, effect, created_at FROM decision_rule_store WHERE action = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;

@@ -268,6 +268,9 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
                 rating: 0.0,
                 downloads: 0,
                 created_at: chrono::Utc::now().to_rfc3339(),
+                version: "1.0.0".into(),
+                screenshots: "".into(),
+                category: "general".into(),
             };
             match market.publish(listing) {
                 Ok(()) => println!("  Published successfully."),

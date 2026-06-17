@@ -69,7 +69,7 @@ pub(crate) fn submit_review(
     };
     s.save_review(&review)?;
 
-    let listing = marketplace.get(&listing_id).unwrap();
+    let listing = marketplace.get(&listing_id).ok_or_else(|| MornError::Internal("Listing not found after submit".to_string()))?;
     let reviews = s.get_listing_reviews(&listing_id)?;
     let avg: f64 = if reviews.is_empty() {
         rating as f64

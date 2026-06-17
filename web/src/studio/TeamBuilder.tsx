@@ -1,14 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
-
-interface TeamTemplate {
-  id: string;
-  name: string;
-  description: string;
-  members: string[];
-  mode: string;
-  consensus: string;
-}
+import { TeamTemplate } from "./types";
 
 const TEAM_TEMPLATES: TeamTemplate[] = [
   {

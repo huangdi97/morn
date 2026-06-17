@@ -20,7 +20,7 @@ pub struct SaveCheckpointArgs<'a> {
 impl Storage {
     /// Saves a checkpoint using grouped arguments and returns success when the row is stored.
     pub fn save_checkpoint_args(&self, args: SaveCheckpointArgs<'_>) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO checkpoints (id, session_id, step_index, step_name, state_json, metadata_json, parent_id, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -67,7 +67,7 @@ impl Storage {
         &self,
         session_id: &str,
     ) -> Result<Option<CheckpointRow>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, session_id, step_index, step_name, state_json, metadata_json, parent_id FROM checkpoints WHERE session_id = ?1 ORDER BY step_index DESC LIMIT 1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -92,7 +92,7 @@ impl Storage {
         &self,
         session_id: &str,
     ) -> Result<Vec<(String, i32, String, String)>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, step_index, step_name, created_at FROM checkpoints WHERE session_id = ?1 ORDER BY step_index ASC")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -120,7 +120,7 @@ impl Storage {
         new_id: &str,
         new_session_id: &str,
     ) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO checkpoints (id, session_id, step_index, step_name, state_json, metadata_json, parent_id, created_at)
              SELECT ?1, ?2, step_index, step_name, state_json, metadata_json, parent_id, ?3 FROM checkpoints WHERE id = ?4",

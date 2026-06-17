@@ -25,7 +25,6 @@ export default function VoiceInput({ onTranscribed }: VoiceInputProps) {
       recorder.onstop = async () => {
         setProcessing(true);
         const blob = new Blob(chunks.current, { type: "audio/webm" });
-        const audioFile = new File([blob], "recording.webm", { type: "audio/webm" });
 
         // Write file to temp and transcribe
         try {

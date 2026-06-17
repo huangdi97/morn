@@ -112,6 +112,9 @@ pub(crate) fn hub_publish(
     item_type: String,
     price: f64,
     author: String,
+    version: String,
+    screenshots: String,
+    category: String,
     state: State<AppState>,
 ) -> Result<String, MornError> {
     let storage = state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))?;
@@ -130,6 +133,9 @@ pub(crate) fn hub_publish(
         rating: 0.0,
         downloads: 0,
         created_at: chrono::Utc::now().to_rfc3339(),
+        version,
+        screenshots,
+        category,
     };
     marketplace.publish(listing)?;
     Ok(id)

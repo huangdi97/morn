@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from "react";
 import type { Node } from "reactflow";
 import { EditorPanel } from "./EditorPanel";
+import { NodeData } from "../types";
 
 export function useSmallScreen() {
   const [isSmallScreen, setIsSmallScreen] = useState(() => window.innerWidth < 768);
@@ -14,13 +15,6 @@ export function useSmallScreen() {
   }, []);
 
   return isSmallScreen;
-}
-
-interface NodeData {
-  nodeType: string;
-  label: string;
-  name: string;
-  detail: string;
 }
 
 const NODE_COLORS: Record<string, string> = {

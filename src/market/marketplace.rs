@@ -43,6 +43,9 @@ pub struct Listing {
     pub rating: f64,
     pub downloads: u64,
     pub created_at: String,
+    pub version: String,
+    pub screenshots: String,
+    pub category: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -95,87 +98,9 @@ impl Marketplace {
     }
 
     fn list_builtin(&self) {
-        let now = chrono::Utc::now().to_rfc3339();
-        let builtin = vec![
-            Listing {
-                id: "listing-tool-web-search".into(),
-                item_type: "tool".into(),
-                name: "Web Search Pro".into(),
-                description: "Advanced web search with multi-source aggregation".into(),
-                price: 0.001,
-                author: "Morn Labs".into(),
-                rating: 4.5,
-                downloads: 1230,
-                created_at: now.clone(),
-            },
-            Listing {
-                id: "listing-knowledge-stocks".into(),
-                item_type: "knowledge".into(),
-                name: "Stock Market Data".into(),
-                description: "Real-time stock quotes and historical data".into(),
-                price: 0.01,
-                author: "Morn Labs".into(),
-                rating: 4.2,
-                downloads: 890,
-                created_at: now.clone(),
-            },
-            Listing {
-                id: "listing-skill-research".into(),
-                item_type: "skill".into(),
-                name: "Deep Research Skill".into(),
-                description: "Multi-step research with cross-verification".into(),
-                price: 0.01,
-                author: "Morn Labs".into(),
-                rating: 4.8,
-                downloads: 560,
-                created_at: now.clone(),
-            },
-            Listing {
-                id: "listing-persona-analyst".into(),
-                item_type: "persona".into(),
-                name: "Financial Analyst".into(),
-                description: "Data-driven financial analysis persona".into(),
-                price: 0.0,
-                author: "Morn Labs".into(),
-                rating: 4.3,
-                downloads: 2100,
-                created_at: now.clone(),
-            },
-            Listing {
-                id: "listing-agent-research".into(),
-                item_type: "agent".into(),
-                name: "Research Agent".into(),
-                description: "Full-featured research agent with web search + analysis".into(),
-                price: 0.05,
-                author: "Morn Labs".into(),
-                rating: 4.6,
-                downloads: 340,
-                created_at: now.clone(),
-            },
-            Listing {
-                id: "listing-workflow-report".into(),
-                item_type: "workflow".into(),
-                name: "Weekly Report Generator".into(),
-                description: "Automated weekly report generation workflow".into(),
-                price: 0.03,
-                author: "Morn Labs".into(),
-                rating: 4.1,
-                downloads: 120,
-                created_at: now.clone(),
-            },
-            Listing {
-                id: "listing-team-risk-control".into(),
-                item_type: ListingType::TeamTemplate.as_str().into(),
-                name: "Risk Control Team".into(),
-                description:
-                    "Pre-built risk control team with data, rule, analyst, and alert agents".into(),
-                price: 0.02,
-                author: "Morn Labs".into(),
-                rating: 4.0,
-                downloads: 75,
-                created_at: now.clone(),
-            },
-        ];
+        let builtin: Vec<Listing> = serde_json::from_str(
+            include_str!("builtin_listings.json")
+        ).expect("Failed to parse builtin_listings.json");
         for listing in builtin {
             if self
                 .storage
@@ -336,6 +261,9 @@ impl Marketplace {
             rating: 0.0,
             downloads: 0,
             created_at: chrono::Utc::now().to_rfc3339(),
+            version: "1.0.0".into(),
+            screenshots: "".into(),
+            category: "general".into(),
         };
         self.storage.save_listing(&listing)?;
         Ok(id)
@@ -485,6 +413,9 @@ mod tests {
             rating: 0.0,
             downloads: 0,
             created_at: chrono::Utc::now().to_rfc3339(),
+            version: "1.0.0".into(),
+            screenshots: "".into(),
+            category: "general".into(),
         };
         market.publish(listing).unwrap();
         assert_eq!(market.list(None).len(), 8);

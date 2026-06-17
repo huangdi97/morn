@@ -113,6 +113,9 @@ fn test_market_storage() {
         rating: 4.0,
         downloads: 100,
         created_at: chrono::Utc::now().to_rfc3339(),
+        version: "1.0.0".to_string(),
+        screenshots: "".to_string(),
+        category: "general".to_string(),
     };
     storage.save_listing(&listing).unwrap();
 

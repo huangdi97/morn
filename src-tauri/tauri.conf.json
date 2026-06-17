@@ -44,7 +44,7 @@
       "active": true,
       "dialog": true,
       "endpoints": ["https://github.com/huangdi97/morn/releases/latest/download/update.json"],
-      "pubkey": ""
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE2NzAxOTA0RUE4NTc2NTcKUldSWGRvWHFCQmx3Rmhid2xULy9RK3c5SFJtMTBSdXU4NkdMUXprREhWR2hqNFkzT1NnRnZBLzEK"
     }
   }
 }

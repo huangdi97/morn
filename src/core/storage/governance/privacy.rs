@@ -13,7 +13,7 @@ impl Storage {
         sensitivity: &str,
         action: &str,
     ) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO privacy_rules (pattern, sensitivity, action) VALUES (?1, ?2, ?3)",
             params![pattern, sensitivity, action],
@@ -24,7 +24,7 @@ impl Storage {
 
     /// Lists privacy rules as id, pattern, sensitivity, and action tuples.
     pub fn list_privacy_rules(&self) -> Result<Vec<(i64, String, String, String)>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, pattern, sensitivity, action FROM privacy_rules")
             .map_err(|e| MornError::Internal(e.to_string()))?;

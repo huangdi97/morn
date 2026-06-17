@@ -2,7 +2,7 @@
 //! Use --cli flag to force CLI mode; otherwise defaults to CLI.
 //! Tauri mode is activated when launched via src-tauri.
 
-use crate::core::error::MornError;
+use morn::core::error::MornError;
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -364,11 +364,11 @@ fn run_daemon(config: MornConfig) -> Result<(), MornError> {
             }
         })
         .map_err(|e| {
-            format!(
+            MornError::Internal(format!(
                 "Failed to remove PID file {}: {}",
                 config.daemon.pid_file.display(),
                 e
-            )
+            ))
         });
 
     result.and(cleanup_result)

@@ -54,7 +54,7 @@ pub struct DecisionRecord {
 impl Storage {
     /// Inserts a task record and returns success when the row is stored.
     pub fn insert_task(&self, task: &TaskRecord) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO tasks (id, user_input, plan_json, status, created_at, completed_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -73,7 +73,7 @@ impl Storage {
 
     /// Fetches a task by id and returns `None` when no row exists.
     pub fn get_task(&self, id: &str) -> Result<Option<TaskRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, user_input, plan_json, status, created_at, completed_at FROM tasks WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -94,7 +94,7 @@ impl Storage {
 
     /// Lists task records ordered by newest creation time first.
     pub fn list_tasks(&self) -> Result<Vec<TaskRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, user_input, plan_json, status, created_at, completed_at FROM tasks ORDER BY created_at DESC")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -119,7 +119,7 @@ impl Storage {
 
     /// Updates a task status by id and sets completion time for terminal statuses.
     pub fn update_task_status(&self, id: &str, status: &str) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let completed_at = if status == "completed" || status == "failed" {
             Some(chrono::Utc::now().to_rfc3339())
         } else {
@@ -136,7 +136,7 @@ impl Storage {
     // Subtasks CRUD
     /// Inserts a subtask record and returns success when the row is stored.
     pub fn insert_subtask(&self, subtask: &SubtaskRecord) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO subtasks (id, task_id, agent_id, action, params_json, status, result_json, started_at, finished_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -152,7 +152,7 @@ impl Storage {
 
     /// Lists subtasks for a task id and returns the matching records.
     pub fn list_subtasks(&self, task_id: &str) -> Result<Vec<SubtaskRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, task_id, agent_id, action, params_json, status, result_json, started_at, finished_at FROM subtasks WHERE task_id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -185,7 +185,7 @@ impl Storage {
         status: &str,
         result_json: Option<&str>,
     ) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let finished_at = if status == "completed" || status == "failed" {
             Some(chrono::Utc::now().to_rfc3339())
         } else {
@@ -202,7 +202,7 @@ impl Storage {
     // Executions CRUD
     /// Inserts an execution record and returns success when the row is stored.
     pub fn insert_execution(&self, exec: &ExecutionRecord) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO executions (id, agent_id, task_id, action, status, latency_ms, error_msg, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -217,7 +217,7 @@ impl Storage {
 
     /// Lists execution records associated with a task id.
     pub fn list_executions(&self, task_id: &str) -> Result<Vec<ExecutionRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, created_at FROM executions WHERE task_id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -244,7 +244,7 @@ impl Storage {
 
     /// Lists execution records created today by matching the date prefix.
     pub fn list_today_executions(&self) -> Result<Vec<ExecutionRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
         let pattern = format!("{}%", today);
         let mut stmt = conn
@@ -272,7 +272,7 @@ impl Storage {
     }
 
     pub fn list_recent_executions(&self, limit: usize) -> Result<Vec<ExecutionRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, created_at FROM executions ORDER BY created_at DESC LIMIT ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -298,7 +298,7 @@ impl Storage {
     }
 
     pub fn get_reliability_metrics(&self) -> Result<serde_json::Value, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let past_24h = (chrono::Utc::now() - chrono::Duration::hours(24))
             .format("%Y-%m-%dT%H:%M:%S")
             .to_string();
@@ -390,7 +390,7 @@ impl Storage {
     // Decisions CRUD
     /// Inserts a decision record and returns success when the row is stored.
     pub fn insert_decision(&self, decision: &DecisionRecord) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO decisions (id, task_id, decision_level, action, context_json, approved, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -405,7 +405,7 @@ impl Storage {
 
     /// Lists decision records associated with a task id.
     pub fn list_decisions(&self, task_id: &str) -> Result<Vec<DecisionRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, task_id, decision_level, action, context_json, approved, created_at FROM decisions WHERE task_id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;

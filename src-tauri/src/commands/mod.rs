@@ -7,8 +7,11 @@ pub mod component_type;
 pub mod config;
 pub mod console;
 pub mod cost;
+pub mod earnings;
 pub mod errors;
+pub(crate) use earnings::get_creator_earnings;
 pub(crate) use errors::CommandError;
+pub mod execution;
 pub mod journey;
 pub mod local_model;
 pub mod market;
@@ -19,11 +22,13 @@ pub mod metrics;
 pub mod notifications;
 pub mod oauth;
 pub mod org;
+pub mod plugin_manager;
 pub mod proactive;
 pub mod recovery;
 pub mod sandbox;
 pub mod scheduler;
 pub mod studio;
+pub mod team_templates;
 pub mod whisper;
 
 pub(crate) use analytics::{get_performance_metrics, get_usage_stats};
@@ -36,6 +41,7 @@ pub(crate) use component_type::{
 pub(crate) use config::{export_config, import_config};
 pub(crate) use console::{get_component_topology, get_system_status};
 pub(crate) use cost::{estimate_cost, get_cost_summary};
+pub(crate) use execution::get_recent_logs;
 pub(crate) use journey::get_user_journey;
 pub(crate) use local_model::{delete_local_model, download_model, list_local_models};
 pub(crate) use market::{
@@ -49,6 +55,7 @@ pub(crate) use memory::{delete_memory, list_memories, search_memories};
 pub(crate) use metrics::get_reliability_metrics;
 pub(crate) use notifications::{list_notifications, send_notification};
 pub(crate) use oauth::{oauth_authorize, oauth_list_providers};
+pub(crate) use plugin_manager::plugin_install;
 pub(crate) use proactive::{list_proactive_rules, toggle_proactive_rule};
 pub(crate) use org::{
     add_member, create_team, create_user, get_audit_log, grant_permission, list_teams, list_users,
@@ -60,4 +67,5 @@ pub(crate) use studio::{
     list_component_types, list_components, publish_component, test_component, test_component_rerun,
     update_component,
 };
+pub(crate) use team_templates::list_team_templates;
 pub(crate) use whisper::{list_audio_devices, transcribe_audio};

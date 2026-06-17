@@ -9,10 +9,29 @@ use crate::core::storage::Storage;
 
 mod capability;
 mod version;
-mod visibility;
 
 pub use capability::Capability;
 pub use version::{compare_versions, AgentTemplate};
+
+/// Checks whether a capability is visible to a given user/team.
+fn is_capability_visible(
+    capability: &capability::Capability,
+    user_id: Option<&str>,
+    user_teams: &[String],
+) -> bool {
+    match capability.visibility.as_str() {
+        "public" => true,
+        "private" => user_id
+            .map(|uid| capability.owner_id.as_deref() == Some(uid))
+            .unwrap_or(false),
+        "team" => capability
+            .team_id
+            .as_ref()
+            .map(|tid| user_teams.iter().any(|ut| ut == tid))
+            .unwrap_or(false),
+        _ => true,
+    }
+}
 
 #[derive(Clone)]
 pub struct Registry {
@@ -203,7 +222,7 @@ impl Registry {
     pub fn list_available(&self, user_id: Option<&str>, user_teams: &[String]) -> Vec<&Capability> {
         self.capabilities
             .values()
-            .filter(|c| visibility::is_capability_visible(c, user_id, user_teams))
+            .filter(|c| is_capability_visible(c, user_id, user_teams))
             .collect()
     }
 

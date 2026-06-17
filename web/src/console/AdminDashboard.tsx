@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
 import { TemplateSelector } from "../studio/TemplateSelector";
+import ExecutionHistory from "./ExecutionHistory";
 
 interface TrendPoint {
   label: string;
@@ -267,6 +268,7 @@ export default function AdminDashboard() {
         {renderTrendChart("Latency Trend", data.latency_trend ?? defaultLatencyTrend, "#d29922", "ms")}
       </div>
       {renderAlerts()}
+      <ExecutionHistory />
       {showOnboarding && renderOnboarding()}
     </div>
   );

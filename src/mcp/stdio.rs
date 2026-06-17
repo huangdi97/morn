@@ -37,3 +37,45 @@ pub fn call_stdio(
         .map_err(|e| MCPError(format!("JSON parse failed: {e}")))?;
     Ok(data)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_call_stdio_success() {
+        let result = call_stdio(
+            "sh",
+            &["-c".to_string(), "cat > /dev/null; printf '{\"success\":true,\"data\":{}}'".to_string()],
+            "test_tool",
+            &serde_json::json!({"key": "value"}),
+        );
+        assert!(result.is_ok());
+        let resp = result.unwrap();
+        assert!(resp.success);
+    }
+
+    #[test]
+    fn test_call_stdio_command_not_found() {
+        let result = call_stdio(
+            "nonexistent_cmd_xyz",
+            &[],
+            "test",
+            &serde_json::json!({}),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().0.contains("Stdio command failed"));
+    }
+
+    #[test]
+    fn test_call_stdio_exit_error() {
+        let result = call_stdio(
+            "sh",
+            &["-c".to_string(), "echo err >&2; exit 1".to_string()],
+            "test",
+            &serde_json::json!({}),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().0.contains("exited with error"));
+    }
+}

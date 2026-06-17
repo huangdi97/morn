@@ -25,23 +25,7 @@ import { MobileView } from "./canvas/MobileView";
 import { EditorPanel } from "./canvas/EditorPanel";
 import { cloneSnapshot, downloadText, buildSnapshotSvg } from "./canvas/SnapshotHelper";
 import type { CanvasSnapshot } from "./canvas/SnapshotHelper";
-
-interface AgentDef {
-  name: string;
-  persona: string;
-  model: string;
-  tools: string[];
-  knowledge: string[];
-  skills: string[];
-}
-
-type NodeData = {
-  nodeType: string;
-  label: string;
-  name: string;
-  detail: string;
-  snapshot?: Record<string, unknown>;
-};
+import { AgentDef, NodeData } from "./types";
 
 const NODE_COLORS: Record<string, string> = {
   persona: "#7c3aed",

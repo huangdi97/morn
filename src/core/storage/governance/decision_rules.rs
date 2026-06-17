@@ -27,7 +27,7 @@ impl Storage {
         user_id: &str,
         keyword: &str,
     ) -> Result<Vec<DecisionRule>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, user_id, keyword, level, trust_threshold, auto_execute, source, hit_count, last_used_at, created_at FROM decision_rules WHERE user_id = ?1 AND keyword = ?2")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -57,7 +57,7 @@ impl Storage {
 
     /// Inserts or updates a decision rule keyed by user id and keyword.
     pub fn upsert_decision_rule(&self, rule: &DecisionRule) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO decision_rules (user_id, keyword, level, trust_threshold, auto_execute, source, hit_count, last_used_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
@@ -79,7 +79,7 @@ impl Storage {
 
     /// Increments a decision rule hit count and updates its last-used timestamp.
     pub fn increment_rule_hit(&self, rule_id: i64) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "UPDATE decision_rules SET hit_count = hit_count + 1, last_used_at = ?1 WHERE id = ?2",
             params![chrono::Utc::now().to_rfc3339(), rule_id],
@@ -90,7 +90,7 @@ impl Storage {
 
     /// Adjusts a decision rule trust threshold by `change`, clamped to the 0-100 range.
     pub fn adjust_rule_threshold(&self, rule_id: i64, change: f64) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "UPDATE decision_rules SET trust_threshold = MAX(0.0, MIN(100.0, trust_threshold + ?1)) WHERE id = ?2",
             params![change, rule_id],

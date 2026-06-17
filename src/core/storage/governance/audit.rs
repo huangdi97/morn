@@ -20,7 +20,7 @@ pub struct AuditLogRecord {
 impl Storage {
     /// Inserts an audit log record and returns success when the row is stored.
     pub fn insert_audit_log(&self, log: &AuditLogRecord) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO audit_log (id, user_id, action, target_type, target_id, details_json, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -37,7 +37,7 @@ impl Storage {
         action_type: Option<&str>,
         limit: u64,
     ) -> Result<Vec<AuditLogRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let sql = match (user_id, action_type) {
             (Some(_), Some(_)) => "SELECT id, user_id, action, target_type, target_id, details_json, created_at FROM audit_log WHERE user_id = ?1 AND action = ?2 ORDER BY created_at DESC LIMIT ?3",
             (Some(_), None) => "SELECT id, user_id, action, target_type, target_id, details_json, created_at FROM audit_log WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2",

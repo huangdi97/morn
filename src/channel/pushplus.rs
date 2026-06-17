@@ -1,7 +1,8 @@
 //! PushPlus 推送渠道 — 通过 pushplus.plus 发送消息通知
+use crate::core::error::{MornError, MornResult};
 use reqwest::blocking::Client;
 
-pub fn pushplus_push(token: &str, title: &str, content: &str) -> Result<(), String> {
+pub fn pushplus_push(token: &str, title: &str, content: &str) -> MornResult<()> {
     let payload = serde_json::json!({
         "token": token,
         "title": title,
@@ -25,10 +26,10 @@ pub fn pushplus_push(token: &str, title: &str, content: &str) -> Result<(), Stri
         .map_err(|e| format!("Failed to parse PushPlus response: {}", e))?;
 
     if !status.is_success() {
-        return Err(format!(
+        return Err(MornError::Network(format!(
             "PushPlus API returned non-200 status {}: {}",
             status, body
-        ));
+        )));
     }
 
     let code = body
@@ -45,7 +46,7 @@ pub fn pushplus_push(token: &str, title: &str, content: &str) -> Result<(), Stri
             .or_else(|| body.get("message"))
             .and_then(|v| v.as_str())
             .unwrap_or("unknown error");
-        return Err(format!("PushPlus API error {}: {}", code, message));
+        return Err(MornError::Network(format!("PushPlus API error {}: {}", code, message)));
     }
 
     Ok(())

@@ -27,7 +27,7 @@ pub struct DeviceRecord {
 
 impl Storage {
     pub fn insert_sync_event(&self, event: &SyncEventRecord) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT INTO sync_events (id, entity_type, entity_id, action, data_json, timestamp, device_id, synced)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -41,7 +41,7 @@ impl Storage {
     }
 
     pub fn list_unsynced_events(&self) -> Result<Vec<SyncEventRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, entity_type, entity_id, action, data_json, timestamp, device_id, synced FROM sync_events WHERE synced = 0 ORDER BY timestamp ASC")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -68,7 +68,7 @@ impl Storage {
     }
 
     pub fn get_sync_event(&self, id: &str) -> Result<Option<SyncEventRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, entity_type, entity_id, action, data_json, timestamp, device_id, synced FROM sync_events WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -91,7 +91,7 @@ impl Storage {
     }
 
     pub fn insert_remote_sync_event(&self, event: &SyncEventRecord) -> Result<bool, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let changed = conn
             .execute(
                 "INSERT OR IGNORE INTO sync_events (id, entity_type, entity_id, action, data_json, timestamp, device_id, synced)
@@ -111,7 +111,7 @@ impl Storage {
     }
 
     pub fn mark_event_synced(&self, id: &str) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "UPDATE sync_events SET synced = 1 WHERE id = ?1",
             params![id],
@@ -128,7 +128,7 @@ impl Storage {
     }
 
     pub fn clear_synced_events(&self) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute("DELETE FROM sync_events WHERE synced = 1", [])
             .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
@@ -136,7 +136,7 @@ impl Storage {
 
     // Devices CRUD
     pub fn upsert_device(&self, device: &DeviceRecord) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT OR REPLACE INTO devices (id, name, last_seen, public_key)
              VALUES (?1, ?2, ?3, ?4)",
@@ -147,7 +147,7 @@ impl Storage {
     }
 
     pub fn list_devices(&self) -> Result<Vec<DeviceRecord>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, name, last_seen, public_key FROM devices ORDER BY last_seen DESC")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -169,7 +169,7 @@ impl Storage {
     }
 
     pub fn delete_device(&self, id: &str) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute("DELETE FROM devices WHERE id = ?1", params![id])
             .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())

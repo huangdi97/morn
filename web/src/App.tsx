@@ -29,12 +29,17 @@ import AnalyticsPanel from "./console/AnalyticsPanel";
 import SandboxPanel from "./console/SandboxPanel";
 import ProactivePanel from "./console/ProactivePanel";
 import BusinessTemplates from "./console/BusinessTemplates";
+import CreatorEarnings from "./console/CreatorEarnings";
 import BotStore from "./store/BotStore";
 import { Settings } from "./Settings";
 import StatusBar from "./StatusBar";
+import ExecutionFlow from "./components/ExecutionFlow";
 import "./styles/base.css";
 import "./styles/skeleton.css";
 import "./styles/dashboard.css";
+import "./styles/chat.css";
+import "./styles/studio.css";
+import "./styles/console.css";
 
 type View = "workbench" | "studio" | "console" | "store";
 
@@ -68,6 +73,8 @@ function App() {
   const [loading, setLoading] = useState<Record<string, boolean>>({ workbench: true, studio: true, console: true });
   const [workStep, setWorkStep] = useState(0);
   const [workVisible, setWorkVisible] = useState(false);
+  const [workLogs, setWorkLogs] = useState<any[]>([]);
+  const workLogsEndRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -97,6 +104,22 @@ function App() {
   }, [messages, isTyping]);
 
   useEffect(() => {
+    const poll = async () => {
+      try {
+        const logs = await api.getRecentLogs();
+        setWorkLogs(logs);
+      } catch { /* ignore */ }
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    workLogsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [workLogs]);
+
+  useEffect(() => {
     if (!isTyping) return;
     setWorkStep(0);
     setWorkVisible(true);
@@ -111,6 +134,12 @@ function App() {
     const t = setTimeout(() => setWorkStep(s => s + 1), 1000);
     return () => clearTimeout(t);
   }, [workVisible, workStep]);
+
+  useEffect(() => {
+    if (workLogs.length > 0) {
+      setWorkVisible(true);
+    }
+  }, [workLogs]);
 
   useEffect(() => {
     if (view !== "store") {
@@ -144,11 +173,23 @@ function App() {
 
     try {
       const response = await api.sendMessage(text);
-      const assistantMsg: Message = { role: "assistant", content: response, timestamp: Date.now() };
+      const assistantMsg: Message = { role: "assistant", content: response.text ?? response, timestamp: Date.now() };
       setMessages((prev) => [...prev, assistantMsg]);
+
+      if (response.execution_events) {
+        setWorkLogs(response.execution_events);
+      } else {
+        // fallback: poll for logs
+        const logs = await api.getRecentLogs();
+        setWorkLogs(logs);
+      }
 
       const s: any = await api.getStatus();
       setStatus(`v${s.version} | ${s.turn_count} turns`);
+
+      // keep workLogs visible for 30s after response
+      setWorkVisible(true);
+      setTimeout(() => setWorkVisible(false), 30000);
     } catch (e: any) {
       const errorMsg: Message = {
         role: "assistant",
@@ -188,7 +229,7 @@ function App() {
   };
 
   const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "team" | "dev" | "types" | "mcp">("builder");
-  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business">("dashboard");
+  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings">("dashboard");
 
   const SkeletonChat = () => (
     <div className="skeleton-chat">
@@ -245,8 +286,6 @@ function App() {
     { name: "Analyst", active: false },
   ];
 
-  const WORK_STEPS = ["Thinking...", "Planning...", "Working...", "Done ✓"];
-
   function AgentBar() {
     const maxVisible = 6;
     const visible = AGENTS.slice(0, maxVisible);
@@ -261,22 +300,6 @@ function App() {
           </span>
         ))}
         {extra > 0 && <span className="agent-extra">+{extra} more</span>}
-      </div>
-    );
-  }
-
-  function WorkLog({ visible, step }: { visible: boolean; step: number }) {
-    if (!visible) return null;
-    const label = step < WORK_STEPS.length ? WORK_STEPS[step] : WORK_STEPS[WORK_STEPS.length - 1];
-
-    return (
-      <div className="work-log">
-        <span className="work-log-label">{label}</span>
-        <div className="work-log-dots">
-          {[0, 1, 2, 3].map(i => (
-            <span key={i} className={`work-dot ${i <= step ? "filled" : ""}`} />
-          ))}
-        </div>
       </div>
     );
   }
@@ -344,6 +367,7 @@ function App() {
         <button className={consoleTab === "sandbox" ? "active" : ""} onClick={() => setConsoleTab("sandbox")}>Sandbox</button>
         <button className={consoleTab === "proactive" ? "active" : ""} onClick={() => setConsoleTab("proactive")}>Proactive</button>
         <button className={consoleTab === "business" ? "active" : ""} onClick={() => setConsoleTab("business")}>Business</button>
+        <button className={consoleTab === "earnings" ? "active" : ""} onClick={() => setConsoleTab("earnings")}>Earnings</button>
       </nav>
       <div className="console-content">
         {loading.console ? <SkeletonConsole /> : (
@@ -368,6 +392,7 @@ function App() {
             {consoleTab === "sandbox" && <SandboxPanel />}
             {consoleTab === "proactive" && <ProactivePanel />}
             {consoleTab === "business" && <BusinessTemplates />}
+            {consoleTab === "earnings" && <CreatorEarnings />}
           </>
         )}
       </div>
@@ -388,7 +413,7 @@ function App() {
       </header>
 
       <AgentBar />
-      <WorkLog visible={workVisible} step={workStep} />
+      <ExecutionFlow logs={workLogs} visible={workVisible} />
 
       <main className="chat-area">
         {loading.workbench && messages.length === 0 ? <SkeletonChat /> : (

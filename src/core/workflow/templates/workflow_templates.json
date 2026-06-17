@@ -1,0 +1,564 @@
+[
+  {
+    "id": "workflow-crm",
+    "name": "客户管理 (CRM)",
+    "description": "Customer relationship management workflow with follow-up tracking and notifications",
+    "category": "business",
+    "tags": [
+      "crm",
+      "customer",
+      "follow-up",
+      "business"
+    ],
+    "version": "1.0.0",
+    "created_at": 0,
+    "updated_at": 0,
+    "fork_from": null,
+    "estimated_duration_secs": 60,
+    "steps": [
+      {
+        "id": "query_followups",
+        "action": {
+          "ToolCall": {
+            "tool_id": "web_search",
+            "params": {
+              "query": ""
+            }
+          }
+        },
+        "depends_on": [],
+        "timeout_secs": 15,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "analyze_customer",
+        "action": {
+          "LLMCall": {
+            "system_prompt": "Analyze customer data and identify key insights, preferences, and follow-up needs.",
+            "model": "default"
+          }
+        },
+        "depends_on": [
+          "query_followups"
+        ],
+        "timeout_secs": 15,
+        "retry_count": 1,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "generate_reminder",
+        "action": {
+          "LLMCall": {
+            "system_prompt": "Generate a personalized follow-up reminder message based on customer analysis.",
+            "model": "default"
+          }
+        },
+        "depends_on": [
+          "analyze_customer"
+        ],
+        "timeout_secs": 10,
+        "retry_count": 1,
+        "approval_required": true,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "send_reminder",
+        "action": {
+          "Notification": {
+            "channel": "email",
+            "message": "Customer follow-up reminder"
+          }
+        },
+        "depends_on": [
+          "generate_reminder"
+        ],
+        "timeout_secs": 10,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "log_activity",
+        "action": {
+          "ToolCall": {
+            "tool_id": "http_request",
+            "params": {
+              "url": "",
+              "method": "POST"
+            }
+          }
+        },
+        "depends_on": [
+          "send_reminder"
+        ],
+        "timeout_secs": 10,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "notify_complete",
+        "action": {
+          "Notification": {
+            "channel": "default",
+            "message": "CRM follow-up cycle completed"
+          }
+        },
+        "depends_on": [
+          "log_activity"
+        ],
+        "timeout_secs": 5,
+        "retry_count": 1,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      }
+    ]
+  },
+  {
+    "id": "workflow-invoice",
+    "name": "发票/收款",
+    "description": "Invoice generation and payment collection workflow",
+    "category": "business",
+    "tags": [
+      "invoice",
+      "payment",
+      "billing",
+      "business"
+    ],
+    "version": "1.0.0",
+    "created_at": 0,
+    "updated_at": 0,
+    "fork_from": null,
+    "estimated_duration_secs": 45,
+    "steps": [
+      {
+        "id": "select_template",
+        "action": {
+          "LLMCall": {
+            "system_prompt": "Select the appropriate invoice template based on client type and project scope.",
+            "model": "default"
+          }
+        },
+        "depends_on": [],
+        "timeout_secs": 10,
+        "retry_count": 1,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "fill_data",
+        "action": {
+          "LLMCall": {
+            "system_prompt": "Fill invoice data including line items, amounts, taxes, and payment terms.",
+            "model": "default"
+          }
+        },
+        "depends_on": [
+          "select_template"
+        ],
+        "timeout_secs": 15,
+        "retry_count": 1,
+        "approval_required": true,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "generate_pdf",
+        "action": {
+          "ToolCall": {
+            "tool_id": "http_request",
+            "params": {
+              "url": "",
+              "method": "POST"
+            }
+          }
+        },
+        "depends_on": [
+          "fill_data"
+        ],
+        "timeout_secs": 10,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "send_email",
+        "action": {
+          "Notification": {
+            "channel": "email",
+            "message": "Invoice ready for client"
+          }
+        },
+        "depends_on": [
+          "generate_pdf"
+        ],
+        "timeout_secs": 10,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "notify_complete",
+        "action": {
+          "Notification": {
+            "channel": "default",
+            "message": "Invoice workflow completed"
+          }
+        },
+        "depends_on": [
+          "send_email"
+        ],
+        "timeout_secs": 5,
+        "retry_count": 1,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      }
+    ]
+  },
+  {
+    "id": "workflow-email-marketing",
+    "name": "邮件营销",
+    "description": "Email marketing campaign workflow from creation to reporting",
+    "category": "business",
+    "tags": [
+      "email",
+      "marketing",
+      "campaign",
+      "business"
+    ],
+    "version": "1.0.0",
+    "created_at": 0,
+    "updated_at": 0,
+    "fork_from": null,
+    "estimated_duration_secs": 90,
+    "steps": [
+      {
+        "id": "create_template",
+        "action": {
+          "LLMCall": {
+            "system_prompt": "Create an email marketing template with compelling subject line and body content.",
+            "model": "default"
+          }
+        },
+        "depends_on": [],
+        "timeout_secs": 20,
+        "retry_count": 1,
+        "approval_required": true,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "select_recipients",
+        "action": {
+          "ToolCall": {
+            "tool_id": "web_search",
+            "params": {
+              "query": ""
+            }
+          }
+        },
+        "depends_on": [
+          "create_template"
+        ],
+        "timeout_secs": 15,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "review_content",
+        "action": {
+          "HumanApproval": {
+            "message": "Please review the email campaign content before sending"
+          }
+        },
+        "depends_on": [
+          "select_recipients"
+        ],
+        "timeout_secs": 300,
+        "retry_count": 0,
+        "approval_required": true,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "send_batch",
+        "action": {
+          "Notification": {
+            "channel": "email",
+            "message": "Batch email campaign send"
+          }
+        },
+        "depends_on": [
+          "review_content"
+        ],
+        "timeout_secs": 30,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "track_opens",
+        "action": {
+          "ToolCall": {
+            "tool_id": "web_search",
+            "params": {
+              "query": ""
+            }
+          }
+        },
+        "depends_on": [
+          "send_batch"
+        ],
+        "timeout_secs": 15,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "generate_report",
+        "action": {
+          "LLMCall": {
+            "system_prompt": "Generate an email marketing performance report with open rates, click rates, and recommendations.",
+            "model": "default"
+          }
+        },
+        "depends_on": [
+          "track_opens"
+        ],
+        "timeout_secs": 15,
+        "retry_count": 1,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      }
+    ]
+  },
+  {
+    "id": "workflow-client-portal",
+    "name": "客户门户",
+    "description": "Client portal workflow for file sharing, requirements gathering, and deliverable management",
+    "category": "business",
+    "tags": [
+      "client",
+      "portal",
+      "deliverable",
+      "business"
+    ],
+    "version": "1.0.0",
+    "created_at": 0,
+    "updated_at": 0,
+    "fork_from": null,
+    "estimated_duration_secs": 60,
+    "steps": [
+      {
+        "id": "share_files",
+        "action": {
+          "Notification": {
+            "channel": "email",
+            "message": "Share project files with client"
+          }
+        },
+        "depends_on": [],
+        "timeout_secs": 10,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "collect_requirements",
+        "action": {
+          "LLMCall": {
+            "system_prompt": "Analyze client requirements and feedback from shared materials.",
+            "model": "default"
+          }
+        },
+        "depends_on": [
+          "share_files"
+        ],
+        "timeout_secs": 15,
+        "retry_count": 1,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "confirm_status",
+        "action": {
+          "HumanApproval": {
+            "message": "Please confirm project status and next steps with the client"
+          }
+        },
+        "depends_on": [
+          "collect_requirements"
+        ],
+        "timeout_secs": 300,
+        "retry_count": 0,
+        "approval_required": true,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "package_deliverables",
+        "action": {
+          "ToolCall": {
+            "tool_id": "http_request",
+            "params": {
+              "url": "",
+              "method": "POST"
+            }
+          }
+        },
+        "depends_on": [
+          "confirm_status"
+        ],
+        "timeout_secs": 15,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "notify_delivery",
+        "action": {
+          "Notification": {
+            "channel": "email",
+            "message": "Deliverables ready for client pickup"
+          }
+        },
+        "depends_on": [
+          "package_deliverables"
+        ],
+        "timeout_secs": 10,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      }
+    ]
+  },
+  {
+    "id": "workflow-schedule",
+    "name": "日程/会议管理",
+    "description": "Meeting scheduling and management workflow with auto-scheduling and minutes generation",
+    "category": "business",
+    "tags": [
+      "schedule",
+      "meeting",
+      "calendar",
+      "business"
+    ],
+    "version": "1.0.0",
+    "created_at": 0,
+    "updated_at": 0,
+    "fork_from": null,
+    "estimated_duration_secs": 45,
+    "steps": [
+      {
+        "id": "view_schedule",
+        "action": {
+          "ToolCall": {
+            "tool_id": "web_search",
+            "params": {
+              "query": ""
+            }
+          }
+        },
+        "depends_on": [],
+        "timeout_secs": 10,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "auto_schedule",
+        "action": {
+          "LLMCall": {
+            "system_prompt": "Find optimal meeting times based on participant availability and preferences.",
+            "model": "default"
+          }
+        },
+        "depends_on": [
+          "view_schedule"
+        ],
+        "timeout_secs": 15,
+        "retry_count": 1,
+        "approval_required": true,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "create_meeting",
+        "action": {
+          "ToolCall": {
+            "tool_id": "http_request",
+            "params": {
+              "url": "",
+              "method": "POST"
+            }
+          }
+        },
+        "depends_on": [
+          "auto_schedule"
+        ],
+        "timeout_secs": 10,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "send_invites",
+        "action": {
+          "Notification": {
+            "channel": "email",
+            "message": "Meeting invitation with agenda"
+          }
+        },
+        "depends_on": [
+          "create_meeting"
+        ],
+        "timeout_secs": 10,
+        "retry_count": 2,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      },
+      {
+        "id": "generate_minutes",
+        "action": {
+          "LLMCall": {
+            "system_prompt": "Generate meeting minutes summarizing key discussion points, decisions, and action items.",
+            "model": "default"
+          }
+        },
+        "depends_on": [
+          "send_invites"
+        ],
+        "timeout_secs": 15,
+        "retry_count": 1,
+        "approval_required": false,
+        "input_mapping": {},
+        "output_mapping": {}
+      }
+    ]
+  }
+]

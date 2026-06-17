@@ -24,3 +24,31 @@ pub fn call_http(
     let data: MCPResponse = resp.json().map_err(|e| MCPError(format!("JSON decode failed: {e}")))?;
     Ok(data)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_call_http_connection_refused() {
+        let result = call_http(
+            "http://127.0.0.1:1",
+            &None,
+            "test_tool",
+            &serde_json::json!({}),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().0.contains("HTTP request failed"));
+    }
+
+    #[test]
+    fn test_call_http_with_api_key() {
+        let result = call_http(
+            "http://127.0.0.1:1",
+            &Some("sk-test".to_string()),
+            "test_tool",
+            &serde_json::json!({"x": 1}),
+        );
+        assert!(result.is_err());
+    }
+}

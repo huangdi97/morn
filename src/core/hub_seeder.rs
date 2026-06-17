@@ -39,6 +39,9 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
             rating: 0.0,
             downloads: 0,
             created_at: chrono::Utc::now().to_rfc3339(),
+            version: "1.0.0".into(),
+            screenshots: "".into(),
+            category: "general".into(),
         });
     }
 
@@ -57,6 +60,9 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
             rating: 0.0,
             downloads: 0,
             created_at: chrono::Utc::now().to_rfc3339(),
+            version: "1.0.0".into(),
+            screenshots: "".into(),
+            category: "general".into(),
         });
     }
 
@@ -75,6 +81,9 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
                 rating: 0.0,
                 downloads: 0,
                 created_at: chrono::Utc::now().to_rfc3339(),
+                version: "1.0.0".into(),
+                screenshots: "".into(),
+                category: "general".into(),
             });
         }
     }

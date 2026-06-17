@@ -14,7 +14,7 @@ impl Storage {
         agent_id: Option<&str>,
         context_json: &str,
     ) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT OR REPLACE INTO sessions (id, user_id, agent_id, status, context_json, created_at, updated_at)
              VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?5)",
@@ -28,7 +28,7 @@ impl Storage {
     }
 
     pub fn get_session(&self, id: &str) -> Result<Option<SessionRow>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, user_id, agent_id, context_json, status FROM sessions WHERE id = ?1",
@@ -49,7 +49,7 @@ impl Storage {
     }
 
     pub fn update_session_context(&self, id: &str, context_json: &str) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "UPDATE sessions SET context_json = ?1, updated_at = ?2 WHERE id = ?3",
             params![context_json, chrono::Utc::now().to_rfc3339(), id],
@@ -59,7 +59,7 @@ impl Storage {
     }
 
     pub fn list_sessions(&self) -> Result<Vec<SessionRow>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, user_id, agent_id, context_json, status FROM sessions ORDER BY created_at DESC")
             .map_err(|e| MornError::Internal(e.to_string()))?;

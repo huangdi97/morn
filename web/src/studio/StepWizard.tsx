@@ -1,17 +1,9 @@
 import { useState, useMemo } from "react";
 import { api } from "../api";
+import { AgentDef } from "./types";
 
 interface StepWizardProps {
   onClose: () => void;
-}
-
-interface AgentDef {
-  name: string;
-  persona: string;
-  model: string;
-  tools: string[];
-  knowledge: string[];
-  skills: string[];
 }
 
 const STEP_ICONS = ["🧠", "🛠", "⚙", "👤", "📡"];

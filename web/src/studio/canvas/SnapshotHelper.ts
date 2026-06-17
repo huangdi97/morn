@@ -1,17 +1,10 @@
+import type { Edge, Node } from "reactflow";
+import { NodeData } from "../types";
+
 export type CanvasSnapshot = {
   nodes: Node<NodeData>[];
   edges: Edge[];
 };
-
-import type { Edge, Node } from "reactflow";
-
-interface NodeData {
-  nodeType: string;
-  label: string;
-  name: string;
-  detail: string;
-  snapshot?: Record<string, unknown>;
-}
 
 export function cloneSnapshot(nodes: Node<NodeData>[], edges: Edge[]): CanvasSnapshot {
   return {

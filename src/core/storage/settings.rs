@@ -6,7 +6,7 @@ use super::Storage;
 
 impl Storage {
     pub fn set_setting(&self, key: &str, value: &str) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
             params![key, value],
@@ -16,7 +16,7 @@ impl Storage {
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<String>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT value FROM settings WHERE key = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;

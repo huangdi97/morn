@@ -1,5 +1,6 @@
 //! dag — Executes task engines over directed acyclic workflow graphs.
 use super::TaskEngine;
+use crate::core::error::MornResult;
 use crate::core::supervisor::SubTaskDef;
 use std::collections::{HashMap, VecDeque};
 
@@ -7,7 +8,7 @@ impl TaskEngine {
     pub fn compute_topological_order(
         &self,
         subtasks: &[SubTaskDef],
-    ) -> Result<Vec<Vec<SubTaskDef>>, String> {
+    ) -> MornResult<Vec<Vec<SubTaskDef>>> {
         let mut in_degree: HashMap<String, usize> = HashMap::new();
         let mut adj: HashMap<String, Vec<String>> = HashMap::new();
         let mut subtask_map: HashMap<String, &SubTaskDef> = HashMap::new();

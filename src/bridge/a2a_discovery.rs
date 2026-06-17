@@ -4,6 +4,7 @@ use crate::bridge::a2a::{A2AMessage, A2AProtocol, AgentCard};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tracing;
 
 #[allow(dead_code)] /* 预留：A2A peer discovery 后台循环 */
 pub struct A2ADiscovery {
@@ -45,8 +46,8 @@ impl A2ADiscovery {
                         discovered.push(agent);
                     }
                 }
-                Ok(_) => {}
-                Err(_) => {}
+                Ok(other) => tracing::warn!("[Discovery] unexpected response from {}: {:?}", endpoint, other),
+                Err(e) => tracing::warn!("[Discovery] peer unreachable at {}: {}", endpoint, e),
             }
         }
         Ok(discovered)

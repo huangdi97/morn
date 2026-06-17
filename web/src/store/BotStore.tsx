@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import CheckoutModal from "./CheckoutModal";
 
 interface BotListing {
   id: string;
@@ -37,15 +38,19 @@ const hardcodedBots: BotListing[] = [
 ];
 
 const categories = ["all", "analysis", "research", "writing", "coding", "translation", "assistant", "review", "support"];
+const priceFilters = ["all", "free", "paid"] as const;
 
 export default function BotStore() {
   const [bots, setBots] = useState<BotListing[]>(hardcodedBots);
   const [category, setCategory] = useState("all");
+  const [priceFilter, setPriceFilter] = useState<string>("all");
   const [installed, setInstalled] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [reviews, setReviews] = useState<Record<string, Review[]>>({});
   const [reviewForm, setReviewForm] = useState<Record<string, { rating: number; comment: string }>>({});
   const [expandedReviews, setExpandedReviews] = useState<Set<string>>(new Set());
+  const [checkoutBot, setCheckoutBot] = useState<BotListing | null>(null);
+  const [publishStatus, setPublishStatus] = useState<Record<string, string>>({});
 
   useEffect(() => {
     api.listBotStore().then(setBots).catch(() => {
@@ -55,15 +60,54 @@ export default function BotStore() {
 
   const filtered = bots.filter(b => {
     const matchCategory = category === "all" || b.category === category;
+    const matchPrice = priceFilter === "all" || (priceFilter === "free" && b.price === 0) || (priceFilter === "paid" && b.price > 0);
     const matchSearch = !search || b.name.toLowerCase().includes(search.toLowerCase()) || b.description.toLowerCase().includes(search.toLowerCase());
-    return matchCategory && matchSearch;
+    return matchCategory && matchPrice && matchSearch;
   });
 
   const handleInstall = (bot: BotListing) => {
     if (installed.has(bot.id)) return;
+    if (bot.price > 0) {
+      setCheckoutBot(bot);
+      return;
+    }
+    doInstall(bot);
+  };
+
+  const doInstall = (bot: BotListing) => {
     api.installBotFromStore(bot.id, bot.template_id)
       .then(() => setInstalled(prev => new Set(prev).add(bot.id)))
       .catch(console.error);
+  };
+
+  const handlePublish = (bot: BotListing) => {
+    const categoryMap: Record<string, string> = {
+      analysis: "data-analysis", research: "research", writing: "writing",
+      coding: "coding", translation: "translation", assistant: "assistant",
+      review: "code-review", support: "customer-support",
+    };
+    setPublishStatus(prev => ({ ...prev, [bot.id]: "publishing..." }));
+    api.hubPublish({
+      name: bot.name,
+      description: bot.description,
+      category: categoryMap[bot.category] || bot.category,
+      version: "1.0.0",
+      screenshots: "",
+      price: 0,
+      author: "Morn Labs",
+      itemType: "agent",
+    }).then(() => {
+      setPublishStatus(prev => ({ ...prev, [bot.id]: "Published!" }));
+      setTimeout(() => setPublishStatus(prev => ({ ...prev, [bot.id]: "" })), 2000);
+    }).catch((err: Error) => {
+      setPublishStatus(prev => ({ ...prev, [bot.id]: err.message || "Error" }));
+    });
+  };
+
+  const handlePurchaseConfirm = async () => {
+    if (!checkoutBot) return;
+    await api.installBotFromStore(checkoutBot.id, checkoutBot.template_id);
+    setInstalled(prev => new Set(prev).add(checkoutBot.id));
   };
 
   const handleSearch = (val: string) => {
@@ -74,6 +118,10 @@ export default function BotStore() {
   const handleCategoryChange = (cat: string) => {
     setCategory(cat);
     api.searchMarketListings(search || null, cat === "all" ? null : cat).then(setBots).catch(() => {});
+  };
+
+  const handlePriceFilterChange = (pf: string) => {
+    setPriceFilter(pf);
   };
 
   const toggleReviews = (botId: string) => {
@@ -123,16 +171,34 @@ export default function BotStore() {
         />
       </div>
 
-      <div style={{ marginBottom: "16px" }}>
-        <select value={category} onChange={e => handleCategoryChange(e.target.value)}
-          style={{
-            background: "#0d1117", border: "1px solid #30363d", borderRadius: "4px",
-            padding: "6px 12px", color: "#e6edf3", fontSize: "13px", textTransform: "capitalize",
-          }}>
-          {categories.map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+      <div style={{ marginBottom: "16px", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ color: "#8b949e", fontSize: "12px" }}>Price:</span>
+        {priceFilters.map(pf => (
+          <button key={pf} onClick={() => handlePriceFilterChange(pf)}
+            style={{
+              background: priceFilter === pf ? "#1f6feb" : "transparent",
+              color: priceFilter === pf ? "#fff" : "#8b949e",
+              border: "1px solid #30363d", borderRadius: "4px",
+              padding: "4px 10px", cursor: "pointer", fontSize: "12px",
+              textTransform: "capitalize",
+            }}>
+            {pf === "all" ? "All" : pf === "free" ? "免费" : "付费"}
+          </button>
+        ))}
+        <span style={{ color: "#30363d" }}>|</span>
+        <span style={{ color: "#8b949e", fontSize: "12px" }}>Category:</span>
+        {categories.map(c => (
+          <button key={c} onClick={() => handleCategoryChange(c)}
+            style={{
+              background: category === c ? "#1f6feb" : "transparent",
+              color: category === c ? "#fff" : "#8b949e",
+              border: "1px solid #30363d", borderRadius: "4px",
+              padding: "4px 10px", cursor: "pointer", fontSize: "12px",
+              textTransform: "capitalize",
+            }}>
+            {c === "all" ? "All" : c}
+          </button>
+        ))}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
@@ -157,18 +223,29 @@ export default function BotStore() {
                 {bot.price === 0 ? "FREE" : `¥${bot.price.toFixed(3)}`}
               </span>
             </div>
-            <button
-              onClick={() => handleInstall(bot)}
-              disabled={installed.has(bot.id)}
-              style={{
-                width: "100%", marginTop: "12px", padding: "6px",
-                background: installed.has(bot.id) ? "#21262d" : "#1f6feb",
-                color: installed.has(bot.id) ? "#8b949e" : "#fff",
-                border: "none", borderRadius: "4px", cursor: installed.has(bot.id) ? "default" : "pointer",
-                fontSize: "13px",
-              }}>
-              {installed.has(bot.id) ? "Installed ✓" : bot.price === 0 ? "Install" : "Purchase"}
-            </button>
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                onClick={() => handleInstall(bot)}
+                disabled={installed.has(bot.id)}
+                style={{
+                  flex: 1, marginTop: "12px", padding: "6px",
+                  background: installed.has(bot.id) ? "#21262d" : "#1f6feb",
+                  color: installed.has(bot.id) ? "#8b949e" : "#fff",
+                  border: "none", borderRadius: "4px", cursor: installed.has(bot.id) ? "default" : "pointer",
+                  fontSize: "13px",
+                }}>
+                {installed.has(bot.id) ? "Installed ✓" : bot.price === 0 ? "免费安装" : `购买 ¥${bot.price.toFixed(3)}`}
+              </button>
+              <button
+                onClick={() => handlePublish(bot)}
+                style={{
+                  marginTop: "12px", padding: "6px 10px",
+                  background: "transparent", color: "#3fb950",
+                  border: "1px solid #3fb950", borderRadius: "4px", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap",
+                }}>
+                {publishStatus[bot.id] || "Publish"}
+              </button>
+            </div>
             <button
               onClick={() => toggleReviews(bot.id)}
               style={{
@@ -207,8 +284,18 @@ export default function BotStore() {
 
       {filtered.length === 0 && (
         <div style={{ color: "#8b949e", textAlign: "center", padding: "40px" }}>
-          No bots found matching your criteria
+          没有找到匹配的 Bot
         </div>
+      )}
+
+      {checkoutBot && (
+        <CheckoutModal
+          name={checkoutBot.name}
+          icon={checkoutBot.icon}
+          price={checkoutBot.price}
+          onConfirm={handlePurchaseConfirm}
+          onClose={() => { setCheckoutBot(null); }}
+        />
       )}
     </div>
   );

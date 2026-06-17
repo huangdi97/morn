@@ -26,7 +26,7 @@ pub struct SaveOAuthTokenArgs<'a> {
 
 impl Storage {
     pub fn save_oauth_token_args(&self, args: SaveOAuthTokenArgs<'_>) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "INSERT OR REPLACE INTO oauth_tokens (id, provider, user_id, access_token, refresh_token, expires_at, scope, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -72,7 +72,7 @@ impl Storage {
         provider: &str,
         user_id: &str,
     ) -> Result<Option<OAuthTokenRow>, MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, provider, user_id, access_token, refresh_token, expires_at, scope FROM oauth_tokens WHERE provider = ?1 AND user_id = ?2")
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -95,7 +95,7 @@ impl Storage {
     }
 
     pub fn delete_oauth_token(&self, provider: &str, user_id: &str) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute(
             "DELETE FROM oauth_tokens WHERE provider = ?1 AND user_id = ?2",
             params![provider, user_id],

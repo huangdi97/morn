@@ -54,6 +54,11 @@ impl Storage {
         Ok(storage)
     }
 
+    /// Returns a locked connection handle with consistent error mapping.
+    pub(crate) fn conn(&self) -> Result<std::sync::MutexGuard<'_, rusqlite::Connection>, MornError> {
+        self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))
+    }
+
     /// Creates an in-memory SQLite database and returns initialized storage for tests or ephemeral use.
     pub fn new_in_memory() -> Result<Self, MornError> {
         let conn = Connection::open_in_memory().map_err(|e| MornError::Internal(e.to_string()))?;
@@ -65,7 +70,7 @@ impl Storage {
     }
 
     fn init_tables(&self) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         conn.execute_batch(
             "
             CREATE TABLE IF NOT EXISTS agents (
@@ -124,7 +129,9 @@ impl Storage {
             CREATE TABLE IF NOT EXISTS market_listings (
                 id TEXT PRIMARY KEY, item_type TEXT NOT NULL, name TEXT NOT NULL,
                 description TEXT NOT NULL, price REAL NOT NULL, author TEXT NOT NULL,
-                rating REAL DEFAULT 0.0, downloads INTEGER DEFAULT 0, created_at TEXT NOT NULL
+                rating REAL DEFAULT 0.0, downloads INTEGER DEFAULT 0, created_at TEXT NOT NULL,
+                version TEXT NOT NULL DEFAULT '1.0.0', screenshots TEXT NOT NULL DEFAULT '',
+                category TEXT NOT NULL DEFAULT 'general'
             );
 
             CREATE TABLE IF NOT EXISTS market_transactions (
@@ -283,7 +290,7 @@ impl Storage {
     /// Returns `Ok(())` when the database responds to a `PRAGMA quick_check`
     /// with the value `"ok"`, and an error otherwise.
     pub fn check_health(&self) -> Result<(), MornError> {
-        let conn = self.conn.lock().map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = self.conn()?;
         let result: String = conn
             .pragma_query_value(None, "quick_check", |row| row.get(0))
             .map_err(|e| MornError::Internal(e.to_string()))?;
