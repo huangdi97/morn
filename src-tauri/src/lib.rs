@@ -16,6 +16,7 @@ use morn::core::supervisor::Supervisor;
 use morn::studio::manager::StudioManager;
 use morn::studio::publisher::StudioPublisher;
 use morn::studio::tester::StudioTester;
+pub use morn::core::error::MornError;
 
 mod autostart;
 mod commands;
@@ -160,7 +161,7 @@ pub fn run() {
             plugin_manager: Mutex::new(plugin_manager),
             type_registry: Mutex::new(TypeRegistry::new()),
             mcp_manager: Mutex::new(Vec::new()),
-            scheduler: Mutex::new(Some(core::scheduler::Scheduler::new())),
+            scheduler: Mutex::new(Some(Scheduler::new())),
         })
         .invoke_handler(tauri::generate_handler![
             commands::chat::send_message,
@@ -215,7 +216,6 @@ pub fn run() {
             commands::backup::import_mornpack,
             commands::component_type::register_component_type,
             commands::component_type::unregister_component_type,
-            commands::component_type::list_component_types,
             commands::mcp::mcp_connect,
             commands::mcp::mcp_disconnect,
             commands::mcp::mcp_list_servers,
