@@ -35,6 +35,7 @@ import { Settings } from "./Settings";
 import StatusBar from "./StatusBar";
 import ExecutionFlow from "./components/ExecutionFlow";
 import { ToastItem } from "./components/Toast";
+import { LocaleProvider, useTranslation } from "./i18n";
 import "./styles/base.css";
 import "./styles/skeleton.css";
 import "./styles/dashboard.css";
@@ -54,6 +55,15 @@ const CHAT_KEY = "morn_chat_history";
 const THEME_KEY = "morn-theme";
 
 function App() {
+  return (
+    <LocaleProvider>
+      <AppInner />
+    </LocaleProvider>
+  );
+}
+
+function AppInner() {
+  const { t } = useTranslation();
   const [view, setView] = useState<View>("workbench");
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
@@ -149,7 +159,7 @@ function App() {
 
   useEffect(() => {
     api.getStatus().then((s: any) => {
-      setStatus(`v${s.version} | ${s.turn_count} turns`);
+      setStatus(t('status.version', { version: s.version, turns: s.turn_count }));
     });
   }, []);
 
@@ -213,8 +223,8 @@ function App() {
       await api.clearHistory();
       setMessages([]);
       const s: any = await api.getStatus();
-      setStatus(`v${s.version} | ${s.turn_count} turns`);
-      showToast("info", "对话历史已清除");
+      setStatus(t('status.version', { version: s.version, turns: s.turn_count }));
+      showToast("info", t('chat.clear_toast'));
       return;
     }
 
@@ -244,7 +254,7 @@ function App() {
       }
 
       const s: any = await api.getStatus();
-      setStatus(`v${s.version} | ${s.turn_count} turns`);
+      setStatus(t('status.version', { version: s.version, turns: s.turn_count }));
 
       // keep workLogs visible for 30s after response
       setWorkVisible(true);
@@ -268,8 +278,8 @@ function App() {
     await api.clearHistory();
     setMessages([]);
     const s: any = await api.getStatus();
-    setStatus(`v${s.version} | ${s.turn_count} turns`);
-    showToast("info", "对话历史已清除");
+    setStatus(t('status.version', { version: s.version, turns: s.turn_count }));
+    showToast("info", t('chat.clear_toast'));
   };
 
   const handleClearClick = () => {
@@ -394,14 +404,14 @@ function App() {
   );
 
   const AGENTS = [
-    { name: "Planner", active: true },
-    { name: "Coder", active: true },
-    { name: "Reviewer", active: true },
-    { name: "Tester", active: true },
-    { name: "Monitor", active: true },
-    { name: "Deployer", active: false },
-    { name: "Optimizer", active: false },
-    { name: "Analyst", active: false },
+    { name: "Planner", active: true, key: "planner" },
+    { name: "Coder", active: true, key: "coder" },
+    { name: "Reviewer", active: true, key: "reviewer" },
+    { name: "Tester", active: true, key: "tester" },
+    { name: "Monitor", active: true, key: "monitor" },
+    { name: "Deployer", active: false, key: "deployer" },
+    { name: "Optimizer", active: false, key: "optimizer" },
+    { name: "Analyst", active: false, key: "analyst" },
   ];
 
   function AgentBar({ isTyping }: { isTyping: boolean }) {
@@ -417,10 +427,10 @@ function App() {
               className={`agent-dot ${agent.active ? "active" : "inactive"}${agent.active && isTyping ? " typing" : ""}`}
               style={agent.active && isTyping ? { animationDelay: `${i * 0.2}s` } : {}}
             />
-            {agent.name}
+            {t('agent.'+agent.key)}
           </span>
         ))}
-        {extra > 0 && <span className="agent-extra">+{extra} more</span>}
+        {extra > 0 && <span className="agent-extra">{t('agent.more', { count: extra })}</span>}
       </div>
     );
   }
@@ -428,14 +438,14 @@ function App() {
   const renderStudio = () => (
     <div className="studio-view">
       <nav className="studio-tabs">
-        <button className={studioTab === "editor" ? "active" : ""} onClick={() => setStudioTab("editor")}>Component Editor</button>
-        <button className={studioTab === "builder" ? "active" : ""} onClick={() => setStudioTab("builder")}>Agent Builder</button>
-        <button className={studioTab === "teams" ? "active" : ""} onClick={() => setStudioTab("teams")}>Teams</button>
-        <button className={studioTab === "team" ? "active" : ""} onClick={() => setStudioTab("team")}>Team Builder</button>
-        <button className={studioTab === "dev" ? "active" : ""} onClick={() => setStudioTab("dev")}>Dev</button>
-        <button className={studioTab === "types" ? "active" : ""} onClick={() => setStudioTab("types")}>Types</button>
-        <button className={studioTab === "mcp" ? "active" : ""} onClick={() => setStudioTab("mcp")}>MCP</button>
-        <button className={studioTab === "test" ? "active" : ""} onClick={() => setStudioTab("test")}>Test Runner</button>
+        <button className={studioTab === "editor" ? "active" : ""} onClick={() => setStudioTab("editor")}>{t('studio_tab.component_editor')}</button>
+        <button className={studioTab === "builder" ? "active" : ""} onClick={() => setStudioTab("builder")}>{t('studio_tab.agent_builder')}</button>
+        <button className={studioTab === "teams" ? "active" : ""} onClick={() => setStudioTab("teams")}>{t('studio_tab.teams')}</button>
+        <button className={studioTab === "team" ? "active" : ""} onClick={() => setStudioTab("team")}>{t('studio_tab.team_builder')}</button>
+        <button className={studioTab === "dev" ? "active" : ""} onClick={() => setStudioTab("dev")}>{t('studio_tab.dev')}</button>
+        <button className={studioTab === "types" ? "active" : ""} onClick={() => setStudioTab("types")}>{t('studio_tab.types')}</button>
+        <button className={studioTab === "mcp" ? "active" : ""} onClick={() => setStudioTab("mcp")}>{t('studio_tab.mcp')}</button>
+        <button className={studioTab === "test" ? "active" : ""} onClick={() => setStudioTab("test")}>{t('studio_tab.test_runner')}</button>
       </nav>
       <div className="studio-content">
         {loading.studio ? <SkeletonStudio /> : (
@@ -468,27 +478,27 @@ onSelect={async (template) => {
   const renderConsole = () => (
     <div className="console-view">
       <nav className="console-tabs">
-        <button className={consoleTab === "dashboard" ? "active" : ""} onClick={() => setConsoleTab("dashboard")}>Dashboard</button>
-        <button className={consoleTab === "journey" ? "active" : ""} onClick={() => setConsoleTab("journey")}>Journey</button>
-        <button className={consoleTab === "topology" ? "active" : ""} onClick={() => setConsoleTab("topology")}>Topology</button>
-        <button className={consoleTab === "system" ? "active" : ""} onClick={() => setConsoleTab("system")}>System</button>
-        <button className={consoleTab === "cost" ? "active" : ""} onClick={() => setConsoleTab("cost")}>Cost</button>
-        <button className={consoleTab === "roi" ? "active" : ""} onClick={() => setConsoleTab("roi")}>ROI</button>
-        <button className={consoleTab === "governance" ? "active" : ""} onClick={() => setConsoleTab("governance")}>Governance</button>
-        <button className={consoleTab === "security" ? "active" : ""} onClick={() => setConsoleTab("security")}>Security</button>
-        <button className={consoleTab === "market" ? "active" : ""} onClick={() => setConsoleTab("market")}>Marketplace</button>
-        <button className={consoleTab === "system_check" ? "active" : ""} onClick={() => setConsoleTab("system_check")}>Self-Check</button>
-        <button className={consoleTab === "notifications" ? "active" : ""} onClick={() => setConsoleTab("notifications")}>Notifications</button>
-        <button className={consoleTab === "memory" ? "active" : ""} onClick={() => setConsoleTab("memory")}>Memory</button>
-        <button className={consoleTab === "connections" ? "active" : ""} onClick={() => setConsoleTab("connections")}>Connections</button>
-        <button className={consoleTab === "audio" ? "active" : ""} onClick={() => setConsoleTab("audio")}>Audio</button>
-        <button className={consoleTab === "cost_tracking" ? "active" : ""} onClick={() => setConsoleTab("cost_tracking")}>Cost</button>
-        <button className={consoleTab === "local_models" ? "active" : ""} onClick={() => setConsoleTab("local_models")}>Local Models</button>
-        <button className={consoleTab === "analytics" ? "active" : ""} onClick={() => setConsoleTab("analytics")}>Analytics</button>
-        <button className={consoleTab === "sandbox" ? "active" : ""} onClick={() => setConsoleTab("sandbox")}>Sandbox</button>
-        <button className={consoleTab === "proactive" ? "active" : ""} onClick={() => setConsoleTab("proactive")}>Proactive</button>
-        <button className={consoleTab === "business" ? "active" : ""} onClick={() => setConsoleTab("business")}>Business</button>
-        <button className={consoleTab === "earnings" ? "active" : ""} onClick={() => setConsoleTab("earnings")}>Earnings</button>
+        <button className={consoleTab === "dashboard" ? "active" : ""} onClick={() => setConsoleTab("dashboard")}>{t('console_tab.dashboard')}</button>
+        <button className={consoleTab === "journey" ? "active" : ""} onClick={() => setConsoleTab("journey")}>{t('console_tab.journey')}</button>
+        <button className={consoleTab === "topology" ? "active" : ""} onClick={() => setConsoleTab("topology")}>{t('console_tab.topology')}</button>
+        <button className={consoleTab === "system" ? "active" : ""} onClick={() => setConsoleTab("system")}>{t('console_tab.system')}</button>
+        <button className={consoleTab === "cost" ? "active" : ""} onClick={() => setConsoleTab("cost")}>{t('console_tab.cost')}</button>
+        <button className={consoleTab === "roi" ? "active" : ""} onClick={() => setConsoleTab("roi")}>{t('console_tab.roi')}</button>
+        <button className={consoleTab === "governance" ? "active" : ""} onClick={() => setConsoleTab("governance")}>{t('console_tab.governance')}</button>
+        <button className={consoleTab === "security" ? "active" : ""} onClick={() => setConsoleTab("security")}>{t('console_tab.security')}</button>
+        <button className={consoleTab === "market" ? "active" : ""} onClick={() => setConsoleTab("market")}>{t('console_tab.marketplace')}</button>
+        <button className={consoleTab === "system_check" ? "active" : ""} onClick={() => setConsoleTab("system_check")}>{t('console_tab.self_check')}</button>
+        <button className={consoleTab === "notifications" ? "active" : ""} onClick={() => setConsoleTab("notifications")}>{t('console_tab.notifications')}</button>
+        <button className={consoleTab === "memory" ? "active" : ""} onClick={() => setConsoleTab("memory")}>{t('console_tab.memory')}</button>
+        <button className={consoleTab === "connections" ? "active" : ""} onClick={() => setConsoleTab("connections")}>{t('console_tab.connections')}</button>
+        <button className={consoleTab === "audio" ? "active" : ""} onClick={() => setConsoleTab("audio")}>{t('console_tab.audio')}</button>
+        <button className={consoleTab === "cost_tracking" ? "active" : ""} onClick={() => setConsoleTab("cost_tracking")}>{t('console_tab.cost_tracking')}</button>
+        <button className={consoleTab === "local_models" ? "active" : ""} onClick={() => setConsoleTab("local_models")}>{t('console_tab.local_models')}</button>
+        <button className={consoleTab === "analytics" ? "active" : ""} onClick={() => setConsoleTab("analytics")}>{t('console_tab.analytics')}</button>
+        <button className={consoleTab === "sandbox" ? "active" : ""} onClick={() => setConsoleTab("sandbox")}>{t('console_tab.sandbox')}</button>
+        <button className={consoleTab === "proactive" ? "active" : ""} onClick={() => setConsoleTab("proactive")}>{t('console_tab.proactive')}</button>
+        <button className={consoleTab === "business" ? "active" : ""} onClick={() => setConsoleTab("business")}>{t('console_tab.business')}</button>
+        <button className={consoleTab === "earnings" ? "active" : ""} onClick={() => setConsoleTab("earnings")}>{t('console_tab.earnings')}</button>
       </nav>
       <div className="console-content">
         {loading.console ? <SkeletonConsole /> : (
@@ -523,10 +533,10 @@ onSelect={async (template) => {
   const renderWorkbench = () => (
     <>
       <header className="header">
-        <h1>Morn</h1>
+        <h1>{t('app.title')}</h1>
         <span className="status">{status}</span>
         <button className={`clear-btn${confirmClear ? ' confirming' : ''}`} onClick={handleClearClick}>
-          {confirmClear ? '确认清除？' : 'Clear'}
+          {confirmClear ? t('chat.clear_confirm') : t('chat.clear')}
         </button>
         <button className="settings-btn" onClick={() => setShowSettings(true)}>
           ⚙
@@ -542,8 +552,8 @@ onSelect={async (template) => {
         {messages.length === 0 && (
           <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-secondary)" }}>
             <div style={{ fontSize: "48px", marginBottom: "12px" }}>🤖</div>
-            <h2 style={{ color: "var(--text-primary)", margin: "0 0 8px 0" }}>欢迎使用 Morn</h2>
-            <p style={{ fontSize: "14px", margin: "0 0 24px 0" }}>选择快捷任务或直接输入你的问题</p>
+            <h2 style={{ color: "var(--text-primary)", margin: "0 0 8px 0" }}>{t('welcome.title')}</h2>
+            <p style={{ fontSize: "14px", margin: "0 0 24px 0" }}>{t('welcome.description')}</p>
             <QuickActions onSend={sendQuickAction} />
           </div>
         )}
@@ -566,7 +576,7 @@ onSelect={async (template) => {
                     <span className="timestamp">{formatTime(msg.timestamp)}</span>
                   </div>
                   {isErr && (
-                    <button className="retry-btn" onClick={() => retryMessage(i)} title="Retry">↻</button>
+                    <button className="retry-btn" onClick={() => retryMessage(i)} title={t('chat.retry')}>↻</button>
                   )}
                   {msg.role === "assistant" && !isErr && (
                     <div className="feedback-btns">
@@ -611,15 +621,15 @@ onSelect={async (template) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
+          placeholder={t('chat.placeholder')}
           rows={1}
         />
         </div>
         {isTyping ? (
-          <button className="stop-btn" onClick={handleStop}>■ Stop</button>
+          <button className="stop-btn" onClick={handleStop}>■ {t('chat.stop')}</button>
         ) : (
           <button onClick={(e) => { (e.currentTarget as HTMLElement).classList.add('pressing'); setTimeout(() => (e.currentTarget as HTMLElement).classList.remove('pressing'), 250); sendMessage(); }} disabled={!input.trim()}>
-            Send
+            {t('chat.send')}
           </button>
         )}
       </footer>
@@ -629,21 +639,21 @@ onSelect={async (template) => {
   return (
     <div className="app" data-theme={theme}>
       <nav className="main-tabs" ref={mainTabsRef}>
-        <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")} data-tooltip="工作台">
+        <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")} data-tooltip={t('nav.workbench_tooltip')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          <span>Workbench</span>
+          <span>{t('nav.workbench')}</span>
         </button>
-        <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")} data-tooltip="工作室">
+        <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")} data-tooltip={t('nav.studio_tooltip')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="16 3 21 8 8 21 3 21 3 16 16 3"/></svg>
-          <span>Studio</span>
+          <span>{t('nav.studio')}</span>
         </button>
-        <button className={view === "store" ? "active" : ""} onClick={() => setView("store")} data-tooltip="商店">
+        <button className={view === "store" ? "active" : ""} onClick={() => setView("store")} data-tooltip={t('nav.store_tooltip')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-          <span>Store</span>
+          <span>{t('nav.store')}</span>
         </button>
-        <button className={view === "console" ? "active" : ""} onClick={() => setView("console")} data-tooltip="控制台">
+        <button className={view === "console" ? "active" : ""} onClick={() => setView("console")} data-tooltip={t('nav.console_tooltip')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          <span>Console</span>
+          <span>{t('nav.console')}</span>
         </button>
         <div className="main-tab-indicator" style={{ left: indicatorStyle.left, width: indicatorStyle.width }} />
       </nav>

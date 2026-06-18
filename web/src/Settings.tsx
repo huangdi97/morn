@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from './i18n';
 
 export type ApiConfig = {
   mode: "local" | "remote";
@@ -47,6 +48,7 @@ export function Settings({ onClose, showToast }: SettingsProps) {
   const [provider, setProvider] = useState(() => localStorage.getItem('morn_model_provider') || 'sensenova');
   const [modelApiKey, setModelApiKey] = useState(() => localStorage.getItem('morn_model_api_key') || '');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const { t } = useTranslation();
 
   // Escape 关闭弹窗
   useEffect(() => {
@@ -106,11 +108,11 @@ export function Settings({ onClose, showToast }: SettingsProps) {
     try {
       saveApiConfig(config);
       setSaveStatus('success');
-      showToast?.('success', '设置已保存');
+      showToast?.('success', t('settings.saved'));
       setTimeout(() => setSaveStatus('idle'), 3000);
     } catch {
       setSaveStatus('error');
-      showToast?.('error', '保存失败');
+      showToast?.('error', t('settings.save_failed'));
       setTimeout(() => setSaveStatus('idle'), 3000);
     }
     onClose();
@@ -199,13 +201,13 @@ export function Settings({ onClose, showToast }: SettingsProps) {
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>Settings</h2>
+           <h2>{t('settings.title')}</h2>
           <button className="settings-close" onClick={onClose}>×</button>
         </div>
 
         <div className="settings-body">
           <div className="settings-section">
-            <label className="settings-label">Theme</label>
+            <label className="settings-label">{t('settings.theme')}</label>
             <select
               className="settings-select"
               value={selectedTheme}
@@ -216,7 +218,7 @@ export function Settings({ onClose, showToast }: SettingsProps) {
               ))}
             </select>
           </div>
-          <label className="settings-label">Mode</label>
+          <label className="settings-label">{t('settings.mode')}</label>
           <div className="settings-radio-group">
             <label className="settings-radio">
               <input
@@ -225,7 +227,7 @@ export function Settings({ onClose, showToast }: SettingsProps) {
                 checked={config.mode === "local"}
                 onChange={() => setConfig({ ...config, mode: "local" })}
               />
-              Local Mode
+              {t('settings.local_mode')}
             </label>
             <label className="settings-radio">
               <input
@@ -234,13 +236,13 @@ export function Settings({ onClose, showToast }: SettingsProps) {
                 checked={config.mode === "remote"}
                 onChange={() => setConfig({ ...config, mode: "remote" })}
               />
-              Remote Mode
+              {t('settings.remote_mode')}
             </label>
           </div>
 
           {config.mode === "remote" && (
             <>
-              <label className="settings-label">Server URL</label>
+              <label className="settings-label">{t('settings.server_url')}</label>
               <input
                 className="settings-input"
                 type="text"
@@ -249,28 +251,28 @@ export function Settings({ onClose, showToast }: SettingsProps) {
                 placeholder="http://localhost:3000"
               />
 
-              <label className="settings-label">API Key</label>
+              <label className="settings-label">{t('settings.api_key')}</label>
               <input
                 className="settings-input"
                 type="password"
                 value={config.apiKey}
                 onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
-                placeholder="Enter your API key"
+                placeholder={t('settings.api_key_placeholder')}
               />
             </>
           )}
         </div>
 
         <div className="settings-section settings-backup">
-          <label className="settings-label">Backup</label>
+          <label className="settings-label">{t('settings.backup')}</label>
           <div className="settings-btn-group">
-            <button className="settings-btn" onClick={handleExport}>Export .mornpack</button>
-            <button className="settings-btn" onClick={handleImport}>Import .mornpack</button>
+            <button className="settings-btn" onClick={handleExport}>{t('settings.export')}</button>
+            <button className="settings-btn" onClick={handleImport}>{t('settings.import')}</button>
           </div>
         </div>
 
         <div className="settings-section">
-          <label className="settings-label">Model Configuration</label>
+          <label className="settings-label">{t('settings.model_config')}</label>
           <select
             className="settings-select"
             value={provider}
@@ -287,32 +289,32 @@ export function Settings({ onClose, showToast }: SettingsProps) {
             type="password"
             value={modelApiKey}
             onChange={(e) => setModelApiKey(e.target.value)}
-            placeholder="API Key"
+            placeholder={t('settings.api_key')}
             style={{ marginBottom: "8px" }}
           />
           <button className="settings-btn" onClick={handleSaveModelConfig}>
-            Save Model Config
+            {t('settings.save_model_config')}
           </button>
         </div>
 
         <div className="settings-section">
-          <label className="settings-label">Sync</label>
+          <label className="settings-label">{t('settings.sync')}</label>
           <div style={{ fontSize: "14px", color: "var(--text-primary)", marginBottom: "8px" }}>
-            Devices
+            {t('settings.devices')}
           </div>
           <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px", paddingLeft: "8px" }}>
-            • This device (current)
+            {t('settings.this_device')}
           </div>
-          <button className="settings-btn" onClick={handleSyncNow}>Sync Now</button>
+          <button className="settings-btn" onClick={handleSyncNow}>{t('settings.sync_now')}</button>
           {syncTime && (
             <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "6px" }}>
-              Synced at {new Date(syncTime).toLocaleTimeString()}
+              {t('settings.synced_at')} {new Date(syncTime).toLocaleTimeString()}
             </div>
           )}
         </div>
 
         <div className="settings-section">
-          <label className="settings-label">Notifications</label>
+          <label className="settings-label">{t('settings.notifications')}</label>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
             <label className="settings-checkbox">
               <input
@@ -320,7 +322,7 @@ export function Settings({ onClose, showToast }: SettingsProps) {
                 checked={telegramEnabled}
                 onChange={(e) => handleTelegramToggle(e.target.checked)}
               />
-              Telegram
+{t('settings.telegram')}
             </label>
             {telegramEnabled && (
               <input
@@ -328,12 +330,12 @@ export function Settings({ onClose, showToast }: SettingsProps) {
                 type="password"
                 value={telegramToken}
                 onChange={(e) => handleTelegramToken(e.target.value)}
-                placeholder="Telegram bot token"
+                placeholder={t('settings.telegram_placeholder')}
                 style={{ marginLeft: "24px", width: "calc(100% - 24px)" }}
               />
             )}
             <button className="settings-btn" onClick={handleTestNotification} style={{ alignSelf: "flex-start" }}>
-              Test Notification
+              {t('settings.test_notification')}
             </button>
             <label className="settings-checkbox">
               <input
@@ -341,7 +343,7 @@ export function Settings({ onClose, showToast }: SettingsProps) {
                 checked={notifyAgentComplete}
                 onChange={(e) => handleNotifyChange('morn_notify_agent_complete', e.target.checked)}
               />
-              Agent Complete
+              {t('settings.agent_complete')}
             </label>
             <label className="settings-checkbox">
               <input
@@ -349,7 +351,7 @@ export function Settings({ onClose, showToast }: SettingsProps) {
                 checked={notifySecurityAlert}
                 onChange={(e) => handleNotifyChange('morn_notify_security_alert', e.target.checked)}
               />
-              Security Alert
+              {t('settings.security_alert')}
             </label>
             <label className="settings-checkbox">
               <input
@@ -357,17 +359,17 @@ export function Settings({ onClose, showToast }: SettingsProps) {
                 checked={notifyUpdateAvailable}
                 onChange={(e) => handleNotifyChange('morn_notify_update_available', e.target.checked)}
               />
-              Update Available
+              {t('settings.update_available')}
             </label>
           </div>
         </div>
 
         <div className="settings-footer">
-          {saveStatus === 'success' && <span className="settings-feedback success">✅ 已保存</span>}
-          {saveStatus === 'error' && <span className="settings-feedback error">❌ 保存失败</span>}
-          {saveStatus === 'saving' && <span className="settings-feedback">⏳ 保存中…</span>}
+          {saveStatus === 'success' && <span className="settings-feedback success">{t('settings.saved')}</span>}
+          {saveStatus === 'error' && <span className="settings-feedback error">{t('settings.save_failed')}</span>}
+          {saveStatus === 'saving' && <span className="settings-feedback">{t('settings.saving')}</span>}
           <button className={`settings-btn settings-btn-primary${saveStatus === 'success' ? ' saved' : ''}`} onClick={handleSave} disabled={saveStatus === 'saving'}>
-            {saveStatus === 'saving' ? '保存中…' : 'Save'}
+            {saveStatus === 'saving' ? t('settings.saving') : t('settings.save')}
           </button>
         </div>
       </div>
