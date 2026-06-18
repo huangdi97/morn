@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import { useTranslation } from '../i18n';
 
 interface Listing {
   id: string;
@@ -22,6 +23,7 @@ const hardcodedListings: Listing[] = [
 ];
 
 export default function Marketplace() {
+  const { t } = useTranslation();
   const [listings, setListings] = useState<Listing[]>(hardcodedListings);
   const [tab, setTab] = useState("all");
 
@@ -48,7 +50,7 @@ export default function Marketplace() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Marketplace</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.marketplace.title')}</h2>
 
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
         {tabs.map(t => (

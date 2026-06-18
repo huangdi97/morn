@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from '../i18n';
 
 export default function MemoryManager() {
+  const { t } = useTranslation();
   const [memories, setMemories] = useState<string[]>([]);
   const [query, setQuery] = useState("");
 
@@ -28,7 +30,7 @@ export default function MemoryManager() {
 
   return (
     <div className="memory-manager">
-      <h2>Memory Manager</h2>
+      <h2>{t('console.memory.title')}</h2>
       <div className="memory-search">
         <input
           type="text"
@@ -36,7 +38,7 @@ export default function MemoryManager() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search memories..."
         />
-        <button onClick={handleSearch}>Search</button>
+        <button onClick={handleSearch}>{t('console.memory.search')}</button>
       </div>
       {memories.length === 0 ? (
         <p className="empty-state">No memories found.</p>
@@ -44,7 +46,7 @@ export default function MemoryManager() {
         <table className="memory-table">
           <thead>
             <tr>
-              <th>Memory</th>
+              <th>{t('console.memory.header')}</th>
             </tr>
           </thead>
           <tbody>

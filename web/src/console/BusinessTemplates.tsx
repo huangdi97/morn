@@ -1,3 +1,5 @@
+import { useTranslation } from '../i18n';
+
 const TEMPLATES = [
   {
     id: "workflow-crm",
@@ -27,13 +29,14 @@ const TEMPLATES = [
 ];
 
 export default function BusinessTemplates() {
+  const { t } = useTranslation();
   const handlePreview = (id: string) => {
     alert(`Preview for template: ${id}`);
   };
 
   return (
     <div className="business-templates">
-      <h2>Business Templates</h2>
+      <h2>{t('console.business.title')}</h2>
       <div className="template-grid">
         {TEMPLATES.map((t) => (
           <div key={t.id} className="template-card">

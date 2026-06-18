@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from '../i18n';
 
 export default function LocalModelPanel() {
+  const { t } = useTranslation();
   const [models, setModels] = useState<string[]>([]);
   const [downloadName, setDownloadName] = useState("");
 
@@ -34,7 +36,7 @@ export default function LocalModelPanel() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Local Models</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.local_models.title')}</h2>
       <div className="cost-card">
         <div style={{ marginBottom: "12px" }}>
           <label style={{ color: "#8b949e", fontSize: "14px", display: "block", marginBottom: "4px" }}>Installed Models</label>

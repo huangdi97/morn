@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import { useTranslation } from '../i18n';
 
 interface CostBreakdown {
   name: string;
@@ -20,6 +21,7 @@ const tableStyle: React.CSSProperties = {
 };
 
 export default function CostCenter() {
+  const { t } = useTranslation();
   const [byAgent, setByAgent] = useState<CostBreakdown[]>([]);
   const [daily, setDaily] = useState<DailyCost[]>([]);
   const [totalCost, setTotalCost] = useState("0.00");
@@ -46,10 +48,10 @@ export default function CostCenter() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Cost Center</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.cost_center.title')}</h2>
 
       <div className="cost-card">
-        <div style={{ color: "#8b949e", fontSize: "13px", marginBottom: "8px" }}>Total Cost (7 days)</div>
+        <div style={{ color: "#8b949e", fontSize: "13px", marginBottom: "8px" }}>{t('console.cost_center.total_cost')}</div>
         <div style={{ fontSize: "28px", fontWeight: "bold", color: "#f85149" }}>¥{totalCost}</div>
       </div>
 

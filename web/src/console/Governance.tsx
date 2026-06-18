@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import { useTranslation } from '../i18n';
 
 interface ApiKeyInfo {
   id: string;
@@ -18,6 +19,7 @@ interface ApprovalItem {
 }
 
 export default function Governance() {
+  const { t } = useTranslation();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
   const [threshold, setThreshold] = useState(50);
@@ -38,12 +40,12 @@ export default function Governance() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Governance</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.governance.title')}</h2>
 
       <div className="gov-card">
         <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>API Keys</div>
         {keys.length === 0 ? (
-          <div style={{ color: "#8b949e" }}>No data available</div>
+          <div style={{ color: "#8b949e" }}>{t('console.governance.no_data')}</div>
         ) : (
           keys.map(k => (
             <div key={k.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #21262d" }}>
@@ -63,7 +65,7 @@ export default function Governance() {
       <div className="gov-card">
         <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>Approval Queue</div>
         {approvals.length === 0 ? (
-          <div style={{ color: "#8b949e" }}>No data available</div>
+          <div style={{ color: "#8b949e" }}>{t('console.governance.no_data')}</div>
         ) : (
           approvals.map(a => (
             <div key={a.id} style={{ padding: "8px 0", borderBottom: "1px solid #21262d" }}>

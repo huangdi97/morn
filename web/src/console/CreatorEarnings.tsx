@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from '../i18n';
 
 interface EarningsData {
   creator_id: string;
@@ -64,6 +65,7 @@ const tdStyle: React.CSSProperties = {
 };
 
 export default function CreatorEarnings() {
+  const { t } = useTranslation();
   const [earnings, setEarnings] = useState<EarningsData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -98,8 +100,8 @@ export default function CreatorEarnings() {
   if (loading) {
     return (
       <div>
-        <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Creator Earnings</h2>
-        <div style={{ color: "#8b949e", fontSize: "14px" }}>Loading...</div>
+        <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.earnings.title')}</h2>
+        <div style={{ color: "#8b949e", fontSize: "14px" }}>{t('console.earnings.loading')}</div>
       </div>
     );
   }
@@ -110,11 +112,11 @@ export default function CreatorEarnings() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Creator Earnings</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.earnings.title')}</h2>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "24px" }}>
         <div style={cardStyle}>
-          <div style={statLabel}>Total Earnings</div>
+          <div style={statLabel}>{t('console.earnings.total_earnings')}</div>
           <div style={{ ...statValue, color: "#3fb950" }}>${earnings?.total_earnings.toFixed(2)}</div>
         </div>
         <div style={cardStyle}>
@@ -141,12 +143,12 @@ export default function CreatorEarnings() {
             cursor: "pointer",
           }}
         >
-          Request Payout (${earnings?.pending_payout.toFixed(2)})
+          {t('console.earnings.request_payout')} (${earnings?.pending_payout.toFixed(2)})
         </button>
       </div>
 
       <div style={{ ...cardStyle, marginBottom: "24px" }}>
-        <h3 style={{ color: "#e6edf3", fontSize: "16px", marginBottom: "12px" }}>Recent Sales</h3>
+        <h3 style={{ color: "#e6edf3", fontSize: "16px", marginBottom: "12px" }}>{t('console.earnings.recent_sales')}</h3>
         <table style={tableStyle}>
           <thead>
             <tr>
@@ -172,13 +174,13 @@ export default function CreatorEarnings() {
       </div>
 
       <div style={cardStyle}>
-        <h3 style={{ color: "#e6edf3", fontSize: "16px", marginBottom: "12px" }}>Payout History</h3>
+        <h3 style={{ color: "#e6edf3", fontSize: "16px", marginBottom: "12px" }}>{t('console.earnings.payout_history')}</h3>
         <table style={tableStyle}>
           <thead>
             <tr>
               <th style={thStyle}>Date</th>
               <th style={thStyle}>Amount</th>
-              <th style={thStyle}>Status</th>
+              <th style={thStyle}>{t('console.earnings.status')}</th>
             </tr>
           </thead>
           <tbody>

@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from '../i18n';
 
 export default function AudioPanel() {
+  const { t } = useTranslation();
   const [devices, setDevices] = useState<string[]>([]);
   const [path, setPath] = useState("");
   const [result, setResult] = useState("");
@@ -21,7 +23,7 @@ export default function AudioPanel() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Audio Transcription</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.audio.title')}</h2>
       <div className="cost-card">
         <div style={{ marginBottom: "12px" }}>
           <label style={{ color: "#8b949e", fontSize: "14px", display: "block", marginBottom: "4px" }}>Audio Devices</label>

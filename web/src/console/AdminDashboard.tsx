@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../api";
 import { TemplateSelector } from "../studio/TemplateSelector";
 import ExecutionHistory from "./ExecutionHistory";
+import { useTranslation } from '../i18n';
 
 interface TrendPoint {
   label: string;
@@ -73,6 +74,7 @@ const cardGradient: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData>({
     total_tasks: 0,
@@ -168,8 +170,8 @@ export default function AdminDashboard() {
 
     return (
       <div className="dashboard-card dashboard-alerts">
-        <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "12px" }}>Alerts</div>
-        {alerts.length === 0 && <div style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>No active alerts.</div>}
+        <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "12px" }}>{t('console.dashboard.alerts')}</div>
+        {alerts.length === 0 && <div style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>{t('console.dashboard.no_alerts')}</div>}
         <div style={{ display: "grid", gap: "10px" }}>
           {alerts.map((alert) => (
             <div key={alert.id} style={{ border: `1px solid ${severityColor(alert.severity)}55`, borderLeft: `3px solid ${severityColor(alert.severity)}`, borderRadius: "6px", padding: "10px 12px", background: "var(--bg-page)" }}>
@@ -190,7 +192,7 @@ export default function AdminDashboard() {
           {onboardingStep === 1 && (
             <>
               <div style={{ fontSize: "48px", textAlign: "center", marginBottom: "16px" }}>🤖</div>
-              <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>欢迎使用 Morn</h2>
+              <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>{t('console.dashboard.welcome')}</h2>
               <p style={{ color: "var(--text-tertiary)", textAlign: "center", fontSize: "14px", lineHeight: "1.6", margin: "0 0 24px 0" }}>
                 Morn 是一个智能 AI 助手平台，帮你构建和使用 AI Agent。
                 你可以通过自然语言快速创建定制 Agent，或从模板开始。
@@ -213,7 +215,7 @@ export default function AdminDashboard() {
           )}
           {onboardingStep === 2 && (
             <>
-              <h3 style={{ color: "var(--text-primary)", margin: "0 0 16px 0" }}>选择你的第一个 Agent</h3>
+              <h3 style={{ color: "var(--text-primary)", margin: "0 0 16px 0" }}>{t('console.dashboard.select_agent')}</h3>
               <p style={{ color: "var(--text-tertiary)", fontSize: "14px", margin: "0 0 16px 0" }}>
                 选择一个模板开始，你也可以之后在 Studio 中自定义。
               </p>
@@ -233,7 +235,7 @@ export default function AdminDashboard() {
           {onboardingStep === 3 && (
             <>
               <div style={{ fontSize: "48px", textAlign: "center", marginBottom: "16px" }}>🚀</div>
-              <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>试试吧</h2>
+              <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>{t('console.dashboard.try_it')}</h2>
               <p style={{ color: "var(--text-tertiary)", textAlign: "center", fontSize: "14px", margin: "0 0 24px 0" }}>
                 前往 Workbench 开始对话，或在 Studio 中创建你的第一个 Agent。
               </p>
@@ -269,7 +271,7 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <h2 style={{ color: "var(--text-primary)", marginBottom: "16px" }}>Dashboard</h2>
+      <h2 style={{ color: "var(--text-primary)", marginBottom: "16px" }}>{t('console.dashboard.title')}</h2>
       <div className="dashboard-grid">
         {cards.map((card) => (
           <div key={card.label} className={`dashboard-card ${cardGradient[card.color] ?? ""}`}>
@@ -279,7 +281,7 @@ export default function AdminDashboard() {
         ))}
       </div>
       <div className={`dashboard-card dashboard-card-uptime`} style={{ marginTop: "var(--space-md)" }}>
-        <div className="dashboard-card-label">Uptime</div>
+        <div className="dashboard-card-label">{t('console.dashboard.uptime')}</div>
         <div className="dashboard-card-value" style={{ color: "var(--accent-brand)" }}>{data.uptime_hours.toFixed(1)} hours</div>
       </div>
       <div className="dashboard-chart-grid">

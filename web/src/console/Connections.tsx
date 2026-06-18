@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from '../i18n';
 
 export default function Connections() {
+  const { t } = useTranslation();
   const [providers, setProviders] = useState<string[]>([]);
   const [connected, setConnected] = useState<Record<string, boolean>>({});
 
@@ -41,7 +43,7 @@ export default function Connections() {
 
   return (
     <div className="connections">
-      <h2>Connections</h2>
+      <h2>{t('console.connections.title')}</h2>
       <div className="connections-list">
         {providers.map((p) => (
           <div key={p} className="connection-item">
