@@ -1053,6 +1053,7 @@ button.welcome-btn-secondary:active {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 .console-content, .studio-content {
