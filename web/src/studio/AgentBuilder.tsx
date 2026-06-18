@@ -3,6 +3,7 @@ import { api } from "../api";
 import { NodeCanvas } from "./NodeCanvas";
 import { StepWizard } from "./StepWizard";
 import { AgentDef, ComponentSummary } from "./types";
+import { useTranslation } from '../i18n';
 
 interface PresetInfo {
   id: string;
@@ -32,6 +33,7 @@ const NL_EXAMPLES = [
 ];
 
 export function AgentBuilder() {
+  const { t } = useTranslation();
   const [showWizard, setShowWizard] = useState(false);
   const [step, setStep] = useState(0);
   const [agentId, setAgentId] = useState<string | null>(null);
@@ -204,8 +206,8 @@ export function AgentBuilder() {
             {renderModeToggle()}
             {mode === "nl" ? (
               <>
-                <h3>用自然语言描述你的 Agent</h3>
-                <p>输入一句话，AI 自动分析并生成 Agent 配置</p>
+                <h3>{t('studio.builder.nl_title')}</h3>
+                <p>{t('studio.builder.nl_desc')}</p>
                 <textarea
                   value={nlInput}
                   onChange={(e) => setNlInput(e.target.value)}
@@ -226,7 +228,7 @@ export function AgentBuilder() {
                   {nlLoading ? "AI 分析中..." : "生成 Agent"}
                 </button>
                 <div style={{ marginTop: "16px", fontSize: "13px", color: "var(--text-secondary)" }}>
-                  <p>示例：</p>
+                  <p>{t('studio.builder.examples')}</p>
                   {NL_EXAMPLES.map((ex, i) => (
                     <div
                       key={i}
@@ -244,8 +246,8 @@ export function AgentBuilder() {
               </>
             ) : (
               <>
-                <h3>Describe your Agent</h3>
-                <p>Tell me what you want the agent to do in natural language</p>
+                <h3>{t('studio.builder.form_title')}</h3>
+                <p>{t('studio.builder.form_desc')}</p>
                 <input
                   type="text"
                   placeholder="e.g. A biology research agent"
@@ -253,7 +255,7 @@ export function AgentBuilder() {
                   onChange={(e) => setDef({ ...def, name: e.target.value })}
                   onKeyDown={(e) => e.key === "Enter" && buildFromNaturalLanguage(def.name)}
                 />
-                <button onClick={() => buildFromNaturalLanguage(def.name)}>Build</button>
+                <button onClick={() => buildFromNaturalLanguage(def.name)}>{t('studio.builder.build')}</button>
               </>
             )}
             {error && <div className="error-indicator">{error}</div>}
@@ -265,14 +267,14 @@ export function AgentBuilder() {
             {renderEditTabs()}
             {editTab === "form" ? (
               <>
-                <h3>Configure Persona & Model</h3>
-                <label>Agent Name:</label>
+                <h3>{t('studio.builder.configure')}</h3>
+                <label>{t('studio.builder.agent_name')}</label>
                 <input
                   type="text"
                   value={def.name}
                   onChange={(e) => setDef({ ...def, name: e.target.value })}
                 />
-                <label>Persona:</label>
+                <label>{t('studio.builder.persona')}</label>
                 <select value={def.persona} onChange={(e) => setDef({ ...def, persona: e.target.value })}>
                   {PERSONAS.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
@@ -312,7 +314,7 @@ export function AgentBuilder() {
                 </div>
                 {presets.length > 0 && (
                   <div className="template-selector" style={{ marginTop: "16px" }}>
-                    <h4 style={{ marginBottom: "8px", fontSize: "14px", color: "var(--text-secondary)" }}>预置人格模板</h4>
+                    <h4 style={{ marginBottom: "8px", fontSize: "14px", color: "var(--text-secondary)" }}>{t('studio.builder.preset_personas')}</h4>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
                       {presets.map((p) => (
                         <div
@@ -337,7 +339,7 @@ export function AgentBuilder() {
               </>
             ) : (
               <>
-                <h3>可视化节点编辑</h3>
+                <h3>{t('studio.builder.visual_editor')}</h3>
                 <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px" }}>
                   从左侧组件库拖拽组件到画布，连接端口构建 Agent
                 </p>
@@ -356,14 +358,14 @@ export function AgentBuilder() {
       case 2:
         return (
           <div className="studio-step">
-            <h3>Agent Created Successfully!</h3>
+            <h3>{t('studio.builder.created')}</h3>
             <div className="test-panel">
               <p>Agent: {def.name}</p>
               <p>Persona: {def.persona}</p>
               <p>Model: {def.model}</p>
               {agentId && <p className="agent-id">Agent ID: {agentId}</p>}
               <div className="component-breakdown">
-                <h4>Component Breakdown</h4>
+                <h4>{t('studio.builder.component_breakdown')}</h4>
                 <p><strong>Tools:</strong> {def.tools.length > 0 ? def.tools.join(", ") : "None"}</p>
                 <p><strong>Knowledge:</strong> {def.knowledge.length > 0 ? def.knowledge.join(", ") : "None"}</p>
                 <p><strong>Skills:</strong> {def.skills.length > 0 ? def.skills.join(", ") : "None"}</p>
@@ -386,7 +388,7 @@ export function AgentBuilder() {
   return (
     <div className="agent-builder">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-        <h2 style={{ margin: 0 }}>Agent Builder</h2>
+        <h2 style={{ margin: 0 }}>{t('studio.builder.title')}</h2>
         <button
           onClick={() => setShowWizard(true)}
           style={{
@@ -401,7 +403,7 @@ export function AgentBuilder() {
       {showWizard && <StepWizard onClose={() => setShowWizard(false)} />}
       <div className="steps-indicator">
         <span className={step >= 0 ? "active" : ""}>Describe</span>
-        <span className={step >= 1 ? "active" : ""}>Configure</span>
+        <span className={step >= 1 ? "active" : ""}>{t('studio.builder.step_configure')}</span>
         <span className={step >= 2 ? "active" : ""}>Done</span>
       </div>
       {renderStep()}

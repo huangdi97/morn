@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from '../i18n';
 
 type PluginType = "theme" | "channel" | "ui_slot" | "protocol";
 
@@ -72,6 +73,7 @@ function generateManifest(name: string, pluginType: PluginType, author: string):
 }
 
 export function DevZone() {
+  const { t } = useTranslation();
   const [pluginName, setPluginName] = useState("");
   const [pluginType, setPluginType] = useState<PluginType>("theme");
   const [author, setAuthor] = useState("");
@@ -132,7 +134,7 @@ export function DevZone() {
   return (
     <div style={{ padding: "24px", maxWidth: "900px" }}>
       <h2 style={{ color: "var(--text-primary)", marginBottom: "24px", fontSize: "20px", fontWeight: 600 }}>
-        Developer Zone
+        {t('studio.dev.title')}
       </h2>
 
       {/* Scaffold Plugin Section */}
@@ -146,13 +148,13 @@ export function DevZone() {
         }}
       >
         <h3 style={{ color: "var(--text-primary)", marginBottom: "16px", fontSize: "16px", fontWeight: 600 }}>
-          Scaffold Plugin
+          {t('studio.dev.scaffold')}
         </h3>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <div>
             <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "13px", marginBottom: "4px" }}>
-              Plugin Name
+              {t('studio.dev.plugin_name')}
             </label>
             <input
               value={pluginName}
@@ -173,7 +175,7 @@ export function DevZone() {
 
           <div>
             <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "13px", marginBottom: "4px" }}>
-              Plugin Type
+              {t('studio.dev.plugin_type')}
             </label>
             <select
               value={pluginType}
@@ -197,7 +199,7 @@ export function DevZone() {
 
           <div>
             <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "13px", marginBottom: "4px" }}>
-              Author
+              {t('studio.dev.author')}
             </label>
             <input
               value={author}
@@ -230,7 +232,7 @@ export function DevZone() {
               cursor: "pointer",
             }}
           >
-            Generate
+{t('studio.dev.generate')}
           </button>
         </div>
 
@@ -268,7 +270,7 @@ export function DevZone() {
                   cursor: "pointer",
                 }}
               >
-                {copied ? "Copied!" : "Copy"}
+                {copied ? t('studio.dev.copied') : t('studio.dev.copy')}
               </button>
             </div>
             <pre
@@ -300,13 +302,13 @@ export function DevZone() {
         }}
       >
         <h3 style={{ color: "var(--text-primary)", marginBottom: "16px", fontSize: "16px", fontWeight: 600 }}>
-          AI Plugin Generator
+          {t('studio.dev.ai_generator')}
         </h3>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <div>
             <label style={{ display: "block", color: "var(--text-secondary)", fontSize: "13px", marginBottom: "4px" }}>
-              Describe your plugin in natural language...
+              {t('studio.dev.describe')}
             </label>
             <textarea
               value={nlInput}
@@ -343,7 +345,7 @@ export function DevZone() {
                 cursor: generating || !nlInput.trim() ? "not-allowed" : "pointer",
               }}
             >
-              {generating ? "Generating..." : "Generate with AI"}
+              {generating ? t('studio.dev.generating') : t('studio.dev.generate_ai')}
             </button>
           </div>
 
@@ -392,7 +394,7 @@ export function DevZone() {
                       cursor: "pointer",
                     }}
                   >
-                    Install Plugin
+                    {t('studio.dev.install')}
                   </button>
                 </>
               )}
@@ -404,7 +406,7 @@ export function DevZone() {
       {/* Example Plugins Section */}
       <div>
         <h3 style={{ color: "var(--text-primary)", marginBottom: "16px", fontSize: "16px", fontWeight: 600 }}>
-          Example Plugins
+          {t('studio.dev.examples')}
         </h3>
         <div
           style={{
@@ -484,7 +486,7 @@ export function DevZone() {
                   fontWeight: 500,
                 }}
               >
-                Use Template
+{t('studio.dev.use_template')}
               </button>
             </div>
           ))}

@@ -1,13 +1,13 @@
 import { useState, useMemo } from "react";
 import { api } from "../api";
 import { AgentDef } from "./types";
+import { useTranslation } from '../i18n';
 
 interface StepWizardProps {
   onClose: () => void;
 }
 
 const STEP_ICONS = ["🧠", "🛠", "⚙", "👤", "📡"];
-const STEP_LABELS = ["选择记忆", "选择工具", "选择 LLM 模型", "选择人格", "选择渠道"];
 
 const MEMORY_OPTIONS = [
   { id: "working_memory", label: "工作记忆", desc: "短期上下文存储" },
@@ -55,6 +55,14 @@ const CHANNEL_OPTIONS = [
 const STEP_TOTAL = 5;
 
 export function StepWizard({ onClose }: StepWizardProps) {
+  const { t } = useTranslation();
+  const stepLabels = [
+    t('studio.wizard.select_memory'),
+    t('studio.wizard.select_tool'),
+    t('studio.wizard.select_llm'),
+    t('studio.wizard.select_persona'),
+    t('studio.wizard.complete'),
+  ];
   const [step, setStep] = useState(0);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,7 +178,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
               {isCompleted ? "✓" : i + 1}
             </div>
             <div style={{ fontSize: "13px", color: "var(--text-primary)", fontWeight: isActive ? 600 : 400 }}>
-              {STEP_ICONS[i]} {STEP_LABELS[i]}
+              {STEP_ICONS[i]} {stepLabels[i]}
             </div>
           </div>
         );
@@ -183,7 +191,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
       case 0:
         return (
           <div>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>🧠 选择记忆</h3>
+            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>🧠 {stepLabels[0]}</h3>
             <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>为 Agent 选择一种记忆方式</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {MEMORY_OPTIONS.map((m) => (
@@ -207,7 +215,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
       case 1:
         return (
           <div>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>🛠 选择工具</h3>
+            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>🛠 {stepLabels[1]}</h3>
             <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>为 Agent 选择可用工具（可多选）</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
               {TOOL_OPTIONS.map((t) => {
@@ -237,7 +245,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
       case 2:
         return (
           <div>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>⚙ 选择 LLM 模型</h3>
+            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>⚙ {stepLabels[2]}</h3>
             <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>选择 Agent 使用的语言模型</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {MODEL_OPTIONS.map((m) => (
@@ -269,7 +277,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
       case 3:
         return (
           <div>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>👤 选择人格</h3>
+            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>👤 {stepLabels[3]}</h3>
             <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>为 Agent 选择一种预设人格</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
               {PERSONA_OPTIONS.map((p) => (
@@ -293,7 +301,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
       case 4:
         return (
           <div>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>📡 完成配置</h3>
+            <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>📡 {stepLabels[4]}</h3>
             <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>命名你的 Agent 并选择部署渠道</p>
             <div style={{ marginBottom: "20px" }}>
               <label style={{ fontSize: "13px", color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>Agent 名称</label>
@@ -392,7 +400,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
           padding: "32px", textAlign: "center",
         }}>
           <div style={{ fontSize: "48px", marginBottom: "12px" }}>✅</div>
-          <h2 style={{ margin: "0 0 8px 0", color: "var(--text-primary)" }}>Agent 创建成功!</h2>
+          <h2 style={{ margin: "0 0 8px 0", color: "var(--text-primary)" }}>{t('studio.wizard.created')}</h2>
           <p style={{ fontSize: "14px", color: "var(--text-secondary)", margin: "0 0 16px 0" }}>
             {agentName} 已创建
           </p>

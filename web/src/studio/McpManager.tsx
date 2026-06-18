@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from '../i18n';
 
 const invoke = (cmd: string, args?: Record<string, unknown>) => {
   if ((window as any).__TAURI__) {
@@ -18,6 +19,7 @@ interface MCPServer {
 }
 
 export function McpManager() {
+  const { t } = useTranslation();
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -63,21 +65,21 @@ export function McpManager() {
 
   return (
     <div className="mcp-manager">
-      <h2>MCP Servers</h2>
+      <h2>{t('studio.mcp.title')}</h2>
 
       <div style={{ display: "flex", gap: "24px" }}>
         {/* List */}
         <div style={{ flex: 1 }}>
-          <h3>Connected Servers ({servers.length})</h3>
+          <h3>{t('studio.mcp.connected', { count: servers.length })}</h3>
           {loading ? (
-            <p>Loading...</p>
+            <p>{t('studio.mcp.loading')}</p>
           ) : servers.length === 0 ? (
             <p style={{ color: "var(--text-secondary)", fontSize: "13px" }}>No MCP servers connected.</p>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th>{t('studio.mcp.name_header')}</th>
                   <th>URL</th>
                   <th>Tools</th>
                   <th></th>
@@ -101,7 +103,7 @@ export function McpManager() {
 
         {/* Connect Form */}
         <div style={{ width: "320px" }}>
-          <h3>Connect MCP Server</h3>
+          <h3>{t('studio.mcp.connect')}</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <input placeholder="Server name" value={name} onChange={(e) => setName(e.target.value)} />
             <input placeholder="URL (e.g. https://mcp.example.com/sse)" value={url} onChange={(e) => setUrl(e.target.value)} />

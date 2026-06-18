@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
 import { ComponentSummary } from "./types";
+import { useTranslation } from '../i18n';
 
 type ComponentType = "tool" | "knowledge" | "skill" | "persona" | "memory" | "model";
 
@@ -11,6 +12,7 @@ interface ComponentDef {
 }
 
 export function ComponentEditor() {
+  const { t } = useTranslation();
   const [type, setType] = useState<ComponentType>("tool");
   const [def, setDef] = useState<ComponentDef>({ name: "", type: "tool", config: "{}" });
   const [saved, setSaved] = useState(false);
@@ -184,7 +186,7 @@ export function ComponentEditor() {
   return (
     <div className="component-editor" style={{ display: "flex", gap: "16px" }}>
       <div className="component-list" style={{ width: "250px", flexShrink: 0 }}>
-        <h3>Existing Components</h3>
+        <h3>{t('studio.editor.existing')}</h3>
         {components.length === 0 ? (
           <div style={{
             padding: "16px",
@@ -216,8 +218,8 @@ export function ComponentEditor() {
         ))}
       </div>
       <div className="editor-form" style={{ flex: 1 }}>
-        <h2>Component Editor</h2>
-        <label>Type:</label>
+        <h2>{t('studio.editor.title')}</h2>
+        <label>{t('studio.editor.type')}</label>
         <select value={type} onChange={(e) => setType(e.target.value as ComponentType)}>
           <option value="tool">Tool</option>
           <option value="knowledge">Knowledge</option>
@@ -226,7 +228,7 @@ export function ComponentEditor() {
           <option value="memory">Memory</option>
           <option value="model">Model</option>
         </select>
-        <label>Name:</label>
+        <label>{t('studio.editor.name')}</label>
         <input
           type="text"
           value={def.name}
@@ -242,7 +244,7 @@ export function ComponentEditor() {
             Saved!{editingId ? "" : ` ID: ${lastCreatedId}`}
           </span>
         )}
-        {error && <span className="error-indicator">Error: {error}</span>}
+        {error && <span className="error-indicator">{t('studio.editor.error')}: {error}</span>}
       </div>
     </div>
   );

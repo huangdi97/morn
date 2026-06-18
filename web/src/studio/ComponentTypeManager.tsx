@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from '../i18n';
 
 // @ts-ignore
 const invoke = window.__TAURI__
@@ -22,6 +23,7 @@ interface ComponentTypeDef {
 }
 
 export function ComponentTypeManager() {
+  const { t } = useTranslation();
   const [types, setTypes] = useState<ComponentTypeDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -81,21 +83,21 @@ export function ComponentTypeManager() {
 
   return (
     <div className="component-type-manager">
-      <h2>Component Type Manager</h2>
+      <h2>{t('studio.types.title')}</h2>
 
       {error && <div className="error">{error}</div>}
 
       <div style={{ display: "flex", gap: "24px" }}>
         {/* List */}
         <div style={{ flex: 1 }}>
-          <h3>Registered Types ({types.length})</h3>
+          <h3>{t('studio.types.registered', { count: types.length })}</h3>
           {loading ? (
-            <p>Loading...</p>
+            <p>{t('studio.types.loading')}</p>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th>{t('studio.types.name_header')}</th>
                   <th>Interfaces</th>
                   <th>Implements</th>
                   <th>Version</th>
@@ -103,17 +105,17 @@ export function ComponentTypeManager() {
                 </tr>
               </thead>
               <tbody>
-                {types.map((t) => (
-                  <tr key={t.type_name}>
-                    <td>{t.type_name}</td>
-                    <td>{t.interfaces.join(", ")}</td>
-                    <td>{t.implements.join(", ")}</td>
-                    <td>{t.version}</td>
+                {types.map((typeDef) => (
+                  <tr key={typeDef.type_name}>
+                    <td>{typeDef.type_name}</td>
+                    <td>{typeDef.interfaces.join(", ")}</td>
+                    <td>{typeDef.implements.join(", ")}</td>
+                    <td>{typeDef.version}</td>
                     <td>
                       {!["tool", "knowledge", "skill", "persona", "memory", "model", "agent", "pipeline"].includes(
-                        t.type_name
+                        typeDef.type_name
                       ) && (
-                        <button onClick={() => handleUnregister(t.type_name)}>Delete</button>
+                        <button onClick={() => handleUnregister(typeDef.type_name)}>{t('studio.types.delete')}</button>
                       )}
                     </td>
                   </tr>
@@ -125,7 +127,7 @@ export function ComponentTypeManager() {
 
         {/* Register Form */}
         <div style={{ width: "320px" }}>
-          <h3>Register New Type</h3>
+          <h3>{t('studio.types.register_new')}</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <input placeholder="Type name" value={typeName} onChange={(e) => setTypeName(e.target.value)} />
             <input placeholder="Interfaces (comma-separated)" value={interfaces} onChange={(e) => setInterfaces(e.target.value)} />
