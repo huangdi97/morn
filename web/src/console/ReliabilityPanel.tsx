@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from '../i18n';
 
 interface Metrics {
   success_rate: number;
@@ -55,6 +56,7 @@ function MetricCard({
 }
 
 export default function ReliabilityPanel() {
+  const { t } = useTranslation();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [recent, setRecent] = useState<Execution[]>([]);
 
@@ -76,7 +78,7 @@ export default function ReliabilityPanel() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Reliability Metrics</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.reliability.title')}</h2>
       <div
         style={{
           display: "flex",
@@ -86,28 +88,28 @@ export default function ReliabilityPanel() {
         }}
       >
         <MetricCard
-          label="Success Rate (24h)"
+          label={t('console.reliability.success_rate')}
           value={metrics ? metrics.success_rate.toFixed(1) : "..."}
           unit="%"
         />
         <MetricCard
-          label="Avg Latency"
+          label={t('console.reliability.avg_latency')}
           value={metrics ? metrics.avg_latency_ms.toFixed(0) : "..."}
           unit="ms"
         />
         <MetricCard
-          label="P95 Latency"
+          label={t('console.reliability.p95_latency')}
           value={metrics ? metrics.p95_latency_ms.toFixed(0) : "..."}
           unit="ms"
         />
         <MetricCard
-          label="SLA Compliance"
+          label={t('console.reliability.sla_compliance')}
           value={metrics ? metrics.sla_rate.toFixed(1) : "..."}
           unit="%"
         />
       </div>
       <h3 style={{ color: "#e6edf3", marginBottom: "12px", fontSize: "15px" }}>
-        Recent Executions
+        {t('console.reliability.recent_executions')}
       </h3>
       <div
         style={{
@@ -155,7 +157,7 @@ export default function ReliabilityPanel() {
               textAlign: "center",
             }}
           >
-            No executions found
+            {t('console.reliability.no_executions')}
           </div>
         )}
       </div>

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from '../i18n';
 
 export default function SyncPanel() {
+  const { t } = useTranslation();
   const [pending, setPending] = useState<number | null>(null);
   const [lastSync, setLastSync] = useState<string>("");
   const [syncing, setSyncing] = useState(false);
@@ -46,7 +48,7 @@ export default function SyncPanel() {
       <div className="cost-card">
         <div style={{ marginBottom: "16px" }}>
           <div style={{ color: "#8b949e", fontSize: "14px", marginBottom: "4px" }}>
-            Last Sync
+            {t('console.sync.last_sync')}
           </div>
           <div style={{ color: "#e6edf3", fontSize: "16px", fontWeight: 600 }}>
             {lastSync || "Loading..."}
@@ -54,7 +56,7 @@ export default function SyncPanel() {
         </div>
         <div style={{ marginBottom: "16px" }}>
           <div style={{ color: "#8b949e", fontSize: "14px", marginBottom: "4px" }}>
-            Pending Events
+            {t('console.sync.pending_events')}
           </div>
           <div style={{ color: "#e6edf3", fontSize: "16px", fontWeight: 600 }}>
             {pending !== null ? pending : "..."}
@@ -74,7 +76,7 @@ export default function SyncPanel() {
             cursor: syncing ? "not-allowed" : "pointer",
           }}
         >
-          {syncing ? "Syncing..." : "Sync Now"}
+          {syncing ? t('console.sync.syncing') : t('console.sync.sync_now')}
         </button>
       </div>
     </div>

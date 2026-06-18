@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import { useTranslation } from '../i18n';
 
 interface SecurityLog {
   timestamp: string;
@@ -9,6 +10,7 @@ interface SecurityLog {
 }
 
 export default function Security() {
+  const { t } = useTranslation();
   const [constitutionStatus, setConstitutionStatus] = useState("ACTIVE");
   const [interceptedCount, setInterceptedCount] = useState("0");
   const [dualLlmStatus, setDualLlmStatus] = useState("ENABLED");
@@ -62,7 +64,7 @@ export default function Security() {
       <div className="sec-card">
         <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>Audit Log</div>
         {logs.length === 0 ? (
-          <div style={{ color: "#8b949e" }}>No data available</div>
+          <div style={{ color: "#8b949e" }}>{t('console.security.no_data')}</div>
         ) : (
           logs.map((log, i) => (
             <div key={i} style={{ display: "flex", gap: "12px", padding: "8px 0", borderBottom: "1px solid #21262d", fontSize: "13px" }}>

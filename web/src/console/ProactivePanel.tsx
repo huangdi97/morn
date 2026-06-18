@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from '../i18n';
 
 interface ProactiveRule {
   id: string;
@@ -8,6 +9,7 @@ interface ProactiveRule {
 }
 
 export default function ProactivePanel() {
+  const { t } = useTranslation();
   const [rules, setRules] = useState<ProactiveRule[]>([]);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function ProactivePanel() {
 
   return (
     <div className="proactive-panel">
-      <h2>Proactive Agents</h2>
+      <h2>{t('console.proactive.title')}</h2>
       <div className="proactive-list">
         {rules.map((rule) => (
           <div key={rule.id} className="proactive-item">

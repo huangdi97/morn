@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from '../i18n';
 
 interface CheckResult {
   label: string;
@@ -30,6 +31,7 @@ function CheckRow({ item }: { item: CheckResult }) {
 }
 
 export default function SystemCheck() {
+  const { t } = useTranslation();
   const [checks, setChecks] = useState<CheckResult[]>([]);
   const [ran, setRan] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -51,7 +53,7 @@ export default function SystemCheck() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>System Self-Check</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.system_check.title')}</h2>
 
       <div className="cost-card">
         <button
@@ -69,12 +71,12 @@ export default function SystemCheck() {
             marginBottom: "16px",
           }}
         >
-          {loading ? "Running..." : "Run Check"}
+          {loading ? t('console.system_check.running') : t('console.system_check.run_check')}
         </button>
 
         {!ran && !loading && (
           <div style={{ color: "#8b949e", fontSize: "14px", padding: "20px 0", textAlign: "center" }}>
-            Click "Run Check" to run system diagnostics
+            {t('console.system_check.hint')}
           </div>
         )}
 

@@ -1,32 +1,17 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from '../i18n';
 
 const FIRST_LAUNCH_KEY = "morn_first_launch";
 
 const milestones = [
-  { day: 1, label: "Created your first Agent", emoji: "✅" },
-  { day: 3, label: "Built a team", emoji: "⬜" },
-  { day: 7, label: "Published to Hub", emoji: "⬜" },
-  { day: 14, label: "Automated a workflow", emoji: "⬜" },
-  { day: 30, label: "Running a one-person company", emoji: "⬜" },
+  { day: 1, emoji: "✅" },
+  { day: 3, emoji: "⬜" },
+  { day: 7, emoji: "⬜" },
+  { day: 14, emoji: "⬜" },
+  { day: 30, emoji: "⬜" },
 ];
 
-const tips = [
-  "Try creating a custom Agent persona",
-  "Explore the Bot Store for pre-built agents",
-  "Use the Canvas to design a workflow",
-  "Publish your Agent to the Hub",
-  "Set up a proactive agent with timer trigger",
-];
-
-const motivationalMessages: Record<number, string> = {
-  1: "Every journey begins with a single step. Great start!",
-  3: "Building your team — collaboration is key!",
-  7: "Publishing to the Hub opens up new possibilities!",
-  14: "Automation is the superpower of efficiency!",
-  30: "You're running a one-person company — incredible!",
-};
-
-const defaultMessage = "Keep going, every day counts!";
+const TIP_COUNT = 5;
 
 function getCurrentDay(): number {
   const stored = localStorage.getItem(FIRST_LAUNCH_KEY);
@@ -53,7 +38,7 @@ export default function UserJourney() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setTipIndex((prev) => (prev + 1) % tips.length);
+      setTipIndex((prev) => (prev + 1) % TIP_COUNT);
     }, 8000);
     return () => clearInterval(interval);
   }, []);
@@ -63,16 +48,22 @@ export default function UserJourney() {
     ...m,
     emoji: day >= m.day ? "✅" : "⬜",
   }));
-  const message = motivationalMessages[day] || (day > 30 ? motivationalMessages[30] : defaultMessage);
+  const { t } = useTranslation();
+  const message =
+    [1, 3, 7, 14, 30].includes(day)
+      ? t(`console.journey.motivation_${day}`)
+      : day > 30
+        ? t('console.journey.motivation_30')
+        : t('console.journey.motivation_default');
 
   return (
     <div>
-      <h2 style={{ color: "var(--text-primary)", marginBottom: "16px" }}>Your Journey</h2>
+      <h2 style={{ color: "var(--text-primary)", marginBottom: "16px" }}>{t('console.journey.title')}</h2>
 
       <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-xl)", border: "1px solid var(--border-default)", padding: "24px", marginBottom: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-          <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>Day {day} of 30</span>
-          <span style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>{progressPercent}% complete</span>
+          <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{t('console.journey.day_of_30', { day })}</span>
+          <span style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>{t('console.journey.percent_complete', { percent: progressPercent })}</span>
         </div>
         <div style={{ width: "100%", height: "8px", background: "var(--bg-page)", borderRadius: "4px", overflow: "hidden" }}>
           <div style={{ width: `${progressPercent}%`, height: "100%", background: "var(--accent-brand)", borderRadius: "4px", transition: "width 0.5s ease" }} />
@@ -80,25 +71,25 @@ export default function UserJourney() {
       </div>
 
       <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-xl)", border: "1px solid var(--border-default)", padding: "24px", marginBottom: "16px" }}>
-        <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "16px" }}>Milestones</div>
+        <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "16px" }}>{t('console.journey.milestones_title')}</div>
         <div style={{ display: "grid", gap: "12px" }}>
           {currentMilestones.map((m) => (
             <div key={m.day} style={{ display: "flex", alignItems: "center", gap: "10px", opacity: day >= m.day ? 1 : 0.5 }}>
               <span style={{ fontSize: "16px" }}>{m.emoji}</span>
-              <span style={{ color: "var(--text-primary)", fontSize: "14px" }}>{m.label}</span>
+              <span style={{ color: "var(--text-primary)", fontSize: "14px" }}>{t(`console.journey.milestone_${m.day}`)}</span>
             </div>
           ))}
         </div>
       </div>
 
       <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-xl)", border: "1px solid var(--border-default)", padding: "24px", marginBottom: "16px" }}>
-        <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "8px" }}>Motivation</div>
+        <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "8px" }}>{t('console.journey.motivation_title')}</div>
         <p style={{ color: "var(--text-secondary)", fontSize: "14px", lineHeight: "1.6", margin: 0 }}>{message}</p>
       </div>
 
       <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-xl)", border: "1px solid var(--border-default)", padding: "24px" }}>
-        <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "8px" }}>Tips for Today</div>
-        <p style={{ color: "var(--accent-brand)", fontSize: "14px", margin: 0 }}>{tips[tipIndex]}</p>
+        <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "8px" }}>{t('console.journey.tips_title')}</div>
+        <p style={{ color: "var(--accent-brand)", fontSize: "14px", margin: 0 }}>{t(`console.journey.tip_${tipIndex}`)}</p>
       </div>
     </div>
   );

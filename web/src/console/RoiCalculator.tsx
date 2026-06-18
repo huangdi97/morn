@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useTranslation } from '../i18n';
 
 export default function RoiCalculator() {
+  const { t } = useTranslation();
   const [hours, setHours] = useState(160);
   const [rate, setRate] = useState(50);
   const [agents, setAgents] = useState(3);
@@ -34,11 +36,11 @@ export default function RoiCalculator() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>ROI Calculator</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.roi.title')}</h2>
 
       <div className="cost-card">
         <div style={{ marginBottom: "16px" }}>
-          <label style={labelStyle}>Monthly Operating Hours</label>
+          <label style={labelStyle}>{t('console.roi.operating_hours')}</label>
           <input
             type="number"
             min={1}
@@ -48,7 +50,7 @@ export default function RoiCalculator() {
           />
         </div>
         <div style={{ marginBottom: "16px" }}>
-          <label style={labelStyle}>Hourly Rate (¥)</label>
+          <label style={labelStyle}>{t('console.roi.hourly_rate')}</label>
           <input
             type="number"
             min={1}
@@ -58,7 +60,7 @@ export default function RoiCalculator() {
           />
         </div>
         <div style={{ marginBottom: "16px" }}>
-          <label style={labelStyle}>Agents Deployed</label>
+          <label style={labelStyle}>{t('console.roi.agents_deployed')}</label>
           <input
             type="number"
             min={1}
@@ -71,22 +73,22 @@ export default function RoiCalculator() {
       </div>
 
       <div className="cost-card">
-        <div style={{ color: "#8b949e", fontSize: "13px", marginBottom: "8px" }}>Time Saved Per Day</div>
+        <div style={{ color: "#8b949e", fontSize: "13px", marginBottom: "8px" }}>{t('console.roi.time_saved_per_day')}</div>
         <div style={{ fontSize: "28px", fontWeight: "bold", color: "#58a6ff" }}>{timeSaved} hrs</div>
       </div>
 
       <div className="cost-card">
-        <div style={{ color: "#8b949e", fontSize: "13px", marginBottom: "8px" }}>Monthly Cost Saved</div>
+        <div style={{ color: "#8b949e", fontSize: "13px", marginBottom: "8px" }}>{t('console.roi.monthly_cost_saved')}</div>
         <div style={{ fontSize: "28px", fontWeight: "bold", color: "#3fb950" }}>
           ¥{costSaved.toLocaleString()}/month
         </div>
         <div style={{ color: "#8b949e", fontSize: "13px", marginTop: "4px" }}>
-          with {agents} agent{agents !== 1 ? "s" : ""}
+          {t('console.roi.with_agents', { agents })}
         </div>
       </div>
 
       <div className="cost-card">
-        <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>Savings Potential</div>
+        <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>{t('console.roi.savings_potential')}</div>
         <div style={{
           width: "100%",
           height: "24px",
@@ -115,7 +117,7 @@ export default function RoiCalculator() {
           </div>
         </div>
         <div style={{ color: "#8b949e", fontSize: "12px", marginTop: "6px", textAlign: "right" }}>
-          vs. 10-agent max
+          {t('console.roi.vs_max')}
         </div>
       </div>
     </div>

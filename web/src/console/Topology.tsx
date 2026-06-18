@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useTranslation } from '../i18n';
 import { api } from "../api";
 
 interface TopologyNode {
@@ -53,6 +54,7 @@ function defaultPosition(index: number): NodePosition {
 }
 
 export default function Topology() {
+  const { t } = useTranslation();
   const [nodes, setNodes] = useState<TopologyNode[]>([]);
   const [positions, setPositions] = useState<Record<string, NodePosition>>({});
   const [edges, setEdges] = useState<TopologyEdge[]>([]);
@@ -163,13 +165,13 @@ export default function Topology() {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-        <h2 style={{ color: "#e6edf3", margin: 0 }}>Component Topology</h2>
+        <h2 style={{ color: "#e6edf3", margin: 0 }}>{t('console.topology.title')}</h2>
         {selectedEdgeId && (
           <button
             onClick={() => deleteEdge(selectedEdgeId)}
             style={{ border: "1px solid #f85149", background: "transparent", color: "#f85149", borderRadius: "6px", padding: "6px 10px", cursor: "pointer" }}
           >
-            Delete link
+            {t('console.topology.delete_link')}
           </button>
         )}
       </div>
@@ -181,7 +183,7 @@ export default function Topology() {
         onPointerCancel={handlePointerUp}
       >
         {nodes.length === 0 && (
-          <p style={{ color: "#8b949e", padding: "16px", margin: 0 }}>No components registered yet.</p>
+          <p style={{ color: "#8b949e", padding: "16px", margin: 0 }}>{t('console.topology.no_components')}</p>
         )}
         <svg
           width={canvasSize.width}
@@ -261,7 +263,7 @@ export default function Topology() {
         })}
       </div>
       <div style={{ color: "#8b949e", fontSize: "12px", marginTop: "8px" }}>
-        Drag nodes to rearrange. Select a link, then delete it from the canvas.
+        {t('console.topology.hint')}
       </div>
     </div>
   );

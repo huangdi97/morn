@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from '../i18n';
 import { api } from "../api";
 import "../styles/execution.css";
 
@@ -37,6 +38,7 @@ const statusDot = (status: string) => {
 };
 
 export default function ExecutionHistory() {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState<Filter>("All");
 
@@ -60,7 +62,7 @@ export default function ExecutionHistory() {
   return (
     <div className="dashboard-card execution-history-card">
       <div className="execution-history-header">
-        <span className="execution-history-title">Execution History</span>
+        <span className="execution-history-title">{t('console.execution_history.title')}</span>
         <div className="execution-history-filters">
           {filters.map((f) => (
             <button
@@ -68,21 +70,21 @@ export default function ExecutionHistory() {
               className={`eh-filter-btn ${filter === f ? "active" : ""}`}
               onClick={() => setFilter(f)}
             >
-              {f}
+{t(`console.execution_history.filter_${f.toLowerCase()}`)}
             </button>
           ))}
         </div>
       </div>
       <div className="execution-history-table">
         <div className="eh-row eh-header">
-          <div className="eh-cell eh-time">Time</div>
-          <div className="eh-cell eh-agent">Agent</div>
-          <div className="eh-cell eh-action">Action</div>
-          <div className="eh-cell eh-status">Status</div>
-          <div className="eh-cell eh-dur">Duration</div>
+          <div className="eh-cell eh-time">{t('console.execution_history.time')}</div>
+          <div className="eh-cell eh-agent">{t('console.execution_history.agent')}</div>
+          <div className="eh-cell eh-action">{t('console.execution_history.action')}</div>
+          <div className="eh-cell eh-status">{t('console.execution_history.status')}</div>
+          <div className="eh-cell eh-dur">{t('console.execution_history.duration')}</div>
         </div>
         {filtered.length === 0 ? (
-          <div className="eh-empty">No logs found</div>
+          <div className="eh-empty">{t('console.execution_history.no_logs')}</div>
         ) : (
           filtered.map((log) => (
             <div key={log.id} className="eh-row">

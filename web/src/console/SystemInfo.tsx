@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import { useTranslation } from '../i18n';
 
 interface SystemInfoData {
   version: string;
@@ -19,6 +20,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 export default function SystemInfo() {
+  const { t } = useTranslation();
   const [info, setInfo] = useState<SystemInfoData>({
     version: "0.1.0",
     cpu_usage: 0,
@@ -47,7 +49,7 @@ export default function SystemInfo() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>System</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.system_info.title')}</h2>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
         <div style={cardStyle}>
