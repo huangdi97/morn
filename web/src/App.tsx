@@ -503,7 +503,7 @@ onSelect={async (template) => {
       <div className="console-content">
         {loading.console ? <SkeletonConsole /> : (
           <>
-            {consoleTab === "dashboard" && <AdminDashboard />}
+            {consoleTab === "dashboard" && <AdminDashboard onNavigate={(tab) => setConsoleTab(tab as any)} />}
             {consoleTab === "journey" && <UserJourney />}
             {consoleTab === "topology" && <Topology />}
             {consoleTab === "system" && <SystemInfo />}

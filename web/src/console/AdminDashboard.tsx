@@ -30,6 +30,10 @@ interface DashboardData {
   alerts?: DashboardAlert[];
 }
 
+interface OnboardingProps {
+  onNavigate?: (tab: string) => void;
+}
+
 const defaultRequestTrend: TrendPoint[] = [
   { label: "Mon", value: 12 },
   { label: "Tue", value: 18 },
@@ -73,7 +77,9 @@ const cardGradient: Record<string, string> = {
   "#79c0ff": "accent-cyan",
 };
 
-export default function AdminDashboard() {
+const TOTAL_STEPS = 5;
+
+export default function AdminDashboard({ onNavigate }: OnboardingProps) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData>({
@@ -120,6 +126,29 @@ export default function AdminDashboard() {
     { label: "Agents", value: data.agent_count.toString(), color: "#bc8cff" },
     { label: "Active Channels", value: data.active_channels.toString(), color: "#79c0ff" },
   ];
+
+  const renderProgressDots = () => (
+    <div style={{ display: "flex", gap: "8px", justifyContent: "center", marginBottom: "16px" }}>
+      {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+        <div
+          key={i}
+          style={{
+            width: "8px", height: "8px", borderRadius: "50%",
+            background: i + 1 === onboardingStep ? "var(--accent-brand)" : i + 1 < onboardingStep ? "#3fb950" : "var(--border-default)",
+            transition: "background 0.3s ease",
+          }}
+        />
+      ))}
+    </div>
+  );
+
+  const renderStepIndicator = () => (
+    <div style={{ textAlign: "center", marginBottom: "8px" }}>
+      <span style={{ color: "var(--text-tertiary)", fontSize: "12px" }}>
+        {t('console.dashboard.step_of', { current: onboardingStep, total: TOTAL_STEPS })}
+      </span>
+    </div>
+  );
 
   const renderTrendChart = (title: string, points: TrendPoint[], color: string, unit = "") => {
     const width = 520;
@@ -189,6 +218,8 @@ export default function AdminDashboard() {
     return (
       <div style={overlayStyle}>
         <div style={modalStyle}>
+          {renderProgressDots()}
+          {renderStepIndicator()}
           {onboardingStep === 1 && (
             <>
               <div style={{ fontSize: "48px", textAlign: "center", marginBottom: "16px" }}>🤖</div>
@@ -202,7 +233,7 @@ export default function AdminDashboard() {
                   onClick={completeOnboarding}
                   style={{ padding: "10px 24px", borderRadius: "6px", border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer" }}
                 >
-                  跳过
+                  {t('console.dashboard.skip')}
                 </button>
                 <button
                   onClick={() => setOnboardingStep(2)}
@@ -222,12 +253,18 @@ export default function AdminDashboard() {
               <TemplateSelector
                 onSelect={() => setOnboardingStep(3)}
               />
-              <div style={{ textAlign: "center", marginTop: "16px" }}>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "center", marginTop: "16px" }}>
                 <button
                   onClick={completeOnboarding}
                   style={{ padding: "8px 20px", borderRadius: "6px", border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer" }}
                 >
-                  稍后再说
+                  {t('console.dashboard.skip')}
+                </button>
+                <button
+                  onClick={() => setOnboardingStep(3)}
+                  style={{ padding: "8px 20px", borderRadius: "6px", border: "none", background: "var(--accent-brand)", color: "#fff", cursor: "pointer" }}
+                >
+                  下一步
                 </button>
               </div>
             </>
@@ -238,6 +275,86 @@ export default function AdminDashboard() {
               <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>{t('console.dashboard.try_it')}</h2>
               <p style={{ color: "var(--text-tertiary)", textAlign: "center", fontSize: "14px", margin: "0 0 24px 0" }}>
                 前往 Workbench 开始对话，或在 Studio 中创建你的第一个 Agent。
+              </p>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                <button
+                  onClick={completeOnboarding}
+                  style={{ padding: "8px 20px", borderRadius: "6px", border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer" }}
+                >
+                  {t('console.dashboard.skip')}
+                </button>
+                <button
+                  onClick={() => setOnboardingStep(4)}
+                  style={{ padding: "10px 24px", borderRadius: "6px", border: "none", background: "var(--accent-brand)", color: "#fff", cursor: "pointer" }}
+                >
+                  下一步
+                </button>
+              </div>
+            </>
+          )}
+          {onboardingStep === 4 && (
+            <>
+              <div style={{ fontSize: "48px", textAlign: "center", marginBottom: "16px" }}>🧭</div>
+              <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>{t('console.dashboard.explore_features')}</h2>
+              <p style={{ color: "var(--text-tertiary)", textAlign: "center", fontSize: "14px", margin: "0 0 20px 0" }}>
+                {t('console.dashboard.explore_desc')}
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "20px" }}>
+                {[
+                  { label: t('console.dashboard.memory_panel'), tab: "memory", icon: "🧠" },
+                  { label: t('console.dashboard.cost_panel'), tab: "cost_tracking", icon: "💰" },
+                  { label: t('console.dashboard.journey_panel'), tab: "journey", icon: "🗺️" },
+                  { label: t('console.dashboard.studio_panel'), tab: "", icon: "🔧" },
+                ].map(item => (
+                  <button
+                    key={item.label}
+                    onClick={() => {
+                      if (item.tab && onNavigate) {
+                        completeOnboarding();
+                        onNavigate(item.tab);
+                      } else if (!item.tab) {
+                        completeOnboarding();
+                      }
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "8px",
+                      padding: "12px", borderRadius: "8px",
+                      border: "1px solid var(--border-default)",
+                      background: "var(--bg-page)", color: "var(--text-primary)",
+                      cursor: "pointer", fontSize: "13px",
+                      transition: "background 0.2s",
+                    }}
+                  >
+                    <span style={{ fontSize: "18px" }}>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                <button
+                  onClick={completeOnboarding}
+                  style={{ padding: "8px 20px", borderRadius: "6px", border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer" }}
+                >
+                  {t('console.dashboard.skip')}
+                </button>
+                <button
+                  onClick={() => setOnboardingStep(5)}
+                  style={{ padding: "10px 24px", borderRadius: "6px", border: "none", background: "var(--accent-brand)", color: "#fff", cursor: "pointer" }}
+                >
+                  完成
+                </button>
+              </div>
+            </>
+          )}
+          {onboardingStep === 5 && (
+            <>
+              <div style={{ fontSize: "48px", textAlign: "center", marginBottom: "16px" }}>🎉</div>
+              <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>{t('console.dashboard.complete_title')}</h2>
+              <p style={{ color: "var(--text-tertiary)", textAlign: "center", fontSize: "14px", margin: "0 0 12px 0" }}>
+                {t('console.dashboard.complete_desc')}
+              </p>
+              <p style={{ color: "var(--text-tertiary)", textAlign: "center", fontSize: "12px", fontStyle: "italic", margin: "0 0 24px 0" }}>
+                {t('console.dashboard.reopen_hint')}
               </p>
               <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
                 <button
