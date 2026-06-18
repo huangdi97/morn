@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from "react";
 import type { Node } from "reactflow";
-import { EditorPanel } from "./EditorPanel";
+import EditorPanel from "./EditorPanel";
 import { NodeData } from "../types";
 
 export function useSmallScreen() {
@@ -118,6 +118,7 @@ export function MobileView({
       <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "8px", padding: "12px" }}>
         <EditorPanel
           selectedNode={selectedNode}
+          selectedEdgeId={null}
           onUpdate={onUpdateNode}
           onDelete={onDeleteNode}
         />

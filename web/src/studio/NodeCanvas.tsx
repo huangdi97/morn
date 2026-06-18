@@ -18,11 +18,13 @@ import ReactFlow, {
   NodeChange,
   EdgeChange,
   useReactFlow,
+  EdgeLabelRenderer,
+  getBezierPath,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import dagre from "dagre";
 import { MobileView } from "./canvas/MobileView";
-import { EditorPanel } from "./canvas/EditorPanel";
+import EditorPanel from "./canvas/EditorPanel";
 import { cloneSnapshot, downloadText, buildSnapshotSvg } from "./canvas/SnapshotHelper";
 import type { CanvasSnapshot } from "./canvas/SnapshotHelper";
 import { AgentDef, NodeData } from "./types";
@@ -44,6 +46,34 @@ const NODE_LABELS: Record<string, string> = {
   skill: "Skill",
   model: "Model",
   agent: "Agent",
+};
+
+const NODE_PORT_CONFIG: Record<string, { inputs: string[]; outputs: string[] }> = {
+  persona: { inputs: ["system_prompt"], outputs: ["persona_config"] },
+  tool: { inputs: ["params"], outputs: ["result"] },
+  knowledge: { inputs: ["query"], outputs: ["data"] },
+  skill: { inputs: ["input"], outputs: ["output"] },
+  model: { inputs: ["prompt"], outputs: ["response"] },
+  agent: { inputs: ["user_input", "persona_config", "tool_result", "knowledge_data", "skill_result", "model_response"], outputs: ["agent_output"] },
+};
+
+const PORT_TYPES: Record<string, string> = {
+  system_prompt: "string",
+  persona_config: "PersonaConfig",
+  params: "Params",
+  result: "any",
+  query: "string",
+  data: "any",
+  input: "any",
+  output: "any",
+  prompt: "string",
+  response: "string",
+  user_input: "string",
+  tool_result: "any",
+  knowledge_data: "any",
+  skill_result: "any",
+  model_response: "string",
+  agent_output: "string",
 };
 
 const PALETTE_CATEGORIES = [
@@ -69,107 +99,170 @@ function getLayoutedElements(nodes: Node<NodeData>[], edges: Edge[], direction =
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: direction, nodesep: 60, ranksep: 100, marginx: 40, marginy: 40 });
-
-  nodes.forEach((node) => {
-    g.setNode(node.id, { width: 180, height: 80 });
-  });
-  edges.forEach((edge) => {
-    g.setEdge(edge.source, edge.target);
-  });
+  nodes.forEach((node) => { g.setNode(node.id, { width: 180, height: 80 }); });
+  edges.forEach((edge) => { g.setEdge(edge.source, edge.target); });
   dagre.layout(g);
-
   const laidOutNodes = nodes.map((node) => {
     const dagreNode = g.node(node.id);
-    return {
-      ...node,
-      position: {
-        x: dagreNode.x - 90,
-        y: dagreNode.y - 40,
-      },
-    };
+    return { ...node, position: { x: dagreNode.x - 90, y: dagreNode.y - 40 } };
   });
   return { nodes: laidOutNodes, edges };
 }
 
+function LabeledEdge({ id, sourceHandle, selected }: Edge & { selected?: boolean }) {
+  const edgePathParams = { sourceX: 0, sourceY: 0, targetX: 0, targetY: 0, sourcePosition: Position.Right, targetPosition: Position.Left };
+  const [edgePath, labelX, labelY] = getBezierPath(edgePathParams);
+  const sourcePortLabel = sourceHandle || "";
+  const sourceType = PORT_TYPES[sourcePortLabel] || "any";
+
+  return (
+    <>
+      <path id={id} className="react-flow__edge-path"
+        d={edgePath}
+        style={{
+          stroke: selected ? "#f85149" : "#58a6ff",
+          strokeWidth: selected ? 3 : 2,
+          strokeDasharray: selected ? "0" : "0",
+        }}
+      />
+      <EdgeLabelRenderer>
+        <div
+          style={{
+            position: "absolute",
+            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+            background: selected ? "#f85149" : "#1a1d23",
+            border: `1px solid ${selected ? "#f85149" : "#30363d"}`,
+            borderRadius: "4px",
+            padding: "2px 8px",
+            fontSize: "10px",
+            color: "#e6edf3",
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+            zIndex: 10,
+          }}
+        >
+          <span style={{ color: "#8b949e" }}>{sourcePortLabel} </span>
+          <span style={{ color: "#58a6ff" }}>{sourceType}</span>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const edgeTypes = { labeled: LabeledEdge };
+
 function BaseNode({ data, selected }: NodeProps<NodeData>) {
   const color = NODE_COLORS[data.nodeType] || "#666";
   const label = data.label || NODE_LABELS[data.nodeType] || data.nodeType;
-
-  const config: Record<string, { inputs: string[]; outputs: string[] }> = {
-    persona: { inputs: ["system_prompt"], outputs: ["persona_config"] },
-    tool: { inputs: ["params"], outputs: ["result"] },
-    knowledge: { inputs: ["query"], outputs: ["data"] },
-    skill: { inputs: ["input"], outputs: ["output"] },
-    model: { inputs: ["prompt"], outputs: ["response"] },
-    agent: {
-      inputs: ["user_input", "persona_config", "tool_result", "knowledge_data", "skill_result", "model_response"],
-      outputs: ["agent_output"],
-    },
-  };
-
-  const ports = config[data.nodeType] || { inputs: [], outputs: [] };
+  const [hovered, setHovered] = useState(false);
+  const ports = NODE_PORT_CONFIG[data.nodeType] || { inputs: [], outputs: [] };
 
   return (
     <div
-      style={{
-        background: "#1a1d23",
-        border: `2px solid ${selected ? color : "#30363d"}`,
-        borderRadius: "8px",
-        padding: "10px 14px",
-        minWidth: "160px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-        position: "relative",
-      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ position: "relative" }}
     >
       <div
         style={{
-          background: color,
-          color: "#fff",
-          fontSize: "12px",
-          fontWeight: 600,
-          padding: "2px 8px",
-          borderRadius: "4px",
-          display: "inline-block",
-          marginBottom: "6px",
+          background: "#1a1d23",
+          border: `2px solid ${selected || data.expanded ? color : "#30363d"}`,
+          borderRadius: "8px",
+          padding: "10px 14px",
+          minWidth: "160px",
+          boxShadow: hovered ? `0 0 0 2px ${color}44, 0 4px 12px rgba(0,0,0,0.3)` : "0 4px 12px rgba(0,0,0,0.3)",
+          position: "relative",
+          transition: "box-shadow 0.15s, border-color 0.15s",
         }}
       >
-        {label}
-      </div>
-      <div style={{ color: "#e6edf3", fontSize: "13px", fontWeight: 500 }}>{data.name || "unnamed"}</div>
-      {data.detail && <div style={{ color: "#8b949e", fontSize: "11px", marginTop: "4px" }}>{data.detail}</div>}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+          <div
+            style={{
+              background: color,
+              color: "#fff",
+              fontSize: "12px",
+              fontWeight: 600,
+              padding: "2px 8px",
+              borderRadius: "4px",
+              display: "inline-block",
+            }}
+          >
+            {label}
+          </div>
+          {data.expanded !== undefined && (
+            <span style={{ color: "#8b949e", fontSize: "10px" }}>
+              {data.expanded ? "▼" : "▶"}
+            </span>
+          )}
+        </div>
+        <div style={{ color: "#e6edf3", fontSize: "13px", fontWeight: 500 }}>{data.name || "unnamed"}</div>
+        {data.detail && data.expanded && (
+          <div style={{ color: "#8b949e", fontSize: "11px", marginTop: "4px", wordBreak: "break-word" }}>{data.detail}</div>
+        )}
 
-      {ports.inputs.map((port, i) => (
-        <Handle
-          key={`in-${port}`}
-          type="target"
-          position={Position.Left}
-          id={port}
+        {ports.inputs.map((port, i) => (
+          <Handle
+            key={`in-${port}`}
+            type="target"
+            position={Position.Left}
+            id={port}
+            style={{
+              top: `${28 + i * 24}px`,
+              background: color,
+              border: `2px solid ${color}`,
+              width: "10px",
+              height: "10px",
+            }}
+            title={port}
+          />
+        ))}
+        {ports.outputs.map((port, i) => (
+          <Handle
+            key={`out-${port}`}
+            type="source"
+            position={Position.Right}
+            id={port}
+            style={{
+              top: `${28 + i * 24}px`,
+              background: color,
+              border: `2px solid ${color}`,
+              width: "10px",
+              height: "10px",
+            }}
+            title={port}
+          />
+        ))}
+      </div>
+
+      {hovered && (
+        <div
           style={{
-            top: `${30 + i * 24}px`,
-            background: color,
-            border: `2px solid ${color}`,
-            width: "10px",
-            height: "10px",
+            position: "absolute",
+            top: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginTop: "8px",
+            background: "#0d1117",
+            border: "1px solid #30363d",
+            borderRadius: "6px",
+            padding: "8px 10px",
+            zIndex: 100,
+            minWidth: "180px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            pointerEvents: "none",
           }}
-          title={port}
-        />
-      ))}
-      {ports.outputs.map((port, i) => (
-        <Handle
-          key={`out-${port}`}
-          type="source"
-          position={Position.Right}
-          id={port}
-          style={{
-            top: `${30 + i * 24}px`,
-            background: color,
-            border: `2px solid ${color}`,
-            width: "10px",
-            height: "10px",
-          }}
-          title={port}
-        />
-      ))}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: color }} />
+            <span style={{ color: "#e6edf3", fontSize: "12px", fontWeight: 600 }}>{label}</span>
+          </div>
+          <div style={{ color: "#8b949e", fontSize: "11px", marginBottom: "4px" }}>{data.name}</div>
+          {data.detail && <div style={{ color: "#8b949e", fontSize: "10px", marginBottom: "4px" }}>{data.detail}</div>}
+          <div style={{ color: "#6b7280", fontSize: "10px" }}>
+            Ports: in({ports.inputs.join(", ")}) out({ports.outputs.join(", ")})
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -239,6 +332,7 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
   const [nodes, setNodes, reactFlowOnNodesChange] = useNodesState<NodeData>(makeInitialNodes(def));
   const [edges, setEdges, reactFlowOnEdgesChange] = useEdgesState([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(nodes[0]?.id ?? null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const historyRef = useRef<{ past: CanvasSnapshot[]; future: CanvasSnapshot[] }>({ past: [], future: [] });
   const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
 
@@ -292,6 +386,14 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Delete" || event.key === "Backspace") {
+        if (selectedEdgeId && !(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)) {
+          event.preventDefault();
+          setEdges((current) => current.filter((e) => e.id !== selectedEdgeId));
+          setSelectedEdgeId(null);
+          return;
+        }
+      }
       if (!(event.ctrlKey || event.metaKey)) return;
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
@@ -305,7 +407,7 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [redo, undo]);
+  }, [redo, undo, selectedEdgeId, setEdges]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -317,18 +419,37 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       reactFlowOnEdgesChange(changes);
+      for (const change of changes) {
+        if (change.type === "remove") {
+          setSelectedEdgeId((prev) => (prev === change.id ? null : prev));
+        }
+      }
     },
     [reactFlowOnEdgesChange],
   );
 
+  const isValidConnection = useCallback(
+    (connection: Connection) => {
+      if (connection.source === connection.target) return false;
+      const existing = edges.find(
+        (e) => e.source === connection.source && e.sourceHandle === connection.sourceHandle && e.target === connection.target && e.targetHandle === connection.targetHandle,
+      );
+      return !existing;
+    },
+    [edges],
+  );
+
   const onConnect = useCallback(
     (params: Connection) => {
+      if (!isValidConnection(params)) return;
       pushHistory();
+      const edgeType = "labeled";
       setEdges((currentEdges) =>
         addEdge(
           {
             ...params,
             id: `edge-${params.source}-${params.sourceHandle}-${params.target}-${params.targetHandle}-${Date.now()}`,
+            type: edgeType,
             animated: true,
             style: { stroke: "#58a6ff", strokeWidth: 2 },
             markerEnd: { type: MarkerType.ArrowClosed, color: "#58a6ff" },
@@ -337,7 +458,7 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
         ),
       );
     },
-    [pushHistory, setEdges],
+    [isValidConnection, pushHistory, setEdges],
   );
 
   const onDrop = useCallback(
@@ -376,20 +497,43 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
   }, []);
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node<NodeData>) => {
-    setSelectedNodeId(node.id);
+    setSelectedNodeId((prev) => (prev === node.id ? prev : node.id));
+    setSelectedEdgeId(null);
   }, []);
 
+  const onNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, node: Node<NodeData>) => {
+      setNodes((currentNodes) =>
+        currentNodes.map((n) =>
+          n.id === node.id ? { ...n, data: { ...n.data, expanded: !n.data.expanded } } : n,
+        ),
+      );
+    },
+    [setNodes],
+  );
+
   const onPaneClick = useCallback(() => {
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  }, []);
+
+  const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
+    setSelectedEdgeId((prev) => (prev === edge.id ? null : edge.id));
     setSelectedNodeId(null);
   }, []);
 
   const deleteSelected = useCallback(() => {
+    if (selectedEdgeId) {
+      setEdges((currentEdges) => currentEdges.filter((edge) => edge.id !== selectedEdgeId));
+      setSelectedEdgeId(null);
+      return;
+    }
     if (!selectedNode) return;
     pushHistory();
     setNodes((currentNodes) => currentNodes.filter((node) => node.id !== selectedNode.id));
     setEdges((currentEdges) => currentEdges.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id));
     setSelectedNodeId(null);
-  }, [pushHistory, selectedNode, setEdges, setNodes]);
+  }, [pushHistory, selectedEdgeId, selectedNode, setEdges, setNodes]);
 
   const updateSelectedNode = useCallback(
     (patch: Partial<NodeData>) => {
@@ -506,6 +650,8 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
     [nodes.length, pushHistory, setNodes],
   );
 
+  const edgesWithSelection = edges.map((e) => ({ ...e, selected: e.id === selectedEdgeId }));
+
   return (
     <MobileView
       nodes={nodes}
@@ -592,6 +738,7 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
           </div>
           <EditorPanel
             selectedNode={selectedNode}
+            selectedEdgeId={selectedEdgeId}
             onUpdate={updateSelectedNode}
             onDelete={deleteSelected}
           />
@@ -604,14 +751,19 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
         >
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={edgesWithSelection}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onNodeDoubleClick={onNodeDoubleClick}
+            onEdgeClick={onEdgeClick}
             onPaneClick={onPaneClick}
             onNodeDragStart={() => pushHistory()}
+            isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            defaultEdgeOptions={{ type: "labeled" }}
             fitView
             minZoom={0.2}
             maxZoom={3}

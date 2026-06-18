@@ -21,6 +21,7 @@ export interface NodeData {
   label: string;
   name: string;
   detail: string;
+  expanded?: boolean;
   snapshot?: Record<string, unknown>;
 }
 

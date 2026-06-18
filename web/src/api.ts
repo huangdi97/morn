@@ -128,6 +128,36 @@ export const api = {
     return res.json();
   },
 
+  async getAgentPoolStatus(): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/agents/pool`, {
+        headers: getApiHeaders(),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("get_agent_pool_status");
+    }
+    const res = await fetch("/api/agents/pool");
+    return res.json();
+  },
+
+  async getExecutionDetails(id: string): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/executions/${id}`, {
+        headers: getApiHeaders(),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("get_execution_details", { id });
+    }
+    const res = await fetch(`/api/executions/${id}`);
+    return res.json();
+  },
+
   async getPresetPersona(name: string): Promise<any> {
     if (isRemote()) {
       const res = await fetch(`${getBaseUrl()}/api/personas/presets/${name}`, {
