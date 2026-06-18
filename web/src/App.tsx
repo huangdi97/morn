@@ -30,6 +30,8 @@ import SandboxPanel from "./console/SandboxPanel";
 import ProactivePanel from "./console/ProactivePanel";
 import BusinessTemplates from "./console/BusinessTemplates";
 import CreatorEarnings from "./console/CreatorEarnings";
+import GitPanel from "./console/GitPanel";
+import PluginManagerPanel from "./console/PluginManagerPanel";
 import BotStore from "./store/BotStore";
 import { Settings } from "./Settings";
 import StatusBar from "./StatusBar";
@@ -357,7 +359,7 @@ function AppInner() {
   };
 
   const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "team" | "dev" | "types" | "mcp">("builder");
-  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings">("dashboard");
+  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings" | "git" | "plugins">("dashboard");
 
   const SkeletonChat = () => (
     <div className="skeleton-chat">
@@ -499,6 +501,8 @@ onSelect={async (template) => {
         <button className={consoleTab === "proactive" ? "active" : ""} onClick={() => setConsoleTab("proactive")}>{t('console_tab.proactive')}</button>
         <button className={consoleTab === "business" ? "active" : ""} onClick={() => setConsoleTab("business")}>{t('console_tab.business')}</button>
         <button className={consoleTab === "earnings" ? "active" : ""} onClick={() => setConsoleTab("earnings")}>{t('console_tab.earnings')}</button>
+        <button className={consoleTab === "git" ? "active" : ""} onClick={() => setConsoleTab("git")}>{t('console_tab.git')}</button>
+        <button className={consoleTab === "plugins" ? "active" : ""} onClick={() => setConsoleTab("plugins")}>{t('console_tab.plugins')}</button>
       </nav>
       <div className="console-content">
         {loading.console ? <SkeletonConsole /> : (
@@ -524,6 +528,8 @@ onSelect={async (template) => {
             {consoleTab === "proactive" && <ProactivePanel />}
             {consoleTab === "business" && <BusinessTemplates />}
             {consoleTab === "earnings" && <CreatorEarnings />}
+            {consoleTab === "git" && <GitPanel />}
+            {consoleTab === "plugins" && <PluginManagerPanel />}
           </>
         )}
       </div>

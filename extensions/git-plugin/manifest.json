@@ -1,0 +1,8 @@
+{
+  "name": "Git Integration",
+  "version": "1.0.0",
+  "description": "Basic Git repository integration — view branch, status, and recent commits",
+  "author": "Morn Labs",
+  "plugin_type": "tool",
+  "entry": "main.js"
+}

@@ -8,9 +8,9 @@ pub mod config;
 pub mod console;
 pub mod cost;
 pub mod earnings;
-pub mod errors;
-pub(crate) use earnings::get_creator_earnings;
+pub use earnings::get_creator_earnings;
 pub mod execution;
+pub mod git;
 pub mod journey;
 pub mod local_model;
 pub mod market;
@@ -60,6 +60,8 @@ pub(crate) use org::{
     remove_member, revoke_permission,
 };
 pub(crate) use plugin_manager::plugin_install;
+pub(crate) use plugin_manager::{list_plugins, toggle_plugin};
+pub(crate) use git::git_info;
 pub(crate) use studio::{
     assemble_agent, create_component, delete_component, get_component, list_agent_templates,
     list_components, publish_component, test_component, test_component_rerun, update_component,

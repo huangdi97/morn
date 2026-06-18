@@ -3,6 +3,70 @@ use crate::MornError;
 use std::path::Path;
 use tauri::State;
 
+use morn::core::plugin_manager::{Plugin, PluginStatus};
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub(crate) struct PluginEntry {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub author: Option<String>,
+    pub plugin_type: String,
+    pub status: String,
+}
+
+impl From<&Plugin> for PluginEntry {
+    fn from(p: &Plugin) -> Self {
+        PluginEntry {
+            name: p.manifest.name.clone(),
+            version: p.manifest.version.clone(),
+            description: p.manifest.description.clone(),
+            author: p.manifest.author.clone(),
+            plugin_type: p.manifest.plugin_type.clone(),
+            status: match p.status {
+                PluginStatus::Discovered => "discovered",
+                PluginStatus::Loaded => "loaded",
+                PluginStatus::Active => "active",
+                PluginStatus::Error(_) => "error",
+            }
+            .to_string(),
+        }
+    }
+}
+
+#[tauri::command]
+pub(crate) fn list_plugins(state: State<AppState>) -> Result<Vec<PluginEntry>, MornError> {
+    let plugin_manager = state
+        .plugin_manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
+    let mgr = plugin_manager
+        .as_ref()
+        .ok_or_else(|| MornError::Internal("PluginManager not initialized".to_string()))?;
+    Ok(mgr.list().iter().map(PluginEntry::from).collect())
+}
+
+#[tauri::command]
+pub(crate) fn toggle_plugin(name: String, enable: bool, state: State<AppState>) -> Result<(), MornError> {
+    let mut plugin_manager = state
+        .plugin_manager
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
+    let mgr = plugin_manager
+        .as_mut()
+        .ok_or_else(|| MornError::Internal("PluginManager not initialized".to_string()))?;
+
+    if enable {
+        // First ensure it's loaded
+        let _ = mgr.load(&name);
+        mgr.activate(&name).map_err(|e| MornError::Internal(e.to_string()))?;
+    } else {
+        mgr.deactivate(&name).map_err(|e| MornError::Internal(e.to_string()))?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub(crate) fn plugin_install(path: String, state: State<AppState>) -> Result<(), MornError> {
     let src = Path::new(&path);

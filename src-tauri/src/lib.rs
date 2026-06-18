@@ -249,7 +249,10 @@ pub fn run() {
             commands::execution::get_recent_logs,
             commands::team_templates::list_team_templates,
             commands::market::rollback_agent,
+            commands::git::git_info,
             commands::plugin_manager::plugin_install,
+            commands::plugin_manager::list_plugins,
+            commands::plugin_manager::toggle_plugin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
