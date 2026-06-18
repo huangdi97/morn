@@ -67,33 +67,22 @@ const tdStyle: React.CSSProperties = {
 export default function CreatorEarnings() {
   const { t } = useTranslation();
   const [earnings, setEarnings] = useState<EarningsData | null>(null);
+  const [sales, setSales] = useState<SaleRecord[]>([]);
+  const [payouts, setPayouts] = useState<PayoutRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [sales] = useState<SaleRecord[]>([
-    { id: "1", time: "2025-06-15 14:30", item: "Web Search Pro", amount: 50.00, platform_cut: 5.00, creator_share: 45.00 },
-    { id: "2", time: "2025-06-14 09:15", item: "Code Assistant", amount: 30.00, platform_cut: 3.00, creator_share: 27.00 },
-    { id: "3", time: "2025-06-13 16:45", item: "Image Generator", amount: 80.00, platform_cut: 8.00, creator_share: 72.00 },
-    { id: "4", time: "2025-06-12 11:20", item: "Data Analyzer", amount: 40.00, platform_cut: 4.00, creator_share: 36.00 },
-    { id: "5", time: "2025-06-11 08:00", item: "Web Search Pro", amount: 50.00, platform_cut: 5.00, creator_share: 45.00 },
-  ]);
-
-  const [payouts] = useState<PayoutRecord[]>([
-    { id: "p1", time: "2025-06-01", amount: 200.00, status: "completed" },
-    { id: "p2", time: "2025-05-15", amount: 150.00, status: "completed" },
-    { id: "p3", time: "2025-05-01", amount: 180.00, status: "completed" },
-  ]);
-
   useEffect(() => {
-    invoke<EarningsData>("get_creator_earnings")
-      .then(setEarnings)
-      .catch(() => {
-        setEarnings({
-          creator_id: "creator-1",
-          total_earnings: 1250.00,
-          pending_payout: 340.00,
-          sale_count: 18,
-        });
+    Promise.all([
+      invoke<EarningsData>("get_creator_earnings"),
+      invoke<SaleRecord[]>("get_earnings_history"),
+      invoke<PayoutRecord[]>("get_payment_history"),
+    ])
+      .then(([earningsData, salesData, payoutsData]) => {
+        setEarnings(earningsData);
+        setSales(salesData);
+        setPayouts(payoutsData);
       })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
@@ -110,6 +99,15 @@ export default function CreatorEarnings() {
     alert("Payout request submitted. Funds will be transferred within 3-5 business days.");
   };
 
+  if (!earnings) {
+    return (
+      <div>
+        <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.earnings.title')}</h2>
+        <div style={{ color: "#8b949e", fontSize: "14px" }}>{t('console.earnings.loading')}</div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.earnings.title')}</h2>
@@ -117,15 +115,15 @@ export default function CreatorEarnings() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "24px" }}>
         <div style={cardStyle}>
           <div style={statLabel}>{t('console.earnings.total_earnings')}</div>
-          <div style={{ ...statValue, color: "#3fb950" }}>${earnings?.total_earnings.toFixed(2)}</div>
+          <div style={{ ...statValue, color: "#3fb950" }}>${earnings.total_earnings.toFixed(2)}</div>
         </div>
         <div style={cardStyle}>
           <div style={statLabel}>Pending Payout</div>
-          <div style={{ ...statValue, color: "#d29922" }}>${earnings?.pending_payout.toFixed(2)}</div>
+          <div style={{ ...statValue, color: "#d29922" }}>${earnings.pending_payout.toFixed(2)}</div>
         </div>
         <div style={cardStyle}>
           <div style={statLabel}>Sales</div>
-          <div style={{ ...statValue, color: "#58a6ff" }}>{earnings?.sale_count}</div>
+          <div style={{ ...statValue, color: "#58a6ff" }}>{earnings.sale_count}</div>
         </div>
       </div>
 
@@ -143,58 +141,66 @@ export default function CreatorEarnings() {
             cursor: "pointer",
           }}
         >
-          {t('console.earnings.request_payout')} (${earnings?.pending_payout.toFixed(2)})
+          {t('console.earnings.request_payout')} (${earnings.pending_payout.toFixed(2)})
         </button>
       </div>
 
       <div style={{ ...cardStyle, marginBottom: "24px" }}>
         <h3 style={{ color: "#e6edf3", fontSize: "16px", marginBottom: "12px" }}>{t('console.earnings.recent_sales')}</h3>
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Time</th>
-              <th style={thStyle}>Item</th>
-              <th style={thStyle}>Amount</th>
-              <th style={thStyle}>Platform Cut</th>
-              <th style={thStyle}>Your Share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sales.map((s) => (
-              <tr key={s.id}>
-                <td style={tdStyle}>{s.time}</td>
-                <td style={tdStyle}>{s.item}</td>
-                <td style={tdStyle}>${s.amount.toFixed(2)}</td>
-                <td style={tdStyle}>-${s.platform_cut.toFixed(2)}</td>
-                <td style={{ ...tdStyle, color: "#3fb950" }}>+${s.creator_share.toFixed(2)}</td>
+        {sales.length === 0 ? (
+          <div style={{ color: "#8b949e", fontSize: "14px" }}>暂无销售记录</div>
+        ) : (
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Time</th>
+                <th style={thStyle}>Item</th>
+                <th style={thStyle}>Amount</th>
+                <th style={thStyle}>Platform Cut</th>
+                <th style={thStyle}>Your Share</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sales.map((s) => (
+                <tr key={s.id}>
+                  <td style={tdStyle}>{s.time}</td>
+                  <td style={tdStyle}>{s.item}</td>
+                  <td style={tdStyle}>${s.amount.toFixed(2)}</td>
+                  <td style={tdStyle}>-${s.platform_cut.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: "#3fb950" }}>+${s.creator_share.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div style={cardStyle}>
         <h3 style={{ color: "#e6edf3", fontSize: "16px", marginBottom: "12px" }}>{t('console.earnings.payout_history')}</h3>
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Date</th>
-              <th style={thStyle}>Amount</th>
-              <th style={thStyle}>{t('console.earnings.status')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payouts.map((p) => (
-              <tr key={p.id}>
-                <td style={tdStyle}>{p.time}</td>
-                <td style={tdStyle}>${p.amount.toFixed(2)}</td>
-                <td style={{ ...tdStyle, color: p.status === "completed" ? "#3fb950" : "#d29922" }}>
-                  {p.status === "completed" ? "Completed" : "Processing"}
-                </td>
+        {payouts.length === 0 ? (
+          <div style={{ color: "#8b949e", fontSize: "14px" }}>暂无提现记录</div>
+        ) : (
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Date</th>
+                <th style={thStyle}>Amount</th>
+                <th style={thStyle}>{t('console.earnings.status')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {payouts.map((p) => (
+                <tr key={p.id}>
+                  <td style={tdStyle}>{p.time}</td>
+                  <td style={tdStyle}>${p.amount.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, color: p.status === "completed" ? "#3fb950" : "#d29922" }}>
+                    {p.status === "completed" ? "Completed" : "Processing"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,13 @@
 import { useState, useEffect } from "react";
-import { api } from "../api";
+import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from '../i18n';
+
+interface SecurityStatus {
+  constitution_status: string;
+  intercepted_count: number;
+  dual_llm_status: string;
+  audit_log: SecurityLog[];
+}
 
 interface SecurityLog {
   timestamp: string;
@@ -15,22 +22,18 @@ export default function Security() {
   const [interceptedCount, setInterceptedCount] = useState("0");
   const [dualLlmStatus, setDualLlmStatus] = useState("ENABLED");
   const [logs, setLogs] = useState<SecurityLog[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getSystemStatus().then((res: any) => {
-      if (res.dashboard?.constitution_status) {
-        setConstitutionStatus(res.dashboard.constitution_status);
-      }
-      if (res.dashboard?.intercepted_count !== undefined) {
-        setInterceptedCount(String(res.dashboard.intercepted_count));
-      }
-      if (res.dashboard?.dual_llm_status) {
-        setDualLlmStatus(res.dashboard.dual_llm_status);
-      }
-      if (res.dashboard?.audit_log) {
-        setLogs(res.dashboard.audit_log);
-      }
-    }).catch(() => {});
+    invoke<SecurityStatus>("get_security_status")
+      .then((res) => {
+        setConstitutionStatus(res.constitution_status);
+        setInterceptedCount(String(res.intercepted_count));
+        setDualLlmStatus(res.dual_llm_status);
+        setLogs(res.audit_log);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const getSeverityColor = (sev: string) => {
@@ -63,7 +66,9 @@ export default function Security() {
 
       <div className="sec-card">
         <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>Audit Log</div>
-        {logs.length === 0 ? (
+        {loading ? (
+          <div style={{ color: "#8b949e" }}>Loading...</div>
+        ) : logs.length === 0 ? (
           <div style={{ color: "#8b949e" }}>{t('console.security.no_data')}</div>
         ) : (
           logs.map((log, i) => (
