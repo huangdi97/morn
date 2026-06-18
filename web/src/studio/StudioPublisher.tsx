@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { api } from "../api";
+import { useTranslation } from '../i18n';
 
 const ITEM_TYPES = ["agent", "tool", "knowledge", "skill", "persona", "workflow", "team_template"];
 
 export default function StudioPublisher() {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [itemType, setItemType] = useState("agent");
@@ -53,7 +55,7 @@ export default function StudioPublisher() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>Publish to Hub</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('studio.publisher.title')}</h2>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: "480px" }}>
         <input type="text" placeholder="Component name" value={name}

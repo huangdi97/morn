@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import { TeamTemplate } from "./types";
+import { useTranslation } from '../i18n';
 
 const TEAM_TEMPLATES: TeamTemplate[] = [
   {
@@ -78,6 +79,7 @@ const CONSENSUS_LABELS: Record<string, string> = {
 };
 
 export function TeamBuilder() {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<TeamTemplate | null>(null);
   const [creating, setCreating] = useState(false);
@@ -96,7 +98,7 @@ export function TeamBuilder() {
 
   return (
     <div className="team-template-selector">
-      <h2>团队构建</h2>
+      <h2>{t('studio.team_builder.title')}</h2>
       <p style={{ color: "var(--text-secondary)", fontSize: "13px", marginBottom: "16px" }}>
         选择预置团队模板，快速创建协作团队
       </p>

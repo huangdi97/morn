@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
 import { TeamTemplate } from "./types";
+import { useTranslation } from '../i18n';
 
 const FALLBACK_TEMPLATES: TeamTemplate[] = [
   { id: "preset-code-review", name: "Code Review Team", description: "Automated code review with reviewer and author agents", members: ["agent-reviewer", "agent-author"], mode: "Voting", consensus: "MungerVeto" },
@@ -36,6 +37,7 @@ const CONSENSUS_LABELS: Record<string, string> = {
 };
 
 export function TeamTemplateSelector({ onSelect }: TeamTemplateSelectorProps) {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TeamTemplate[]>(FALLBACK_TEMPLATES);
   const [loading, setLoading] = useState(true);
@@ -50,7 +52,7 @@ export function TeamTemplateSelector({ onSelect }: TeamTemplateSelectorProps) {
 
   return (
     <div className="team-template-selector">
-      <h2>团队模板</h2>
+      <h2>{t('studio.teams.templates_title')}</h2>
       {loading && <p style={{ color: "var(--text-secondary)" }}>加载中...</p>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "12px" }}>
         {templates.map((t) => (

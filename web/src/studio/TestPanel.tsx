@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import { useTranslation } from '../i18n';
 
 interface TestStep {
   name: string;
@@ -27,6 +28,7 @@ interface ComponentType {
 }
 
 export function TestPanel() {
+  const { t } = useTranslation();
   const [componentId, setComponentId] = useState("");
   const [componentType, setComponentType] = useState("agent");
   const [types, setTypes] = useState<ComponentType[]>([]);
@@ -93,7 +95,7 @@ export function TestPanel() {
 
   return (
     <div className="test-panel">
-      <h2>Test Runner</h2>
+      <h2>{t('studio.test.title')}</h2>
       <div className="test-input">
         <label>Component ID:</label>
         <input
@@ -137,7 +139,7 @@ export function TestPanel() {
 
       {result && (
         <div className="test-results">
-          <h3>Execution Trace</h3>
+          <h3>{t('studio.test.execution_trace')}</h3>
           <div className="trace-steps">
             {result.steps.map((step, i) => (
               <div key={i}>
@@ -182,10 +184,10 @@ export function TestPanel() {
                       {editingStep === i ? (
                         <>
                           <button className="step-rerun-btn" onClick={() => runEdit(i)}>Re-run</button>
-                          <button className="step-cancel-btn" onClick={cancelEdit}>Cancel</button>
+                          <button className="step-cancel-btn" onClick={cancelEdit}>{t('studio.test.cancel')}</button>
                         </>
                       ) : (
-                        <button className="step-rerun-btn" onClick={() => startEdit(i, step.input_preview || "")}>Edit & Re-run</button>
+                        <button className="step-rerun-btn" onClick={() => startEdit(i, step.input_preview || "")}>{t('studio.test.edit_rerun')}</button>
                       )}
                     </div>
                   </div>

@@ -26,6 +26,7 @@ import { EditorPanel } from "./canvas/EditorPanel";
 import { cloneSnapshot, downloadText, buildSnapshotSvg } from "./canvas/SnapshotHelper";
 import type { CanvasSnapshot } from "./canvas/SnapshotHelper";
 import { AgentDef, NodeData } from "./types";
+import { useTranslation } from '../i18n';
 
 const NODE_COLORS: Record<string, string> = {
   persona: "#7c3aed",
@@ -232,6 +233,7 @@ function makeInitialNodes(def: AgentDef): Node<NodeData>[] {
 }
 
 function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
+  const { t } = useTranslation();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlow = useReactFlow<NodeData, Edge>();
   const [nodes, setNodes, reactFlowOnNodesChange] = useNodesState<NodeData>(makeInitialNodes(def));
@@ -531,7 +533,7 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
             overflowY: "auto",
           }}
         >
-          <h4 style={{ color: "#e6edf3", margin: "0 0 12px 0", fontSize: "14px" }}>组件库</h4>
+          <h4 style={{ color: "#e6edf3", margin: "0 0 12px 0", fontSize: "14px" }}>{t('studio.canvas.component_lib')}</h4>
           {PALETTE_CATEGORIES.map((cat) => (
             <div key={cat.name} style={{ marginBottom: "12px" }}>
               <div style={{ color: "#8b949e", fontSize: "11px", marginBottom: "4px", textTransform: "uppercase" }}>{cat.name}</div>

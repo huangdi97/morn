@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import { useTranslation } from '../i18n';
 
 interface Template {
   id: string;
@@ -27,6 +28,7 @@ interface TemplateSelectorProps {
 }
 
 export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<string | null>(null);
   const [templates, setTemplates] = useState<Template[]>(FALLBACK_TEMPLATES);
   const [loading, setLoading] = useState(true);
@@ -50,7 +52,7 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
 
   return (
     <div className="template-selector">
-      <h2>选择一个模板</h2>
+      <h2>{t('studio.teams.select_template')}</h2>
       {loading && <p style={{ color: "var(--text-secondary)" }}>加载中...</p>}
       <div className="template-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "12px" }}>
         {templates.map((t) => (
