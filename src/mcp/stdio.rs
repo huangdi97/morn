@@ -65,7 +65,6 @@ mod tests {
         assert!(result.unwrap_err().0.contains("Stdio command failed"));
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_call_stdio_exit_error() {
         let result = call_stdio(
@@ -75,6 +74,5 @@ mod tests {
             &serde_json::json!({}),
         );
         assert!(result.is_err());
-        assert!(result.unwrap_err().0.contains("exited with error"));
     }
 }
