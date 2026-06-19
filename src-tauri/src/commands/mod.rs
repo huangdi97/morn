@@ -8,7 +8,7 @@ pub mod config;
 pub mod console;
 pub mod cost;
 pub mod earnings;
-pub use earnings::get_creator_earnings;
+
 pub mod errors;
 pub mod execution;
 pub mod git;
