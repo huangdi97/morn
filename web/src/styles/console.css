@@ -11,7 +11,15 @@
   mask-image: linear-gradient(to right, black 90%, transparent 98%);
 }
 
-.console-tabs button {
+.hub-subtabs {
+  display: flex;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 0 var(--space-md);
+}
+
+.console-tabs button,
+.hub-subtabs button {
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -24,12 +32,14 @@
   white-space: nowrap;
 }
 
-.console-tabs button:hover {
+.console-tabs button:hover,
+.hub-subtabs button:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
 }
 
-.console-tabs button.active {
+.console-tabs button.active,
+.hub-subtabs button.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }

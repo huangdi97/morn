@@ -624,4 +624,40 @@ export const api = {
     const res = await fetch(`/api/market/reviews/${listingId}`);
     return res.json();
   },
+
+  async listWorkflowTemplates(): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/workflow/templates`, {
+        headers: getApiHeaders(),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("list_workflow_templates");
+    }
+    const res = await fetch("/api/workflow/templates");
+    return res.json();
+  },
+
+  async saveWorkflowTemplate(template: any): Promise<any> {
+    if (isRemote()) {
+      const res = await fetch(`${getBaseUrl()}/api/workflow/templates`, {
+        method: "POST",
+        headers: getApiHeaders(),
+        body: JSON.stringify(template),
+      });
+      return res.json();
+    }
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("save_workflow_template", { template });
+    }
+    const res = await fetch("/api/workflow/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(template),
+    });
+    return res.json();
+  },
 };

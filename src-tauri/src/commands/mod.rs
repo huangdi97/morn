@@ -9,6 +9,7 @@ pub mod console;
 pub mod cost;
 pub mod earnings;
 pub use earnings::get_creator_earnings;
+pub mod errors;
 pub mod execution;
 pub mod git;
 pub mod journey;
@@ -41,6 +42,7 @@ pub(crate) use config::{export_config, import_config};
 pub(crate) use console::{get_component_topology, get_system_status};
 pub(crate) use cost::{estimate_cost, get_cost_summary};
 pub(crate) use execution::get_recent_logs;
+pub(crate) use git::git_info;
 pub(crate) use journey::get_user_journey;
 pub(crate) use local_model::{delete_local_model, download_model, list_local_models};
 pub(crate) use market::{
@@ -61,7 +63,6 @@ pub(crate) use org::{
 };
 pub(crate) use plugin_manager::plugin_install;
 pub(crate) use plugin_manager::{list_plugins, toggle_plugin};
-pub(crate) use git::git_info;
 pub(crate) use studio::{
     assemble_agent, create_component, delete_component, get_component, list_agent_templates,
     list_components, publish_component, test_component, test_component_rerun, update_component,

@@ -64,19 +64,37 @@ pub(crate) fn get_market_listings(
 }
 
 #[tauri::command]
-pub(crate) fn list_bot_store() -> Vec<serde_json::Value> {
-    vec![
-        serde_json::json!({"id": "b1", "name": "Data Analyst", "icon": "📊", "description": "Turn raw data into actionable insights with statistical analysis and visualization", "category": "analysis", "rating": 4.8, "installs": 3420, "author": "Morn Labs", "price": 0, "template_id": "preset-analyst"}),
-        serde_json::json!({"id": "b2", "name": "Research Assistant", "icon": "🔬", "description": "Multi-source research with cross-validation and citation management", "category": "research", "rating": 4.7, "installs": 2890, "author": "Morn Labs", "price": 0, "template_id": "preset-researcher"}),
-        serde_json::json!({"id": "b3", "name": "Content Writer", "icon": "✍️", "description": "Create engaging content from blog posts to technical documentation", "category": "writing", "rating": 4.6, "installs": 2150, "author": "Morn Labs", "price": 0, "template_id": "preset-writer"}),
-        serde_json::json!({"id": "b4", "name": "Code Engineer", "icon": "💻", "description": "Full-stack development with testing and best practices", "category": "coding", "rating": 4.9, "installs": 4560, "author": "Morn Labs", "price": 0, "template_id": "preset-coder"}),
-        serde_json::json!({"id": "b5", "name": "Translator Pro", "icon": "🌐", "description": "Professional translation with cultural adaptation and terminology management", "category": "translation", "rating": 4.5, "installs": 1870, "author": "Morn Labs", "price": 0.001, "template_id": "preset-translator"}),
-        serde_json::json!({"id": "b6", "name": "System Assistant", "icon": "🤖", "description": "All-purpose AI assistant for daily tasks and workflow automation", "category": "assistant", "rating": 4.4, "installs": 5230, "author": "Morn Labs", "price": 0, "template_id": "preset-assistant"}),
-        serde_json::json!({"id": "b7", "name": "Code Reviewer", "icon": "🔍", "description": "Thorough code review with actionable improvement suggestions", "category": "review", "rating": 4.7, "installs": 1560, "author": "Morn Labs", "price": 0, "template_id": "preset-reviewer"}),
-        serde_json::json!({"id": "b8", "name": "Customer Support", "icon": "🎧", "description": "Patient and empathetic customer service agent", "category": "support", "rating": 4.3, "installs": 980, "author": "Morn Labs", "price": 0, "template_id": "preset-cs-agent"}),
-        serde_json::json!({"id": "b9", "name": "Financial Analyst", "icon": "💰", "description": "Financial data analysis, trend prediction and investment research", "category": "analysis", "rating": 4.6, "installs": 1340, "author": "Morn Labs", "price": 0.002, "template_id": "preset-analyst"}),
-        serde_json::json!({"id": "b10", "name": "DevOps Bot", "icon": "⚙️", "description": "Infrastructure management, deployment automation and monitoring", "category": "coding", "rating": 4.5, "installs": 870, "author": "Morn Labs", "price": 0, "template_id": "preset-coder"}),
-    ]
+pub(crate) fn list_bot_store(state: State<AppState>) -> Result<Vec<serde_json::Value>, MornError> {
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
+    let s = storage
+        .as_ref()
+        .ok_or_else(|| "Storage not initialized".to_string())?;
+
+    let marketplace = Marketplace::new(s.clone());
+    let listings = marketplace.list(None);
+
+    let bot_listings: Vec<serde_json::Value> = listings
+        .iter()
+        .map(|l| {
+            serde_json::json!({
+                "id": l.id,
+                "name": l.name,
+                "icon": "🤖",
+                "description": l.description,
+                "category": l.category,
+                "rating": l.rating,
+                "installs": l.downloads,
+                "author": l.author,
+                "price": l.price,
+                "template_id": format!("preset-{}", l.name.to_lowercase().replace(' ', "-")),
+            })
+        })
+        .collect();
+
+    Ok(bot_listings)
 }
 
 #[tauri::command]

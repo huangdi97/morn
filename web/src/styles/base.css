@@ -636,6 +636,7 @@ body {
   }
   .studio-tabs button { padding: 8px 12px; font-size: 12px; }
   .console-tabs button { padding: 8px 12px; font-size: 12px; }
+  .workbench-tabs button { padding: 6px 10px; font-size: 11px; }
   .agent-bar { font-size: 10px; gap: 6px; padding: 4px 12px; }
   header h1 { font-size: 20px; }
   .settings-panel { width: 90vw; max-width: 90vw; }
@@ -672,6 +673,8 @@ body {
   .console-tabs button { padding: 6px 8px; font-size: 11px; }
   .studio-tabs { overflow-x: auto; gap: 0; }
   .console-tabs { overflow-x: auto; gap: 0; }
+  .workbench-tabs button { padding: 5px 8px; font-size: 11px; }
+  .workbench-tabs { overflow-x: auto; gap: 0; }
 }
 
 /* 霓虹发光边框 */

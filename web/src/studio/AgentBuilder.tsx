@@ -114,8 +114,12 @@ export function AgentBuilder() {
     try {
       setBuilding(true);
       setError(null);
-      const result = await api.assembleAgent(def) as { agent_id: string };
-      setAgentId(result.agent_id);
+      if (agentId) {
+        await api.updateComponent(agentId, def);
+      } else {
+        const result = await api.assembleAgent(def) as { agent_id: string };
+        setAgentId(result.agent_id);
+      }
       setStep(2);
     } catch (e: any) {
       setError(e.toString());
@@ -349,7 +353,7 @@ export function AgentBuilder() {
             <div className="step-buttons" style={{ marginTop: "12px" }}>
               <button onClick={() => setStep(0)}>Back</button>
               <button onClick={handleBuild} disabled={building}>
-                {building ? "Building..." : "Build Agent"}
+                {building ? "Building..." : (agentId ? "Update Agent" : "Build Agent")}
               </button>
             </div>
             {error && <div className="error-indicator">{error}</div>}
@@ -364,16 +368,14 @@ export function AgentBuilder() {
               <p>Persona: {def.persona}</p>
               <p>Model: {def.model}</p>
               {agentId && <p className="agent-id">Agent ID: {agentId}</p>}
-              <div className="component-breakdown">
-                <h4>{t('studio.builder.component_breakdown')}</h4>
-                <p><strong>Tools:</strong> {def.tools.length > 0 ? def.tools.join(", ") : "None"}</p>
-                <p><strong>Knowledge:</strong> {def.knowledge.length > 0 ? def.knowledge.join(", ") : "None"}</p>
-                <p><strong>Skills:</strong> {def.skills.length > 0 ? def.skills.join(", ") : "None"}</p>
-              </div>
+              <NodeCanvas def={def} onDefChange={(newDef) => { setDef(newDef); setEditTab("visual"); setStep(1); }} />
             </div>
             <div className="step-buttons">
               <button onClick={handlePublish} disabled={publishing || !agentId}>
                 {publishing ? "Publishing..." : "Publish to Workbench"}
+              </button>
+              <button onClick={() => { setEditTab("visual"); setStep(1); }}>
+                Edit Agent
               </button>
               <button onClick={() => { setStep(0); setAgentId(null); setPublishMsg(null); }}>Create Another</button>
             </div>

@@ -24,25 +24,12 @@ interface Review {
   created_at: string;
 }
 
-const hardcodedBots: BotListing[] = [
-  { id: "b1", name: "Data Analyst", icon: "📊", description: "Turn raw data into actionable insights with statistical analysis and visualization", category: "analysis", rating: 4.8, installs: 3420, author: "Morn Labs", price: 0, template_id: "preset-analyst" },
-  { id: "b2", name: "Research Assistant", icon: "🔬", description: "Multi-source research with cross-validation and citation management", category: "research", rating: 4.7, installs: 2890, author: "Morn Labs", price: 0, template_id: "preset-researcher" },
-  { id: "b3", name: "Content Writer", icon: "✍️", description: "Create engaging content from blog posts to technical documentation", category: "writing", rating: 4.6, installs: 2150, author: "Morn Labs", price: 0, template_id: "preset-writer" },
-  { id: "b4", name: "Code Engineer", icon: "💻", description: "Full-stack development with testing and best practices", category: "coding", rating: 4.9, installs: 4560, author: "Morn Labs", price: 0, template_id: "preset-coder" },
-  { id: "b5", name: "Translator Pro", icon: "🌐", description: "Professional translation with cultural adaptation and terminology management", category: "translation", rating: 4.5, installs: 1870, author: "Morn Labs", price: 0.001, template_id: "preset-translator" },
-  { id: "b6", name: "System Assistant", icon: "🤖", description: "All-purpose AI assistant for daily tasks and workflow automation", category: "assistant", rating: 4.4, installs: 5230, author: "Morn Labs", price: 0, template_id: "preset-assistant" },
-  { id: "b7", name: "Code Reviewer", icon: "🔍", description: "Thorough code review with actionable improvement suggestions", category: "review", rating: 4.7, installs: 1560, author: "Morn Labs", price: 0, template_id: "preset-reviewer" },
-  { id: "b8", name: "Customer Support", icon: "🎧", description: "Patient and empathetic customer service agent", category: "support", rating: 4.3, installs: 980, author: "Morn Labs", price: 0, template_id: "preset-cs-agent" },
-  { id: "b9", name: "Financial Analyst", icon: "💰", description: "Financial data analysis, trend prediction and investment research", category: "analysis", rating: 4.6, installs: 1340, author: "Morn Labs", price: 0.002, template_id: "preset-analyst" },
-  { id: "b10", name: "DevOps Bot", icon: "⚙️", description: "Infrastructure management, deployment automation and monitoring", category: "coding", rating: 4.5, installs: 870, author: "Morn Labs", price: 0, template_id: "preset-coder" },
-];
-
 const categories = ["all", "analysis", "research", "writing", "coding", "translation", "assistant", "review", "support"];
 const priceFilters = ["all", "free", "paid"] as const;
 
 export default function BotStore() {
   const [loading, setLoading] = useState(true);
-  const [bots, setBots] = useState<BotListing[]>(hardcodedBots);
+  const [bots, setBots] = useState<BotListing[]>([]);
   const [category, setCategory] = useState("all");
   const [priceFilter, setPriceFilter] = useState<string>("all");
   const [installed, setInstalled] = useState<Set<string>>(new Set());
@@ -58,7 +45,7 @@ export default function BotStore() {
       setBots(res);
       setLoading(false);
     }).catch(() => {
-      setBots(hardcodedBots);
+      setBots([]);
       setLoading(false);
     });
   }, []);

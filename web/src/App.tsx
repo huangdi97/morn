@@ -4,6 +4,7 @@ import { ComponentEditor } from "./studio/ComponentEditor";
 import { AgentBuilder } from "./studio/AgentBuilder";
 import { TeamBuilder } from "./studio/TeamBuilder";
 import { TestPanel } from "./studio/TestPanel";
+import WorkflowBuilder from "./studio/WorkflowBuilder";
 import { TeamTemplateSelector } from "./studio/TeamTemplateSelector";
 import { DevZone } from "./studio/DevZone";
 import { ComponentTypeManager } from "./studio/ComponentTypeManager";
@@ -35,7 +36,7 @@ import PluginManagerPanel from "./console/PluginManagerPanel";
 import BotStore from "./store/BotStore";
 import { Settings } from "./Settings";
 import StatusBar from "./StatusBar";
-import ExecutionFlow from "./components/ExecutionFlow";
+import PipelineFlow from "./components/PipelineFlow";
 import { ToastItem } from "./components/Toast";
 import { LocaleProvider, useTranslation } from "./i18n";
 import "./styles/base.css";
@@ -45,7 +46,7 @@ import "./styles/chat.css";
 import "./styles/studio.css";
 import "./styles/console.css";
 
-type View = "workbench" | "studio" | "console" | "store";
+type View = "workbench" | "studio" | "hub" | "console";
 
 interface Message {
   role: "user" | "assistant";
@@ -208,7 +209,7 @@ function AppInner() {
   }, [workLogs]);
 
   useEffect(() => {
-    if (view !== "store") {
+    if (view !== "hub") {
       setLoading(prev => ({ ...prev, [view]: true }));
       const t = setTimeout(() => setLoading(prev => ({ ...prev, [view]: false })), 500);
       return () => clearTimeout(t);
@@ -360,6 +361,7 @@ function AppInner() {
 
   const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "team" | "dev" | "types" | "mcp">("builder");
   const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings" | "git" | "plugins">("dashboard");
+  const [workbenchTab, setWorkbenchTab] = useState<"chat" | "workflow">("chat");
 
   const SkeletonChat = () => (
     <div className="skeleton-chat">
@@ -550,8 +552,15 @@ onSelect={async (template) => {
       </header>
 
       <AgentBar isTyping={isTyping} />
-      <ExecutionFlow logs={workLogs} visible={workVisible} />
+      <PipelineFlow logs={workLogs} visible={workVisible} />
 
+      <nav className="workbench-tabs">
+        <button className={workbenchTab === "chat" ? "active" : ""} onClick={() => setWorkbenchTab("chat")}>{t('workbench_tab.chat')}</button>
+        <button className={workbenchTab === "workflow" ? "active" : ""} onClick={() => setWorkbenchTab("workflow")}>{t('workbench_tab.workflow')}</button>
+      </nav>
+
+      {workbenchTab === "chat" ? (
+        <>
       <main className="chat-area" ref={chatAreaRef}>
         {loading.workbench && messages.length === 0 ? <SkeletonChat /> : (
           <>
@@ -573,7 +582,7 @@ onSelect={async (template) => {
               {showSeparator && <div className="time-separator">{formatTime(msg.timestamp)}</div>}
               <div
                 className={`message ${msg.role}${i === sendingIndex ? ' sending' : ''}${isErr ? ' error' : ''}`}
-                style={{ "--msg-index": i } as React.CSSProperties}
+                style={{"--msg-index": i} as React.CSSProperties}
               >
                 <div className="avatar">{isErr ? "⚠️" : msg.role === "user" ? "👤" : "🤖"}</div>
                 <div>
@@ -639,6 +648,12 @@ onSelect={async (template) => {
           </button>
         )}
       </footer>
+        </>
+      ) : (
+        <div className="workbench-workflow">
+          <WorkflowBuilder />
+        </div>
+      )}
     </>
   );
 
@@ -653,9 +668,9 @@ onSelect={async (template) => {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="16 3 21 8 8 21 3 21 3 16 16 3"/></svg>
           <span>{t('nav.studio')}</span>
         </button>
-        <button className={view === "store" ? "active" : ""} onClick={() => setView("store")} data-tooltip={t('nav.store_tooltip')}>
+        <button className={view === "hub" ? "active" : ""} onClick={() => setView("hub")} data-tooltip={t('nav.hub_tooltip')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-          <span>{t('nav.store')}</span>
+          <span>{t('nav.hub')}</span>
         </button>
         <button className={view === "console" ? "active" : ""} onClick={() => setView("console")} data-tooltip={t('nav.console_tooltip')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
@@ -665,7 +680,7 @@ onSelect={async (template) => {
       </nav>
       {view === "workbench" && renderWorkbench()}
       {view === "studio" && renderStudio()}
-      {view === "store" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}
+      {view === "hub" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}
       {view === "console" && renderConsole()}
       {showSettings && <Settings onClose={() => setShowSettings(false)} showToast={showToast} />}
       <StatusBar />

@@ -48,7 +48,11 @@ pub(crate) fn list_plugins(state: State<AppState>) -> Result<Vec<PluginEntry>, M
 }
 
 #[tauri::command]
-pub(crate) fn toggle_plugin(name: String, enable: bool, state: State<AppState>) -> Result<(), MornError> {
+pub(crate) fn toggle_plugin(
+    name: String,
+    enable: bool,
+    state: State<AppState>,
+) -> Result<(), MornError> {
     let mut plugin_manager = state
         .plugin_manager
         .lock()
@@ -60,9 +64,11 @@ pub(crate) fn toggle_plugin(name: String, enable: bool, state: State<AppState>) 
     if enable {
         // First ensure it's loaded
         let _ = mgr.load(&name);
-        mgr.activate(&name).map_err(|e| MornError::Internal(e.to_string()))?;
+        mgr.activate(&name)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
     } else {
-        mgr.deactivate(&name).map_err(|e| MornError::Internal(e.to_string()))?;
+        mgr.deactivate(&name)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
     }
     Ok(())
 }

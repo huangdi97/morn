@@ -65,13 +65,8 @@ pub(crate) fn git_info(_state: State<AppState>) -> GitInfo {
         .map(|s| s.lines().count())
         .unwrap_or(0);
 
-    let log_output = run_git(&[
-        "log",
-        "--oneline",
-        "-5",
-        "--format=%H|%an|%s|%ar",
-    ])
-    .unwrap_or_default();
+    let log_output =
+        run_git(&["log", "--oneline", "-5", "--format=%H|%an|%s|%ar"]).unwrap_or_default();
 
     let recent_commits: Vec<GitCommit> = log_output
         .lines()
