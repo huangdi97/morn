@@ -65,6 +65,7 @@ mod tests {
         assert!(result.unwrap_err().0.contains("Stdio command failed"));
     }
 
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_call_stdio_exit_error() {
         let result = call_stdio(
