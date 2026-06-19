@@ -38,7 +38,9 @@ pub struct Listing {
     pub item_type: String,
     pub name: String,
     pub description: String,
-    pub price: f64,
+    pub price: Option<f64>,
+    #[serde(default)]
+    pub price_model: String,
     pub author: String,
     pub rating: f64,
     pub downloads: u64,
@@ -46,6 +48,12 @@ pub struct Listing {
     pub version: String,
     pub screenshots: String,
     pub category: String,
+    #[serde(default)]
+    pub requires: Vec<String>,
+    #[serde(default)]
+    pub verified: bool,
+    #[serde(default)]
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -133,7 +141,7 @@ impl Marketplace {
             id: format!("tx-{}", uuid::Uuid::new_v4()),
             listing_id: listing_id.to_string(),
             buyer: user_id.to_string(),
-            amount: listing.price,
+            amount: listing.price.unwrap_or(0.0),
             timestamp: chrono::Utc::now().to_rfc3339(),
         };
         self.storage.save_transaction(&tx)?;
@@ -143,7 +151,7 @@ impl Marketplace {
             listing_id: listing_id.to_string(),
             user_id: user_id.to_string(),
             granted_at: chrono::Utc::now().to_rfc3339(),
-            expires_at: if listing.price > 0.0 {
+            expires_at: if listing.price.unwrap_or(0.0) > 0.0 {
                 Some((chrono::Utc::now() + chrono::Duration::days(30)).to_rfc3339())
             } else {
                 None
@@ -257,7 +265,7 @@ impl Marketplace {
                 "Component type '{}' v{} by {} — interfaces: {:?}",
                 type_def.type_name, type_def.version, type_def.author, type_def.interfaces
             ),
-            price: 0.0,
+            price: Some(0.0),
             author: user_id.to_string(),
             rating: 0.0,
             downloads: 0,
@@ -265,6 +273,10 @@ impl Marketplace {
             version: "1.0.0".into(),
             screenshots: "".into(),
             category: "general".into(),
+            price_model: "free".into(),
+            requires: vec![],
+            verified: false,
+            updated_at: chrono::Utc::now().to_rfc3339(),
         };
         self.storage.save_listing(&listing)?;
         Ok(id)
@@ -411,7 +423,7 @@ mod tests {
             item_type: "tool".into(),
             name: "Test Tool".into(),
             description: "test".into(),
-            price: 0.0,
+            price: Some(0.0),
             author: "test".into(),
             rating: 0.0,
             downloads: 0,
@@ -419,6 +431,10 @@ mod tests {
             version: "1.0.0".into(),
             screenshots: "".into(),
             category: "general".into(),
+            price_model: "free".into(),
+            requires: vec![],
+            verified: false,
+            updated_at: chrono::Utc::now().to_rfc3339(),
         };
         market.publish(listing).unwrap();
         assert_eq!(market.list(None).len(), 8);

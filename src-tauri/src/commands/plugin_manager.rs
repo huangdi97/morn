@@ -3,7 +3,7 @@ use crate::MornError;
 use std::path::Path;
 use tauri::State;
 
-use morn::core::plugin_manager::{Plugin, PluginStatus};
+use morn::core::plugin_manager::{MornPluginMeta, Plugin, PluginStatus};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -128,6 +128,17 @@ pub(crate) fn plugin_install(path: String, state: State<AppState>) -> Result<(),
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn list_morn_plugins() -> Result<Vec<MornPluginMeta>, MornError> {
+    Ok(morn::core::plugin_manager::list_morn_plugin_metas())
+}
+
+#[tauri::command]
+pub(crate) fn toggle_morn_plugin(id: String, enabled: bool) -> Result<(), MornError> {
+    morn::core::plugin_manager::toggle_morn_plugin_enabled(&id, enabled)
+        .map_err(|e| MornError::Internal(e))
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {

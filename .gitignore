@@ -10,3 +10,4 @@ tests/*.log
 tests/*.tmp
 # Updater keys (keep private!)
 updater-keypair/
+*.deb

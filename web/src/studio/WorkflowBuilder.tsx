@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import ReactFlow, {
   addEdge,
   Connection,
@@ -40,6 +40,8 @@ interface WorkflowNodeData {
   stepName: string;
   actionType: string;
   status?: string;
+  config?: Record<string, unknown>;
+  timeout_secs?: number;
 }
 
 const ACTION_COLORS: Record<string, string> = {
@@ -138,7 +140,7 @@ function getLayoutedSteps(steps: WorkflowStep[], direction = "TB") {
       id: step.id,
       type: "workflowStep",
       position: { x: 0, y: 0 },
-      data: { stepName: step.id, actionType: step.action.type },
+      data: { stepName: step.id, actionType: step.action.type, config: step.action.config, timeout_secs: step.timeout_secs },
     };
   });
 
@@ -170,17 +172,23 @@ function getLayoutedSteps(steps: WorkflowStep[], direction = "TB") {
 function WorkflowStepNode({ data, selected }: NodeProps<WorkflowNodeData>) {
   const color = ACTION_COLORS[data.actionType] || ACTION_COLORS.default;
   const statusColor = data.status ? STATUS_COLORS[data.status] || STATUS_COLORS.pending : STATUS_COLORS.pending;
+  const statusBorder = data.status === "success" ? "#3fb950" :
+    data.status === "failed" ? "#f85149" :
+    data.status === "running" ? "#58a6ff" :
+    selected ? color : "#30363d";
 
   return (
     <div
       style={{
         background: "#1a1d23",
-        border: `2px solid ${selected ? color : "#30363d"}`,
+        border: `2px solid ${statusBorder}`,
         borderRadius: "8px",
         padding: "8px 12px",
         minWidth: "160px",
-        boxShadow: selected ? `0 0 0 2px ${color}44, 0 4px 12px rgba(0,0,0,0.3)` : "0 4px 12px rgba(0,0,0,0.3)",
+        boxShadow: data.status === "running" ? "0 0 12px #58a6ff66, 0 4px 12px rgba(0,0,0,0.3)" :
+          selected ? `0 0 0 2px ${color}44, 0 4px 12px rgba(0,0,0,0.3)` : "0 4px 12px rgba(0,0,0,0.3)",
         position: "relative",
+        transition: data.status === "running" ? "box-shadow 1s ease-in-out" : undefined,
       }}
     >
       <Handle type="target" position={Position.Top} style={{ background: color, border: `2px solid ${color}`, width: 8, height: 8 }} />
@@ -200,6 +208,149 @@ function WorkflowStepNode({ data, selected }: NodeProps<WorkflowNodeData>) {
 
 const nodeTypes = { workflowStep: WorkflowStepNode };
 
+const ACTION_CONFIG_FIELDS: Record<string, { key: string; label: string; type: "input" | "textarea" | "select"; options?: string[] }[]> = {
+  llm_call: [
+    { key: "model", label: "Model", type: "input" },
+    { key: "system_prompt", label: "System Prompt", type: "textarea" },
+  ],
+  tool_exec: [
+    { key: "tool_id", label: "Tool ID", type: "input" },
+  ],
+  api_request: [
+    { key: "url", label: "URL", type: "input" },
+    { key: "method", label: "Method", type: "select", options: ["GET", "POST", "PUT", "DELETE"] },
+  ],
+  web_search: [
+    { key: "query", label: "Query", type: "input" },
+  ],
+  kb_query: [
+    { key: "knowledge_id", label: "Knowledge ID", type: "input" },
+    { key: "query", label: "Query", type: "input" },
+  ],
+  generate_report: [
+    { key: "format", label: "Format", type: "select", options: ["markdown", "html", "pdf", "csv"] },
+  ],
+  notify: [
+    { key: "channel", label: "Channel", type: "input" },
+    { key: "message", label: "Message", type: "input" },
+  ],
+};
+
+function ConfigPanel({
+  node,
+  onUpdateNode,
+  onClose,
+}: {
+  node: Node<WorkflowNodeData>;
+  onUpdateNode: (id: string, data: Partial<WorkflowNodeData>) => void;
+  onClose: () => void;
+}) {
+  const fields = ACTION_CONFIG_FIELDS[node.data.actionType] || [];
+  const config = node.data.config || {};
+  const timeout = node.data.timeout_secs ?? 60;
+
+  const setConfigValue = (key: string, value: unknown) => {
+    onUpdateNode(node.id, { config: { ...config, [key]: value } });
+  };
+
+  return (
+    <div style={{
+      width: 280,
+      background: "#161b22",
+      borderLeft: "1px solid #30363d",
+      padding: "16px",
+      overflowY: "auto",
+      flexShrink: 0,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <span style={{ color: "#e6edf3", fontSize: 14, fontWeight: 600 }}>Node Config</span>
+        <button
+          onClick={onClose}
+          style={{ background: "none", border: "none", color: "#8b949e", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", color: "#8b949e", fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Step Name</label>
+        <input
+          value={node.data.stepName}
+          onChange={(e) => onUpdateNode(node.id, { stepName: e.target.value })}
+          style={{
+            width: "100%", background: "#0d1117", border: "1px solid #30363d", borderRadius: 4,
+            padding: "6px 8px", color: "#e6edf3", fontSize: 13, boxSizing: "border-box",
+          }}
+        />
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", color: "#8b949e", fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Action Type</label>
+        <div style={{
+          background: "#0d1117", border: "1px solid #30363d", borderRadius: 4,
+          padding: "6px 8px", color: "#8b949e", fontSize: 13,
+        }}>
+          {node.data.actionType}
+        </div>
+      </div>
+
+      {fields.map((field) => (
+        <div key={field.key} style={{ marginBottom: 12 }}>
+          <label style={{ display: "block", color: "#8b949e", fontSize: 11, marginBottom: 4, fontWeight: 600 }}>{field.label}</label>
+          {field.type === "textarea" ? (
+            <textarea
+              value={(config[field.key] as string) || ""}
+              onChange={(e) => setConfigValue(field.key, e.target.value)}
+              rows={4}
+              style={{
+                width: "100%", background: "#0d1117", border: "1px solid #30363d", borderRadius: 4,
+                padding: "6px 8px", color: "#e6edf3", fontSize: 13, resize: "vertical",
+                boxSizing: "border-box", fontFamily: "inherit",
+              }}
+            />
+          ) : field.type === "select" ? (
+            <select
+              value={(config[field.key] as string) || (field.options?.[0] || "")}
+              onChange={(e) => setConfigValue(field.key, e.target.value)}
+              style={{
+                width: "100%", background: "#0d1117", border: "1px solid #30363d", borderRadius: 4,
+                padding: "6px 8px", color: "#e6edf3", fontSize: 13, boxSizing: "border-box",
+              }}
+            >
+              {field.options?.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={(config[field.key] as string) || ""}
+              onChange={(e) => setConfigValue(field.key, e.target.value)}
+              style={{
+                width: "100%", background: "#0d1117", border: "1px solid #30363d", borderRadius: 4,
+                padding: "6px 8px", color: "#e6edf3", fontSize: 13, boxSizing: "border-box",
+              }}
+            />
+          )}
+        </div>
+      ))}
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", color: "#8b949e", fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Timeout (seconds)</label>
+        <input
+          type="number"
+          min={1}
+          value={timeout}
+          onChange={(e) => onUpdateNode(node.id, { timeout_secs: parseInt(e.target.value, 10) || 60 })}
+          style={{
+            width: "100%", background: "#0d1117", border: "1px solid #30363d", borderRadius: 4,
+            padding: "6px 8px", color: "#e6edf3", fontSize: 13, boxSizing: "border-box",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function CanvasInner() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useReactFlow();
@@ -211,6 +362,19 @@ function CanvasInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [executing, setExecuting] = useState(false);
+  const [backendNodeTypes, setBackendNodeTypes] = useState<{type: string; label: string; category: string}[]>([]);
+
+  const paletteCategories = useMemo(() => {
+    if (backendNodeTypes.length === 0) return PALETTE_CATEGORIES;
+    const map = new Map<string, {type: string; label: string}[]>();
+    for (const n of backendNodeTypes) {
+      if (!map.has(n.category)) map.set(n.category, []);
+      map.get(n.category)!.push({type: n.type, label: n.label});
+    }
+    return Array.from(map.entries()).map(([category, items]) => ({category, items}));
+  }, [backendNodeTypes]);
 
   useEffect(() => {
     api.listWorkflowTemplates?.().then((result: WorkflowTemplate[]) => {
@@ -218,6 +382,17 @@ function CanvasInner() {
         setTemplates(result);
       }
     }).catch(() => {});
+
+    const loadNodeTypes = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const types = await invoke<{type: string; label: string; category: string}[]>("list_workflow_node_types");
+        if (types && types.length > 0) {
+          setBackendNodeTypes(types);
+        }
+      } catch {}
+    };
+    loadNodeTypes();
   }, []);
 
   const loadTemplate = useCallback((template: WorkflowTemplate) => {
@@ -226,6 +401,7 @@ function CanvasInner() {
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedSteps(template.steps);
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
+    setSelectedNodeId(null);
   }, [setNodes, setEdges]);
 
   useEffect(() => {
@@ -271,7 +447,7 @@ function CanvasInner() {
       typeCountRef.current[type] = (typeCountRef.current[type] || 0) + 1;
       const count = typeCountRef.current[type];
 
-      const paletteItem = PALETTE_CATEGORIES.flatMap((c) => c.items).find((i) => i.type === type);
+      const paletteItem = paletteCategories.flatMap((c) => c.items).find((i) => i.type === type);
       const label = paletteItem?.label || type;
 
       const newId = `${type}-${count}`;
@@ -279,7 +455,7 @@ function CanvasInner() {
         id: newId,
         type: "workflowStep",
         position,
-        data: { stepName: `${label} #${count}`, actionType: type },
+        data: { stepName: `${label} #${count}`, actionType: type, config: {}, timeout_secs: 60 },
       };
 
       setNodes((nds) => [...nds, newNode]);
@@ -293,7 +469,7 @@ function CanvasInner() {
       id: newId,
       type: "workflowStep",
       position: { x: 100, y: 80 + nodes.length * 90 },
-      data: { stepName: newId, actionType: "llm_call" },
+      data: { stepName: newId, actionType: "llm_call", config: {}, timeout_secs: 60 },
     };
     setNodes((nds) => [...nds, newNode]);
   }, [nodes.length, setNodes]);
@@ -303,15 +479,16 @@ function CanvasInner() {
     if (selected) {
       setNodes((nds) => nds.filter((n) => n.id !== selected.id));
       setEdges((eds) => eds.filter((e) => e.source !== selected.id && e.target !== selected.id));
+      if (selectedNodeId === selected.id) setSelectedNodeId(null);
     }
-  }, [nodes, setNodes, setEdges]);
+  }, [nodes, setNodes, setEdges, selectedNodeId]);
 
   const autoLayout = useCallback(() => {
     const steps: WorkflowStep[] = nodes.map((n) => ({
       id: n.id,
-      action: { type: n.data.actionType, config: {} },
+      action: { type: n.data.actionType, config: n.data.config || {} },
       depends_on: edges.filter((e) => e.target === n.id).map((e) => e.source),
-      timeout_secs: 60,
+      timeout_secs: n.data.timeout_secs ?? 60,
     }));
     const { nodes: laidOut, edges: laidEdges } = getLayoutedSteps(steps);
     setNodes(laidOut);
@@ -321,9 +498,9 @@ function CanvasInner() {
   const saveTemplate = useCallback(async () => {
     const steps: WorkflowStep[] = nodes.map((n) => ({
       id: n.id,
-      action: { type: n.data.actionType, config: {} },
+      action: { type: n.data.actionType, config: n.data.config || {} },
       depends_on: edges.filter((e) => e.target === n.id).map((e) => e.source),
-      timeout_secs: 60,
+      timeout_secs: n.data.timeout_secs ?? 60,
     }));
     const newTemplate: WorkflowTemplate = {
       id: `custom-${Date.now()}`,
@@ -344,6 +521,72 @@ function CanvasInner() {
       setLoading(false);
     }
   }, [nodes, edges, templateName, templateDescription]);
+
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    setSelectedNodeId(node.id);
+  }, []);
+
+  const onPaneClick = useCallback(() => {
+    setSelectedNodeId(null);
+  }, []);
+
+  const updateNodeData = useCallback((id: string, data: Partial<WorkflowNodeData>) => {
+    setNodes((nds) =>
+      nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...data } } : n)),
+    );
+  }, [setNodes]);
+
+  const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null;
+
+  const runWorkflow = useCallback(async () => {
+    setExecuting(true);
+    setNodes((nds) =>
+      nds.map((n) => ({ ...n, data: { ...n.data, status: undefined } })),
+    );
+    try {
+      const template: WorkflowTemplate = {
+        id: selectedTemplateId || "custom",
+        name: templateName || "Untitled Workflow",
+        description: templateDescription,
+        steps: nodes.map((n) => ({
+          id: n.id,
+          action: { type: n.data.actionType, config: n.data.config || {} },
+          depends_on: edges.filter((e) => e.target === n.id).map((e) => e.source),
+          timeout_secs: n.data.timeout_secs ?? 60,
+        })),
+      };
+
+      setNodes((nds) =>
+        nds.map((n) => ({ ...n, data: { ...n.data, status: "running" } })),
+      );
+
+      const { invoke } = await import("@tauri-apps/api/core");
+      const results = await invoke("execute_workflow", { template }) as Record<string, string>;
+
+      setNodes((nds) =>
+        nds.map((n) => {
+          const status = results[n.id];
+          if (status === "success" || status === "failed") {
+            return { ...n, data: { ...n.data, status } };
+          }
+          return { ...n, data: { ...n.data, status: "success" } };
+        }),
+      );
+    } catch (e) {
+      console.error("Workflow execution failed", e);
+      setNodes((nds) =>
+        nds.map((n) => ({
+          ...n,
+          data: {
+            ...n.data,
+            status: n.data.status === "running" ? "failed" : n.data.status,
+          },
+        })),
+      );
+    } finally {
+      setExecuting(false);
+    }
+  }, [nodes, edges, selectedTemplateId, templateName, templateDescription, setNodes]);
 
   const edgesWithSelection = edges.map((e) => ({ ...e, selected: false }));
 
@@ -401,6 +644,16 @@ function CanvasInner() {
         >
           {loading ? "Saving..." : "Save Workflow"}
         </button>
+        <button
+          onClick={runWorkflow}
+          disabled={executing || nodes.length === 0}
+          style={{
+            padding: "6px 16px", fontSize: 12, background: executing ? "#21262d" : "#7c3aed",
+            color: "#fff", border: "none", borderRadius: 4, cursor: executing || nodes.length === 0 ? "default" : "pointer",
+          }}
+        >
+          {executing ? "Running..." : "Run Workflow"}
+        </button>
       </div>
 
       <div style={{ display: "flex", height: 500, borderRadius: 8, overflow: "hidden", border: "1px solid #30363d" }}>
@@ -418,7 +671,7 @@ function CanvasInner() {
             if (type) event.dataTransfer.setData("application/reactflow", type);
           }}
         >
-          {PALETTE_CATEGORIES.map((cat) => (
+          {paletteCategories.map((cat) => (
             <div key={cat.category}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#8b949e", textTransform: "uppercase", margin: "12px 0 4px 0" }}>
                 {cat.category}
@@ -462,6 +715,8 @@ function CanvasInner() {
             onConnect={onConnect}
             onDrop={onDrop}
             onDragOver={onDragOver}
+            onNodeClick={onNodeClick}
+            onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
             fitView
             minZoom={0.2}
@@ -477,6 +732,14 @@ function CanvasInner() {
             />
           </ReactFlow>
         </div>
+
+        {selectedNode && (
+          <ConfigPanel
+            node={selectedNode}
+            onUpdateNode={updateNodeData}
+            onClose={() => setSelectedNodeId(null)}
+          />
+        )}
       </div>
 
       {nodes.length === 0 && (

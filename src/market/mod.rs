@@ -28,7 +28,7 @@ pub fn render_market_browser() -> String {
             listing.id,
             listing.item_type,
             listing.name,
-            listing.price,
+            listing.price.unwrap_or(0.0),
             listing.rating,
             listing.downloads
         ));
@@ -51,7 +51,7 @@ pub fn render_listing_detail(id: &str) -> String {
             listing.item_type,
             listing.name,
             listing.author,
-            listing.price,
+listing.price.unwrap_or(0.0),
             listing.rating,
             listing.downloads,
             listing.description
@@ -89,7 +89,7 @@ mod tests {
             item_type: "tool".into(),
             name: "Tool".into(),
             description: "desc".into(),
-            price: 0.0,
+            price: Some(0.0),
             author: "tester".into(),
             version: "1.0.0".into(),
             screenshots: "".into(),
@@ -97,12 +97,16 @@ mod tests {
             rating: 0.0,
             downloads: 0,
             created_at: "now".into(),
+            price_model: "free".into(),
+            requires: vec![],
+            verified: false,
+            updated_at: "now".into(),
         };
         let transaction = Transaction {
             id: "tx-1".into(),
             listing_id: listing.id.clone(),
             buyer: "user-1".into(),
-            amount: listing.price,
+            amount: listing.price.unwrap_or(0.0),
             timestamp: "now".into(),
         };
         let license = License {

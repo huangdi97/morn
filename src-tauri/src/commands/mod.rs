@@ -30,6 +30,7 @@ pub mod scheduler;
 pub mod studio;
 pub mod team_templates;
 pub mod whisper;
+pub mod workflow;
 
 pub(crate) use analytics::{get_performance_metrics, get_usage_stats};
 pub(crate) use backup::{export_mornpack, import_mornpack};
@@ -69,3 +70,4 @@ pub(crate) use studio::{
 };
 pub(crate) use team_templates::list_team_templates;
 pub(crate) use whisper::{list_audio_devices, transcribe_audio};
+pub(crate) use workflow::{delete_workflow_template, execute_workflow, list_workflow_node_types, list_workflow_templates, save_workflow_template};

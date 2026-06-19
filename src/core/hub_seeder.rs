@@ -34,7 +34,7 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
             item_type: "workflow".into(),
             name: template.name,
             description: template.description,
-            price: 0.0,
+            price: Some(0.0),
             author: "Morn Labs".into(),
             rating: 0.0,
             downloads: 0,
@@ -42,6 +42,10 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
             version: "1.0.0".into(),
             screenshots: "".into(),
             category: "general".into(),
+            price_model: "free".into(),
+            requires: vec![],
+            verified: false,
+            updated_at: chrono::Utc::now().to_rfc3339(),
         });
     }
 
@@ -55,7 +59,7 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
             item_type: "agent".into(),
             name: agent.name.to_string(),
             description: agent.description.to_string(),
-            price: 0.0,
+            price: Some(0.0),
             author: "Morn Labs".into(),
             rating: 0.0,
             downloads: 0,
@@ -63,6 +67,10 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
             version: "1.0.0".into(),
             screenshots: "".into(),
             category: "general".into(),
+            price_model: "free".into(),
+            requires: vec![],
+            verified: false,
+            updated_at: chrono::Utc::now().to_rfc3339(),
         });
     }
 
@@ -76,7 +84,7 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
                 item_type: "agent".into(),
                 name: def.name.clone(),
                 description: def.persona.clone(),
-                price: 0.0,
+                price: Some(0.0),
                 author: "Morn Labs".into(),
                 rating: 0.0,
                 downloads: 0,
@@ -84,6 +92,10 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
                 version: "1.0.0".into(),
                 screenshots: "".into(),
                 category: "general".into(),
+                price_model: "free".into(),
+                requires: vec![],
+                verified: false,
+                updated_at: chrono::Utc::now().to_rfc3339(),
             });
         }
     }

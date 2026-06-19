@@ -35,6 +35,9 @@ pub mod orchestrator;
 pub mod pipeline;
 pub mod plugin_generator;
 pub mod plugin_manager;
+pub use plugin_manager::{
+    load_plugins, topological_sort, MornPlugin, PluginContext, PluginOrderError,
+};
 pub mod privacy_gate;
 pub mod proactive;
 pub mod registry;

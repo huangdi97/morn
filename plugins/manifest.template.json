@@ -1,0 +1,10 @@
+{
+  "name": "my-plugin",
+  "version": "0.1.0",
+  "description": "A Morn plugin",
+  "author": "Your Name",
+  "plugin_type": "tool",
+  "entry": "main.py",
+  "icon": "",
+  "permissions": ["network", "filesystem"]
+}

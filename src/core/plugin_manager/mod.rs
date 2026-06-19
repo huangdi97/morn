@@ -2,9 +2,328 @@
 use crate::core::error::MornError;
 pub mod error;
 pub use error::PluginError;
+pub use error::PluginOrderError;
 
-use std::collections::HashMap;
+pub mod adapter;
+pub mod bridge_plugin;
+pub mod plugins;
+#[cfg(feature = "sandbox")]
+pub mod wasm_plugin;
+pub use plugins::CorePluginRegistry;
+pub mod config;
+pub use config::PluginConfig;
+use std::any::Any;
+use std::cell::RefCell;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
+use std::sync::Mutex;
+use std::sync::OnceLock;
+
+/// Plugin category enum matching DESIGN.md §11.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum PluginType {
+    Theme,
+    Channel,
+    Tool,
+    Knowledge,
+    UiPanel,
+    Protocol,
+}
+
+impl PluginType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PluginType::Theme => "theme",
+            PluginType::Channel => "channel",
+            PluginType::Tool => "tool",
+            PluginType::Knowledge => "knowledge",
+            PluginType::UiPanel => "ui_panel",
+            PluginType::Protocol => "protocol",
+        }
+    }
+}
+
+impl std::fmt::Display for PluginType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// Shared context that plugins can use to access registered services.
+///
+/// Services are registered by key and accessed by type. The `get` method
+/// returns an owned clone because the underlying `Any` type cannot yield
+/// references in a generic way.
+pub struct PluginContext {
+    services: RefCell<HashMap<&'static str, Box<dyn Any + Send + Sync>>>,
+}
+
+impl PluginContext {
+    pub fn new() -> Self {
+        PluginContext {
+            services: RefCell::new(HashMap::new()),
+        }
+    }
+
+    pub fn register<T: 'static + Send + Sync>(&self, key: &'static str, val: T) {
+        self.services.borrow_mut().insert(key, Box::new(val));
+    }
+
+    pub fn get<T: 'static + Clone>(&self, key: &str) -> Option<T> {
+        self.services
+            .borrow()
+            .get(key)
+            .and_then(|v| v.downcast_ref::<T>())
+            .cloned()
+    }
+
+    pub fn unregister(&self, key: &'static str) {
+        self.services.borrow_mut().remove(key);
+    }
+}
+
+/// Trait that every Morn plugin **with a typed PluginType** must implement.
+///
+/// This is the DESIGN.md §11 interface, kept alongside the existing
+/// [`MornPlugin`] trait for backward compatibility (bridge pattern).
+pub trait TypedPlugin: Send + Sync {
+    fn id(&self) -> &str;
+    fn plugin_type(&self) -> PluginType;
+    fn version(&self) -> &str;
+    fn load(&self, ctx: &PluginContext) -> Result<(), PluginError>;
+    fn activate(&self, ctx: &PluginContext) -> Result<(), PluginError>;
+    fn deactivate(&self, ctx: &PluginContext) -> Result<(), PluginError>;
+    fn unload(&self) -> Result<(), PluginError>;
+    fn hooks(&self) -> Vec<&str> {
+        vec![]
+    }
+}
+
+/// Trait that every Morn plugin must implement.
+///
+/// Provides lifecycle hooks (`init`, `activate`, `deactivate`) and metadata
+/// (`id`, `deps`, `priority`) used by [`topological_sort`] and [`load_plugins`].
+pub trait MornPlugin: Send + Sync {
+    /// Unique identifier for this plugin.
+    fn id(&self) -> &str;
+
+    /// IDs of plugins this plugin depends on.
+    fn deps(&self) -> Vec<&str> {
+        vec![]
+    }
+
+    /// Higher values = loaded / activated first.
+    fn priority(&self) -> i32 {
+        0
+    }
+
+    /// Initialization phase (all plugins init before any activate).
+    fn init(&mut self, ctx: &PluginContext) -> Result<(), PluginError>;
+
+    /// Activation phase (run in dependency order after all inits succeed).
+    fn activate(&mut self, ctx: &PluginContext) -> Result<(), PluginError>;
+
+    /// Deactivation / teardown.
+    fn deactivate(&mut self, ctx: &PluginContext) -> Result<(), PluginError>;
+}
+
+/// Kahn's algorithm — returns indices into `plugins` sorted so every plugin
+/// appears after its dependencies. Higher-priority plugins are preferred when
+/// multiple nodes have no remaining dependencies.
+///
+/// # Errors
+///
+/// Returns [`PluginOrderError`] when a dependency is missing or a cycle is
+/// detected.
+pub fn topological_sort(plugins: &[Box<dyn MornPlugin>]) -> Result<Vec<usize>, PluginOrderError> {
+    let n = plugins.len();
+    let mut in_degree = vec![0; n];
+    let mut adj: HashMap<usize, Vec<usize>> = HashMap::new();
+
+    let id_to_idx: HashMap<&str, usize> = plugins
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.id(), i))
+        .collect();
+
+    for (i, plugin) in plugins.iter().enumerate() {
+        for dep in plugin.deps() {
+            match id_to_idx.get(dep) {
+                Some(&j) => {
+                    adj.entry(j).or_default().push(i);
+                    in_degree[i] += 1;
+                }
+                None => {
+                    return Err(PluginOrderError::MissingDependency(
+                        plugin.id().to_string(),
+                        dep.to_string(),
+                    ));
+                }
+            }
+        }
+    }
+
+    let mut queue: VecDeque<usize> = (0..n).filter(|&i| in_degree[i] == 0).collect();
+    let mut result = Vec::with_capacity(n);
+
+    while let Some(node) = queue.pop_front() {
+        result.push(node);
+        if let Some(neighbors) = adj.get(&node) {
+            for &next in neighbors {
+                in_degree[next] -= 1;
+                if in_degree[next] == 0 {
+                    queue.push_back(next);
+                }
+            }
+        }
+    }
+
+    if result.len() != n {
+        let cycle: Vec<String> = (0..n)
+            .filter(|&i| in_degree[i] > 0)
+            .map(|i| plugins[i].id().to_string())
+            .collect();
+        return Err(PluginOrderError::CycleDetected(cycle));
+    }
+
+    Ok(result)
+}
+
+/// Two-phase plugin loading:
+/// 1. Call `init` on every plugin (order independent).
+/// 2. Topologically sort plugins, then call `activate` in dependency order.
+///
+/// # Errors
+///
+/// Returns [`PluginError::LoadFailed`] if any `init` fails,  
+/// [`PluginError::ActivateFailed`] if any `activate` fails, or
+/// [`PluginOrderError`] converted to [`PluginError::OrderError`] on dependency
+/// issues.
+pub fn load_plugins(
+    plugins: &mut [Box<dyn MornPlugin>],
+    ctx: &PluginContext,
+) -> Result<(), PluginError> {
+    for plugin in plugins.iter_mut() {
+        safe_init(plugin.as_mut(), ctx)?;
+    }
+
+    let order = topological_sort(plugins).map_err(|e| PluginError::OrderError(e.to_string()))?;
+
+    for &i in &order {
+        safe_activate(plugins[i].as_mut(), ctx)?;
+    }
+
+    Ok(())
+}
+
+/// Safe init a plugin — uses catch_unwind to isolate crashes.
+pub fn safe_init(plugin: &mut dyn MornPlugin, ctx: &PluginContext) -> Result<(), PluginError> {
+    let id = plugin.id().to_string();
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| plugin.init(ctx))).map_err(
+        |panic| {
+            let msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic".to_string()
+            };
+            PluginError::LoadFailed(id, msg)
+        },
+    )?
+}
+
+/// Safe activate a plugin — uses catch_unwind to isolate crashes.
+pub fn safe_activate(plugin: &mut dyn MornPlugin, ctx: &PluginContext) -> Result<(), PluginError> {
+    let id = plugin.id().to_string();
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| plugin.activate(ctx))).map_err(
+        |panic| {
+            let msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic".to_string()
+            };
+            PluginError::ActivateFailed(id, msg)
+        },
+    )?
+}
+
+/// Safe deactivate a plugin — uses catch_unwind to isolate crashes.
+pub fn safe_deactivate(
+    plugin: &mut dyn MornPlugin,
+    ctx: &PluginContext,
+) -> Result<(), PluginError> {
+    let id = plugin.id().to_string();
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| plugin.deactivate(ctx))).map_err(
+        |panic| {
+            let msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic".to_string()
+            };
+            PluginError::Other(format!("{} deactivate panicked: {}", id, msg))
+        },
+    )?
+}
+
+/// Enable a plugin at runtime — calls init then activate.
+pub fn enable_plugin(
+    plugin: &mut Box<dyn MornPlugin>,
+    ctx: &PluginContext,
+) -> Result<(), PluginError> {
+    safe_init(plugin.as_mut(), ctx)?;
+    safe_activate(plugin.as_mut(), ctx)?;
+    Ok(())
+}
+
+/// Disable a plugin at runtime — calls deactivate.
+pub fn disable_plugin(
+    plugin: &mut Box<dyn MornPlugin>,
+    ctx: &PluginContext,
+) -> Result<(), PluginError> {
+    safe_deactivate(plugin.as_mut(), ctx)
+}
+
+/// Metadata for a [`MornPlugin`] registered in the global plugin registry.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MornPluginMeta {
+    pub id: String,
+    pub deps: Vec<String>,
+    pub priority: i32,
+    pub enabled: bool,
+}
+
+static MORN_PLUGIN_META: OnceLock<Mutex<HashMap<String, MornPluginMeta>>> = OnceLock::new();
+
+fn get_plugin_meta() -> &'static Mutex<HashMap<String, MornPluginMeta>> {
+    MORN_PLUGIN_META.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Register a [`MornPlugin`]'s metadata into the global registry.
+pub fn register_morn_plugin(meta: MornPluginMeta) {
+    let mut map = get_plugin_meta().lock().expect("plugin meta lock");
+    map.insert(meta.id.clone(), meta);
+}
+
+/// List all registered [`MornPlugin`] metadata entries.
+pub fn list_morn_plugin_metas() -> Vec<MornPluginMeta> {
+    let map = get_plugin_meta().lock().expect("plugin meta lock");
+    map.values().cloned().collect()
+}
+
+/// Toggle the enabled flag of a registered [`MornPlugin`].
+pub fn toggle_morn_plugin_enabled(id: &str, enabled: bool) -> Result<(), String> {
+    let mut map = get_plugin_meta().lock().expect("plugin meta lock");
+    let meta = map
+        .get_mut(id)
+        .ok_or_else(|| format!("Plugin '{}' not found", id))?;
+    meta.enabled = enabled;
+    Ok(())
+}
 
 /// Metadata describing a plugin, typically read from a `manifest.json` file.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -18,10 +337,28 @@ pub struct PluginManifest {
     /// Optional author name or identifier.
     #[serde(default)]
     pub author: Option<String>,
-    /// Plugin category (e.g. `"theme"`, `"channel"`, `"tool"`).
+    /// Plugin category (e.g. `PluginType::Tool`, `PluginType::Theme`).
     pub plugin_type: String,
+    /// Typed plugin category parsed from `plugin_type` string.
+    #[serde(skip)]
+    pub typed: Option<PluginType>,
     /// Path (relative to the plugin directory) to the entry script.
     pub entry: String,
+    /// Optional icon path or URL.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// Optional homepage URL.
+    #[serde(default)]
+    pub homepage: Option<String>,
+    /// Optional source repository URL.
+    #[serde(default)]
+    pub repository: Option<String>,
+    /// Optional list of required permissions (e.g. ['network', 'filesystem']).
+    #[serde(default)]
+    pub permissions: Option<Vec<String>>,
+    /// Optional list of dependency plugin names.
+    #[serde(default)]
+    pub dependencies: Option<Vec<String>>,
 }
 
 /// The lifecycle state of a plugin within the [`PluginManager`].
@@ -111,14 +448,25 @@ impl PluginManager {
             } else {
                 "js"
             };
+            let typed = match manifest.plugin_type.as_str() {
+                "theme" => Some(PluginType::Theme),
+                "channel" => Some(PluginType::Channel),
+                "tool" => Some(PluginType::Tool),
+                "knowledge" => Some(PluginType::Knowledge),
+                "ui_panel" => Some(PluginType::UiPanel),
+                "protocol" => Some(PluginType::Protocol),
+                _ => None,
+            };
             // Avoid duplicates
             if !self.plugins.iter().any(|p| p.manifest.name == name) {
-                self.plugins.push(Plugin {
+                let mut plugin = Plugin {
                     manifest,
                     status: PluginStatus::Discovered,
                     dir: path,
                     runtime_type: runtime_type.to_string(),
-                });
+                };
+                plugin.manifest.typed = typed;
+                self.plugins.push(plugin);
                 discovered.push(name);
             }
         }

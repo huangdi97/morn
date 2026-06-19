@@ -32,6 +32,15 @@ impl PaymentGateway for StripePaymentGateway {
     fn process_refund(&self, payment_id: &str, amount: u64) -> Result<(), PaymentError> {
         Err(PaymentError::GatewayNotConfigured)
     }
+
+    fn payout_to_creator(
+        &self,
+        _creator_id: &str,
+        _amount: u64,
+        _currency: &str,
+    ) -> Result<String, PaymentError> {
+        Err(PaymentError::GatewayNotConfigured)
+    }
 }
 
 #[cfg(test)]

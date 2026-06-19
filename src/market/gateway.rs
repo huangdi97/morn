@@ -106,4 +106,12 @@ pub trait PaymentGateway: Send + Sync {
     fn verify_payment(&self, payment_id: &str) -> Result<PaymentStatus, PaymentError>;
 
     fn process_refund(&self, payment_id: &str, amount: u64) -> Result<(), PaymentError>;
+
+    /// Payout to a creator — returns a payout transaction ID.
+    fn payout_to_creator(
+        &self,
+        creator_id: &str,
+        amount: u64,
+        currency: &str,
+    ) -> Result<String, PaymentError>;
 }

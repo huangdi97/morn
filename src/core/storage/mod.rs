@@ -132,10 +132,14 @@ impl Storage {
 
             CREATE TABLE IF NOT EXISTS market_listings (
                 id TEXT PRIMARY KEY, item_type TEXT NOT NULL, name TEXT NOT NULL,
-                description TEXT NOT NULL, price REAL NOT NULL, author TEXT NOT NULL,
+                description TEXT NOT NULL, price REAL, author TEXT NOT NULL,
                 rating REAL DEFAULT 0.0, downloads INTEGER DEFAULT 0, created_at TEXT NOT NULL,
                 version TEXT NOT NULL DEFAULT '1.0.0', screenshots TEXT NOT NULL DEFAULT '',
-                category TEXT NOT NULL DEFAULT 'general'
+                category TEXT NOT NULL DEFAULT 'general',
+                price_model TEXT NOT NULL DEFAULT 'free',
+                requires TEXT NOT NULL DEFAULT '',
+                verified INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS market_transactions (

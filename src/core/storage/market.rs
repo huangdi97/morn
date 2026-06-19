@@ -9,11 +9,12 @@ impl Storage {
     pub fn save_listing(&self, listing: &Listing) -> Result<(), MornError> {
         let conn = self.conn()?;
         conn.execute(
-            "INSERT OR REPLACE INTO market_listings (id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT OR REPLACE INTO market_listings (id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 listing.id, listing.item_type, listing.name, listing.description,
                 listing.price, listing.author, listing.rating, listing.downloads, listing.created_at,
-                listing.version, listing.screenshots, listing.category
+                listing.version, listing.screenshots, listing.category,
+                listing.price_model, listing.requires.join(","), listing.verified as i32, listing.updated_at
             ],
         )
         .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -23,8 +24,8 @@ impl Storage {
     pub fn list_listings(&self, filter: Option<&str>) -> Result<Vec<Listing>, MornError> {
         let conn = self.conn()?;
         let sql = match filter {
-            Some(_) => "SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category FROM market_listings WHERE item_type = ?1 ORDER BY created_at DESC",
-            None => "SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category FROM market_listings ORDER BY created_at DESC",
+            Some(_) => "SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at FROM market_listings WHERE item_type = ?1 ORDER BY created_at DESC",
+            None => "SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at FROM market_listings ORDER BY created_at DESC",
         };
         let mut stmt = conn
             .prepare(sql)
@@ -46,7 +47,7 @@ impl Storage {
     pub fn get_listing(&self, id: &str) -> Result<Option<Listing>, MornError> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category FROM market_listings WHERE id = ?1")
+            .prepare("SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at FROM market_listings WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut rows = stmt
             .query(params![id])
@@ -312,6 +313,10 @@ fn map_listing_row(row: &rusqlite::Row) -> rusqlite::Result<Listing> {
         version: row.get(9)?,
         screenshots: row.get(10)?,
         category: row.get(11)?,
+        price_model: row.get(12)?,
+        requires: row.get::<_, String>(13)?.split(',').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect(),
+        verified: row.get::<_, i32>(14)? != 0,
+        updated_at: row.get(15)?,
     })
 }
 
@@ -333,6 +338,10 @@ fn listing_from_row(row: &rusqlite::Row) -> Result<Listing, MornError> {
         category: row
             .get(11)
             .map_err(|e| MornError::Internal(e.to_string()))?,
+        price_model: row.get(12).map_err(|e| MornError::Internal(e.to_string()))?,
+        requires: row.get::<_, String>(13).map_err(|e| MornError::Internal(e.to_string()))?.split(',').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect(),
+        verified: row.get::<_, i32>(14).map_err(|e| MornError::Internal(e.to_string()))? != 0,
+        updated_at: row.get(15).map_err(|e| MornError::Internal(e.to_string()))?,
     })
 }
 
@@ -346,7 +355,7 @@ mod tests {
             item_type: "tool".to_string(),
             name: "Test Tool".to_string(),
             description: "A test listing".to_string(),
-            price: 1.5,
+            price: Some(1.5),
             author: "tester".to_string(),
             version: "1.0.0".to_string(),
             screenshots: "".to_string(),
@@ -354,6 +363,10 @@ mod tests {
             rating: 4.0,
             downloads: 10,
             created_at: chrono::Utc::now().to_rfc3339(),
+            price_model: "free".to_string(),
+            requires: vec![],
+            verified: false,
+            updated_at: chrono::Utc::now().to_rfc3339(),
         }
     }
 

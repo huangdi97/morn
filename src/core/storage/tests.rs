@@ -108,7 +108,7 @@ fn test_market_storage() {
         item_type: "tool".to_string(),
         name: "Test Tool".to_string(),
         description: "A test tool".to_string(),
-        price: 0.5,
+        price: Some(0.5),
         author: "tester".to_string(),
         rating: 4.0,
         downloads: 100,
@@ -116,12 +116,16 @@ fn test_market_storage() {
         version: "1.0.0".to_string(),
         screenshots: "".to_string(),
         category: "general".to_string(),
+        price_model: "free".to_string(),
+        requires: vec![],
+        verified: false,
+        updated_at: chrono::Utc::now().to_rfc3339(),
     };
     storage.save_listing(&listing).unwrap();
 
     let got = storage.get_listing("listing-test-1").unwrap().unwrap();
     assert_eq!(got.name, "Test Tool");
-    assert_eq!(got.price, 0.5);
+    assert_eq!(got.price, Some(0.5));
 
     let listings = storage.list_listings(None).unwrap();
     assert_eq!(listings.len(), 1);

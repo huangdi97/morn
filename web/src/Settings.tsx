@@ -48,6 +48,7 @@ export function Settings({ onClose, showToast }: SettingsProps) {
   const [provider, setProvider] = useState(() => localStorage.getItem('morn_model_provider') || 'sensenova');
   const [modelApiKey, setModelApiKey] = useState(() => localStorage.getItem('morn_model_api_key') || '');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [mornPlugins, setMornPlugins] = useState<{ id: string; deps: string[]; priority: number; enabled: boolean }[]>([]);
   const { t } = useTranslation();
 
   // Escape 关闭弹窗
@@ -73,6 +74,18 @@ export function Settings({ onClose, showToast }: SettingsProps) {
         }
       } catch (e) {
         console.error("Failed to load themes", e);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const list = await invoke<{ id: string; deps: string[]; priority: number; enabled: boolean }[]>("list_morn_plugins");
+        setMornPlugins(list);
+      } catch (e) {
+        console.error("Failed to load morn plugins", e);
       }
     })();
   }, []);
@@ -197,6 +210,16 @@ export function Settings({ onClose, showToast }: SettingsProps) {
     }
   };
 
+  const handleToggleMornPlugin = async (id: string, enabled: boolean) => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("toggle_morn_plugin", { id, enabled });
+      setMornPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
+    } catch (e) {
+      console.error("Failed to toggle plugin", e);
+    }
+  };
+
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
@@ -311,6 +334,28 @@ export function Settings({ onClose, showToast }: SettingsProps) {
               {t('settings.synced_at')} {new Date(syncTime).toLocaleTimeString()}
             </div>
           )}
+        </div>
+
+        <div className="settings-section">
+          <label className="settings-label">插件管理</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+            {mornPlugins.length === 0 && (
+              <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>暂无已注册的插件</div>
+            )}
+            {mornPlugins.map(p => (
+              <label key={p.id} className="settings-checkbox">
+                <input
+                  type="checkbox"
+                  checked={p.enabled}
+                  onChange={(e) => handleToggleMornPlugin(p.id, e.target.checked)}
+                />
+                {p.id}
+                <span style={{ fontSize: "11px", color: "var(--text-secondary)", marginLeft: "6px" }}>
+                  (priority: {p.priority})
+                </span>
+              </label>
+            ))}
+          </div>
         </div>
 
         <div className="settings-section">

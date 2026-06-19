@@ -5,6 +5,7 @@ use crate::core::storage::Storage;
 mod dag;
 mod executor;
 
+#[derive(Clone)]
 pub struct TaskEngine {
     storage: Option<Storage>,
     event_bus: Option<SimpleEventBus>,

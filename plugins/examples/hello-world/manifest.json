@@ -1,0 +1,9 @@
+{
+  "name": "hello-world",
+  "version": "0.1.0",
+  "description": "A simple example plugin",
+  "author": "Morn",
+  "plugin_type": "tool",
+  "entry": "main.py",
+  "permissions": []
+}

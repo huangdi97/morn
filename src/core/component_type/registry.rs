@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use super::def::ComponentTypeDef;
 
+#[derive(Clone)]
 pub struct TypeRegistry {
     types: HashMap<String, ComponentTypeDef>,
 }

@@ -253,6 +253,38 @@ pub struct WorkflowTemplate {
     pub fork_from: Option<String>,
 }
 
+/// 前端 API 使用的工作流步骤定义（简版）
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WorkflowStepDef {
+    pub id: String,
+    pub action_type: String,
+    pub config: serde_json::Value,
+    pub depends_on: Vec<String>,
+    pub timeout_secs: u64,
+    #[serde(default)]
+    pub input_map: std::collections::HashMap<String, String>,
+}
+
+/// 前端 API 使用的工作流模板（简版）
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WorkflowTemplateDef {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub steps: Vec<WorkflowStepDef>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+/// 步骤执行结果
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StepResult {
+    pub step_id: String,
+    pub status: String,
+    pub output: serde_json::Value,
+    pub duration_ms: u64,
+}
+
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;

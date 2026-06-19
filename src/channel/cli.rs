@@ -143,7 +143,7 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
             for listing in &listings {
                 println!(
                     "  [{}] {} ({} | {} MORN | ★ {})",
-                    listing.id, listing.name, listing.item_type, listing.price, listing.rating
+                    listing.id, listing.name, listing.item_type, listing.price.unwrap_or(0.0), listing.rating
                 );
             }
         }
@@ -161,7 +161,7 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
                     println!("  Name: {}", listing.name);
                     println!("  Type: {}", listing.item_type);
                     println!("  Description: {}", listing.description);
-                    println!("  Price: {} MORN", listing.price);
+                    println!("  Price: {} MORN", listing.price.unwrap_or(0.0));
                     println!("  Author: {}", listing.author);
                     println!("  Rating: {} / 5.0", listing.rating);
                     println!("  Downloads: {}", listing.downloads);
@@ -227,7 +227,7 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
             for listing in &results {
                 println!(
                     "  [{}] {} ({} | {} MORN | ★ {})",
-                    listing.id, listing.name, listing.item_type, listing.price, listing.rating
+                    listing.id, listing.name, listing.item_type, listing.price.unwrap_or(0.0), listing.rating
                 );
             }
         }
@@ -263,7 +263,7 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
                 item_type: item_type.to_string(),
                 name: name.to_string(),
                 description: format!("Published from CLI: {}", name),
-                price,
+                price: Some(price),
                 author: "cli-user".to_string(),
                 rating: 0.0,
                 downloads: 0,
@@ -271,6 +271,10 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
                 version: "1.0.0".into(),
                 screenshots: "".into(),
                 category: "general".into(),
+                price_model: "free".into(),
+                requires: vec![],
+                verified: false,
+                updated_at: chrono::Utc::now().to_rfc3339(),
             };
             match market.publish(listing) {
                 Ok(()) => println!("  Published successfully."),

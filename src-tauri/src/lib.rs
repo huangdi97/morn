@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -7,13 +8,15 @@ use tauri::Manager;
 use morn::console::ConsoleBackend;
 use morn::core::component_type::registry::TypeRegistry;
 pub use morn::core::error::MornError;
-use morn::core::hub_seeder::seed_hub_data;
 use morn::core::mcp::MCPServer;
-use morn::core::plugin_manager::PluginManager;
+use morn::core::plugin_manager::{register_morn_plugin, MornPluginMeta, PluginManager};
+use morn::core::plugin_manager::adapter::morn_plugin_to_plugin;
+use morn::core::plugin_manager::CorePluginRegistry;
+use morn::core::plugin_manager::PluginConfig;
 use morn::core::scheduler::Scheduler;
 use morn::core::storage::Storage;
-use morn::core::supervisor::presets::seed_preset_agents;
 use morn::core::supervisor::Supervisor;
+use morn::core::{load_plugins, MornPlugin, PluginContext};
 use morn::studio::manager::StudioManager;
 use morn::studio::publisher::StudioPublisher;
 use morn::studio::tester::StudioTester;
@@ -37,59 +40,69 @@ pub struct AppState {
     pub scheduler: Mutex<Option<Scheduler>>,
 }
 
+impl AppState {
+    pub fn from_ctx(ctx: &PluginContext) -> Self {
+        Self {
+            supervisor: Mutex::new(ctx.get::<Arc<Mutex<Supervisor>>>("morn:supervisor")),
+            turn_count: Mutex::new(0),
+            manager: Mutex::new(ctx.get::<Arc<Mutex<StudioManager>>>("morn:studio-manager")),
+            publisher: Mutex::new(ctx.get::<Arc<Mutex<StudioPublisher>>>("morn:studio-publisher")),
+            tester: Mutex::new(ctx.get::<Arc<Mutex<StudioTester>>>("morn:studio-tester")),
+            console: Mutex::new(ctx.get::<Arc<Mutex<ConsoleBackend>>>("morn:console")),
+            storage: Mutex::new(ctx.get::<Storage>("morn:storage")),
+            plugin_manager: Mutex::new(None),
+            type_registry: Mutex::new(
+                ctx.get::<TypeRegistry>("morn:type-registry").unwrap_or_default(),
+            ),
+            mcp_manager: Mutex::new(Vec::new()),
+            scheduler: Mutex::new(Some(Scheduler::new())),
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let api_key = std::env::var("MORN_API_KEY").ok();
-    let effective_key = api_key.unwrap_or(DEFAULT_API_KEY.to_string());
-    let storage = match Storage::new() {
-        Ok(s) => Some(s),
-        Err(e) => {
-            tracing::warn!("Storage init failed: {}", e);
-            None
-        }
-    };
-    let supervisor = Some(Supervisor::new(storage.clone(), None));
-
-    let registry = None;
-    let manager = Some(StudioManager::new(registry.clone(), storage.clone(), None));
-
-    if let Some(ref manager) = manager {
-        seed_preset_agents(&storage, manager);
-    }
-
-    // First-run seeding: only seed hub data if not already seeded.
-    let already_seeded = storage
-        .as_ref()
-        .and_then(|s| s.get_setting("morn_seeded").ok().flatten())
-        .is_some();
-    if !already_seeded {
-        seed_hub_data(&storage);
-        if let Some(ref s) = storage {
-            let _ = s.set_setting("morn_seeded", "true");
-        }
-    }
-
-    let publisher = Some(StudioPublisher::new(
-        registry.clone(),
-        storage.clone(),
-        None,
-    ));
-    let tester = Some(StudioTester::new());
-    let console = Some(ConsoleBackend::new(
-        registry,
-        storage.clone(),
-        None,
-        None,
-        None,
-        None,
-    ));
-
     let plugin_dir = dirs::data_dir()
         .map(|d| d.join("morn").join("plugins"))
         .unwrap_or_else(|| PathBuf::from("./plugins"));
-    let mut plugin_manager = PluginManager::new(plugin_dir);
-    let _ = plugin_manager.scan();
-    let plugin_manager = Some(plugin_manager);
+
+    let config_path = plugin_dir.join("plugins.json");
+    let config = PluginConfig::load(&config_path);
+    let registry = CorePluginRegistry::new();
+
+    let mut plugins: Vec<Box<dyn MornPlugin>> = config
+        .plugins_to_load(&registry)
+        .iter()
+        .filter_map(|id| registry.build(id, plugin_dir.clone()))
+        .collect();
+
+    if plugins.is_empty() {
+        panic!("No plugins loaded. Check plugins.json in: {:?}", plugin_dir);
+    }
+    let ctx = PluginContext::new();
+    load_plugins(&mut plugins, &ctx).expect("Plugin loading failed");
+
+    for plugin in &plugins {
+        register_morn_plugin(MornPluginMeta {
+            id: plugin.id().to_string(),
+            deps: plugin.deps().into_iter().map(|s| s.to_string()).collect(),
+            priority: plugin.priority(),
+            enabled: true,
+        });
+    }
+
+    // Build PluginManager with all plugins
+    let mut pm = PluginManager::new(plugin_dir);
+    let _ = pm.scan();
+    for plugin in &plugins {
+        let adapter = morn_plugin_to_plugin(plugin.as_ref());
+        if !pm.plugins.iter().any(|p| p.manifest.name == adapter.manifest.name) {
+            pm.plugins.push(adapter);
+        }
+    }
+
+    let mut state = AppState::from_ctx(&ctx);
+    state.plugin_manager = Mutex::new(Some(pm));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -150,19 +163,7 @@ pub fn run() {
                 api.prevent_close();
             }
         })
-        .manage(AppState {
-            supervisor: Mutex::new(supervisor),
-            turn_count: Mutex::new(0),
-            manager: Mutex::new(manager),
-            publisher: Mutex::new(publisher),
-            tester: Mutex::new(tester),
-            console: Mutex::new(console),
-            storage: Mutex::new(storage),
-            plugin_manager: Mutex::new(plugin_manager),
-            type_registry: Mutex::new(TypeRegistry::new()),
-            mcp_manager: Mutex::new(Vec::new()),
-            scheduler: Mutex::new(Some(Scheduler::new())),
-        })
+        .manage(state)
         .invoke_handler(tauri::generate_handler![
             commands::chat::send_message,
             commands::chat::get_status,
@@ -253,6 +254,13 @@ pub fn run() {
             commands::plugin_manager::plugin_install,
             commands::plugin_manager::list_plugins,
             commands::plugin_manager::toggle_plugin,
+            commands::plugin_manager::list_morn_plugins,
+            commands::plugin_manager::toggle_morn_plugin,
+            commands::workflow::list_workflow_templates,
+            commands::workflow::save_workflow_template,
+            commands::workflow::delete_workflow_template,
+            commands::workflow::execute_workflow,
+            commands::workflow::list_workflow_node_types,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
