@@ -5,6 +5,12 @@ use crate::core::storage::Storage;
 
 pub struct RegistryPlugin(pub Option<TypeRegistry>);
 
+impl Default for RegistryPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RegistryPlugin {
     pub fn new() -> Self {
         Self(None)

@@ -5,7 +5,7 @@ use crate::core::component::{
 };
 use crate::core::error::MornError;
 
-#[allow(dead_code)]
+#[allow(dead_code)] // TODO: implement when needed
 pub struct CalcTool {
     id: String,
     name: String,

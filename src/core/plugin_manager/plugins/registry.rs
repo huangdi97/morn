@@ -7,9 +7,18 @@ use super::{
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// 内置插件构造器类型
+type PluginBuilder = fn(PathBuf) -> Box<dyn MornPlugin>;
+
 /// 内部插件注册表 — 知道所有核心插件的构造函数
 pub struct CorePluginRegistry {
-    builders: HashMap<&'static str, fn(PathBuf) -> Box<dyn MornPlugin>>,
+    builders: HashMap<&'static str, PluginBuilder>,
+}
+
+impl Default for CorePluginRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CorePluginRegistry {

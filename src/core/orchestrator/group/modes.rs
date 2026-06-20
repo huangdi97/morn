@@ -147,7 +147,7 @@ pub(crate) fn mode_base_cost(mode: &CollaborationMode) -> f64 {
 }
 
 /// Returns the execution-result-id prefix for a collaboration mode.
-#[allow(dead_code)]
+#[allow(dead_code)] // TODO: implement when needed
 pub(crate) fn mode_exec_prefix(mode: &CollaborationMode) -> &'static str {
     GroupCollaborationMode::from(mode).exec_prefix()
 }

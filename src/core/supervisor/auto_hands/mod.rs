@@ -277,7 +277,7 @@ mod tests {
 
     #[test]
     fn test_event_trigger_publishes_to_bus() {
-        let _guard = event_lock().lock().unwrap();
+        let _guard = event_lock().lock().expect("lock poisoned");
         reset();
         let mut bus = SimpleEventBus::new();
         bus.subscribe("auto_hands.event_triggered", handler);

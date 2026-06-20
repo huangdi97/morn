@@ -9,6 +9,12 @@ use crate::studio::manager::StudioManager;
 
 pub struct SupervisorPlugin(pub Option<Arc<Mutex<Supervisor>>>);
 
+impl Default for SupervisorPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SupervisorPlugin {
     pub fn new() -> Self {
         Self(None)

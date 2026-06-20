@@ -33,6 +33,7 @@ import BusinessTemplates from "./console/BusinessTemplates";
 import CreatorEarnings from "./console/CreatorEarnings";
 import GitPanel from "./console/GitPanel";
 import PluginManagerPanel from "./console/PluginManagerPanel";
+import CreatePluginWizard from "./plugins/CreatePluginWizard";
 import BotStore from "./store/BotStore";
 import { Settings } from "./Settings";
 import StatusBar from "./StatusBar";
@@ -359,7 +360,7 @@ function AppInner() {
     return `${hh}:${mm}`;
   };
 
-  const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "team" | "dev" | "types" | "mcp">("builder");
+  const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "team" | "dev" | "types" | "mcp" | "create_plugin">("builder");
   const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings" | "git" | "plugins">("dashboard");
   const [workbenchTab, setWorkbenchTab] = useState<"chat" | "workflow">("chat");
 
@@ -449,6 +450,7 @@ function AppInner() {
         <button className={studioTab === "dev" ? "active" : ""} onClick={() => setStudioTab("dev")}>{t('studio_tab.dev')}</button>
         <button className={studioTab === "types" ? "active" : ""} onClick={() => setStudioTab("types")}>{t('studio_tab.types')}</button>
         <button className={studioTab === "mcp" ? "active" : ""} onClick={() => setStudioTab("mcp")}>{t('studio_tab.mcp')}</button>
+        <button className={studioTab === "create_plugin" ? "active" : ""} onClick={() => setStudioTab("create_plugin")}>{t('studio_tab.create_plugin') || 'Create Plugin'}</button>
         <button className={studioTab === "test" ? "active" : ""} onClick={() => setStudioTab("test")}>{t('studio_tab.test_runner')}</button>
       </nav>
       <div className="studio-content">
@@ -473,6 +475,7 @@ onSelect={async (template) => {
             {studioTab === "dev" && <DevZone />}
             {studioTab === "types" && <ComponentTypeManager />}
             {studioTab === "mcp" && <McpManager />}
+            {studioTab === "create_plugin" && <CreatePluginWizard />}
           </>
         )}
       </div>

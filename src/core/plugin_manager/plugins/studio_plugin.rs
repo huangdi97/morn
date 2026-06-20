@@ -13,6 +13,12 @@ pub struct StudioPlugin(
     pub Option<Arc<Mutex<StudioPublisher>>>,
 );
 
+impl Default for StudioPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StudioPlugin {
     pub fn new() -> Self {
         Self(None, None)

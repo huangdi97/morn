@@ -3,6 +3,12 @@ use crate::sandbox::wasm::Sandbox;
 
 pub struct SandboxPlugin(pub Option<Sandbox>);
 
+impl Default for SandboxPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SandboxPlugin {
     pub fn new() -> Self {
         Self(None)

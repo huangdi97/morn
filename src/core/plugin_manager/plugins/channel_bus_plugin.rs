@@ -8,6 +8,12 @@ use crate::core::storage::Storage;
 
 pub struct ChannelBusPlugin(pub Option<Arc<Mutex<ChannelAdapter>>>);
 
+impl Default for ChannelBusPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChannelBusPlugin {
     pub fn new() -> Self {
         Self(None)

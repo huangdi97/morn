@@ -15,15 +15,15 @@ opt-level = "z"
 
 [features]
 default = ["full"]
-local-llm = []
+local-llm = []        # TODO: reserved for local LLM inference
 sandbox = ["wasmtime", "wat"]
 email = ["lettre"]
-server = ["axum", "tower", "tower-http", "futures-util"]
-channels-full = []
-providers-full = []
-desktop-real = []
-vnc-sandbox = []
-voice = []
+server = ["axum", "tower-http", "futures-util"]
+channels-full = []    # TODO: reserved for extended channel integrations
+providers-full = []   # TODO: reserved for extended LLM provider backends
+desktop-real = []     # TODO: reserved for real desktop automation (non-simulation mode)
+vnc-sandbox = []    # TODO: reserved for VNC sandbox (virtual display isolation)
+voice = []            # TODO: reserved for voice input/output
 full = ["sandbox", "email", "server", "channels-full", "providers-full", "desktop-real", "vnc-sandbox", "local-llm", "voice"]
 
 [dependencies]
@@ -50,7 +50,7 @@ lettre = { version = "0.11", default-features = false, features = ["smtp-transpo
 
 # optional: http server
 axum = { version = "0.8", features = ["json", "ws"], optional = true }
-tower = { version = "0.5", optional = true }
+# tower = { version = "0.5", optional = true }  # unused, kept as comment for reference
 tower-http = { version = "0.6", features = ["cors"], optional = true }
 futures-util = { version = "0.3", optional = true }
 

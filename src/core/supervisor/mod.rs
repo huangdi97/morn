@@ -2,7 +2,7 @@
 use crate::core::error::MornError;
 pub mod auto_hands;
 mod decision;
-mod execution;
+pub mod execution;
 mod guided_builder;
 mod learning;
 pub mod presets;

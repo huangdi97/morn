@@ -4,6 +4,12 @@ use crate::core::storage::Storage;
 
 pub struct DataLayerPlugin(pub Option<Storage>);
 
+impl Default for DataLayerPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DataLayerPlugin {
     pub fn new() -> Self {
         Self(None)

@@ -5,13 +5,14 @@ pub mod gateway_mock;
 pub mod gateway_stripe;
 pub mod marketplace;
 pub mod revenue;
+pub mod types;
 
-pub use marketplace::AgentVersion;
-pub use marketplace::License;
-pub use marketplace::Listing;
 pub use marketplace::Marketplace;
-pub use marketplace::Review;
-pub use marketplace::Transaction;
+pub use types::AgentVersion;
+pub use types::License;
+pub use types::Listing;
+pub use types::Review;
+pub use types::Transaction;
 
 pub fn render_market_browser() -> String {
     let storage = match crate::core::storage::Storage::new_in_memory() {

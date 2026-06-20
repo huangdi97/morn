@@ -259,6 +259,7 @@ pub fn run() {
             commands::plugin_manager::plugin_install,
             commands::plugin_manager::list_plugins,
             commands::plugin_manager::toggle_plugin,
+            commands::plugin_manager::create_plugin_from_spec,
             commands::plugin_manager::list_morn_plugins,
             commands::plugin_manager::toggle_morn_plugin,
             commands::workflow::list_workflow_templates,

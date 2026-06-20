@@ -3,6 +3,8 @@ use crate::MornError;
 use std::path::Path;
 use tauri::State;
 
+use morn::bridge::chat_agent::ChatAgent;
+use morn::core::plugin_generator;
 use morn::core::plugin_manager::{MornPluginMeta, Plugin, PluginStatus};
 use serde::Serialize;
 
@@ -154,4 +156,50 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+pub(crate) async fn create_plugin_from_spec(
+    description: String,
+    state: State<'_, AppState>,
+) -> Result<PluginEntry, MornError> {
+    let api_key =
+        std::env::var("MORN_API_KEY").map_err(|_| MornError::Internal("MORN_API_KEY not set".to_string()))?;
+    let chat_agent = ChatAgent::new(&api_key, "https://api.deepseek.com", "deepseek-chat");
+
+    let plugin_dir = {
+        let plugin_manager = state
+            .plugin_manager
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let mgr = plugin_manager
+            .as_ref()
+            .ok_or_else(|| MornError::Internal("PluginManager not initialized".to_string()))?;
+        mgr.plugin_dir.clone()
+    };
+
+    let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
+    let spec = plugin_generator::parse_nl_to_spec(&description, &chat_fn)
+        .map_err(|e| MornError::Internal(e.to_string()))?;
+    let manifest_path = plugin_generator::scaffold_plugin(&spec, &plugin_dir)
+        .map_err(|e| MornError::Internal(e.to_string()))?;
+
+    {
+        let mut plugin_manager = state
+            .plugin_manager
+            .lock()
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        if let Some(mgr) = plugin_manager.as_mut() {
+            let _ = mgr.scan();
+        }
+    }
+
+    Ok(PluginEntry {
+        name: spec.name.clone(),
+        version: "0.1.0".to_string(),
+        description: spec.description,
+        author: None,
+        plugin_type: spec.plugin_type,
+        status: "active".to_string(),
+    })
 }

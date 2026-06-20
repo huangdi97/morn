@@ -2,6 +2,7 @@ use crate::MornError;
 pub mod analytics;
 pub mod backup;
 pub mod chat;
+pub mod collaboration;
 pub mod checkup;
 pub mod component_type;
 pub mod config;
@@ -63,7 +64,7 @@ pub(crate) use org::{
     remove_member, revoke_permission,
 };
 pub(crate) use plugin_manager::plugin_install;
-pub(crate) use plugin_manager::{list_plugins, toggle_plugin};
+pub(crate) use plugin_manager::{list_plugins, toggle_plugin, create_plugin_from_spec};
 pub(crate) use studio::{
     assemble_agent, create_component, delete_component, get_component, list_agent_templates,
     list_components, publish_component, test_component, test_component_rerun, update_component,

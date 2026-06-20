@@ -4,6 +4,12 @@ use crate::core::storage::Storage;
 
 pub struct EnginePlugin(pub Option<TaskEngine>);
 
+impl Default for EnginePlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EnginePlugin {
     pub fn new() -> Self {
         Self(None)

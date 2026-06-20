@@ -9,6 +9,20 @@
 
 use crate::core::plugin_manager::{MornPlugin, PluginContext, PluginError};
 
+#[cfg(feature = "sandbox")]
+use crate::sandbox::wasm::Sandbox;
+
+#[cfg(feature = "sandbox")]
+use std::sync::OnceLock;
+
+#[cfg(feature = "sandbox")]
+static SANDBOX: OnceLock<Sandbox> = OnceLock::new();
+
+#[cfg(feature = "sandbox")]
+fn get_sandbox() -> &'static Sandbox {
+    SANDBOX.get_or_init(|| Sandbox::new().expect("failed to create sandbox"))
+}
+
 /// 一个从 .wasm 文件加载的 MornPlugin 包装
 pub struct WasmPlugin {
     id: String,
@@ -48,25 +62,32 @@ impl MornPlugin for WasmPlugin {
     }
 
     fn init(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
-        // TODO: 加载 wasm 模块，实例化，调用 morn_init 导出函数
-        // 使用 wasmtime::Engine::new() 创建引擎
-        // 使用 wasmtime::Module::new() 加载 .wasm 文件
-        // 使用 wasmtime::Store::new() 创建 store
-        // 使用 wasmtime::Instance::new() 创建实例
-        // 通过 instance.get_typed_func::<(), ()>() 获取 morn_init 函数
-        // 调用 morn_init()
-        //
-        // 参考 src/sandbox/wasm/mod.rs 的 Sandbox 实现模式
+        #[cfg(feature = "sandbox")] {
+            let wasm_bytes = std::fs::read(&self._wasm_path)
+                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+            get_sandbox().execute_func(&wasm_bytes, "morn_init")
+                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+        }
         Ok(())
     }
 
     fn activate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
-        // TODO: 调用 wasm 导出的 morn_activate 函数
+        #[cfg(feature = "sandbox")] {
+            let wasm_bytes = std::fs::read(&self._wasm_path)
+                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+            get_sandbox().execute_func(&wasm_bytes, "morn_activate")
+                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+        }
         Ok(())
     }
 
     fn deactivate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
-        // TODO: 调用 wasm 导出的 morn_deactivate 函数
+        #[cfg(feature = "sandbox")] {
+            let wasm_bytes = std::fs::read(&self._wasm_path)
+                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+            get_sandbox().execute_func(&wasm_bytes, "morn_deactivate")
+                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+        }
         Ok(())
     }
 }

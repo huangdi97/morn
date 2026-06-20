@@ -2928,7 +2928,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "toml 0.8.23",
- "tower",
  "tower-http",
  "tracing",
  "uuid",

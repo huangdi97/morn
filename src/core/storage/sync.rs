@@ -231,7 +231,7 @@ mod tests {
     }
 
     fn sync_event_count(storage: &Storage) -> i64 {
-        let conn = storage.conn.lock().unwrap();
+        let conn = storage.conn.lock().expect("lock poisoned");
         conn.query_row("SELECT COUNT(*) FROM sync_events", [], |row| row.get(0))
             .unwrap()
     }
