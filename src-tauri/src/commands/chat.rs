@@ -45,11 +45,7 @@ pub(crate) fn send_message(
         .supervisor
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let mut sup = supervisor
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let mut sup = supervisor.as_ref().unwrap().lock().unwrap();
 
     let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
 

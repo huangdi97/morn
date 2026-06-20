@@ -9,11 +9,7 @@ pub(crate) fn get_creator_earnings(state: State<AppState>) -> Result<CreatorEarn
         .console
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let _con = console
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let _con = console.as_ref().unwrap().lock().unwrap();
     Ok(CreatorEarnings {
         creator_id: "creator-1".to_string(),
         total_earnings: 1250.00,

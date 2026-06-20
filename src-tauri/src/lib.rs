@@ -9,10 +9,10 @@ use morn::console::ConsoleBackend;
 use morn::core::component_type::registry::TypeRegistry;
 pub use morn::core::error::MornError;
 use morn::core::mcp::MCPServer;
-use morn::core::plugin_manager::{register_morn_plugin, MornPluginMeta, PluginManager};
 use morn::core::plugin_manager::adapter::morn_plugin_to_plugin;
 use morn::core::plugin_manager::CorePluginRegistry;
 use morn::core::plugin_manager::PluginConfig;
+use morn::core::plugin_manager::{register_morn_plugin, MornPluginMeta, PluginManager};
 use morn::core::scheduler::Scheduler;
 use morn::core::storage::Storage;
 use morn::core::supervisor::Supervisor;
@@ -52,7 +52,8 @@ impl AppState {
             storage: Mutex::new(ctx.get::<Storage>("morn:storage")),
             plugin_manager: Mutex::new(None),
             type_registry: Mutex::new(
-                ctx.get::<TypeRegistry>("morn:type-registry").unwrap_or_default(),
+                ctx.get::<TypeRegistry>("morn:type-registry")
+                    .unwrap_or_default(),
             ),
             mcp_manager: Mutex::new(Vec::new()),
             scheduler: Mutex::new(Some(Scheduler::new())),
@@ -96,7 +97,11 @@ pub fn run() {
     let _ = pm.scan();
     for plugin in &plugins {
         let adapter = morn_plugin_to_plugin(plugin.as_ref());
-        if !pm.plugins.iter().any(|p| p.manifest.name == adapter.manifest.name) {
+        if !pm
+            .plugins
+            .iter()
+            .any(|p| p.manifest.name == adapter.manifest.name)
+        {
             pm.plugins.push(adapter);
         }
     }

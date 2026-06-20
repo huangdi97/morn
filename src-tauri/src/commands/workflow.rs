@@ -1,20 +1,28 @@
 use crate::AppState;
 use crate::MornError;
+use morn::core::workflow::{StepResult, WorkflowStepDef, WorkflowTemplateDef};
 use std::collections::HashSet;
 use std::sync::Mutex;
 use tauri::State;
-use morn::core::workflow::{StepResult, WorkflowTemplateDef, WorkflowStepDef};
 
-fn get_storage<'a>(state: &'a State<'a, AppState>) -> Result<std::sync::MutexGuard<'a, Option<morn::core::storage::Storage>>, MornError> {
-    state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))
+fn get_storage<'a>(
+    state: &'a State<'a, AppState>,
+) -> Result<std::sync::MutexGuard<'a, Option<morn::core::storage::Storage>>, MornError> {
+    state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))
 }
 
 #[tauri::command]
-pub(crate) fn list_workflow_templates(state: State<AppState>) -> Result<Vec<WorkflowTemplateDef>, MornError> {
+pub(crate) fn list_workflow_templates(
+    state: State<AppState>,
+) -> Result<Vec<WorkflowTemplateDef>, MornError> {
     let storage = get_storage(&state)?;
     match storage.as_ref() {
         Some(s) => {
-            let templates: Vec<WorkflowTemplateDef> = s.get_setting("workflow_templates")
+            let templates: Vec<WorkflowTemplateDef> = s
+                .get_setting("workflow_templates")
                 .ok()
                 .flatten()
                 .and_then(|json| serde_json::from_str(&json).ok())
@@ -44,7 +52,10 @@ pub(crate) fn list_workflow_node_types() -> Result<serde_json::Value, MornError>
 }
 
 #[tauri::command]
-pub(crate) fn execute_workflow(state: State<AppState>, template: WorkflowTemplateDef) -> Result<Vec<StepResult>, MornError> {
+pub(crate) fn execute_workflow(
+    state: State<AppState>,
+    template: WorkflowTemplateDef,
+) -> Result<Vec<StepResult>, MornError> {
     let step_results = Mutex::new(Vec::new());
 
     let mut executed = HashSet::new();
@@ -54,54 +65,65 @@ pub(crate) fn execute_workflow(state: State<AppState>, template: WorkflowTemplat
     while executed.len() < steps.len() && made_progress {
         made_progress = false;
         for step in &steps {
-            if executed.contains(&step.id) { continue; }
+            if executed.contains(&step.id) {
+                continue;
+            }
 
             let deps_met = step.depends_on.iter().all(|d| executed.contains(d));
-            if !deps_met { continue; }
+            if !deps_met {
+                continue;
+            }
 
             let start = std::time::Instant::now();
             let result = match step.action_type.as_str() {
-                "llm_call" => {
-                    Ok::<serde_json::Value, MornError>(serde_json::json!({"status": "completed", "output": "LLM call simulation"}))
-                }
-                "tool_exec" => {
-                    Ok::<serde_json::Value, MornError>(serde_json::json!({"status": "completed", "output": "Tool execution simulation"}))
-                }
-                "api_request" => {
-                    Ok::<serde_json::Value, MornError>(serde_json::json!({"status": "completed", "output": "API request simulation"}))
-                }
-                "web_search" => {
-                    Ok::<serde_json::Value, MornError>(serde_json::json!({"status": "completed", "output": "Search results simulation"}))
-                }
-                _ => {
-                    Ok::<serde_json::Value, MornError>(serde_json::json!({"status": "completed", "output": format!("Executed: {}", step.action_type)}))
-                }
+                "llm_call" => Ok::<serde_json::Value, MornError>(
+                    serde_json::json!({"status": "completed", "output": "LLM call simulation"}),
+                ),
+                "tool_exec" => Ok::<serde_json::Value, MornError>(
+                    serde_json::json!({"status": "completed", "output": "Tool execution simulation"}),
+                ),
+                "api_request" => Ok::<serde_json::Value, MornError>(
+                    serde_json::json!({"status": "completed", "output": "API request simulation"}),
+                ),
+                "web_search" => Ok::<serde_json::Value, MornError>(
+                    serde_json::json!({"status": "completed", "output": "Search results simulation"}),
+                ),
+                _ => Ok::<serde_json::Value, MornError>(
+                    serde_json::json!({"status": "completed", "output": format!("Executed: {}", step.action_type)}),
+                ),
             };
 
             let duration = start.elapsed().as_millis() as u64;
             executed.insert(step.id.clone());
 
-            step_results.lock().map_err(|e| MornError::Internal(e.to_string()))?.push(
-                StepResult {
+            step_results
+                .lock()
+                .map_err(|e| MornError::Internal(e.to_string()))?
+                .push(StepResult {
                     step_id: step.id.clone(),
                     status: "success".to_string(),
                     output: result.unwrap_or(serde_json::json!({"error": "execution failed"})),
                     duration_ms: duration,
-                }
-            );
+                });
             made_progress = true;
         }
     }
 
-    Ok(step_results.into_inner().map_err(|e| MornError::Internal(e.to_string()))?)
+    Ok(step_results
+        .into_inner()
+        .map_err(|e| MornError::Internal(e.to_string()))?)
 }
 
 #[tauri::command]
-pub(crate) fn save_workflow_template(state: State<AppState>, template: WorkflowTemplateDef) -> Result<(), MornError> {
+pub(crate) fn save_workflow_template(
+    state: State<AppState>,
+    template: WorkflowTemplateDef,
+) -> Result<(), MornError> {
     let storage = get_storage(&state)?;
     match storage.as_ref() {
         Some(s) => {
-            let mut templates: Vec<WorkflowTemplateDef> = s.get_setting("workflow_templates")
+            let mut templates: Vec<WorkflowTemplateDef> = s
+                .get_setting("workflow_templates")
                 .ok()
                 .flatten()
                 .and_then(|json| serde_json::from_str(&json).ok())
@@ -124,11 +146,15 @@ pub(crate) fn save_workflow_template(state: State<AppState>, template: WorkflowT
 }
 
 #[tauri::command]
-pub(crate) fn delete_workflow_template(state: State<AppState>, id: String) -> Result<(), MornError> {
+pub(crate) fn delete_workflow_template(
+    state: State<AppState>,
+    id: String,
+) -> Result<(), MornError> {
     let storage = get_storage(&state)?;
     match storage.as_ref() {
         Some(s) => {
-            let mut templates: Vec<WorkflowTemplateDef> = s.get_setting("workflow_templates")
+            let mut templates: Vec<WorkflowTemplateDef> = s
+                .get_setting("workflow_templates")
                 .ok()
                 .flatten()
                 .and_then(|json| serde_json::from_str(&json).ok())

@@ -56,8 +56,14 @@ pub(crate) fn get_market_listings(
     let marketplace = Marketplace::new(s.clone());
     let listings = marketplace.list(type_filter.as_deref());
     let filtered = match price_filter.as_deref() {
-        Some("free") => listings.into_iter().filter(|l| l.price == Some(0.0)).collect(),
-        Some("paid") => listings.into_iter().filter(|l| l.price > Some(0.0)).collect(),
+        Some("free") => listings
+            .into_iter()
+            .filter(|l| l.price == Some(0.0))
+            .collect(),
+        Some("paid") => listings
+            .into_iter()
+            .filter(|l| l.price > Some(0.0))
+            .collect(),
         _ => listings,
     };
     serde_json::to_value(filtered).map_err(|e| MornError::Internal(e.to_string()))
@@ -110,9 +116,7 @@ pub(crate) fn install_bot_from_store(
     let mgr = manager
         .as_ref()
         .ok_or_else(|| "StudioManager not initialized".to_string())?;
-    let mgr = mgr
-        .lock()
-        .map_err(|e| MornError::Internal(e.to_string()))?;
+    let mgr = mgr.lock().map_err(|e| MornError::Internal(e.to_string()))?;
 
     let name = template_id
         .strip_prefix("preset-")
@@ -217,9 +221,7 @@ pub(crate) fn create_agent_from_description(
     let sup = supervisor
         .as_ref()
         .ok_or_else(|| "Supervisor not initialized.".to_string())?;
-    let sup = sup
-        .lock()
-        .map_err(|e| MornError::Internal(e.to_string()))?;
+    let sup = sup.lock().map_err(|e| MornError::Internal(e.to_string()))?;
 
     let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
     let nl_def = sup.create_agent_from_nl(&nl, &chat_fn, None)?;

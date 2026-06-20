@@ -373,7 +373,10 @@ impl ConsoleBackend {
         let listings = market.map(|m| m.list(None)).unwrap_or_default();
         let total_listings = listings.len();
         let total_downloads: u64 = listings.iter().map(|l| l.downloads).sum();
-        let total_revenue: f64 = listings.iter().map(|l| l.price.unwrap_or(0.0) * l.downloads as f64).sum();
+        let total_revenue: f64 = listings
+            .iter()
+            .map(|l| l.price.unwrap_or(0.0) * l.downloads as f64)
+            .sum();
         let top_listing = listings.into_iter().max_by_key(|l| l.downloads);
 
         let top_listing_name;

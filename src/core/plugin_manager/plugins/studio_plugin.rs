@@ -69,7 +69,8 @@ impl MornPlugin for StudioPlugin {
     }
 
     fn activate(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
-        let manager = ctx.get::<Arc<Mutex<StudioManager>>>("morn:studio-manager")
+        let manager = ctx
+            .get::<Arc<Mutex<StudioManager>>>("morn:studio-manager")
             .ok_or_else(|| {
                 PluginError::ActivateFailed(
                     "morn:studio".to_string(),
@@ -84,7 +85,8 @@ impl MornPlugin for StudioPlugin {
                 )
             })?;
         ctx.register("morn:studio-manager", manager.clone());
-        let publisher = ctx.get::<Arc<Mutex<StudioPublisher>>>("morn:studio-publisher")
+        let publisher = ctx
+            .get::<Arc<Mutex<StudioPublisher>>>("morn:studio-publisher")
             .ok_or_else(|| {
                 PluginError::ActivateFailed(
                     "morn:studio".to_string(),

@@ -314,7 +314,12 @@ fn map_listing_row(row: &rusqlite::Row) -> rusqlite::Result<Listing> {
         screenshots: row.get(10)?,
         category: row.get(11)?,
         price_model: row.get(12)?,
-        requires: row.get::<_, String>(13)?.split(',').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect(),
+        requires: row
+            .get::<_, String>(13)?
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect(),
         verified: row.get::<_, i32>(14)? != 0,
         updated_at: row.get(15)?,
     })
@@ -338,10 +343,23 @@ fn listing_from_row(row: &rusqlite::Row) -> Result<Listing, MornError> {
         category: row
             .get(11)
             .map_err(|e| MornError::Internal(e.to_string()))?,
-        price_model: row.get(12).map_err(|e| MornError::Internal(e.to_string()))?,
-        requires: row.get::<_, String>(13).map_err(|e| MornError::Internal(e.to_string()))?.split(',').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect(),
-        verified: row.get::<_, i32>(14).map_err(|e| MornError::Internal(e.to_string()))? != 0,
-        updated_at: row.get(15).map_err(|e| MornError::Internal(e.to_string()))?,
+        price_model: row
+            .get(12)
+            .map_err(|e| MornError::Internal(e.to_string()))?,
+        requires: row
+            .get::<_, String>(13)
+            .map_err(|e| MornError::Internal(e.to_string()))?
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect(),
+        verified: row
+            .get::<_, i32>(14)
+            .map_err(|e| MornError::Internal(e.to_string()))?
+            != 0,
+        updated_at: row
+            .get(15)
+            .map_err(|e| MornError::Internal(e.to_string()))?,
     })
 }
 

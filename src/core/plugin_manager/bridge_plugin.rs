@@ -4,12 +4,9 @@
 //! 为每个发现的外部插件创建代理 MornPluginWrapper。
 //! 外部脚本通过 stdin/stdout JSON-RPC 与 Bridge 通信。
 
+use crate::core::plugin_manager::{MornPlugin, PluginContext, PluginError, PluginManifest};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use crate::core::plugin_manager::{
-    MornPlugin, PluginContext, PluginError,
-    PluginManifest,
-};
 
 /// BridgePlugin — 外部脚本插件的宿主。
 pub struct BridgePlugin {
@@ -44,26 +41,31 @@ impl BridgePlugin {
         if !self.plugin_dir.exists() {
             return Ok(discovered);
         }
-        for entry in std::fs::read_dir(&self.plugin_dir).map_err(|e| {
-            PluginError::Other(format!("bridge: read dir failed: {}", e))
-        })? {
-            let entry = entry.map_err(|e| {
-                PluginError::Other(format!("bridge: entry failed: {}", e))
-            })?;
+        for entry in std::fs::read_dir(&self.plugin_dir)
+            .map_err(|e| PluginError::Other(format!("bridge: read dir failed: {}", e)))?
+        {
+            let entry =
+                entry.map_err(|e| PluginError::Other(format!("bridge: entry failed: {}", e)))?;
             let path = entry.path();
-            if !path.is_dir() { continue; }
+            if !path.is_dir() {
+                continue;
+            }
             let manifest_path = path.join("manifest.json");
-            if !manifest_path.exists() { continue; }
+            if !manifest_path.exists() {
+                continue;
+            }
 
-            let content = std::fs::read_to_string(&manifest_path).map_err(|e| {
-                PluginError::Other(format!("bridge: read manifest failed: {}", e))
-            })?;
-            let manifest: PluginManifest = serde_json::from_str(&content).map_err(|e| {
-                PluginError::Other(format!("bridge: parse manifest failed: {}", e))
-            })?;
+            let content = std::fs::read_to_string(&manifest_path)
+                .map_err(|e| PluginError::Other(format!("bridge: read manifest failed: {}", e)))?;
+            let manifest: PluginManifest = serde_json::from_str(&content)
+                .map_err(|e| PluginError::Other(format!("bridge: parse manifest failed: {}", e)))?;
 
             let name = manifest.name.clone();
-            let runtime = if manifest.entry.ends_with(".py") { "python" } else { "js" };
+            let runtime = if manifest.entry.ends_with(".py") {
+                "python"
+            } else {
+                "js"
+            };
 
             let wrapper = MornPluginWrapper {
                 id: format!("external:{}", name),

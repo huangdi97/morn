@@ -143,7 +143,11 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
             for listing in &listings {
                 println!(
                     "  [{}] {} ({} | {} MORN | ★ {})",
-                    listing.id, listing.name, listing.item_type, listing.price.unwrap_or(0.0), listing.rating
+                    listing.id,
+                    listing.name,
+                    listing.item_type,
+                    listing.price.unwrap_or(0.0),
+                    listing.rating
                 );
             }
         }
@@ -227,7 +231,11 @@ fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex
             for listing in &results {
                 println!(
                     "  [{}] {} ({} | {} MORN | ★ {})",
-                    listing.id, listing.name, listing.item_type, listing.price.unwrap_or(0.0), listing.rating
+                    listing.id,
+                    listing.name,
+                    listing.item_type,
+                    listing.price.unwrap_or(0.0),
+                    listing.rating
                 );
             }
         }

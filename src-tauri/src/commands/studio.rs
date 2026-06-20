@@ -14,11 +14,7 @@ pub(crate) fn list_components(
         .manager
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let mgr = manager
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let mgr = manager.as_ref().unwrap().lock().unwrap();
     let components = mgr.list_components(type_filter.as_deref());
     Ok(serde_json::to_value(components).map_err(|e| MornError::Internal(e.to_string()))?)
 }
@@ -32,11 +28,7 @@ pub(crate) fn get_component(
         .manager
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let mgr = manager
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let mgr = manager.as_ref().unwrap().lock().unwrap();
     let detail = mgr.get_component(&id)?;
     Ok(serde_json::to_value(detail).map_err(|e| MornError::Internal(e.to_string()))?)
 }
@@ -52,11 +44,7 @@ pub(crate) fn create_component(
         .manager
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let mgr = manager
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let mgr = manager.as_ref().unwrap().lock().unwrap();
     let id = mgr.create_component(CreateComponentDef {
         name,
         component_type,
@@ -77,11 +65,7 @@ pub(crate) fn update_component(
         .manager
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let mgr = manager
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let mgr = manager.as_ref().unwrap().lock().unwrap();
     mgr.update_component(
         &id,
         UpdateComponentDef {
@@ -98,11 +82,7 @@ pub(crate) fn delete_component(id: String, state: State<AppState>) -> Result<(),
         .manager
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let mgr = manager
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let mgr = manager.as_ref().unwrap().lock().unwrap();
     mgr.delete_component(&id)
 }
 
@@ -120,11 +100,7 @@ pub(crate) fn assemble_agent(
         .manager
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let mgr = manager
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let mgr = manager.as_ref().unwrap().lock().unwrap();
 
     let persona_obj = match persona.as_str() {
         "researcher" => morn::component::persona::create_researcher_persona(),
@@ -168,11 +144,7 @@ pub(crate) fn list_agent_templates(state: State<AppState>) -> Result<serde_json:
         .manager
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let mgr = manager
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let mgr = manager.as_ref().unwrap().lock().unwrap();
     let templates = mgr.list_templates();
     Ok(serde_json::to_value(templates).map_err(|e| MornError::Internal(e.to_string()))?)
 }
@@ -188,11 +160,7 @@ pub(crate) fn test_component(
         .manager
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let mgr = manager
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let mgr = manager.as_ref().unwrap().lock().unwrap();
     let data = morn::core::component::Data::text(&input);
     let result = mgr.test_component(&id, data, component_type.as_deref())?;
     Ok(serde_json::to_value(result).map_err(|e| MornError::Internal(e.to_string()))?)
@@ -210,11 +178,7 @@ pub(crate) fn test_component_rerun(
         .manager
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let mgr = manager
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let mgr = manager.as_ref().unwrap().lock().unwrap();
     let step = mgr.rerun_component_step(&component_type, &id, step_index, &new_input)?;
     Ok(serde_json::to_value(step).map_err(|e| MornError::Internal(e.to_string()))?)
 }
@@ -235,10 +199,6 @@ pub(crate) fn publish_component(id: String, state: State<AppState>) -> Result<()
         .publisher
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let pubr = publisher
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap();
+    let pubr = publisher.as_ref().unwrap().lock().unwrap();
     pubr.publish_agent(&id)
 }

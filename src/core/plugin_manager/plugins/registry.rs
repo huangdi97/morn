@@ -1,11 +1,11 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
+use super::super::bridge_plugin::BridgePlugin;
 use super::super::MornPlugin;
 use super::{
-    ChannelBusPlugin, DataLayerPlugin, EnginePlugin, RegistryPlugin,
-    SandboxPlugin, StudioPlugin, SupervisorPlugin,
+    ChannelBusPlugin, DataLayerPlugin, EnginePlugin, RegistryPlugin, SandboxPlugin, StudioPlugin,
+    SupervisorPlugin,
 };
-use super::super::bridge_plugin::BridgePlugin;
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// 内部插件注册表 — 知道所有核心插件的构造函数
 pub struct CorePluginRegistry {
@@ -15,7 +15,9 @@ pub struct CorePluginRegistry {
 impl CorePluginRegistry {
     /// 注册所有内置插件
     pub fn new() -> Self {
-        let mut r = Self { builders: HashMap::new() };
+        let mut r = Self {
+            builders: HashMap::new(),
+        };
         r.register("morn:data-layer", |_| Box::new(DataLayerPlugin(None)));
         r.register("morn:registry", |_| Box::new(RegistryPlugin(None)));
         r.register("morn:sandbox", |_| Box::new(SandboxPlugin(None)));
