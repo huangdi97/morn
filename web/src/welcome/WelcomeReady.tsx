@@ -1,47 +1,51 @@
+import { useTranslation } from "../i18n";
+
 interface WelcomeReadyProps {
   onSend: (text: string) => void;
   onDismiss?: () => void;
 }
 
 const EXAMPLES = [
-  { emoji: "📄", text: "帮我写一份周报" },
-  { emoji: "💻", text: "查一下电脑配置" },
-  { emoji: "🔍", text: "搜索 AI Agent 最新消息" },
-  { emoji: "📊", text: "分析这组数据" },
+  { emoji: "📄", textKey: "welcome_ready.example_report" },
+  { emoji: "💻", textKey: "welcome_ready.example_pc" },
+  { emoji: "🔍", textKey: "welcome_ready.example_search" },
+  { emoji: "📊", textKey: "welcome_ready.example_analyze" },
 ];
 
 export default function WelcomeReady({ onSend, onDismiss }: WelcomeReadyProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="welcome-page">
       <div className="welcome-emoji">👋</div>
       <h1 className="welcome-title">
-        你好，我是 Morn
+        {t('welcome_ready.title')}
       </h1>
       <p className="welcome-desc">
-        你的桌面 AI 系统已经就绪 ✅
+        {t('welcome_ready.desc')}
       </p>
       <div className="welcome-examples">
         {EXAMPLES.map((ex) => (
           <button
-            key={ex.text}
-            onClick={() => onSend(ex.text)}
+            key={ex.textKey}
+            onClick={() => onSend(t(ex.textKey))}
             className="welcome-example-btn"
           >
             <span>{ex.emoji}</span>
-            <span>{ex.text}</span>
+            <span>{t(ex.textKey)}</span>
           </button>
         ))}
       </div>
       <div className="welcome-ready-footer">
         <p style={{ color: "var(--text-secondary)", fontSize: "13px", margin: 0 }}>
-          或者去 Store 安装预置 Bot
+          {t('welcome_ready.footer')}
         </p>
         {onDismiss && (
           <button
             onClick={onDismiss}
             className="welcome-btn-secondary"
           >
-            🔑 配置 API Key
+            🔑 {t('welcome_ready.configure_key')}
           </button>
         )}
       </div>

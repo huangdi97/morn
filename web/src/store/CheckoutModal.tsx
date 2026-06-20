@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "../i18n";
 
 interface CheckoutModalProps {
   name: string;
@@ -11,14 +12,15 @@ interface CheckoutModalProps {
 type PaymentMethod = "mock" | "stripe" | "alipay";
 type CheckoutStatus = "idle" | "processing" | "success" | "error";
 
-const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  mock: "模拟支付 (Mock)",
-  stripe: "Stripe",
-  alipay: "支付宝",
-};
-
 export default function CheckoutModal({ name, icon, price, onConfirm, onClose }: CheckoutModalProps) {
+  const { t } = useTranslation();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mock");
+
+  const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+    mock: t('checkout.payment_mock'),
+    stripe: "Stripe",
+    alipay: t('checkout.payment_alipay'),
+  };
   const [status, setStatus] = useState<CheckoutStatus>("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -30,7 +32,7 @@ export default function CheckoutModal({ name, icon, price, onConfirm, onClose }:
       setStatus("success");
     } catch (e: any) {
       setStatus("error");
-      setErrorMsg(e?.toString() || "Purchase failed");
+      setErrorMsg(e?.toString() || t('checkout.purchase_failed'));
     }
   };
 
@@ -48,22 +50,22 @@ export default function CheckoutModal({ name, icon, price, onConfirm, onClose }:
         {status === "success" ? (
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "48px", marginBottom: "12px" }}>✓</div>
-            <h3 style={{ color: "#3fb950", margin: "0 0 8px" }}>Purchase Successful</h3>
+            <h3 style={{ color: "#3fb950", margin: "0 0 8px" }}>{t('checkout.success_title')}</h3>
             <p style={{ color: "#8b949e", fontSize: "13px", margin: "0 0 20px" }}>
-              {name} has been installed.
+              {t('checkout.success_desc', { name })}
             </p>
             <button onClick={onClose}
               style={{
                 padding: "8px 24px", background: "#1f6feb", color: "#fff",
                 border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "13px",
               }}>
-              Close
+              {t('checkout.close')}
             </button>
           </div>
         ) : (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ color: "#e6edf3", margin: 0 }}>Checkout</h3>
+              <h3 style={{ color: "#e6edf3", margin: 0 }}>{t('checkout.title')}</h3>
               <button onClick={onClose}
                 style={{
                   background: "none", border: "none", color: "#8b949e",
@@ -89,7 +91,7 @@ export default function CheckoutModal({ name, icon, price, onConfirm, onClose }:
 
             <div style={{ marginBottom: "20px" }}>
               <div style={{ color: "#8b949e", fontSize: "12px", marginBottom: "8px" }}>
-                Payment Method
+                {t('checkout.payment_method')}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map(m => (
@@ -123,7 +125,7 @@ export default function CheckoutModal({ name, icon, price, onConfirm, onClose }:
                 color: "#fff", border: "none", borderRadius: "4px",
                 cursor: status === "processing" ? "default" : "pointer",
               }}>
-              {status === "processing" ? "Processing..." : `Pay ¥${price.toFixed(3)}`}
+              {status === "processing" ? t('checkout.processing') : t('checkout.pay', { price: price.toFixed(3) })}
             </button>
           </>
         )}

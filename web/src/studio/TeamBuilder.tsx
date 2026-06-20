@@ -62,56 +62,64 @@ const TEAM_TEMPLATES: TeamTemplate[] = [
   },
 ];
 
-const MODE_LABELS: Record<string, string> = {
-  Chain: "链式",
-  Voting: "投票",
-  Broadcast: "广播",
-  ManagerWorker: "管理-执行",
-  Routing: "路由",
-  Blackboard: "黑板",
-};
-
-const CONSENSUS_LABELS: Record<string, string> = {
-  CeoDecides: "CEO决策",
-  MungerVeto: "一票否决",
-  AutoSynthesis: "自动合成",
-  Vote: "多数投票",
-};
-
 export function TeamBuilder() {
   const { t } = useTranslation();
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<TeamTemplate | null>(null);
   const [creating, setCreating] = useState(false);
 
+  const modeLabel = (mode: string) => {
+    const keyMap: Record<string, string> = {
+      Chain: "chain",
+      Voting: "voting",
+      Broadcast: "broadcast",
+      ManagerWorker: "manager_worker",
+      Routing: "routing",
+      Blackboard: "blackboard",
+    };
+    return t(`team_builder.mode.${keyMap[mode] || mode}`);
+  };
+
+  const consensusLabel = (consensus: string) => {
+    const keyMap: Record<string, string> = {
+      CeoDecides: "ceo_decides",
+      MungerVeto: "munger_veto",
+      AutoSynthesis: "auto_synthesis",
+      Vote: "vote",
+    };
+    return t(`team_builder.consensus.${keyMap[consensus] || consensus}`);
+  };
+
   const handleCreate = async (template: TeamTemplate) => {
     setCreating(true);
     try {
       await api.createTeam(template.name, template.description, "default-user");
-      alert(`团队 "${template.name}" 创建成功`);
+      alert(t('toast.team_created', { name: template.name }));
     } catch (e: any) {
-      alert(`创建失败: ${e}`);
+      alert(t('toast.create_failed', { error: e }));
     } finally {
       setCreating(false);
     }
   };
 
+  const templateKey = (id: string) => id.replace(/-/g, "_");
+
   return (
     <div className="team-template-selector">
       <h2>{t('studio.team_builder.title')}</h2>
       <p style={{ color: "var(--text-secondary)", fontSize: "13px", marginBottom: "16px" }}>
-        选择预置团队模板，快速创建协作团队
+        {t('team_builder.description')}
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "12px" }}>
-        {TEAM_TEMPLATES.map((t) => {
-          const isSelected = selected === t.id;
+        {TEAM_TEMPLATES.map((template) => {
+          const isSelected = selected === template.id;
           return (
             <div
-              key={t.id}
+              key={template.id}
               className={`team-template-card ${isSelected ? "selected" : ""}`}
               onClick={() => {
-                setSelected(t.id);
-                setPreview(t);
+                setSelected(template.id);
+                setPreview(template);
               }}
               style={{
                 background: isSelected ? "var(--bg-tertiary)" : "var(--bg-secondary)",
@@ -122,10 +130,10 @@ export function TeamBuilder() {
                 transition: "all 0.15s ease",
               }}
             >
-              <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px", fontSize: "15px" }}>{t.name}</div>
-              <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "10px", lineHeight: "1.4" }}>{t.description}</div>
+              <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px", fontSize: "15px" }}>{t(`team_builder.template.${templateKey(template.id)}`)}</div>
+              <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "10px", lineHeight: "1.4" }}>{t(`team_builder.template.${templateKey(template.id)}_desc`)}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "8px" }}>
-                {t.members.map((m, i) => (
+                {template.members.map((m, i) => (
                   <span key={i} style={{
                     fontSize: "11px", padding: "2px 6px", borderRadius: "4px",
                     background: "var(--bg-tertiary)", color: "var(--text-secondary)",
@@ -140,17 +148,17 @@ export function TeamBuilder() {
                   fontSize: "11px", padding: "2px 6px", borderRadius: "4px",
                   background: "rgba(99,102,241,0.15)", color: "var(--accent)",
                 }}>
-                  {MODE_LABELS[t.mode] || t.mode}
+                  {modeLabel(template.mode)}
                 </span>
                 <span style={{
                   fontSize: "11px", padding: "2px 6px", borderRadius: "4px",
                   background: "rgba(34,197,94,0.15)", color: "rgb(34,197,94)",
                 }}>
-                  {CONSENSUS_LABELS[t.consensus] || t.consensus}
+                  {consensusLabel(template.consensus)}
                 </span>
               </div>
               <button
-                onClick={(e) => { e.stopPropagation(); handleCreate(t); }}
+                onClick={(e) => { e.stopPropagation(); handleCreate(template); }}
                 disabled={creating}
                 style={{
                   width: "100%", marginTop: "10px", padding: "6px 12px", borderRadius: "6px",
@@ -159,7 +167,7 @@ export function TeamBuilder() {
                   opacity: creating ? 0.7 : 1,
                 }}
               >
-                {creating ? "创建中..." : "创建团队"}
+                {creating ? t('team_builder.creating') : t('team_builder.create_team')}
               </button>
             </div>
           );
@@ -171,16 +179,16 @@ export function TeamBuilder() {
           background: "var(--bg-secondary)", border: "1px solid var(--border)",
         }}>
           <h3 style={{ margin: "0 0 8px", color: "var(--text-primary)", fontSize: "15px" }}>
-            {preview.name} — 预览
+            {t(`team_builder.template.${templateKey(preview.id)}`)} — {t('team_builder.preview')}
           </h3>
           <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "8px" }}>
-            {preview.description}
+            {t(`team_builder.template.${templateKey(preview.id)}_desc`)}
           </div>
           <div style={{ fontSize: "13px", color: "var(--text-primary)", marginBottom: "4px" }}>
-            协作模式: {MODE_LABELS[preview.mode] || preview.mode}
+            {t('team_builder.collaboration_mode')}: {modeLabel(preview.mode)}
           </div>
           <div style={{ fontSize: "13px", color: "var(--text-primary)", marginBottom: "8px" }}>
-            决策方式: {CONSENSUS_LABELS[preview.consensus] || preview.consensus}
+            {t('team_builder.decision_method')}: {consensusLabel(preview.consensus)}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "10px" }}>
             {preview.members.map((m, i) => (
@@ -203,7 +211,7 @@ export function TeamBuilder() {
               opacity: creating ? 0.7 : 1,
             }}
           >
-            {creating ? "创建中..." : "确认创建团队"}
+            {creating ? t('team_builder.creating') : t('team_builder.confirm_create')}
           </button>
         </div>
       )}

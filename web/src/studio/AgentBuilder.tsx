@@ -134,9 +134,9 @@ export function AgentBuilder() {
       setPublishing(true);
       setPublishMsg(null);
       await api.publishComponent(agentId);
-      setPublishMsg("Published to Workbench successfully");
+      setPublishMsg(t('agent_builder.publish_success'));
     } catch (e: any) {
-      setPublishMsg("Publish failed: " + e.toString());
+      setPublishMsg(t('agent_builder.publish_failed') + " " + e.toString());
     } finally {
       setPublishing(false);
     }
@@ -155,7 +155,7 @@ export function AgentBuilder() {
             color: mode === "nl" ? "#fff" : "var(--text-primary)", cursor: "pointer",
           }}
         >
-          自然语言描述
+          {t('agent_builder.nl_mode')}
         </button>
         <button
           className={mode === "form" ? "active" : ""}
@@ -166,7 +166,7 @@ export function AgentBuilder() {
             color: mode === "form" ? "#fff" : "var(--text-primary)", cursor: "pointer",
           }}
         >
-          手动编辑
+          {t('agent_builder.form_mode')}
         </button>
       </div>
     );
@@ -185,7 +185,7 @@ export function AgentBuilder() {
             color: editTab === "form" ? "#fff" : "var(--text-primary)", cursor: "pointer",
           }}
         >
-          表单编辑
+          {t('agent_builder.form_edit')}
         </button>
         <button
           className={editTab === "visual" ? "active" : ""}
@@ -196,7 +196,7 @@ export function AgentBuilder() {
             color: editTab === "visual" ? "#fff" : "var(--text-primary)", cursor: "pointer",
           }}
         >
-          可视化编辑
+          {t('agent_builder.visual_edit')}
         </button>
       </div>
     );
@@ -215,7 +215,7 @@ export function AgentBuilder() {
                 <textarea
                   value={nlInput}
                   onChange={(e) => setNlInput(e.target.value)}
-                  placeholder='例如："创建一个股票分析助手，能获取行情数据、计算技术指标并生成报告"'
+                  placeholder={t('agent_builder.nl_placeholder')}
                   rows={5}
                   style={{
                     width: "100%", padding: "12px", borderRadius: "6px",
@@ -229,7 +229,7 @@ export function AgentBuilder() {
                   disabled={nlLoading || !nlInput.trim()}
                   style={{ marginTop: "12px" }}
                 >
-                  {nlLoading ? "AI 分析中..." : "生成 Agent"}
+                  {nlLoading ? t('agent_builder.analyzing') : t('agent_builder.generate_agent')}
                 </button>
                 <div style={{ marginTop: "16px", fontSize: "13px", color: "var(--text-secondary)" }}>
                   <p>{t('studio.builder.examples')}</p>
@@ -243,7 +243,7 @@ export function AgentBuilder() {
                         border: "1px solid var(--border)",
                       }}
                     >
-                      {ex}
+                       {t(`agent_builder.example_${i}`)}
                     </div>
                   ))}
                 </div>
@@ -254,7 +254,7 @@ export function AgentBuilder() {
                 <p>{t('studio.builder.form_desc')}</p>
                 <input
                   type="text"
-                  placeholder="e.g. A biology research agent"
+                  placeholder={t('agent_builder.form_placeholder')}
                   value={def.name}
                   onChange={(e) => setDef({ ...def, name: e.target.value })}
                   onKeyDown={(e) => e.key === "Enter" && buildFromNaturalLanguage(def.name)}
@@ -282,11 +282,11 @@ export function AgentBuilder() {
                 <select value={def.persona} onChange={(e) => setDef({ ...def, persona: e.target.value })}>
                   {PERSONAS.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
-                <label>Model:</label>
+                <label>{t('agent_builder.model_label')}</label>
                 <select value={def.model} onChange={(e) => setDef({ ...def, model: e.target.value })}>
                   {MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
-                <label>Tools:</label>
+                <label>{t('agent_builder.tools_label')}</label>
                 <div className="checkbox-group">
                   {tools.map((t) => (
                     <label key={t}>
@@ -296,7 +296,7 @@ export function AgentBuilder() {
                     </label>
                   ))}
                 </div>
-                <label>Knowledge:</label>
+                <label>{t('agent_builder.knowledge_label')}</label>
                 <div className="checkbox-group">
                   {knowledge.map((k) => (
                     <label key={k}>
@@ -306,7 +306,7 @@ export function AgentBuilder() {
                     </label>
                   ))}
                 </div>
-                <label>Skills:</label>
+                <label>{t('agent_builder.skills_label')}</label>
                 <div className="checkbox-group">
                   {skills.map((s) => (
                     <label key={s}>
@@ -345,15 +345,15 @@ export function AgentBuilder() {
               <>
                 <h3>{t('studio.builder.visual_editor')}</h3>
                 <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px" }}>
-                  从左侧组件库拖拽组件到画布，连接端口构建 Agent
+                  {t('agent_builder.visual_desc')}
                 </p>
                 <NodeCanvas def={def} onDefChange={setDef} />
               </>
             )}
             <div className="step-buttons" style={{ marginTop: "12px" }}>
-              <button onClick={() => setStep(0)}>Back</button>
+              <button onClick={() => setStep(0)}>{t('agent_builder.back')}</button>
               <button onClick={handleBuild} disabled={building}>
-                {building ? "Building..." : (agentId ? "Update Agent" : "Build Agent")}
+                {building ? t('agent_builder.building') : (agentId ? t('agent_builder.update_agent') : t('agent_builder.build_agent'))}
               </button>
             </div>
             {error && <div className="error-indicator">{error}</div>}
@@ -372,14 +372,14 @@ export function AgentBuilder() {
             </div>
             <div className="step-buttons">
               <button onClick={handlePublish} disabled={publishing || !agentId}>
-                {publishing ? "Publishing..." : "Publish to Workbench"}
+                {publishing ? t('agent_builder.publishing') : t('agent_builder.publish')}
               </button>
               <button onClick={() => { setEditTab("visual"); setStep(1); }}>
-                Edit Agent
+                {t('agent_builder.edit_agent')}
               </button>
-              <button onClick={() => { setStep(0); setAgentId(null); setPublishMsg(null); }}>Create Another</button>
+              <button onClick={() => { setStep(0); setAgentId(null); setPublishMsg(null); }}>{t('agent_builder.create_another')}</button>
             </div>
-            {publishMsg && <div className={publishMsg.startsWith("Publish failed") ? "error-indicator" : "success-indicator"}>{publishMsg}</div>}
+            {publishMsg && <div className={publishMsg.startsWith(t('agent_builder.publish_failed')) ? "error-indicator" : "success-indicator"}>{publishMsg}</div>}
           </div>
         );
       default:
@@ -399,14 +399,14 @@ export function AgentBuilder() {
             cursor: "pointer", fontSize: "13px", fontWeight: 500,
           }}
         >
-          引导式新建
+          {t('agent_builder.wizard_new')}
         </button>
       </div>
       {showWizard && <StepWizard onClose={() => setShowWizard(false)} />}
       <div className="steps-indicator">
-        <span className={step >= 0 ? "active" : ""}>Describe</span>
+        <span className={step >= 0 ? "active" : ""}>{t('agent_builder.step_describe')}</span>
         <span className={step >= 1 ? "active" : ""}>{t('studio.builder.step_configure')}</span>
-        <span className={step >= 2 ? "active" : ""}>Done</span>
+        <span className={step >= 2 ? "active" : ""}>{t('agent_builder.step_done')}</span>
       </div>
       {renderStep()}
     </div>

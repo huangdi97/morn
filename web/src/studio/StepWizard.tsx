@@ -192,7 +192,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
         return (
           <div>
             <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>🧠 {stepLabels[0]}</h3>
-            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>为 Agent 选择一种记忆方式</p>
+            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>{t('step_wizard.memory_hint')}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {MEMORY_OPTIONS.map((m) => (
                 <div
@@ -205,8 +205,8 @@ export function StepWizard({ onClose }: StepWizardProps) {
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <div style={{ fontWeight: 500, fontSize: "14px", color: "var(--text-primary)", marginBottom: "4px" }}>{m.label}</div>
-                  <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{m.desc}</div>
+                  <div style={{ fontWeight: 500, fontSize: "14px", color: "var(--text-primary)", marginBottom: "4px" }}>{t(`step_wizard.memory.${m.id}`)}</div>
+                  <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{t(`step_wizard.memory.${m.id}_desc`)}</div>
                 </div>
               ))}
             </div>
@@ -216,14 +216,14 @@ export function StepWizard({ onClose }: StepWizardProps) {
         return (
           <div>
             <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>🛠 {stepLabels[1]}</h3>
-            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>为 Agent 选择可用工具（可多选）</p>
+            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>{t('step_wizard.tool_hint')}</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-              {TOOL_OPTIONS.map((t) => {
-                const selected = selectedTools.includes(t.id);
+              {TOOL_OPTIONS.map((tool) => {
+                const selected = selectedTools.includes(tool.id);
                 return (
                   <div
-                    key={t.id}
-                    onClick={() => toggleTool(t.id)}
+                    key={tool.id}
+                    onClick={() => toggleTool(tool.id)}
                     style={{
                       padding: "8px 14px", borderRadius: "20px", cursor: "pointer",
                       background: selected ? "var(--accent)" : "var(--bg-tertiary)",
@@ -234,8 +234,8 @@ export function StepWizard({ onClose }: StepWizardProps) {
                       userSelect: "none",
                     }}
                   >
-                    {t.label}
-                    <span style={{ marginLeft: "6px", fontSize: "11px", opacity: 0.7 }}>{t.desc}</span>
+                    {tool.label}
+                    <span style={{ marginLeft: "6px", fontSize: "11px", opacity: 0.7 }}>{t(`step_wizard.tool.${tool.id}_desc`)}</span>
                   </div>
                 );
               })}
@@ -246,7 +246,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
         return (
           <div>
             <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>⚙ {stepLabels[2]}</h3>
-            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>选择 Agent 使用的语言模型</p>
+            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>{t('step_wizard.model_hint')}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {MODEL_OPTIONS.map((m) => (
                 <div
@@ -278,7 +278,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
         return (
           <div>
             <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>👤 {stepLabels[3]}</h3>
-            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>为 Agent 选择一种预设人格</p>
+            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>{t('step_wizard.persona_hint')}</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
               {PERSONA_OPTIONS.map((p) => (
                 <div
@@ -291,8 +291,8 @@ export function StepWizard({ onClose }: StepWizardProps) {
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <div style={{ fontWeight: 500, fontSize: "14px", color: "var(--text-primary)", marginBottom: "4px" }}>{p.label}</div>
-                  <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.4" }}>{p.desc}</div>
+                  <div style={{ fontWeight: 500, fontSize: "14px", color: "var(--text-primary)", marginBottom: "4px" }}>{t(`step_wizard.persona.${p.id}`)}</div>
+                  <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.4" }}>{t(`step_wizard.persona.${p.id}_desc`)}</div>
                 </div>
               ))}
             </div>
@@ -302,14 +302,14 @@ export function StepWizard({ onClose }: StepWizardProps) {
         return (
           <div>
             <h3 style={{ margin: "0 0 4px 0", fontSize: "16px", color: "var(--text-primary)" }}>📡 {stepLabels[4]}</h3>
-            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>命名你的 Agent 并选择部署渠道</p>
+            <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>{t('step_wizard.finalize_hint')}</p>
             <div style={{ marginBottom: "20px" }}>
-              <label style={{ fontSize: "13px", color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>Agent 名称</label>
+              <label style={{ fontSize: "13px", color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>{t('step_wizard.agent_name_label')}</label>
               <input
                 type="text"
                 value={agentName}
                 onChange={(e) => setAgentName(e.target.value)}
-                placeholder="例如：我的智能助手"
+                placeholder={t('step_wizard.agent_name_placeholder')}
                 style={{
                   width: "100%", padding: "10px 12px", borderRadius: "6px",
                   border: "1px solid var(--border)", background: "var(--bg-secondary)",
@@ -321,7 +321,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
               />
             </div>
             <div>
-              <label style={{ fontSize: "13px", color: "var(--text-secondary)", display: "block", marginBottom: "8px" }}>部署渠道（可多选）</label>
+              <label style={{ fontSize: "13px", color: "var(--text-secondary)", display: "block", marginBottom: "8px" }}>{t('step_wizard.channel_label')}</label>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 {CHANNEL_OPTIONS.map((c) => (
                   <label
@@ -341,8 +341,8 @@ export function StepWizard({ onClose }: StepWizardProps) {
                       style={{ accentColor: "var(--accent)" }}
                     />
                     <div>
-                      <div style={{ fontSize: "14px", color: "var(--text-primary)", fontWeight: 500 }}>{c.label}</div>
-                      <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{c.desc}</div>
+                      <div style={{ fontSize: "14px", color: "var(--text-primary)", fontWeight: 500 }}>{t(`step_wizard.channel.${c.id}`)}</div>
+                      <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{t(`step_wizard.channel.${c.id}_desc`)}</div>
                     </div>
                   </label>
                 ))}
@@ -357,12 +357,12 @@ export function StepWizard({ onClose }: StepWizardProps) {
 
   const renderOverview = () => {
     const items: { label: string; value: string }[] = [];
-    if (selections.memory) items.push({ label: "记忆", value: selections.memory.label });
-    if (selectedTools.length > 0) items.push({ label: "工具", value: selectedTools.join(", ") });
-    if (selections.model) items.push({ label: "模型", value: selections.model.label });
-    if (selections.persona) items.push({ label: "人格", value: selections.persona.label });
-    if (selectedChannels.length > 0) items.push({ label: "渠道", value: selectedChannels.join(", ") });
-    if (agentName.trim()) items.unshift({ label: "名称", value: agentName.trim() });
+    if (selections.memory) items.push({ label: t('step_wizard.label_memory'), value: t(`step_wizard.memory.${selections.memory.id}`) });
+    if (selectedTools.length > 0) items.push({ label: t('step_wizard.label_tool'), value: selectedTools.join(", ") });
+    if (selections.model) items.push({ label: t('step_wizard.label_model'), value: selections.model.label });
+    if (selections.persona) items.push({ label: t('step_wizard.label_persona'), value: t(`step_wizard.persona.${selections.persona.id}`) });
+    if (selectedChannels.length > 0) items.push({ label: t('step_wizard.label_channel'), value: selectedChannels.map(id => t(`step_wizard.channel.${id}`)).join(", ") });
+    if (agentName.trim()) items.unshift({ label: t('step_wizard.label_name'), value: agentName.trim() });
 
     if (items.length === 0) return null;
     return (
@@ -371,7 +371,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
         background: "var(--bg-tertiary)", border: "1px solid var(--border)",
         marginTop: "20px",
       }}>
-        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "8px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.5px" }}>当前配置概览</div>
+        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "8px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.5px" }}>{t('step_wizard.overview_title')}</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
           {items.map((item, i) => (
             <span key={i} style={{
@@ -402,7 +402,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
           <div style={{ fontSize: "48px", marginBottom: "12px" }}>✅</div>
           <h2 style={{ margin: "0 0 8px 0", color: "var(--text-primary)" }}>{t('studio.wizard.created')}</h2>
           <p style={{ fontSize: "14px", color: "var(--text-secondary)", margin: "0 0 16px 0" }}>
-            {agentName} 已创建
+            {t('step_wizard.created_message', { name: agentName })}
           </p>
           {agentId && (
             <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "20px", wordBreak: "break-all" }}>
@@ -417,7 +417,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
               cursor: "pointer", fontSize: "14px", fontWeight: 500,
             }}
           >
-            关闭
+            {t('step_wizard.close')}
           </button>
         </div>
       </div>
@@ -440,7 +440,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
           padding: "16px 20px", borderBottom: "1px solid var(--border)",
         }}>
           <h2 style={{ margin: 0, fontSize: "18px", color: "var(--text-primary)" }}>
-            引导式构建 <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: 400 }}>Step {step + 1}/{STEP_TOTAL}</span>
+            {t('step_wizard.title')} <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: 400 }}>{t('step_wizard.step_prefix', { current: step + 1, total: STEP_TOTAL })}</span>
           </h2>
           <button
             onClick={onClose}
@@ -474,7 +474,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
           padding: "16px 20px", borderTop: "1px solid var(--border)",
         }}>
           <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-            {step === 0 ? "开始配置你的 Agent" : ""}
+            {step === 0 ? t('step_wizard.footer_hint') : ""}
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <button
@@ -487,7 +487,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
                 opacity: step === 0 ? 0.5 : 1,
               }}
             >
-              上一步
+              {t('step_wizard.prev')}
             </button>
             {step < STEP_TOTAL - 1 ? (
               <button
@@ -500,7 +500,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
                   opacity: canProceed ? 1 : 0.5,
                 }}
               >
-                下一步
+                {t('step_wizard.next')}
               </button>
             ) : (
               <button
@@ -513,7 +513,7 @@ export function StepWizard({ onClose }: StepWizardProps) {
                   opacity: building || !canProceed ? 0.5 : 1,
                 }}
               >
-                {building ? "创建中..." : "完成"}
+                {building ? t('step_wizard.building') : t('step_wizard.finish')}
               </button>
             )}
           </div>

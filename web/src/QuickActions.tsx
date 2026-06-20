@@ -1,16 +1,20 @@
+import { useTranslation } from "./i18n";
+
 interface QuickActionsProps {
   onSend: (text: string) => void;
 }
 
-const ACTIONS = [
-  { emoji: "📊", label: "数据分析", prompt: "帮我分析最近的市场趋势数据，包括行情指标和图表" },
-  { emoji: "📝", label: "写作", prompt: "帮我写一篇关于最新科技发展的短文，需要清晰的结构和流畅的表达" },
-  { emoji: "🔍", label: "搜索研究", prompt: "搜索并整理关于人工智能领域的最新研究进展" },
-  { emoji: "💻", label: "编码", prompt: "帮我检查这段代码的质量，找出潜在问题并给出改进建议" },
-  { emoji: "🌐", label: "翻译", prompt: "请帮我进行翻译，确保专业术语准确" },
-];
-
 export function QuickActions({ onSend }: QuickActionsProps) {
+  const { t } = useTranslation();
+
+  const ACTIONS = [
+    { emoji: "📊", labelKey: "quick_actions.analysis", promptKey: "quick_actions.analysis_prompt" },
+    { emoji: "📝", labelKey: "quick_actions.writing", promptKey: "quick_actions.writing_prompt" },
+    { emoji: "🔍", labelKey: "quick_actions.research", promptKey: "quick_actions.research_prompt" },
+    { emoji: "💻", labelKey: "quick_actions.coding", promptKey: "quick_actions.coding_prompt" },
+    { emoji: "🌐", labelKey: "quick_actions.translate", promptKey: "quick_actions.translate_prompt" },
+  ];
+
   return (
     <div style={{
       display: "flex", gap: "8px", padding: "8px 16px",
@@ -18,12 +22,12 @@ export function QuickActions({ onSend }: QuickActionsProps) {
     }}>
       {ACTIONS.map((action) => (
         <button
-          key={action.label}
-          onClick={() => onSend(action.prompt)}
+          key={action.labelKey}
+          onClick={() => onSend(t(action.promptKey))}
           className="quick-action-btn"
         >
           <span>{action.emoji}</span>
-          <span>{action.label}</span>
+          <span>{t(action.labelKey)}</span>
         </button>
       ))}
     </div>

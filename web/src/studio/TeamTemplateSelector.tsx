@@ -20,24 +20,22 @@ interface TeamTemplateSelectorProps {
   onSelect?: (template: TeamTemplate) => void;
 }
 
-const MODE_LABELS: Record<string, string> = {
-  Chain: "链式",
-  Voting: "投票",
-  Broadcast: "广播",
-  ManagerWorker: "管理-执行",
-  Routing: "路由",
-  Blackboard: "黑板",
-};
-
-const CONSENSUS_LABELS: Record<string, string> = {
-  CeoDecides: "CEO决策",
-  MungerVeto: "一票否决",
-  AutoSynthesis: "自动合成",
-  Vote: "多数投票",
-};
-
 export function TeamTemplateSelector({ onSelect }: TeamTemplateSelectorProps) {
   const { t } = useTranslation();
+  const MODE_LABELS: Record<string, string> = {
+    Chain: t('team_template_selector.mode.chain'),
+    Voting: t('team_template_selector.mode.voting'),
+    Broadcast: t('team_template_selector.mode.broadcast'),
+    ManagerWorker: t('team_template_selector.mode.manager_worker'),
+    Routing: t('team_template_selector.mode.routing'),
+    Blackboard: t('team_template_selector.mode.blackboard'),
+  };
+  const CONSENSUS_LABELS: Record<string, string> = {
+    CeoDecides: t('team_template_selector.consensus.ceo_decides'),
+    MungerVeto: t('team_template_selector.consensus.munger_veto'),
+    AutoSynthesis: t('team_template_selector.consensus.auto_synthesis'),
+    Vote: t('team_template_selector.consensus.vote'),
+  };
   const [selected, setSelected] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TeamTemplate[]>(FALLBACK_TEMPLATES);
   const [loading, setLoading] = useState(true);
@@ -53,29 +51,29 @@ export function TeamTemplateSelector({ onSelect }: TeamTemplateSelectorProps) {
   return (
     <div className="team-template-selector">
       <h2>{t('studio.teams.templates_title')}</h2>
-      {loading && <p style={{ color: "var(--text-secondary)" }}>加载中...</p>}
+      {loading && <p style={{ color: "var(--text-secondary)" }}>{t('team_template_selector.loading')}</p>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "12px" }}>
-        {templates.map((t) => (
+        {templates.map((tmpl) => (
           <div
-            key={t.id}
-            className={`team-template-card ${selected === t.id ? "selected" : ""}`}
+            key={tmpl.id}
+            className={`team-template-card ${selected === tmpl.id ? "selected" : ""}`}
             onClick={() => {
-              setSelected(t.id);
-              onSelect?.(t);
+              setSelected(tmpl.id);
+              onSelect?.(tmpl);
             }}
             style={{
-              background: selected === t.id ? "var(--bg-tertiary)" : "var(--bg-secondary)",
-              border: selected === t.id ? "2px solid var(--accent)" : "1px solid var(--border)",
+              background: selected === tmpl.id ? "var(--bg-tertiary)" : "var(--bg-secondary)",
+              border: selected === tmpl.id ? "2px solid var(--accent)" : "1px solid var(--border)",
               borderRadius: "8px",
               padding: "16px",
               cursor: "pointer",
               transition: "all 0.15s ease",
             }}
           >
-            <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px", fontSize: "15px" }}>{t.name}</div>
-            <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "10px", lineHeight: "1.4" }}>{t.description}</div>
+            <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px", fontSize: "15px" }}>{tmpl.name}</div>
+            <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "10px", lineHeight: "1.4" }}>{tmpl.description}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "8px" }}>
-              {t.members.map((m, i) => (
+              {tmpl.members.map((m, i) => (
                 <span key={i} style={{
                   fontSize: "11px", padding: "2px 6px", borderRadius: "4px",
                   background: "var(--bg-tertiary)", color: "var(--text-secondary)",
@@ -90,24 +88,24 @@ export function TeamTemplateSelector({ onSelect }: TeamTemplateSelectorProps) {
                 fontSize: "11px", padding: "2px 6px", borderRadius: "4px",
                 background: "rgba(99,102,241,0.15)", color: "var(--accent)",
               }}>
-                {MODE_LABELS[t.mode] || t.mode}
+                {MODE_LABELS[tmpl.mode] || tmpl.mode}
               </span>
               <span style={{
                 fontSize: "11px", padding: "2px 6px", borderRadius: "4px",
                 background: "rgba(34,197,94,0.15)", color: "rgb(34,197,94)",
               }}>
-                {CONSENSUS_LABELS[t.consensus] || t.consensus}
+                {CONSENSUS_LABELS[tmpl.consensus] || tmpl.consensus}
               </span>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); onSelect?.(t); }}
+              onClick={(e) => { e.stopPropagation(); onSelect?.(tmpl); }}
               style={{
                 width: "100%", marginTop: "10px", padding: "6px 12px", borderRadius: "6px",
                 background: "var(--accent)", color: "#fff", border: "none",
                 cursor: "pointer", fontSize: "13px", fontWeight: 500,
               }}
             >
-              使用此团队
+              {t('team_template_selector.use_team')}
             </button>
           </div>
         ))}

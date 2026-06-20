@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import { useTranslation } from "../i18n";
 import CheckoutModal from "./CheckoutModal";
 
 interface BotListing {
@@ -28,6 +29,7 @@ const categories = ["all", "analysis", "research", "writing", "coding", "transla
 const priceFilters = ["all", "free", "paid"] as const;
 
 export default function BotStore() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [bots, setBots] = useState<BotListing[]>([]);
   const [category, setCategory] = useState("all");
@@ -150,15 +152,15 @@ export default function BotStore() {
   };
 
   if (loading) {
-    return <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>正在加载商店…</div>;
+    return <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>{t('store.loading')}</div>;
   }
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-        <h2 style={{ color: "#e6edf3", margin: 0 }}>Bot Store</h2>
+        <h2 style={{ color: "#e6edf3", margin: 0 }}>{t('store.title')}</h2>
         <input
-          type="text" placeholder="Search bots..."
+          type="text" placeholder={t('store.search_placeholder')}
           value={search} onChange={e => handleSearch(e.target.value)}
           style={{
             background: "#0d1117", border: "1px solid #30363d", borderRadius: "4px",
@@ -178,7 +180,7 @@ export default function BotStore() {
               padding: "4px 10px", cursor: "pointer", fontSize: "12px",
               textTransform: "capitalize",
             }}>
-            {pf === "all" ? "All" : pf === "free" ? "免费" : "付费"}
+            {pf === "all" ? "All" : pf === "free" ? t('store.free') : t('store.paid')}
           </button>
         ))}
         <span style={{ color: "#30363d" }}>|</span>
@@ -230,7 +232,7 @@ export default function BotStore() {
                   border: "none", borderRadius: "4px", cursor: installed.has(bot.id) ? "default" : "pointer",
                   fontSize: "13px",
                 }}>
-                {installed.has(bot.id) ? "Installed ✓" : bot.price === 0 ? "免费安装" : `购买 ¥${bot.price.toFixed(3)}`}
+                {installed.has(bot.id) ? t('store.installed') : bot.price === 0 ? t('store.install_free') : t('store.purchase_price', { price: bot.price.toFixed(3) })}
               </button>
               <button
                 onClick={() => handlePublish(bot)}
@@ -280,7 +282,7 @@ export default function BotStore() {
 
       {filtered.length === 0 && (
         <div style={{ color: "#8b949e", textAlign: "center", padding: "40px" }}>
-          没有找到匹配的 Bot
+          {t('store.no_results')}
         </div>
       )}
 
