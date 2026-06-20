@@ -52,6 +52,7 @@ pub(crate) fn run_system_check(state: State<AppState>) -> Result<Vec<CheckResult
             .map_err(|e| MornError::Internal(e.to_string()))?;
         match supervisor.as_ref() {
             Some(sup) => {
+                let sup = sup.lock().unwrap();
                 let router = sup.model_router();
                 let configured = router.default_model().is_some();
                 results.push(CheckResult {
@@ -129,7 +130,7 @@ pub(crate) fn run_system_check(state: State<AppState>) -> Result<Vec<CheckResult
             .manager
             .lock()
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        let count = mgr.as_ref().map(|m| m.list_templates().len()).unwrap_or(0);
+        let count = mgr.as_ref().map(|m| m.lock().unwrap().list_templates().len()).unwrap_or(0);
         results.push(CheckResult {
             label: "Workflow Templates".into(),
             status: "ok".into(),

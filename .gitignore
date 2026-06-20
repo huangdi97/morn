@@ -11,3 +11,4 @@ tests/*.tmp
 # Updater keys (keep private!)
 updater-keypair/
 *.deb
+tasks.md

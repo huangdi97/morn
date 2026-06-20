@@ -11,7 +11,9 @@ pub(crate) fn get_creator_earnings(state: State<AppState>) -> Result<CreatorEarn
         .map_err(|e| MornError::Internal(e.to_string()))?;
     let _con = console
         .as_ref()
-        .ok_or_else(|| MornError::Internal("ConsoleBackend not initialized".to_string()))?;
+        .unwrap()
+        .lock()
+        .unwrap();
     Ok(CreatorEarnings {
         creator_id: "creator-1".to_string(),
         total_earnings: 1250.00,

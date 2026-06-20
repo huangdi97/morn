@@ -17,7 +17,7 @@ pub(crate) fn list_workflow_templates(state: State<AppState>) -> Result<Vec<Work
             let templates: Vec<WorkflowTemplateDef> = s.get_setting("workflow_templates")
                 .ok()
                 .flatten()
-                .and_then(|json| serde_json::from_str(&json).ok())
+                .and_then(|json| serde_json::from_str(json).ok())
                 .unwrap_or_default();
             Ok(templates)
         }
@@ -104,7 +104,7 @@ pub(crate) fn save_workflow_template(state: State<AppState>, template: WorkflowT
             let mut templates: Vec<WorkflowTemplateDef> = s.get_setting("workflow_templates")
                 .ok()
                 .flatten()
-                .and_then(|json| serde_json::from_str(&json).ok())
+                .and_then(|json| serde_json::from_str(json).ok())
                 .unwrap_or_default();
 
             if let Some(pos) = templates.iter().position(|t| t.id == template.id) {
@@ -131,7 +131,7 @@ pub(crate) fn delete_workflow_template(state: State<AppState>, id: String) -> Re
             let mut templates: Vec<WorkflowTemplateDef> = s.get_setting("workflow_templates")
                 .ok()
                 .flatten()
-                .and_then(|json| serde_json::from_str(&json).ok())
+                .and_then(|json| serde_json::from_str(json).ok())
                 .unwrap_or_default();
             templates.retain(|t| t.id != id);
             let json = serde_json::to_string(&templates)
@@ -142,21 +142,4 @@ pub(crate) fn delete_workflow_template(state: State<AppState>, id: String) -> Re
         }
         None => Err(MornError::Internal("Storage not available".to_string())),
     }
-}
-
-#[tauri::command]
-pub(crate) fn list_workflow_node_types() -> Result<serde_json::Value, MornError> {
-    Ok(serde_json::json!([
-        {"type": "llm_call", "label": "LLM 调用", "category": "🤖 AI 处理"},
-        {"type": "agent_call", "label": "Agent 调用", "category": "🤖 AI 处理"},
-        {"type": "analyze", "label": "分析", "category": "🤖 AI 处理"},
-        {"type": "tool_exec", "label": "工具执行", "category": "🔧 工具"},
-        {"type": "api_request", "label": "API 请求", "category": "🔧 工具"},
-        {"type": "web_search", "label": "网页搜索", "category": "🔍 搜索/获取"},
-        {"type": "kb_query", "label": "知识库查询", "category": "🔍 搜索/获取"},
-        {"type": "read_file", "label": "文件读取", "category": "🔍 搜索/获取"},
-        {"type": "generate_report", "label": "生成报告", "category": "📤 输出"},
-        {"type": "notify", "label": "推送通知", "category": "📤 输出"},
-        {"type": "write_file", "label": "写文件", "category": "📤 输出"},
-    ]))
 }

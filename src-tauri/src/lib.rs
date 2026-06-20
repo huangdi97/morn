@@ -27,12 +27,12 @@ mod commands;
 const DEFAULT_API_KEY: &str = "sk-zcFNOoh23DWQZxNdmCgXQnomTvc1jmPt";
 
 pub struct AppState {
-    pub supervisor: Mutex<Option<Supervisor>>,
+    pub supervisor: Mutex<Option<Arc<Mutex<Supervisor>>>>,
     pub turn_count: Mutex<u64>,
-    pub manager: Mutex<Option<StudioManager>>,
-    pub publisher: Mutex<Option<StudioPublisher>>,
-    pub tester: Mutex<Option<StudioTester>>,
-    pub console: Mutex<Option<ConsoleBackend>>,
+    pub manager: Mutex<Option<Arc<Mutex<StudioManager>>>>,
+    pub publisher: Mutex<Option<Arc<Mutex<StudioPublisher>>>>,
+    pub tester: Mutex<Option<Arc<Mutex<StudioTester>>>>,
+    pub console: Mutex<Option<Arc<Mutex<ConsoleBackend>>>>,
     pub storage: Mutex<Option<Storage>>,
     pub plugin_manager: Mutex<Option<PluginManager>>,
     pub type_registry: Mutex<TypeRegistry>,

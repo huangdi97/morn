@@ -431,7 +431,8 @@ fn test_marketplace_publish_and_list() {
         item_type: "tool".into(),
         name: "Test Tool".into(),
         description: "A test listing".into(),
-        price: 0.0,
+        price: Some(0.0),
+        price_model: "free".into(),
         author: "Test Author".into(),
         rating: 0.0,
         downloads: 0,
@@ -439,6 +440,9 @@ fn test_marketplace_publish_and_list() {
         version: "1.0.0".into(),
         screenshots: "".into(),
         category: "general".into(),
+        requires: vec![],
+        verified: false,
+        updated_at: "".into(),
     };
     market.publish(listing).unwrap();
     let listings = market.list(None);
@@ -456,7 +460,8 @@ fn test_marketplace_get_listing_by_id() {
         item_type: "knowledge".into(),
         name: "Get Test".into(),
         description: "Test get by id".into(),
-        price: 1.0,
+        price: Some(1.0),
+        price_model: "free".into(),
         author: "Author".into(),
         rating: 4.0,
         downloads: 10,
@@ -464,6 +469,9 @@ fn test_marketplace_get_listing_by_id() {
         version: "2.0.0".into(),
         screenshots: "".into(),
         category: "data".into(),
+        requires: vec![],
+        verified: false,
+        updated_at: "".into(),
     };
     market.publish(listing).unwrap();
     let got = market.get("get-test-listing");

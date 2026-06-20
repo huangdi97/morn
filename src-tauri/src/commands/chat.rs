@@ -18,12 +18,12 @@ pub(crate) fn send_message(
     state: State<AppState>,
 ) -> Result<SendMessageResult, MornError> {
     if text.trim().starts_with("/clear") {
-        let mut supervisor = state
+        let supervisor = state
             .supervisor
             .lock()
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(ref mut sup) = *supervisor {
-            sup.clear_history();
+        if let Some(sup) = supervisor.as_ref() {
+            sup.lock().unwrap().clear_history();
         }
         let mut turn = state
             .turn_count
@@ -41,13 +41,15 @@ pub(crate) fn send_message(
     let chat_agent =
         morn::bridge::chat_agent::ChatAgent::new(&api_key, SENSENOVA_BASE_URL, "deepseek-chat");
 
-    let mut supervisor = state
+    let supervisor = state
         .supervisor
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
     let sup = supervisor
-        .as_mut()
-        .ok_or_else(|| "Supervisor not initialized.".to_string())?;
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap();
 
     let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
 
@@ -127,12 +129,12 @@ pub(crate) fn get_status(state: State<AppState>) -> Result<serde_json::Value, Mo
 
 #[tauri::command]
 pub(crate) fn clear_history(state: State<AppState>) -> Result<(), MornError> {
-    let mut supervisor = state
+    let supervisor = state
         .supervisor
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    if let Some(ref mut sup) = *supervisor {
-        sup.clear_history();
+    if let Some(sup) = supervisor.as_ref() {
+        sup.lock().unwrap().clear_history();
     }
     let mut turn = state
         .turn_count
