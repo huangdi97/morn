@@ -353,6 +353,7 @@ fn run_daemon(config: MornConfig) -> Result<(), MornError> {
             supervisor,
             registry,
             chat_fn,
+            storage: storage.clone(),
         };
 
         println!("[Morn] Daemon started with PID {}", std::process::id());

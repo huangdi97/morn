@@ -49,7 +49,7 @@ pub(crate) struct PullResponse {
 pub struct SyncEngine {
     pub(crate) storage: Option<Arc<Mutex<Storage>>>,
     pub(crate) device_id: String,
-    sync_server_url: Option<String>,
+    pub sync_server_url: Option<String>,
     pub(crate) devices: Vec<DeviceInfo>,
     pub(crate) state: SyncState,
     #[allow(dead_code)] /* 预留：后台同步循环状态 */ running: bool,

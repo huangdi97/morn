@@ -120,6 +120,7 @@ mod tests {
             supervisor: Arc::new(AsyncMutex::new(Supervisor::new(None, None))),
             registry: Arc::new(AsyncMutex::new(Registry::new(None, None))),
             chat_fn: Arc::new(|prompt, _system| Ok(format!("reply: {}", prompt))),
+            storage: None,
         })
     }
 

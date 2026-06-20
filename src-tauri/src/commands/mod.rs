@@ -29,6 +29,7 @@ pub mod recovery;
 pub mod sandbox;
 pub mod scheduler;
 pub mod studio;
+pub mod sync;
 pub mod team_templates;
 pub mod whisper;
 pub mod workflow;
@@ -74,6 +75,7 @@ pub(crate) use studio::{
     assemble_agent, create_component, delete_component, get_component, list_agent_templates,
     list_components, publish_component, test_component, test_component_rerun, update_component,
 };
+pub(crate) use sync::{get_sync_status, list_sync_devices, set_sync_server_url};
 pub(crate) use team_templates::list_team_templates;
 pub(crate) use whisper::{list_audio_devices, transcribe_audio};
 pub(crate) use workflow::{

@@ -1,5 +1,7 @@
 //! rest_api — Provides a channel adapter backed by REST-style message handling.
 use crate::core::error::MornError;
+use crate::core::storage::{Storage, SyncEventRecord};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use axum::extract::{Path, State};
@@ -164,6 +166,7 @@ pub struct ApiState {
     pub supervisor: Arc<AsyncMutex<Supervisor>>,
     pub registry: Arc<AsyncMutex<Registry>>,
     pub chat_fn: ChatFn,
+    pub storage: Option<Storage>,
 }
 
 #[derive(Deserialize)]
@@ -236,7 +239,9 @@ pub async fn serve(state: ApiState) -> Result<(), MornError> {
         .route("/tools", get(api_tools_list_handler))
         .route("/tools/{name}/execute", post(api_tool_execute_handler))
         .route("/workflows", get(api_workflows_list_handler))
-        .route("/workflows/{id}", get(api_workflow_get_handler));
+        .route("/workflows/{id}", get(api_workflow_get_handler))
+        .route("/sync/push", post(sync_push_handler))
+        .route("/sync/pull", get(sync_pull_handler));
 
     #[cfg(feature = "channels-full")]
     let app = app.route("/ws", get(crate::channel::browser_ext::ws_handler));
@@ -332,6 +337,69 @@ async fn api_workflow_get_handler(
     }
 }
 
+#[derive(Deserialize)]
+#[allow(dead_code)]
+struct SyncPushRequest {
+    device_id: String,
+    events: Vec<SyncEventRecord>,
+}
+
+async fn sync_push_handler(
+    State(state): State<Arc<ApiState>>,
+    Json(req): Json<SyncPushRequest>,
+) -> Result<Json<Value>, Json<Value>> {
+    let storage = state
+        .storage
+        .clone()
+        .ok_or_else(|| Json(serde_json::json!({"error": "Storage not available"})))?;
+
+    let mut local_wins = Vec::new();
+    for event in &req.events {
+        match storage.get_sync_event(&event.id) {
+            Ok(Some(local)) => {
+                if event.timestamp < local.timestamp {
+                    local_wins.push(local);
+                    continue;
+                }
+                let _ = storage.mark_event_synced(&event.id);
+            }
+            Ok(None) => {}
+            Err(e) => {
+                return Err(Json(serde_json::json!({"error": e.to_string()})));
+            }
+        }
+        if let Err(e) = storage.upsert_sync_event(event) {
+            return Err(Json(serde_json::json!({"error": e.to_string()})));
+        }
+    }
+
+    Ok(Json(serde_json::json!({
+        "conflicts": local_wins,
+        "applied": req.events.len() - local_wins.len()
+    })))
+}
+
+async fn sync_pull_handler(
+    State(state): State<Arc<ApiState>>,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+) -> Result<Json<Vec<SyncEventRecord>>, Json<Value>> {
+    let since = params
+        .get("since")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0);
+    let device_id = params.get("device_id").map(|s| s.as_str()).unwrap_or("");
+
+    let storage = state
+        .storage
+        .clone()
+        .ok_or_else(|| Json(serde_json::json!({"error": "Storage not available"})))?;
+
+    match storage.list_events_since(since, device_id) {
+        Ok(events) => Ok(Json(events)),
+        Err(e) => Err(Json(serde_json::json!({"error": e.to_string()}))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,6 +410,7 @@ mod tests {
             supervisor: Arc::new(tokio::sync::Mutex::new(Supervisor::new(None, None))),
             registry: Arc::new(tokio::sync::Mutex::new(Registry::new(None, None))),
             chat_fn: Arc::new(|_, _| Ok("ok".to_string())),
+            storage: None,
         };
 
         assert_eq!(Arc::strong_count(&state.supervisor), 1);
@@ -359,6 +428,7 @@ mod tests {
             supervisor: Arc::new(tokio::sync::Mutex::new(Supervisor::new(None, None))),
             registry: Arc::new(tokio::sync::Mutex::new(Registry::new(None, None))),
             chat_fn: Arc::new(|_, _| Ok("ok".to_string())),
+            storage: None,
         })
     }
 
@@ -415,6 +485,7 @@ mod tests {
             supervisor: Arc::new(tokio::sync::Mutex::new(Supervisor::new(None, None))),
             registry: Arc::new(tokio::sync::Mutex::new(Registry::new(None, None))),
             chat_fn: Arc::new(|_, _| Err(MornError::Internal("chat failed".to_string()))),
+            storage: None,
         });
 
         let err = api_chat_handler(

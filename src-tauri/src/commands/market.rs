@@ -320,24 +320,19 @@ pub(crate) fn generate_plugin_from_nl(
 
 #[tauri::command]
 pub(crate) fn sync_now(state: State<AppState>) -> Result<String, MornError> {
-    let storage = state
-        .storage
+    let mut guard = state
+        .sync_engine
         .lock()
-        .map_err(|e| MornError::Internal(e.to_string()))?;
-    let s = storage
-        .as_ref()
-        .ok_or_else(|| "Storage not initialized".to_string())?;
-
-    let unsynced = s.list_unsynced_events()?;
-    let ids: Vec<String> = unsynced.iter().map(|e| e.id.clone()).collect();
-    if !ids.is_empty() {
-        s.mark_events_synced(&ids)?;
+        .map_err(|e| MornError::Internal(format!("lock error: {}", e)))?;
+    if let Some(ref mut engine) = *guard {
+        let report = engine.sync_once()?;
+        Ok(format!(
+            "Synced: {} pushed, {} pulled, {} applied",
+            report.pushed_events, report.pulled_events, report.applied_events
+        ))
+    } else {
+        Err(MornError::Internal("Sync engine not initialized".into()))
     }
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs().to_string())
-        .unwrap_or_default();
-    Ok(timestamp)
 }
 
 #[tauri::command]

@@ -179,6 +179,53 @@ impl Storage {
             .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
+
+    pub fn list_events_since(&self, since: i64, exclude_device_id: &str) -> Result<Vec<SyncEventRecord>, MornError> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare("SELECT id, entity_type, entity_id, action, data_json, timestamp, device_id, synced FROM sync_events WHERE timestamp > ?1 AND device_id != ?2 ORDER BY timestamp ASC")
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let rows = stmt
+            .query_map(params![since.to_string(), exclude_device_id], |row| {
+                let synced_int: i32 = row.get(7)?;
+                Ok(SyncEventRecord {
+                    id: row.get(0)?,
+                    entity_type: row.get(1)?,
+                    entity_id: row.get(2)?,
+                    action: row.get(3)?,
+                    data_json: row.get(4)?,
+                    timestamp: row.get(5)?,
+                    device_id: row.get(6)?,
+                    synced: synced_int != 0,
+                })
+            })
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut events = Vec::new();
+        for row in rows {
+            events.push(row.map_err(|e| MornError::Internal(e.to_string()))?);
+        }
+        Ok(events)
+    }
+
+    pub fn upsert_sync_event(&self, event: &SyncEventRecord) -> Result<bool, MornError> {
+        let conn = self.conn()?;
+        let changed = conn
+            .execute(
+                "INSERT OR REPLACE INTO sync_events (id, entity_type, entity_id, action, data_json, timestamp, device_id, synced)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1)",
+                params![
+                    event.id,
+                    event.entity_type,
+                    event.entity_id,
+                    event.action,
+                    event.data_json,
+                    event.timestamp,
+                    event.device_id
+                ],
+            )
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        Ok(changed > 0)
+    }
 }
 
 #[cfg(test)]

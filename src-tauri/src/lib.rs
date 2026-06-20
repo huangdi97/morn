@@ -6,6 +6,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 
+use morn::bridge::sync::SyncEngine;
 use morn::console::ConsoleBackend;
 use morn::core::component_type::registry::TypeRegistry;
 pub use morn::core::error::MornError;
@@ -29,6 +30,19 @@ mod commands;
 
 const DEFAULT_API_KEY: &str = "sk-zcFNOoh23DWQZxNdmCgXQnomTvc1jmPt";
 
+fn start_sync_loop(engine: Arc<Mutex<Option<SyncEngine>>>) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(300));
+        if let Ok(mut guard) = engine.lock() {
+            if let Some(ref mut engine) = *guard {
+                if let Err(e) = engine.sync_once() {
+                    tracing::warn!("Sync failed: {}", e);
+                }
+            }
+        }
+    });
+}
+
 pub struct AppState {
     pub supervisor: Mutex<Option<Arc<Mutex<Supervisor>>>>,
     pub turn_count: Mutex<u64>,
@@ -43,6 +57,7 @@ pub struct AppState {
     pub scheduler: Mutex<Option<Scheduler>>,
     pub oauth_manager: Mutex<Option<OAuthManager>>,
     pub proactive_engine: Arc<Mutex<ProactiveEngine>>,
+    pub sync_engine: Arc<Mutex<Option<SyncEngine>>>,
 }
 
 impl AppState {
@@ -64,6 +79,7 @@ impl AppState {
             scheduler: Mutex::new(Some(Scheduler::new())),
             oauth_manager: Mutex::new(None),
             proactive_engine: Arc::new(Mutex::new(ProactiveEngine::new(None))),
+            sync_engine: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -134,6 +150,34 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             autostart::setup_autostart(app);
+
+            // Initialize SyncEngine
+            let storage_lock = state.storage.lock().ok();
+            let storage_clone = storage_lock.as_ref().and_then(|s| s.clone());
+            let device_id = storage_clone.as_ref().and_then(|s| {
+                s.get_setting("sync_device_id").ok().flatten()
+            }).unwrap_or_else(|| {
+                let id = uuid::Uuid::new_v4().to_string();
+                if let Some(ref s) = storage_clone {
+                    let _ = s.set_setting("sync_device_id", &id);
+                }
+                id
+            });
+            let server_url = storage_clone.as_ref().and_then(|s| {
+                s.get_setting("sync_server_url").ok().flatten()
+            }).unwrap_or_else(|| "http://localhost:3000".to_string());
+
+            if let Some(ref s) = storage_clone {
+                let engine = SyncEngine::new(&device_id, Some(server_url))
+                    .with_storage(Arc::new(Mutex::new(s.clone())));
+                if let Ok(mut guard) = state.sync_engine.lock() {
+                    *guard = Some(engine);
+                }
+
+                // Start background sync loop
+                let sync_engine = state.sync_engine.clone();
+                start_sync_loop(sync_engine);
+            }
 
             // Background tick thread for proactive engine
             let engine = bg_engine.clone();
@@ -305,6 +349,9 @@ pub fn run() {
             commands::workflow::delete_workflow_template,
             commands::workflow::execute_workflow,
             commands::workflow::list_workflow_node_types,
+            commands::sync::list_sync_devices,
+            commands::sync::get_sync_status,
+            commands::sync::set_sync_server_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
