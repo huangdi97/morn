@@ -24,3 +24,12 @@ impl fmt::Display for CommandError {
 }
 
 impl std::error::Error for CommandError {}
+
+impl From<MornError> for CommandError {
+    fn from(e: MornError) -> Self {
+        match e {
+            MornError::NotFound(msg) => CommandError::NotFound(msg),
+            _ => CommandError::Internal(e.to_string()),
+        }
+    }
+}

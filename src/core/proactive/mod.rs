@@ -5,6 +5,9 @@
 //! ready agents whose trigger conditions have been met.
 
 use std::collections::HashMap;
+use std::sync::Arc;
+
+use crate::core::storage::Storage;
 
 /// Condition that determines when a [`ProactiveAgent`] fires.
 #[derive(Debug, Clone)]
@@ -36,11 +39,80 @@ pub struct ProactiveAgent {
 #[derive(Debug, Default)]
 pub struct ProactiveEngine {
     agents: HashMap<String, ProactiveAgent>,
+    storage: Option<Arc<Storage>>,
 }
 
 impl ProactiveEngine {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(storage: Option<Arc<Storage>>) -> Self {
+        let mut engine = ProactiveEngine {
+            agents: HashMap::new(),
+            storage,
+        };
+        engine.load_rules();
+        engine
+    }
+
+    /// Loads enabled rules from storage into the engine.
+    pub fn load_rules(&mut self) {
+        if let Some(ref storage) = self.storage {
+            if let Ok(rules) = storage.list_proactive_rules() {
+                for rule in rules {
+                    if rule.enabled {
+                        let trigger = match rule.trigger_type.as_str() {
+                            "timer" => {
+                                let interval = rule.trigger_config.parse::<u64>().unwrap_or(60);
+                                Trigger::Timer(interval)
+                            }
+                            "event" => Trigger::Event(rule.trigger_config.clone()),
+                            _ => continue,
+                        };
+                        self.agents.insert(
+                            rule.id.clone(),
+                            ProactiveAgent {
+                                id: rule.id,
+                                trigger,
+                                action: rule.action,
+                                counter: 0,
+                            },
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Saves a rule to storage and registers it in the engine.
+    pub fn save_rule(&mut self, rule: &crate::core::storage::ProactiveRule) {
+        if let Some(ref storage) = self.storage {
+            let _ = storage.create_proactive_rule(rule);
+        }
+        if rule.enabled {
+            let trigger = match rule.trigger_type.as_str() {
+                "timer" => {
+                    let interval = rule.trigger_config.parse::<u64>().unwrap_or(60);
+                    Trigger::Timer(interval)
+                }
+                "event" => Trigger::Event(rule.trigger_config.clone()),
+                _ => return,
+            };
+            self.agents.insert(
+                rule.id.clone(),
+                ProactiveAgent {
+                    id: rule.id.clone(),
+                    trigger,
+                    action: rule.action.clone(),
+                    counter: 0,
+                },
+            );
+        }
+    }
+
+    /// Deletes a rule from storage and removes it from the engine.
+    pub fn delete_rule(&mut self, id: &str) {
+        if let Some(ref storage) = self.storage {
+            let _ = storage.delete_proactive_rule(id);
+        }
+        self.agents.remove(id);
     }
 
     /// Registers a proactive agent, replacing any existing agent with the same `id`.
@@ -108,7 +180,7 @@ mod tests {
 
     #[test]
     fn test_register_and_tick_returns_ready_after_interval() {
-        let mut engine = ProactiveEngine::new();
+        let mut engine = ProactiveEngine::new(None);
         let agent = ProactiveAgent {
             id: "ticker".into(),
             trigger: Trigger::Timer(3),
@@ -132,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_event_trigger_match() {
-        let mut engine = ProactiveEngine::new();
+        let mut engine = ProactiveEngine::new(None);
         engine.register(ProactiveAgent {
             id: "event_agent".into(),
             trigger: Trigger::Event("config_changed".into()),
@@ -152,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_remove_agent() {
-        let mut engine = ProactiveEngine::new();
+        let mut engine = ProactiveEngine::new(None);
         engine.register(ProactiveAgent {
             id: "removable".into(),
             trigger: Trigger::Timer(1),

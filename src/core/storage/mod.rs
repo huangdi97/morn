@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Storage {
     conn: Arc<Mutex<Connection>>,
 }
@@ -14,6 +14,7 @@ mod decision_rules;
 mod governance;
 mod market;
 mod oauth;
+mod proactive;
 mod sessions;
 mod settings;
 mod sync;
@@ -23,6 +24,7 @@ mod users;
 pub use agents::*;
 pub use governance::*;
 pub use oauth::*;
+pub use proactive::*;
 pub use sessions::*;
 pub use sync::*;
 pub use tasks::*;
@@ -286,6 +288,18 @@ impl Storage {
             CREATE TABLE IF NOT EXISTS settings (
                 key             TEXT PRIMARY KEY,
                 value           TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS proactive_rules (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                trigger_type TEXT NOT NULL,
+                trigger_config TEXT NOT NULL,
+                action TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                last_triggered_at INTEGER,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
             );
             ",
         )

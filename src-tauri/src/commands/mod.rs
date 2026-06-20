@@ -67,6 +67,9 @@ pub(crate) use org::{
 };
 pub(crate) use plugin_manager::plugin_install;
 pub(crate) use plugin_manager::{list_plugins, toggle_plugin, create_plugin_from_spec};
+pub(crate) use proactive::{
+    create_proactive_rule, delete_proactive_rule, list_proactive_rules, toggle_proactive_rule,
+};
 pub(crate) use studio::{
     assemble_agent, create_component, delete_component, get_component, list_agent_templates,
     list_components, publish_component, test_component, test_component_rerun, update_component,

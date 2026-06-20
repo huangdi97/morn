@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
@@ -14,6 +15,7 @@ use morn::core::plugin_manager::adapter::morn_plugin_to_plugin;
 use morn::core::plugin_manager::CorePluginRegistry;
 use morn::core::plugin_manager::PluginConfig;
 use morn::core::plugin_manager::{register_morn_plugin, MornPluginMeta, PluginManager};
+use morn::core::proactive::ProactiveEngine;
 use morn::core::scheduler::Scheduler;
 use morn::core::storage::Storage;
 use morn::core::supervisor::Supervisor;
@@ -40,6 +42,7 @@ pub struct AppState {
     pub mcp_manager: Mutex<Vec<MCPServer>>,
     pub scheduler: Mutex<Option<Scheduler>>,
     pub oauth_manager: Mutex<Option<OAuthManager>>,
+    pub proactive_engine: Arc<Mutex<ProactiveEngine>>,
 }
 
 impl AppState {
@@ -60,6 +63,7 @@ impl AppState {
             mcp_manager: Mutex::new(Vec::new()),
             scheduler: Mutex::new(Some(Scheduler::new())),
             oauth_manager: Mutex::new(None),
+            proactive_engine: Arc::new(Mutex::new(ProactiveEngine::new(None))),
         }
     }
 }
@@ -114,15 +118,36 @@ pub fn run() {
 
     // Initialize OAuthManager with stored provider credentials
     if let Some(storage) = state.storage.lock().ok().and_then(|s| s.clone()) {
-        let oauth = OAuthManager::new(Arc::new(storage));
+        let oauth = OAuthManager::new(Arc::new(storage.clone()));
         state.oauth_manager = Mutex::new(Some(oauth));
+
+        // Initialize ProactiveEngine with storage
+        let engine = ProactiveEngine::new(Some(Arc::new(storage)));
+        state.proactive_engine = Arc::new(Mutex::new(engine));
     }
+
+    // Clone engine reference for background tick thread
+    let bg_engine = state.proactive_engine.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             autostart::setup_autostart(app);
+
+            // Background tick thread for proactive engine
+            let engine = bg_engine.clone();
+            std::thread::spawn(move || {
+                loop {
+                    std::thread::sleep(Duration::from_secs(60));
+                    if let Ok(mut engine) = engine.lock() {
+                        let ready = engine.tick();
+                        for agent in &ready {
+                            tracing::info!("Proactive rule triggered: {} (action: {})", agent.id, agent.action);
+                        }
+                    }
+                }
+            });
 
             let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -257,6 +282,8 @@ pub fn run() {
             commands::recovery::retry_last_operation,
             commands::proactive::list_proactive_rules,
             commands::proactive::toggle_proactive_rule,
+            commands::proactive::create_proactive_rule,
+            commands::proactive::delete_proactive_rule,
             commands::earnings::get_creator_earnings,
             commands::metrics::get_reliability_metrics,
             commands::checkup::run_system_check,
