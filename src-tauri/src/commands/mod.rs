@@ -58,7 +58,9 @@ pub(crate) use mcp::{mcp_call_tool, mcp_connect, mcp_disconnect, mcp_list_server
 pub(crate) use memory::{delete_memory, list_memories, search_memories};
 pub(crate) use metrics::get_reliability_metrics;
 pub(crate) use notifications::{list_notifications, send_notification};
-pub(crate) use oauth::{oauth_authorize, oauth_list_providers};
+pub(crate) use oauth::{
+    oauth_authorize, oauth_callback, oauth_list_providers, oauth_save_config,
+};
 pub(crate) use org::{
     add_member, create_team, create_user, get_audit_log, grant_permission, list_teams, list_users,
     remove_member, revoke_permission,

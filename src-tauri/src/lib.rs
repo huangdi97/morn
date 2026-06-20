@@ -9,6 +9,7 @@ use morn::console::ConsoleBackend;
 use morn::core::component_type::registry::TypeRegistry;
 pub use morn::core::error::MornError;
 use morn::core::mcp::MCPServer;
+use morn::core::oauth::OAuthManager;
 use morn::core::plugin_manager::adapter::morn_plugin_to_plugin;
 use morn::core::plugin_manager::CorePluginRegistry;
 use morn::core::plugin_manager::PluginConfig;
@@ -38,6 +39,7 @@ pub struct AppState {
     pub type_registry: Mutex<TypeRegistry>,
     pub mcp_manager: Mutex<Vec<MCPServer>>,
     pub scheduler: Mutex<Option<Scheduler>>,
+    pub oauth_manager: Mutex<Option<OAuthManager>>,
 }
 
 impl AppState {
@@ -57,6 +59,7 @@ impl AppState {
             ),
             mcp_manager: Mutex::new(Vec::new()),
             scheduler: Mutex::new(Some(Scheduler::new())),
+            oauth_manager: Mutex::new(None),
         }
     }
 }
@@ -108,6 +111,12 @@ pub fn run() {
 
     let mut state = AppState::from_ctx(&ctx);
     state.plugin_manager = Mutex::new(Some(pm));
+
+    // Initialize OAuthManager with stored provider credentials
+    if let Some(storage) = state.storage.lock().ok().and_then(|s| s.clone()) {
+        let oauth = OAuthManager::new(Arc::new(storage));
+        state.oauth_manager = Mutex::new(Some(oauth));
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -234,7 +243,9 @@ pub fn run() {
             commands::config::export_config,
             commands::config::import_config,
             commands::oauth::oauth_authorize,
+            commands::oauth::oauth_callback,
             commands::oauth::oauth_list_providers,
+            commands::oauth::oauth_save_config,
             commands::memory::list_memories,
             commands::memory::search_memories,
             commands::memory::delete_memory,

@@ -1,6 +1,7 @@
 //! oauth — Manages OAuth token persistence and provider authorization state.
 use crate::core::error::MornError;
 use crate::core::storage::{SaveOAuthTokenArgs, Storage};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,6 +24,14 @@ pub struct OAuthToken {
     pub token_type: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProviderInfo {
+    pub name: String,
+    pub has_client_id: bool,
+    pub has_token: bool,
+    pub auth_url: String,
+}
+
 pub struct OAuthManager {
     storage: Arc<Storage>,
     providers: HashMap<String, OAuthConfig>,
@@ -35,6 +44,7 @@ impl OAuthManager {
             providers: HashMap::new(),
         };
         mgr.register_defaults();
+        let _ = mgr.load_provider_configs();
         mgr
     }
 
@@ -47,7 +57,7 @@ impl OAuthManager {
                 auth_url: "https://github.com/login/oauth/authorize".to_string(),
                 token_url: "https://github.com/login/oauth/access_token".to_string(),
                 scopes: vec!["read:user".to_string(), "repo".to_string()],
-                redirect_uri: "http://localhost:3000/auth/github/callback".to_string(),
+                redirect_uri: "http://localhost:1420/oauth/callback".to_string(),
             },
         );
         self.providers.insert(
@@ -62,7 +72,7 @@ impl OAuthManager {
                     "email".to_string(),
                     "profile".to_string(),
                 ],
-                redirect_uri: "http://localhost:3000/auth/google/callback".to_string(),
+                redirect_uri: "http://localhost:1420/oauth/callback".to_string(),
             },
         );
         self.providers.insert(
@@ -73,7 +83,7 @@ impl OAuthManager {
                 auth_url: "https://slack.com/oauth/v2/authorize".to_string(),
                 token_url: "https://slack.com/api/oauth.v2.access".to_string(),
                 scopes: vec!["channels:read".to_string(), "chat:write".to_string()],
-                redirect_uri: "http://localhost:3000/auth/slack/callback".to_string(),
+                redirect_uri: "http://localhost:1420/oauth/callback".to_string(),
             },
         );
         self.providers.insert(
@@ -84,7 +94,7 @@ impl OAuthManager {
                 auth_url: "https://api.notion.com/v1/oauth/authorize".to_string(),
                 token_url: "https://api.notion.com/v1/oauth/token".to_string(),
                 scopes: vec!["read:database".to_string(), "read:page".to_string()],
-                redirect_uri: "http://localhost:3000/auth/notion/callback".to_string(),
+                redirect_uri: "http://localhost:1420/oauth/callback".to_string(),
             },
         );
     }
@@ -98,21 +108,79 @@ impl OAuthManager {
         let config = self
             .providers
             .get(provider)
-            .ok_or_else(|| format!("Unknown provider: {}", provider))?;
+            .ok_or_else(|| MornError::Internal(format!("Unknown provider: {}", provider)))?;
         let scopes = config.scopes.join(" ");
         Ok(format!(
-            "{}?client_id={}&redirect_uri={}&scope={}&response_type=code",
-            config.auth_url, config.client_id, config.redirect_uri, scopes
+            "{}?client_id={}&redirect_uri={}&scope={}&response_type=code&state={}",
+            config.auth_url, config.client_id, config.redirect_uri, scopes, provider
         ))
     }
 
     pub fn handle_callback(&self, provider: &str, code: &str) -> Result<OAuthToken, MornError> {
+        let config = self
+            .providers
+            .get(provider)
+            .ok_or_else(|| MornError::Internal(format!("unknown provider: {}", provider)))?;
+
+        let params = serde_json::json!({
+            "client_id": config.client_id,
+            "client_secret": config.client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": config.redirect_uri,
+        });
+
+        let client = reqwest::blocking::Client::new();
+        let resp = client
+            .post(&config.token_url)
+            .header("Accept", "application/json")
+            .json(&params)
+            .send()
+            .map_err(|e| MornError::Network(format!("OAuth token request failed: {}", e)))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp
+                .text()
+                .unwrap_or_else(|_| "cannot read body".to_string());
+            return Err(MornError::Network(format!(
+                "OAuth token request returned {}: {}",
+                status, body
+            )));
+        }
+
+        let token_data: Value = resp
+            .json()
+            .map_err(|e| MornError::Serialization(format!("OAuth response parse failed: {}", e)))?;
+
+        if let Some(error) = token_data.get("error").and_then(|v| v.as_str()) {
+            let desc = token_data
+                .get("error_description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            return Err(MornError::Network(format!(
+                "OAuth provider returned error: {} - {}",
+                error, desc
+            )));
+        }
+
+        let access_token = token_data["access_token"]
+            .as_str()
+            .ok_or_else(|| MornError::Network("no access_token in response".into()))?;
+
         let token = OAuthToken {
-            access_token: format!("mock_{}_token_{}", provider, code),
-            refresh_token: Some(format!("mock_refresh_{}", code)),
-            expires_at: Some((chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339()),
-            scope: None,
-            token_type: "Bearer".to_string(),
+            access_token: access_token.to_string(),
+            refresh_token: token_data["refresh_token"].as_str().map(String::from),
+            expires_at: token_data["expires_in"]
+                .as_i64()
+                .map(|secs| {
+                    (chrono::Utc::now() + chrono::Duration::seconds(secs)).to_rfc3339()
+                }),
+            scope: token_data["scope"].as_str().map(String::from),
+            token_type: token_data["token_type"]
+                .as_str()
+                .unwrap_or("Bearer")
+                .to_string(),
         };
 
         let token_id = uuid::Uuid::new_v4().to_string();
@@ -145,6 +213,81 @@ impl OAuthManager {
 
     pub fn list_providers(&self) -> Vec<String> {
         self.providers.keys().cloned().collect()
+    }
+
+    pub fn get_provider_info(&self, provider: &str) -> Result<ProviderInfo, MornError> {
+        let config = self
+            .providers
+            .get(provider)
+            .ok_or_else(|| MornError::Internal(format!("Unknown provider: {}", provider)))?;
+        let has_token = self
+            .storage
+            .get_oauth_token(provider, "default")
+            .ok()
+            .flatten()
+            .is_some();
+        Ok(ProviderInfo {
+            name: provider.to_string(),
+            has_client_id: !config.client_id.is_empty(),
+            has_token,
+            auth_url: config.auth_url.clone(),
+        })
+    }
+
+    pub fn list_provider_info(&self) -> Vec<ProviderInfo> {
+        self.providers
+            .keys()
+            .filter_map(|name| self.get_provider_info(name).ok())
+            .collect()
+    }
+
+    pub fn set_provider_credentials(
+        &mut self,
+        provider: &str,
+        client_id: String,
+        client_secret: String,
+    ) -> Result<(), MornError> {
+        let config = self
+            .providers
+            .get_mut(provider)
+            .ok_or_else(|| MornError::Internal(format!("Unknown provider: {}", provider)))?;
+        config.client_id = client_id;
+        config.client_secret = client_secret;
+        self.save_provider_configs()
+    }
+
+    pub fn get_provider_config(&self, provider: &str) -> Result<OAuthConfig, MornError> {
+        self.providers
+            .get(provider)
+            .cloned()
+            .ok_or_else(|| MornError::Internal(format!("Unknown provider: {}", provider)))
+    }
+
+    fn save_provider_configs(&self) -> Result<(), MornError> {
+        let json = serde_json::to_string(&self.providers)
+            .map_err(|e| MornError::Serialization(e.to_string()))?;
+        self.storage.set_setting("oauth_providers", &json)
+    }
+
+    fn load_provider_configs(&mut self) -> Result<(), MornError> {
+        if let Some(json) = self.storage.get_setting("oauth_providers")? {
+            if let Ok(configs) = serde_json::from_str::<HashMap<String, OAuthConfig>>(&json) {
+                for (name, config) in configs {
+                    if let Some(existing) = self.providers.get(&name) {
+                        let merged = OAuthConfig {
+                            client_id: config.client_id,
+                            client_secret: config.client_secret,
+                            auth_url: existing.auth_url.clone(),
+                            token_url: existing.token_url.clone(),
+                            scopes: existing.scopes.clone(),
+                            redirect_uri: existing.redirect_uri.clone(),
+                        };
+                        self.providers.insert(name, merged);
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn is_token_expired(&self, token: &OAuthToken) -> bool {
@@ -184,6 +327,8 @@ mod tests {
         assert!(url.contains("github.com"));
         assert!(url.contains("client_id="));
         assert!(url.contains("redirect_uri="));
+        assert!(url.contains("state=github"));
+        assert!(url.contains("response_type=code"));
     }
 
     #[test]
@@ -193,19 +338,30 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_callback() {
+    fn test_handle_callback_no_credentials() {
         let mgr = setup_manager();
-        let token = mgr.handle_callback("github", "auth_code_123").unwrap();
-        assert_eq!(token.token_type, "Bearer");
-        assert!(token.access_token.contains("github"));
+        let result = mgr.handle_callback("github", "auth_code_123");
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_get_token() {
         let mgr = setup_manager();
-        mgr.handle_callback("github", "code_1").unwrap();
+        let token_id = uuid::Uuid::new_v4().to_string();
+        mgr.storage
+            .save_oauth_token_args(SaveOAuthTokenArgs {
+                id: &token_id,
+                provider: "github",
+                user_id: "default",
+                access_token: "test_token",
+                refresh_token: None,
+                expires_at: None,
+                scope: None,
+            })
+            .unwrap();
         let token = mgr.get_token("github", "default").unwrap();
         assert_eq!(token.token_type, "Bearer");
+        assert_eq!(token.access_token, "test_token");
     }
 
     #[test]
