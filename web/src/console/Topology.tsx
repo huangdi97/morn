@@ -281,7 +281,7 @@ export default function Topology() {
       `}</style>
 
       <div style={{ color: "#8b949e", fontSize: "12px", marginTop: "8px" }}>
-        {t('console.topology.hint')} {Object.keys(executionStatus).length > 0 && " — 节点状态实时更新"}
+        {t('console.topology.hint')}{Object.keys(executionStatus).length > 0 && t('console.topology.status_updating')}
       </div>
     </div>
   );

@@ -21,6 +21,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import dagre from "dagre";
 import { api } from "../api";
+import { useTranslation } from '../i18n';
 
 interface WorkflowStep {
   id: string;
@@ -108,24 +109,24 @@ interface PaletteCategoryDef {
 }
 
 const PALETTE_CATEGORIES: PaletteCategoryDef[] = [
-  { category: "📡 触发器", items: [
-    { type: "timer", label: "定时器" },
+  { category: "workflow_builder.category.triggers", items: [
+    { type: "timer", label: "workflow_builder.timer" },
     { type: "webhook", label: "Webhook" },
   ]},
-  { category: "🤖 AI 处理", items: [
-    { type: "llm_call", label: "LLM 调用" },
-    { type: "agent_call", label: "Agent 调用" },
-    { type: "analyze", label: "分析" },
+  { category: "workflow_builder.category.ai_processing", items: [
+    { type: "llm_call", label: "workflow_builder.llm_call" },
+    { type: "agent_call", label: "workflow_builder.agent_call" },
+    { type: "analyze", label: "workflow_builder.analyze" },
   ]},
-  { category: "🔍 搜索/获取", items: [
-    { type: "web_search", label: "网页搜索" },
-    { type: "kb_query", label: "知识库查询" },
-    { type: "read_file", label: "文件读取" },
+  { category: "workflow_builder.category.search_fetch", items: [
+    { type: "web_search", label: "workflow_builder.web_search" },
+    { type: "kb_query", label: "workflow_builder.kb_query" },
+    { type: "read_file", label: "workflow_builder.read_file" },
   ]},
-  { category: "📤 输出", items: [
-    { type: "generate_report", label: "生成报告" },
-    { type: "notify", label: "推送通知" },
-    { type: "write_file", label: "写文件" },
+  { category: "workflow_builder.category.output", items: [
+    { type: "generate_report", label: "workflow_builder.generate_report" },
+    { type: "notify", label: "workflow_builder.notify" },
+    { type: "write_file", label: "workflow_builder.write_file" },
   ]},
 ];
 
@@ -352,6 +353,7 @@ function ConfigPanel({
 }
 
 function CanvasInner() {
+  const { t } = useTranslation();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useReactFlow();
   const typeCountRef = useRef<Record<string, number>>({});
@@ -455,7 +457,7 @@ function CanvasInner() {
         id: newId,
         type: "workflowStep",
         position,
-        data: { stepName: `${label} #${count}`, actionType: type, config: {}, timeout_secs: 60 },
+        data: { stepName: `${t(label)} #${count}`, actionType: type, config: {}, timeout_secs: 60 },
       };
 
       setNodes((nds) => [...nds, newNode]);
@@ -674,7 +676,7 @@ function CanvasInner() {
           {paletteCategories.map((cat) => (
             <div key={cat.category}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#8b949e", textTransform: "uppercase", margin: "12px 0 4px 0" }}>
-                {cat.category}
+                {t(cat.category)}
               </div>
               {cat.items.map((item) => (
                 <div
@@ -699,7 +701,7 @@ function CanvasInner() {
                     e.dataTransfer.effectAllowed = "move";
                   }}
                 >
-                  {item.label}
+                  {t(item.label)}
                 </div>
               ))}
             </div>

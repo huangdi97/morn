@@ -78,7 +78,7 @@ const PORT_TYPES: Record<string, string> = {
 
 const PALETTE_CATEGORIES = [
   {
-    name: "基础组件",
+    name: "basic_components",
     items: [
       { type: "agent", label: "Agent", color: NODE_COLORS.agent },
       { type: "persona", label: "Persona", color: NODE_COLORS.persona },
@@ -86,7 +86,7 @@ const PALETTE_CATEGORIES = [
     ],
   },
   {
-    name: "功能组件",
+    name: "functional_components",
     items: [
       { type: "tool", label: "Tool", color: NODE_COLORS.tool },
       { type: "knowledge", label: "Knowledge", color: NODE_COLORS.knowledge },
@@ -682,7 +682,7 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
           <h4 style={{ color: "#e6edf3", margin: "0 0 12px 0", fontSize: "14px" }}>{t('studio.canvas.component_lib')}</h4>
           {PALETTE_CATEGORIES.map((cat) => (
             <div key={cat.name} style={{ marginBottom: "12px" }}>
-              <div style={{ color: "#8b949e", fontSize: "11px", marginBottom: "4px", textTransform: "uppercase" }}>{cat.name}</div>
+              <div style={{ color: "#8b949e", fontSize: "11px", marginBottom: "4px", textTransform: "uppercase" }}>{t(`node_canvas.${cat.name}`)}</div>
               {cat.items.map((item) => (
                 <div
                   key={item.type}
@@ -712,28 +712,28 @@ function CanvasInner({ def, onDefChange }: NodeCanvasProps) {
           <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "6px" }}>
             <div style={{ display: "flex", gap: "4px" }}>
               <button onClick={undo} disabled={historyCounts.undo === 0} title="Ctrl+Z" style={{ fontSize: "12px", padding: "4px 8px", flex: 1, opacity: historyCounts.undo === 0 ? 0.5 : 1 }}>
-                撤销
+                {t('node_canvas.undo')}
               </button>
               <button onClick={redo} disabled={historyCounts.redo === 0} title="Ctrl+Shift+Z" style={{ fontSize: "12px", padding: "4px 8px", flex: 1, opacity: historyCounts.redo === 0 ? 0.5 : 1 }}>
-                重做
+                {t('node_canvas.redo')}
               </button>
             </div>
             <div style={{ display: "flex", gap: "4px" }}>
-              <button onClick={autoLayout} title="自动排列" style={{ fontSize: "12px", padding: "4px 8px", flex: 1 }}>
-                自动排列
+              <button onClick={autoLayout} title={t('node_canvas.auto_layout')} style={{ fontSize: "12px", padding: "4px 8px", flex: 1 }}>
+                {t('node_canvas.auto_layout')}
               </button>
-              <button onClick={zoomIn} title="放大" style={{ fontSize: "12px", padding: "4px 8px" }}>
+              <button onClick={zoomIn} title={t('node_canvas.zoom_in')} style={{ fontSize: "12px", padding: "4px 8px" }}>
                 ＋
               </button>
-              <button onClick={zoomOut} title="缩小" style={{ fontSize: "12px", padding: "4px 8px" }}>
+              <button onClick={zoomOut} title={t('node_canvas.zoom_out')} style={{ fontSize: "12px", padding: "4px 8px" }}>
                 －
               </button>
             </div>
             <button onClick={takeSnapshot} style={{ fontSize: "12px", padding: "6px" }}>
-              画布快照
+              {t('node_canvas.snapshot')}
             </button>
             <button onClick={exportDef} style={{ fontSize: "12px", padding: "6px" }}>
-              导出为 AgentDef
+              {t('node_canvas.export_def')}
             </button>
           </div>
           <EditorPanel

@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import type { Node } from "reactflow";
 import EditorPanel from "./EditorPanel";
 import { NodeData } from "../types";
+import { useTranslation } from '../../i18n';
 
 export function useSmallScreen() {
   const [isSmallScreen, setIsSmallScreen] = useState(() => window.innerWidth < 768);
@@ -63,6 +64,7 @@ export function MobileView({
   children,
 }: MobileViewProps & { children: ReactNode }) {
   const isSmallScreen = useSmallScreen();
+  const { t } = useTranslation();
   if (!isSmallScreen) return <>{children}</>;
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
@@ -82,13 +84,13 @@ export function MobileView({
       </div>
       <div style={{ display: "flex", gap: "6px" }}>
         <button onClick={onUndo} disabled={historyCounts.undo === 0} style={{ flex: 1, opacity: historyCounts.undo === 0 ? 0.5 : 1 }}>
-          撤销
+          {t('node_canvas.undo')}
         </button>
         <button onClick={onRedo} disabled={historyCounts.redo === 0} style={{ flex: 1, opacity: historyCounts.redo === 0 ? 0.5 : 1 }}>
-          重做
+          {t('node_canvas.redo')}
         </button>
         <button onClick={onSnapshot} style={{ flex: 1 }}>
-          快照
+          {t('node_canvas.snapshot')}
         </button>
       </div>
       <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "8px", overflow: "hidden" }}>
@@ -123,7 +125,7 @@ export function MobileView({
           onDelete={onDeleteNode}
         />
         <button onClick={onExport} style={{ width: "100%", marginTop: "12px", padding: "8px" }}>
-          导出为 AgentDef
+          {t('node_canvas.export_def')}
         </button>
       </div>
     </div>

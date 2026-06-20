@@ -225,8 +225,7 @@ export default function AdminDashboard({ onNavigate }: OnboardingProps) {
               <div style={{ fontSize: "48px", textAlign: "center", marginBottom: "16px" }}>🤖</div>
               <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>{t('console.dashboard.welcome')}</h2>
               <p style={{ color: "var(--text-tertiary)", textAlign: "center", fontSize: "14px", lineHeight: "1.6", margin: "0 0 24px 0" }}>
-                Morn 是一个智能 AI 助手平台，帮你构建和使用 AI Agent。
-                你可以通过自然语言快速创建定制 Agent，或从模板开始。
+                {t('console.dashboard.welcome_desc')}
               </p>
               <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
                 <button
@@ -239,7 +238,7 @@ export default function AdminDashboard({ onNavigate }: OnboardingProps) {
                   onClick={() => setOnboardingStep(2)}
                   style={{ padding: "10px 24px", borderRadius: "6px", border: "none", background: "var(--accent-brand)", color: "#fff", cursor: "pointer" }}
                 >
-                  开始使用
+                  {t('console.dashboard.get_started')}
                 </button>
               </div>
             </>
@@ -248,7 +247,7 @@ export default function AdminDashboard({ onNavigate }: OnboardingProps) {
             <>
               <h3 style={{ color: "var(--text-primary)", margin: "0 0 16px 0" }}>{t('console.dashboard.select_agent')}</h3>
               <p style={{ color: "var(--text-tertiary)", fontSize: "14px", margin: "0 0 16px 0" }}>
-                选择一个模板开始，你也可以之后在 Studio 中自定义。
+                {t('console.dashboard.select_template_desc')}
               </p>
               <TemplateSelector
                 onSelect={() => setOnboardingStep(3)}
@@ -264,7 +263,7 @@ export default function AdminDashboard({ onNavigate }: OnboardingProps) {
                   onClick={() => setOnboardingStep(3)}
                   style={{ padding: "8px 20px", borderRadius: "6px", border: "none", background: "var(--accent-brand)", color: "#fff", cursor: "pointer" }}
                 >
-                  下一步
+                  {t('console.dashboard.next_step')}
                 </button>
               </div>
             </>
@@ -274,7 +273,7 @@ export default function AdminDashboard({ onNavigate }: OnboardingProps) {
               <div style={{ fontSize: "48px", textAlign: "center", marginBottom: "16px" }}>🚀</div>
               <h2 style={{ color: "var(--text-primary)", textAlign: "center", margin: "0 0 8px 0" }}>{t('console.dashboard.try_it')}</h2>
               <p style={{ color: "var(--text-tertiary)", textAlign: "center", fontSize: "14px", margin: "0 0 24px 0" }}>
-                前往 Workbench 开始对话，或在 Studio 中创建你的第一个 Agent。
+                {t('console.dashboard.try_it_desc')}
               </p>
               <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
                 <button
@@ -287,7 +286,7 @@ export default function AdminDashboard({ onNavigate }: OnboardingProps) {
                   onClick={() => setOnboardingStep(4)}
                   style={{ padding: "10px 24px", borderRadius: "6px", border: "none", background: "var(--accent-brand)", color: "#fff", cursor: "pointer" }}
                 >
-                  下一步
+                  {t('console.dashboard.next_step')}
                 </button>
               </div>
             </>
@@ -341,7 +340,7 @@ export default function AdminDashboard({ onNavigate }: OnboardingProps) {
                   onClick={() => setOnboardingStep(5)}
                   style={{ padding: "10px 24px", borderRadius: "6px", border: "none", background: "var(--accent-brand)", color: "#fff", cursor: "pointer" }}
                 >
-                  完成
+                  {t('console.dashboard.finish')}
                 </button>
               </div>
             </>
@@ -361,7 +360,7 @@ export default function AdminDashboard({ onNavigate }: OnboardingProps) {
                   onClick={completeOnboarding}
                   style={{ padding: "10px 24px", borderRadius: "6px", border: "none", background: "var(--accent-brand)", color: "#fff", cursor: "pointer" }}
                 >
-                  开始探索
+                  {t('console.dashboard.start_exploring')}
                 </button>
               </div>
             </>
