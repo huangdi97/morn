@@ -17,7 +17,7 @@ pub(crate) fn list_workflow_templates(state: State<AppState>) -> Result<Vec<Work
             let templates: Vec<WorkflowTemplateDef> = s.get_setting("workflow_templates")
                 .ok()
                 .flatten()
-                .and_then(|json| serde_json::from_str(json).ok())
+                .and_then(|json| serde_json::from_str(&json).ok())
                 .unwrap_or_default();
             Ok(templates)
         }
@@ -104,7 +104,7 @@ pub(crate) fn save_workflow_template(state: State<AppState>, template: WorkflowT
             let mut templates: Vec<WorkflowTemplateDef> = s.get_setting("workflow_templates")
                 .ok()
                 .flatten()
-                .and_then(|json| serde_json::from_str(json).ok())
+                .and_then(|json| serde_json::from_str(&json).ok())
                 .unwrap_or_default();
 
             if let Some(pos) = templates.iter().position(|t| t.id == template.id) {
@@ -131,7 +131,7 @@ pub(crate) fn delete_workflow_template(state: State<AppState>, id: String) -> Re
             let mut templates: Vec<WorkflowTemplateDef> = s.get_setting("workflow_templates")
                 .ok()
                 .flatten()
-                .and_then(|json| serde_json::from_str(json).ok())
+                .and_then(|json| serde_json::from_str(&json).ok())
                 .unwrap_or_default();
             templates.retain(|t| t.id != id);
             let json = serde_json::to_string(&templates)
