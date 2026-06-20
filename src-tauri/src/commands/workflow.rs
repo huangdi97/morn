@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use tauri::State;
 use morn::core::workflow::{StepResult, WorkflowTemplateDef, WorkflowStepDef};
 
-fn get_storage(state: &State<AppState>) -> Result<std::sync::MutexGuard<Option<morn::core::storage::Storage>>, MornError> {
+fn get_storage<'a>(state: &'a State<'a, AppState>) -> Result<std::sync::MutexGuard<'a, Option<morn::core::storage::Storage>>, MornError> {
     state.storage.lock().map_err(|e| MornError::Internal(e.to_string()))
 }
 
@@ -62,19 +62,19 @@ pub(crate) fn execute_workflow(state: State<AppState>, template: WorkflowTemplat
             let start = std::time::Instant::now();
             let result = match step.action_type.as_str() {
                 "llm_call" => {
-                    Ok(serde_json::json!({"status": "completed", "output": "LLM call simulation"}))
+                    Ok::<serde_json::Value, MornError>(serde_json::json!({"status": "completed", "output": "LLM call simulation"}))
                 }
                 "tool_exec" => {
-                    Ok(serde_json::json!({"status": "completed", "output": "Tool execution simulation"}))
+                    Ok::<serde_json::Value, MornError>(serde_json::json!({"status": "completed", "output": "Tool execution simulation"}))
                 }
                 "api_request" => {
-                    Ok(serde_json::json!({"status": "completed", "output": "API request simulation"}))
+                    Ok::<serde_json::Value, MornError>(serde_json::json!({"status": "completed", "output": "API request simulation"}))
                 }
                 "web_search" => {
-                    Ok(serde_json::json!({"status": "completed", "output": "Search results simulation"}))
+                    Ok::<serde_json::Value, MornError>(serde_json::json!({"status": "completed", "output": "Search results simulation"}))
                 }
                 _ => {
-                    Ok(serde_json::json!({"status": "completed", "output": format!("Executed: {}", step.action_type)}))
+                    Ok::<serde_json::Value, MornError>(serde_json::json!({"status": "completed", "output": format!("Executed: {}", step.action_type)}))
                 }
             };
 

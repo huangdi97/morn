@@ -45,7 +45,7 @@ pub(crate) fn send_message(
         .supervisor
         .lock()
         .map_err(|e| MornError::Internal(e.to_string()))?;
-    let sup = supervisor
+    let mut sup = supervisor
         .as_ref()
         .unwrap()
         .lock()
