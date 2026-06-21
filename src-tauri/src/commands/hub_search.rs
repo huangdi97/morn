@@ -2,7 +2,7 @@ use crate::AppState;
 use crate::MornError;
 use tauri::State;
 
-use morn::hub::{Listing, Hub, Review};
+use morn::hub::{Hub, Listing, Review};
 
 #[tauri::command]
 pub(crate) fn search_hub_listings(

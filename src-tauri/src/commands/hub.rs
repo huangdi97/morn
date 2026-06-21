@@ -5,7 +5,7 @@ use tauri::State;
 
 use morn::bridge::chat_agent::ChatAgent;
 use morn::core::plugin_generator;
-use morn::hub::{Listing, Hub};
+use morn::hub::{Hub, Listing};
 use morn::studio::manager::CreateComponentDef;
 
 #[tauri::command]

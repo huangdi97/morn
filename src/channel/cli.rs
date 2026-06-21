@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 use crate::core::registry::Registry;
 use crate::core::supervisor::Mode;
-use crate::hub::{Listing, Hub};
+use crate::hub::{Hub, Listing};
 
 type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, MornError> + Send + Sync>;
 

@@ -13,8 +13,8 @@ mod agents;
 mod costs;
 mod decision_rules;
 mod governance;
-mod installed_items;
 mod hub;
+mod installed_items;
 mod memory;
 mod oauth;
 mod proactive;
@@ -88,7 +88,7 @@ impl Storage {
              ALTER TABLE market_transactions RENAME TO hub_transactions;
              ALTER TABLE market_licenses RENAME TO hub_licenses;
              ALTER TABLE market_agent_versions RENAME TO hub_agent_versions;
-             ALTER TABLE market_reviews RENAME TO hub_reviews;"
+             ALTER TABLE market_reviews RENAME TO hub_reviews;",
         );
 
         conn.execute_batch(

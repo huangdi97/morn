@@ -5,7 +5,7 @@ use crate::core::agent_templates::AGENT_TEMPLATES;
 use crate::core::storage::Storage;
 use crate::core::supervisor::presets::preset_agent_defs;
 use crate::core::workflow::WorkflowTemplate;
-use crate::hub::{Listing, Hub};
+use crate::hub::{Hub, Listing};
 
 /// Publishes built-in workflow templates, agent templates, and preset agent
 /// definitions to the marketplace.

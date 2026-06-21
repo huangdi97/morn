@@ -423,7 +423,7 @@ fn test_supervisor_build_team_from_nl() {
 #[test]
 fn test_marketplace_publish_and_list() {
     use morn::core::storage::Storage;
-    use morn::hub::{Listing, Hub};
+    use morn::hub::{Hub, Listing};
     let storage = Storage::new_in_memory().unwrap();
     let market = Hub::new(storage.clone());
     let listing = Listing {
@@ -452,7 +452,7 @@ fn test_marketplace_publish_and_list() {
 #[test]
 fn test_marketplace_get_listing_by_id() {
     use morn::core::storage::Storage;
-    use morn::hub::{Listing, Hub};
+    use morn::hub::{Hub, Listing};
     let storage = Storage::new_in_memory().unwrap();
     let market = Hub::new(storage.clone());
     let listing = Listing {
