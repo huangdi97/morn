@@ -105,7 +105,9 @@ pub(crate) fn list_local_models() -> Result<Vec<String>, CommandError> {
     let mut models = Vec::new();
 
     if models_dir.exists() {
-        for entry in std::fs::read_dir(&models_dir).map_err(|e| CommandError::Internal(e.to_string()))? {
+        for entry in
+            std::fs::read_dir(&models_dir).map_err(|e| CommandError::Internal(e.to_string()))?
+        {
             let entry = entry.map_err(|e| CommandError::Internal(e.to_string()))?;
             let path = entry.path();
             if path.extension().map_or(false, |ext| ext == "gguf") {
@@ -129,7 +131,10 @@ pub(crate) fn list_local_models() -> Result<Vec<String>, CommandError> {
 }
 
 #[tauri::command]
-pub(crate) async fn download_model(name: String, url: Option<String>) -> Result<String, CommandError> {
+pub(crate) async fn download_model(
+    name: String,
+    url: Option<String>,
+) -> Result<String, CommandError> {
     if name.is_empty() {
         return Err(CommandError::NotFound("model name is empty".to_string()));
     }
@@ -188,7 +193,10 @@ pub(crate) fn delete_local_model(name: String) -> Result<String, CommandError> {
 
     let model_path = get_models_dir().join(format!("{}.gguf", name));
     if !model_path.exists() {
-        return Err(CommandError::NotFound(format!("Model '{}' not found", name)));
+        return Err(CommandError::NotFound(format!(
+            "Model '{}' not found",
+            name
+        )));
     }
 
     std::fs::remove_file(&model_path)

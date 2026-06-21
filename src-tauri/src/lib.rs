@@ -1,9 +1,9 @@
+use chrono::Utc;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
-use chrono::Utc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
@@ -43,7 +43,7 @@ fn start_sync_loop(engine: Arc<Mutex<Option<SyncEngine>>>) {
                 }
             }
         }
-});
+    });
 }
 
 /// 从 overrides.json 加载外部插件覆盖
@@ -156,21 +156,29 @@ pub fn run() {
             autostart::setup_autostart(app);
 
             // Start background sync loop (engine initialized by SyncPlugin)
-            if state.sync_engine.lock().ok().map(|g| g.is_some()).unwrap_or(false) {
+            if state
+                .sync_engine
+                .lock()
+                .ok()
+                .map(|g| g.is_some())
+                .unwrap_or(false)
+            {
                 let sync_engine = state.sync_engine.clone();
                 start_sync_loop(sync_engine);
             }
 
             // Background tick thread for proactive engine
             let engine = bg_engine.clone();
-            std::thread::spawn(move || {
-                loop {
-                    std::thread::sleep(Duration::from_secs(60));
-                    if let Ok(mut engine) = engine.lock() {
-                        let ready = engine.tick();
-                        for agent in &ready {
-                            tracing::info!("Proactive rule triggered: {} (action: {})", agent.id, agent.action);
-                        }
+            std::thread::spawn(move || loop {
+                std::thread::sleep(Duration::from_secs(60));
+                if let Ok(mut engine) = engine.lock() {
+                    let ready = engine.tick();
+                    for agent in &ready {
+                        tracing::info!(
+                            "Proactive rule triggered: {} (action: {})",
+                            agent.id,
+                            agent.action
+                        );
                     }
                 }
             });

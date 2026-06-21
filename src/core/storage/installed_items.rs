@@ -1,6 +1,6 @@
+use super::Storage;
 use crate::core::error::MornError;
 use rusqlite::params;
-use super::Storage;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InstalledItem {
@@ -25,16 +25,19 @@ impl Storage {
     pub fn list_installed_items(&self) -> Result<Vec<InstalledItem>, MornError> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare("SELECT id, item_type, name, description, enabled, installed_at FROM installed_items ORDER BY item_type, name")?;
-        let items = stmt.query_map([], |row| {
-            Ok(InstalledItem {
-                id: row.get(0)?,
-                item_type: row.get(1)?,
-                name: row.get(2)?,
-                description: row.get(3)?,
-                enabled: row.get::<_, i32>(4)? != 0,
-                installed_at: row.get(5)?,
-            })
-        })?.filter_map(|r| r.ok()).collect();
+        let items = stmt
+            .query_map([], |row| {
+                Ok(InstalledItem {
+                    id: row.get(0)?,
+                    item_type: row.get(1)?,
+                    name: row.get(2)?,
+                    description: row.get(3)?,
+                    enabled: row.get::<_, i32>(4)? != 0,
+                    installed_at: row.get(5)?,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
         Ok(items)
     }
 
@@ -45,7 +48,8 @@ impl Storage {
             params![id],
         )?;
         let new_state: bool = conn.query_row(
-            "SELECT enabled FROM installed_items WHERE id = ?1", params![id],
+            "SELECT enabled FROM installed_items WHERE id = ?1",
+            params![id],
             |row| row.get::<_, i32>(0).map(|v| v != 0),
         )?;
         Ok(new_state)

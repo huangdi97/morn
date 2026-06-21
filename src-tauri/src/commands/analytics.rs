@@ -59,7 +59,9 @@ pub(crate) fn get_analytics_data(
     let s = storage
         .as_ref()
         .ok_or_else(|| CommandError::Internal("Storage not initialized".to_string()))?;
-    let conn = s.conn().map_err(|e| CommandError::Internal(e.to_string()))?;
+    let conn = s
+        .conn()
+        .map_err(|e| CommandError::Internal(e.to_string()))?;
 
     let days_param = format!("-{} days", days);
 
@@ -156,9 +158,11 @@ pub(crate) fn get_analytics_data(
         .collect::<Vec<_>>();
 
     let active_users: u64 = conn
-        .query_row("SELECT COUNT(DISTINCT agent_id) FROM executions", [], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT COUNT(DISTINCT agent_id) FROM executions",
+            [],
+            |row| row.get(0),
+        )
         .map_err(|e| CommandError::Internal(e.to_string()))?;
 
     let total_executions: u64 = conn

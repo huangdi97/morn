@@ -124,23 +124,31 @@ impl Sandbox {
         let start = Instant::now();
         let module = Module::new(&self.engine, wasm_bytes)
             .map_err(|e| SandboxError::Compile(e.to_string()))?;
-        let mut store = Store::new(&self.engine, SandboxData {
-            limits: StoreLimitsBuilder::new()
-                .memory_size(MAX_MEMORY_BYTES as usize)
-                .build(),
-        });
+        let mut store = Store::new(
+            &self.engine,
+            SandboxData {
+                limits: StoreLimitsBuilder::new()
+                    .memory_size(MAX_MEMORY_BYTES as usize)
+                    .build(),
+            },
+        );
         store.limiter(|state| &mut state.limits);
-        store.set_fuel(MAX_FUEL).map_err(|e| SandboxError::ResourceLimit(e.to_string()))?;
+        store
+            .set_fuel(MAX_FUEL)
+            .map_err(|e| SandboxError::ResourceLimit(e.to_string()))?;
         let linker = Linker::new(&self.engine);
-        let instance = linker.instantiate(&mut store, &module)
+        let instance = linker
+            .instantiate(&mut store, &module)
             .map_err(|e| SandboxError::Execute(e.to_string()))?;
-        let func = instance.get_typed_func::<(), ()>(&mut store, func_name)
+        let func = instance
+            .get_typed_func::<(), ()>(&mut store, func_name)
             .map_err(|e| SandboxError::Execute(format!("function '{func_name}' not found: {e}")))?;
         let elapsed = start.elapsed().as_millis() as u64;
         if elapsed > MAX_EXECUTION_MS {
             return Err(SandboxError::ResourceLimit("timeout before call".into()));
         }
-        func.call(&mut store, ()).map_err(|e| SandboxError::Execute(e.to_string()))?;
+        func.call(&mut store, ())
+            .map_err(|e| SandboxError::Execute(e.to_string()))?;
         Ok(())
     }
 }

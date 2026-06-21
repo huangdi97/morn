@@ -30,25 +30,18 @@ impl MornPlugin for ObservabilityPlugin {
     }
 
     fn init(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
-        let storage = ctx
-            .get::<Storage>("morn:storage")
-            .ok_or_else(|| {
-                PluginError::LoadFailed(
-                    "morn:observability".into(),
-                    "morn:storage not found".into(),
-                )
-            })?;
+        let storage = ctx.get::<Storage>("morn:storage").ok_or_else(|| {
+            PluginError::LoadFailed("morn:observability".into(), "morn:storage not found".into())
+        })?;
         ctx.register("morn:observability", storage.clone());
         self.0 = Some(Arc::new(storage));
         Ok(())
     }
 
     fn activate(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
-        let storage = ctx
-            .get::<Storage>("morn:observability")
-            .ok_or_else(|| {
-                PluginError::ActivateFailed("morn:observability".into(), "missing".into())
-            })?;
+        let storage = ctx.get::<Storage>("morn:observability").ok_or_else(|| {
+            PluginError::ActivateFailed("morn:observability".into(), "missing".into())
+        })?;
         let _ = storage.get_cost_summary(30);
         Ok(())
     }

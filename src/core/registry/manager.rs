@@ -1,4 +1,4 @@
-use super::{Capability, AgentTemplate, version};
+use super::{version, AgentTemplate, Capability};
 use crate::core::error::MornError;
 use crate::core::event_bus::{SimpleEventBus, EVENT_CHAT_AGENT_RESPONSE, EVENT_SYSTEM_READY};
 use crate::core::storage::Storage;

@@ -2,8 +2,8 @@ use crate::MornError;
 pub mod analytics;
 pub mod backup;
 pub mod chat;
-pub mod collaboration;
 pub mod checkup;
+pub mod collaboration;
 pub mod component_type;
 pub mod config;
 pub mod console;
@@ -61,15 +61,13 @@ pub(crate) use mcp::{mcp_call_tool, mcp_connect, mcp_disconnect, mcp_list_server
 pub(crate) use memory::{delete_memory, list_memories, search_memories};
 pub(crate) use metrics::get_reliability_metrics;
 pub(crate) use notifications::{list_notifications, send_notification};
-pub(crate) use oauth::{
-    oauth_authorize, oauth_callback, oauth_list_providers, oauth_save_config,
-};
+pub(crate) use oauth::{oauth_authorize, oauth_callback, oauth_list_providers, oauth_save_config};
 pub(crate) use org::{
     add_member, create_team, create_user, get_audit_log, grant_permission, list_teams, list_users,
     remove_member, revoke_permission,
 };
 pub(crate) use plugin_manager::plugin_install;
-pub(crate) use plugin_manager::{list_plugins, toggle_plugin, create_plugin_from_spec};
+pub(crate) use plugin_manager::{create_plugin_from_spec, list_plugins, toggle_plugin};
 pub(crate) use proactive::{
     create_proactive_rule, delete_proactive_rule, list_proactive_rules, toggle_proactive_rule,
 };

@@ -126,16 +126,36 @@ impl ObservabilityManager {
         self.publish_span_event(EVENT_TRACE_SPAN_ENDED, &span);
 
         if let Some(storage) = &self.storage {
-            let agent_id = span.metadata.get("agent").map(|s| s.as_str()).unwrap_or("unknown");
-            let model = span.metadata.get("model").map(|s| s.as_str()).unwrap_or("unknown");
-            let tokens = span.metadata.get("tokens").and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
-            let cost = span.metadata.get("cost_usd").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+            let agent_id = span
+                .metadata
+                .get("agent")
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+            let model = span
+                .metadata
+                .get("model")
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+            let tokens = span
+                .metadata
+                .get("tokens")
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(0);
+            let cost = span
+                .metadata
+                .get("cost_usd")
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(0.0);
 
             if tokens > 0 || cost > 0.0 {
                 let _ = storage.record_call_cost(agent_id, model, tokens, cost);
             }
 
-            let task_id = span.metadata.get("task_id").map(|s| s.as_str()).unwrap_or("unknown");
+            let task_id = span
+                .metadata
+                .get("task_id")
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
             let action = format!("{:?}", span.span_type);
             let latency_ms = span.duration_ms as i64;
             let _ = storage.insert_execution(&crate::core::storage::ExecutionRecord {
@@ -146,7 +166,11 @@ impl ObservabilityManager {
                 status: span.status.clone(),
                 latency_ms: Some(latency_ms),
                 error_msg: None,
-                token_count: if tokens > 0 { Some(tokens as i64) } else { None },
+                token_count: if tokens > 0 {
+                    Some(tokens as i64)
+                } else {
+                    None
+                },
                 created_at: chrono::Utc::now().to_rfc3339(),
             });
         }

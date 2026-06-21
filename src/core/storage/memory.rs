@@ -42,8 +42,11 @@ impl Storage {
         sql.push_str(" ORDER BY created_at DESC LIMIT ?");
         params.push(Box::new(limit as i64));
 
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-        let mut stmt = conn.prepare(&sql).map_err(|e| MornError::Internal(e.to_string()))?;
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(param_refs.as_slice(), |row| {
                 Ok(MemoryEntry {
@@ -86,8 +89,11 @@ impl Storage {
         }
         sql.push_str(" ORDER BY created_at DESC LIMIT 50");
 
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-        let mut stmt = conn.prepare(&sql).map_err(|e| MornError::Internal(e.to_string()))?;
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(param_refs.as_slice(), |row| {
                 Ok(MemoryEntry {

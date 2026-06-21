@@ -163,8 +163,8 @@ pub(crate) async fn create_plugin_from_spec(
     description: String,
     state: State<'_, AppState>,
 ) -> Result<PluginEntry, MornError> {
-    let api_key =
-        std::env::var("MORN_API_KEY").map_err(|_| MornError::Internal("MORN_API_KEY not set".to_string()))?;
+    let api_key = std::env::var("MORN_API_KEY")
+        .map_err(|_| MornError::Internal("MORN_API_KEY not set".to_string()))?;
     let chat_agent = ChatAgent::new(&api_key, "https://api.deepseek.com", "deepseek-chat");
 
     let plugin_dir = {

@@ -32,16 +32,11 @@ pub(crate) fn search_memories(
         .map_err(|e| CommandError::Internal(e.to_string()))?
         .clone()
         .ok_or_else(|| CommandError::Internal("Storage not initialized".to_string()))?;
-    storage
-        .search_memories(&q, None)
-        .map_err(|e| e.into())
+    storage.search_memories(&q, None).map_err(|e| e.into())
 }
 
 #[tauri::command]
-pub(crate) fn delete_memory(
-    state: State<AppState>,
-    id: String,
-) -> Result<String, CommandError> {
+pub(crate) fn delete_memory(state: State<AppState>, id: String) -> Result<String, CommandError> {
     let storage = state
         .storage
         .lock()

@@ -68,7 +68,10 @@ pub(crate) fn get_sync_status(state: State<AppState>) -> Result<serde_json::Valu
 }
 
 #[tauri::command]
-pub(crate) fn set_sync_server_url(url: String, state: State<AppState>) -> Result<String, MornError> {
+pub(crate) fn set_sync_server_url(
+    url: String,
+    state: State<AppState>,
+) -> Result<String, MornError> {
     let storage = state
         .storage
         .lock()

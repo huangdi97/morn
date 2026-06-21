@@ -1,14 +1,15 @@
 use crate::commands::errors::CommandError;
 use crate::AppState;
-use tauri::State;
 use morn::core::oauth::{OAuthConfig, ProviderInfo};
+use tauri::State;
 
 fn lock_oauth(
     state: &State<'_, AppState>,
 ) -> Result<std::sync::MutexGuard<'_, Option<morn::core::oauth::OAuthManager>>, CommandError> {
-    state.oauth_manager.lock().map_err(|e| {
-        CommandError::Internal(format!("OAuth lock error: {}", e))
-    })
+    state
+        .oauth_manager
+        .lock()
+        .map_err(|e| CommandError::Internal(format!("OAuth lock error: {}", e)))
 }
 
 fn get_manager(
@@ -28,9 +29,9 @@ pub(crate) fn oauth_authorize(
 ) -> Result<String, CommandError> {
     let guard = get_manager(&state)?;
     let manager = guard.as_ref().unwrap();
-    manager.get_auth_url(&provider).map_err(|e| {
-        CommandError::Internal(format!("Failed to get auth URL: {}", e))
-    })
+    manager
+        .get_auth_url(&provider)
+        .map_err(|e| CommandError::Internal(format!("Failed to get auth URL: {}", e)))
 }
 
 #[tauri::command]
@@ -41,9 +42,9 @@ pub(crate) fn oauth_callback(
 ) -> Result<String, CommandError> {
     let guard = get_manager(&state)?;
     let manager = guard.as_ref().unwrap();
-    let token = manager.handle_callback(&provider, &code).map_err(|e| {
-        CommandError::Network(format!("OAuth callback failed: {}", e))
-    })?;
+    let token = manager
+        .handle_callback(&provider, &code)
+        .map_err(|e| CommandError::Network(format!("OAuth callback failed: {}", e)))?;
     Ok(token.access_token)
 }
 
@@ -64,9 +65,9 @@ pub(crate) fn oauth_save_config(
     client_secret: String,
 ) -> Result<(), CommandError> {
     let mut guard = lock_oauth(&state)?;
-    let manager = guard.as_mut().ok_or_else(|| {
-        CommandError::Internal("OAuth not initialized".into())
-    })?;
+    let manager = guard
+        .as_mut()
+        .ok_or_else(|| CommandError::Internal("OAuth not initialized".into()))?;
     manager
         .set_provider_credentials(&provider, client_id, client_secret)
         .map_err(|e| CommandError::Internal(format!("Failed to save config: {}", e)))

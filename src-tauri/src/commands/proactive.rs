@@ -34,7 +34,9 @@ impl From<morn::core::storage::ProactiveRule> for ProactiveRule {
 }
 
 #[tauri::command]
-pub(crate) fn list_proactive_rules(state: State<AppState>) -> Result<Vec<ProactiveRule>, CommandError> {
+pub(crate) fn list_proactive_rules(
+    state: State<AppState>,
+) -> Result<Vec<ProactiveRule>, CommandError> {
     let storage = state
         .storage
         .lock()
@@ -67,7 +69,9 @@ pub(crate) fn create_proactive_rule(
         ));
     }
     if trigger_config.trim().is_empty() {
-        return Err(CommandError::InvalidInput("trigger_config cannot be empty".into()));
+        return Err(CommandError::InvalidInput(
+            "trigger_config cannot be empty".into(),
+        ));
     }
 
     let now = SystemTime::now()

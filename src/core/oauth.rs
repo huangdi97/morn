@@ -173,9 +173,7 @@ impl OAuthManager {
             refresh_token: token_data["refresh_token"].as_str().map(String::from),
             expires_at: token_data["expires_in"]
                 .as_i64()
-                .map(|secs| {
-                    (chrono::Utc::now() + chrono::Duration::seconds(secs)).to_rfc3339()
-                }),
+                .map(|secs| (chrono::Utc::now() + chrono::Duration::seconds(secs)).to_rfc3339()),
             scope: token_data["scope"].as_str().map(String::from),
             token_type: token_data["token_type"]
                 .as_str()

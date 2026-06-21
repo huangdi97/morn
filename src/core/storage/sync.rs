@@ -180,7 +180,11 @@ impl Storage {
         Ok(())
     }
 
-    pub fn list_events_since(&self, since: i64, exclude_device_id: &str) -> Result<Vec<SyncEventRecord>, MornError> {
+    pub fn list_events_since(
+        &self,
+        since: i64,
+        exclude_device_id: &str,
+    ) -> Result<Vec<SyncEventRecord>, MornError> {
         let conn = self.conn()?;
         let mut stmt = conn
             .prepare("SELECT id, entity_type, entity_id, action, data_json, timestamp, device_id, synced FROM sync_events WHERE timestamp > ?1 AND device_id != ?2 ORDER BY timestamp ASC")

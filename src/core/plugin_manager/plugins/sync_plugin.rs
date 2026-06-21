@@ -32,11 +32,9 @@ impl MornPlugin for SyncPlugin {
     }
 
     fn init(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
-        let storage = ctx
-            .get::<Storage>("morn:storage")
-            .ok_or_else(|| {
-                PluginError::LoadFailed("morn:sync".into(), "morn:storage not found".into())
-            })?;
+        let storage = ctx.get::<Storage>("morn:storage").ok_or_else(|| {
+            PluginError::LoadFailed("morn:sync".into(), "morn:storage not found".into())
+        })?;
 
         let server_url = storage
             .get_setting("sync_server_url")

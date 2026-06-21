@@ -62,30 +62,36 @@ impl MornPlugin for WasmPlugin {
     }
 
     fn init(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
-        #[cfg(feature = "sandbox")] {
+        #[cfg(feature = "sandbox")]
+        {
             let wasm_bytes = std::fs::read(&self._wasm_path)
                 .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
-            get_sandbox().execute_func(&wasm_bytes, "morn_init")
+            get_sandbox()
+                .execute_func(&wasm_bytes, "morn_init")
                 .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
         }
         Ok(())
     }
 
     fn activate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
-        #[cfg(feature = "sandbox")] {
+        #[cfg(feature = "sandbox")]
+        {
             let wasm_bytes = std::fs::read(&self._wasm_path)
                 .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
-            get_sandbox().execute_func(&wasm_bytes, "morn_activate")
+            get_sandbox()
+                .execute_func(&wasm_bytes, "morn_activate")
                 .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
         }
         Ok(())
     }
 
     fn deactivate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
-        #[cfg(feature = "sandbox")] {
+        #[cfg(feature = "sandbox")]
+        {
             let wasm_bytes = std::fs::read(&self._wasm_path)
                 .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
-            get_sandbox().execute_func(&wasm_bytes, "morn_deactivate")
+            get_sandbox()
+                .execute_func(&wasm_bytes, "morn_deactivate")
                 .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
         }
         Ok(())

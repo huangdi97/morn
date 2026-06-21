@@ -60,7 +60,10 @@ impl Storage {
         let mut rows = stmt
             .query(params![id])
             .map_err(|e| MornError::Internal(e.to_string()))?;
-        if let Some(row) = rows.next().map_err(|e| MornError::Internal(e.to_string()))? {
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| MornError::Internal(e.to_string()))?
+        {
             Ok(Some(ProactiveRule {
                 id: row.get(0)?,
                 name: row.get(1)?,

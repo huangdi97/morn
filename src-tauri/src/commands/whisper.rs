@@ -10,7 +10,8 @@ pub(crate) fn transcribe_audio(
     let audio_path = if let Some(data) = data {
         let bytes = base64::decode(&data)
             .map_err(|e| CommandError::InvalidInput(format!("base64 decode failed: {}", e)))?;
-        let tmp_path = std::env::temp_dir().join(format!("morn_voice_{}.webm", uuid::Uuid::new_v4()));
+        let tmp_path =
+            std::env::temp_dir().join(format!("morn_voice_{}.webm", uuid::Uuid::new_v4()));
         std::fs::write(&tmp_path, &bytes)
             .map_err(|e| CommandError::Internal(format!("failed to write temp file: {}", e)))?;
         tmp_path
@@ -70,10 +71,8 @@ pub(crate) fn list_audio_devices() -> Result<Vec<String>, CommandError> {
                     if parts.len() == 2 {
                         let card_str = parts[0].trim();
                         if let Some(dev_part) = parts[1].split(',').next() {
-                            if let Some(device_str) = dev_part
-                                .trim()
-                                .strip_prefix("device ")
-                                .map(|s| s.trim())
+                            if let Some(device_str) =
+                                dev_part.trim().strip_prefix("device ").map(|s| s.trim())
                             {
                                 devices.push(format!("hw:{},{}", card_str, device_str));
                                 devices.push(format!("plughw:{},{}", card_str, device_str));

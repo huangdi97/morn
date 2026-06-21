@@ -6,14 +6,30 @@ macro_rules! make_always_channel_plugin {
     ($name:ident, $id:expr) => {
         pub struct $name;
         impl MornPlugin for $name {
-            fn id(&self) -> &str { $id }
-            fn deps(&self) -> Vec<&str> { vec!["morn:channel-bus", "morn:data-layer"] }
-            fn priority(&self) -> i32 { 60 }
-            fn init(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> { Ok(()) }
-            fn activate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> { Ok(()) }
-            fn deactivate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> { Ok(()) }
+            fn id(&self) -> &str {
+                $id
+            }
+            fn deps(&self) -> Vec<&str> {
+                vec!["morn:channel-bus", "morn:data-layer"]
+            }
+            fn priority(&self) -> i32 {
+                60
+            }
+            fn init(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
+                Ok(())
+            }
+            fn activate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
+                Ok(())
+            }
+            fn deactivate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
+                Ok(())
+            }
         }
-        impl Default for $name { fn default() -> Self { Self } }
+        impl Default for $name {
+            fn default() -> Self {
+                Self
+            }
+        }
     };
 }
 
@@ -27,14 +43,30 @@ macro_rules! make_channel_plugin {
     ($name:ident, $id:expr) => {
         pub struct $name;
         impl MornPlugin for $name {
-            fn id(&self) -> &str { $id }
-            fn deps(&self) -> Vec<&str> { vec!["morn:channel-bus", "morn:data-layer"] }
-            fn priority(&self) -> i32 { 60 }
-            fn init(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> { Ok(()) }
-            fn activate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> { Ok(()) }
-            fn deactivate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> { Ok(()) }
+            fn id(&self) -> &str {
+                $id
+            }
+            fn deps(&self) -> Vec<&str> {
+                vec!["morn:channel-bus", "morn:data-layer"]
+            }
+            fn priority(&self) -> i32 {
+                60
+            }
+            fn init(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
+                Ok(())
+            }
+            fn activate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
+                Ok(())
+            }
+            fn deactivate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
+                Ok(())
+            }
         }
-        impl Default for $name { fn default() -> Self { Self } }
+        impl Default for $name {
+            fn default() -> Self {
+                Self
+            }
+        }
     };
 }
 

@@ -347,10 +347,8 @@ impl Storage {
         )
         .map_err(|e| MornError::Internal(e.to_string()))?;
 
-        conn.execute_batch(
-            "ALTER TABLE executions ADD COLUMN token_count INTEGER DEFAULT 0;",
-        )
-        .ok();
+        conn.execute_batch("ALTER TABLE executions ADD COLUMN token_count INTEGER DEFAULT 0;")
+            .ok();
 
         Ok(())
     }
@@ -377,7 +375,8 @@ impl Storage {
     /// 安全地将当前数据库备份到目标路径（使用 SQLite 在线备份 API）
     pub fn backup_to(&self, target: PathBuf) -> Result<(), String> {
         if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create backup dir: {e}"))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Cannot create backup dir: {e}"))?;
         }
         let target_conn = rusqlite::Connection::open(&target)
             .map_err(|e| format!("Cannot open backup file: {e}"))?;
@@ -395,8 +394,8 @@ impl Storage {
         if !source.exists() {
             return Err(format!("Backup file not found: {}", source.display()));
         }
-        let source_conn = rusqlite::Connection::open(&source)
-            .map_err(|e| format!("Cannot open backup: {e}"))?;
+        let source_conn =
+            rusqlite::Connection::open(&source).map_err(|e| format!("Cannot open backup: {e}"))?;
         let mut guard = self.conn.lock().map_err(|e| e.to_string())?;
         let backup = rusqlite::backup::Backup::new(&source_conn, &mut guard)
             .map_err(|e| format!("Restore init failed: {e}"))?;

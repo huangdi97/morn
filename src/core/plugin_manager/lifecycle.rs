@@ -77,16 +77,18 @@ pub fn load_plugins(
 
 pub fn safe_init(plugin: &mut dyn MornPlugin, ctx: &PluginContext) -> Result<(), PluginError> {
     let id = plugin.id().to_string();
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| plugin.init(ctx))).map_err(|panic| {
-        let msg = if let Some(s) = panic.downcast_ref::<&str>() {
-            s.to_string()
-        } else if let Some(s) = panic.downcast_ref::<String>() {
-            s.clone()
-        } else {
-            "unknown panic".to_string()
-        };
-        PluginError::LoadFailed(id, msg)
-    })?
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| plugin.init(ctx))).map_err(
+        |panic| {
+            let msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic".to_string()
+            };
+            PluginError::LoadFailed(id, msg)
+        },
+    )?
 }
 
 pub fn safe_activate(plugin: &mut dyn MornPlugin, ctx: &PluginContext) -> Result<(), PluginError> {
