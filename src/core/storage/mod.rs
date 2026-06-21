@@ -62,10 +62,8 @@ impl Storage {
         Ok(storage)
     }
 
-    /// Returns a locked connection handle with consistent error mapping.
-    pub(crate) fn conn(
-        &self,
-    ) -> Result<std::sync::MutexGuard<'_, rusqlite::Connection>, MornError> {
+    /// 获取数据库连接的快捷方法
+    pub fn conn(&self) -> Result<std::sync::MutexGuard<'_, rusqlite::Connection>, MornError> {
         self.conn
             .lock()
             .map_err(|e| MornError::Internal(e.to_string()))

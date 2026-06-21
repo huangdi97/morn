@@ -109,7 +109,8 @@ impl AppState {
             oauth_manager: Mutex::new(None),
             proactive_engine: Arc::new(Mutex::new(ProactiveEngine::new(None))),
             sync_engine: Arc::new(Mutex::new(
-                ctx.get::<Arc<Mutex<SyncEngine>>>("morn:sync-engine"),
+                ctx.get::<Arc<Mutex<SyncEngine>>>("morn:sync-engine")
+                    .and_then(|arc| arc.lock().ok().map(|guard| guard.clone())),
             )),
         }
     }
@@ -165,17 +166,19 @@ pub fn run() {
     state.plugin_manager = Mutex::new(Some(pm));
 
     // 自动将系统插件注册到 installed_items 生命周期表
-    if let Some(ref storage) = *state.storage.lock().map_err(|e| e.to_string()).ok() {
-        for plugin_id in registry.known_ids() {
-            let item = InstalledItem {
-                id: plugin_id.clone(),
-                item_type: "system_plugin".to_string(),
-                name: plugin_id.clone(),
-                description: String::new(),
-                enabled: true,
-                installed_at: Utc::now().to_rfc3339(),
-            };
-            let _ = storage.upsert_installed_item(&item);
+    if let Ok(guard) = state.storage.lock() {
+        if let Some(ref storage) = *guard {
+            for plugin_id in registry.known_ids() {
+                let item = InstalledItem {
+                    id: plugin_id.clone(),
+                    item_type: "system_plugin".to_string(),
+                    name: plugin_id.clone(),
+                    description: String::new(),
+                    enabled: true,
+                    installed_at: Utc::now().to_rfc3339(),
+                };
+                let _ = storage.upsert_installed_item(&item);
+            }
         }
     }
 

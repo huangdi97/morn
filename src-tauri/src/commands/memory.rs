@@ -43,6 +43,6 @@ pub(crate) fn delete_memory(state: State<AppState>, id: String) -> Result<String
         .map_err(|e| CommandError::Internal(e.to_string()))?
         .clone()
         .ok_or_else(|| CommandError::Internal("Storage not initialized".to_string()))?;
-    storage.delete_memory(&id).map_err(|e| e.into())?;
+    storage.delete_memory(&id).map_err(CommandError::from)?;
     Ok("deleted".to_string())
 }

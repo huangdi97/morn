@@ -224,7 +224,7 @@ pub(crate) fn create_agent_from_description(
     let sup = sup.lock().map_err(|e| MornError::Internal(e.to_string()))?;
 
     let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
-    let nl_def = sup.create_agent_from_nl(&nl, &chat_fn, None)?;
+    let nl_def = sup.create_team_from_nl(&nl, &chat_fn)?;
     serde_json::to_string(&nl_def).map_err(|e| MornError::Internal(e.to_string()))
 }
 

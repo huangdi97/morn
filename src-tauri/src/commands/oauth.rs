@@ -3,18 +3,18 @@ use crate::AppState;
 use morn::core::oauth::{OAuthConfig, ProviderInfo};
 use tauri::State;
 
-fn lock_oauth(
-    state: &State<'_, AppState>,
-) -> Result<std::sync::MutexGuard<'_, Option<morn::core::oauth::OAuthManager>>, CommandError> {
+fn lock_oauth<'a>(
+    state: &'a State<'_, AppState>,
+) -> Result<std::sync::MutexGuard<'a, Option<morn::core::oauth::OAuthManager>>, CommandError> {
     state
         .oauth_manager
         .lock()
         .map_err(|e| CommandError::Internal(format!("OAuth lock error: {}", e)))
 }
 
-fn get_manager(
-    state: &State<'_, AppState>,
-) -> Result<std::sync::MutexGuard<'_, Option<morn::core::oauth::OAuthManager>>, CommandError> {
+fn get_manager<'a>(
+    state: &'a State<'_, AppState>,
+) -> Result<std::sync::MutexGuard<'a, Option<morn::core::oauth::OAuthManager>>, CommandError> {
     let guard = lock_oauth(state)?;
     if guard.is_none() {
         return Err(CommandError::Internal("OAuth not initialized".into()));
