@@ -1,16 +1,33 @@
 use crate::commands::errors::CommandError;
-use crate::MornError;
 use std::path::Path;
 use std::process::Command;
 
 #[tauri::command]
-pub(crate) fn transcribe_audio(path: String) -> Result<String, CommandError> {
-    if !Path::new(&path).exists() {
-        return Err(CommandError::NotFound(format!(
-            "audio file not found: {}",
-            path
-        )));
-    }
+pub(crate) fn transcribe_audio(
+    path: Option<String>,
+    data: Option<String>,
+) -> Result<String, CommandError> {
+    let audio_path = if let Some(data) = data {
+        let bytes = base64::decode(&data)
+            .map_err(|e| CommandError::InvalidInput(format!("base64 decode failed: {}", e)))?;
+        let tmp_path = std::env::temp_dir().join(format!("morn_voice_{}.webm", uuid::Uuid::new_v4()));
+        std::fs::write(&tmp_path, &bytes)
+            .map_err(|e| CommandError::Internal(format!("failed to write temp file: {}", e)))?;
+        tmp_path
+    } else if let Some(path) = path {
+        if !Path::new(&path).exists() {
+            return Err(CommandError::NotFound(format!(
+                "audio file not found: {}",
+                path
+            )));
+        }
+        path.into()
+    } else {
+        return Err(CommandError::InvalidInput(
+            "No audio data provided".to_string(),
+        ));
+    };
+
     let exists = Command::new("which")
         .arg("whisper")
         .output()
@@ -22,7 +39,7 @@ pub(crate) fn transcribe_audio(path: String) -> Result<String, CommandError> {
         ));
     }
     let output = Command::new("whisper")
-        .arg(&path)
+        .arg(&audio_path)
         .arg("--output_format")
         .arg("txt")
         .arg("--language")
@@ -42,5 +59,31 @@ pub(crate) fn transcribe_audio(path: String) -> Result<String, CommandError> {
 
 #[tauri::command]
 pub(crate) fn list_audio_devices() -> Result<Vec<String>, CommandError> {
-    Ok(vec!["default".to_string()])
+    let mut devices = vec!["default".to_string()];
+
+    if let Ok(output) = Command::new("arecord").args(["-l"]).output() {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                if let Some(rest) = line.strip_prefix("card ") {
+                    let parts: Vec<&str> = rest.splitn(2, ':').collect();
+                    if parts.len() == 2 {
+                        let card_str = parts[0].trim();
+                        if let Some(dev_part) = parts[1].split(',').next() {
+                            if let Some(device_str) = dev_part
+                                .trim()
+                                .strip_prefix("device ")
+                                .map(|s| s.trim())
+                            {
+                                devices.push(format!("hw:{},{}", card_str, device_str));
+                                devices.push(format!("plughw:{},{}", card_str, device_str));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(devices)
 }

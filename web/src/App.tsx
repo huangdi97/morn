@@ -42,6 +42,7 @@ import StatusBar from "./StatusBar";
 import PipelineFlow from "./components/PipelineFlow";
 import { ToastItem } from "./components/Toast";
 import { LocaleProvider, useTranslation } from "./i18n";
+import VoiceInput from "./components/VoiceInput";
 import "./styles/base.css";
 import "./styles/skeleton.css";
 import "./styles/dashboard.css";
@@ -638,6 +639,7 @@ onSelect={async (template) => {
       </main>
 
       <footer className="input-bar">
+        <VoiceInput onTranscribed={(text) => setInput(text)} />
         <div className="input-wrap">
         <textarea
           value={input}

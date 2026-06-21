@@ -3,6 +3,39 @@
   animation: fadeIn 0.2s ease-out;
 }
 
+.voice-input-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 18px;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.voice-input-btn:hover {
+  color: var(--accent);
+  background: rgba(0, 240, 255, 0.08);
+}
+
+.voice-input-btn.recording {
+  color: var(--danger);
+  animation: pulseMic 0.8s ease-in-out infinite;
+}
+
+.voice-input-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes pulseMic {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .chat-area { padding: 8px; }

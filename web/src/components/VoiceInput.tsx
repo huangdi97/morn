@@ -26,18 +26,21 @@ export default function VoiceInput({ onTranscribed }: VoiceInputProps) {
         setProcessing(true);
         const blob = new Blob(chunks.current, { type: "audio/webm" });
 
-        // Write file to temp and transcribe
-        try {
-          const text: string = await invoke("transcribe_audio", {
-            path: URL.createObjectURL(blob),
-          });
-          onTranscribed(text);
-        } catch (e) {
-          console.error("Transcription failed:", e);
-        }
-
-        stream.getTracks().forEach((t) => t.stop());
-        setProcessing(false);
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(",")[1];
+          try {
+            const text: string = await invoke("transcribe_audio", {
+              data: base64,
+            });
+            onTranscribed(text);
+          } catch (e) {
+            console.error("Transcription failed:", e);
+          }
+          stream.getTracks().forEach((t) => t.stop());
+          setProcessing(false);
+        };
+        reader.readAsDataURL(blob);
       };
 
       recorder.start();
@@ -57,14 +60,7 @@ export default function VoiceInput({ onTranscribed }: VoiceInputProps) {
       onClick={recording ? stopRecording : startRecording}
       disabled={processing}
       title={recording ? "Stop recording" : "Start voice input"}
-      style={{
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: "4px 8px",
-        fontSize: "18px",
-        color: recording ? "#f85149" : "#8b949e",
-      }}
+      className={`voice-input-btn${recording ? " recording" : ""}`}
     >
       {processing ? "⏳" : recording ? "🔴" : "🎤"}
     </button>

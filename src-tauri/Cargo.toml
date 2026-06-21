@@ -24,6 +24,7 @@ chrono = { version = "0.4", features = ["serde"] }
 reqwest = { version = "0.12", features = ["json"] }
 sysinfo = "0.33"
 morn = { path = ".." }
+base64 = "0.22"
 dirs = "5"
 
 # Mobile-specific (optional, only for mobile targets)
