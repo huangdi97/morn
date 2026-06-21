@@ -3,8 +3,8 @@ pub mod billing;
 pub mod gateway;
 pub mod gateway_mock;
 pub mod gateway_stripe;
-pub mod service;
 pub mod revenue;
+pub mod service;
 pub mod types;
 
 pub use service::Hub;
