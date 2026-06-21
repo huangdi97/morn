@@ -1,6 +1,6 @@
 use crate::AppState;
 use crate::MornError;
-use morn::market::revenue::CreatorEarnings;
+use morn::hub::revenue::CreatorEarnings;
 use tauri::State;
 
 #[tauri::command]

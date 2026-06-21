@@ -5,7 +5,7 @@ use tauri::State;
 
 use morn::bridge::chat_agent::ChatAgent;
 use morn::core::plugin_generator;
-use morn::market::{Listing, Marketplace};
+use morn::hub::{Listing, Hub};
 use morn::studio::manager::CreateComponentDef;
 
 #[tauri::command]
@@ -41,7 +41,7 @@ pub(crate) fn apply_theme(name: String, state: State<AppState>) -> Result<String
 }
 
 #[tauri::command]
-pub(crate) fn get_market_listings(
+pub(crate) fn get_hub_listings(
     type_filter: Option<String>,
     price_filter: Option<String>,
     state: State<AppState>,
@@ -53,7 +53,7 @@ pub(crate) fn get_market_listings(
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
-    let marketplace = Marketplace::new(s.clone());
+    let marketplace = Hub::new(s.clone());
     let listings = marketplace.list(type_filter.as_deref());
     let filtered = match price_filter.as_deref() {
         Some("free") => listings
@@ -79,7 +79,7 @@ pub(crate) fn list_bot_store(state: State<AppState>) -> Result<Vec<serde_json::V
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
 
-    let marketplace = Marketplace::new(s.clone());
+    let marketplace = Hub::new(s.clone());
     let listings = marketplace.list(None);
 
     let bot_listings: Vec<serde_json::Value> = listings
@@ -162,7 +162,7 @@ pub(crate) fn hub_publish(
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
-    let marketplace = Marketplace::new(s.clone());
+    let marketplace = Hub::new(s.clone());
     let id = format!("hub-{}", uuid::Uuid::new_v4());
     let listing = Listing {
         id: id.clone(),
@@ -240,7 +240,7 @@ pub(crate) fn get_agent_versions(
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
-    let marketplace = Marketplace::new(s.clone());
+    let marketplace = Hub::new(s.clone());
     let versions = marketplace.get_version_history(&listing_id);
     serde_json::to_value(versions).map_err(|e| MornError::Internal(e.to_string()))
 }
@@ -259,7 +259,7 @@ pub(crate) fn publish_agent_version(
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
-    let marketplace = Marketplace::new(s.clone());
+    let marketplace = Hub::new(s.clone());
     let ver = marketplace.publish_new_version(&listing_id, &data_json, &changelog)?;
     serde_json::to_value(ver).map_err(|e| MornError::Internal(e.to_string()))
 }
@@ -277,7 +277,7 @@ pub(crate) fn rollback_agent(
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
-    let marketplace = Marketplace::new(s.clone());
+    let marketplace = Hub::new(s.clone());
     let data = marketplace.restore_version(&listing_id, &version)?;
     serde_json::to_value(data).map_err(|e| MornError::Internal(e.to_string()))
 }

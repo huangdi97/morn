@@ -16,8 +16,8 @@ pub mod git;
 pub mod journey;
 pub mod lifecycle;
 pub mod local_model;
-pub mod market;
-pub mod market_search;
+pub mod hub;
+pub mod hub_search;
 pub mod mcp;
 pub mod memory;
 pub mod metrics;
@@ -50,13 +50,13 @@ pub(crate) use git::git_info;
 pub(crate) use journey::get_user_journey;
 pub(crate) use lifecycle::{list_installed_items, toggle_installed_item, uninstall_installed_item};
 pub(crate) use local_model::{delete_local_model, download_model, list_local_models};
-pub(crate) use market::{
+pub(crate) use hub::{
     apply_theme, create_agent_from_description, generate_plugin_from_nl, get_agent_versions,
-    get_market_listings, get_preset_persona, hub_publish, install_bot_from_store, list_bot_store,
+    get_hub_listings, get_preset_persona, hub_publish, install_bot_from_store, list_bot_store,
     list_preset_personas, list_themes, publish_agent_version, rollback_agent, sync_now,
     test_notification,
 };
-pub(crate) use market_search::{get_listing_reviews, search_market_listings, submit_review};
+pub(crate) use hub_search::{get_listing_reviews, search_hub_listings, submit_review};
 pub(crate) use mcp::{mcp_call_tool, mcp_connect, mcp_disconnect, mcp_list_servers, mcp_serve};
 pub(crate) use memory::{delete_memory, list_memories, search_memories};
 pub(crate) use metrics::get_reliability_metrics;

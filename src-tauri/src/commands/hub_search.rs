@@ -2,10 +2,10 @@ use crate::AppState;
 use crate::MornError;
 use tauri::State;
 
-use morn::market::{Listing, Marketplace, Review};
+use morn::hub::{Listing, Hub, Review};
 
 #[tauri::command]
-pub(crate) fn search_market_listings(
+pub(crate) fn search_hub_listings(
     query: Option<String>,
     type_filter: Option<String>,
     state: State<AppState>,
@@ -17,7 +17,7 @@ pub(crate) fn search_market_listings(
     let s = storage
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
-    let marketplace = Marketplace::new(s.clone());
+    let marketplace = Hub::new(s.clone());
 
     let listings = match type_filter.as_deref() {
         Some(t) if !t.is_empty() && t != "all" => marketplace.list(Some(t)),
@@ -62,7 +62,7 @@ pub(crate) fn submit_review(
         .as_ref()
         .ok_or_else(|| "Storage not initialized".to_string())?;
 
-    let marketplace = Marketplace::new(s.clone());
+    let marketplace = Hub::new(s.clone());
     marketplace
         .get(&listing_id)
         .ok_or_else(|| "Listing not found".to_string())?;
