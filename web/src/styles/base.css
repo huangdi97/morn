@@ -1064,3 +1064,35 @@ button.welcome-btn-secondary:active {
   overflow-y: auto;
   min-height: 0;
 }
+
+/* ====== Error Boundary ====== */
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  flex: 1;
+  min-height: 0;
+}
+.error-boundary-icon { font-size: 48px; margin-bottom: 16px; }
+.error-boundary h3 { color: var(--text-primary); margin: 0 0 8px 0; font-size: 20px; }
+.error-boundary-message { color: var(--text-secondary); margin-bottom: 24px; font-size: 14px; }
+.error-boundary-detail { color: var(--text-tertiary); font-size: 12px; margin-bottom: 16px; max-width: 360px; word-break: break-word; font-family: var(--font-mono); }
+.error-boundary-retry {
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.error-boundary-retry:hover {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+}

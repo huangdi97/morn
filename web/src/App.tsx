@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { api } from "./api";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ComponentEditor } from "./studio/ComponentEditor";
 import { AgentBuilder } from "./studio/AgentBuilder";
 import { TeamBuilder } from "./studio/TeamBuilder";
@@ -682,12 +683,12 @@ onSelect={async (template) => {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span>{t('nav.console')}</span>
         </button>
-        <div className="main-tab-indicator" style={{ left: indicatorStyle.left, width: indicatorStyle.width }} />
-      </nav>
-      {view === "workbench" && renderWorkbench()}
-      {view === "studio" && renderStudio()}
-      {view === "hub" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}
-      {view === "console" && renderConsole()}
+      <div className="main-tab-indicator" style={{ left: indicatorStyle.left, width: indicatorStyle.width }} />
+        </nav>
+        <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "workbench" && renderWorkbench()}</ErrorBoundary>
+        <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "studio" && renderStudio()}</ErrorBoundary>
+        <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "hub" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}</ErrorBoundary>
+        <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "console" && renderConsole()}</ErrorBoundary>
       {showSettings && <Settings onClose={() => setShowSettings(false)} showToast={showToast} />}
       <StatusBar />
       <div className="toast-container">

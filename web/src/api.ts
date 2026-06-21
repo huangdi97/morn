@@ -660,4 +660,22 @@ export const api = {
     });
     return res.json();
   },
+
+  async getLastError(): Promise<any> {
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("get_last_error");
+    }
+    const res = await fetch("/api/recovery/last-error");
+    return res.json();
+  },
+
+  async retryLastOperation(): Promise<any> {
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("retry_last_operation");
+    }
+    const res = await fetch("/api/recovery/retry", { method: "POST" });
+    return res.json();
+  },
 };
