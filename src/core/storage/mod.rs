@@ -14,6 +14,7 @@ mod costs;
 mod decision_rules;
 mod governance;
 mod market;
+mod memory;
 mod oauth;
 mod proactive;
 mod sessions;
@@ -25,6 +26,7 @@ mod users;
 pub use agents::*;
 pub use costs::*;
 pub use governance::*;
+pub use memory::*;
 pub use oauth::*;
 pub use proactive::*;
 pub use sessions::*;
@@ -315,6 +317,21 @@ impl Storage {
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
                 updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
             );
+
+            CREATE TABLE IF NOT EXISTS memory_entries (
+                id TEXT PRIMARY KEY,
+                layer TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                key TEXT NOT NULL,
+                value TEXT NOT NULL,
+                metadata TEXT DEFAULT '{}',
+                priority REAL DEFAULT 0.0,
+                expires_at INTEGER,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_memory_agent ON memory_entries(agent_id);
+            CREATE INDEX IF NOT EXISTS idx_memory_layer ON memory_entries(layer);
             ",
         )
         .map_err(|e| MornError::Internal(e.to_string()))?;
