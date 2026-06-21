@@ -33,6 +33,7 @@ pub struct ExecutionRecord {
     pub status: String,
     pub latency_ms: Option<i64>,
     pub error_msg: Option<String>,
+    pub token_count: Option<i64>,
     pub created_at: String,
 }
 

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { api } from "../api";
 import { useTranslation } from '../i18n';
 
 interface CostBreakdown {
@@ -12,6 +11,22 @@ interface CostBreakdown {
 interface DailyCost {
   date: string;
   cost: number;
+}
+
+interface DailyCostRow {
+  date: string;
+  agent_id: string;
+  model: string;
+  token_count: number;
+  cost_usd: number;
+  call_count: number;
+}
+
+interface CostSummary {
+  total: number;
+  calls: number;
+  tokens: number;
+  by_date: DailyCostRow[];
 }
 
 const tableStyle: React.CSSProperties = {
@@ -27,21 +42,42 @@ export default function CostCenter() {
   const [totalCost, setTotalCost] = useState("0.00");
 
   useEffect(() => {
-    api.getSystemStatus().then((res: { dashboard: { agent_costs?: { name: string, cost: number, calls: number }[], daily_costs?: { date: string, cost: number }[] } }) => {
-      const ac = res.dashboard.agent_costs;
-      if (ac && ac.length > 0) {
-        const total = ac.reduce((s, a) => s + a.cost, 0);
-        setByAgent(ac.map(a => ({
-          ...a,
-          percentage: total > 0 ? (a.cost / total) * 100 : 0,
-        })));
+    const load = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const summary = await invoke<CostSummary>("get_cost_summary");
+        setTotalCost(summary.total.toFixed(2));
+
+        const details = await invoke<DailyCostRow[]>("get_cost_details", { agentId: null });
+        const agentMap = new Map<string, { cost: number; calls: number }>();
+        const dateMap = new Map<string, number>();
+        for (const row of details) {
+          const prev = agentMap.get(row.agent_id) || { cost: 0, calls: 0 };
+          agentMap.set(row.agent_id, {
+            cost: prev.cost + row.cost_usd,
+            calls: prev.calls + row.call_count,
+          });
+          dateMap.set(row.date, (dateMap.get(row.date) || 0) + row.cost_usd);
+        }
+        const total = summary.total || 0.01;
+        setByAgent(
+          Array.from(agentMap.entries()).map(([name, v]) => ({
+            name,
+            cost: v.cost,
+            calls: v.calls,
+            percentage: (v.cost / total) * 100,
+          }))
+        );
+        setDaily(
+          Array.from(dateMap.entries())
+            .map(([date, cost]) => ({ date, cost }))
+            .sort((a, b) => a.date.localeCompare(b.date))
+        );
+      } catch {
+        console.error("Failed to load cost data");
       }
-      const dc = res.dashboard.daily_costs;
-      if (dc && dc.length > 0) {
-        setDaily(dc);
-        setTotalCost(dc.reduce((s, d) => s + d.cost, 0).toFixed(2));
-      }
-    }).catch(() => {});
+    };
+    load();
   }, []);
 
   const maxDaily = Math.max(...daily.map(d => d.cost), 0.01);

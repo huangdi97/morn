@@ -10,6 +10,7 @@ pub struct Storage {
 }
 
 mod agents;
+mod costs;
 mod decision_rules;
 mod governance;
 mod market;
@@ -22,6 +23,7 @@ mod tasks;
 mod users;
 
 pub use agents::*;
+pub use costs::*;
 pub use governance::*;
 pub use oauth::*;
 pub use proactive::*;
@@ -109,8 +111,20 @@ impl Storage {
             CREATE TABLE IF NOT EXISTS executions (
                 id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, task_id TEXT NOT NULL,
                 action TEXT NOT NULL, status TEXT DEFAULT 'pending',
-                latency_ms INTEGER, error_msg TEXT, created_at TEXT NOT NULL,
+                latency_ms INTEGER, error_msg TEXT, token_count INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
                 FOREIGN KEY (task_id) REFERENCES tasks(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS daily_costs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                model TEXT NOT NULL,
+                token_count INTEGER NOT NULL DEFAULT 0,
+                cost_usd REAL NOT NULL DEFAULT 0.0,
+                call_count INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(date, agent_id, model)
             );
 
             CREATE TABLE IF NOT EXISTS decisions (
@@ -304,6 +318,12 @@ impl Storage {
             ",
         )
         .map_err(|e| MornError::Internal(e.to_string()))?;
+
+        conn.execute_batch(
+            "ALTER TABLE executions ADD COLUMN token_count INTEGER DEFAULT 0;",
+        )
+        .ok();
+
         Ok(())
     }
 

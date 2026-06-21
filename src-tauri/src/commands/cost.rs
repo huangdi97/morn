@@ -23,7 +23,7 @@ pub(crate) fn estimate_cost(tokens: u64, model: String) -> Result<f64, CommandEr
 }
 
 #[tauri::command]
-pub(crate) fn get_cost_summary(state: State<AppState>) -> Result<String, CommandError> {
+pub(crate) fn get_cost_summary(state: State<AppState>) -> Result<serde_json::Value, CommandError> {
     let storage_lock = state
         .storage
         .lock()
@@ -31,16 +31,36 @@ pub(crate) fn get_cost_summary(state: State<AppState>) -> Result<String, Command
     let s = storage_lock
         .as_ref()
         .ok_or_else(|| CommandError::Internal("Storage not available".to_string()))?;
-    let executions = s
-        .list_today_executions()
+    let summary = s
+        .get_cost_summary(7)
         .map_err(|e| CommandError::Internal(e.to_string()))?;
-    let calls = executions.len();
-    let avg_tokens_per_call: u64 = 500;
-    let total_tokens = calls as u64 * avg_tokens_per_call;
-    let total_cost = (total_tokens as f64 / 1000.0) * 0.005;
-    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-    Ok(format!(
-        r#"{{"total": {:.2}, "calls": {}, "date": "{}"}}"#,
-        total_cost, calls, today
-    ))
+    Ok(serde_json::json!({
+        "total": summary.total_cost,
+        "calls": summary.total_calls,
+        "tokens": summary.total_tokens,
+        "by_date": summary.by_date,
+    }))
+}
+
+#[tauri::command]
+pub(crate) fn get_cost_details(
+    state: State<AppState>,
+    agent_id: Option<String>,
+) -> Result<serde_json::Value, CommandError> {
+    let storage_lock = state
+        .storage
+        .lock()
+        .map_err(|e| CommandError::Internal(e.to_string()))?;
+    let s = storage_lock
+        .as_ref()
+        .ok_or_else(|| CommandError::Internal("Storage not available".to_string()))?;
+    let rows = if let Some(aid) = agent_id {
+        s.get_agent_costs(&aid, 7)
+            .map_err(|e| CommandError::Internal(e.to_string()))?
+    } else {
+        s.get_cost_summary(7)
+            .map_err(|e| CommandError::Internal(e.to_string()))?
+            .by_date
+    };
+    Ok(serde_json::json!(rows))
 }

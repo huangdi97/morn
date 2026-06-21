@@ -203,6 +203,7 @@
   "console_tab.system": "System",
   "console_tab.cost": "Cost",
   "console_tab.roi": "ROI",
+  "console_tab.reliability": "Reliability",
   "console_tab.governance": "Governance",
   "console_tab.security": "Security",
   "console_tab.marketplace": "Marketplace",

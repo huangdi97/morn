@@ -165,11 +165,11 @@ impl Storage {
     pub fn insert_execution(&self, exec: &ExecutionRecord) -> Result<(), MornError> {
         let conn = self.conn()?;
         conn.execute(
-            "INSERT INTO executions (id, agent_id, task_id, action, status, latency_ms, error_msg, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO executions (id, agent_id, task_id, action, status, latency_ms, error_msg, token_count, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 exec.id, exec.agent_id, exec.task_id, exec.action,
-                exec.status, exec.latency_ms, exec.error_msg, exec.created_at
+                exec.status, exec.latency_ms, exec.error_msg, exec.token_count, exec.created_at
             ],
         )
         .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -180,7 +180,7 @@ impl Storage {
     pub fn list_executions(&self, task_id: &str) -> Result<Vec<ExecutionRecord>, MornError> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, created_at FROM executions WHERE task_id = ?1")
+            .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, token_count, created_at FROM executions WHERE task_id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![task_id], |row| {
@@ -192,7 +192,8 @@ impl Storage {
                     status: row.get(4)?,
                     latency_ms: row.get(5)?,
                     error_msg: row.get(6)?,
-                    created_at: row.get(7)?,
+                    token_count: row.get(7)?,
+                    created_at: row.get(8)?,
                 })
             })
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -209,7 +210,7 @@ impl Storage {
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
         let pattern = format!("{}%", today);
         let mut stmt = conn
-            .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, created_at FROM executions WHERE created_at LIKE ?1")
+            .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, token_count, created_at FROM executions WHERE created_at LIKE ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![pattern], |row| {
@@ -221,7 +222,8 @@ impl Storage {
                     status: row.get(4)?,
                     latency_ms: row.get(5)?,
                     error_msg: row.get(6)?,
-                    created_at: row.get(7)?,
+                    token_count: row.get(7)?,
+                    created_at: row.get(8)?,
                 })
             })
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -235,7 +237,7 @@ impl Storage {
     pub fn list_recent_executions(&self, limit: usize) -> Result<Vec<ExecutionRecord>, MornError> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, created_at FROM executions ORDER BY created_at DESC LIMIT ?1")
+            .prepare("SELECT id, agent_id, task_id, action, status, latency_ms, error_msg, token_count, created_at FROM executions ORDER BY created_at DESC LIMIT ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![limit as i64], |row| {
@@ -247,7 +249,8 @@ impl Storage {
                     status: row.get(4)?,
                     latency_ms: row.get(5)?,
                     error_msg: row.get(6)?,
-                    created_at: row.get(7)?,
+                    token_count: row.get(7)?,
+                    created_at: row.get(8)?,
                 })
             })
             .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -469,6 +472,7 @@ mod tests {
                 status: "completed".to_string(),
                 latency_ms: Some(42),
                 error_msg: None,
+                token_count: None,
                 created_at: chrono::Utc::now().to_rfc3339(),
             })
             .unwrap();

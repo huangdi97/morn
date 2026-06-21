@@ -43,7 +43,7 @@ pub(crate) use component_type::{
 };
 pub(crate) use config::{export_config, import_config};
 pub(crate) use console::{get_component_topology, get_system_status};
-pub(crate) use cost::{estimate_cost, get_cost_summary};
+pub(crate) use cost::{estimate_cost, get_cost_details, get_cost_summary};
 pub(crate) use execution::get_recent_logs;
 pub(crate) use git::git_info;
 pub(crate) use journey::get_user_journey;

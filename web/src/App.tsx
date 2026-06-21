@@ -14,6 +14,7 @@ import Topology from "./console/Topology";
 import SystemInfo from "./console/SystemInfo";
 import AdminDashboard from "./console/AdminDashboard";
 import CostCenter from "./console/CostCenter";
+import ReliabilityPanel from "./console/ReliabilityPanel";
 import RoiCalculator from "./console/RoiCalculator";
 import SystemCheck from "./console/SystemCheck";
 import Governance from "./console/Governance";
@@ -361,7 +362,7 @@ function AppInner() {
   };
 
   const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "team" | "dev" | "types" | "mcp" | "create_plugin">("builder");
-  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings" | "git" | "plugins">("dashboard");
+  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "reliability" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings" | "git" | "plugins">("dashboard");
   const [workbenchTab, setWorkbenchTab] = useState<"chat" | "workflow">("chat");
 
   const SkeletonChat = () => (
@@ -491,6 +492,7 @@ onSelect={async (template) => {
         <button className={consoleTab === "system" ? "active" : ""} onClick={() => setConsoleTab("system")}>{t('console_tab.system')}</button>
         <button className={consoleTab === "cost" ? "active" : ""} onClick={() => setConsoleTab("cost")}>{t('console_tab.cost')}</button>
         <button className={consoleTab === "roi" ? "active" : ""} onClick={() => setConsoleTab("roi")}>{t('console_tab.roi')}</button>
+        <button className={consoleTab === "reliability" ? "active" : ""} onClick={() => setConsoleTab("reliability")}>{t('console_tab.reliability')}</button>
         <button className={consoleTab === "governance" ? "active" : ""} onClick={() => setConsoleTab("governance")}>{t('console_tab.governance')}</button>
         <button className={consoleTab === "security" ? "active" : ""} onClick={() => setConsoleTab("security")}>{t('console_tab.security')}</button>
         <button className={consoleTab === "market" ? "active" : ""} onClick={() => setConsoleTab("market")}>{t('console_tab.marketplace')}</button>
@@ -518,6 +520,7 @@ onSelect={async (template) => {
             {consoleTab === "system" && <SystemInfo />}
             {consoleTab === "cost" && <CostCenter />}
             {consoleTab === "roi" && <RoiCalculator />}
+            {consoleTab === "reliability" && <ReliabilityPanel />}
             {consoleTab === "governance" && <Governance />}
             {consoleTab === "security" && <Security />}
             {consoleTab === "market" && <Marketplace />}

@@ -322,6 +322,7 @@ pub fn run() {
             commands::whisper::list_audio_devices,
             commands::cost::estimate_cost,
             commands::cost::get_cost_summary,
+            commands::cost::get_cost_details,
             commands::recovery::get_last_error,
             commands::recovery::retry_last_operation,
             commands::proactive::list_proactive_rules,

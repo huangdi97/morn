@@ -1,7 +1,9 @@
 //! observability — Tracks trace spans and token usage for runtime workflows.
 use crate::core::event_bus::{Event, SimpleEventBus};
+use crate::core::storage::Storage;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub const EVENT_TRACE_SPAN_STARTED: &str = "observability.trace.span_started";
 pub const EVENT_TRACE_SPAN_ENDED: &str = "observability.trace.span_ended";
@@ -58,6 +60,7 @@ pub struct ObservabilityManager {
     token_stats: TokenStats,
     max_spans: usize,
     event_bus: Option<SimpleEventBus>,
+    storage: Option<Arc<Storage>>,
 }
 
 impl ObservabilityManager {
@@ -72,7 +75,13 @@ impl ObservabilityManager {
             token_stats: TokenStats::default(),
             max_spans,
             event_bus: None,
+            storage: None,
         }
+    }
+
+    pub fn with_storage(mut self, storage: Arc<Storage>) -> Self {
+        self.storage = Some(storage);
+        self
     }
 
     pub fn with_event_bus(mut self, event_bus: SimpleEventBus) -> Self {
@@ -115,6 +124,33 @@ impl ObservabilityManager {
         self.completed_spans.push(span.clone());
         self.trim_spans();
         self.publish_span_event(EVENT_TRACE_SPAN_ENDED, &span);
+
+        if let Some(storage) = &self.storage {
+            let agent_id = span.metadata.get("agent").map(|s| s.as_str()).unwrap_or("unknown");
+            let model = span.metadata.get("model").map(|s| s.as_str()).unwrap_or("unknown");
+            let tokens = span.metadata.get("tokens").and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+            let cost = span.metadata.get("cost_usd").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+
+            if tokens > 0 || cost > 0.0 {
+                let _ = storage.record_call_cost(agent_id, model, tokens, cost);
+            }
+
+            let task_id = span.metadata.get("task_id").map(|s| s.as_str()).unwrap_or("unknown");
+            let action = format!("{:?}", span.span_type);
+            let latency_ms = span.duration_ms as i64;
+            let _ = storage.insert_execution(&crate::core::storage::ExecutionRecord {
+                id: span.id.clone(),
+                agent_id: agent_id.to_string(),
+                task_id: task_id.to_string(),
+                action,
+                status: span.status.clone(),
+                latency_ms: Some(latency_ms),
+                error_msg: None,
+                token_count: if tokens > 0 { Some(tokens as i64) } else { None },
+                created_at: chrono::Utc::now().to_rfc3339(),
+            });
+        }
+
         Some(span)
     }
 
@@ -131,6 +167,10 @@ impl ObservabilityManager {
             .by_agent
             .entry(agent.to_string())
             .or_insert(0) += tokens;
+
+        if let Some(storage) = &self.storage {
+            let _ = storage.record_call_cost(agent, model, tokens, cost_usd);
+        }
 
         if let Some(bus) = &self.event_bus {
             bus.publish_event(

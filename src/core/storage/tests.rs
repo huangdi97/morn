@@ -79,6 +79,7 @@ fn test_storage_crud() {
         status: "completed".to_string(),
         latency_ms: Some(100),
         error_msg: None,
+        token_count: None,
         created_at: chrono::Utc::now().to_rfc3339(),
     };
     storage.insert_execution(&exec).unwrap();
