@@ -110,7 +110,7 @@ impl AppState {
             proactive_engine: Arc::new(Mutex::new(ProactiveEngine::new(None))),
             sync_engine: Arc::new(Mutex::new(
                 ctx.get::<Arc<Mutex<SyncEngine>>>("morn:sync-engine")
-                    .and_then(|arc| arc.lock().ok().map(|guard| guard.clone())),
+                    .and_then(|arc| arc.lock().ok().map(|guard| (*guard).clone())),
             )),
         }
     }
@@ -192,26 +192,26 @@ pub fn run() {
         state.proactive_engine = Arc::new(Mutex::new(engine));
     }
 
+    // Start background sync loop (engine initialized by SyncPlugin)
+    if state
+        .sync_engine
+        .lock()
+        .ok()
+        .map(|g| g.is_some())
+        .unwrap_or(false)
+    {
+        let sync_engine = state.sync_engine.clone();
+        start_sync_loop(sync_engine);
+    }
+
     // Clone engine reference for background tick thread
     let bg_engine = state.proactive_engine.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .setup(|app| {
+        .setup(move |app| {
             autostart::setup_autostart(app);
-
-            // Start background sync loop (engine initialized by SyncPlugin)
-            if state
-                .sync_engine
-                .lock()
-                .ok()
-                .map(|g| g.is_some())
-                .unwrap_or(false)
-            {
-                let sync_engine = state.sync_engine.clone();
-                start_sync_loop(sync_engine);
-            }
 
             // Background tick thread for proactive engine
             let engine = bg_engine.clone();

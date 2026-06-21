@@ -46,6 +46,7 @@ pub(crate) struct PullResponse {
     last_sync_key: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct SyncEngine {
     pub(crate) storage: Option<Arc<Mutex<Storage>>>,
     pub(crate) device_id: String,

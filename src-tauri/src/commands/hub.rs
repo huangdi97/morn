@@ -223,7 +223,7 @@ pub(crate) fn create_agent_from_description(
         .ok_or_else(|| "Supervisor not initialized.".to_string())?;
     let sup = sup.lock().map_err(|e| MornError::Internal(e.to_string()))?;
 
-    let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
+    let chat_fn = move |prompt: &str, system: &str| chat_agent.chat(prompt, system);
     let nl_def = sup.create_team_from_nl(&nl, &chat_fn)?;
     serde_json::to_string(&nl_def).map_err(|e| MornError::Internal(e.to_string()))
 }
@@ -301,7 +301,7 @@ pub(crate) fn generate_plugin_from_nl(
         mgr.plugin_dir.clone()
     };
 
-    let chat_fn = |prompt: &str, system: &str| chat_agent.chat(prompt, system);
+    let chat_fn = move |prompt: &str, system: &str| chat_agent.chat(prompt, system);
     let path = plugin_generator::generate_plugin_from_nl(&nl, &plugin_dir, &chat_fn)
         .map_err(|e| MornError::Internal(e.to_string()))?;
 

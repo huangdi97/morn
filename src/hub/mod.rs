@@ -3,11 +3,11 @@ pub mod billing;
 pub mod gateway;
 pub mod gateway_mock;
 pub mod gateway_stripe;
-pub mod hub;
+pub mod service;
 pub mod revenue;
 pub mod types;
 
-pub use hub::Hub;
+pub use service::Hub;
 pub use types::AgentVersion;
 pub use types::License;
 pub use types::Listing;
