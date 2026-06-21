@@ -28,7 +28,7 @@ pub struct ProactiveAgent {
     /// Opaque action string (e.g. a hook name or command) to execute.
     pub action: String,
     /// Internal tick counter (managed by [`ProactiveEngine`]).
-    counter: u64,
+    pub counter: u64,
 }
 
 /// Engine that registers, ticks, and evaluates [`ProactiveAgent`] instances.
