@@ -478,12 +478,12 @@ export const api = {
     }
     if (isTauri) {
       const { invoke } = await import("@tauri-apps/api/core");
-      return invoke("get_market_listings", { typeFilter, priceFilter });
+      return invoke("get_hub_listings", { typeFilter, priceFilter });
     }
     const params = new URLSearchParams();
     if (typeFilter) params.set("typeFilter", typeFilter);
     if (priceFilter) params.set("priceFilter", priceFilter);
-    const res = await fetch(`/api/market/listings?${params}`);
+    const res = await fetch(`/api/hub/listings?${params}`);
     return res.json();
   },
 
@@ -565,12 +565,12 @@ export const api = {
     }
     if (isTauri) {
       const { invoke } = await import("@tauri-apps/api/core");
-      return invoke("search_market_listings", { query, typeFilter });
+      return invoke("search_hub_listings", { query, typeFilter });
     }
     const params = new URLSearchParams();
     if (query) params.set("query", query);
     if (typeFilter) params.set("typeFilter", typeFilter);
-    const res = await fetch(`/api/market/search?${params}`);
+    const res = await fetch(`/api/hub/search?${params}`);
     return res.json();
   },
 

@@ -41,6 +41,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Phase 2+ 多 Agent 团队：7 种协作模式 + 工作流引擎
 - Phase 2+ 管理台：Console — 成本 / 治理 / 监控
 - Phase 2+ 电脑操控：桌面 / 文件 / 浏览器 / 应用 / 系统 / 感知
-- Phase 2+ 市场：Marketplace — 上架 / 下载 / 评分 / 许可证
+- Phase 2+ 中心：Hub — 上架 / 下载 / 评分 / 许可证
 - Phase 2+ 四层安全宪法：L1-L4 安全策略 + Dual-LLM
 - Rust + Tauri + React 技术栈，MIT 许可证

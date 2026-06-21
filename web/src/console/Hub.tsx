@@ -95,7 +95,7 @@ function DetailModal({ listing, allListings, onClose }: { listing: Listing; allL
             <span style={{
               color: categoryColors[listing.item_type] || "#8b949e", fontSize: "11px",
               textTransform: "uppercase", fontWeight: "bold",
-            }}>{t(`console.marketplace.category.${listing.item_type}`)}</span>
+            }}>{t(`console.hub.category.${listing.item_type}`)}</span>
             <h2 style={{ margin: "4px 0", fontSize: "20px" }}>{listing.name}</h2>
           </div>
           <button onClick={onClose} style={{
@@ -106,17 +106,17 @@ function DetailModal({ listing, allListings, onClose }: { listing: Listing; allL
         <p style={{ color: "#8b949e", fontSize: "14px", margin: "12px 0" }}>{listing.description}</p>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "13px", margin: "16px 0" }}>
-          <div><span style={{ color: "#8b949e" }}>{t('console.marketplace.detail.version')}:</span> {listing.version}</div>
-          <div><span style={{ color: "#8b949e" }}>{t('console.marketplace.detail.size')}:</span> {listing.size}</div>
-          <div><span style={{ color: "#8b949e" }}>{t('console.marketplace.detail.license')}:</span> {listing.license}</div>
-          <div><span style={{ color: "#8b949e" }}>{t('console.marketplace.detail.author')}:</span> {listing.author}</div>
-          <div><span style={{ color: "#8b949e" }}>{t('console.marketplace.detail.updated')}:</span> {t('console.marketplace.days_ago', { count: daysAgo(listing.updatedAt) })}</div>
-          <div><span style={{ color: "#8b949e" }}>{t('console.marketplace.detail.downloads')}:</span> {listing.downloads.toLocaleString()}</div>
+          <div><span style={{ color: "#8b949e" }}>{t('console.hub.detail.version')}:</span> {listing.version}</div>
+          <div><span style={{ color: "#8b949e" }}>{t('console.hub.detail.size')}:</span> {listing.size}</div>
+          <div><span style={{ color: "#8b949e" }}>{t('console.hub.detail.license')}:</span> {listing.license}</div>
+          <div><span style={{ color: "#8b949e" }}>{t('console.hub.detail.author')}:</span> {listing.author}</div>
+          <div><span style={{ color: "#8b949e" }}>{t('console.hub.detail.updated')}:</span> {t('console.hub.days_ago', { count: daysAgo(listing.updatedAt) })}</div>
+          <div><span style={{ color: "#8b949e" }}>{t('console.hub.detail.downloads')}:</span> {listing.downloads.toLocaleString()}</div>
         </div>
 
         <div style={{ margin: "16px 0" }}>
           <div style={{ color: "#e6edf3", fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>
-            {t('console.marketplace.detail.rating_distribution')}
+            {t('console.hub.detail.rating_distribution')}
           </div>
           {[5, 4, 3, 2, 1].map(star => {
             const count = listing.ratingDistribution[star as keyof RatingDistribution] || 0;
@@ -132,7 +132,7 @@ function DetailModal({ listing, allListings, onClose }: { listing: Listing; allL
             );
           })}
           <div style={{ color: "#8b949e", fontSize: "12px", marginTop: "4px" }}>
-            {t('console.marketplace.detail.total_reviews', { count: listing.reviewCount })}
+            {t('console.hub.detail.total_reviews', { count: listing.reviewCount })}
           </div>
         </div>
 
@@ -142,14 +142,14 @@ function DetailModal({ listing, allListings, onClose }: { listing: Listing; allL
           borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontWeight: "bold",
         }}>
           {listing.price === 0
-            ? t('console.marketplace.install_free')
-            : `${t('console.marketplace.purchase')} ¥${listing.price.toFixed(3)}`}
+            ? t('console.hub.install_free')
+            : `${t('console.hub.purchase')} ¥${listing.price.toFixed(3)}`}
         </button>
 
         {recommendations.length > 0 && (
           <div style={{ marginTop: "20px", borderTop: "1px solid #30363d", paddingTop: "16px" }}>
             <div style={{ color: "#e6edf3", fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>
-              {t('console.marketplace.detail.you_may_also_like')}
+              {t('console.hub.detail.you_may_also_like')}
             </div>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               {recommendations.map(r => (
@@ -169,7 +169,7 @@ function DetailModal({ listing, allListings, onClose }: { listing: Listing; allL
   );
 }
 
-export default function Marketplace() {
+export default function Hub() {
   const { t } = useTranslation();
   const [listings, setListings] = useState<Listing[]>(hardcodedListings);
   const [searchQuery, setSearchQuery] = useState("");
@@ -197,7 +197,7 @@ export default function Marketplace() {
 
   return (
     <div>
-      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.marketplace.title')}</h2>
+      <h2 style={{ color: "#e6edf3", marginBottom: "16px" }}>{t('console.hub.title')}</h2>
 
       <div style={{ marginBottom: "12px" }}>
         <input
@@ -205,7 +205,7 @@ export default function Marketplace() {
           type="text"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          placeholder={t('console.marketplace.search_placeholder')}
+          placeholder={t('console.hub.search_placeholder')}
           style={{
             width: "100%", padding: "8px 12px", boxSizing: "border-box",
             background: "#0d1117", border: "1px solid #30363d", borderRadius: "6px",
@@ -216,7 +216,7 @@ export default function Marketplace() {
 
       {debouncedQuery && (
         <div style={{ color: "#8b949e", fontSize: "13px", marginBottom: "12px" }}>
-          {t('console.marketplace.search_results', { count: filtered.length })}
+          {t('console.hub.search_results', { count: filtered.length })}
         </div>
       )}
 
@@ -230,7 +230,7 @@ export default function Marketplace() {
               padding: "4px 12px", borderRadius: "4px", cursor: "pointer",
               fontSize: "13px",
             }}>
-            {t(`console.marketplace.category.${cat}`)}
+            {t(`console.hub.category.${cat}`)}
           </button>
         ))}
       </div>
@@ -245,7 +245,7 @@ export default function Marketplace() {
                 color: categoryColors[listing.item_type] || "#8b949e", fontSize: "11px",
                 textTransform: "uppercase", fontWeight: "bold",
               }}>
-                {t(`console.marketplace.category.${listing.item_type}`)}
+                {t(`console.hub.category.${listing.item_type}`)}
               </span>
               <div style={{ display: "flex", alignItems: "center", gap: "4px", position: "relative" }}>
                 <span style={{ color: "#d29922", fontSize: "13px", cursor: "pointer" }}
@@ -260,7 +260,7 @@ export default function Marketplace() {
                     padding: "12px", minWidth: "200px",
                   }} onClick={e => e.stopPropagation()}>
                     <div style={{ color: "#e6edf3", fontSize: "12px", fontWeight: "bold", marginBottom: "8px" }}>
-                      {t('console.marketplace.detail.rating_distribution')}
+                      {t('console.hub.detail.rating_distribution')}
                     </div>
                     {[5, 4, 3, 2, 1].map(star => {
                       const count = listing.ratingDistribution[star as keyof RatingDistribution] || 0;
@@ -284,11 +284,11 @@ export default function Marketplace() {
             <div style={{ color: "#8b949e", fontSize: "13px", marginTop: "4px", lineHeight: 1.4 }}>{listing.description}</div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "12px" }}>
               <span style={{ color: "#8b949e", fontSize: "12px" }}>
-                {t('console.marketplace.by_author', { author: listing.author })} · {listing.downloads.toLocaleString()} {t('console.marketplace.downloads')} · {t('console.marketplace.days_ago', { count: daysAgo(listing.updatedAt) })}
+                {t('console.hub.by_author', { author: listing.author })} · {listing.downloads.toLocaleString()} {t('console.hub.downloads')} · {t('console.hub.days_ago', { count: daysAgo(listing.updatedAt) })}
               </span>
               {listing.price === 0 ? (
                 <span style={{ color: "#3fb950", fontSize: "11px", fontWeight: "bold", background: "rgba(63,185,80,0.15)", padding: "2px 8px", borderRadius: "4px" }}>
-                  {t('console.marketplace.free')}
+                  {t('console.hub.free')}
                 </span>
               ) : (
                 <span style={{ color: "#f85149", fontWeight: "bold", fontSize: "13px" }}>¥{listing.price.toFixed(3)}</span>
@@ -302,7 +302,7 @@ export default function Marketplace() {
               e.stopPropagation();
               setDetailListing(listing);
             }}>
-              {listing.price === 0 ? t('console.marketplace.install_free') : t('console.marketplace.purchase')}
+              {listing.price === 0 ? t('console.hub.install_free') : t('console.hub.purchase')}
             </button>
           </div>
         ))}
@@ -310,7 +310,7 @@ export default function Marketplace() {
 
       {filtered.length === 0 && (
         <div style={{ color: "#8b949e", textAlign: "center", padding: "40px", fontSize: "14px" }}>
-          {t('console.marketplace.no_results')}
+          {t('console.hub.no_results')}
         </div>
       )}
 

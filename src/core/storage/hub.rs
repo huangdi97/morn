@@ -1,15 +1,15 @@
-//! market — Persists marketplace listings and install records.
+//! hub — Persists marketplace listings and install records.
 use crate::core::error::MornError;
 use rusqlite::params;
 
 use super::Storage;
-use crate::market::{AgentVersion, License, Listing, Review, Transaction};
+use crate::hub::{AgentVersion, License, Listing, Review, Transaction};
 
 impl Storage {
     pub fn save_listing(&self, listing: &Listing) -> Result<(), MornError> {
         let conn = self.conn()?;
         conn.execute(
-            "INSERT OR REPLACE INTO market_listings (id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            "INSERT OR REPLACE INTO hub_listings (id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 listing.id, listing.item_type, listing.name, listing.description,
                 listing.price, listing.author, listing.rating, listing.downloads, listing.created_at,
@@ -24,8 +24,8 @@ impl Storage {
     pub fn list_listings(&self, filter: Option<&str>) -> Result<Vec<Listing>, MornError> {
         let conn = self.conn()?;
         let sql = match filter {
-            Some(_) => "SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at FROM market_listings WHERE item_type = ?1 ORDER BY created_at DESC",
-            None => "SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at FROM market_listings ORDER BY created_at DESC",
+            Some(_) => "SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at FROM hub_listings WHERE item_type = ?1 ORDER BY created_at DESC",
+            None => "SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at FROM hub_listings ORDER BY created_at DESC",
         };
         let mut stmt = conn
             .prepare(sql)
@@ -47,7 +47,7 @@ impl Storage {
     pub fn get_listing(&self, id: &str) -> Result<Option<Listing>, MornError> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at FROM market_listings WHERE id = ?1")
+            .prepare("SELECT id, item_type, name, description, price, author, rating, downloads, created_at, version, screenshots, category, price_model, requires, verified, updated_at FROM hub_listings WHERE id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut rows = stmt
             .query(params![id])
@@ -65,7 +65,7 @@ impl Storage {
     pub fn save_transaction(&self, tx: &Transaction) -> Result<(), MornError> {
         let conn = self.conn()?;
         conn.execute(
-            "INSERT INTO market_transactions (id, listing_id, buyer, amount, timestamp)
+            "INSERT INTO hub_transactions (id, listing_id, buyer, amount, timestamp)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![tx.id, tx.listing_id, tx.buyer, tx.amount, tx.timestamp],
         )
@@ -76,7 +76,7 @@ impl Storage {
     pub fn save_license(&self, lic: &License) -> Result<(), MornError> {
         let conn = self.conn()?;
         conn.execute(
-            "INSERT INTO market_licenses (id, listing_id, user_id, granted_at, expires_at)
+            "INSERT INTO hub_licenses (id, listing_id, user_id, granted_at, expires_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 lic.id,
@@ -93,7 +93,7 @@ impl Storage {
     pub fn get_user_licenses(&self, user_id: &str) -> Result<Vec<License>, MornError> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, listing_id, user_id, granted_at, expires_at FROM market_licenses WHERE user_id = ?1")
+            .prepare("SELECT id, listing_id, user_id, granted_at, expires_at FROM hub_licenses WHERE user_id = ?1")
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![user_id], |row| {
@@ -121,7 +121,7 @@ impl Storage {
     ) -> Result<(), MornError> {
         let conn = self.conn()?;
         conn.execute(
-            "UPDATE market_listings SET rating = ?1, downloads = ?2 WHERE id = ?3",
+            "UPDATE hub_listings SET rating = ?1, downloads = ?2 WHERE id = ?3",
             params![rating, downloads, id],
         )
         .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -130,7 +130,7 @@ impl Storage {
 
     pub fn delete_listing(&self, id: &str) -> Result<(), MornError> {
         let conn = self.conn()?;
-        conn.execute("DELETE FROM market_listings WHERE id = ?1", params![id])
+        conn.execute("DELETE FROM hub_listings WHERE id = ?1", params![id])
             .map_err(|e| MornError::Internal(e.to_string()))?;
         Ok(())
     }
@@ -138,7 +138,7 @@ impl Storage {
     pub fn list_transactions(&self) -> Result<Vec<Transaction>, MornError> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, listing_id, buyer, amount, timestamp FROM market_transactions ORDER BY timestamp DESC")
+            .prepare("SELECT id, listing_id, buyer, amount, timestamp FROM hub_transactions ORDER BY timestamp DESC")
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map([], |row| {
@@ -161,7 +161,7 @@ impl Storage {
     pub fn list_transactions_by_buyer(&self, buyer: &str) -> Result<Vec<Transaction>, MornError> {
         let conn = self.conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, listing_id, buyer, amount, timestamp FROM market_transactions WHERE buyer = ?1 ORDER BY timestamp DESC")
+            .prepare("SELECT id, listing_id, buyer, amount, timestamp FROM hub_transactions WHERE buyer = ?1 ORDER BY timestamp DESC")
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
             .query_map(params![buyer], |row| {
@@ -184,7 +184,7 @@ impl Storage {
     pub fn save_agent_version(&self, ver: &AgentVersion) -> Result<(), MornError> {
         let conn = self.conn()?;
         conn.execute(
-            "INSERT OR REPLACE INTO market_agent_versions (id, listing_id, version, data_json, changelog, created_at)
+            "INSERT OR REPLACE INTO hub_agent_versions (id, listing_id, version, data_json, changelog, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 ver.id, ver.listing_id, ver.version, ver.data_json, ver.changelog, ver.created_at
@@ -199,7 +199,7 @@ impl Storage {
         let mut stmt = conn
             .prepare(
                 "SELECT id, listing_id, version, data_json, changelog, created_at
-                 FROM market_agent_versions WHERE listing_id = ?1 ORDER BY created_at DESC",
+                 FROM hub_agent_versions WHERE listing_id = ?1 ORDER BY created_at DESC",
             )
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt
@@ -230,7 +230,7 @@ impl Storage {
         let mut stmt = conn
             .prepare(
                 "SELECT id, listing_id, version, data_json, changelog, created_at
-                 FROM market_agent_versions WHERE listing_id = ?1 AND version = ?2",
+                 FROM hub_agent_versions WHERE listing_id = ?1 AND version = ?2",
             )
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let mut rows = stmt
@@ -256,7 +256,7 @@ impl Storage {
     pub fn save_review(&self, review: &Review) -> Result<(), MornError> {
         let conn = self.conn()?;
         conn.execute(
-            "INSERT INTO market_reviews (id, listing_id, user_id, rating, comment, created_at)
+            "INSERT INTO hub_reviews (id, listing_id, user_id, rating, comment, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 review.id,
@@ -276,7 +276,7 @@ impl Storage {
         let mut stmt = conn
             .prepare(
                 "SELECT id, listing_id, user_id, rating, comment, created_at
-                 FROM market_reviews WHERE listing_id = ?1 ORDER BY created_at DESC",
+                 FROM hub_reviews WHERE listing_id = ?1 ORDER BY created_at DESC",
             )
             .map_err(|e| MornError::Internal(e.to_string()))?;
         let rows = stmt

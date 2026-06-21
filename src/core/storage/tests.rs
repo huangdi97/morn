@@ -1,7 +1,7 @@
 //! Storage core tests.
 use super::*;
 use crate::core::error::MornError;
-use crate::market::{License, Listing, Transaction};
+use crate::hub::{License, Listing, Transaction};
 
 #[test]
 fn test_storage_crud() {

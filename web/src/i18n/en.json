@@ -65,7 +65,6 @@
   "team_builder.consensus.munger_veto": "Munger Veto",
   "team_builder.consensus.auto_synthesis": "Auto Synthesis",
   "team_builder.consensus.vote": "Majority Vote",
-
   "agent_builder.analyzing": "AI analyzing...",
   "agent_builder.back": "Back",
   "agent_builder.build_agent": "Build Agent",
@@ -96,7 +95,6 @@
   "agent_builder.visual_desc": "Drag components from the left panel onto the canvas and connect ports to build the Agent",
   "agent_builder.visual_edit": "Visual Edit",
   "agent_builder.wizard_new": "Guided Wizard",
-
   "step_wizard.agent_name_label": "Agent Name",
   "step_wizard.agent_name_placeholder": "e.g. My Smart Assistant",
   "step_wizard.building": "Creating...",
@@ -161,7 +159,6 @@
   "step_wizard.tool.web_search_desc": "Web search",
   "step_wizard.tool.write_file_desc": "Write file",
   "step_wizard.tool_hint": "Select available tools for the Agent (multi-select)",
-
   "template_selector.coding_helper": "Coding Helper",
   "template_selector.coding_helper_desc": "Code review, debugging, formatting, and testing",
   "template_selector.data_analyst": "Data Analyst",
@@ -176,7 +173,6 @@
   "template_selector.use_template": "Use this Template",
   "template_selector.writing_assistant": "Writing Assistant",
   "template_selector.writing_assistant_desc": "Translation, grammar check, formatting, and style optimization",
-
   "team_template_selector.consensus.auto_synthesis": "Auto Synthesis",
   "team_template_selector.consensus.ceo_decides": "CEO Decides",
   "team_template_selector.consensus.munger_veto": "Munger Veto",
@@ -189,7 +185,6 @@
   "team_template_selector.mode.routing": "Routing",
   "team_template_selector.mode.voting": "Voting",
   "team_template_selector.use_team": "Use this Team",
-
   "studio_tab.dev": "Dev",
   "studio_tab.types": "Types",
   "studio_tab.mcp": "MCP",
@@ -454,30 +449,25 @@
   "studio.builder.component_breakdown": "Component Breakdown",
   "studio.builder.title": "Agent Builder",
   "studio.builder.step_configure": "Configure",
-
   "studio.teams.select_template": "Select a Template",
   "studio.teams.templates_title": "Team Templates",
-
   "studio.editor.existing": "Existing Components",
   "studio.editor.title": "Component Editor",
   "studio.editor.type": "Type:",
   "studio.editor.name": "Name:",
   "studio.editor.error": "Error",
-
   "studio.types.title": "Component Type Manager",
   "studio.types.registered": "Registered Types ({count})",
   "studio.types.register_new": "Register New Type",
   "studio.types.name_header": "Name",
   "studio.types.delete": "Delete",
   "studio.types.loading": "Loading...",
-
   "studio.wizard.select_memory": "Select Memory",
   "studio.wizard.select_tool": "Select Tool",
   "studio.wizard.select_llm": "Select LLM Model",
   "studio.wizard.select_persona": "Select Persona",
   "studio.wizard.complete": "Complete Configuration",
   "studio.wizard.created": "Agent Created Successfully!",
-
   "studio.dev.title": "Developer Zone",
   "studio.dev.scaffold": "Scaffold Plugin",
   "studio.dev.plugin_name": "Plugin Name",
@@ -493,13 +483,11 @@
   "studio.dev.examples": "Example Plugins",
   "studio.dev.use_template": "Use Template",
   "studio.dev.install": "Install Plugin",
-
   "studio.mcp.title": "MCP Servers",
   "studio.mcp.connected": "Connected Servers ({count})",
   "studio.mcp.connect": "Connect MCP Server",
   "studio.mcp.loading": "Loading...",
   "studio.mcp.name_header": "Name",
-
   "console.git.title": "Git",
   "console.git.loading": "Loading...",
   "console.git.no_data": "No data available",
@@ -519,7 +507,6 @@
   "console.git.author": "Author",
   "console.git.time": "Time",
   "console.git.unknown": "Unknown",
-
   "console.plugins.title": "Plugins",
   "console.plugins.loading": "Loading...",
   "console.plugins.no_plugins": "No plugins installed.",
@@ -533,13 +520,11 @@
   "console.plugins.type_knowledge": "Knowledge",
   "console.plugins.type_ui_slot": "UI Slot",
   "console.plugins.type_protocol": "Protocol",
-
   "welcome_no_key.title": "Welcome to Morn",
   "welcome_no_key.desc": "You need to configure an AI model to get started",
   "welcome_no_key.got_key": "I have an API Key → Open Settings",
   "welcome_no_key.browse_first": "Browse first, configure later",
   "welcome_no_key.footer": "Or browse: 🏪 Store · 📖 Studio · ⚙️ Settings",
-
   "welcome_ready.title": "Hello, I'm Morn",
   "welcome_ready.desc": "Your desktop AI system is ready ✅",
   "welcome_ready.example_report": "Help me write a weekly report",
@@ -548,11 +533,9 @@
   "welcome_ready.example_analyze": "Analyze this data",
   "welcome_ready.footer": "Or go to Store to install preset Bots",
   "welcome_ready.configure_key": "Configure API Key",
-
   "welcome_error.title": "API call failed",
   "welcome_error.check_key": "Check API Key → Settings",
   "welcome_error.switch_provider": "Switch model Provider",
-
   "quick_actions.analysis": "Data Analysis",
   "quick_actions.analysis_prompt": "Help me analyze recent market trends, including indicators and charts",
   "quick_actions.writing": "Writing",
@@ -563,7 +546,6 @@
   "quick_actions.coding_prompt": "Help me review this code quality, find potential issues, and suggest improvements",
   "quick_actions.translate": "Translate",
   "quick_actions.translate_prompt": "Help me translate this, ensuring accurate terminology",
-
   "store.title": "Bot Store",
   "store.search_placeholder": "Search bots...",
   "store.loading": "Loading...",
@@ -573,7 +555,6 @@
   "store.install_free": "Free Install",
   "store.purchase_price": "Buy ¥{price}",
   "store.no_results": "No matching bots found",
-
   "checkout.title": "Checkout",
   "checkout.success_title": "Purchase Successful",
   "checkout.success_desc": "{name} has been installed",
@@ -636,7 +617,6 @@
   "backup.confirm_restore": "Restore this backup? Current data will be replaced.",
   "backup.no_backups": "No backups yet",
   "backup.last_backup": "Last backup",
-
   "lifecycle.title": "Installed Items",
   "lifecycle.type_system_plugin": "System Plugins",
   "lifecycle.type_agent": "Agents",
@@ -648,5 +628,35 @@
   "lifecycle.enable": "Enable",
   "lifecycle.disable": "Disable",
   "lifecycle.uninstall": "Uninstall",
-  "lifecycle.confirm_uninstall": "Uninstall this item?"
+  "lifecycle.confirm_uninstall": "Uninstall this item?",
+  "console_tab.hub": "Hub",
+  "console.hub.title": "Hub",
+  "console.hub.search_placeholder": "Search by name or description...",
+  "console.hub.search_results": "Found {count} result(s)",
+  "console.hub.category.all": "All",
+  "console.hub.category.agent": "Agent",
+  "console.hub.category.team": "Team",
+  "console.hub.category.tool": "Tool",
+  "console.hub.category.skill": "Skill",
+  "console.hub.category.knowledge": "Knowledge",
+  "console.hub.category.personality": "Personality",
+  "console.hub.category.memory": "Memory",
+  "console.hub.category.model": "Model",
+  "console.hub.category.workflow": "Workflow",
+  "console.hub.by_author": "By {author}",
+  "console.hub.downloads": "downloads",
+  "console.hub.days_ago": "{count}d ago",
+  "console.hub.free": "Free",
+  "console.hub.install_free": "Free Install",
+  "console.hub.purchase": "Purchase",
+  "console.hub.no_results": "No results found.",
+  "console.hub.detail.version": "Version",
+  "console.hub.detail.size": "Size",
+  "console.hub.detail.license": "License",
+  "console.hub.detail.author": "Author",
+  "console.hub.detail.updated": "Last Updated",
+  "console.hub.detail.downloads": "Downloads",
+  "console.hub.detail.rating_distribution": "Rating Distribution",
+  "console.hub.detail.total_reviews": "Based on {count} review(s)",
+  "console.hub.detail.you_may_also_like": "You may also like"
 }

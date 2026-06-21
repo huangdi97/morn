@@ -8,7 +8,7 @@ pub mod config;
 pub mod console;
 pub mod core;
 
-pub mod market;
+pub mod hub;
 pub mod mcp;
 pub mod org;
 pub mod protocol;

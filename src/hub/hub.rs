@@ -1,4 +1,4 @@
-//! marketplace — Lists, installs, and manages marketplace capabilities.
+//! marketplace — Lists, installs, and manages hub capabilities.
 use crate::core::component_type::ComponentTypeDef;
 use crate::core::error::MornError;
 use crate::core::registry::{Capability, Registry};
@@ -7,13 +7,13 @@ use tracing;
 
 pub use super::types::*;
 
-pub struct Marketplace {
+pub struct Hub {
     storage: Storage,
 }
 
-impl Marketplace {
+impl Hub {
     pub fn new(storage: Storage) -> Self {
-        let market = Marketplace { storage };
+        let market = Hub { storage };
         market.list_builtin();
         market
     }
@@ -305,14 +305,14 @@ mod tests {
 
     #[test]
     fn test_list_marketplace() {
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
         let all = market.list(None);
         assert_eq!(all.len(), 7);
     }
 
     #[test]
     fn test_filter_by_type() {
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
         let tools = market.list(Some("tool"));
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "Web Search Pro");
@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_purchase_and_install() {
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
         let license = market
             .purchase("listing-tool-web-search", "user-1")
             .unwrap();
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn test_publish() {
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
         let listing = Listing {
             id: "listing-test-1".into(),
             item_type: "tool".into(),
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn test_rating() {
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
         market
             .rate("listing-tool-web-search", "user-1", 5, "Great!")
             .unwrap();
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn test_search() {
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
         let results = market.search("search");
         assert!(!results.is_empty());
         assert!(results.iter().any(|l| l.name.contains("Search")));
@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_purchase_without_license() {
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
         assert!(market
             .install("listing-tool-web-search", "unknown-user")
             .is_err());
@@ -382,7 +382,7 @@ mod tests {
     #[test]
     fn test_install_to_registry() {
         let mut registry = Registry::new(None, None);
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
         market
             .purchase("listing-tool-web-search", "user-1")
             .unwrap();
@@ -396,7 +396,7 @@ mod tests {
 
     #[test]
     fn test_publish_type() {
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
         let type_def = ComponentTypeDef {
             type_name: "my_custom_type".to_string(),
             interfaces: vec!["execute".to_string()],
@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn test_install_type_to_registry() {
         let mut registry = Registry::new(None, None);
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
 
         let type_def = ComponentTypeDef {
             type_name: "vision_model".to_string(),
@@ -438,7 +438,7 @@ mod tests {
     #[test]
     fn test_install_type_to_registry_rejects_non_type_listing() {
         let mut registry = Registry::new(None, None);
-        let market = Marketplace::new(test_storage());
+        let market = Hub::new(test_storage());
         let result = market.install_type_to_registry("listing-tool-web-search", &mut registry);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not a ComponentTypeDef"));

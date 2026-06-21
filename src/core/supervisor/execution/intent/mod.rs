@@ -7,7 +7,7 @@ use crate::core::registry::Registry;
 use crate::core::storage::DecisionRule;
 use crate::core::storage::Storage;
 use crate::core::supervisor::Supervisor;
-use crate::market::Marketplace;
+use crate::hub::Hub;
 
 impl Supervisor {
     /// Queries registry capabilities matching the natural-language description and returns matching tool names.
@@ -32,8 +32,8 @@ impl Supervisor {
             Ok(s) => s,
             Err(_) => return vec![],
         };
-        let market = Marketplace::new(storage);
-        market
+        let hub = Hub::new(storage);
+        hub
             .search(nl)
             .into_iter()
             .map(|l| format!("{} ({})", l.name, l.item_type))

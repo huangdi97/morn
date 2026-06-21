@@ -65,7 +65,6 @@
   "team_builder.consensus.munger_veto": "一票否决",
   "team_builder.consensus.auto_synthesis": "自动合成",
   "team_builder.consensus.vote": "多数投票",
-
   "agent_builder.analyzing": "AI 分析中...",
   "agent_builder.back": "返回",
   "agent_builder.build_agent": "构建 Agent",
@@ -96,7 +95,6 @@
   "agent_builder.visual_desc": "从左侧组件库拖拽组件到画布，连接端口构建 Agent",
   "agent_builder.visual_edit": "可视化编辑",
   "agent_builder.wizard_new": "引导式新建",
-
   "step_wizard.agent_name_label": "Agent 名称",
   "step_wizard.agent_name_placeholder": "例如：我的智能助手",
   "step_wizard.building": "创建中...",
@@ -161,7 +159,6 @@
   "step_wizard.tool.web_search_desc": "网络搜索",
   "step_wizard.tool.write_file_desc": "写入文件",
   "step_wizard.tool_hint": "为 Agent 选择可用工具（可多选）",
-
   "template_selector.coding_helper": "编码助手",
   "template_selector.coding_helper_desc": "代码审查、调试、格式化和测试",
   "template_selector.data_analyst": "数据分析师",
@@ -176,7 +173,6 @@
   "template_selector.use_template": "使用此模板",
   "template_selector.writing_assistant": "写作助手",
   "template_selector.writing_assistant_desc": "翻译、语法检查、格式润色与风格优化",
-
   "team_template_selector.consensus.auto_synthesis": "自动合成",
   "team_template_selector.consensus.ceo_decides": "CEO决策",
   "team_template_selector.consensus.munger_veto": "一票否决",
@@ -189,7 +185,6 @@
   "team_template_selector.mode.routing": "路由",
   "team_template_selector.mode.voting": "投票",
   "team_template_selector.use_team": "使用此团队",
-
   "studio_tab.dev": "开发",
   "studio_tab.types": "类型",
   "studio_tab.mcp": "MCP",
@@ -454,30 +449,25 @@
   "studio.builder.component_breakdown": "Component Breakdown",
   "studio.builder.title": "Agent Builder",
   "studio.builder.step_configure": "Configure",
-
   "studio.teams.select_template": "选择一个模板",
   "studio.teams.templates_title": "团队模板",
-
   "studio.editor.existing": "现有组件",
   "studio.editor.title": "组件编辑器",
   "studio.editor.type": "类型:",
   "studio.editor.name": "名称:",
   "studio.editor.error": "错误",
-
   "studio.types.title": "组件类型管理器",
   "studio.types.registered": "已注册类型 ({count})",
   "studio.types.register_new": "注册新类型",
   "studio.types.name_header": "名称",
   "studio.types.delete": "删除",
   "studio.types.loading": "加载中...",
-
   "studio.wizard.select_memory": "选择记忆",
   "studio.wizard.select_tool": "选择工具",
   "studio.wizard.select_llm": "选择 LLM 模型",
   "studio.wizard.select_persona": "选择人格",
   "studio.wizard.complete": "完成配置",
   "studio.wizard.created": "Agent 创建成功!",
-
   "studio.dev.title": "开发者区",
   "studio.dev.scaffold": "脚手架插件",
   "studio.dev.plugin_name": "插件名称",
@@ -493,13 +483,11 @@
   "studio.dev.examples": "示例插件",
   "studio.dev.use_template": "使用模板",
   "studio.dev.install": "安装插件",
-
   "studio.mcp.title": "MCP 服务器",
   "studio.mcp.connected": "已连接服务器 ({count})",
   "studio.mcp.connect": "连接 MCP 服务器",
   "studio.mcp.loading": "加载中...",
   "studio.mcp.name_header": "名称",
-
   "console.git.title": "Git",
   "console.git.loading": "加载中...",
   "console.git.no_data": "暂无数据",
@@ -519,7 +507,6 @@
   "console.git.author": "作者",
   "console.git.time": "时间",
   "console.git.unknown": "未知",
-
   "console.plugins.title": "插件管理",
   "console.plugins.loading": "加载中...",
   "console.plugins.no_plugins": "暂未安装插件",
@@ -533,13 +520,11 @@
   "console.plugins.type_knowledge": "知识",
   "console.plugins.type_ui_slot": "UI 插槽",
   "console.plugins.type_protocol": "协议",
-
   "welcome_no_key.title": "欢迎使用 Morn",
   "welcome_no_key.desc": "你需要配置一个 AI 模型才能开始",
   "welcome_no_key.got_key": "我有 API Key → 打开设置页",
   "welcome_no_key.browse_first": "先逛逛，稍后配置",
   "welcome_no_key.footer": "或者先逛逛：🏪 Store · 📖 Studio · ⚙️ 设置",
-
   "welcome_ready.title": "你好，我是 Morn",
   "welcome_ready.desc": "你的桌面 AI 系统已经就绪 ✅",
   "welcome_ready.example_report": "帮我写一份周报",
@@ -548,11 +533,9 @@
   "welcome_ready.example_analyze": "分析这组数据",
   "welcome_ready.footer": "或者去 Store 安装预置 Bot",
   "welcome_ready.configure_key": "配置 API Key",
-
   "welcome_error.title": "API 调用失败",
   "welcome_error.check_key": "检查 API Key → 设置",
   "welcome_error.switch_provider": "切换模型 Provider",
-
   "quick_actions.analysis": "数据分析",
   "quick_actions.analysis_prompt": "帮我分析最近的市场趋势数据，包括行情指标和图表",
   "quick_actions.writing": "写作",
@@ -563,7 +546,6 @@
   "quick_actions.coding_prompt": "帮我检查这段代码的质量，找出潜在问题并给出改进建议",
   "quick_actions.translate": "翻译",
   "quick_actions.translate_prompt": "请帮我进行翻译，确保专业术语准确",
-
   "store.title": "Bot Store",
   "store.search_placeholder": "搜索 Bot...",
   "store.loading": "加载中...",
@@ -573,7 +555,6 @@
   "store.install_free": "免费安装",
   "store.purchase_price": "购买 ¥{price}",
   "store.no_results": "没有找到匹配的 Bot",
-
   "checkout.title": "确认购买",
   "checkout.success_title": "支付成功！",
   "checkout.success_desc": "{name} 已安装",
@@ -636,7 +617,6 @@
   "backup.confirm_restore": "确定要恢复此备份吗？当前数据将被替换。",
   "backup.no_backups": "暂无备份",
   "backup.last_backup": "上次备份",
-
   "lifecycle.title": "已安装项目",
   "lifecycle.type_system_plugin": "系统插件",
   "lifecycle.type_agent": "Agent",
@@ -648,5 +628,35 @@
   "lifecycle.enable": "启用",
   "lifecycle.disable": "停用",
   "lifecycle.uninstall": "卸载",
-  "lifecycle.confirm_uninstall": "确定要卸载此项目吗？"
+  "lifecycle.confirm_uninstall": "确定要卸载此项目吗？",
+  "console_tab.hub": "中心",
+  "console.hub.title": "中心",
+  "console.hub.search_placeholder": "按名称或描述搜索...",
+  "console.hub.search_results": "找到 {count} 个结果",
+  "console.hub.category.all": "全部",
+  "console.hub.category.agent": "Agent",
+  "console.hub.category.team": "团队",
+  "console.hub.category.tool": "工具",
+  "console.hub.category.skill": "技能",
+  "console.hub.category.knowledge": "知识",
+  "console.hub.category.personality": "人格",
+  "console.hub.category.memory": "记忆",
+  "console.hub.category.model": "模型",
+  "console.hub.category.workflow": "工作流",
+  "console.hub.by_author": "作者 {author}",
+  "console.hub.downloads": "次下载",
+  "console.hub.days_ago": "{count} 天前",
+  "console.hub.free": "免费",
+  "console.hub.install_free": "免费安装",
+  "console.hub.purchase": "购买",
+  "console.hub.no_results": "未找到结果。",
+  "console.hub.detail.version": "版本",
+  "console.hub.detail.size": "大小",
+  "console.hub.detail.license": "许可证",
+  "console.hub.detail.author": "作者",
+  "console.hub.detail.updated": "最后更新",
+  "console.hub.detail.downloads": "下载量",
+  "console.hub.detail.rating_distribution": "评分分布",
+  "console.hub.detail.total_reviews": "基于 {count} 条评价",
+  "console.hub.detail.you_may_also_like": "你可能也喜欢"
 }

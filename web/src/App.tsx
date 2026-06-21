@@ -20,7 +20,7 @@ import RoiCalculator from "./console/RoiCalculator";
 import SystemCheck from "./console/SystemCheck";
 import Governance from "./console/Governance";
 import Security from "./console/Security";
-import Marketplace from "./console/Marketplace";
+import Hub from "./console/Hub";
 import NotificationManager from "./console/NotificationManager";
 import MemoryManager from "./console/MemoryManager";
 import Connections from "./console/Connections";
@@ -382,7 +382,7 @@ function AppInner() {
   };
 
   const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "team" | "dev" | "types" | "mcp" | "create_plugin">("builder");
-  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "reliability" | "governance" | "security" | "market" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings" | "git" | "plugins">("dashboard");
+  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "reliability" | "governance" | "security" | "hub" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings" | "git" | "plugins">("dashboard");
   const [workbenchTab, setWorkbenchTab] = useState<"chat" | "workflow">("chat");
 
   const SkeletonChat = () => (
@@ -515,7 +515,7 @@ onSelect={async (template) => {
         <button className={consoleTab === "reliability" ? "active" : ""} onClick={() => setConsoleTab("reliability")}>{t('console_tab.reliability')}</button>
         <button className={consoleTab === "governance" ? "active" : ""} onClick={() => setConsoleTab("governance")}>{t('console_tab.governance')}</button>
         <button className={consoleTab === "security" ? "active" : ""} onClick={() => setConsoleTab("security")}>{t('console_tab.security')}</button>
-        <button className={consoleTab === "market" ? "active" : ""} onClick={() => setConsoleTab("market")}>{t('console_tab.marketplace')}</button>
+        <button className={consoleTab === "hub" ? "active" : ""} onClick={() => setConsoleTab("hub")}>{t('console_tab.hub')}</button>
         <button className={consoleTab === "system_check" ? "active" : ""} onClick={() => setConsoleTab("system_check")}>{t('console_tab.self_check')}</button>
         <button className={consoleTab === "notifications" ? "active" : ""} onClick={() => setConsoleTab("notifications")}>{t('console_tab.notifications')}</button>
         <button className={consoleTab === "memory" ? "active" : ""} onClick={() => setConsoleTab("memory")}>{t('console_tab.memory')}</button>
@@ -543,7 +543,7 @@ onSelect={async (template) => {
             {consoleTab === "reliability" && <ReliabilityPanel />}
             {consoleTab === "governance" && <Governance />}
             {consoleTab === "security" && <Security />}
-            {consoleTab === "market" && <Marketplace />}
+            {consoleTab === "hub" && <Hub />}
             {consoleTab === "system_check" && <SystemCheck />}
             {consoleTab === "notifications" && <NotificationManager />}
             {consoleTab === "memory" && <MemoryManager />}

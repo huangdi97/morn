@@ -6,14 +6,14 @@ use std::sync::{Arc, Mutex};
 use crate::channel::adapter::{ChannelAdapter, ChannelMessage};
 use crate::core::registry::Registry;
 use crate::core::supervisor::Mode;
-use crate::market::{Listing, Marketplace};
+use crate::hub::{Listing, Hub};
 
 type ChatFn = Arc<dyn Fn(&str, &str) -> Result<String, MornError> + Send + Sync>;
 
 pub fn run_repl(
     adapter: &mut ChannelAdapter,
     chat_fn: ChatFn,
-    marketplace: &Marketplace,
+    marketplace: &Hub,
     registry: &Arc<Mutex<Registry>>,
 ) {
     adapter.set_chat_fn(chat_fn);
@@ -125,7 +125,7 @@ fn handle_mode_command(input: &str, adapter: &mut ChannelAdapter) {
     }
 }
 
-fn handle_market_command(input: &str, market: &Marketplace, registry: &Arc<Mutex<Registry>>) {
+fn handle_market_command(input: &str, market: &Hub, registry: &Arc<Mutex<Registry>>) {
     let parts: Vec<&str> = input.split_whitespace().collect();
     if parts.len() < 2 {
         println!("  Usage: /market <list|show|buy|install|search|my|publish> [args]");
@@ -301,11 +301,11 @@ mod tests {
     use super::*;
     use crate::core::storage::Storage;
 
-    fn market_and_registry() -> (Marketplace, Arc<Mutex<Registry>>) {
+    fn market_and_registry() -> (Hub, Arc<Mutex<Registry>>) {
         let storage = Storage::new_in_memory()
             .unwrap_or_else(|e| panic!("in-memory storage should initialize: {}", e));
         let registry = Arc::new(Mutex::new(Registry::new(Some(storage.clone()), None)));
-        (Marketplace::new(storage), registry)
+        (Hub::new(storage), registry)
     }
 
     #[test]

@@ -14,7 +14,7 @@ mod costs;
 mod decision_rules;
 mod governance;
 mod installed_items;
-mod market;
+mod hub;
 mod memory;
 mod oauth;
 mod proactive;
@@ -81,6 +81,16 @@ impl Storage {
 
     fn init_tables(&self) -> Result<(), MornError> {
         let conn = self.conn()?;
+
+        // Migrate old market_* tables to hub_* naming
+        let _ = conn.execute_batch(
+            "ALTER TABLE market_listings RENAME TO hub_listings;
+             ALTER TABLE market_transactions RENAME TO hub_transactions;
+             ALTER TABLE market_licenses RENAME TO hub_licenses;
+             ALTER TABLE market_agent_versions RENAME TO hub_agent_versions;
+             ALTER TABLE market_reviews RENAME TO hub_reviews;"
+        );
+
         conn.execute_batch(
             "
             CREATE TABLE IF NOT EXISTS agents (
@@ -148,7 +158,7 @@ impl Storage {
                 FOREIGN KEY (target_agent_id) REFERENCES agents(id)
             );
 
-            CREATE TABLE IF NOT EXISTS market_listings (
+            CREATE TABLE IF NOT EXISTS hub_listings (
                 id TEXT PRIMARY KEY, item_type TEXT NOT NULL, name TEXT NOT NULL,
                 description TEXT NOT NULL, price REAL, author TEXT NOT NULL,
                 rating REAL DEFAULT 0.0, downloads INTEGER DEFAULT 0, created_at TEXT NOT NULL,
@@ -160,36 +170,36 @@ impl Storage {
                 updated_at TEXT NOT NULL DEFAULT ''
             );
 
-            CREATE TABLE IF NOT EXISTS market_transactions (
+            CREATE TABLE IF NOT EXISTS hub_transactions (
                 id TEXT PRIMARY KEY, listing_id TEXT NOT NULL, buyer TEXT NOT NULL,
                 amount REAL NOT NULL, timestamp TEXT NOT NULL,
-                FOREIGN KEY (listing_id) REFERENCES market_listings(id) ON DELETE CASCADE
+                FOREIGN KEY (listing_id) REFERENCES hub_listings(id) ON DELETE CASCADE
             );
 
-            CREATE TABLE IF NOT EXISTS market_licenses (
+            CREATE TABLE IF NOT EXISTS hub_licenses (
                 id TEXT PRIMARY KEY, listing_id TEXT NOT NULL, user_id TEXT NOT NULL,
                 granted_at TEXT NOT NULL, expires_at TEXT,
-                FOREIGN KEY (listing_id) REFERENCES market_listings(id) ON DELETE CASCADE
+                FOREIGN KEY (listing_id) REFERENCES hub_listings(id) ON DELETE CASCADE
             );
 
-            CREATE TABLE IF NOT EXISTS market_agent_versions (
+            CREATE TABLE IF NOT EXISTS hub_agent_versions (
                 id TEXT PRIMARY KEY,
                 listing_id TEXT NOT NULL,
                 version TEXT NOT NULL,
                 data_json TEXT NOT NULL,
                 changelog TEXT DEFAULT '',
                 created_at TEXT NOT NULL,
-                FOREIGN KEY (listing_id) REFERENCES market_listings(id) ON DELETE CASCADE
+                FOREIGN KEY (listing_id) REFERENCES hub_listings(id) ON DELETE CASCADE
             );
 
-            CREATE TABLE IF NOT EXISTS market_reviews (
+            CREATE TABLE IF NOT EXISTS hub_reviews (
                 id TEXT PRIMARY KEY,
                 listing_id TEXT NOT NULL,
                 user_id TEXT NOT NULL,
                 rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
                 comment TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                FOREIGN KEY (listing_id) REFERENCES market_listings(id) ON DELETE CASCADE
+                FOREIGN KEY (listing_id) REFERENCES hub_listings(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS users (

@@ -5,7 +5,7 @@ use crate::core::event_bus::SimpleEventBus;
 use crate::core::registry::Registry;
 use crate::core::storage::Storage;
 use crate::core::supervisor::Supervisor;
-use crate::market::Marketplace;
+use crate::hub::Hub;
 
 pub struct ConsoleBackend {
     pub registry: Option<Registry>,
@@ -13,7 +13,7 @@ pub struct ConsoleBackend {
     pub supervisor: Option<Supervisor>,
     pub event_bus: Option<SimpleEventBus>,
     pub dual_llm: Option<DualLlmGuard>,
-    pub marketplace: Option<Marketplace>,
+    pub marketplace: Option<Hub>,
 }
 
 impl ConsoleBackend {
@@ -23,7 +23,7 @@ impl ConsoleBackend {
         supervisor: Option<Supervisor>,
         event_bus: Option<SimpleEventBus>,
         dual_llm: Option<DualLlmGuard>,
-        marketplace: Option<Marketplace>,
+        marketplace: Option<Hub>,
     ) -> Self {
         ConsoleBackend {
             registry,
@@ -304,7 +304,7 @@ impl ConsoleBackend {
         entries
     }
 
-    pub fn get_market_summary(&self) -> MarketSummary {
+    pub fn get_hub_summary(&self) -> HubSummary {
         let market = self.marketplace.as_ref();
         let listings = market.map(|m| m.list(None)).unwrap_or_default();
         let total_listings = listings.len();
@@ -325,7 +325,7 @@ impl ConsoleBackend {
             top_listing_downloads = 0;
         }
 
-        MarketSummary {
+        HubSummary {
             total_listings,
             total_downloads,
             total_revenue,

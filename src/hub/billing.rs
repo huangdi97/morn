@@ -110,23 +110,23 @@ impl PaymentGateway {
 ///
 /// 使用提供的 PaymentGateway 实现创建支付，返回支付 URL。
 pub fn activate_subscription(
-    plan: &crate::market::gateway::SubscriptionPlan,
-    gateway: &impl crate::market::gateway::PaymentGateway,
-) -> Result<crate::market::gateway::PaymentUrl, MornError> {
+    plan: &crate::hub::gateway::SubscriptionPlan,
+    gateway: &impl crate::hub::gateway::PaymentGateway,
+) -> Result<crate::hub::gateway::PaymentUrl, MornError> {
     let (amount, currency) = match plan {
-        crate::market::gateway::SubscriptionPlan::Free => {
-            return Ok(crate::market::gateway::PaymentUrl {
+        crate::hub::gateway::SubscriptionPlan::Free => {
+            return Ok(crate::hub::gateway::PaymentUrl {
                 url: String::new(),
                 payment_id: String::new(),
             });
         }
-        crate::market::gateway::SubscriptionPlan::Starter { amount, currency } => {
+        crate::hub::gateway::SubscriptionPlan::Starter { amount, currency } => {
             (*amount, currency.as_str())
         }
-        crate::market::gateway::SubscriptionPlan::Pro {
+        crate::hub::gateway::SubscriptionPlan::Pro {
             amount, currency, ..
         } => (*amount, currency.as_str()),
-        crate::market::gateway::SubscriptionPlan::Enterprise {
+        crate::hub::gateway::SubscriptionPlan::Enterprise {
             amount, currency, ..
         } => (*amount, currency.as_str()),
     };

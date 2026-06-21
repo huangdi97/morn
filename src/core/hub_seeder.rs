@@ -5,7 +5,7 @@ use crate::core::agent_templates::AGENT_TEMPLATES;
 use crate::core::storage::Storage;
 use crate::core::supervisor::presets::preset_agent_defs;
 use crate::core::workflow::WorkflowTemplate;
-use crate::market::{Listing, Marketplace};
+use crate::hub::{Listing, Hub};
 
 /// Publishes built-in workflow templates, agent templates, and preset agent
 /// definitions to the marketplace.
@@ -22,7 +22,7 @@ pub fn seed_hub_data(storage: &Option<Storage>) {
         Some(s) => s,
         None => return,
     };
-    let market = Marketplace::new(storage.clone());
+    let market = Hub::new(storage.clone());
 
     for template in WorkflowTemplate::list_builtin() {
         let id = format!("listing-workflow-{}", template.id);
@@ -110,7 +110,7 @@ mod tests {
     fn test_seed_hub_data_populates_listings() {
         let storage = Storage::new_in_memory().unwrap();
         seed_hub_data(&Some(storage.clone()));
-        let market = Marketplace::new(storage.clone());
+        let market = Hub::new(storage.clone());
         let count = market.list(None).len();
         assert!(count > 0);
     }
@@ -119,7 +119,7 @@ mod tests {
     fn test_seed_hub_data_idempotent() {
         let storage = Storage::new_in_memory().unwrap();
         seed_hub_data(&Some(storage.clone()));
-        let market = Marketplace::new(storage.clone());
+        let market = Hub::new(storage.clone());
         let count = market.list(None).len();
         seed_hub_data(&Some(storage.clone()));
         let count2 = market.list(None).len();

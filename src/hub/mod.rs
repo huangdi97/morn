@@ -1,27 +1,27 @@
-//! market — Marketplace listings, billing, payments, and creator revenue.
+//! hub — Hub listings, billing, payments, and creator revenue.
 pub mod billing;
 pub mod gateway;
 pub mod gateway_mock;
 pub mod gateway_stripe;
-pub mod marketplace;
+pub mod hub;
 pub mod revenue;
 pub mod types;
 
-pub use marketplace::Marketplace;
+pub use hub::Hub;
 pub use types::AgentVersion;
 pub use types::License;
 pub use types::Listing;
 pub use types::Review;
 pub use types::Transaction;
 
-pub fn render_market_browser() -> String {
+pub fn render_hub_browser() -> String {
     let storage = match crate::core::storage::Storage::new_in_memory() {
         Ok(storage) => storage,
-        Err(err) => return format!("Market unavailable: {}", err),
+        Err(err) => return format!("Hub unavailable: {}", err),
     };
-    let market = Marketplace::new(storage);
-    let listings = market.list(None);
-    let mut output = String::from("Market Browser\n");
+    let hub = Hub::new(storage);
+    let listings = hub.list(None);
+    let mut output = String::from("Hub Browser\n");
 
     for listing in listings {
         output.push_str(&format!(
@@ -41,11 +41,11 @@ pub fn render_market_browser() -> String {
 pub fn render_listing_detail(id: &str) -> String {
     let storage = match crate::core::storage::Storage::new_in_memory() {
         Ok(storage) => storage,
-        Err(err) => return format!("Market unavailable: {}", err),
+        Err(err) => return format!("Hub unavailable: {}", err),
     };
-    let market = Marketplace::new(storage);
+    let hub = Hub::new(storage);
 
-    match market.get(id) {
+    match hub.get(id) {
         Some(listing) => format!(
             "Listing Detail\nid: {}\ntype: {}\nname: {}\nauthor: {}\nprice: ¥{:.3}\nrating: {:.1}\ndownloads: {}\ndescription: {}",
             listing.id,
@@ -67,17 +67,17 @@ mod tests {
     use crate::core::storage::Storage;
 
     #[test]
-    fn marketplace_initializes_builtin_listings() {
-        let market = Marketplace::new(Storage::new_in_memory().unwrap());
+    fn hub_initializes_builtin_listings() {
+        let hub = Hub::new(Storage::new_in_memory().unwrap());
 
-        assert_eq!(market.list(None).len(), 7);
+        assert_eq!(hub.list(None).len(), 7);
     }
 
     #[test]
     fn category_query_filters_builtin_type() {
-        let market = Marketplace::new(Storage::new_in_memory().unwrap());
+        let hub = Hub::new(Storage::new_in_memory().unwrap());
 
-        let personas = market.list(Some("persona"));
+        let personas = hub.list(Some("persona"));
 
         assert_eq!(personas.len(), 1);
         assert_eq!(personas[0].item_type, "persona");
@@ -122,10 +122,10 @@ mod tests {
     }
 
     #[test]
-    fn render_market_browser_lists_builtin_items() {
-        let output = render_market_browser();
+    fn render_hub_browser_lists_builtin_items() {
+        let output = render_hub_browser();
 
-        assert!(output.contains("Market Browser"));
+        assert!(output.contains("Hub Browser"));
         assert!(output.contains("listing-tool-web-search"));
         assert!(output.contains("Web Search Pro"));
     }

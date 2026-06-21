@@ -423,9 +423,9 @@ fn test_supervisor_build_team_from_nl() {
 #[test]
 fn test_marketplace_publish_and_list() {
     use morn::core::storage::Storage;
-    use morn::market::{Listing, Marketplace};
+    use morn::hub::{Listing, Hub};
     let storage = Storage::new_in_memory().unwrap();
-    let market = Marketplace::new(storage.clone());
+    let market = Hub::new(storage.clone());
     let listing = Listing {
         id: "test-listing-1".into(),
         item_type: "tool".into(),
@@ -452,9 +452,9 @@ fn test_marketplace_publish_and_list() {
 #[test]
 fn test_marketplace_get_listing_by_id() {
     use morn::core::storage::Storage;
-    use morn::market::{Listing, Marketplace};
+    use morn::hub::{Listing, Hub};
     let storage = Storage::new_in_memory().unwrap();
-    let market = Marketplace::new(storage.clone());
+    let market = Hub::new(storage.clone());
     let listing = Listing {
         id: "get-test-listing".into(),
         item_type: "knowledge".into(),
@@ -482,18 +482,18 @@ fn test_marketplace_get_listing_by_id() {
 #[test]
 fn test_marketplace_listing_not_found() {
     use morn::core::storage::Storage;
-    use morn::market::Marketplace;
+    use morn::hub::Hub;
     let storage = Storage::new_in_memory().unwrap();
-    let market = Marketplace::new(storage);
+    let market = Hub::new(storage);
     assert!(market.get("nonexistent").is_none());
 }
 
 #[test]
 fn test_marketplace_has_builtin_listings() {
     use morn::core::storage::Storage;
-    use morn::market::Marketplace;
+    use morn::hub::Hub;
     let storage = Storage::new_in_memory().unwrap();
-    let market = Marketplace::new(storage);
+    let market = Hub::new(storage);
     let all = market.list(None);
     assert!(!all.is_empty());
     assert!(all.iter().any(|l| l.author == "Morn Labs"));

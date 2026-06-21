@@ -94,7 +94,7 @@ morn-desktop/
 │   ├── channel/                  # 多渠道适配
 │   ├── studio/                   # 创作台后端
 │   ├── console/                  # 管理台后端
-│   ├── market/                   # 组件市场
+│   ├── hub/                       # 组件中心
 │   └── computer/                 # 电脑操控
 ├── src-tauri/                    # Tauri 桌面入口 (86 个 Tauri 命令)
 │   └── src/lib.rs                # 命令注册 + 系统托盘 + 自动更新

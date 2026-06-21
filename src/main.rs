@@ -30,7 +30,7 @@ use morn::core::registry::Registry;
 use morn::core::security::SecurityGuard;
 use morn::core::storage::Storage;
 use morn::core::supervisor::Supervisor;
-use morn::market::Marketplace;
+use morn::hub::Hub;
 use morn::mcp::adapter;
 use morn::org::team::TeamManager;
 use morn::protocol::a2a::router::A2ARouter;
@@ -477,7 +477,7 @@ fn run_cli(
     let _mcp_tool = adapter::port_to_mcp_tool("test", "test", &[]);
     let mut adapter = ChannelAdapter::new(Some(supervisor));
     let marketplace = storage
-        .map(Marketplace::new)
+        .map(Hub::new)
         .ok_or_else(|| "Storage required for marketplace".to_string())?;
     cli::run_repl(&mut adapter, chat_fn, &marketplace, &registry);
     Ok(())

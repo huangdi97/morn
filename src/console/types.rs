@@ -66,7 +66,7 @@ pub struct AuditEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MarketSummary {
+pub struct HubSummary {
     pub total_listings: usize,
     pub total_downloads: u64,
     pub total_revenue: f64,
