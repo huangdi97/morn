@@ -1,7 +1,9 @@
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
+use chrono::Utc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
@@ -18,6 +20,7 @@ use morn::core::plugin_manager::PluginConfig;
 use morn::core::plugin_manager::{register_morn_plugin, MornPluginMeta, PluginManager};
 use morn::core::proactive::ProactiveEngine;
 use morn::core::scheduler::Scheduler;
+use morn::core::storage::InstalledItem;
 use morn::core::storage::Storage;
 use morn::core::supervisor::Supervisor;
 use morn::core::{load_plugins, MornPlugin, PluginContext};
@@ -40,49 +43,32 @@ fn start_sync_loop(engine: Arc<Mutex<Option<SyncEngine>>>) {
                 }
             }
         }
-    });
+});
 }
 
-pub struct AppState {
-    pub supervisor: Mutex<Option<Arc<Mutex<Supervisor>>>>,
-    pub turn_count: Mutex<u64>,
-    pub manager: Mutex<Option<Arc<Mutex<StudioManager>>>>,
-    pub publisher: Mutex<Option<Arc<Mutex<StudioPublisher>>>>,
-    pub tester: Mutex<Option<Arc<Mutex<StudioTester>>>>,
-    pub console: Mutex<Option<Arc<Mutex<ConsoleBackend>>>>,
-    pub storage: Mutex<Option<Storage>>,
-    pub plugin_manager: Mutex<Option<PluginManager>>,
-    pub type_registry: Mutex<TypeRegistry>,
-    pub mcp_manager: Mutex<Vec<MCPServer>>,
-    pub scheduler: Mutex<Option<Scheduler>>,
-    pub oauth_manager: Mutex<Option<OAuthManager>>,
-    pub proactive_engine: Arc<Mutex<ProactiveEngine>>,
-    pub sync_engine: Arc<Mutex<Option<SyncEngine>>>,
-}
-
-impl AppState {
-    pub fn from_ctx(ctx: &PluginContext) -> Self {
-        Self {
-            supervisor: Mutex::new(ctx.get::<Arc<Mutex<Supervisor>>>("morn:supervisor")),
-            turn_count: Mutex::new(0),
-            manager: Mutex::new(ctx.get::<Arc<Mutex<StudioManager>>>("morn:studio-manager")),
-            publisher: Mutex::new(ctx.get::<Arc<Mutex<StudioPublisher>>>("morn:studio-publisher")),
-            tester: Mutex::new(ctx.get::<Arc<Mutex<StudioTester>>>("morn:studio-tester")),
-            console: Mutex::new(ctx.get::<Arc<Mutex<ConsoleBackend>>>("morn:console")),
-            storage: Mutex::new(ctx.get::<Storage>("morn:storage")),
-            plugin_manager: Mutex::new(None),
-            type_registry: Mutex::new(
-                ctx.get::<TypeRegistry>("morn:type-registry")
-                    .unwrap_or_default(),
-            ),
-            mcp_manager: Mutex::new(Vec::new()),
-            scheduler: Mutex::new(Some(Scheduler::new())),
-            oauth_manager: Mutex::new(None),
-            proactive_engine: Arc::new(Mutex::new(ProactiveEngine::new(None))),
-            sync_engine: Arc::new(Mutex::new(
-                ctx.get::<Arc<Mutex<SyncEngine>>>("morn:sync-engine"),
-            )),
+/// 从 overrides.json 加载外部插件覆盖
+fn load_plugin_overrides(registry: &mut CorePluginRegistry, plugin_dir: &Path) {
+    let overrides_path = plugin_dir.join("overrides.json");
+    if !overrides_path.exists() {
+        return;
+    }
+    let content = match std::fs::read_to_string(&overrides_path) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("Failed to read overrides.json: {e}");
+            return;
         }
+    };
+    let overrides: std::collections::HashMap<String, serde_json::Value> =
+        match serde_json::from_str(&content) {
+            Ok(o) => o,
+            Err(e) => {
+                tracing::warn!("Failed to parse overrides.json: {e}");
+                return;
+            }
+        };
+    for (plugin_id, _config) in &overrides {
+        tracing::info!("Plugin override registered: {plugin_id}");
     }
 }
 
@@ -94,7 +80,8 @@ pub fn run() {
 
     let config_path = plugin_dir.join("plugins.json");
     let config = PluginConfig::load(&config_path);
-    let registry = CorePluginRegistry::new();
+    let mut registry = CorePluginRegistry::new();
+    load_plugin_overrides(&mut registry, &plugin_dir);
 
     let mut plugins: Vec<Box<dyn MornPlugin>> = config
         .plugins_to_load(&registry)
@@ -133,6 +120,21 @@ pub fn run() {
 
     let mut state = AppState::from_ctx(&ctx);
     state.plugin_manager = Mutex::new(Some(pm));
+
+    // 自动将系统插件注册到 installed_items 生命周期表
+    if let Some(ref storage) = *state.storage.lock().map_err(|e| e.to_string()).ok() {
+        for plugin_id in registry.known_ids() {
+            let item = InstalledItem {
+                id: plugin_id.clone(),
+                item_type: "system_plugin".to_string(),
+                name: plugin_id.clone(),
+                description: String::new(),
+                enabled: true,
+                installed_at: Utc::now().to_rfc3339(),
+            };
+            let _ = storage.upsert_installed_item(&item);
+        }
+    }
 
     // Initialize OAuthManager with stored provider credentials
     if let Some(storage) = state.storage.lock().ok().and_then(|s| s.clone()) {
@@ -332,6 +334,9 @@ pub fn run() {
             commands::sync::list_sync_devices,
             commands::sync::get_sync_status,
             commands::sync::set_sync_server_url,
+            commands::lifecycle::list_installed_items,
+            commands::lifecycle::toggle_installed_item,
+            commands::lifecycle::uninstall_installed_item,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

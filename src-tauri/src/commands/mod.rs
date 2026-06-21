@@ -14,6 +14,7 @@ pub mod errors;
 pub mod execution;
 pub mod git;
 pub mod journey;
+pub mod lifecycle;
 pub mod local_model;
 pub mod market;
 pub mod market_search;
@@ -35,7 +36,7 @@ pub mod whisper;
 pub mod workflow;
 
 pub(crate) use analytics::get_analytics_data;
-pub(crate) use backup::{export_mornpack, import_mornpack};
+pub(crate) use backup::{create_backup, export_mornpack, import_mornpack, restore_backup};
 pub(crate) use chat::{clear_history, get_status, send_message};
 pub(crate) use checkup::run_system_check;
 pub(crate) use component_type::{
@@ -47,6 +48,7 @@ pub(crate) use cost::{estimate_cost, get_cost_details, get_cost_summary};
 pub(crate) use execution::get_recent_logs;
 pub(crate) use git::git_info;
 pub(crate) use journey::get_user_journey;
+pub(crate) use lifecycle::{list_installed_items, toggle_installed_item, uninstall_installed_item};
 pub(crate) use local_model::{delete_local_model, download_model, list_local_models};
 pub(crate) use market::{
     apply_theme, create_agent_from_description, generate_plugin_from_nl, get_agent_versions,

@@ -42,11 +42,7 @@ impl PluginConfig {
         registry: &crate::core::plugin_manager::CorePluginRegistry,
     ) -> Vec<String> {
         if self.enable_all {
-            registry
-                .known_ids()
-                .into_iter()
-                .map(|s| s.to_string())
-                .collect()
+            registry.known_ids()
         } else {
             self.enabled.clone()
         }

@@ -1,11 +1,20 @@
+pub mod backup_plugin;
+pub use backup_plugin::BackupPlugin;
+
 pub mod channel_bus_plugin;
 pub use channel_bus_plugin::ChannelBusPlugin;
+
+pub mod channel_plugins;
+pub use channel_plugins::*;
 
 pub mod data_layer_plugin;
 pub use data_layer_plugin::DataLayerPlugin;
 
 pub mod engine_plugin;
 pub use engine_plugin::EnginePlugin;
+
+pub mod hub_plugin;
+pub use hub_plugin::HubPlugin;
 
 pub mod observability_plugin;
 pub use observability_plugin::ObservabilityPlugin;

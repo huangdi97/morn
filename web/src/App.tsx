@@ -38,6 +38,8 @@ import PluginManagerPanel from "./console/PluginManagerPanel";
 import CreatePluginWizard from "./plugins/CreatePluginWizard";
 import BotStore from "./store/BotStore";
 import { Settings } from "./Settings";
+import { OnboardingWizard } from './OnboardingWizard';
+import { FeatureGuide } from './FeatureGuide';
 import StatusBar from "./StatusBar";
 import PipelineFlow from "./components/PipelineFlow";
 import { ToastItem } from "./components/Toast";
@@ -87,11 +89,16 @@ function AppInner() {
     return localStorage.getItem(THEME_KEY) || "cyber";
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => !localStorage.getItem('morn_onboarding_done')
+  );
+  const [showGuide, setShowGuide] = useState(false);
   const [sendingIndex, setSendingIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState<Record<string, boolean>>({ workbench: true, studio: true, console: true });
   const [workStep, setWorkStep] = useState(0);
   const [workVisible, setWorkVisible] = useState(false);
   const [workLogs, setWorkLogs] = useState<any[]>([]);
+  const [hubAvailable, setHubAvailable] = useState(true);
   const workLogsEndRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -211,6 +218,17 @@ function AppInner() {
       setWorkVisible(true);
     }
   }, [workLogs]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const plugins = await invoke<{id: string; enabled: boolean}[]>("list_morn_plugins");
+        const hub = plugins.find(p => p.id === "morn:hub");
+        setHubAvailable(hub?.enabled ?? true);
+      } catch { /* 非 Tauri 环境默认显示 */ }
+    })();
+  }, []);
 
   useEffect(() => {
     if (view !== "hub") {
@@ -669,19 +687,21 @@ onSelect={async (template) => {
   return (
     <div className="app" data-theme={theme}>
       <nav className="main-tabs" ref={mainTabsRef}>
-        <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")} data-tooltip={t('nav.workbench_tooltip')}>
+        <button className={view === "workbench" ? "active" : ""} onClick={() => setView("workbench")} data-tooltip={t('nav.workbench_tooltip')} data-guide-target="workbench">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <span>{t('nav.workbench')}</span>
         </button>
-        <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")} data-tooltip={t('nav.studio_tooltip')}>
+        <button className={view === "studio" ? "active" : ""} onClick={() => setView("studio")} data-tooltip={t('nav.studio_tooltip')} data-guide-target="studio">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="16 3 21 8 8 21 3 21 3 16 16 3"/></svg>
           <span>{t('nav.studio')}</span>
         </button>
-        <button className={view === "hub" ? "active" : ""} onClick={() => setView("hub")} data-tooltip={t('nav.hub_tooltip')}>
+        {hubAvailable && (
+        <button className={view === "hub" ? "active" : ""} onClick={() => setView("hub")} data-tooltip={t('nav.hub_tooltip')} data-guide-target="hub">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
           <span>{t('nav.hub')}</span>
         </button>
-        <button className={view === "console" ? "active" : ""} onClick={() => setView("console")} data-tooltip={t('nav.console_tooltip')}>
+        )}
+        <button className={view === "console" ? "active" : ""} onClick={() => setView("console")} data-tooltip={t('nav.console_tooltip')} data-guide-target="console">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span>{t('nav.console')}</span>
         </button>
@@ -689,10 +709,25 @@ onSelect={async (template) => {
         </nav>
         <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "workbench" && renderWorkbench()}</ErrorBoundary>
         <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "studio" && renderStudio()}</ErrorBoundary>
-        <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "hub" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}</ErrorBoundary>
+        <ErrorBoundary onRetry={() => api.retryLastOperation()}>{hubAvailable && view === "hub" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}</ErrorBoundary>
         <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "console" && renderConsole()}</ErrorBoundary>
       {showSettings && <Settings onClose={() => setShowSettings(false)} showToast={showToast} />}
       <StatusBar />
+      {showOnboarding && (
+        <OnboardingWizard
+          onComplete={() => {
+            localStorage.setItem('morn_onboarding_done', 'true');
+            setShowOnboarding(false);
+            setShowGuide(true);
+          }}
+        />
+      )}
+      {showGuide && (
+        <FeatureGuide
+          onComplete={() => setShowGuide(false)}
+          onSkip={() => setShowGuide(false)}
+        />
+      )}
       <div className="toast-container">
         {toasts.map(t => (
           <ToastItem key={t.id} toast={t} onRemove={removeToast} />

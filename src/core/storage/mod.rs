@@ -13,6 +13,7 @@ mod agents;
 mod costs;
 mod decision_rules;
 mod governance;
+mod installed_items;
 mod market;
 mod memory;
 mod oauth;
@@ -26,6 +27,7 @@ mod users;
 pub use agents::*;
 pub use costs::*;
 pub use governance::*;
+pub use installed_items::*;
 pub use memory::*;
 pub use oauth::*;
 pub use proactive::*;
@@ -332,6 +334,15 @@ impl Storage {
             );
             CREATE INDEX IF NOT EXISTS idx_memory_agent ON memory_entries(agent_id);
             CREATE INDEX IF NOT EXISTS idx_memory_layer ON memory_entries(layer);
+
+            CREATE TABLE IF NOT EXISTS installed_items (
+                id TEXT PRIMARY KEY,
+                item_type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                installed_at TEXT NOT NULL
+            );
             ",
         )
         .map_err(|e| MornError::Internal(e.to_string()))?;
@@ -361,6 +372,38 @@ impl Storage {
                 result
             )))
         }
+    }
+
+    /// 安全地将当前数据库备份到目标路径（使用 SQLite 在线备份 API）
+    pub fn backup_to(&self, target: PathBuf) -> Result<(), String> {
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create backup dir: {e}"))?;
+        }
+        let target_conn = rusqlite::Connection::open(&target)
+            .map_err(|e| format!("Cannot open backup file: {e}"))?;
+        let mut target_conn_mut = target_conn;
+        let conn = self.conn().map_err(|e| e.to_string())?;
+        let backup = rusqlite::backup::Backup::new(&conn, &mut target_conn_mut)
+            .map_err(|e| format!("Backup init failed: {e}"))?;
+        backup
+            .run_to_completion(5, std::time::Duration::from_millis(250), None)
+            .map_err(|e| format!("Backup failed: {e}"))?;
+        Ok(())
+    }
+
+    pub fn restore_from(&self, source: PathBuf) -> Result<(), String> {
+        if !source.exists() {
+            return Err(format!("Backup file not found: {}", source.display()));
+        }
+        let source_conn = rusqlite::Connection::open(&source)
+            .map_err(|e| format!("Cannot open backup: {e}"))?;
+        let mut guard = self.conn.lock().map_err(|e| e.to_string())?;
+        let backup = rusqlite::backup::Backup::new(&source_conn, &mut guard)
+            .map_err(|e| format!("Restore init failed: {e}"))?;
+        backup
+            .run_to_completion(5, std::time::Duration::from_millis(250), None)
+            .map_err(|e| format!("Restore failed: {e}"))?;
+        Ok(())
     }
 }
 

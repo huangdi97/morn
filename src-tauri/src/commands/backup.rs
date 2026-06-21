@@ -41,3 +41,33 @@ pub(crate) fn import_mornpack(data: String, state: State<AppState>) -> Result<us
     }
     Ok(count)
 }
+
+#[tauri::command]
+pub(crate) fn create_backup(state: State<AppState>, path: String) -> Result<String, MornError> {
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
+    let s = storage
+        .as_ref()
+        .ok_or_else(|| MornError::Internal("Storage not initialized".to_string()))?;
+    let target = std::path::PathBuf::from(&path);
+    s.backup_to(target.clone())
+        .map_err(|e| MornError::Internal(e))?;
+    Ok(format!("Backup saved to {}", target.display()))
+}
+
+#[tauri::command]
+pub(crate) fn restore_backup(state: State<AppState>, path: String) -> Result<String, MornError> {
+    let storage = state
+        .storage
+        .lock()
+        .map_err(|e| MornError::Internal(e.to_string()))?;
+    let s = storage
+        .as_ref()
+        .ok_or_else(|| MornError::Internal("Storage not initialized".to_string()))?;
+    let source = std::path::PathBuf::from(&path);
+    s.restore_from(source.clone())
+        .map_err(|e| MornError::Internal(e))?;
+    Ok(format!("Restored from {}", source.display()))
+}
