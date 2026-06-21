@@ -1,8 +1,8 @@
 use super::super::bridge_plugin::BridgePlugin;
 use super::super::MornPlugin;
 use super::{
-    ChannelBusPlugin, DataLayerPlugin, EnginePlugin, RegistryPlugin, SandboxPlugin, StudioPlugin,
-    SupervisorPlugin,
+    ChannelBusPlugin, DataLayerPlugin, EnginePlugin, ObservabilityPlugin, RegistryPlugin,
+    SandboxPlugin, StudioPlugin, SupervisorPlugin, SyncPlugin, VoicePlugin,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -35,6 +35,9 @@ impl CorePluginRegistry {
         r.register("morn:supervisor", |_| Box::new(SupervisorPlugin(None)));
         r.register("morn:studio", |_| Box::new(StudioPlugin(None, None)));
         r.register("morn:bridge", |p| Box::new(BridgePlugin::new(p)));
+        r.register("morn:observability", |_| Box::new(ObservabilityPlugin(None)));
+        r.register("morn:voice", |_| Box::new(VoicePlugin));
+        r.register("morn:sync", |_| Box::new(SyncPlugin(None)));
         r
     }
 

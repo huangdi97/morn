@@ -79,7 +79,9 @@ impl AppState {
             scheduler: Mutex::new(Some(Scheduler::new())),
             oauth_manager: Mutex::new(None),
             proactive_engine: Arc::new(Mutex::new(ProactiveEngine::new(None))),
-            sync_engine: Arc::new(Mutex::new(None)),
+            sync_engine: Arc::new(Mutex::new(
+                ctx.get::<Arc<Mutex<SyncEngine>>>("morn:sync-engine"),
+            )),
         }
     }
 }
@@ -151,30 +153,8 @@ pub fn run() {
         .setup(|app| {
             autostart::setup_autostart(app);
 
-            // Initialize SyncEngine
-            let storage_lock = state.storage.lock().ok();
-            let storage_clone = storage_lock.as_ref().and_then(|s| s.clone());
-            let device_id = storage_clone.as_ref().and_then(|s| {
-                s.get_setting("sync_device_id").ok().flatten()
-            }).unwrap_or_else(|| {
-                let id = uuid::Uuid::new_v4().to_string();
-                if let Some(ref s) = storage_clone {
-                    let _ = s.set_setting("sync_device_id", &id);
-                }
-                id
-            });
-            let server_url = storage_clone.as_ref().and_then(|s| {
-                s.get_setting("sync_server_url").ok().flatten()
-            }).unwrap_or_else(|| "http://localhost:3000".to_string());
-
-            if let Some(ref s) = storage_clone {
-                let engine = SyncEngine::new(&device_id, Some(server_url))
-                    .with_storage(Arc::new(Mutex::new(s.clone())));
-                if let Ok(mut guard) = state.sync_engine.lock() {
-                    *guard = Some(engine);
-                }
-
-                // Start background sync loop
+            // Start background sync loop (engine initialized by SyncPlugin)
+            if state.sync_engine.lock().ok().map(|g| g.is_some()).unwrap_or(false) {
                 let sync_engine = state.sync_engine.clone();
                 start_sync_loop(sync_engine);
             }

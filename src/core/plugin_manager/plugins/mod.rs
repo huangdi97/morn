@@ -7,6 +7,9 @@ pub use data_layer_plugin::DataLayerPlugin;
 pub mod engine_plugin;
 pub use engine_plugin::EnginePlugin;
 
+pub mod observability_plugin;
+pub use observability_plugin::ObservabilityPlugin;
+
 pub mod registry_plugin;
 pub use registry_plugin::RegistryPlugin;
 
@@ -18,6 +21,12 @@ pub use studio_plugin::StudioPlugin;
 
 pub mod supervisor_plugin;
 pub use supervisor_plugin::SupervisorPlugin;
+
+pub mod sync_plugin;
+pub use sync_plugin::SyncPlugin;
+
+pub mod voice_plugin;
+pub use voice_plugin::VoicePlugin;
 
 pub mod registry;
 pub use registry::CorePluginRegistry;
