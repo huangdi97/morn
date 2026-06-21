@@ -34,7 +34,7 @@ pub mod team_templates;
 pub mod whisper;
 pub mod workflow;
 
-pub(crate) use analytics::{get_performance_metrics, get_usage_stats};
+pub(crate) use analytics::get_analytics_data;
 pub(crate) use backup::{export_mornpack, import_mornpack};
 pub(crate) use chat::{clear_history, get_status, send_message};
 pub(crate) use checkup::run_system_check;
