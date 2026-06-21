@@ -72,6 +72,49 @@ fn load_plugin_overrides(registry: &mut CorePluginRegistry, plugin_dir: &Path) {
     }
 }
 
+pub struct AppState {
+    pub supervisor: Mutex<Option<Arc<Mutex<Supervisor>>>>,
+    pub turn_count: Mutex<u64>,
+    pub manager: Mutex<Option<Arc<Mutex<StudioManager>>>>,
+    pub publisher: Mutex<Option<Arc<Mutex<StudioPublisher>>>>,
+    pub tester: Mutex<Option<Arc<Mutex<StudioTester>>>>,
+    pub console: Mutex<Option<Arc<Mutex<ConsoleBackend>>>>,
+    pub storage: Mutex<Option<Storage>>,
+    pub plugin_manager: Mutex<Option<PluginManager>>,
+    pub type_registry: Mutex<TypeRegistry>,
+    pub mcp_manager: Mutex<Vec<MCPServer>>,
+    pub scheduler: Mutex<Option<Scheduler>>,
+    pub oauth_manager: Mutex<Option<OAuthManager>>,
+    pub proactive_engine: Arc<Mutex<ProactiveEngine>>,
+    pub sync_engine: Arc<Mutex<Option<SyncEngine>>>,
+}
+
+impl AppState {
+    pub fn from_ctx(ctx: &PluginContext) -> Self {
+        Self {
+            supervisor: Mutex::new(ctx.get::<Arc<Mutex<Supervisor>>>("morn:supervisor")),
+            turn_count: Mutex::new(0),
+            manager: Mutex::new(ctx.get::<Arc<Mutex<StudioManager>>>("morn:studio-manager")),
+            publisher: Mutex::new(ctx.get::<Arc<Mutex<StudioPublisher>>>("morn:studio-publisher")),
+            tester: Mutex::new(ctx.get::<Arc<Mutex<StudioTester>>>("morn:studio-tester")),
+            console: Mutex::new(ctx.get::<Arc<Mutex<ConsoleBackend>>>("morn:console")),
+            storage: Mutex::new(ctx.get::<Storage>("morn:storage")),
+            plugin_manager: Mutex::new(None),
+            type_registry: Mutex::new(
+                ctx.get::<TypeRegistry>("morn:type-registry")
+                    .unwrap_or_default(),
+            ),
+            mcp_manager: Mutex::new(Vec::new()),
+            scheduler: Mutex::new(Some(Scheduler::new())),
+            oauth_manager: Mutex::new(None),
+            proactive_engine: Arc::new(Mutex::new(ProactiveEngine::new(None))),
+            sync_engine: Arc::new(Mutex::new(
+                ctx.get::<Arc<Mutex<SyncEngine>>>("morn:sync-engine"),
+            )),
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let plugin_dir = dirs::data_dir()
