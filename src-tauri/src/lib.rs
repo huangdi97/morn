@@ -141,7 +141,40 @@ pub fn run() {
     }
     let cap_registry = Arc::new(Mutex::new(CapabilityRegistry::new()));
     let ctx = PluginContext::new().with_capability_registry(cap_registry.clone());
-    load_plugins(&mut plugins, &ctx).expect("Plugin loading failed");
+    if let Err(e) = load_plugins(&mut plugins, &ctx) {
+        let crash_log = dirs::data_dir()
+            .map(|d| d.join("morn").join("crash.log"))
+            .unwrap_or_else(|| PathBuf::from("./crash.log"));
+        let _ = std::fs::write(
+            &crash_log,
+            format!(
+                "Morn crash at {}\nPlugin loading failed: {:#?}\n",
+                chrono::Utc::now().to_rfc3339(),
+                e
+            ),
+        );
+        // On Windows, try to show an error dialog via PowerShell
+        #[cfg(target_os = "windows")]
+        {
+            let _ = std::process::Command::new("powershell")
+                .args([
+                    "-WindowStyle",
+                    "Hidden",
+                    "-Command",
+                    &format!(
+                        "[System.Windows.Forms.MessageBox]::Show(\
+                            'Morn 启动失败，插件加载出错。\n\n{0}\n\n详情已写入：\n{1}',\
+                            'Morn Error', 'OK', 'Error')",
+                        e, crash_log.display()
+                    ),
+                ])
+                .output();
+        }
+        panic!(
+            "Plugin loading failed: {:#?}. Crash log written to: {:?}",
+            e, crash_log
+        );
+    }
 
     for plugin in &plugins {
         register_morn_plugin(MornPluginMeta {
