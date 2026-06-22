@@ -1,7 +1,7 @@
 //! core — Exposes the main orchestration, storage, workflow, and agent subsystems.
 pub mod agent_loop;
 pub mod agent_pool;
-mod agent_templates;
+pub mod agent_templates;
 pub mod approval;
 pub mod assembler;
 pub mod assembly;

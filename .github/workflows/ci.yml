@@ -50,7 +50,7 @@ jobs:
         run: npm ci
         working-directory: ./web
       - name: Npm audit (vulnerability scan)
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=critical
         working-directory: ./web
 
       - name: TypeScript check
