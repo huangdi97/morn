@@ -165,7 +165,8 @@ pub fn run() {
                         "[System.Windows.Forms.MessageBox]::Show(\
                             'Morn 启动失败，插件加载出错。\n\n{0}\n\n详情已写入：\n{1}',\
                             'Morn Error', 'OK', 'Error')",
-                        e, crash_log.display()
+                        e,
+                        crash_log.display()
                     ),
                 ])
                 .output();
