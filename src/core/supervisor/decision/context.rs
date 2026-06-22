@@ -86,7 +86,13 @@ impl Supervisor {
             let user_id = self.user_id.as_deref().unwrap_or("default");
             let keywords = Self::extract_keywords(text);
             for kw in &keywords {
-                let rules = storage.get_decision_rules(user_id, kw).unwrap_or_default();
+                let rules = match storage.get_decision_rules(user_id, kw) {
+                    Ok(rules) => rules,
+                    Err(e) => {
+                        tracing::error!(error = %e, user_id = %user_id, keyword = %kw, "Failed to get decision rules");
+                        vec![]
+                    }
+                };
                 if let Some(rule) = rules.first() {
                     if let Some(ref storage) = self.storage {
                         if let Err(e) = storage.increment_rule_hit(rule.id.unwrap_or(0)) {

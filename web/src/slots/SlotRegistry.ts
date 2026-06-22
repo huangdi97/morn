@@ -10,28 +10,84 @@ export interface SlotPlugin {
   order?: number;
 }
 
-const registry = new Map<SlotPosition, SlotPlugin[]>();
-
-export function registerPlugin(plugin: SlotPlugin): void {
-  const existing = registry.get(plugin.position) ?? [];
-  existing.push(plugin);
-  existing.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  registry.set(plugin.position, existing);
+export interface SlotMeta {
+  label: string;
+  icon?: string;
+  pluginId: string;
+  priority?: number;
 }
 
-export function getPlugins(position: SlotPosition): SlotPlugin[] {
-  return registry.get(position) ?? [];
+export interface SlotRegistration {
+  id: string;
+  component: ComponentType<any>;
+  meta: SlotMeta;
+}
+
+class SlotRegistryImpl {
+  private slots = new Map<string, SlotRegistration[]>();
+
+  register(slotName: string, registration: SlotRegistration) {
+    const list = [...(this.slots.get(slotName) || [])];
+    list.push(registration);
+    list.sort((a, b) => (b.meta.priority ?? 0) - (a.meta.priority ?? 0));
+    this.slots.set(slotName, list);
+  }
+
+  get(slotName: string): SlotRegistration[] {
+    return this.slots.get(slotName) || [];
+  }
+
+  unregister(slotName: string, id: string) {
+    const list = this.slots.get(slotName);
+    if (list) {
+      this.slots.set(slotName, list.filter(r => r.id !== id));
+    }
+  }
+
+  clear() {
+    this.slots.clear();
+  }
+
+  /** @internal iterate all slots (for unregister-by-id across all slots) */
+  [Symbol.iterator]() {
+    return this.slots[Symbol.iterator]();
+  }
+}
+
+export const slotRegistry = new SlotRegistryImpl();
+
+const POSITION_TO_SLOT: Record<string, string> = {
+  "footer": "status-bar",
+  "sidebar:top": "console-panels",
+  "sidebar:bottom": "console-panels",
+  "console:tab": "console-panels",
+  "studio:panel": "studio-tools",
+};
+
+export function registerPlugin(plugin: SlotPlugin): void {
+  const slotName = POSITION_TO_SLOT[plugin.position] || plugin.position;
+  slotRegistry.register(slotName, {
+    id: plugin.id,
+    component: plugin.component,
+    meta: {
+      label: plugin.label,
+      pluginId: plugin.id,
+      priority: plugin.order ?? 0,
+    },
+  });
+}
+
+export function getPlugins(position: SlotPosition): SlotRegistration[] {
+  const slotName = POSITION_TO_SLOT[position] || position;
+  return slotRegistry.get(slotName);
 }
 
 export function unregisterPlugin(id: string): void {
-  for (const [position, plugins] of registry) {
-    const filtered = plugins.filter((p) => p.id !== id);
-    if (filtered.length !== plugins.length) {
-      registry.set(position, filtered);
-    }
+  for (const [slotName] of slotRegistry) {
+    slotRegistry.unregister(slotName, id);
   }
 }
 
 export function clearPlugins(): void {
-  registry.clear();
+  slotRegistry.clear();
 }

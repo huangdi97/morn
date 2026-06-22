@@ -391,7 +391,7 @@
 }
 
 .trace-step-detail {
-  background: #1a1d23;
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-top: none;
   border-radius: 0 0 4px 4px;
@@ -401,7 +401,7 @@
 }
 
 .trace-step-detail pre {
-  background: #111318;
+  background: var(--bg-surface);
   padding: var(--space-sm);
   border-radius: 4px;
   overflow-x: auto;
@@ -468,7 +468,7 @@
 
 .step-edit-textarea {
   width: 100%;
-  background: #111318;
+  background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text-primary);
@@ -610,15 +610,15 @@
 }
 
 .component-type-badge.system {
-  background: #6e7681;
+  background: var(--text-tertiary);
 }
 
 .component-type-badge.agent {
-  background: #d2a8ff;
+  background: #a78bfa;
 }
 
 .component-type-badge.tool {
-  background: #79c0ff;
+  background: var(--accent);
 }
 
 .component-status {

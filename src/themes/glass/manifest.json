@@ -1,0 +1,7 @@
+{
+  "name": "glass",
+  "version": "1.0.0",
+  "description": "Frosted glass theme with subtle shadows",
+  "plugin_type": "theme",
+  "entry": "theme.css"
+}

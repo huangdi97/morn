@@ -11,7 +11,7 @@ const milestones = [
   { day: 30, emoji: "⬜" },
 ];
 
-const TIP_COUNT = 5;
+const TIP_COUNT = 13;
 
 function getCurrentDay(): number {
   const stored = localStorage.getItem(FIRST_LAUNCH_KEY);
@@ -24,7 +24,7 @@ function getCurrentDay(): number {
   return Math.min(Math.max(diffDays + 1, 1), 30);
 }
 
-export default function UserJourney() {
+export default function UserJourney({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const [day, setDay] = useState(1);
   const [tipIndex, setTipIndex] = useState(0);
 
@@ -56,6 +56,32 @@ export default function UserJourney() {
         ? t('console.journey.motivation_30')
         : t('console.journey.motivation_default');
 
+  const actionButtons: { key: string; tab: string }[] = [];
+  if (day >= 3) {
+    actionButtons.push(
+      { key: 'console.journey.action_day3_create_agent', tab: 'studio' },
+      { key: 'console.journey.action_day3_team_topology', tab: 'topology' },
+    );
+  }
+  if (day >= 7) {
+    actionButtons.push(
+      { key: 'console.journey.action_day7_publish', tab: 'hub' },
+      { key: 'console.journey.action_day7_bot_store', tab: 'marketplace' },
+    );
+  }
+  if (day >= 14) {
+    actionButtons.push(
+      { key: 'console.journey.action_day14_manage_workflow', tab: 'workflow' },
+      { key: 'console.journey.action_day14_efficiency_report', tab: 'analytics' },
+    );
+  }
+  if (day >= 30) {
+    actionButtons.push(
+      { key: 'console.journey.action_day30_full_stats', tab: 'analytics' },
+      { key: 'console.journey.action_day30_share', tab: 'earnings' },
+    );
+  }
+
   return (
     <div>
       <h2 style={{ color: "var(--text-primary)", marginBottom: "16px" }}>{t('console.journey.title')}</h2>
@@ -86,6 +112,34 @@ export default function UserJourney() {
         <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "8px" }}>{t('console.journey.motivation_title')}</div>
         <p style={{ color: "var(--text-secondary)", fontSize: "14px", lineHeight: "1.6", margin: 0 }}>{message}</p>
       </div>
+
+      {actionButtons.length > 0 && (
+        <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-xl)", border: "1px solid var(--border-default)", padding: "24px", marginBottom: "16px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+            {actionButtons.map((btn) => (
+              <button
+                key={btn.key}
+                onClick={() => onNavigate?.(btn.tab)}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: "var(--radius-lg)",
+                  border: "1px solid var(--accent-brand)",
+                  background: "var(--bg-page)",
+                  color: "var(--accent-brand)",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  transition: "background 0.2s, color 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-brand)"; e.currentTarget.style.color = "#fff"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-page)"; e.currentTarget.style.color = "var(--accent-brand)"; }}
+              >
+                {t(btn.key)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-xl)", border: "1px solid var(--border-default)", padding: "24px" }}>
         <div style={{ color: "var(--text-primary)", fontWeight: 600, marginBottom: "8px" }}>{t('console.journey.tips_title')}</div>

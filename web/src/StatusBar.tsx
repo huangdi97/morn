@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "./api";
+import { RenderSlot } from "./slots/RenderSlot";
 
 export default function StatusBar() {
   const [status, setStatus] = useState("");
@@ -37,6 +38,7 @@ export default function StatusBar() {
       <span>🟢 {status || "Loading..."}</span>
       <span>💰 {cost}</span>
       <span>⚡ Provider</span>
+      <RenderSlot name="status-bar" />
     </div>
   );
 }

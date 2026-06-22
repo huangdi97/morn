@@ -23,6 +23,11 @@ pub fn topological_sort(plugins: &[Box<dyn MornPlugin>]) -> Result<Vec<usize>, P
                     in_degree[i] += 1;
                 }
                 None => {
+                    tracing::error!(
+                        "[plugin_manager] topological_sort missing dependency: {} -> {}",
+                        plugin.id(),
+                        dep
+                    );
                     return Err(PluginOrderError::MissingDependency(
                         plugin.id().to_string(),
                         dep.to_string(),
@@ -52,6 +57,10 @@ pub fn topological_sort(plugins: &[Box<dyn MornPlugin>]) -> Result<Vec<usize>, P
             .filter(|&i| in_degree[i] > 0)
             .map(|i| plugins[i].id().to_string())
             .collect();
+        tracing::error!(
+            "[plugin_manager] topological_sort cycle detected: {:?}",
+            cycle
+        );
         return Err(PluginOrderError::CycleDetected(cycle));
     }
 
@@ -86,6 +95,7 @@ pub fn safe_init(plugin: &mut dyn MornPlugin, ctx: &PluginContext) -> Result<(),
             } else {
                 "unknown panic".to_string()
             };
+            tracing::error!("[plugin_manager] safe_init {} panicked: {}", id, msg);
             PluginError::LoadFailed(id, msg)
         },
     )?
@@ -102,6 +112,7 @@ pub fn safe_activate(plugin: &mut dyn MornPlugin, ctx: &PluginContext) -> Result
             } else {
                 "unknown panic".to_string()
             };
+            tracing::error!("[plugin_manager] safe_activate {} panicked: {}", id, msg);
             PluginError::ActivateFailed(id, msg)
         },
     )?
@@ -121,6 +132,7 @@ pub fn safe_deactivate(
             } else {
                 "unknown panic".to_string()
             };
+            tracing::error!("[plugin_manager] safe_deactivate {} panicked: {}", id, msg);
             PluginError::Other(format!("{} deactivate panicked: {}", id, msg))
         },
     )?

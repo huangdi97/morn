@@ -10,6 +10,7 @@ use tauri::Manager;
 
 use morn::bridge::sync::SyncEngine;
 use morn::console::ConsoleBackend;
+use morn::core::capability::CapabilityRegistry;
 use morn::core::component_type::registry::TypeRegistry;
 pub use morn::core::error::MornError;
 use morn::core::mcp::MCPServer;
@@ -87,6 +88,7 @@ pub struct AppState {
     pub oauth_manager: Mutex<Option<OAuthManager>>,
     pub proactive_engine: Arc<Mutex<ProactiveEngine>>,
     pub sync_engine: Arc<Mutex<Option<SyncEngine>>>,
+    pub capability_registry: Option<Arc<Mutex<CapabilityRegistry>>>,
 }
 
 impl AppState {
@@ -112,6 +114,7 @@ impl AppState {
                 ctx.get::<Arc<Mutex<SyncEngine>>>("morn:sync-engine")
                     .and_then(|arc| arc.lock().ok().map(|guard| (*guard).clone())),
             )),
+            capability_registry: ctx.capability_registry().cloned(),
         }
     }
 }
@@ -136,7 +139,8 @@ pub fn run() {
     if plugins.is_empty() {
         panic!("No plugins loaded. Check plugins.json in: {:?}", plugin_dir);
     }
-    let ctx = PluginContext::new();
+    let cap_registry = Arc::new(Mutex::new(CapabilityRegistry::new()));
+    let ctx = PluginContext::new().with_capability_registry(cap_registry.clone());
     load_plugins(&mut plugins, &ctx).expect("Plugin loading failed");
 
     for plugin in &plugins {

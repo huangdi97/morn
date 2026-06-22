@@ -661,6 +661,49 @@ export const api = {
     return res.json();
   },
 
+  async oauthListProviders(): Promise<ProviderInfo[]> {
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("oauth_list_providers");
+    }
+    const res = await fetch("/api/oauth/providers");
+    return res.json();
+  },
+
+  async oauthSaveConfig(provider: string, clientId: string, clientSecret: string): Promise<void> {
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("oauth_save_config", { provider, clientId, clientSecret });
+    }
+    await fetch("/api/oauth/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, clientId, clientSecret }),
+    });
+  },
+
+  async oauthAuthorize(provider: string): Promise<string> {
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("oauth_authorize", { provider });
+    }
+    const res = await fetch(`/api/oauth/authorize/${provider}`);
+    return res.text();
+  },
+
+  async oauthCallback(provider: string, code: string): Promise<string> {
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("oauth_callback", { provider, code });
+    }
+    const res = await fetch("/api/oauth/callback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, code }),
+    });
+    return res.text();
+  },
+
   async getLastError(): Promise<any> {
     if (isTauri) {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -679,3 +722,10 @@ export const api = {
     return res.json();
   },
 };
+
+export interface ProviderInfo {
+  name: string;
+  has_client_id: boolean;
+  has_token: boolean;
+  auth_url: string;
+}

@@ -2,8 +2,12 @@ use super::super::bridge_plugin::BridgePlugin;
 use super::super::MornPlugin;
 use super::channel_plugins::*;
 use super::{
-    BackupPlugin, ChannelBusPlugin, DataLayerPlugin, EnginePlugin, HubPlugin, ObservabilityPlugin,
-    RegistryPlugin, SandboxPlugin, StudioPlugin, SupervisorPlugin, SyncPlugin, VoicePlugin,
+    AgentPoolPlugin, ApprovalPlugin, AssemblyPlugin, BackupPlugin, ChannelBusPlugin, CodeToolPlugin,
+    ConsensusPlugin, DataLayerPlugin, DataFlowPlugin, DelegationPlugin, EnginePlugin, HubPlugin,
+    IntentParserPlugin, McpPlugin, MemoryPlugin, ModelRouterPlugin, ObservabilityPlugin,
+    OrchestratorPlugin, ProactivePlugin, RegistryPlugin, SandboxPlugin, SchedulerPlugin,
+    SecurityPlugin, StudioPlugin, SupervisorPlugin, SyncPlugin, TaskEnginePlugin, TypeRegistryPlugin,
+    VoicePlugin, WorkflowPlugin, ComputerUsePlugin,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -59,6 +63,25 @@ impl CorePluginRegistry {
         r.register("morn:voice", Box::new(|_| Box::new(VoicePlugin)));
         r.register("morn:sync", Box::new(|_| Box::new(SyncPlugin(None))));
         r.register("morn:backup", Box::new(|_| Box::new(BackupPlugin::new())));
+        r.register("morn:model-router", Box::new(|_| Box::new(ModelRouterPlugin(None))));
+        r.register("morn:memory", Box::new(|_| Box::new(MemoryPlugin(None))));
+        r.register("morn:mcp", Box::new(|_| Box::new(McpPlugin(None))));
+        r.register("morn:security", Box::new(|_| Box::new(SecurityPlugin(None))));
+        r.register("morn:intent-parser", Box::new(|_| Box::new(IntentParserPlugin(None))));
+        r.register("morn:task-engine", Box::new(|_| Box::new(TaskEnginePlugin(None))));
+        r.register("morn:approval", Box::new(|_| Box::new(ApprovalPlugin(None))));
+        r.register("morn:workflow", Box::new(|_| Box::new(WorkflowPlugin::new())));
+        r.register("morn:orchestrator", Box::new(|_| Box::new(OrchestratorPlugin::new())));
+        r.register("morn:data-flow", Box::new(|_| Box::new(DataFlowPlugin::new())));
+        r.register("morn:computer-use", Box::new(|_| Box::new(ComputerUsePlugin)));
+        r.register("morn:scheduler", Box::new(|_| Box::new(SchedulerPlugin::new())));
+        r.register("morn:proactive", Box::new(|_| Box::new(ProactivePlugin::new())));
+        r.register("morn:delegation", Box::new(|_| Box::new(DelegationPlugin::new())));
+        r.register("morn:consensus", Box::new(|_| Box::new(ConsensusPlugin::new())));
+        r.register("morn:agent-pool", Box::new(|_| Box::new(AgentPoolPlugin::new())));
+        r.register("morn:code-tool", Box::new(|_| Box::new(CodeToolPlugin::new())));
+        r.register("morn:component-type", Box::new(|_| Box::new(TypeRegistryPlugin::new())));
+        r.register("morn:assembly", Box::new(|_| Box::new(AssemblyPlugin::new())));
 
         // 固定渠道
         r.register("morn:channel-cli", Box::new(|_| Box::new(CliChannelPlugin)));

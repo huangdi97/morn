@@ -6,5 +6,13 @@
   "plugin_type": "tool",
   "entry": "main.py",
   "icon": "",
-  "permissions": ["network", "filesystem"]
+  "permissions": ["network", "filesystem"],
+  "ui_slots": [
+    {
+      "slot": "status-bar",
+      "label": "My Widget",
+      "icon": "🔌",
+      "entry": "panel.js"
+    }
+  ]
 }

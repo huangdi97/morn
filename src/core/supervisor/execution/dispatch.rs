@@ -56,10 +56,16 @@ impl Supervisor {
         }
 
         if let Some(ref _planner) = self.planner {
-            Planner::plan(&plan.user_input, plan.subtasks.clone())?;
+            if let Err(e) = Planner::plan(&plan.user_input, plan.subtasks.clone()) {
+                tracing::error!("[COO] Planner::plan failed: {}", e);
+                return Err(e);
+            }
         }
         if let Some(ref _scheduler) = self.scheduler {
-            _scheduler.schedule(&plan.task_id, plan)?;
+            if let Err(e) = _scheduler.schedule(&plan.task_id, plan) {
+                tracing::error!("[COO] Scheduler::schedule failed: {}", e);
+                return Err(e);
+            }
         }
 
         if let Some(ref storage) = self.storage {
@@ -129,6 +135,7 @@ impl Supervisor {
                     })
                     .to_string(),
                 );
+                tracing::error!("[COO] chat_fn failed: {}", err);
                 return Err(err);
             }
         };
@@ -158,7 +165,10 @@ impl Supervisor {
         }
 
         if let Some(engine) = &self.learning_engine {
-            engine.ingest_decision(&plan.user_input, &plan.decision_level, true)?;
+            if let Err(e) = engine.ingest_decision(&plan.user_input, &plan.decision_level, true) {
+                tracing::error!("[COO] LearningEngine::ingest_decision failed: {}", e);
+                return Err(e);
+            }
         }
 
         Ok(result)
@@ -180,7 +190,13 @@ impl Supervisor {
             self.override_decision(override_.level, override_.scope);
         }
 
-        let routed_model = self.model_router.route(&clean_input)?;
+        let routed_model = match self.model_router.route(&clean_input) {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::error!("[COO] ModelRouter::route failed: {}", e);
+                return Err(e);
+            }
+        };
         let routed_agent = match ChatAgent::from_route(&routed_model) {
             Ok(agent) => Some(agent),
             Err(err) => {
@@ -237,7 +253,13 @@ impl Supervisor {
 
         self.apply_dual_llm_check(&mut plan, &routed_chat_fn);
 
-        let result = self.execute_plan(&plan, &routed_chat_fn)?;
+        let result = match self.execute_plan(&plan, &routed_chat_fn) {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!("[COO] execute_plan failed: {}", e);
+                return Err(e);
+            }
+        };
         Ok(result.summary)
     }
 

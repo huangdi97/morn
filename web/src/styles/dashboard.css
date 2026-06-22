@@ -5,21 +5,21 @@
 }
 
 .dashboard-card {
-  background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
   transition: all var(--transition-normal);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   position: relative;
   overflow: hidden;
 }
 
 .dashboard-card:hover {
-  background: rgba(255,255,255,0.04);
+  background: var(--bg-hover);
   transform: translateY(-2px);
-  border-color: rgba(0, 240, 255, 0.3);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 12px rgba(0, 240, 255, 0.15);
+  border-color: var(--border-default);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .dashboard-card-label {
@@ -42,27 +42,27 @@
 }
 
 .dashboard-card.accent-blue {
-  background: linear-gradient(135deg, rgba(94,106,210,0.12), rgba(94,106,210,0.04));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
 }
 
 .dashboard-card.accent-green {
-  background: linear-gradient(135deg, rgba(63,185,80,0.12), rgba(63,185,80,0.04));
+  background: color-mix(in srgb, var(--success) 8%, var(--bg-surface));
 }
 
 .dashboard-card.accent-yellow {
-  background: linear-gradient(135deg, rgba(210,153,34,0.12), rgba(210,153,34,0.04));
+  background: color-mix(in srgb, var(--warning) 8%, var(--bg-surface));
 }
 
 .dashboard-card.accent-red {
-  background: linear-gradient(135deg, rgba(248,81,73,0.12), rgba(248,81,73,0.04));
+  background: color-mix(in srgb, var(--danger) 8%, var(--bg-surface));
 }
 
 .dashboard-card.accent-purple {
-  background: linear-gradient(135deg, rgba(188,140,255,0.12), rgba(188,140,255,0.04));
+  background: color-mix(in srgb, #a78bfa 8%, var(--bg-surface));
 }
 
 .dashboard-card.accent-cyan {
-  background: linear-gradient(135deg, rgba(121,192,255,0.12), rgba(121,192,255,0.04));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
 }
 
 .dashboard-section-title {
@@ -74,19 +74,19 @@
 }
 
 .dashboard-chart-card {
-  background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
   min-height: 210px;
   transition: all var(--transition-normal);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
 .dashboard-chart-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(0, 240, 255, 0.2);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 8px rgba(0, 240, 255, 0.1);
+  border-color: var(--border-default);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .dashboard-chart-grid {

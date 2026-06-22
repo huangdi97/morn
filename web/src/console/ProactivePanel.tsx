@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from '../i18n';
+import { EmptyState } from "../components/EmptyState";
 
 interface ProactiveRule {
   id: string;
@@ -135,9 +136,7 @@ export default function ProactivePanel() {
 
       <div className="proactive-list">
         {rules.length === 0 && (
-          <p style={{ color: "var(--text-secondary)", textAlign: "center", padding: "24px" }}>
-            No rules defined. Create one to get started.
-          </p>
+          <EmptyState icon="🤖" title="没有预置 Agent" description="创建预置规则实现主动推送，让 Agent 在满足条件时自动执行任务。" action={{ label: "新建规则", onClick: () => setShowForm(true) }} />
         )}
         {rules.map((rule) => (
           <div key={rule.id} className="proactive-item" style={{

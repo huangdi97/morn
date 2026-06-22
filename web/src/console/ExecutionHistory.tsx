@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from '../i18n';
 import { api } from "../api";
+import { EmptyState } from "../components/EmptyState";
 import "../styles/execution.css";
 
 interface LogEntry {
@@ -41,6 +42,7 @@ export default function ExecutionHistory() {
   const { t } = useTranslation();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState<Filter>("All");
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchLogs = () => {
@@ -48,7 +50,8 @@ export default function ExecutionHistory() {
         if (Array.isArray(data)) {
           setLogs(data.slice(0, 20));
         }
-      }).catch(() => {});
+        setIsLoading(false);
+      }).catch(() => { setIsLoading(false); });
     };
     fetchLogs();
     const interval = setInterval(fetchLogs, 5000);
@@ -75,18 +78,20 @@ export default function ExecutionHistory() {
           ))}
         </div>
       </div>
-      <div className="execution-history-table">
-        <div className="eh-row eh-header">
+      {isLoading ? (
+        <div className="skeleton-list">
+          {[1,2,3,4,5].map(i => <div key={i} className="skeleton" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState icon="📋" title="还没有执行记录" description="执行记录将会在此显示，开始使用后即可查看。" />
+      ) : (<><div className="eh-row eh-header">
           <div className="eh-cell eh-time">{t('console.execution_history.time')}</div>
           <div className="eh-cell eh-agent">{t('console.execution_history.agent')}</div>
           <div className="eh-cell eh-action">{t('console.execution_history.action')}</div>
           <div className="eh-cell eh-status">{t('console.execution_history.status')}</div>
           <div className="eh-cell eh-dur">{t('console.execution_history.duration')}</div>
         </div>
-        {filtered.length === 0 ? (
-          <div className="eh-empty">{t('console.execution_history.no_logs')}</div>
-        ) : (
-          filtered.map((log) => (
+        {filtered.map((log) => (
             <div key={log.id} className="eh-row">
               <div className="eh-cell eh-time">
                 {log.created_at?.slice(11, 19) ?? "--"}
@@ -102,9 +107,7 @@ export default function ExecutionHistory() {
               </div>
               <div className="eh-cell eh-dur">{log.latency_ms}ms</div>
             </div>
-          ))
-        )}
-      </div>
+          ))}</>)}
     </div>
   );
 }

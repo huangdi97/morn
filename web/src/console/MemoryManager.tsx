@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from '../i18n';
+import { EmptyState } from "../components/EmptyState";
 
 interface Memory {
   id: string;
@@ -107,7 +108,7 @@ export default function MemoryManager() {
         ))}
       </div>
       {filtered.length === 0 ? (
-        <p className="empty-state">{t('console.memory.no_results')}</p>
+        <EmptyState icon="🧠" title="记忆为空" description="暂无记忆数据，与 Agent 对话会自动生成记忆。" />
       ) : (
         <table className="memory-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
           <thead>

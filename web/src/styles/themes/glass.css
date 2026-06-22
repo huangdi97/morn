@@ -1,0 +1,98 @@
+/* ===== Morn Glass Theme ===== */
+/* 毛玻璃效果 + 轻盈阴影 */
+[data-theme="glass"] {
+  --bg-page: rgba(245, 247, 250, 0.5);
+  --bg-panel: rgba(255, 255, 255, 0.45);
+  --bg-surface: rgba(255, 255, 255, 0.3);
+  --bg-hover: rgba(255, 255, 255, 0.55);
+
+  --text-primary: #1a1d23;
+  --text-secondary: #5e6470;
+  --text-tertiary: #8b91a0;
+  --text-muted: #b0b5c0;
+
+  --accent: #0ea5e9;
+  --accent-hover: #38bdf8;
+  --accent-active: #7dd3fc;
+
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+
+  --border-default: rgba(0, 0, 0, 0.06);
+  --border-subtle: rgba(255, 255, 255, 0.5);
+
+  --user-bubble: #0ea5e9;
+  --assistant-bubble: rgba(255, 255, 255, 0.55);
+
+  --shadow-glass-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-glass-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-glass-lg: 0 8px 32px rgba(0, 0, 0, 0.08);
+
+  --glass-blur: blur(20px);
+  --panel-blur: blur(12px);
+
+  --scrollbar-thumb: rgba(0, 0, 0, 0.1);
+  --scrollbar-track: transparent;
+}
+
+[data-theme="glass"] .app {
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+[data-theme="glass"] .input-bar {
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  box-shadow: 0 -1px 0 var(--border-default);
+}
+
+[data-theme="glass"] .main-tabs {
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+}
+
+[data-theme="glass"] .agent-bar,
+[data-theme="glass"] .work-log {
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+}
+
+[data-theme="glass"] .message.assistant .bubble {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-glass-sm);
+}
+
+[data-theme="glass"] .input-bar textarea {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="glass"] ::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+[data-theme="glass"] ::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+[data-theme="glass"] .settings-panel {
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  box-shadow: var(--shadow-glass-lg);
+}
+
+[data-theme="glass"] .command-palette {
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  box-shadow: var(--shadow-glass-lg);
+}
+
+[data-theme="glass"] .toast {
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  box-shadow: var(--shadow-glass-md);
+}

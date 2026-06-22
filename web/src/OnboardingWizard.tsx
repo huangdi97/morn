@@ -117,6 +117,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               <option value="cyber">cyber</option>
               <option value="dark">dark</option>
               <option value="light">light</option>
+              <option value="glass">glass</option>
             </select>
             <p style={{ fontSize: 13, color: "var(--text-secondary, #8b949e)", marginTop: 8 }}>
               {t('settings.theme')}: {theme}

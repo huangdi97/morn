@@ -1,10 +1,11 @@
 //! core — Exposes the main orchestration, storage, workflow, and agent subsystems.
 pub mod agent_loop;
 pub mod agent_pool;
-pub mod agent_templates;
+mod agent_templates;
 pub mod approval;
 pub mod assembler;
 pub mod assembly;
+pub mod capability;
 pub mod checkpoint;
 pub mod code_tool;
 pub mod component;
@@ -21,7 +22,7 @@ pub mod engine;
 pub mod error;
 pub mod event_bus;
 pub mod feedback;
-pub mod hub_seeder;
+mod hub_seeder;
 pub mod intent_parser;
 pub mod long_task_engine;
 pub mod mcp;
@@ -30,7 +31,6 @@ pub mod model_router;
 
 pub mod oauth;
 pub mod observability;
-pub mod onboarding;
 pub mod orchestrator;
 pub mod pipeline;
 pub mod plugin_generator;
@@ -39,6 +39,7 @@ pub use plugin_manager::{
     load_plugins, topological_sort, MornPlugin, PluginContext, PluginOrderError,
 };
 pub mod privacy_gate;
+pub use privacy_gate::PrivacyGate;
 pub mod proactive;
 pub mod registry;
 pub mod repo_map;
@@ -47,8 +48,6 @@ pub mod scan_bind;
 pub mod scheduler;
 pub mod search_launcher;
 pub mod security;
-pub mod skill_manifest;
-pub mod sop_template;
 pub mod storage;
 pub mod supervisor;
 pub mod task_engine;

@@ -1,21 +1,23 @@
-import { Fragment } from "react";
-import { SlotPosition, getPlugins } from "./SlotRegistry";
+import React from "react";
+import { slotRegistry } from "./SlotRegistry";
 
 interface RenderSlotProps {
-  position: SlotPosition;
+  name: string;
+  fallback?: React.ReactNode;
 }
 
-export function RenderSlot({ position }: RenderSlotProps) {
-  const plugins = getPlugins(position);
+export const RenderSlot: React.FC<RenderSlotProps> = ({ name, fallback }) => {
+  const registrations = slotRegistry.get(name);
 
-  if (plugins.length === 0) return null;
+  if (registrations.length === 0) {
+    return fallback ?? null;
+  }
 
   return (
-    <Fragment>
-      {plugins.map((plugin) => {
-        const Component = plugin.component;
-        return <Component key={plugin.id} />;
-      })}
-    </Fragment>
+    <>
+      {registrations.map(reg => (
+        <reg.component key={reg.id} />
+      ))}
+    </>
   );
-}
+};

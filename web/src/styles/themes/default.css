@@ -1,22 +1,28 @@
-/* ===== Morn Default Theme ===== */
-/* 中性暗色配色，偏蓝灰调 */
+/* ===== Morn Light Theme ===== */
+/* 简洁浅色，青色主调 */
+:root,
 [data-theme="default"] {
-  --bg-page: #0d1117;
-  --bg-panel: #161b22;
-  --bg-surface: #21262d;
-  --bg-hover: #30363d;
-  --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --text-tertiary: #6e7681;
-  --text-muted: #484f58;
-  --accent: #58a6ff;
-  --accent-hover: #79c0ff;
-  --accent-active: #a5d6ff;
-  --success: #3fb950;
-  --danger: #f85149;
-  --warning: #d29922;
-  --border-default: rgba(255,255,255,0.12);
-  --border-subtle: rgba(255,255,255,0.06);
-  --user-bubble: #1f6feb;
-  --assistant-bubble: #21262d;
+  --bg-page: #ffffff;
+  --bg-panel: #f8f9fb;
+  --bg-surface: #f0f1f4;
+  --bg-hover: #e8eaee;
+
+  --text-primary: #1a1d23;
+  --text-secondary: #5e6470;
+  --text-tertiary: #8b91a0;
+  --text-muted: #b0b5c0;
+
+  --accent: #0ea5e9;
+  --accent-hover: #38bdf8;
+  --accent-active: #7dd3fc;
+
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+
+  --border-default: rgba(0,0,0,0.08);
+  --border-subtle: rgba(0,0,0,0.04);
+
+  --user-bubble: #0ea5e9;
+  --assistant-bubble: #f0f1f4;
 }

@@ -34,6 +34,7 @@ import ProactivePanel from "./console/ProactivePanel";
 import BusinessTemplates from "./console/BusinessTemplates";
 import CreatorEarnings from "./console/CreatorEarnings";
 import GitPanel from "./console/GitPanel";
+import OAuthPanel from "./console/OAuthPanel";
 import PluginManagerPanel from "./console/PluginManagerPanel";
 import CreatePluginWizard from "./plugins/CreatePluginWizard";
 import BotStore from "./store/BotStore";
@@ -45,6 +46,9 @@ import PipelineFlow from "./components/PipelineFlow";
 import { ToastItem } from "./components/Toast";
 import { LocaleProvider, useTranslation } from "./i18n";
 import VoiceInput from "./components/VoiceInput";
+import { CommandPalette } from "./components/CommandPalette";
+import { DesignSystem } from "./design/DesignSystem";
+import { RenderSlot } from "./slots/RenderSlot";
 import "./styles/base.css";
 import "./styles/skeleton.css";
 import "./styles/dashboard.css";
@@ -52,7 +56,7 @@ import "./styles/chat.css";
 import "./styles/studio.css";
 import "./styles/console.css";
 
-type View = "workbench" | "studio" | "hub" | "console";
+type View = "workbench" | "studio" | "hub" | "console" | "design";
 
 interface Message {
   role: "user" | "assistant";
@@ -116,10 +120,11 @@ function AppInner() {
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
   const [confirmClear, setConfirmClear] = useState(false);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [toasts, setToasts] = useState<Array<{ id: number; type: "success" | "error" | "info"; message: string }>>([]);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [toasts, setToasts] = useState<Array<{ id: number; type: "success" | "error" | "info" | "warning"; message: string }>>([]);
   const toastIdRef = useRef(0);
 
-  const showToast = (type: "success" | "error" | "info", message: string) => {
+  const showToast = (type: "success" | "error" | "info" | "warning", message: string) => {
     const id = ++toastIdRef.current;
     setToasts(prev => [...prev, { id, type, message }]);
   };
@@ -330,6 +335,25 @@ function AppInner() {
     return () => document.removeEventListener('click', handler);
   }, [confirmClear]);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
+  const commandPaletteViews = [
+    { key: 'workbench', label: '打开 Workbench', icon: '💬' },
+    { key: 'studio', label: '打开 Studio', icon: '🎨' },
+    { key: 'hub', label: '打开 Store', icon: '🏪' },
+    { key: 'console', label: '打开 Console', icon: '📋' },
+    ...(import.meta.env.DEV ? [{ key: 'design', label: '打开 Design System', icon: '🎨' }] : []),
+  ];
+
   const sendQuickAction = async (text: string) => {
     setInput(text);
   };
@@ -382,7 +406,7 @@ function AppInner() {
   };
 
   const [studioTab, setStudioTab] = useState<"editor" | "builder" | "test" | "teams" | "team" | "dev" | "types" | "mcp" | "create_plugin">("builder");
-  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "reliability" | "governance" | "security" | "hub" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings" | "git" | "plugins">("dashboard");
+  const [consoleTab, setConsoleTab] = useState<"dashboard" | "journey" | "topology" | "system" | "cost" | "roi" | "reliability" | "governance" | "security" | "hub" | "system_check" | "notifications" | "memory" | "connections" | "audio" | "cost_tracking" | "local_models" | "analytics" | "sandbox" | "proactive" | "business" | "earnings" | "git" | "plugins" | "oauth">("dashboard");
   const [workbenchTab, setWorkbenchTab] = useState<"chat" | "workflow">("chat");
 
   const SkeletonChat = () => (
@@ -500,6 +524,7 @@ onSelect={async (template) => {
           </>
         )}
       </div>
+      <RenderSlot name="studio-tools" />
     </div>
   );
 
@@ -530,6 +555,7 @@ onSelect={async (template) => {
         <button className={consoleTab === "earnings" ? "active" : ""} onClick={() => setConsoleTab("earnings")}>{t('console_tab.earnings')}</button>
         <button className={consoleTab === "git" ? "active" : ""} onClick={() => setConsoleTab("git")}>{t('console_tab.git')}</button>
         <button className={consoleTab === "plugins" ? "active" : ""} onClick={() => setConsoleTab("plugins")}>{t('console_tab.plugins')}</button>
+        <button className={consoleTab === "oauth" ? "active" : ""} onClick={() => setConsoleTab("oauth")}>{t('console_tab.oauth')}</button>
       </nav>
       <div className="console-content">
         {loading.console ? <SkeletonConsole /> : (
@@ -558,9 +584,11 @@ onSelect={async (template) => {
             {consoleTab === "earnings" && <CreatorEarnings />}
             {consoleTab === "git" && <GitPanel />}
             {consoleTab === "plugins" && <PluginManagerPanel />}
+            {consoleTab === "oauth" && <OAuthPanel />}
           </>
         )}
       </div>
+      <RenderSlot name="console-panels" />
     </div>
   );
 
@@ -705,12 +733,19 @@ onSelect={async (template) => {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span>{t('nav.console')}</span>
         </button>
+        {import.meta.env.DEV && (
+        <button className={view === "design" ? "active" : ""} onClick={() => setView("design")} data-tooltip="Design System">
+          <span style={{ fontSize: 18 }}>🎨</span>
+          <span>Design</span>
+        </button>
+        )}
       <div className="main-tab-indicator" style={{ left: indicatorStyle.left, width: indicatorStyle.width }} />
         </nav>
         <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "workbench" && renderWorkbench()}</ErrorBoundary>
         <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "studio" && renderStudio()}</ErrorBoundary>
-        <ErrorBoundary onRetry={() => api.retryLastOperation()}>{hubAvailable && view === "hub" && <div className="console-view"><div className="console-content"><BotStore /></div></div>}</ErrorBoundary>
+        <ErrorBoundary onRetry={() => api.retryLastOperation()}>{hubAvailable && view === "hub" && <div className="console-view"><div className="console-content"><BotStore /></div><RenderSlot name="store-tabs" /></div>}</ErrorBoundary>
         <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "console" && renderConsole()}</ErrorBoundary>
+        {import.meta.env.DEV && <ErrorBoundary onRetry={() => api.retryLastOperation()}>{view === "design" && <div className="console-view"><div className="console-content"><DesignSystem /></div></div>}</ErrorBoundary>}
       {showSettings && <Settings onClose={() => setShowSettings(false)} showToast={showToast} />}
       <StatusBar />
       {showOnboarding && (
@@ -726,6 +761,13 @@ onSelect={async (template) => {
         <FeatureGuide
           onComplete={() => setShowGuide(false)}
           onSkip={() => setShowGuide(false)}
+        />
+      )}
+      {showCommandPalette && (
+        <CommandPalette
+          views={commandPaletteViews}
+          onNavigate={(v) => setView(v as View)}
+          onClose={() => setShowCommandPalette(false)}
         />
       )}
       <div className="toast-container">

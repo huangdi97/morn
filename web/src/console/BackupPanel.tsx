@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from '../i18n';
+import { EmptyState } from "../components/EmptyState";
 
 interface BackupEntry {
   name: string;
@@ -65,7 +66,7 @@ export function BackupPanel() {
       {message && <p className="backup-message">{message}</p>}
       <div className="backup-list">
         <h3>{t('backup.backup_list')}</h3>
-        {backupList.length === 0 && <p>{t('backup.no_backups')}</p>}
+        {backupList.length === 0 && <EmptyState icon="💾" title="还没有备份" description="备份数据以保护你的 Agent 配置和记忆。" action={{ label: "创建备份", onClick: handleBackup }} />}
         {backupList.map(b => (
           <div key={b.name} className="backup-item">
             <span>{b.name}</span>

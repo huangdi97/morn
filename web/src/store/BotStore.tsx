@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../api";
 import { useTranslation } from "../i18n";
 import CheckoutModal from "./CheckoutModal";
+import { EmptyState } from "../components/EmptyState";
 
 interface BotListing {
   id: string;
@@ -152,7 +153,7 @@ export default function BotStore() {
   };
 
   if (loading) {
-    return <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>{t('store.loading')}</div>;
+    return <div className="skeleton-grid">{Array.from({length:6}).map((_,i) => <div key={i} className="skeleton" />)}</div>;
   }
 
   return (
@@ -281,9 +282,7 @@ export default function BotStore() {
       </div>
 
       {filtered.length === 0 && (
-        <div style={{ color: "#8b949e", textAlign: "center", padding: "40px" }}>
-          {t('store.no_results')}
-        </div>
+        <EmptyState icon="🏪" title="商店暂无内容" description="前往 Studio 发布你的第一个 Agent 到商店！" action={{ label: "打开 Studio", onClick: () => {} }} />
       )}
 
       {checkoutBot && (

@@ -372,15 +372,11 @@ export default function AdminDashboard({ onNavigate }: OnboardingProps) {
 
   if (loading) {
     return (
-      <div className="console-grid">
-        {[1,2,3,4,5,6].map(i => (
-          <div key={i} className="skeleton skeleton-console-card" style={{ height: '100px' }} />
-        ))}
-        <div className="skeleton" style={{ gridColumn: '1 / -1', height: '60px', marginTop: '8px' }} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', gridColumn: '1 / -1' }}>
-          <div className="skeleton" style={{ height: '200px' }} />
-          <div className="skeleton" style={{ height: '200px' }} />
-        </div>
+      <div className="skeleton-dashboard">
+        {[1,2,3,4,5,6].map(i => <div key={i} className="skeleton" />)}
+        <div className="skeleton" style={{ height: '60px' }} />
+        <div className="skeleton" style={{ height: '200px' }} />
+        <div className="skeleton" style={{ height: '200px' }} />
       </div>
     );
   }

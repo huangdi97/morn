@@ -26,6 +26,8 @@ jobs:
         run: cargo fmt --check
       - name: Clippy
         run: cargo clippy --lib -- -D warnings
+      - name: Cargo audit (vulnerability scan)
+        run: cargo audit
 
   build-tauri:
     runs-on: windows-latest
@@ -46,6 +48,9 @@ jobs:
 
       - name: Install npm dependencies
         run: npm ci
+        working-directory: ./web
+      - name: Npm audit (vulnerability scan)
+        run: npm audit --audit-level=high
         working-directory: ./web
 
       - name: TypeScript check

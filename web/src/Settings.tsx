@@ -31,7 +31,7 @@ function saveApiConfig(config: ApiConfig) {
 
 interface SettingsProps {
   onClose: () => void;
-  showToast?: (type: "success" | "error" | "info", message: string) => void;
+  showToast?: (type: "success" | "error" | "info" | "warning", message: string) => void;
 }
 
 export function Settings({ onClose, showToast }: SettingsProps) {
@@ -74,6 +74,7 @@ export function Settings({ onClose, showToast }: SettingsProps) {
         }
       } catch (e) {
         console.error("Failed to load themes", e);
+        setThemes(['default', 'cyber', 'glass']);
       }
     })();
   }, []);

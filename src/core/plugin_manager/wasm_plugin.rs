@@ -65,10 +65,16 @@ impl MornPlugin for WasmPlugin {
         #[cfg(feature = "sandbox")]
         {
             let wasm_bytes = std::fs::read(&self._wasm_path)
-                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+                .map_err(|e| {
+                    tracing::error!("[plugin_manager] wasm init read {}: {}", self.id, e);
+                    PluginError::LoadFailed(self.id.clone(), e.to_string())
+                })?;
             get_sandbox()
                 .execute_func(&wasm_bytes, "morn_init")
-                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+                .map_err(|e| {
+                    tracing::error!("[plugin_manager] wasm init exec {}: {}", self.id, e);
+                    PluginError::LoadFailed(self.id.clone(), e.to_string())
+                })?;
         }
         Ok(())
     }
@@ -77,10 +83,16 @@ impl MornPlugin for WasmPlugin {
         #[cfg(feature = "sandbox")]
         {
             let wasm_bytes = std::fs::read(&self._wasm_path)
-                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+                .map_err(|e| {
+                    tracing::error!("[plugin_manager] wasm activate read {}: {}", self.id, e);
+                    PluginError::LoadFailed(self.id.clone(), e.to_string())
+                })?;
             get_sandbox()
                 .execute_func(&wasm_bytes, "morn_activate")
-                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+                .map_err(|e| {
+                    tracing::error!("[plugin_manager] wasm activate exec {}: {}", self.id, e);
+                    PluginError::LoadFailed(self.id.clone(), e.to_string())
+                })?;
         }
         Ok(())
     }
@@ -89,10 +101,16 @@ impl MornPlugin for WasmPlugin {
         #[cfg(feature = "sandbox")]
         {
             let wasm_bytes = std::fs::read(&self._wasm_path)
-                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+                .map_err(|e| {
+                    tracing::error!("[plugin_manager] wasm deactivate read {}: {}", self.id, e);
+                    PluginError::LoadFailed(self.id.clone(), e.to_string())
+                })?;
             get_sandbox()
                 .execute_func(&wasm_bytes, "morn_deactivate")
-                .map_err(|e| PluginError::LoadFailed(self.id.clone(), e.to_string()))?;
+                .map_err(|e| {
+                    tracing::error!("[plugin_manager] wasm deactivate exec {}: {}", self.id, e);
+                    PluginError::LoadFailed(self.id.clone(), e.to_string())
+                })?;
         }
         Ok(())
     }

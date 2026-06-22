@@ -26,6 +26,66 @@ const TEMPLATES = [
     nameKey: "console.business.schedule",
     description: "Meeting scheduling and management workflow with auto-scheduling and minutes generation",
   },
+
+  // 财务管理类
+  {
+    id: "workflow-financial-reconciliation",
+    nameKey: "console.business.financial_reconciliation",
+    description: "Invoice matching, expense categorization, and monthly financial report generation",
+  },
+
+  // 项目管理类
+  {
+    id: "workflow-project-management",
+    nameKey: "console.business.project_management",
+    description: "Task breakdown, Gantt chart, milestone tracking, and progress reporting",
+  },
+  {
+    id: "workflow-content-calendar",
+    nameKey: "console.business.content_calendar",
+    description: "Content scheduling, auto-publishing, and multi-platform distribution",
+  },
+
+  // 客户关系类
+  {
+    id: "workflow-customer-support",
+    nameKey: "console.business.customer_support",
+    description: "Ticket system, auto-reply, escalation strategies, and satisfaction tracking",
+  },
+  {
+    id: "workflow-recruitment",
+    nameKey: "console.business.recruitment",
+    description: "Job posting, resume screening, interview arrangement, and offer management",
+  },
+
+  // 运营管理类
+  {
+    id: "workflow-social-media",
+    nameKey: "console.business.social_media",
+    description: "Multi-platform scheduling, batch publishing, and engagement analytics",
+  },
+  {
+    id: "workflow-inventory",
+    nameKey: "console.business.inventory",
+    description: "Stock in/out tracking, low-stock alerts, and periodic inventory audit",
+  },
+
+  // 文档与合规类
+  {
+    id: "workflow-contract-management",
+    nameKey: "console.business.contract_management",
+    description: "Template library, approval workflow, expiration reminders, and version control",
+  },
+  {
+    id: "workflow-market-research",
+    nameKey: "console.business.market_research",
+    description: "Survey design, data collection, analysis report, and insight generation",
+  },
+  {
+    id: "workflow-knowledge-base",
+    nameKey: "console.business.knowledge_base",
+    description: "Document center, full-text search, version management, and team collaboration",
+  },
 ];
 
 export default function BusinessTemplates() {

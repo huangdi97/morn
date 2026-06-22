@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from '../i18n';
+import { EmptyState } from "../components/EmptyState";
 
 export default function Connections() {
   const { t } = useTranslation();
   const [providers, setProviders] = useState<string[]>([]);
   const [connected, setConnected] = useState<Record<string, boolean>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -24,6 +26,7 @@ export default function Connections() {
       } catch (e) {
         console.error("Failed to load providers", e);
       }
+      setIsLoading(false);
     })();
   }, []);
 
@@ -44,6 +47,13 @@ export default function Connections() {
   return (
     <div className="connections">
       <h2>{t('console.connections.title')}</h2>
+      {isLoading ? (
+        <div className="skeleton-list">
+          {[1,2,3].map(i => <div key={i} className="skeleton" />)}
+        </div>
+      ) : providers.length === 0 ? (
+        <EmptyState icon="🔗" title="还没有配置渠道" description="连接第三方服务以扩展 Agent 的能力。" action={{ label: "配置渠道", onClick: () => {} }} />
+      ) : (
       <div className="connections-list">
         {providers.map((p) => (
           <div key={p} className="connection-item">
@@ -61,6 +71,7 @@ export default function Connections() {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

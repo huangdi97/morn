@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from '../i18n';
 import { api } from "../api";
+import { EmptyState } from "../components/EmptyState";
 
 interface AgentTask {
   id: string;
@@ -114,9 +115,11 @@ export default function AgentPoolPanel() {
 
       <div style={{ maxHeight: "400px", overflowY: "auto" }}>
         {summary.tasks.length === 0 ? (
-          <div style={{ padding: "24px", textAlign: "center", color: "#8b949e", fontSize: "13px" }}>
-            {t('console.agent_pool.no_tasks')}
-          </div>
+          <EmptyState
+            icon="🤖"
+            title="还没有运行的 Agent"
+            description="当前没有正在执行的任务。发送消息或创建 Agent 开始使用。"
+          />
         ) : (
           summary.tasks.map((task) => {
             const isExpanded = expandedId === task.id;

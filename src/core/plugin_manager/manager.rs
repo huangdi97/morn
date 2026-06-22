@@ -25,12 +25,13 @@ impl PluginManager {
     pub fn scan(&mut self) -> Result<Vec<String>, PluginError> {
         let dir = &self.plugin_dir;
         if !dir.exists() {
-            std::fs::create_dir_all(dir)?;
+            std::fs::create_dir_all(dir)
+                .inspect_err(|e| tracing::error!("[plugin_manager] scan create_dir_all: {e}"))?;
             return Ok(Vec::new());
         }
         let mut discovered = Vec::new();
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
+        for entry in std::fs::read_dir(dir).inspect_err(|e| tracing::error!("[plugin_manager] scan read_dir: {e}"))? {
+            let entry = entry.inspect_err(|e| tracing::error!("[plugin_manager] scan entry: {e}"))?;
             let path = entry.path();
             if !path.is_dir() {
                 continue;
@@ -39,8 +40,10 @@ impl PluginManager {
             if !manifest_path.exists() {
                 continue;
             }
-            let content = std::fs::read_to_string(&manifest_path)?;
+            let content = std::fs::read_to_string(&manifest_path)
+                .inspect_err(|e| tracing::error!("[plugin_manager] scan read manifest: {e}"))?;
             let manifest: PluginManifest = serde_json::from_str(&content).map_err(|e| {
+                tracing::error!("[plugin_manager] scan parse manifest: {e}");
                 PluginError::InvalidManifest(path.to_string_lossy().to_string(), e.to_string())
             })?;
             let name = manifest.name.clone();
@@ -79,7 +82,10 @@ impl PluginManager {
             .plugins
             .iter_mut()
             .find(|p| p.manifest.name == name)
-            .ok_or_else(|| PluginError::NotFound(name.to_string()))?;
+            .ok_or_else(|| {
+                tracing::error!("[plugin_manager] load plugin not found: {}", name);
+                PluginError::NotFound(name.to_string())
+            })?;
         if plugin.status == PluginStatus::Discovered {
             plugin.status = PluginStatus::Loaded;
         }
@@ -91,13 +97,17 @@ impl PluginManager {
             .plugins
             .iter_mut()
             .find(|p| p.manifest.name == name)
-            .ok_or_else(|| PluginError::NotFound(name.to_string()))?;
+            .ok_or_else(|| {
+                tracing::error!("[plugin_manager] activate plugin not found: {}", name);
+                PluginError::NotFound(name.to_string())
+            })?;
         match &plugin.status {
             PluginStatus::Loaded | PluginStatus::Discovered => {
                 if plugin.manifest.plugin_type == "theme" {
                     let css_path = plugin.dir.join("theme.css");
                     if css_path.exists() {
-                        let css = std::fs::read_to_string(&css_path)?;
+                        let css = std::fs::read_to_string(&css_path)
+                            .inspect_err(|e| tracing::error!("[plugin_manager] activate read theme.css: {e}"))?;
                         self.theme_css.insert(name.to_string(), css);
                     }
                 }
@@ -110,10 +120,13 @@ impl PluginManager {
                 Ok(())
             }
             PluginStatus::Active => Ok(()),
-            PluginStatus::Error(e) => Err(PluginError::Other(format!(
-                "Plugin '{}' is in error state: {}",
-                name, e
-            ))),
+            PluginStatus::Error(e) => {
+                tracing::error!("[plugin_manager] activate plugin '{}' in error state: {}", name, e);
+                Err(PluginError::Other(format!(
+                    "Plugin '{}' is in error state: {}",
+                    name, e
+                )))
+            }
         }
     }
 
@@ -122,7 +135,10 @@ impl PluginManager {
             .plugins
             .iter_mut()
             .find(|p| p.manifest.name == name)
-            .ok_or_else(|| PluginError::NotFound(name.to_string()))?;
+            .ok_or_else(|| {
+                tracing::error!("[plugin_manager] deactivate plugin not found: {}", name);
+                PluginError::NotFound(name.to_string())
+            })?;
         if plugin.status == PluginStatus::Active {
             plugin.status = PluginStatus::Loaded;
         }
@@ -158,6 +174,7 @@ impl PluginManager {
     pub fn load_plugin_sandboxed(&self, path: &str) -> Result<(), MornError> {
         let manifest_path = format!("{}/manifest.json", path);
         if !std::path::Path::new(&manifest_path).exists() {
+            tracing::error!("[plugin_manager] load_plugin_sandboxed manifest not found: {}", manifest_path);
             return Err(MornError::Internal(format!(
                 "Manifest not found: {}",
                 manifest_path

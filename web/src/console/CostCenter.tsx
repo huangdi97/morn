@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from '../i18n';
+import { EmptyState } from "../components/EmptyState";
 
 interface CostBreakdown {
   name: string;
@@ -91,10 +92,14 @@ export default function CostCenter() {
         <div style={{ fontSize: "28px", fontWeight: "bold", color: "#f85149" }}>¥{totalCost}</div>
       </div>
 
+      {byAgent.length === 0 && daily.length === 0 ? (
+        <EmptyState icon="💰" title="还没有费用数据" description="费用数据将在执行 Agent 任务后自动生成。" />
+      ) : (
+      <>
       <div className="cost-card">
         <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>By Agent</div>
         {byAgent.length === 0 ? (
-          <div style={{ color: "#8b949e" }}>No cost data available</div>
+          <div style={{ color: "#8b949e" }}>暂无按 Agent 的费用数据</div>
         ) : (
           <table style={tableStyle}>
             <thead>
@@ -119,7 +124,7 @@ export default function CostCenter() {
       <div className="cost-card">
         <div style={{ color: "#e6edf3", fontWeight: "bold", marginBottom: "8px" }}>Daily Trend</div>
         {daily.length === 0 ? (
-          <div style={{ color: "#8b949e" }}>No daily cost data available</div>
+          <div style={{ color: "#8b949e" }}>暂无每日费用数据</div>
         ) : (
           <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", height: "80px" }}>
             {daily.map(d => (
@@ -132,6 +137,8 @@ export default function CostCenter() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

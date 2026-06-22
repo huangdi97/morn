@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EmptyState } from "../components/EmptyState";
 
 export default function SandboxPanel() {
   const [code, setCode] = useState("");
@@ -31,6 +32,9 @@ export default function SandboxPanel() {
 
   return (
     <div className="sandbox-panel">
+      {!status ? (
+        <EmptyState icon="📦" title="还没有沙箱环境" description="沙箱提供安全的代码执行环境，连接后端后即可使用。" />
+      ) : (<>
       <h2>WASM Sandbox</h2>
       <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px" }}>{status}</p>
       <div style={{ marginBottom: "8px" }}>
@@ -51,6 +55,8 @@ export default function SandboxPanel() {
         <pre style={{ marginTop: "12px", padding: "8px", background: "var(--bg-secondary)", borderRadius: "4px" }}>
           {result}
         </pre>
+      )}
+      </>
       )}
     </div>
   );

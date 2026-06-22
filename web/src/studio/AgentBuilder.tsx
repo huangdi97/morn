@@ -45,6 +45,7 @@ export function AgentBuilder() {
   const [nlInput, setNlInput] = useState("");
   const [nlLoading, setNlLoading] = useState(false);
   const [editTab, setEditTab] = useState<"form" | "visual">("form");
+  const [isLoading, setIsLoading] = useState(true);
   const [def, setDef] = useState<AgentDef>({
     name: "",
     persona: "assistant",
@@ -63,7 +64,8 @@ export function AgentBuilder() {
       setTools(list.filter((c) => c.component_type === "tool").map((c) => c.id));
       setKnowledge(list.filter((c) => c.component_type === "knowledge").map((c) => c.id));
       setSkills(list.filter((c) => c.component_type === "skill").map((c) => c.id));
-    }).catch(() => {});
+      setIsLoading(false);
+    }).catch(() => { setIsLoading(false); });
     api.listPresetPersonas().then(setPresets).catch(() => {});
   }, []);
 
@@ -389,6 +391,16 @@ export function AgentBuilder() {
 
   return (
     <div className="agent-builder">
+      {isLoading ? (
+        <div className="skeleton-canvas">
+          <div className="skeleton-canvas-sidebar">
+            {[1,2,3,4].map(i => <div key={i} className="skeleton" />)}
+          </div>
+          <div className="skeleton-canvas-main">
+            {[1,2,3].map(i => <div key={i} className="skeleton" />)}
+          </div>
+        </div>
+      ) : (<>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <h2 style={{ margin: 0 }}>{t('studio.builder.title')}</h2>
         <button
@@ -409,6 +421,8 @@ export function AgentBuilder() {
         <span className={step >= 2 ? "active" : ""}>{t('agent_builder.step_done')}</span>
       </div>
       {renderStep()}
+      </>
+      )}
     </div>
   );
 }
