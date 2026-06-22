@@ -64,11 +64,10 @@ impl MornPlugin for WasmPlugin {
     fn init(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
         #[cfg(feature = "sandbox")]
         {
-            let wasm_bytes = std::fs::read(&self._wasm_path)
-                .map_err(|e| {
-                    tracing::error!("[plugin_manager] wasm init read {}: {}", self.id, e);
-                    PluginError::LoadFailed(self.id.clone(), e.to_string())
-                })?;
+            let wasm_bytes = std::fs::read(&self._wasm_path).map_err(|e| {
+                tracing::error!("[plugin_manager] wasm init read {}: {}", self.id, e);
+                PluginError::LoadFailed(self.id.clone(), e.to_string())
+            })?;
             get_sandbox()
                 .execute_func(&wasm_bytes, "morn_init")
                 .map_err(|e| {
@@ -82,11 +81,10 @@ impl MornPlugin for WasmPlugin {
     fn activate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
         #[cfg(feature = "sandbox")]
         {
-            let wasm_bytes = std::fs::read(&self._wasm_path)
-                .map_err(|e| {
-                    tracing::error!("[plugin_manager] wasm activate read {}: {}", self.id, e);
-                    PluginError::LoadFailed(self.id.clone(), e.to_string())
-                })?;
+            let wasm_bytes = std::fs::read(&self._wasm_path).map_err(|e| {
+                tracing::error!("[plugin_manager] wasm activate read {}: {}", self.id, e);
+                PluginError::LoadFailed(self.id.clone(), e.to_string())
+            })?;
             get_sandbox()
                 .execute_func(&wasm_bytes, "morn_activate")
                 .map_err(|e| {
@@ -100,11 +98,10 @@ impl MornPlugin for WasmPlugin {
     fn deactivate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
         #[cfg(feature = "sandbox")]
         {
-            let wasm_bytes = std::fs::read(&self._wasm_path)
-                .map_err(|e| {
-                    tracing::error!("[plugin_manager] wasm deactivate read {}: {}", self.id, e);
-                    PluginError::LoadFailed(self.id.clone(), e.to_string())
-                })?;
+            let wasm_bytes = std::fs::read(&self._wasm_path).map_err(|e| {
+                tracing::error!("[plugin_manager] wasm deactivate read {}: {}", self.id, e);
+                PluginError::LoadFailed(self.id.clone(), e.to_string())
+            })?;
             get_sandbox()
                 .execute_func(&wasm_bytes, "morn_deactivate")
                 .map_err(|e| {

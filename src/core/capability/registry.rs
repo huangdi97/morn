@@ -59,10 +59,7 @@ impl CapabilityRegistry {
     }
 
     pub fn get_by_id(&self, id: &str) -> Option<&CapabilityDef> {
-        self.categories
-            .values()
-            .flatten()
-            .find(|c| c.id == id)
+        self.categories.values().flatten().find(|c| c.id == id)
     }
 
     pub fn unregister(&mut self, category: &str, id: &str) -> Option<CapabilityDef> {

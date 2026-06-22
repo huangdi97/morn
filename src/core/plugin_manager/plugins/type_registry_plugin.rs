@@ -1,21 +1,31 @@
-use std::sync::Arc;
 use crate::core::component_type::registry::TypeRegistry;
 use crate::core::plugin_manager::{MornPlugin, PluginContext, PluginError};
+use std::sync::Arc;
 
 pub struct TypeRegistryPlugin(pub Option<Arc<TypeRegistry>>);
 
 impl Default for TypeRegistryPlugin {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TypeRegistryPlugin {
-    pub fn new() -> Self { Self(None) }
+    pub fn new() -> Self {
+        Self(None)
+    }
 }
 
 impl MornPlugin for TypeRegistryPlugin {
-    fn id(&self) -> &str { "morn:component-type" }
-    fn deps(&self) -> Vec<&str> { vec!["morn:registry"] }
-    fn priority(&self) -> i32 { 85 }
+    fn id(&self) -> &str {
+        "morn:component-type"
+    }
+    fn deps(&self) -> Vec<&str> {
+        vec!["morn:registry"]
+    }
+    fn priority(&self) -> i32 {
+        85
+    }
 
     fn init(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
         let registry = Arc::new(TypeRegistry::new());
@@ -25,9 +35,10 @@ impl MornPlugin for TypeRegistryPlugin {
     }
 
     fn activate(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
-        ctx.get::<Arc<TypeRegistry>>("morn:component-type").ok_or_else(|| {
-            PluginError::ActivateFailed("morn:component-type".into(), "not registered".into())
-        })?;
+        ctx.get::<Arc<TypeRegistry>>("morn:component-type")
+            .ok_or_else(|| {
+                PluginError::ActivateFailed("morn:component-type".into(), "not registered".into())
+            })?;
         Ok(())
     }
 

@@ -1,21 +1,31 @@
-use std::sync::Arc;
 use crate::core::assembly::AssemblyBuilder;
 use crate::core::plugin_manager::{MornPlugin, PluginContext, PluginError};
+use std::sync::Arc;
 
 pub struct AssemblyPlugin(pub Option<Arc<AssemblyBuilder>>);
 
 impl Default for AssemblyPlugin {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AssemblyPlugin {
-    pub fn new() -> Self { Self(None) }
+    pub fn new() -> Self {
+        Self(None)
+    }
 }
 
 impl MornPlugin for AssemblyPlugin {
-    fn id(&self) -> &str { "morn:assembly" }
-    fn deps(&self) -> Vec<&str> { vec!["morn:registry", "morn:component-type"] }
-    fn priority(&self) -> i32 { 80 }
+    fn id(&self) -> &str {
+        "morn:assembly"
+    }
+    fn deps(&self) -> Vec<&str> {
+        vec!["morn:registry", "morn:component-type"]
+    }
+    fn priority(&self) -> i32 {
+        80
+    }
 
     fn init(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
         let builder = Arc::new(AssemblyBuilder::new());
@@ -25,9 +35,10 @@ impl MornPlugin for AssemblyPlugin {
     }
 
     fn activate(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
-        ctx.get::<Arc<AssemblyBuilder>>("morn:assembly").ok_or_else(|| {
-            PluginError::ActivateFailed("morn:assembly".into(), "not registered".into())
-        })?;
+        ctx.get::<Arc<AssemblyBuilder>>("morn:assembly")
+            .ok_or_else(|| {
+                PluginError::ActivateFailed("morn:assembly".into(), "not registered".into())
+            })?;
         Ok(())
     }
 

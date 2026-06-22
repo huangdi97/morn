@@ -30,8 +30,11 @@ impl PluginManager {
             return Ok(Vec::new());
         }
         let mut discovered = Vec::new();
-        for entry in std::fs::read_dir(dir).inspect_err(|e| tracing::error!("[plugin_manager] scan read_dir: {e}"))? {
-            let entry = entry.inspect_err(|e| tracing::error!("[plugin_manager] scan entry: {e}"))?;
+        for entry in std::fs::read_dir(dir)
+            .inspect_err(|e| tracing::error!("[plugin_manager] scan read_dir: {e}"))?
+        {
+            let entry =
+                entry.inspect_err(|e| tracing::error!("[plugin_manager] scan entry: {e}"))?;
             let path = entry.path();
             if !path.is_dir() {
                 continue;
@@ -106,8 +109,9 @@ impl PluginManager {
                 if plugin.manifest.plugin_type == "theme" {
                     let css_path = plugin.dir.join("theme.css");
                     if css_path.exists() {
-                        let css = std::fs::read_to_string(&css_path)
-                            .inspect_err(|e| tracing::error!("[plugin_manager] activate read theme.css: {e}"))?;
+                        let css = std::fs::read_to_string(&css_path).inspect_err(|e| {
+                            tracing::error!("[plugin_manager] activate read theme.css: {e}")
+                        })?;
                         self.theme_css.insert(name.to_string(), css);
                     }
                 }
@@ -121,7 +125,11 @@ impl PluginManager {
             }
             PluginStatus::Active => Ok(()),
             PluginStatus::Error(e) => {
-                tracing::error!("[plugin_manager] activate plugin '{}' in error state: {}", name, e);
+                tracing::error!(
+                    "[plugin_manager] activate plugin '{}' in error state: {}",
+                    name,
+                    e
+                );
                 Err(PluginError::Other(format!(
                     "Plugin '{}' is in error state: {}",
                     name, e
@@ -174,7 +182,10 @@ impl PluginManager {
     pub fn load_plugin_sandboxed(&self, path: &str) -> Result<(), MornError> {
         let manifest_path = format!("{}/manifest.json", path);
         if !std::path::Path::new(&manifest_path).exists() {
-            tracing::error!("[plugin_manager] load_plugin_sandboxed manifest not found: {}", manifest_path);
+            tracing::error!(
+                "[plugin_manager] load_plugin_sandboxed manifest not found: {}",
+                manifest_path
+            );
             return Err(MornError::Internal(format!(
                 "Manifest not found: {}",
                 manifest_path

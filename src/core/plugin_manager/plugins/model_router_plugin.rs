@@ -4,17 +4,27 @@ use crate::core::plugin_manager::{MornPlugin, PluginContext, PluginError};
 pub struct ModelRouterPlugin(pub Option<ModelRouter>);
 
 impl Default for ModelRouterPlugin {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ModelRouterPlugin {
-    pub fn new() -> Self { Self(None) }
+    pub fn new() -> Self {
+        Self(None)
+    }
 }
 
 impl MornPlugin for ModelRouterPlugin {
-    fn id(&self) -> &str { "morn:model-router" }
-    fn deps(&self) -> Vec<&str> { vec![] }
-    fn priority(&self) -> i32 { 170 }
+    fn id(&self) -> &str {
+        "morn:model-router"
+    }
+    fn deps(&self) -> Vec<&str> {
+        vec![]
+    }
+    fn priority(&self) -> i32 {
+        170
+    }
 
     fn init(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
         let router = ModelRouter::default();
