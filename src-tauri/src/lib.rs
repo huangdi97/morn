@@ -32,7 +32,40 @@ use morn::studio::tester::StudioTester;
 mod autostart;
 mod commands;
 
-const DEFAULT_API_KEY: &str = "sk-zcFNOoh23DWQZxNdmCgXQnomTvc1jmPt";
+const DEFAULT_API_KEY: &str = "sk-zcF...jmPt";
+
+/// 安装全局 panic hook：捕获所有 panic 写入 crash.log + 弹错误框
+pub fn setup_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let crash_log = dirs::data_dir()
+            .map(|d| d.join("morn").join("crash.log"))
+            .unwrap_or_else(|| PathBuf::from("./crash.log"));
+        let msg = format!(
+            "Morn crash at {}\nPanic: {}\n",
+            chrono::Utc::now().to_rfc3339(),
+            info
+        );
+        let _ = std::fs::write(&crash_log, &msg);
+        #[cfg(target_os = "windows")]
+        {
+            let _ = std::process::Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-WindowStyle",
+                    "Hidden",
+                    "-Command",
+                    &format!(
+                        "[System.Windows.Forms.MessageBox]::Show(\
+                            'Morn 遇到意外错误，即将关闭。\n\n{0}\n\n详情已写入：\n{1}',\
+                            'Morn Error', 'OK', 'Error')",
+                        info,
+                        crash_log.display()
+                    ),
+                ])
+                .output();
+        }
+    }));
+}
 
 fn start_sync_loop(engine: Arc<Mutex<Option<SyncEngine>>>) {
     std::thread::spawn(move || loop {
@@ -121,6 +154,9 @@ impl AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 1. 全局 panic hook — 捕获所有 panic，确保 crash.log 总能写出来
+    setup_panic_hook();
+
     let plugin_dir = dirs::data_dir()
         .map(|d| d.join("morn").join("plugins"))
         .unwrap_or_else(|| PathBuf::from("./plugins"));
