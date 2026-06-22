@@ -20,7 +20,6 @@ pub mod delegation;
 pub mod dual_llm;
 pub mod engine;
 pub mod error;
-pub mod onboarding;
 pub mod event_bus;
 pub mod feedback;
 mod hub_seeder;
@@ -29,6 +28,7 @@ pub mod long_task_engine;
 pub mod mcp;
 pub mod memory;
 pub mod model_router;
+pub mod onboarding;
 
 pub mod oauth;
 pub mod observability;
