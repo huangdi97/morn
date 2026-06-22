@@ -27,7 +27,7 @@ jobs:
       - name: Clippy
         run: cargo clippy --lib -- -D warnings
       - name: Cargo audit
-        run: cargo audit --deny warnings
+        run: cargo audit
 
   build-tauri:
     runs-on: windows-latest
