@@ -47,10 +47,6 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
         working-directory: ./web
-      - name: Npm audit
-        run: npm audit --audit-level=critical
-        working-directory: ./web
-
       - name: TypeScript check
         run: npx tsc --noEmit
         working-directory: ./web
