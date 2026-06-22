@@ -63,9 +63,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF_NAME}"
-          # Find the built bundles
-          NSIS_FILES=$(find src-tauri/target -path "*/bundle/nsis/*.exe" 2>/dev/null || true)
-          MSI_FILES=$(find src-tauri/target -path "*/bundle/msi/*.msi" 2>/dev/null || true)
+          # Find the built bundles (workspace root target, not src-tauri/target)
+          NSIS_FILES=$(find target -path "*/bundle/nsis/*.exe" 2>/dev/null || true)
+          MSI_FILES=$(find target -path "*/bundle/msi/*.msi" 2>/dev/null || true)
           echo "Found NSIS: $NSIS_FILES"
           echo "Found MSI: $MSI_FILES"
           if [ -n "$NSIS_FILES" ] || [ -n "$MSI_FILES" ]; then
@@ -83,7 +83,7 @@ jobs:
         shell: pwsh
         run: |
           $VERSION = "${{ github.ref_name }}".TrimStart('v')
-          $MSI_PATH = Get-ChildItem -Path src-tauri/target/release/bundle/msi/*.msi -ErrorAction SilentlyContinue
+          $MSI_PATH = Get-ChildItem -Path target/release/bundle/msi/*.msi -ErrorAction SilentlyContinue
           if ($MSI_PATH) {
             $SIZE = (Get-Item $MSI_PATH).Length
             $UPDATE_JSON = @{
