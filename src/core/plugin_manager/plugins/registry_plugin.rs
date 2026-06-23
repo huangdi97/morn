@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::core::component_type::registry::TypeRegistry;
 use crate::core::plugin_manager::{MornPlugin, PluginContext, PluginError};
 use crate::core::registry::Registry;
@@ -31,9 +33,14 @@ impl MornPlugin for RegistryPlugin {
     }
 
     fn init(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
-        let registry = TypeRegistry::new();
-        ctx.register("morn:type-registry", registry.clone());
-        self.0 = Some(registry);
+        let storage = ctx.get::<Storage>("morn:storage").ok_or_else(|| {
+            PluginError::LoadFailed("morn:registry".into(), "morn:storage not ready".into())
+        })?;
+        let type_registry = TypeRegistry::new();
+        ctx.register("morn:type-registry", type_registry.clone());
+        let registry = Arc::new(Registry::new(Some(storage.clone()), None));
+        ctx.register("morn:registry", registry);
+        self.0 = Some(type_registry);
         Ok(())
     }
 
@@ -45,14 +52,12 @@ impl MornPlugin for RegistryPlugin {
                     "morn:type-registry not registered".to_string(),
                 )
             })?;
-        let storage = ctx.get::<Storage>("morn:storage").ok_or_else(|| {
+        ctx.get::<Arc<Registry>>("morn:registry").ok_or_else(|| {
             PluginError::ActivateFailed(
                 "morn:registry".to_string(),
-                "morn:storage not registered".to_string(),
+                "morn:registry not registered".to_string(),
             )
         })?;
-        let registry = Registry::new(Some(storage.clone()), None);
-        ctx.register("morn:registry", registry);
         Ok(())
     }
 

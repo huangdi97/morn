@@ -29,13 +29,13 @@ impl MornPlugin for DelegationPlugin {
     }
 
     fn init(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
-        let registry = ctx.get::<Registry>("morn:type-registry").ok_or_else(|| {
+        let registry = ctx.get::<Arc<Registry>>("morn:registry").ok_or_else(|| {
             PluginError::LoadFailed(
                 "morn:delegation".into(),
-                "morn:type-registry not ready".into(),
+                "morn:registry not ready".into(),
             )
         })?;
-        let manager = Arc::new(DelegationManager::new(Arc::new(registry)));
+        let manager = Arc::new(DelegationManager::new(registry));
         ctx.register("morn:delegation", manager.clone());
         self.0 = Some(manager);
         Ok(())

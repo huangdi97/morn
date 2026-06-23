@@ -30,11 +30,11 @@ impl MornPlugin for WorkflowPlugin {
 
     fn init(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
         let registry = ctx
-            .get::<Arc<Registry>>("morn:type-registry")
+            .get::<Arc<Registry>>("morn:registry")
             .ok_or_else(|| {
                 PluginError::LoadFailed(
                     "morn:workflow".into(),
-                    "morn:type-registry not ready".into(),
+                    "morn:registry not ready".into(),
                 )
             })?;
         let builder = Arc::new(WorkflowBuilder::new(registry));

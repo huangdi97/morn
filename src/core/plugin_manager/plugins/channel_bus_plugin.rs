@@ -48,12 +48,13 @@ impl MornPlugin for ChannelBusPlugin {
                 "morn:storage not registered".to_string(),
             )
         })?;
-        let registry = ctx.get::<Registry>("morn:registry").ok_or_else(|| {
+        let reg_arc = ctx.get::<Arc<Registry>>("morn:registry").ok_or_else(|| {
             PluginError::ActivateFailed(
                 "morn:channel-bus".to_string(),
                 "morn:registry not registered".to_string(),
             )
         })?;
+        let registry = Arc::unwrap_or_clone(reg_arc);
         let console = ConsoleBackend::new(Some(registry), Some(storage), None, None, None, None);
         ctx.register("morn:console", Arc::new(Mutex::new(console)));
 
