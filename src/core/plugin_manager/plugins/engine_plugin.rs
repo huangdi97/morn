@@ -31,24 +31,20 @@ impl MornPlugin for EnginePlugin {
 
     fn init(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
         let storage = ctx.get::<Storage>("morn:storage").ok_or_else(|| {
-            PluginError::LoadFailed(
-                "morn:engine".to_string(),
-                "morn:storage not registered".to_string(),
-            )
+            PluginError::LoadFailed("morn:engine".into(), "morn:storage not registered".into())
         })?;
         let engine = TaskEngine::new(Some(storage), None);
-        ctx.register("morn:task-engine", engine.clone());
         self.0 = Some(engine);
         Ok(())
     }
 
-    fn activate(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
-        ctx.get::<TaskEngine>("morn:task-engine").ok_or_else(|| {
-            PluginError::ActivateFailed(
-                "morn:engine".to_string(),
-                "morn:task-engine not registered".to_string(),
-            )
-        })?;
+    fn activate(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
+        if self.0.is_none() {
+            return Err(PluginError::ActivateFailed(
+                "morn:engine".into(),
+                "not initialized".into(),
+            ));
+        }
         Ok(())
     }
 
