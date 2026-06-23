@@ -71,11 +71,11 @@ pub fn load_plugins(
     plugins: &mut [Box<dyn MornPlugin>],
     ctx: &PluginContext,
 ) -> Result<(), PluginError> {
-    for plugin in plugins.iter_mut() {
-        safe_init(plugin.as_mut(), ctx)?;
-    }
-
     let order = topological_sort(plugins).map_err(|e| PluginError::OrderError(e.to_string()))?;
+
+    for &i in &order {
+        safe_init(plugins[i].as_mut(), ctx)?;
+    }
 
     for &i in &order {
         safe_activate(plugins[i].as_mut(), ctx)?;
