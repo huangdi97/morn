@@ -37,9 +37,6 @@ pub use supervisor_plugin::SupervisorPlugin;
 pub mod sync_plugin;
 pub use sync_plugin::SyncPlugin;
 
-pub mod voice_plugin;
-pub use voice_plugin::VoicePlugin;
-
 pub mod model_router_plugin;
 pub use model_router_plugin::ModelRouterPlugin;
 

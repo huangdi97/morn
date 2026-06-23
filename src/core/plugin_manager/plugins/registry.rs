@@ -7,7 +7,7 @@ use super::{
     DelegationPlugin, EnginePlugin, HubPlugin, IntentParserPlugin, McpPlugin, MemoryPlugin,
     ModelRouterPlugin, ObservabilityPlugin, OrchestratorPlugin, ProactivePlugin, RegistryPlugin,
     SandboxPlugin, SchedulerPlugin, SecurityPlugin, StudioPlugin, SupervisorPlugin, SyncPlugin,
-    TaskEnginePlugin, TypeRegistryPlugin, VoicePlugin, WorkflowPlugin,
+    TaskEnginePlugin, TypeRegistryPlugin, WorkflowPlugin,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -60,7 +60,6 @@ impl CorePluginRegistry {
             "morn:observability",
             Box::new(|_| Box::new(ObservabilityPlugin(None))),
         );
-        r.register("morn:voice", Box::new(|_| Box::new(VoicePlugin)));
         r.register("morn:sync", Box::new(|_| Box::new(SyncPlugin(None))));
         r.register("morn:backup", Box::new(|_| Box::new(BackupPlugin::new())));
         r.register(
