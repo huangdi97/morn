@@ -39,6 +39,7 @@ make_always_channel_plugin!(RestApiChannelPlugin, "morn:channel-rest-api");
 
 // ===== feature-gated 渠道（12个） =====
 
+#[allow(unused_macros)]
 macro_rules! make_channel_plugin {
     ($name:ident, $id:expr) => {
         pub struct $name;

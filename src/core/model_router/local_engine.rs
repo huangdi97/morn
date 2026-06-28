@@ -1,6 +1,7 @@
 //! local_engine — Scans and manages local GGUF models for on-device inference.
 
 use crate::core::error::MornError;
+#[allow(unused_imports)]
 use serde::Deserialize;
 
 #[derive(Debug, Clone)]
@@ -152,22 +153,26 @@ impl LocalEngine {
     }
 }
 
+#[cfg(feature = "local-llm")]
 #[derive(Debug, Deserialize)]
 struct OllamaGenerateResponse {
     response: Option<String>,
     error: Option<String>,
 }
 
+#[cfg(feature = "local-llm")]
 #[derive(Debug, Deserialize)]
 struct LmStudioChatResponse {
     choices: Vec<LmStudioChoice>,
 }
 
+#[cfg(feature = "local-llm")]
 #[derive(Debug, Deserialize)]
 struct LmStudioChoice {
     message: LmStudioMessage,
 }
 
+#[cfg(feature = "local-llm")]
 #[derive(Debug, Deserialize)]
 struct LmStudioMessage {
     content: String,

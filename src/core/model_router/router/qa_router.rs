@@ -23,6 +23,7 @@ pub(super) fn default_provider_catalog() -> Vec<ProviderCatalogEntry> {
         .collect()
 }
 
+#[cfg(feature = "local-llm")]
 pub(super) fn is_local_provider(provider: &str) -> bool {
     provider == "ollama" || provider == "lm_studio" || provider == "local"
 }

@@ -14,7 +14,8 @@ strip = true
 opt-level = "z"
 
 [features]
-default = ["full"]
+default = ["mvp"]
+mvp = []
 local-llm = []        # TODO: reserved for local LLM inference
 sandbox = ["wasmtime", "wat"]
 email = ["lettre"]
@@ -24,7 +25,18 @@ providers-full = []   # TODO: reserved for extended LLM provider backends
 desktop-real = []     # TODO: reserved for real desktop automation (non-simulation mode)
 vnc-sandbox = []    # TODO: reserved for VNC sandbox (virtual display isolation)
 voice = []            # TODO: reserved for voice input/output
-full = ["sandbox", "email", "server", "channels-full", "providers-full", "desktop-real", "vnc-sandbox", "local-llm", "voice"]
+channels = []
+bridge = []
+orchestrator = []
+studio = []
+hub = []
+computer = []
+mcp = []
+security = []
+console = []
+org = []
+protocol = []
+full = ["sandbox", "email", "server", "channels-full", "bridge", "orchestrator", "studio", "hub", "computer", "mcp", "security", "console", "org", "protocol", "local-llm", "providers-full", "desktop-real", "vnc-sandbox", "voice"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

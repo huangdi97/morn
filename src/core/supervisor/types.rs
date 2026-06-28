@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::component::persona::{PersonaParameters, PromptLayers};
+#[cfg(feature = "computer")]
+#[allow(unused_imports)]
 pub use crate::computer::SecurityConfig;
 
 fn default_communication_style() -> String {

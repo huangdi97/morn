@@ -55,6 +55,7 @@ impl ModelRouter {
     }
 
     fn init_default_models(&mut self) {
+        #[allow(unused_variables)]
         for p in self.providers.clone() {
             #[cfg(feature = "providers-full")]
             {
@@ -187,6 +188,8 @@ impl ModelRouter {
     }
 
     pub fn has_local_models(&self) -> bool {
+        eprintln!("DEBUG: cfg(feature=local-llm) = {}", cfg!(feature = "local-llm"));
+        eprintln!("DEBUG: local_models.len() = {}", self.local_models.len());
         if cfg!(feature = "local-llm") {
             !self.local_models.is_empty()
         } else {

@@ -7,6 +7,8 @@ use std::process::Command;
 
 use uuid::Uuid;
 
+#[cfg(feature = "sandbox")]
+#[allow(unused_imports)]
 use crate::sandbox::wasm::Sandbox;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -22,7 +24,12 @@ pub struct CodeToolExecutor {
     timeout_secs: u64,
     max_memory_mb: u64,
     forbidden_patterns: Vec<String>,
-    sandbox: Option<Sandbox>,
+    #[cfg(feature = "sandbox")]
+    #[allow(dead_code)]
+    pub sandbox: Option<Sandbox>,
+    #[cfg(not(feature = "sandbox"))]
+    #[allow(dead_code)]
+    pub sandbox: Option<()>,
 }
 
 impl Default for CodeToolExecutor {
@@ -65,6 +72,7 @@ impl CodeToolExecutor {
         self
     }
 
+    #[cfg(feature = "sandbox")]
     pub fn with_sandbox(mut self, sandbox: Sandbox) -> Self {
         self.sandbox = Some(sandbox);
         self
@@ -96,6 +104,7 @@ impl CodeToolExecutor {
             }
         }
 
+        #[cfg(feature = "sandbox")]
         if let Some(ref sb) = self.sandbox {
             match sb.execute(code) {
                 Ok(output) => {

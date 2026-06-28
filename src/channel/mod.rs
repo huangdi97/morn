@@ -14,6 +14,7 @@ pub mod miniprogram;
 pub mod pushplus;
 #[cfg(feature = "channels-full")]
 pub mod qqbot;
+#[cfg(feature = "server")]
 pub mod rest_api;
 #[cfg(feature = "channels-full")]
 pub mod serverchan;
