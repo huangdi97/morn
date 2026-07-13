@@ -1,12 +1,22 @@
 //! storage — Provides SQLite-backed persistence for agents, tasks, settings, and sync data.
 use crate::core::error::MornError;
-use rusqlite::Connection;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 
-#[derive(Debug, Clone)]
+type Conn = r2d2::PooledConnection<SqliteConnectionManager>;
+
+#[derive(Debug)]
 pub struct Storage {
-    conn: Arc<Mutex<Connection>>,
+    pool: Pool<SqliteConnectionManager>,
+}
+
+impl Clone for Storage {
+    fn clone(&self) -> Self {
+        Storage {
+            pool: self.pool.clone(),
+        }
+    }
 }
 
 mod agents;
@@ -54,27 +64,36 @@ impl Storage {
             })?;
         }
 
-        let conn = Connection::open(path).map_err(|e| MornError::Internal(e.to_string()))?;
-        let storage = Storage {
-            conn: Arc::new(Mutex::new(conn)),
-        };
+        let manager = SqliteConnectionManager::file(path);
+        let pool = Pool::builder()
+            .build(manager)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let conn = pool.get().map_err(|e| MornError::Internal(e.to_string()))?;
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA busy_timeout=5000;",
+        )
+        .map_err(|e| MornError::Internal(e.to_string()))?;
+        drop(conn);
+        let storage = Storage { pool };
         storage.init_tables()?;
         Ok(storage)
     }
 
     /// 获取数据库连接的快捷方法
-    pub fn conn(&self) -> Result<std::sync::MutexGuard<'_, rusqlite::Connection>, MornError> {
-        self.conn
-            .lock()
+    pub fn conn(&self) -> Result<Conn, MornError> {
+        self.pool
+            .get()
             .map_err(|e| MornError::Internal(e.to_string()))
     }
 
     /// Creates an in-memory SQLite database and returns initialized storage for tests or ephemeral use.
     pub fn new_in_memory() -> Result<Self, MornError> {
-        let conn = Connection::open_in_memory().map_err(|e| MornError::Internal(e.to_string()))?;
-        let storage = Storage {
-            conn: Arc::new(Mutex::new(conn)),
-        };
+        let manager = SqliteConnectionManager::memory();
+        let pool = Pool::builder()
+            .build(manager)
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let storage = Storage { pool };
         storage.init_tables()?;
         Ok(storage)
     }
@@ -404,8 +423,8 @@ impl Storage {
         }
         let source_conn =
             rusqlite::Connection::open(&source).map_err(|e| format!("Cannot open backup: {e}"))?;
-        let mut guard = self.conn.lock().map_err(|e| e.to_string())?;
-        let backup = rusqlite::backup::Backup::new(&source_conn, &mut guard)
+        let mut conn = self.pool.get().map_err(|e| e.to_string())?;
+        let backup = rusqlite::backup::Backup::new(&source_conn, &mut conn)
             .map_err(|e| format!("Restore init failed: {e}"))?;
         backup
             .run_to_completion(5, std::time::Duration::from_millis(250), None)

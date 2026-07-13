@@ -5,7 +5,7 @@ use crate::component::persona;
 use crate::core::assembler::{AgentAssembler, AgentDef};
 use crate::core::error::MornError;
 use crate::core::orchestrator::*;
-use tracing;
+use reqwest::blocking::Client;
 
 // === voting ===
 
@@ -335,18 +335,57 @@ impl Orchestrator {
                     memory: None,
                 };
                 let assembler = AgentAssembler::new(Some(registry.clone()));
-                if let Ok(mut agent) = assembler.assemble(agent_def) {
-                    if let Err(e) = agent.init() {
-                        tracing::warn!("Failed to init agent: {}", e);
+                let base_url = agent_def.model.base_url.clone();
+                let model_name = agent_def.model.model_name.clone();
+                let system_prompt = agent_def.persona.build_system_prompt();
+                let api_key = std::env::var("DEEPSEEK_API_KEY").unwrap_or_default();
+                if let Ok(mut _agent) = assembler.assemble(agent_def) {
+                    let client = Client::new();
+                    let request = serde_json::json!({
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": input}
+                        ],
+                        "stream": false
+                    });
+
+                    let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+                    let resp = client
+                        .post(&url)
+                        .header("Content-Type", "application/json")
+                        .header("Authorization", format!("Bearer {}", api_key))
+                        .json(&request)
+                        .send()
+                        .map_err(|e| MornError::Internal(format!("LLM request failed: {}", e)))?;
+
+                    if !resp.status().is_success() {
+                        let status = resp.status();
+                        let body = resp.text().unwrap_or_default();
+                        return Err(MornError::Internal(format!(
+                            "LLM API error {}: {}",
+                            status, body
+                        )));
                     }
-                    if let Err(e) = agent.run() {
-                        tracing::warn!("Failed to run agent: {}", e);
-                    }
+
+                    let chat_response: serde_json::Value = resp
+                        .json()
+                        .map_err(|e| MornError::Internal(format!("JSON parse error: {}", e)))?;
+
+                    let content = chat_response["choices"][0]["message"]["content"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string();
+
+                    return Ok(TeamMemberOutput {
+                        agent_id: agent_id.to_string(),
+                        output: content,
+                        confidence: 0.9,
+                    });
                 }
             }
         }
 
-        let confidence = 0.7 + (input.len() as f64 % 30.0) / 100.0;
         let output = format!(
             "[{}] processed: {} (dispatched via registry)",
             agent_id, input
@@ -354,7 +393,7 @@ impl Orchestrator {
         Ok(TeamMemberOutput {
             agent_id: agent_id.to_string(),
             output,
-            confidence: confidence.min(1.0),
+            confidence: 0.9,
         })
     }
 }

@@ -188,7 +188,10 @@ impl ModelRouter {
     }
 
     pub fn has_local_models(&self) -> bool {
-        eprintln!("DEBUG: cfg(feature=local-llm) = {}", cfg!(feature = "local-llm"));
+        eprintln!(
+            "DEBUG: cfg(feature=local-llm) = {}",
+            cfg!(feature = "local-llm")
+        );
         eprintln!("DEBUG: local_models.len() = {}", self.local_models.len());
         if cfg!(feature = "local-llm") {
             !self.local_models.is_empty()
