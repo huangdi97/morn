@@ -1,4 +1,4 @@
-﻿# CHANGELOG.md
+# CHANGELOG.md
 
 ## [0.1.0] — 2026-08-15 — Morn v10.2 Tonight Baseline
 

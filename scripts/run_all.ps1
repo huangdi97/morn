@@ -41,6 +41,40 @@ if (Test-Path (Join-Path $root "src-tauri\Cargo.toml")) {
     Run-Step "tauri desktop build" { cargo build -p morn-desktop }
 }
 
+# ---- Browser-level UI smoke (Playwright) ----
+if (Test-Path (Join-Path $root "frontend\node_modules\playwright\package.json")) {
+    $browserDir = Join-Path $env:LOCALAPPDATA "ms-playwright"
+    if (Test-Path $browserDir) {
+        Run-Step "frontend ui smoke (playwright)" {
+            $env:MORN_DB = Join-Path $root "target\ui_smoke.db"
+            $env:MORN_PORT = "8090"
+            $serverExe = Join-Path $root "target\debug\server.exe"
+            $server = Start-Process -FilePath $serverExe -WindowStyle Hidden -PassThru
+            $fe = $null
+            try {
+                Start-Sleep -Seconds 2
+                Push-Location (Join-Path $root "frontend")
+                $fe = Start-Process -FilePath "npm.cmd" -ArgumentList "run","dev","--","--port","5173","--strictPort" -WindowStyle Hidden -PassThru
+                Start-Sleep -Seconds 6
+                node scripts/ui_smoke.mjs
+                if ($LASTEXITCODE -ne 0) { throw "UI smoke failed with exit code $LASTEXITCODE" }
+                Pop-Location
+            }
+            finally {
+                if ($fe) { Stop-Process -Id $fe.Id -Force -ErrorAction SilentlyContinue }
+                Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+                Pop-Location -ErrorAction SilentlyContinue
+            }
+        }
+    }
+    else {
+        Write-Host "SKIP frontend ui smoke: playwright browsers not installed"
+    }
+}
+else {
+    Write-Host "SKIP frontend ui smoke: playwright package not installed"
+}
+
 # ---- Demo smoke: start API server, run BioLab E2E, stop ----
 Run-Step "build server binary" { cargo build -p morn-app --bin server }
 Run-Step "demo smoke (server + BioLab E2E)" {

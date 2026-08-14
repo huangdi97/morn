@@ -57,6 +57,7 @@ frontend test                -> 2 passed
 frontend build               -> pass (dist/ built)
 build server binary          -> pass
 tauri desktop build          -> pass (cargo build -p morn-desktop; binary launches outside sandbox)
+frontend ui smoke (playwright)-> pass (/workbench /studio /console /hub, 0 console errors; BioLab E2E rendered)
 demo smoke                   -> health=ok, BioLab E2E 7/7 steps, workbench objects=3
 ```
 

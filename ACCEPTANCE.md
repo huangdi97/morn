@@ -69,7 +69,7 @@
 - [x] Console 使用同一 backend records（`/api/console`：ledger traces/outcomes/promotions）
 - [x] Hub 展示真实 registry assets（`/api/hub`）
 - [x] loading / empty / error / blocked 状态（UI 组件齐全）
-- [~] 关键页面无明显 overflow/console error：前端 build 通过；浏览器级 runtime QA 未自动化（KF-003 deferred）
+- [x] 关键页面无明显 overflow/console error：Playwright UI smoke（`frontend/scripts/ui_smoke.mjs`）加载四个表面 + BioLab E2E，0 console error / 0 pageerror，exit 0
 
 ### A11 Docs
 - [x] STATUS 同步

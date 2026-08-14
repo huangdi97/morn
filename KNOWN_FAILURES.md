@@ -63,24 +63,26 @@ GUI 启动验证在非沙箱环境执行；构建验证（`cargo build -p morn-d
 Test added:
 沙箱外启动 smoke（见 KF-002）。
 
-### KF-003 — 浏览器级 UI runtime QA 未自动化（deferred）
-Status: Deferred
+### KF-003 — 浏览器级 UI runtime QA（已自动化）
+Status: Fixed
 
 Reproduction:
 ACCEPTANCE A10 要求“关键页面无明显 overflow/console error”。
 
 Expected: headless 浏览器 smoke 捕获 console error / overflow。
 
-Actual: 前端 typecheck/lint/test/build 全通过，`dist/` 可构建；未配置 headless 浏览器（Playwright 等）做运行时 console 检查。
+Actual: 已加入 Playwright（chromium 151.0.7922.34）UI smoke：`frontend/scripts/ui_smoke.mjs` 加载
+/workbench、/studio、/console、/hub 四个表面并点击 BioLab E2E 按钮，断言 0 console error / 0 pageerror；
+`npm run ui-smoke` 通过（exit 0）。已纳入 `scripts/run_all.ps1`（playwright 浏览器存在时执行）。
 
 Root cause:
-当前环境无现成 headless 浏览器测试夹具；配置它属于下一步工程。
+早期无 headless 浏览器测试夹具。
 
 Fix/Decision:
-前端组件已有 loading/empty/error/blocked 状态；浏览器级 smoke 列为下一步 P1 项（Playwright + 真实 server）。
+UI smoke 由 `run_all.ps1` 覆盖；Playwright 为 devDependency，浏览器需 `npx playwright install chromium`。
 
 Test added:
-无（不伪造）。
+`frontend/scripts/ui_smoke.mjs`（4 surfaces + BioLab E2E）。
 
 ### KF-004 — 早期文件带 UTF-8 BOM 导致严格 JSON 解析失败（fixed）
 Status: Fixed

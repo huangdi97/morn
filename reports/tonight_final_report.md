@@ -13,8 +13,8 @@ React/Vite 前端，受治理 Evolution Engine v0.1，DeepSeek Harness Provider 
 
 真实 DeepSeek Harness smoke 为**外部/凭据 blocker**（B-001）：当前环境没有官方 DSH 安装物，唯一同名 PyPI 包是
 第三方 OpenAI 兼容客户端且需要真实 DeepSeek API key；Morn 侧 provider contract 已完整通过。
-Tauri v2 桌面壳已构建并通过（`cargo build -p morn-desktop`，沙箱外可启动）；浏览器级 UI runtime QA 仍为
-deferred（KF-003），均未伪造为完成。
+Tauri v2 桌面壳已构建并通过（`cargo build -p morn-desktop`，沙箱外可启动）；浏览器级 UI runtime QA 已自动化
+（Playwright，4 surfaces 0 console error + BioLab E2E）。均未伪造为完成。
 
 ## 2. Git / Environment
 - branch: `master`（本次初始化仓库，4 个独立 commit）
@@ -101,6 +101,7 @@ cargo test                    -> 41 tests, 0 failed, 0 ignored
 frontend typecheck/lint/test  -> pass (2 tests)
 frontend build                -> pass (dist/)
 tauri desktop build           -> pass (cargo build -p morn-desktop; binary launches outside sandbox)
+frontend ui smoke (playwright) -> pass (/workbench /studio /console /hub with 0 console errors; BioLab E2E rendered via real backend)
 demo smoke                    -> health=ok, BioLab E2E 7 steps, workbench objects=3
 ```
 
@@ -120,7 +121,7 @@ demo smoke                    -> health=ok, BioLab E2E 7 steps, workbench object
   自动 Role/Software/Org evolution（suggestion schema only）。
 
 ## 13. Next Shortest Path
-1. 浏览器级 UI smoke（Playwright，复用已构建的 `morn-app` HTTP/domain API 与 Tauri 壳）。
+1. 真实 DeepSeek Harness 集成（获得官方安装物或 API 凭据后跑真实 smoke，Morn contract tests 已就绪）。
 2. 真实 DeepSeek Harness 集成（获得官方安装物或 API 凭据后跑真实 smoke，Morn contract tests 已就绪）。
 3. Workcell Live View + Attention Queue 全 UI 接线（workcell/member/harness 实时状态）。
 4. Organization Compiler v0.2 可解释输出 + Solution Manifest 完整序列化。
