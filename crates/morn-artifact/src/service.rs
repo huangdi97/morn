@@ -62,6 +62,10 @@ impl ArtifactService {
         self.versions.iter().find(|v| v.id == *id)
     }
 
+    pub fn all_version_count(&self) -> usize {
+        self.versions.len()
+    }
+
     pub fn versions_of(&self, artifact_id: &ArtifactId) -> Vec<&ArtifactVersion> {
         self.versions
             .iter()
@@ -265,7 +269,7 @@ mod tests {
 
     #[test]
     fn approval_flow_reaches_approved_and_gate_passes() {
-        let (mut svc, _artifact, v1_id, author, _ws) = setup();
+        let (mut svc, _artifact, v1_id, _author, _ws) = setup();
         let reviewer = PrincipalId::generate_with("reviewer");
         let pi = PrincipalId::generate_with("pi");
         svc.submit(&v1_id).unwrap();
@@ -284,4 +288,6 @@ mod tests {
         assert_eq!(graph.edges[0].relation, ProvRelation::WasDerivedFrom);
     }
 }
+
+
 

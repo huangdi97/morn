@@ -569,8 +569,10 @@ dependencies = [
  "morn-work",
  "morn-world",
  "rusqlite",
+ "serde",
  "serde_json",
  "thiserror",
+ "uuid",
 ]
 
 [[package]]
