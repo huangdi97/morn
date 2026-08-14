@@ -1,4 +1,4 @@
-﻿//! Goals and metrics: why actions happen and how to measure them.
+//! Goals and metrics: why actions happen and how to measure them.
 
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +15,11 @@ pub struct Goal {
 }
 
 impl Goal {
-    pub fn new(workspace_id: WorkspaceId, statement: impl Into<String>, metric_ids: Vec<MetricId>) -> Self {
+    pub fn new(
+        workspace_id: WorkspaceId,
+        statement: impl Into<String>,
+        metric_ids: Vec<MetricId>,
+    ) -> Self {
         Self {
             id: GoalId::generate_with("goal"),
             workspace_id,

@@ -1,4 +1,4 @@
-﻿//! Mixed organization: RoleSlot, MemberBinding, ResponsibilityBinding,
+//! Mixed organization: RoleSlot, MemberBinding, ResponsibilityBinding,
 //! Delegation, Commitment and Workcell.
 
 pub mod delegation;

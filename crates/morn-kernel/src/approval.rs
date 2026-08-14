@@ -1,4 +1,4 @@
-﻿//! Approval requests and decisions (human-in-the-loop gates).
+//! Approval requests and decisions (human-in-the-loop gates).
 
 use serde::{Deserialize, Serialize};
 
@@ -70,7 +70,11 @@ impl ApprovalRequest {
                 self.id
             )));
         }
-        if !self.required_approvers.iter().any(|r| r == approver.as_str()) {
+        if !self
+            .required_approvers
+            .iter()
+            .any(|r| r == approver.as_str())
+        {
             return Err(crate::Error::not_authorized(format!(
                 "principal {approver} is not an allowed approver"
             )));
@@ -97,8 +101,15 @@ mod tests {
         let ws = WorkspaceId::generate();
         let pi = PrincipalId::generate_with("pi");
         let analyst = PrincipalId::generate_with("analyst");
-        let mut req = ApprovalRequest::new(ws, "release claim", "claim-1", vec![pi.as_str().to_string()]);
-        assert!(req.decide(&analyst, ApprovalDecision::Approved, None).is_err());
+        let mut req = ApprovalRequest::new(
+            ws,
+            "release claim",
+            "claim-1",
+            vec![pi.as_str().to_string()],
+        );
+        assert!(req
+            .decide(&analyst, ApprovalDecision::Approved, None)
+            .is_err());
         assert!(req.is_pending());
         req.decide(&pi, ApprovalDecision::Approved, None).unwrap();
         assert!(!req.is_pending());

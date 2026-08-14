@@ -1,4 +1,4 @@
-﻿//! Version type (semver-like) used across Morn records.
+//! Version type (semver-like) used across Morn records.
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -7,7 +7,9 @@ use std::str::FromStr;
 use crate::error::{Error, Result};
 
 /// A semantic version `major.minor.patch`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,

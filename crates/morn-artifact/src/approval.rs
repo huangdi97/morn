@@ -1,4 +1,4 @@
-﻿//! Approvals of artifact versions.
+//! Approvals of artifact versions.
 
 use serde::{Deserialize, Serialize};
 

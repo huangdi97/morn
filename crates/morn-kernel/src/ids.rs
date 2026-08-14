@@ -1,4 +1,4 @@
-﻿//! Strongly-typed domain IDs. Each domain concept gets its own `Id<T>` type.
+//! Strongly-typed domain IDs. Each domain concept gets its own `Id<T>` type.
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -214,4 +214,3 @@ pub type SampleId = Id<SampleTag>;
 pub type AnalysisRunId = Id<AnalysisRunTag>;
 pub type QCResultId = Id<QCResultTag>;
 pub type ScientificClaimId = Id<ScientificClaimTag>;
-

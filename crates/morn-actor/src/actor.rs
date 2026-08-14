@@ -1,4 +1,4 @@
-﻿//! Actors: persistent software principals with identity, capabilities and lifecycle.
+//! Actors: persistent software principals with identity, capabilities and lifecycle.
 
 use serde::{Deserialize, Serialize};
 
@@ -111,9 +111,17 @@ mod tests {
 
     #[test]
     fn actor_is_distinct_from_role_and_identity() {
-        let tmpl = ActorTemplate::new("analyst", ActorOrigin::RoleDerived, "bioinformatics analyst");
+        let tmpl = ActorTemplate::new(
+            "analyst",
+            ActorOrigin::RoleDerived,
+            "bioinformatics analyst",
+        );
         let identity_id = IdentityId::generate();
-        let instance = ActorInstance::new(tmpl.id.clone(), identity_id.clone(), ActorOrigin::RoleDerived);
+        let instance = ActorInstance::new(
+            tmpl.id.clone(),
+            identity_id.clone(),
+            ActorOrigin::RoleDerived,
+        );
         // An actor instance has its own id, distinct from its identity.
         assert_ne!(instance.id.as_str(), identity_id.as_str());
         assert_eq!(instance.template_id, tmpl.id);

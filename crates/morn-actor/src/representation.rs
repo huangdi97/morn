@@ -1,4 +1,4 @@
-﻿//! RepresentationContract: what a human-delegated actor may represent.
+//! RepresentationContract: what a human-delegated actor may represent.
 
 use serde::{Deserialize, Serialize};
 

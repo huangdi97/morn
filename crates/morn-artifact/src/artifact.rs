@@ -1,4 +1,4 @@
-﻿//! Artifacts and their immutable versions.
+//! Artifacts and their immutable versions.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -57,6 +57,7 @@ impl Artifact {
 }
 
 impl ArtifactVersion {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         artifact_id: ArtifactId,
         version_no: u64,

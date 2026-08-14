@@ -1,4 +1,4 @@
-﻿//! Evolution candidates: proposals to change production, never direct writes.
+//! Evolution candidates: proposals to change production, never direct writes.
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,4 @@
-﻿//! ArtifactService: governed artifact lifecycle with immutable versions.
+//! ArtifactService: governed artifact lifecycle with immutable versions.
 
 use std::collections::HashMap;
 
@@ -10,7 +10,7 @@ use morn_kernel::status::ArtifactStatus;
 
 use crate::approval::{ArtifactApproval, ArtifactApprovalDecision};
 use crate::artifact::{Artifact, ArtifactVersion};
-use crate::provenance::{ProvenanceGraph, ProvRelation};
+use crate::provenance::{ProvRelation, ProvenanceGraph};
 use crate::review::{Review, ReviewDecision};
 
 /// In-memory artifact store. Repository adapters persist externally.
@@ -28,6 +28,7 @@ impl ArtifactService {
     }
 
     /// Create a new artifact with its first (draft) version.
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         &mut self,
         artifact_type: &str,
@@ -38,7 +39,12 @@ impl ArtifactService {
         structured_content: Value,
         checksum: &str,
     ) -> Result<(Artifact, ArtifactVersion)> {
-        let artifact = Artifact::new(artifact_type, schema_version, workspace_id, created_by.clone());
+        let artifact = Artifact::new(
+            artifact_type,
+            schema_version,
+            workspace_id,
+            created_by.clone(),
+        );
         let version = ArtifactVersion::new(
             artifact.id.clone(),
             1,
@@ -74,7 +80,9 @@ impl ArtifactService {
     }
 
     pub fn latest_version(&self, artifact_id: &ArtifactId) -> Option<&ArtifactVersion> {
-        self.versions_of(artifact_id).into_iter().max_by_key(|v| v.version_no)
+        self.versions_of(artifact_id)
+            .into_iter()
+            .max_by_key(|v| v.version_no)
     }
 
     /// Submit a draft for review.
@@ -98,7 +106,10 @@ impl ArtifactService {
         let version = self
             .version_mut(&review.artifact_version_id)
             .ok_or_else(|| Error::not_found(format!("version {}", review.artifact_version_id)))?;
-        if !matches!(version.status, ArtifactStatus::Submitted | ArtifactStatus::InReview) {
+        if !matches!(
+            version.status,
+            ArtifactStatus::Submitted | ArtifactStatus::InReview
+        ) {
             return Err(Error::invalid_state(format!(
                 "version {} is not under review (status {:?})",
                 version.id, version.status
@@ -195,7 +206,11 @@ impl ArtifactService {
         let mut graph = ProvenanceGraph::default();
         for v in self.versions_of(artifact_id) {
             if let Some(derived) = &v.derived_from {
-                graph.add(derived.to_string(), v.id.to_string(), ProvRelation::WasDerivedFrom);
+                graph.add(
+                    derived.to_string(),
+                    v.id.to_string(),
+                    ProvRelation::WasDerivedFrom,
+                );
             }
         }
         graph
@@ -236,12 +251,26 @@ mod tests {
     use morn_kernel::ids::{PrincipalId, WorkspaceId};
     use serde_json::json;
 
-    fn setup() -> (ArtifactService, ArtifactId, ArtifactVersionId, PrincipalId, WorkspaceId) {
+    fn setup() -> (
+        ArtifactService,
+        ArtifactId,
+        ArtifactVersionId,
+        PrincipalId,
+        WorkspaceId,
+    ) {
         let mut svc = ArtifactService::new();
         let ws = WorkspaceId::generate();
         let author = PrincipalId::generate_with("analyst");
         let (artifact, version) = svc
-            .create("analysis", "biolab/analysis@1", ws.clone(), author.clone(), "ref://v1", json!({"x": 1}), "c1")
+            .create(
+                "analysis",
+                "biolab/analysis@1",
+                ws.clone(),
+                author.clone(),
+                "ref://v1",
+                json!({"x": 1}),
+                "c1",
+            )
             .unwrap();
         (svc, artifact.id.clone(), version.id.clone(), author, ws)
     }
@@ -273,21 +302,29 @@ mod tests {
         let reviewer = PrincipalId::generate_with("reviewer");
         let pi = PrincipalId::generate_with("pi");
         svc.submit(&v1_id).unwrap();
-        svc.review(Review::new(v1_id.clone(), reviewer, ReviewDecision::Approve, "ok")).unwrap();
-        svc.approve(ArtifactApproval::approve(v1_id.clone(), pi, None)).unwrap();
-        assert_eq!(svc.version(&v1_id).unwrap().status, ArtifactStatus::Approved);
+        svc.review(Review::new(
+            v1_id.clone(),
+            reviewer,
+            ReviewDecision::Approve,
+            "ok",
+        ))
+        .unwrap();
+        svc.approve(ArtifactApproval::approve(v1_id.clone(), pi, None))
+            .unwrap();
+        assert_eq!(
+            svc.version(&v1_id).unwrap().status,
+            ArtifactStatus::Approved
+        );
         assert!(svc.require_approved(&v1_id).is_ok());
     }
 
     #[test]
     fn lineage_links_derived_versions() {
         let (mut svc, artifact_id, v1_id, author, _ws) = setup();
-        svc.supersede(&v1_id, "ref://v2", json!({"x": 2}), "c2", author).unwrap();
+        svc.supersede(&v1_id, "ref://v2", json!({"x": 2}), "c2", author)
+            .unwrap();
         let graph = svc.lineage(&artifact_id);
         assert_eq!(graph.edges.len(), 1);
         assert_eq!(graph.edges[0].relation, ProvRelation::WasDerivedFrom);
     }
 }
-
-
-

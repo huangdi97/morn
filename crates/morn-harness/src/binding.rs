@@ -1,4 +1,4 @@
-﻿//! HarnessBinding and RuntimeBinding are separated: an actor can switch
+//! HarnessBinding and RuntimeBinding are separated: an actor can switch
 //! harness/runtime while keeping identity, workspace and work unchanged.
 
 use serde::{Deserialize, Serialize};
@@ -19,11 +19,7 @@ pub struct HarnessBinding {
 }
 
 impl HarnessBinding {
-    pub fn new(
-        actor_id: ActorInstanceId,
-        spec_id: HarnessSpecId,
-        spec_version: Version,
-    ) -> Self {
+    pub fn new(actor_id: ActorInstanceId, spec_id: HarnessSpecId, spec_version: Version) -> Self {
         Self {
             id: HarnessBindingId::generate_with("hb"),
             actor_id,

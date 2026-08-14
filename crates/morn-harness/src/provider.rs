@@ -1,4 +1,4 @@
-﻿//! Harness providers: MornNativeHarness (reference) and DeepSeekHarnessProvider (boundary).
+//! Harness providers: MornNativeHarness (reference) and DeepSeekHarnessProvider (boundary).
 
 use std::collections::HashMap;
 
@@ -7,8 +7,8 @@ use morn_kernel::error::{Error, Result};
 use crate::context::RuntimeContext;
 use crate::event::{ExecutionEvent, ExecutionEventKind};
 use crate::receipt::ExecutionReceipt;
-use morn_kernel::ids::ExecutionReceiptId;
 use crate::scope::CapabilityScope;
+use morn_kernel::ids::ExecutionReceiptId;
 
 /// A mounted provider handle; unmount performs E0 lifecycle cleanup only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,7 +248,11 @@ impl HarnessProvider for MornNativeHarness {
             workspace_id: ws,
             session_id: session_id.to_string(),
             trace_refs: event_ids.clone(),
-            started_at: state.events.first().map(|e| e.created_at).unwrap_or_default(),
+            started_at: state
+                .events
+                .first()
+                .map(|e| e.created_at)
+                .unwrap_or_default(),
             ended_at: Some(morn_kernel::time::Timestamp::now()),
             outcome: "completed".to_string(),
             harness_version: None,
@@ -467,7 +471,11 @@ impl HarnessProvider for DeepSeekHarnessProvider {
             workspace_id: ws,
             session_id: session_id.to_string(),
             trace_refs: event_ids.clone(),
-            started_at: state.events.first().map(|e| e.created_at).unwrap_or_default(),
+            started_at: state
+                .events
+                .first()
+                .map(|e| e.created_at)
+                .unwrap_or_default(),
             ended_at: Some(morn_kernel::time::Timestamp::now()),
             outcome: "completed".to_string(),
             harness_version: None,
@@ -476,4 +484,3 @@ impl HarnessProvider for DeepSeekHarnessProvider {
         })
     }
 }
-

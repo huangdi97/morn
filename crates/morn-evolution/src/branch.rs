@@ -1,4 +1,4 @@
-﻿//! Evolution branches: isolated sandboxes based on a production version.
+//! Evolution branches: isolated sandboxes based on a production version.
 
 use serde::{Deserialize, Serialize};
 

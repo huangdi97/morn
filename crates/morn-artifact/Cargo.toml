@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "morn-artifact"
 version.workspace = true
 edition.workspace = true

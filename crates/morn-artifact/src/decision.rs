@@ -1,4 +1,4 @@
-﻿//! Decision packages: why a choice was made, based on what evidence, approved by whom.
+//! Decision packages: why a choice was made, based on what evidence, approved by whom.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

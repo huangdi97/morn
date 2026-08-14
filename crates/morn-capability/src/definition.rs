@@ -1,4 +1,4 @@
-﻿//! Capability seam: Definition -> Provider -> Consumer.
+//! Capability seam: Definition -> Provider -> Consumer.
 
 use serde::{Deserialize, Serialize};
 

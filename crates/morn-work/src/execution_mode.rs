@@ -1,4 +1,4 @@
-﻿//! ExecutionMode: classify the nature of work before choosing an executor.
+//! ExecutionMode: classify the nature of work before choosing an executor.
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,4 @@
-﻿//! Morn app server binary.
+//! Morn app server binary.
 
 use std::net::SocketAddr;
 
@@ -7,7 +7,10 @@ use morn_app::{router, AppState};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = std::env::var("MORN_DB").unwrap_or_else(|_| "morn.db".to_string());
-    let port: u16 = std::env::var("MORN_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8090);
+    let port: u16 = std::env::var("MORN_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8090);
 
     let state = AppState::new(&db_path)?;
     let app = router(state);

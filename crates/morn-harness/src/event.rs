@@ -1,4 +1,4 @@
-﻿//! Normalized Morn execution events (harness/runtime facts, not canonical state).
+//! Normalized Morn execution events (harness/runtime facts, not canonical state).
 
 use serde::{Deserialize, Serialize};
 
@@ -65,4 +65,3 @@ impl ExecutionEvent {
 
 /// Re-export placeholder for session ids.
 pub type SessionId = morn_kernel::ids::Id<SessionIdTag>;
-

@@ -1,4 +1,4 @@
-﻿//! Provenance graph (W3C PROV inspired): entities, activities, agents and relations.
+//! Provenance graph (W3C PROV inspired): entities, activities, agents and relations.
 
 use serde::{Deserialize, Serialize};
 

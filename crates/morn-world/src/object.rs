@@ -1,4 +1,4 @@
-﻿//! Object types and object instances in the Operational World.
+//! Object types and object instances in the Operational World.
 
 use std::collections::BTreeMap;
 

@@ -522,6 +522,7 @@ dependencies = [
  "morn-capability",
  "morn-kernel",
  "morn-work",
+ "morn-world",
  "serde",
  "serde_json",
  "uuid",

@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "morn-actor"
 version.workspace = true
 edition.workspace = true

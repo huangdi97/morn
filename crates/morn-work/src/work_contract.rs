@@ -1,4 +1,4 @@
-﻿//! WorkContract and OutcomeContract.
+//! WorkContract and OutcomeContract.
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,4 @@
-﻿//! State diffs describing what changed on an object between committed states.
+//! State diffs describing what changed on an object between committed states.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

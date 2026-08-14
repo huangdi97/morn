@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "morn-biolab"
 version.workspace = true
 edition.workspace = true

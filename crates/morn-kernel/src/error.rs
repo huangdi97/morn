@@ -1,4 +1,4 @@
-﻿//! Structured errors for the Morn kernel.
+//! Structured errors for the Morn kernel.
 
 use thiserror::Error;
 
@@ -58,4 +58,3 @@ impl Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
-

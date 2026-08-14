@@ -1,4 +1,4 @@
-﻿//! Policy: rules governing who may do what, evaluated before action authorization.
+//! Policy: rules governing who may do what, evaluated before action authorization.
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,4 @@
-﻿//! ActionGateway: the only path from proposal to canonical state change.
+//! ActionGateway: the only path from proposal to canonical state change.
 //! Enforces Policy, Approval and Effect Class (E0-E3).
 
 use std::collections::BTreeMap;
@@ -7,9 +7,7 @@ use serde_json::Value;
 
 use morn_capability::effect::{EffectClass, EffectContract};
 use morn_kernel::error::{Error, Result};
-use morn_kernel::ids::{
-    ActionId, ExecutionReceiptId, ObjectId, WorkspaceId,
-};
+use morn_kernel::ids::{ActionId, ExecutionReceiptId, ObjectId, WorkspaceId};
 use morn_kernel::ledger::Ledger;
 use morn_kernel::policy::{Policy, PolicyDecision};
 use morn_world::action::{Action, ActionProposal, ActionStatus};
@@ -195,7 +193,11 @@ impl ActionGateway {
     }
 
     /// Verify an execution outcome against expectations.
-    pub fn verify(&self, outcome: &ExecutionOutcome, expected_snapshot_count: usize) -> Result<bool> {
+    pub fn verify(
+        &self,
+        outcome: &ExecutionOutcome,
+        expected_snapshot_count: usize,
+    ) -> Result<bool> {
         if !outcome.verified {
             return Err(Error::validation("execution was not verified"));
         }
@@ -203,7 +205,12 @@ impl ActionGateway {
     }
 
     /// Record a recovery for a failed action.
-    pub fn recover(&mut self, failure: &str, actor: &str, workspace_id: WorkspaceId) -> Result<ActionId> {
+    pub fn recover(
+        &mut self,
+        failure: &str,
+        actor: &str,
+        workspace_id: WorkspaceId,
+    ) -> Result<ActionId> {
         let action_id = ActionId::generate_with("recover");
         self.ledger.append(
             workspace_id,
@@ -232,19 +239,17 @@ mod tests {
     use serde_json::json;
 
     fn proposal(ws: WorkspaceId, target: ObjectId, by: &str) -> ActionProposal {
-        ActionProposal::new(
-            ActionTypeId::generate(),
-            target,
-            ws,
-            BTreeMap::new(),
-            by,
-        )
+        ActionProposal::new(ActionTypeId::generate(), target, ws, BTreeMap::new(), by)
     }
 
     #[test]
     fn e3_without_approval_is_denied() {
         let ws = WorkspaceId::generate();
-        let policy = Policy::new(ws.clone(), "strict", vec![PolicyRule::allow("release_claim")]);
+        let policy = Policy::new(
+            ws.clone(),
+            "strict",
+            vec![PolicyRule::allow("release_claim")],
+        );
         let e3 = EffectContract::e3("public release of scientific claim");
         let mut gateway = ActionGateway::new(policy, e3);
         let target = ObjectId::generate();
@@ -257,13 +262,23 @@ mod tests {
     #[test]
     fn e3_with_approval_is_authorized_and_executes_via_world() {
         let ws = WorkspaceId::generate();
-        let policy = Policy::new(ws.clone(), "strict", vec![PolicyRule::allow("release_claim")]);
+        let policy = Policy::new(
+            ws.clone(),
+            "strict",
+            vec![PolicyRule::allow("release_claim")],
+        );
         let e3 = EffectContract::e3("public release");
         let mut gateway = ActionGateway::new(policy, e3);
         gateway.mark_approval_satisfied("pi");
 
         let mut world = WorldService::new();
-        let obj_type = ObjectType::new("biolab.Claim", ws.clone(), vec!["status".into()], vec![], vec![]);
+        let obj_type = ObjectType::new(
+            "biolab.Claim",
+            ws.clone(),
+            vec!["status".into()],
+            vec![],
+            vec![],
+        );
         world.register_object_type(obj_type.clone());
         let target = ObjectId::generate_with("claim");
         world.register_object(Object::new(
@@ -284,7 +299,14 @@ mod tests {
         let mut new_state = BTreeMap::new();
         new_state.insert("status".to_string(), json!("released"));
         let outcome = gateway
-            .execute(&authorized, target.clone(), new_state, Some("pi approved".to_string()), "analyst", &mut world)
+            .execute(
+                &authorized,
+                target.clone(),
+                new_state,
+                Some("pi approved".to_string()),
+                "analyst",
+                &mut world,
+            )
             .unwrap();
         assert!(outcome.verified);
         assert_eq!(
@@ -323,11 +345,16 @@ mod tests {
         let obj_type = ObjectType::new("t", ws.clone(), vec!["s".into()], vec![], vec![]);
         world.register_object_type(obj_type.clone());
         let target = ObjectId::generate();
-        world.register_object(Object::new(target.clone(), obj_type.id.clone(), ws.clone(), {
-            let mut m = BTreeMap::new();
-            m.insert("s".to_string(), json!("a"));
-            m
-        }));
+        world.register_object(Object::new(
+            target.clone(),
+            obj_type.id.clone(),
+            ws.clone(),
+            {
+                let mut m = BTreeMap::new();
+                m.insert("s".to_string(), json!("a"));
+                m
+            },
+        ));
         let prop = proposal(ws, target.clone(), "runtime");
         let unauthorized = Action::new(prop.id);
         assert!(world
@@ -335,5 +362,3 @@ mod tests {
             .is_err());
     }
 }
-
-

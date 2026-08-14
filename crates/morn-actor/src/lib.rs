@@ -1,4 +1,4 @@
-﻿//! Actor model: ActorTemplate / ActorInstance / ActorOrigin / RepresentationContract.
+//! Actor model: ActorTemplate / ActorInstance / ActorOrigin / RepresentationContract.
 
 pub mod actor;
 pub mod representation;

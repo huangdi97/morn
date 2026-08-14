@@ -1,4 +1,4 @@
-﻿//! Shared status enums for Morn records.
+//! Shared status enums for Morn records.
 
 use serde::{Deserialize, Serialize};
 

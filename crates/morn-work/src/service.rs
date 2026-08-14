@@ -1,4 +1,4 @@
-﻿//! WorkService: work-package lifecycle and acceptance gating.
+//! WorkService: work-package lifecycle and acceptance gating.
 //! DurableWorkService: checkpoint/pause/resume/recovery/attention.
 
 use std::collections::HashMap;
@@ -63,7 +63,11 @@ impl WorkService {
     }
 
     /// Attempt to accept a WorkPackage. Without an AcceptanceSpec this always fails.
-    pub fn attempt_accept(&mut self, id: &WorkPackageId, evidence: &AcceptanceEvidence) -> Result<WorkStatus> {
+    pub fn attempt_accept(
+        &mut self,
+        id: &WorkPackageId,
+        evidence: &AcceptanceEvidence,
+    ) -> Result<WorkStatus> {
         let wp = self
             .work_packages
             .get(id)
@@ -87,7 +91,9 @@ impl WorkService {
             }
         }
         if !evidence.verification_passed {
-            return Err(Error::validation("acceptance requires verification to pass"));
+            return Err(Error::validation(
+                "acceptance requires verification to pass",
+            ));
         }
         if spec.human_approval_required && evidence.required_approvals.is_empty() {
             return Err(Error::validation(
@@ -183,7 +189,10 @@ impl DurableWorkService {
     }
 
     pub fn open_attention(&self) -> Vec<&AttentionItem> {
-        self.attention.iter().filter(|a| a.status == "open").collect()
+        self.attention
+            .iter()
+            .filter(|a| a.status == "open")
+            .collect()
     }
 
     pub fn attention_items(&self) -> &[AttentionItem] {
@@ -267,7 +276,10 @@ mod tests {
         durable.pause(ws, wp_id.clone(), r#"{"step":3}"#);
         let payload = durable.resume(&wp_id).unwrap();
         assert_eq!(payload, r#"{"step":3}"#);
-        assert_eq!(durable.latest_checkpoint(&wp_id).unwrap().run_state, "running");
+        assert_eq!(
+            durable.latest_checkpoint(&wp_id).unwrap().run_state,
+            "running"
+        );
     }
 
     #[test]
@@ -284,4 +296,3 @@ mod tests {
         assert_eq!(durable.recovery_records().len(), 1);
     }
 }
-

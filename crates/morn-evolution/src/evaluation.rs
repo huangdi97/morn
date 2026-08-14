@@ -1,4 +1,4 @@
-﻿//! Evaluation of an evolution branch.
+//! Evaluation of an evolution branch.
 
 use serde::{Deserialize, Serialize};
 

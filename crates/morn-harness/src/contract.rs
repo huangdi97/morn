@@ -1,4 +1,4 @@
-﻿//! Shared provider contract suite. Every harness provider path must pass it,
+//! Shared provider contract suite. Every harness provider path must pass it,
 //! proving Morn-side invariants independent of the concrete provider.
 
 use morn_kernel::error::Result;
@@ -76,18 +76,29 @@ pub fn run_provider_contract(
         &mut report,
         "event normalization",
         !events.is_empty()
-            && events
-                .iter()
-                .all(|e| matches!(e.kind, ExecutionEventKind::SessionStarted | ExecutionEventKind::ModelResponse | ExecutionEventKind::ToolCompleted)),
+            && events.iter().all(|e| {
+                matches!(
+                    e.kind,
+                    ExecutionEventKind::SessionStarted
+                        | ExecutionEventKind::ModelResponse
+                        | ExecutionEventKind::ToolCompleted
+                )
+            }),
     );
 
     check(
         &mut report,
         "inspect",
-        provider.inspect(&session.id).is_ok_and(|s| s.status == "running"),
+        provider
+            .inspect(&session.id)
+            .is_ok_and(|s| s.status == "running"),
     );
 
-    check(&mut report, "interrupt", provider.interrupt(&session.id).is_ok());
+    check(
+        &mut report,
+        "interrupt",
+        provider.interrupt(&session.id).is_ok(),
+    );
     check(&mut report, "resume", provider.resume(&session.id).is_ok());
 
     let receipt = provider.terminate(&session.id);
@@ -120,5 +131,3 @@ pub fn test_context(workspace_id: &WorkspaceId) -> RuntimeContext {
         WorkPackageId::generate(),
     )
 }
-
-

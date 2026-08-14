@@ -1,4 +1,4 @@
-﻿//! Recovery records for interrupted work runs.
+//! Recovery records for interrupted work runs.
 
 use serde::{Deserialize, Serialize};
 

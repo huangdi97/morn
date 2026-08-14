@@ -1,4 +1,4 @@
-﻿//! RuntimeContext: the minimal, temporary, auditable context handed to a harness.
+//! RuntimeContext: the minimal, temporary, auditable context handed to a harness.
 
 use serde::{Deserialize, Serialize};
 

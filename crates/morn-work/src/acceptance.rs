@@ -1,4 +1,4 @@
-﻿//! AcceptanceSpec: the definition of done for a WorkPackage.
+//! AcceptanceSpec: the definition of done for a WorkPackage.
 
 use serde::{Deserialize, Serialize};
 

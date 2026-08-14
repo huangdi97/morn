@@ -1,4 +1,4 @@
-﻿//! Morn runtime: governed Action Gateway.
+//! Morn runtime: governed Action Gateway.
 
 pub mod gateway;
 

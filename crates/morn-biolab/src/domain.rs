@@ -1,4 +1,4 @@
-﻿//! BioLab domain schema: object types, action types, roles and work templates.
+//! BioLab domain schema: object types, action types, roles and work templates.
 
 use std::collections::BTreeMap;
 
@@ -10,13 +10,16 @@ use morn_world::object::ObjectType;
 
 /// Register the BioLab operational object types in a world service.
 pub fn register_object_types(ws: &WorkspaceId, world: &mut morn_world::WorldService) {
-    let dataset_actions = vec![
-        ActionTypeId::generate_with("actt"),
-    ];
+    let dataset_actions = vec![ActionTypeId::generate_with("actt")];
     world.register_object_type(ObjectType::new(
         "biolab.Dataset",
         ws.clone(),
-        vec!["name".into(), "rows".into(), "locked_version".into(), "qc_status".into()],
+        vec![
+            "name".into(),
+            "rows".into(),
+            "locked_version".into(),
+            "qc_status".into(),
+        ],
         vec!["registered".into(), "locked".into(), "qc_failed".into()],
         dataset_actions,
     ));
@@ -24,13 +27,24 @@ pub fn register_object_types(ws: &WorkspaceId, world: &mut morn_world::WorldServ
         "biolab.AnalysisRun",
         ws.clone(),
         vec!["dataset".into(), "status".into(), "summary".into()],
-        vec!["pending".into(), "running".into(), "completed".into(), "failed".into()],
+        vec![
+            "pending".into(),
+            "running".into(),
+            "completed".into(),
+            "failed".into(),
+        ],
         vec![],
     ));
     world.register_object_type(ObjectType::new(
         "biolab.ScientificClaim",
         ws.clone(),
-        vec!["statement".into(), "status".into(), "dataset".into(), "analysis_run".into(), "artifact".into()],
+        vec![
+            "statement".into(),
+            "status".into(),
+            "dataset".into(),
+            "analysis_run".into(),
+            "artifact".into(),
+        ],
         vec!["draft".into(), "reviewed".into(), "released".into()],
         vec![],
     ));
@@ -41,7 +55,10 @@ pub fn role_blueprints() -> Vec<(&'static str, Vec<MemberType>)> {
     vec![
         ("analyst", vec![MemberType::Actor]),
         ("pipeline", vec![MemberType::DeterministicWorker]),
-        ("statistical_reviewer", vec![MemberType::Actor, MemberType::Human]),
+        (
+            "statistical_reviewer",
+            vec![MemberType::Actor, MemberType::Human],
+        ),
         ("pi", vec![MemberType::Human]),
     ]
 }

@@ -1,13 +1,11 @@
-﻿//! Action types, proposals and executed actions.
+//! Action types, proposals and executed actions.
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use morn_kernel::ids::{
-    ActionId, ActionProposalId, ActionTypeId, ObjectId, WorkspaceId,
-};
+use morn_kernel::ids::{ActionId, ActionProposalId, ActionTypeId, ObjectId, WorkspaceId};
 use morn_kernel::time::Timestamp;
 
 /// Status of an action through the governed lifecycle.

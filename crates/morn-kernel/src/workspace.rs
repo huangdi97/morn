@@ -1,4 +1,4 @@
-﻿//! Workspace: the isolation boundary for data, members, policies, artifacts, memory and secrets.
+//! Workspace: the isolation boundary for data, members, policies, artifacts, memory and secrets.
 
 use serde::{Deserialize, Serialize};
 
@@ -51,7 +51,9 @@ impl Workspace {
 
     pub fn suspend(&mut self) -> Result<()> {
         if self.status != LifecycleStatus::Active {
-            return Err(Error::invalid_state("only active workspace can be suspended"));
+            return Err(Error::invalid_state(
+                "only active workspace can be suspended",
+            ));
         }
         self.status = LifecycleStatus::Suspended;
         self.touch();

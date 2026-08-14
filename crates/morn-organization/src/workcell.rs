@@ -1,8 +1,8 @@
-﻿//! Workcell: a dynamic execution unit assembled around a WorkPackage.
+//! Workcell: a dynamic execution unit assembled around a WorkPackage.
 
 use serde::{Deserialize, Serialize};
 
-use morn_kernel::ids::{RoleSlotId, WorkPackageId, WorkspaceId, WorkcellId};
+use morn_kernel::ids::{RoleSlotId, WorkPackageId, WorkcellId, WorkspaceId};
 use morn_kernel::time::Timestamp;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

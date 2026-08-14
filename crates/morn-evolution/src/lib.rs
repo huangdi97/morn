@@ -1,4 +1,4 @@
-﻿//! Governed Evolution Engine v0.1: candidate -> branch -> evaluation -> promotion.
+//! Governed Evolution Engine v0.1: candidate -> branch -> evaluation -> promotion.
 
 pub mod branch;
 pub mod candidate;

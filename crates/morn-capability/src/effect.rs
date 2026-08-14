@@ -1,4 +1,4 @@
-﻿//! Governed effects: E0 lifecycle-reversible, E1 transactional, E2 compensatable, E3 irreversible.
+//! Governed effects: E0 lifecycle-reversible, E1 transactional, E2 compensatable, E3 irreversible.
 
 use serde::{Deserialize, Serialize};
 

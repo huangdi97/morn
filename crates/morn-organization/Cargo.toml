@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "morn-organization"
 version.workspace = true
 edition.workspace = true

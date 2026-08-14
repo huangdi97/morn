@@ -1,4 +1,4 @@
-﻿//! World events: facts that happened (not intentions).
+//! World events: facts that happened (not intentions).
 
 use std::collections::BTreeMap;
 

@@ -1,4 +1,4 @@
-﻿//! Execution receipts: auditable proof that an external execution happened.
+//! Execution receipts: auditable proof that an external execution happened.
 
 use serde::{Deserialize, Serialize};
 

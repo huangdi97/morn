@@ -1,4 +1,4 @@
-﻿//! Delegation and commitment.
+//! Delegation and commitment.
 
 use serde::{Deserialize, Serialize};
 

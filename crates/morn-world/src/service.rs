@@ -1,4 +1,4 @@
-﻿//! WorldService: the only gateway for canonical Operational World state changes.
+//! WorldService: the only gateway for canonical Operational World state changes.
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -7,8 +7,8 @@ use serde_json::{json, Value};
 
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{
-    ActionId, GoalId, MetricId, ObjectId, ObjectTypeId, OutcomeRecordId,
-    RelationTypeId, WorkspaceId,
+    ActionId, GoalId, MetricId, ObjectId, ObjectTypeId, OutcomeRecordId, RelationTypeId,
+    WorkspaceId,
 };
 use morn_kernel::ledger::{Ledger, LedgerEntry};
 
@@ -53,7 +53,8 @@ impl WorldService {
     // ---- object types ----
 
     pub fn register_object_type(&mut self, object_type: ObjectType) {
-        self.object_types.insert(object_type.id.clone(), object_type);
+        self.object_types
+            .insert(object_type.id.clone(), object_type);
     }
 
     pub fn object_type(&self, id: &ObjectTypeId) -> Option<&ObjectType> {
@@ -81,7 +82,8 @@ impl WorldService {
     // ---- relations ----
 
     pub fn register_relation_type(&mut self, relation_type: RelationType) {
-        self.relation_types.insert(relation_type.id.clone(), relation_type);
+        self.relation_types
+            .insert(relation_type.id.clone(), relation_type);
     }
 
     pub fn add_relation(&mut self, relation: Relation) {
@@ -294,7 +296,13 @@ mod tests {
     fn canonical_state_requires_authorized_action() {
         let mut world = WorldService::new();
         let ws = WorkspaceId::generate();
-        let obj_type = ObjectType::new("biolab.Sample", ws.clone(), vec!["qc_status".into()], vec!["ok".into(), "failed".into()], vec![]);
+        let obj_type = ObjectType::new(
+            "biolab.Sample",
+            ws.clone(),
+            vec!["qc_status".into()],
+            vec!["ok".into(), "failed".into()],
+            vec![],
+        );
         world.register_object_type(obj_type.clone());
         let obj_id = ObjectId::generate_with("sample");
         world.register_object(Object::new(
@@ -326,7 +334,13 @@ mod tests {
     fn commit_creates_snapshot_diff_and_ledger() {
         let mut world = WorldService::new();
         let ws = WorkspaceId::generate();
-        let obj_type = ObjectType::new("biolab.Sample", ws.clone(), vec!["qc_status".into()], vec![], vec![]);
+        let obj_type = ObjectType::new(
+            "biolab.Sample",
+            ws.clone(),
+            vec!["qc_status".into()],
+            vec![],
+            vec![],
+        );
         world.register_object_type(obj_type.clone());
         let obj_id = ObjectId::generate_with("sample");
         world.register_object(Object::new(
@@ -347,19 +361,23 @@ mod tests {
         action.status = ActionStatus::Authorized;
 
         let commit = world
-            .commit_state(&action, obj_id.clone(), str_state("qc_status", "failed"), Some("qc failed".to_string()), "pipeline")
+            .commit_state(
+                &action,
+                obj_id.clone(),
+                str_state("qc_status", "failed"),
+                Some("qc failed".to_string()),
+                "pipeline",
+            )
             .unwrap();
         assert_eq!(commit.snapshot.version, 2);
         assert_eq!(commit.diffs.len(), 1);
         assert_eq!(commit.diffs[0].field, "qc_status");
         assert_eq!(commit.diffs[0].to, Some(json!("failed")));
-        assert_eq!(world.object(&obj_id).unwrap().state().get("qc_status"), Some(&json!("failed")));
+        assert_eq!(
+            world.object(&obj_id).unwrap().state().get("qc_status"),
+            Some(&json!("failed"))
+        );
         assert_eq!(world.snapshots_for(&obj_id).len(), 1);
         assert_eq!(world.ledger_entries().len(), 1);
     }
 }
-
-
-
-
-

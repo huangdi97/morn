@@ -1,4 +1,4 @@
-﻿//! EvolutionEngine: governed promotion. Candidates cannot mutate production.
+//! EvolutionEngine: governed promotion. Candidates cannot mutate production.
 
 use std::collections::HashMap;
 
@@ -65,10 +65,7 @@ impl EvolutionEngine {
 
     pub fn record_evaluation(&mut self, evaluation: EvolutionEvaluation) -> Result<()> {
         if !self.branches.contains_key(&evaluation.branch_id) {
-            return Err(Error::not_found(format!(
-                "branch {}",
-                evaluation.branch_id
-            )));
+            return Err(Error::not_found(format!("branch {}", evaluation.branch_id)));
         }
         if let Some(branch) = self.branches.get_mut(&evaluation.branch_id) {
             branch.status = if evaluation.passed() {
@@ -184,6 +181,10 @@ impl EvolutionEngine {
         self.production_versions.get(target)
     }
 
+    pub fn evaluations(&self) -> &[EvolutionEvaluation] {
+        &self.evaluations
+    }
+
     pub fn promotions(&self) -> &[PromotionDecision] {
         &self.promotions
     }
@@ -249,7 +250,10 @@ mod tests {
             ))
             .unwrap();
         let err = engine.promote(&branch.id, by, &[]);
-        assert!(err.is_err(), "high-risk promotion without approval must fail");
+        assert!(
+            err.is_err(),
+            "high-risk promotion without approval must fail"
+        );
     }
 
     #[test]
@@ -302,13 +306,12 @@ mod tests {
                 "all green",
             ))
             .unwrap();
-        let decision = engine.promote(&branch.id, by, &["governance".to_string()]).unwrap();
+        let decision = engine
+            .promote(&branch.id, by, &["governance".to_string()])
+            .unwrap();
         let record = engine.rollback(&decision.id).unwrap();
         assert!(record.rollback_eligible);
         assert_eq!(record.previous_version, Version::v1());
         assert_eq!(record.current_version, Version::v1());
     }
 }
-
-
-

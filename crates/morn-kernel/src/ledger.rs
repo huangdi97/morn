@@ -1,4 +1,4 @@
-﻿//! Append-only ledger for auditable events (proposals, approvals, actions, state commits, ...).
+//! Append-only ledger for auditable events (proposals, approvals, actions, state commits, ...).
 
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,7 @@ impl Ledger {
         Self::default()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn append(
         &mut self,
         workspace_id: WorkspaceId,
@@ -88,15 +89,36 @@ mod tests {
         let ws = WorkspaceId::generate();
         let mut ledger = Ledger::new();
         let e1 = ledger
-            .append(ws.clone(), "action.executed", "obj-1", "state changed", "actor-1", None, vec![])
+            .append(
+                ws.clone(),
+                "action.executed",
+                "obj-1",
+                "state changed",
+                "actor-1",
+                None,
+                vec![],
+            )
             .unwrap();
         let e2 = ledger
-            .append(ws.clone(), "artifact.released", "art-1", "released v2", "actor-1", Some("abc".into()), vec![])
+            .append(
+                ws.clone(),
+                "artifact.released",
+                "art-1",
+                "released v2",
+                "actor-1",
+                Some("abc".into()),
+                vec![],
+            )
             .unwrap();
         assert_eq!(e1.seq, 0);
         assert_eq!(e2.seq, 1);
         assert_eq!(ledger.len(), 2);
         assert_eq!(ledger.entries_for_subject("obj-1").len(), 1);
-        assert_eq!(ledger.entries_for_subject("art-1")[0].payload_hash.as_deref(), Some("abc"));
+        assert_eq!(
+            ledger.entries_for_subject("art-1")[0]
+                .payload_hash
+                .as_deref(),
+            Some("abc")
+        );
     }
 }

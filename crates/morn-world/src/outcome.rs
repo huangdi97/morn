@@ -1,4 +1,4 @@
-﻿//! Outcome records: did the work actually achieve its objective.
+//! Outcome records: did the work actually achieve its objective.
 
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +21,11 @@ pub struct OutcomeRecord {
 }
 
 impl OutcomeRecord {
-    pub fn new(workspace_id: WorkspaceId, objective: impl Into<String>, acceptance_met: bool) -> Self {
+    pub fn new(
+        workspace_id: WorkspaceId,
+        objective: impl Into<String>,
+        acceptance_met: bool,
+    ) -> Self {
         Self {
             id: OutcomeRecordId::generate_with("out"),
             workspace_id,

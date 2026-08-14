@@ -1,4 +1,4 @@
-﻿//! Verification reports.
+//! Verification reports.
 
 use serde::{Deserialize, Serialize};
 

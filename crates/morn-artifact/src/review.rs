@@ -1,4 +1,4 @@
-﻿//! Reviews of artifact versions.
+//! Reviews of artifact versions.
 
 use serde::{Deserialize, Serialize};
 

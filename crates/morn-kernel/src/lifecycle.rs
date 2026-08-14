@@ -1,4 +1,4 @@
-﻿//! Lifecycle tracking: who changed which object from which status to which status.
+//! Lifecycle tracking: who changed which object from which status to which status.
 
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +30,7 @@ impl LifecycleTracker {
         Self::default()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn record(
         &mut self,
         workspace_id: WorkspaceId,

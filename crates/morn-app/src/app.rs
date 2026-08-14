@@ -1,4 +1,4 @@
-﻿//! Application state: one shared backend for Workbench/Studio/Console/Hub.
+//! Application state: one shared backend for Workbench/Studio/Console/Hub.
 
 use std::sync::{Arc, Mutex};
 
@@ -55,4 +55,3 @@ impl AppState {
         self.0.lock().expect("app state poisoned")
     }
 }
-

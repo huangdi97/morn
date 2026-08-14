@@ -1,4 +1,4 @@
-﻿//! Artifact / Decision / Outcome: evidence-first work system.
+//! Artifact / Decision / Outcome: evidence-first work system.
 
 pub mod approval;
 pub mod artifact;

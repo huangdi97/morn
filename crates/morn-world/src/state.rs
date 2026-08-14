@@ -1,4 +1,4 @@
-﻿//! State snapshots: immutable records of an object's state at a version.
+//! State snapshots: immutable records of an object's state at a version.
 
 use std::collections::BTreeMap;
 

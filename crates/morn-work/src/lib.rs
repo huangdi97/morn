@@ -1,4 +1,4 @@
-﻿//! Work contracts: WorkPackage, AcceptanceSpec, OutcomeContract, ExecutionMode,
+//! Work contracts: WorkPackage, AcceptanceSpec, OutcomeContract, ExecutionMode,
 //! attention queue, durable checkpoint/recovery.
 
 pub mod acceptance;

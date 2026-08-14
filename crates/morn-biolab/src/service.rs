@@ -1,4 +1,4 @@
-﻿//! BioLabService: the Dataset -> Reviewed Scientific Claim vertical slice.
+//! BioLabService: the Dataset -> Reviewed Scientific Claim vertical slice.
 
 use std::collections::BTreeMap;
 
@@ -10,8 +10,7 @@ use morn_artifact::service::ArtifactService;
 use morn_capability::effect::EffectContract;
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{
-    ActionTypeId, AnalysisRunId, DatasetId, ObjectId, PrincipalId, ScientificClaimId,
-    WorkspaceId,
+    ActionTypeId, AnalysisRunId, DatasetId, ObjectId, PrincipalId, ScientificClaimId, WorkspaceId,
 };
 use morn_kernel::policy::{Policy, PolicyRule};
 use morn_runtime::gateway::ActionGateway;
@@ -44,11 +43,12 @@ pub struct E2eResult {
     pub claim_id: String,
     pub outcome_id: String,
     pub steps: Vec<E2eStep>,
+    pub all_ok: bool,
 }
 
 impl E2eResult {
     pub fn all_ok(&self) -> bool {
-        !self.steps.is_empty() && self.steps.iter().all(|s| s.ok)
+        self.all_ok
     }
 }
 
@@ -117,7 +117,10 @@ impl BioLabService {
             domain::dataset_state(dataset_name, rows),
         );
         self.world.register_object(dataset_object);
-        steps.push(ok_step("register_dataset", &format!("dataset {dataset_id} registered ({rows} rows)")));
+        steps.push(ok_step(
+            "register_dataset",
+            &format!("dataset {dataset_id} registered ({rows} rows)"),
+        ));
 
         // 2. WorkPackage with AcceptanceSpec + hybrid ExecutionMode
         let acceptance = AcceptanceSpec::new("dataset_to_reviewed_claim")
@@ -133,11 +136,18 @@ impl BioLabService {
         .with_acceptance_spec(acceptance_id)
         .with_execution_mode(ExecutionMode::hybrid(
             vec![WorkNature::Deterministic, WorkNature::Probabilistic],
-            vec![ExecutorType::Program, ExecutorType::Actor, ExecutorType::Human],
+            vec![
+                ExecutorType::Program,
+                ExecutorType::Actor,
+                ExecutorType::Human,
+            ],
         ));
         let wp_id = wp.id.clone();
         self.work.add_work_package(wp);
-        steps.push(ok_step("work_package", &format!("work package {wp_id} with acceptance spec + hybrid mode")));
+        steps.push(ok_step(
+            "work_package",
+            &format!("work package {wp_id} with acceptance spec + hybrid mode"),
+        ));
 
         // 3. start analysis (deterministic worker) -> AnalysisRun object + analysis artifact v1
         let analysis_run_id = AnalysisRunId::generate_with("run");
@@ -156,10 +166,13 @@ impl BioLabService {
             }),
             &analysis.checksum,
         )?;
-        steps.push(ok_step("start_analysis", &format!(
-            "analysis run {analysis_run_id} completed; artifact {} v{} created",
-            artifact.id, version.version_no
-        )));
+        steps.push(ok_step(
+            "start_analysis",
+            &format!(
+                "analysis run {analysis_run_id} completed; artifact {} v{} created",
+                artifact.id, version.version_no
+            ),
+        ));
 
         // 4. submit + review + PI approval
         self.artifacts.submit(&version.id)?;
@@ -175,7 +188,10 @@ impl BioLabService {
             self.pi.clone(),
             Some("PI approves analysis".to_string()),
         ))?;
-        steps.push(ok_step("review_approve", "statistical reviewer + PI approval recorded"));
+        steps.push(ok_step(
+            "review_approve",
+            "statistical reviewer + PI approval recorded",
+        ));
 
         // 5. governed release action (E3) -> claim state diff -> outcome
         let claim_id = ScientificClaimId::generate_with("claim");
@@ -186,10 +202,16 @@ impl BioLabService {
             self.workspace_id.clone(),
             {
                 let mut s = BTreeMap::new();
-                s.insert("statement".to_string(), json!("Mechanism X is reproducible in this dataset"));
+                s.insert(
+                    "statement".to_string(),
+                    json!("Mechanism X is reproducible in this dataset"),
+                );
                 s.insert("status".to_string(), json!("draft"));
                 s.insert("dataset".to_string(), json!(dataset_id.to_string()));
-                s.insert("analysis_run".to_string(), json!(analysis_run_id.to_string()));
+                s.insert(
+                    "analysis_run".to_string(),
+                    json!(analysis_run_id.to_string()),
+                );
                 s.insert("artifact".to_string(), json!(artifact.id.to_string()));
                 s
             },
@@ -209,9 +231,15 @@ impl BioLabService {
         let authorized = self.gateway.authorize(&proposal, "release_claim")?;
         let mut new_state = BTreeMap::new();
         new_state.insert("status".to_string(), json!("released"));
-        new_state.insert("statement".to_string(), json!("Mechanism X is reproducible in this dataset"));
+        new_state.insert(
+            "statement".to_string(),
+            json!("Mechanism X is reproducible in this dataset"),
+        );
         new_state.insert("dataset".to_string(), json!(dataset_id.to_string()));
-        new_state.insert("analysis_run".to_string(), json!(analysis_run_id.to_string()));
+        new_state.insert(
+            "analysis_run".to_string(),
+            json!(analysis_run_id.to_string()),
+        );
         new_state.insert("artifact".to_string(), json!(artifact.id.to_string()));
         let outcome = self.gateway.execute(
             &authorized,
@@ -221,10 +249,13 @@ impl BioLabService {
             self.analyst.as_str(),
             &mut self.world,
         )?;
-        steps.push(ok_step("governed_action", &format!(
-            "release_claim executed -> receipt {} ({} )",
-            outcome.receipt_id, outcome.details
-        )));
+        steps.push(ok_step(
+            "governed_action",
+            &format!(
+                "release_claim executed -> receipt {} ({} )",
+                outcome.receipt_id, outcome.details
+            ),
+        ));
 
         // 6. accept work package
         let status = self.work.attempt_accept(
@@ -236,7 +267,10 @@ impl BioLabService {
                 forbidden_condition_hit: None,
             },
         )?;
-        steps.push(ok_step("accept", &format!("work package accepted: {status:?}")));
+        steps.push(ok_step(
+            "accept",
+            &format!("work package accepted: {status:?}"),
+        ));
 
         // 7. outcome record
         let snapshot = self
@@ -245,11 +279,8 @@ impl BioLabService {
             .last()
             .cloned()
             .ok_or_else(|| Error::internal("missing claim snapshot"))?;
-        let outcome_record = OutcomeRecord::new(
-            self.workspace_id.clone(),
-            "Reviewed Scientific Claim",
-            true,
-        );
+        let outcome_record =
+            OutcomeRecord::new(self.workspace_id.clone(), "Reviewed Scientific Claim", true);
         let outcome_id = outcome_record.id.clone();
         self.world.record_outcome(OutcomeRecord {
             state_snapshot_ids: vec![snapshot.id.clone()],
@@ -258,8 +289,12 @@ impl BioLabService {
             related_artifacts: vec![artifact.id.to_string()],
             ..outcome_record
         });
-        steps.push(ok_step("outcome", &format!("Reviewed Scientific Claim outcome {outcome_id} recorded")));
+        steps.push(ok_step(
+            "outcome",
+            &format!("Reviewed Scientific Claim outcome {outcome_id} recorded"),
+        ));
 
+        let all_ok = !steps.is_empty() && steps.iter().all(|s| s.ok);
         Ok(E2eResult {
             workspace_id: self.workspace_id.to_string(),
             dataset_id: dataset_id.to_string(),
@@ -270,6 +305,7 @@ impl BioLabService {
             claim_id: claim_id.to_string(),
             outcome_id: outcome_id.to_string(),
             steps,
+            all_ok,
         })
     }
 
@@ -281,7 +317,7 @@ impl BioLabService {
         analysis_run_id: &AnalysisRunId,
         rows: u64,
     ) -> DeterministicResult {
-        let qc_pass = rows > 0 && rows % 2 == 0;
+        let qc_pass = rows > 0 && rows.is_multiple_of(2);
         let summary = format!(
             "qc={}; rows={}; plate_batch=1",
             if qc_pass { "pass" } else { "warn" },
@@ -335,9 +371,7 @@ fn ok_step(step: &str, detail: &str) -> E2eStep {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use morn_kernel::ids::{
-        ArtifactVersionId, OutcomeRecordId, WorkPackageId, WorkspaceId,
-    };
+    use morn_kernel::ids::{ArtifactVersionId, OutcomeRecordId, WorkPackageId, WorkspaceId};
 
     #[test]
     fn biolab_e2e_reaches_reviewed_claim_with_lineage() {
@@ -360,7 +394,10 @@ mod tests {
             .outcome(&OutcomeRecordId::new(result.outcome_id.clone()))
             .expect("outcome");
         assert!(!outcome.state_snapshot_ids.is_empty());
-        assert_eq!(outcome.work_package_id, Some(WorkPackageId::new(result.work_package_id.clone())));
+        assert_eq!(
+            outcome.work_package_id,
+            Some(WorkPackageId::new(result.work_package_id.clone()))
+        );
 
         // artifact approved and readable
         let artifact_version = svc
@@ -371,10 +408,7 @@ mod tests {
             artifact_version.status,
             morn_kernel::status::ArtifactStatus::Approved
         );
-        assert!(svc
-            .artifacts
-            .require_approved(&artifact_version.id)
-            .is_ok());
+        assert!(svc.artifacts.require_approved(&artifact_version.id).is_ok());
 
         // work package accepted
         assert_eq!(
@@ -386,7 +420,3 @@ mod tests {
         );
     }
 }
-
-
-
-

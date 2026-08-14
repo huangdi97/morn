@@ -1,10 +1,9 @@
-﻿//! Roles, member bindings and responsibility bindings.
+//! Roles, member bindings and responsibility bindings.
 
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::ids::{
-    MemberBindingId, PrincipalId, ResponsibilityBindingId, RoleSlotId, WorkPackageId,
-    WorkspaceId,
+    MemberBindingId, PrincipalId, ResponsibilityBindingId, RoleSlotId, WorkPackageId, WorkspaceId,
 };
 use morn_kernel::time::Timestamp;
 
@@ -56,7 +55,11 @@ pub struct MemberBinding {
 }
 
 impl MemberBinding {
-    pub fn new(role_slot_id: RoleSlotId, member_type: MemberType, member_ref: impl Into<String>) -> Self {
+    pub fn new(
+        role_slot_id: RoleSlotId,
+        member_type: MemberType,
+        member_ref: impl Into<String>,
+    ) -> Self {
         Self {
             id: MemberBindingId::generate_with("mb"),
             role_slot_id,

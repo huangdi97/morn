@@ -1,9 +1,13 @@
-﻿//! The SAME provider contract suite must pass for at least two provider paths:
+//! The SAME provider contract suite must pass for at least two provider paths:
 //! MornNativeHarness and DeepSeekHarnessProvider (fixture mode).
 
 use morn_harness::contract::{run_provider_contract, test_context};
-use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, HarnessProvider, MornNativeHarness};
+use morn_harness::provider::{
+    DeepSeekHarnessProvider, DshMode, HarnessProvider, MornNativeHarness,
+};
 use morn_kernel::ids::WorkspaceId;
+use morn_world::object::{Object, ObjectType};
+use serde_json::json;
 
 #[test]
 fn morn_native_passes_provider_contract() {
@@ -26,12 +30,81 @@ fn deepseek_harness_fixture_passes_provider_contract() {
 }
 
 #[test]
+fn harness_events_do_not_mutate_canonical_world() {
+    // Session events are execution facts; they must never change Morn canonical state.
+    let ws = WorkspaceId::generate();
+    let ctx = test_context(&ws);
+    let mut world = morn_world::WorldService::new();
+    let obj_type = ObjectType::new("t", ws.clone(), vec!["s".into()], vec![], vec![]);
+    world.register_object_type(obj_type.clone());
+    let obj_id = morn_kernel::ids::ObjectId::generate_with("obj");
+    world.register_object(Object::new(
+        obj_id.clone(),
+        obj_type.id.clone(),
+        ws.clone(),
+        {
+            let mut m = std::collections::BTreeMap::new();
+            m.insert("s".to_string(), json!("a"));
+            m
+        },
+    ));
+
+    let mut native = MornNativeHarness::new();
+    let session = native.start(&ctx).unwrap();
+    native.send(&session.id, "run").unwrap();
+    native.terminate(&session.id).unwrap();
+
+    assert_eq!(
+        world.object(&obj_id).unwrap().state().get("s"),
+        Some(&json!("a")),
+        "harness events must not mutate world state"
+    );
+    assert!(
+        world.ledger_entries().is_empty(),
+        "harness events must not create ledger entries"
+    );
+}
+
+#[test]
+fn provider_switch_preserves_actor_identity_and_canonical_records() {
+    use morn_actor::actor::{ActorInstance, ActorOrigin};
+    use morn_harness::binding::{HarnessBinding, RuntimeBinding};
+    use morn_kernel::ids::{ActorTemplateId, HarnessSpecId, IdentityId};
+    use morn_kernel::version::Version;
+
+    let identity_id = IdentityId::generate();
+    let actor = ActorInstance::new(
+        ActorTemplateId::generate(),
+        identity_id.clone(),
+        ActorOrigin::Independent,
+    );
+
+    // Bind to native harness, then switch to DeepSeek Harness provider.
+    let spec_id = HarnessSpecId::generate();
+    let hb_native = HarnessBinding::new(actor.id.clone(), spec_id.clone(), Version::v1());
+    let rb_native = RuntimeBinding::new(actor.id.clone(), "morn-native");
+    let hb_dsh = HarnessBinding::new(actor.id.clone(), spec_id, Version::new(1, 1, 0));
+    let rb_dsh = RuntimeBinding::new(actor.id.clone(), "deepseek-harness");
+
+    // Identity / workspace / work / artifact semantics belong to Morn, not the provider.
+    assert_eq!(actor.identity_id, identity_id);
+    assert_eq!(actor.actor_origin, ActorOrigin::Independent);
+    assert_eq!(hb_native.actor_id, hb_dsh.actor_id);
+    assert_eq!(rb_native.actor_id, rb_dsh.actor_id);
+    assert_eq!(actor.workspace_bindings.len(), 0);
+    assert_eq!(actor.role_bindings.len(), 0);
+}
+
+#[test]
 fn deepseek_harness_real_mode_reports_external_blocker() {
     let ws = WorkspaceId::generate();
     let ctx = test_context(&ws);
     let mut provider = DeepSeekHarnessProvider::new(DshMode::Real);
     let err = provider.start(&ctx);
-    assert!(err.is_err(), "real DSH is not available in this environment");
+    assert!(
+        err.is_err(),
+        "real DSH is not available in this environment"
+    );
     let msg = format!("{}", err.unwrap_err());
     assert!(msg.contains("not installed"), "unexpected error: {msg}");
 }

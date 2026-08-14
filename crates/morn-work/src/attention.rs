@@ -1,4 +1,4 @@
-﻿//! Attention queue: where human attention is requested.
+//! Attention queue: where human attention is requested.
 
 use serde::{Deserialize, Serialize};
 

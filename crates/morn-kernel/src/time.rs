@@ -1,4 +1,4 @@
-﻿//! Timestamps as UTC instants with millisecond precision.
+//! Timestamps as UTC instants with millisecond precision.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

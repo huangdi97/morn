@@ -1,4 +1,4 @@
-﻿//! HTTP API (axum): the shared backend for Workbench / Studio / Console / Hub.
+//! HTTP API (axum): the shared backend for Workbench / Studio / Console / Hub.
 
 use axum::{
     extract::State,
@@ -62,10 +62,7 @@ async fn health() -> ApiResult {
 
 async fn list_workspaces(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
-    let workspaces = guard
-        .store
-        .list_workspaces()
-        .map_err(Error::internal)?;
+    let workspaces = guard.store.list_workspaces().map_err(Error::internal)?;
     Ok(Json(json!({ "workspaces": workspaces })))
 }
 
@@ -90,12 +87,16 @@ async fn workbench(State(state): State<AppState>) -> ApiResult {
     let attention: Vec<Value> = durable
         .open_attention()
         .iter()
-        .map(|a| json!({ "id": a.id, "kind": a.kind, "subject": a.subject, "priority": a.priority }))
+        .map(
+            |a| json!({ "id": a.id, "kind": a.kind, "subject": a.subject, "priority": a.priority }),
+        )
         .collect();
     let outcomes: Vec<Value> = world
         .outcomes()
         .iter()
-        .map(|o| json!({ "id": o.id, "objective": o.objective, "acceptance_met": o.acceptance_met }))
+        .map(
+            |o| json!({ "id": o.id, "objective": o.objective, "acceptance_met": o.acceptance_met }),
+        )
         .collect();
 
     Ok(Json(json!({
@@ -245,10 +246,7 @@ async fn evolution_center(State(state): State<AppState>) -> ApiResult {
 
 async fn run_biolab(State(state): State<AppState>) -> ApiResult {
     let mut guard = state.lock();
-    let result = guard
-        .biolab
-        .run_dataset_to_claim_e2e("aging_pilot", 128)
-        .map_err(Error::from)?;
+    let result = guard.biolab.run_dataset_to_claim_e2e("aging_pilot", 128)?;
     guard.e2e_result = Some(result.clone());
     Ok(Json(json!({ "ok": true, "result": result })))
 }
@@ -257,9 +255,8 @@ async fn biolab_result(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     match guard.e2e_result.as_ref() {
         Some(r) => Ok(Json(json!({ "ok": true, "result": r }))),
-        None => Ok(Json(json!({ "ok": false, "detail": "no E2E run yet; POST /api/biolab/run first" }))),
+        None => Ok(Json(
+            json!({ "ok": false, "detail": "no E2E run yet; POST /api/biolab/run first" }),
+        )),
     }
 }
-
-
-

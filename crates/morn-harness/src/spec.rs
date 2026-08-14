@@ -1,4 +1,4 @@
-﻿//! HarnessSpec and HarnessVersion.
+//! HarnessSpec and HarnessVersion.
 
 use serde::{Deserialize, Serialize};
 

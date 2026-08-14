@@ -1,4 +1,4 @@
-﻿//! Identity model: unified management of Human, Actor, Service, External Agent, Device, Organization.
+//! Identity model: unified management of Human, Actor, Service, External Agent, Device, Organization.
 
 use serde::{Deserialize, Serialize};
 
@@ -66,7 +66,11 @@ pub struct Principal {
 }
 
 impl Principal {
-    pub fn new(identity_id: IdentityId, workspace_id: WorkspaceId, display_name: impl Into<String>) -> Self {
+    pub fn new(
+        identity_id: IdentityId,
+        workspace_id: WorkspaceId,
+        display_name: impl Into<String>,
+    ) -> Self {
         Self {
             id: PrincipalId::generate_with("prc"),
             identity_id,

@@ -1,4 +1,4 @@
-﻿//! MornStore: SQLite-backed persistence for the core Morn records.
+//! MornStore: SQLite-backed persistence for the core Morn records.
 
 use std::path::Path;
 
@@ -68,13 +68,18 @@ impl MornStore {
         .map_err(|e| Error::internal(e.to_string()))?;
 
         let current: Option<i64> = conn
-            .query_row("SELECT version FROM schema_version LIMIT 1", [], |r| r.get(0))
+            .query_row("SELECT version FROM schema_version LIMIT 1", [], |r| {
+                r.get(0)
+            })
             .optional()
             .map_err(|e| Error::internal(e.to_string()))?;
         match current {
             None => {
-                conn.execute("INSERT INTO schema_version (version) VALUES (?1)", params![SCHEMA_VERSION])
-                    .map_err(|e| Error::internal(e.to_string()))?;
+                conn.execute(
+                    "INSERT INTO schema_version (version) VALUES (?1)",
+                    params![SCHEMA_VERSION],
+                )
+                .map_err(|e| Error::internal(e.to_string()))?;
             }
             Some(v) if v < SCHEMA_VERSION => {
                 // Forward migrations would live here; v1 is the first schema.
@@ -86,13 +91,22 @@ impl MornStore {
 
     pub fn schema_version(&self) -> Result<i64> {
         self.conn
-            .query_row("SELECT version FROM schema_version LIMIT 1", [], |r| r.get(0))
+            .query_row("SELECT version FROM schema_version LIMIT 1", [], |r| {
+                r.get(0)
+            })
             .map_err(|e| Error::internal(e.to_string()))
     }
 
     // ---- generic typed records ----
 
-    pub fn save_record<T: serde::Serialize>(&self, kind: &str, id: &str, workspace_id: &str, created_at: i64, record: &T) -> Result<()> {
+    pub fn save_record<T: serde::Serialize>(
+        &self,
+        kind: &str,
+        id: &str,
+        workspace_id: &str,
+        created_at: i64,
+        record: &T,
+    ) -> Result<()> {
         let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
         self.conn
             .execute(
@@ -104,7 +118,11 @@ impl MornStore {
         Ok(())
     }
 
-    pub fn load_record<T: serde::de::DeserializeOwned>(&self, kind: &str, id: &str) -> Result<Option<T>> {
+    pub fn load_record<T: serde::de::DeserializeOwned>(
+        &self,
+        kind: &str,
+        id: &str,
+    ) -> Result<Option<T>> {
         let row: Option<String> = self
             .conn
             .query_row(
@@ -116,7 +134,8 @@ impl MornStore {
             .map_err(|e| Error::internal(e.to_string()))?;
         match row {
             Some(payload) => {
-                let record = serde_json::from_str(&payload).map_err(|e| Error::internal(e.to_string()))?;
+                let record =
+                    serde_json::from_str(&payload).map_err(|e| Error::internal(e.to_string()))?;
                 Ok(Some(record))
             }
             None => Ok(None),
@@ -134,7 +153,8 @@ impl MornStore {
         let mut out = Vec::new();
         for row in rows {
             let payload = row.map_err(|e| Error::internal(e.to_string()))?;
-            let record = serde_json::from_str(&payload).map_err(|e| Error::internal(e.to_string()))?;
+            let record =
+                serde_json::from_str(&payload).map_err(|e| Error::internal(e.to_string()))?;
             out.push(record);
         }
         Ok(out)
@@ -155,7 +175,8 @@ impl MornStore {
         let mut out = Vec::new();
         for row in rows {
             let payload = row.map_err(|e| Error::internal(e.to_string()))?;
-            let record = serde_json::from_str(&payload).map_err(|e| Error::internal(e.to_string()))?;
+            let record =
+                serde_json::from_str(&payload).map_err(|e| Error::internal(e.to_string()))?;
             out.push(record);
         }
         Ok(out)
@@ -164,7 +185,8 @@ impl MornStore {
     // ---- ledger (append-only, monotonic) ----
 
     pub fn append_ledger_entry(&self, entry: &LedgerEntry) -> Result<()> {
-        let refs = serde_json::to_string(&entry.refs).map_err(|e| Error::internal(e.to_string()))?;
+        let refs =
+            serde_json::to_string(&entry.refs).map_err(|e| Error::internal(e.to_string()))?;
         self.conn
             .execute(
                 "INSERT INTO ledger_entries (workspace_id, entry_id, event_type, subject, summary, principal, payload_hash, refs, created_at)
@@ -226,10 +248,19 @@ impl MornStore {
     // ---- typed helpers for the most important records ----
 
     pub fn save_workspace(&self, ws: &morn_kernel::workspace::Workspace) -> Result<()> {
-        self.save_record("workspace", ws.id.as_str(), ws.id.as_str(), ws.created_at.millis(), ws)
+        self.save_record(
+            "workspace",
+            ws.id.as_str(),
+            ws.id.as_str(),
+            ws.created_at.millis(),
+            ws,
+        )
     }
 
-    pub fn load_workspace(&self, id: &WorkspaceId) -> Result<Option<morn_kernel::workspace::Workspace>> {
+    pub fn load_workspace(
+        &self,
+        id: &WorkspaceId,
+    ) -> Result<Option<morn_kernel::workspace::Workspace>> {
         self.load_record("workspace", id.as_str())
     }
 
@@ -238,70 +269,240 @@ impl MornStore {
     }
 
     pub fn save_object(&self, obj: &morn_world::object::Object) -> Result<()> {
-        self.save_record("object", obj.id.as_str(), obj.workspace_id.as_str(), obj.created_at.millis(), obj)
+        self.save_record(
+            "object",
+            obj.id.as_str(),
+            obj.workspace_id.as_str(),
+            obj.created_at.millis(),
+            obj,
+        )
     }
 
-    pub fn load_object(&self, id: &morn_kernel::ids::ObjectId) -> Result<Option<morn_world::object::Object>> {
+    pub fn load_object(
+        &self,
+        id: &morn_kernel::ids::ObjectId,
+    ) -> Result<Option<morn_world::object::Object>> {
         self.load_record("object", id.as_str())
     }
 
-    pub fn list_objects(&self, workspace_id: &WorkspaceId) -> Result<Vec<morn_world::object::Object>> {
+    pub fn list_objects(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Vec<morn_world::object::Object>> {
         self.load_records_in_workspace("object", workspace_id.as_str())
     }
 
     pub fn save_snapshot(&self, snap: &morn_world::state::StateSnapshot) -> Result<()> {
-        self.save_record("snapshot", snap.id.as_str(), snap.workspace_id.as_str(), snap.created_at.millis(), snap)
+        self.save_record(
+            "snapshot",
+            snap.id.as_str(),
+            snap.workspace_id.as_str(),
+            snap.created_at.millis(),
+            snap,
+        )
     }
 
-    pub fn load_snapshots_for(&self, object_id: &morn_kernel::ids::ObjectId) -> Result<Vec<morn_world::state::StateSnapshot>> {
+    pub fn load_snapshots_for(
+        &self,
+        object_id: &morn_kernel::ids::ObjectId,
+    ) -> Result<Vec<morn_world::state::StateSnapshot>> {
         let all: Vec<morn_world::state::StateSnapshot> = self.load_records("snapshot")?;
-        Ok(all.into_iter().filter(|s| s.object_id == *object_id).collect())
+        Ok(all
+            .into_iter()
+            .filter(|s| s.object_id == *object_id)
+            .collect())
     }
 
     pub fn save_artifact(&self, artifact: &morn_artifact::artifact::Artifact) -> Result<()> {
-        self.save_record("artifact", artifact.id.as_str(), artifact.workspace_id.as_str(), artifact.created_at.millis(), artifact)
+        self.save_record(
+            "artifact",
+            artifact.id.as_str(),
+            artifact.workspace_id.as_str(),
+            artifact.created_at.millis(),
+            artifact,
+        )
     }
 
-    pub fn save_artifact_version(&self, version: &morn_artifact::artifact::ArtifactVersion) -> Result<()> {
-        self.save_record("artifact_version", version.id.as_str(), "", version.created_at.millis(), version)
+    pub fn save_artifact_version(
+        &self,
+        version: &morn_artifact::artifact::ArtifactVersion,
+    ) -> Result<()> {
+        self.save_record(
+            "artifact_version",
+            version.id.as_str(),
+            "",
+            version.created_at.millis(),
+            version,
+        )
     }
 
-    pub fn load_artifact_versions(&self, artifact_id: &ArtifactId) -> Result<Vec<morn_artifact::artifact::ArtifactVersion>> {
-        let all: Vec<morn_artifact::artifact::ArtifactVersion> = self.load_records("artifact_version")?;
-        Ok(all.into_iter().filter(|v| v.artifact_id == *artifact_id).collect())
+    pub fn load_artifact_versions(
+        &self,
+        artifact_id: &ArtifactId,
+    ) -> Result<Vec<morn_artifact::artifact::ArtifactVersion>> {
+        let all: Vec<morn_artifact::artifact::ArtifactVersion> =
+            self.load_records("artifact_version")?;
+        Ok(all
+            .into_iter()
+            .filter(|v| v.artifact_id == *artifact_id)
+            .collect())
     }
 
-    pub fn load_artifact_version(&self, id: &ArtifactVersionId) -> Result<Option<morn_artifact::artifact::ArtifactVersion>> {
+    pub fn load_artifact_version(
+        &self,
+        id: &ArtifactVersionId,
+    ) -> Result<Option<morn_artifact::artifact::ArtifactVersion>> {
         self.load_record("artifact_version", id.as_str())
     }
 
     pub fn save_work_package(&self, wp: &morn_work::work_package::WorkPackage) -> Result<()> {
-        self.save_record("work_package", wp.id.as_str(), wp.workspace_id.as_str(), wp.created_at.millis(), wp)
+        self.save_record(
+            "work_package",
+            wp.id.as_str(),
+            wp.workspace_id.as_str(),
+            wp.created_at.millis(),
+            wp,
+        )
     }
 
-    pub fn load_work_package(&self, id: &morn_kernel::ids::WorkPackageId) -> Result<Option<morn_work::work_package::WorkPackage>> {
+    pub fn load_work_package(
+        &self,
+        id: &morn_kernel::ids::WorkPackageId,
+    ) -> Result<Option<morn_work::work_package::WorkPackage>> {
         self.load_record("work_package", id.as_str())
     }
 
-    pub fn list_work_packages(&self, workspace_id: &WorkspaceId) -> Result<Vec<morn_work::work_package::WorkPackage>> {
+    pub fn list_work_packages(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Vec<morn_work::work_package::WorkPackage>> {
         self.load_records_in_workspace("work_package", workspace_id.as_str())
     }
 
     pub fn save_checkpoint(&self, cp: &morn_work::checkpoint::Checkpoint) -> Result<()> {
-        self.save_record("checkpoint", cp.id.as_str(), cp.workspace_id.as_str(), cp.created_at.millis(), cp)
+        self.save_record(
+            "checkpoint",
+            cp.id.as_str(),
+            cp.workspace_id.as_str(),
+            cp.created_at.millis(),
+            cp,
+        )
     }
 
-    pub fn load_checkpoints(&self, work_package_id: &morn_kernel::ids::WorkPackageId) -> Result<Vec<morn_work::checkpoint::Checkpoint>> {
+    pub fn load_checkpoints(
+        &self,
+        work_package_id: &morn_kernel::ids::WorkPackageId,
+    ) -> Result<Vec<morn_work::checkpoint::Checkpoint>> {
         let all: Vec<morn_work::checkpoint::Checkpoint> = self.load_records("checkpoint")?;
-        Ok(all.into_iter().filter(|c| c.work_package_id == *work_package_id).collect())
+        Ok(all
+            .into_iter()
+            .filter(|c| c.work_package_id == *work_package_id)
+            .collect())
     }
 
-    pub fn save_evolution_candidate(&self, c: &morn_evolution::candidate::EvolutionCandidate) -> Result<()> {
-        self.save_record("evolution_candidate", c.id.as_str(), c.workspace_id.as_str(), c.created_at.millis(), c)
+    pub fn save_evolution_candidate(
+        &self,
+        c: &morn_evolution::candidate::EvolutionCandidate,
+    ) -> Result<()> {
+        self.save_record(
+            "evolution_candidate",
+            c.id.as_str(),
+            c.workspace_id.as_str(),
+            c.created_at.millis(),
+            c,
+        )
     }
 
-    pub fn load_evolution_candidates(&self, workspace_id: &WorkspaceId) -> Result<Vec<morn_evolution::candidate::EvolutionCandidate>> {
+    pub fn load_evolution_candidates(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Vec<morn_evolution::candidate::EvolutionCandidate>> {
         self.load_records_in_workspace("evolution_candidate", workspace_id.as_str())
+    }
+
+    pub fn save_review(&self, review: &morn_artifact::review::Review) -> Result<()> {
+        self.save_record(
+            "review",
+            review.id.as_str(),
+            "",
+            review.created_at.millis(),
+            review,
+        )
+    }
+
+    pub fn load_reviews(&self) -> Result<Vec<morn_artifact::review::Review>> {
+        self.load_records("review")
+    }
+
+    pub fn save_artifact_approval(
+        &self,
+        approval: &morn_artifact::approval::ArtifactApproval,
+    ) -> Result<()> {
+        self.save_record(
+            "artifact_approval",
+            approval.id.as_str(),
+            "",
+            approval.created_at.millis(),
+            approval,
+        )
+    }
+
+    pub fn load_artifact_approvals(
+        &self,
+    ) -> Result<Vec<morn_artifact::approval::ArtifactApproval>> {
+        self.load_records("artifact_approval")
+    }
+
+    pub fn save_evolution_branch(&self, b: &morn_evolution::branch::EvolutionBranch) -> Result<()> {
+        self.save_record(
+            "evolution_branch",
+            b.id.as_str(),
+            "",
+            b.created_at.millis(),
+            b,
+        )
+    }
+
+    pub fn load_evolution_branches(&self) -> Result<Vec<morn_evolution::branch::EvolutionBranch>> {
+        self.load_records("evolution_branch")
+    }
+
+    pub fn save_evolution_evaluation(
+        &self,
+        e: &morn_evolution::evaluation::EvolutionEvaluation,
+    ) -> Result<()> {
+        self.save_record(
+            "evolution_evaluation",
+            e.id.as_str(),
+            "",
+            e.created_at.millis(),
+            e,
+        )
+    }
+
+    pub fn load_evolution_evaluations(
+        &self,
+    ) -> Result<Vec<morn_evolution::evaluation::EvolutionEvaluation>> {
+        self.load_records("evolution_evaluation")
+    }
+
+    pub fn save_promotion_decision(
+        &self,
+        d: &morn_evolution::promotion::PromotionDecision,
+    ) -> Result<()> {
+        self.save_record(
+            "promotion_decision",
+            d.id.as_str(),
+            "",
+            d.created_at.millis(),
+            d,
+        )
+    }
+
+    pub fn load_promotion_decisions(
+        &self,
+    ) -> Result<Vec<morn_evolution::promotion::PromotionDecision>> {
+        self.load_records("promotion_decision")
     }
 }
 
@@ -316,7 +517,10 @@ mod tests {
 
     fn temp_db(name: &str) -> String {
         let dir = std::env::temp_dir();
-        let path = dir.join(format!("morn_store_test_{name}_{}.db", uuid::Uuid::new_v4()));
+        let path = dir.join(format!(
+            "morn_store_test_{name}_{}.db",
+            uuid::Uuid::new_v4()
+        ));
         path.to_string_lossy().to_string()
     }
 
@@ -342,14 +546,18 @@ mod tests {
         let path = temp_db("ledger");
         let ws = WorkspaceId::generate();
         let mut ledger = morn_kernel::ledger::Ledger::new();
-        let e1 = ledger.append(ws.clone(), "a", "x", "first", "p", None, vec![]).unwrap();
+        let e1 = ledger
+            .append(ws.clone(), "a", "x", "first", "p", None, vec![])
+            .unwrap();
         {
             let store = MornStore::open(&path).unwrap();
             store.append_ledger_entry(&e1).unwrap();
         }
         let e2 = {
             let mut ledger2 = morn_kernel::ledger::Ledger::new();
-            ledger2.append(ws.clone(), "b", "y", "second", "p", None, vec![]).unwrap()
+            ledger2
+                .append(ws.clone(), "b", "y", "second", "p", None, vec![])
+                .unwrap()
         };
         {
             let store = MornStore::open(&path).unwrap();
@@ -369,9 +577,19 @@ mod tests {
         let author = PrincipalId::generate();
         let mut svc = ArtifactService::new();
         let (artifact, v1) = svc
-            .create("analysis", "s@1", ws.clone(), author.clone(), "ref1", json!({"x":1}), "c1")
+            .create(
+                "analysis",
+                "s@1",
+                ws.clone(),
+                author.clone(),
+                "ref1",
+                json!({"x":1}),
+                "c1",
+            )
             .unwrap();
-        let v2 = svc.supersede(&v1.id, "ref2", json!({"x":2}), "c2", author.clone()).unwrap();
+        let v2 = svc
+            .supersede(&v1.id, "ref2", json!({"x":2}), "c2", author.clone())
+            .unwrap();
         let v1_superseded = svc.version(&v1.id).unwrap().clone();
         {
             let store = MornStore::open(&path).unwrap();
@@ -386,7 +604,57 @@ mod tests {
         assert_eq!(v1_loaded.status, ArtifactStatus::Superseded);
         assert_eq!(v1_loaded.structured_content, json!({"x":1}));
         // readable after restart
-        assert_eq!(store.load_artifact_version(&v1.id).unwrap().unwrap().id, v1.id);
+        assert_eq!(
+            store.load_artifact_version(&v1.id).unwrap().unwrap().id,
+            v1.id
+        );
+    }
+
+    #[test]
+    fn evolution_and_review_records_persist() {
+        let path = temp_db("evolution");
+        let ws = WorkspaceId::generate();
+        let by = PrincipalId::generate();
+        let mut engine = morn_evolution::engine::EvolutionEngine::new();
+        let cand = morn_evolution::candidate::EvolutionCandidate::new(
+            ws.clone(),
+            morn_evolution::candidate::CandidateType::Workflow,
+            morn_kernel::version::Version::v1(),
+            "workflow v2",
+            by.clone(),
+        );
+        let cand_id = cand.id.clone();
+        engine.add_candidate(cand);
+        let branch = engine.branch(&cand_id).unwrap();
+        engine
+            .record_evaluation(morn_evolution::evaluation::EvolutionEvaluation::new(
+                branch.id.clone(),
+                true,
+                true,
+                true,
+                "all green",
+            ))
+            .unwrap();
+        let decision = engine
+            .promote(&branch.id, by, &["governance".to_string()])
+            .unwrap();
+        {
+            let store = MornStore::open(&path).unwrap();
+            store.save_evolution_branch(&branch).unwrap();
+            store
+                .save_evolution_evaluation(&engine.evaluations()[0].clone())
+                .unwrap();
+            store.save_promotion_decision(&decision).unwrap();
+        }
+        let store = MornStore::open(&path).unwrap();
+        assert_eq!(store.load_evolution_branches().unwrap().len(), 1);
+        assert_eq!(store.load_evolution_evaluations().unwrap().len(), 1);
+        let decisions = store.load_promotion_decisions().unwrap();
+        assert_eq!(decisions.len(), 1);
+        assert_eq!(
+            decisions[0].new_version,
+            Some(morn_kernel::version::Version::new(1, 1, 0))
+        );
     }
 
     #[test]
@@ -400,12 +668,11 @@ mod tests {
         store.save_workspace(&wa).unwrap();
         store.save_workspace(&wb).unwrap();
         // list workspaces returns both but each object query is scoped
-        let objs_a: Vec<morn_world::object::Object> = store.load_records_in_workspace("object", ws_a.as_str()).unwrap();
+        let objs_a: Vec<morn_world::object::Object> = store
+            .load_records_in_workspace("object", ws_a.as_str())
+            .unwrap();
         assert!(objs_a.is_empty());
         assert_eq!(store.list_workspaces().unwrap().len(), 2);
         let _ = ws_b;
     }
 }
-
-
-

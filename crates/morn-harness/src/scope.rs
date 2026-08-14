@@ -1,4 +1,4 @@
-﻿//! CapabilityScope: a business scope tree with add/override/restrict/isolate.
+//! CapabilityScope: a business scope tree with add/override/restrict/isolate.
 
 use serde::{Deserialize, Serialize};
 

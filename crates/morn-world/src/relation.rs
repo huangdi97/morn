@@ -1,4 +1,4 @@
-﻿//! Relations between operational objects.
+//! Relations between operational objects.
 
 use serde::{Deserialize, Serialize};
 

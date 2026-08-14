@@ -1,8 +1,8 @@
-﻿//! Promotion decisions and rollback metadata.
+//! Promotion decisions and rollback metadata.
 
 use serde::{Deserialize, Serialize};
 
-use morn_kernel::ids::{EvolutionBranchId, PromotionDecisionId, PrincipalId};
+use morn_kernel::ids::{EvolutionBranchId, PrincipalId, PromotionDecisionId};
 use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
 

@@ -1,4 +1,4 @@
-﻿//! Durable checkpoint: persisted work-run state for pause/resume/recovery.
+//! Durable checkpoint: persisted work-run state for pause/resume/recovery.
 
 use serde::{Deserialize, Serialize};
 

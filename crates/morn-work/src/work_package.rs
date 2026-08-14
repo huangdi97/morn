@@ -1,4 +1,4 @@
-﻿//! WorkPackage: the core delegable work unit.
+//! WorkPackage: the core delegable work unit.
 
 use serde::{Deserialize, Serialize};
 
