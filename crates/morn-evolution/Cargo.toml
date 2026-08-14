@@ -9,3 +9,5 @@ authors.workspace = true
 morn-kernel = { workspace = true }
 morn-work = { workspace = true }
 serde = { workspace = true }
+uuid = { workspace = true }
+

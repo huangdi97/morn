@@ -14,5 +14,7 @@ morn-organization = { workspace = true }
 morn-actor = { workspace = true }
 morn-harness = { workspace = true }
 morn-runtime = { workspace = true }
+morn-capability = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+

@@ -60,6 +60,10 @@ impl WorldService {
         self.object_types.get(id)
     }
 
+    pub fn object_types(&self) -> Vec<&ObjectType> {
+        self.object_types.values().collect()
+    }
+
     // ---- objects ----
 
     pub fn register_object(&mut self, object: Object) {
@@ -354,6 +358,8 @@ mod tests {
         assert_eq!(world.ledger_entries().len(), 1);
     }
 }
+
+
 
 
 

@@ -10,5 +10,7 @@ morn-kernel = { workspace = true }
 morn-world = { workspace = true }
 morn-work = { workspace = true }
 morn-harness = { workspace = true }
+morn-capability = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+

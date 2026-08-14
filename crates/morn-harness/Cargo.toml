@@ -12,3 +12,5 @@ morn-work = { workspace = true }
 morn-actor = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+uuid = { workspace = true }
+

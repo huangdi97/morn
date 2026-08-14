@@ -143,6 +143,7 @@ id_types!(
     DomainPackTag,
     HubAssetTag,
     DatasetTag,
+    SessionIdTag,
     SampleTag,
     AnalysisRunTag,
     QCResultTag,
@@ -213,3 +214,4 @@ pub type SampleId = Id<SampleTag>;
 pub type AnalysisRunId = Id<AnalysisRunTag>;
 pub type QCResultId = Id<QCResultTag>;
 pub type ScientificClaimId = Id<ScientificClaimTag>;
+

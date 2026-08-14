@@ -484,6 +484,7 @@ version = "0.1.0"
 dependencies = [
  "morn-actor",
  "morn-artifact",
+ "morn-capability",
  "morn-harness",
  "morn-kernel",
  "morn-organization",
@@ -510,6 +511,7 @@ dependencies = [
  "morn-kernel",
  "morn-work",
  "serde",
+ "uuid",
 ]
 
 [[package]]
@@ -522,6 +524,7 @@ dependencies = [
  "morn-work",
  "serde",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -547,6 +550,7 @@ dependencies = [
 name = "morn-runtime"
 version = "0.1.0"
 dependencies = [
+ "morn-capability",
  "morn-harness",
  "morn-kernel",
  "morn-work",
