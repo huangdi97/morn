@@ -1,0 +1,23 @@
+﻿# Rust
+/target
+Cargo.lock.bak
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local data / secrets
+*.db
+*.db-journal
+*.sqlite
+.secrets/
+.env
+.env.local
+
+# Logs
+*.log

@@ -1,0 +1,11 @@
+﻿[package]
+name = "morn-evolution"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+morn-kernel = { workspace = true }
+morn-work = { workspace = true }
+serde = { workspace = true }

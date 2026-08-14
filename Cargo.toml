@@ -1,0 +1,51 @@
+﻿[workspace]
+resolver = "2"
+members = [
+    "crates/morn-kernel",
+    "crates/morn-world",
+    "crates/morn-artifact",
+    "crates/morn-capability",
+    "crates/morn-harness",
+    "crates/morn-runtime",
+    "crates/morn-actor",
+    "crates/morn-organization",
+    "crates/morn-work",
+    "crates/morn-evolution",
+    "crates/morn-biolab",
+    "crates/morn-store",
+    "crates/morn-app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Morn Project"]
+
+[workspace.dependencies]
+morn-kernel = { path = "crates/morn-kernel" }
+morn-world = { path = "crates/morn-world" }
+morn-artifact = { path = "crates/morn-artifact" }
+morn-capability = { path = "crates/morn-capability" }
+morn-harness = { path = "crates/morn-harness" }
+morn-runtime = { path = "crates/morn-runtime" }
+morn-actor = { path = "crates/morn-actor" }
+morn-organization = { path = "crates/morn-organization" }
+morn-work = { path = "crates/morn-work" }
+morn-evolution = { path = "crates/morn-evolution" }
+morn-biolab = { path = "crates/morn-biolab" }
+morn-store = { path = "crates/morn-store" }
+morn-app = { path = "crates/morn-app" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+[profile.release]
+lto = "thin"
