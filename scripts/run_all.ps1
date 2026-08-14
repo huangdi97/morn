@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Stop"
 $env:Path = "C:\Users\Kaiser\.cargo\bin;" + $env:Path
 
 function Run-Step {
@@ -36,6 +36,11 @@ if (Test-Path (Join-Path $frontend "package.json")) {
     }
 }
 
+# ---- Tauri desktop shell ----
+if (Test-Path (Join-Path $root "src-tauri\Cargo.toml")) {
+    Run-Step "tauri desktop build" { cargo build -p morn-desktop }
+}
+
 # ---- Demo smoke: start API server, run BioLab E2E, stop ----
 Run-Step "build server binary" { cargo build -p morn-app --bin server }
 Run-Step "demo smoke (server + BioLab E2E)" {
@@ -63,4 +68,5 @@ Run-Step "demo smoke (server + BioLab E2E)" {
 
 Write-Host ""
 Write-Host "=== Verification complete ==="
+
 

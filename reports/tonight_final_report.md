@@ -1,4 +1,4 @@
-﻿# Morn v10.2 Tonight Final Report
+# Morn v10.2 Tonight Final Report
 
 Date: 2026-08-15
 Goal: `MORN-V10.2-TONIGHT-BASELINE`
@@ -12,8 +12,9 @@ React/Vite 前端，受治理 Evolution Engine v0.1，DeepSeek Harness Provider 
 `scripts/run_all.ps1` 全绿（exit 0）。
 
 真实 DeepSeek Harness smoke 为**外部/凭据 blocker**（B-001）：当前环境没有官方 DSH 安装物，唯一同名 PyPI 包是
-第三方 OpenAI 兼容客户端且需要真实 DeepSeek API key；Morn 侧 provider contract 已完整通过。Tauri 桌面壳与
-浏览器级 UI runtime QA 为明确 deferred（KF-002/KF-003），未伪造为完成。
+第三方 OpenAI 兼容客户端且需要真实 DeepSeek API key；Morn 侧 provider contract 已完整通过。
+Tauri v2 桌面壳已构建并通过（`cargo build -p morn-desktop`，沙箱外可启动）；浏览器级 UI runtime QA 仍为
+deferred（KF-003），均未伪造为完成。
 
 ## 2. Git / Environment
 - branch: `master`（本次初始化仓库，4 个独立 commit）
@@ -21,6 +22,7 @@ React/Vite 前端，受治理 Evolution Engine v0.1，DeepSeek Harness Provider 
 - OS: Windows (x86_64-pc-windows-msvc)
 - Rust: 1.97.1 (rustup stable, MSVC)   Node: 22.15.0   npm: 11.3.0   Python: 3.12.7
 - package manager: npm (frontend, package-lock.json committed)
+- Tauri: v2 (crate `morn-desktop` at `src-tauri/`), WebView2 runtime 151.0.4129.78
 
 ## 3. Completed
 | Capability | Code | Tests | Status |
@@ -98,6 +100,7 @@ cargo clippy -D warnings      -> pass
 cargo test                    -> 41 tests, 0 failed, 0 ignored
 frontend typecheck/lint/test  -> pass (2 tests)
 frontend build                -> pass (dist/)
+tauri desktop build           -> pass (cargo build -p morn-desktop; binary launches outside sandbox)
 demo smoke                    -> health=ok, BioLab E2E 7 steps, workbench objects=3
 ```
 
@@ -117,7 +120,7 @@ demo smoke                    -> health=ok, BioLab E2E 7 steps, workbench object
   自动 Role/Software/Org evolution（suggestion schema only）。
 
 ## 13. Next Shortest Path
-1. Tauri v2 desktop shell（复用 `morn-app` HTTP/domain API）+ 浏览器级 UI smoke（Playwright）。
+1. 浏览器级 UI smoke（Playwright，复用已构建的 `morn-app` HTTP/domain API 与 Tauri 壳）。
 2. 真实 DeepSeek Harness 集成（获得官方安装物或 API 凭据后跑真实 smoke，Morn contract tests 已就绪）。
 3. Workcell Live View + Attention Queue 全 UI 接线（workcell/member/harness 实时状态）。
 4. Organization Compiler v0.2 可解释输出 + Solution Manifest 完整序列化。

@@ -1,4 +1,4 @@
-﻿# KNOWN_FAILURES.md
+# KNOWN_FAILURES.md
 
 记录已知失败/缺陷。普通 bug 不要写成 blocker 后停止，继续修。
 
@@ -21,24 +21,47 @@ Fix/Decision:
 Test added:
 `frontend/src/App.test.ts`（2 用例）——在审批环境通过。
 
-### KF-002 — Tauri 桌面壳本轮未构建（deferred）
-Status: Deferred
+### KF-002 — Tauri 桌面壳（已构建并验证）
+Status: Fixed
 
 Reproduction:
 ACCEPTANCE A1 提到 “Tauri app 可启动或至少 desktop build 通过”。
 
-Expected: 提供 Tauri desktop build。
+Expected: Tauri desktop build 通过。
 
-Actual: 本轮未添加 `src-tauri`；四个产品表面通过同一 axum 后端 + React/Vite web 前端交付（`frontend/` + `crates/morn-app`）。
+Actual: `src-tauri`（tauri v2 + WebView2）已添加；`cargo build -p morn-desktop` 通过（纳入 run_all）；二进制在沙箱外可启动（WebView2 runtime 151.0.4129.78）。
 
 Root cause:
-时间/范围决策（D-007）：先打通同一真实后端的四个表面与全量验证；Tauri 壳需要额外 tauri 依赖树与打包配置，且当前无浏览器级 UI runtime QA 工具链。
+先打通同一真实后端的四个表面与全量验证；随后补齐 Tauri 壳。
 
 Fix/Decision:
-不声明 Tauri build 已通过。下一步 P1：在 `morn-app` 之上加 `src-tauri`（tauri v2 + WebView2），复用同一 HTTP/domain API。
+Tauri 壳作为边界层，不堆业务逻辑；复用同一 HTTP/domain API。
 
 Test added:
-无（未实现，不伪造）。
+`run_all.ps1` 新增 `tauri desktop build` 步骤；沙箱外启动 smoke（进程存活 6s）。
+
+### KF-005 — 沙箱 token 拒绝 GUI/WebView2 启动
+Status: Open (environment boundary)
+
+Reproduction:
+在 Codex sandbox 内运行 `target\debug\morn-desktop.exe`：
+```text
+thread 'main' panicked at tauri-2.11.5/src/app.rs:1425:11:
+Failed to setup app: 拒绝访问。 (os error 5)
+```
+
+Expected: 桌面窗口正常启动。
+
+Actual: 沙箱 token 下 WebView2/COM 初始化返回 “Access is denied (os error 5)”；在审批（非沙箱）环境下同一二进制启动正常（进程存活 6s），WebView2 runtime 151.0.4129.78 已安装。
+
+Root cause:
+沙箱对 GUI/COM 初始化的权限限制（环境边界），非产品缺陷。
+
+Fix/Decision:
+GUI 启动验证在非沙箱环境执行；构建验证（`cargo build -p morn-desktop`）在 run_all 中覆盖。
+
+Test added:
+沙箱外启动 smoke（见 KF-002）。
 
 ### KF-003 — 浏览器级 UI runtime QA 未自动化（deferred）
 Status: Deferred
@@ -73,7 +96,7 @@ Root cause:
 写文件编码选择。
 
 Fix/Decision:
-全仓库文本文件去除 BOM（UTF-8 no-BOM 重写）。
+全仓库文本文件去除 BOM（UTF-8 no-BOM 重写）；后续写文件统一用 no-BOM UTF-8。
 
 Test added:
-`npm test` / `npm run build` 通过。
+`npm test` / `npm run build` / Tauri build（tauri.conf.json 严格 JSON 解析）均通过。

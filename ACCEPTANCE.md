@@ -1,4 +1,4 @@
-﻿# ACCEPTANCE.md — 今晚验收门
+# ACCEPTANCE.md — 今晚验收门
 
 > 状态：2026-08-15 逐条核对。`[x]` = 通过（代码+测试）；`[~]` = 部分/有说明；`[ ]` = 未通过。
 > 全量验证：`scripts/run_all.ps1` exit 0；41 Rust 测试 + 2 前端测试全绿。
@@ -8,7 +8,7 @@
 ### A1 Build
 - [x] Rust workspace build 通过（`cargo build --workspace`）
 - [x] 前端 build/typecheck 通过（`npm run build` = tsc + vite build）
-- [~] Tauri app：未构建（deferred，KF-002；环境具备 MSVC，属于范围决策，不伪造“已构建”）
+- [x] Tauri app：desktop build 通过（`cargo build -p morn-desktop`，纳入 run_all）；二进制在沙箱外可启动（WebView2 151.0.4129.78）；沙箱内 GUI 启动被沙箱 token 拒绝（os error 5，KF-005，环境边界）
 - [x] 锁文件存在且一致（Cargo.lock、package-lock.json）
 
 ### A2 Kernel / World

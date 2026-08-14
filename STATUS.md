@@ -1,4 +1,4 @@
-﻿# STATUS.md — Morn v10.2 Tonight
+# STATUS.md — Morn v10.2 Tonight
 
 Last updated: 2026-08-15
 
@@ -31,11 +31,13 @@ backend build:  cargo build --workspace
 backend test:   cargo test --workspace --all-features
 backend lint:   cargo clippy --workspace --all-targets --all-features -- -D warnings
 backend fmt:    cargo fmt --all -- --check
+desktop build:  cargo build -p morn-desktop   (Tauri v2 shell, loads frontend/dist)
 frontend install: npm install (in frontend/)
 frontend test:  npm test
 frontend lint:  npm run lint
 frontend build: npm run build
 server:         cargo run -p morn-app --bin server   (default http://127.0.0.1:8090, db morn.db)
+desktop run:    target\debug\morn-desktop.exe   (WebView2; GUI launch denied inside sandbox token)
 full verify:    powershell -ExecutionPolicy Bypass -File scripts/run_all.ps1
 ```
 
@@ -54,6 +56,7 @@ frontend lint                -> pass
 frontend test                -> 2 passed
 frontend build               -> pass (dist/ built)
 build server binary          -> pass
+tauri desktop build          -> pass (cargo build -p morn-desktop; binary launches outside sandbox)
 demo smoke                   -> health=ok, BioLab E2E 7/7 steps, workbench objects=3
 ```
 

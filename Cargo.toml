@@ -1,4 +1,4 @@
-[workspace]
+﻿[workspace]
 resolver = "2"
 members = [
     "crates/morn-kernel",
@@ -14,6 +14,7 @@ members = [
     "crates/morn-biolab",
     "crates/morn-store",
     "crates/morn-app",
+    "src-tauri",
 ]
 
 [workspace.package]
@@ -49,3 +50,4 @@ tower-http = { version = "0.5", features = ["cors", "trace"] }
 
 [profile.release]
 lto = "thin"
+

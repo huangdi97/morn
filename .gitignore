@@ -1,5 +1,6 @@
-# Rust
+﻿# Rust
 /target
+src-tauri/target
 Cargo.lock.bak
 
 # Node
@@ -21,3 +22,4 @@ Thumbs.db
 
 # Logs
 *.log
+

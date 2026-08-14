@@ -1,4 +1,4 @@
-﻿# DECISIONS.md
+# DECISIONS.md
 
 > Codex 只能追加/修订有明确依据的 Decision。不要把猜测写成既定事实。
 
@@ -56,7 +56,7 @@ Python/FastAPI 后端（可用但偏离母版 Rust/Tauri 主线）；纯内存�
 
 Consequences:
 - 未来接 PostgreSQL 只需新增 store adapter。
-- Tauri 壳可在同一 `morn-app` 后端之上加 `src-tauri`。
+- Tauri 壳已实现为边界层（无业务逻辑），复用同一 `morn-app` 后端。
 
 Tests/Proof:
 `scripts/run_all.ps1` exit 0；BioLab E2E smoke 通过。
