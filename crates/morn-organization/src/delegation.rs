@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{CommitmentId, DelegationId, WorkPackageId, WorkspaceId};
 use morn_kernel::time::Timestamp;
 
@@ -48,6 +49,51 @@ impl Delegation {
             retained_accountability: "delegator retains final accountability".to_string(),
         }
     }
+
+    pub fn with_authority_scope(mut self, scope: Vec<String>) -> Self {
+        self.authority_scope = scope;
+        self
+    }
+
+    pub fn with_task_scope(mut self, scope: Vec<String>) -> Self {
+        self.task_scope = scope;
+        self
+    }
+
+    pub fn with_expiry(mut self, expires_at: Timestamp) -> Self {
+        self.expires_at = Some(expires_at);
+        self
+    }
+
+    pub fn with_redelegation(mut self, allowed: bool) -> Self {
+        self.can_redelegate = allowed;
+        self
+    }
+
+    /// Whether the delegation is currently valid (not expired).
+    pub fn is_active(&self, now: Timestamp) -> bool {
+        self.valid_from <= now && self.expires_at.map(|exp| now < exp).unwrap_or(true)
+    }
+
+    pub fn is_expired(&self, now: Timestamp) -> bool {
+        !self.is_active(now)
+    }
+
+    /// Whether `action` is inside the delegated authority scope.
+    pub fn authority_allows(&self, action: &str) -> bool {
+        self.authority_scope.iter().any(|a| a == action)
+    }
+
+    /// Delegatee may only redelegate when explicitly allowed.
+    pub fn may_redelegate(&self) -> Result<()> {
+        if !self.can_redelegate {
+            return Err(Error::not_authorized(format!(
+                "delegation {} does not permit redelegation",
+                self.id
+            )));
+        }
+        Ok(())
+    }
 }
 
 /// A commitment by a member to deliver an outcome for a work package.
@@ -79,5 +125,51 @@ impl Commitment {
             status: "open".to_string(),
             blocked_reason: None,
         }
+    }
+
+    pub fn mark_blocked(&mut self, reason: impl Into<String>) {
+        self.status = "blocked".to_string();
+        self.blocked_reason = Some(reason.into());
+    }
+
+    pub fn complete(&mut self) {
+        self.status = "complete".to_string();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn delegation_scope_and_expiry() {
+        let ws = WorkspaceId::generate();
+        let delegation = Delegation::new(ws, "pi", "analyst", "analysis")
+            .with_authority_scope(vec![
+                "start_analysis".to_string(),
+                "submit_artifact".to_string(),
+            ])
+            .with_expiry(Timestamp::from_millis(Timestamp::now().millis() + 60_000));
+        let now = Timestamp::now();
+        let past = Timestamp::from_millis(now.millis() - 120_000);
+
+        assert!(delegation.is_active(now));
+        assert!(delegation.authority_allows("start_analysis"));
+        assert!(!delegation.authority_allows("release_claim"));
+        assert!(delegation.is_expired(past), "expired after expires_at");
+        assert!(
+            delegation.may_redelegate().is_err(),
+            "redelegation not allowed by default"
+        );
+    }
+
+    #[test]
+    fn retained_accountability_is_not_transferred() {
+        let ws = WorkspaceId::generate();
+        let delegation = Delegation::new(ws, "pi", "analyst", "analysis");
+        // Delegation != accountability transfer.
+        assert!(delegation
+            .retained_accountability
+            .contains("delegator retains final accountability"));
     }
 }

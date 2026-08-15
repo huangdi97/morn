@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{
     MemberBindingId, PrincipalId, ResponsibilityBindingId, RoleSlotId, WorkPackageId, WorkspaceId,
 };
@@ -98,9 +99,36 @@ impl ResponsibilityBinding {
     }
 }
 
+/// Validate that a member binding's type is accepted by the role slot.
+pub fn validate_member_binding(slot: &RoleSlot, binding: &MemberBinding) -> Result<()> {
+    if !slot.accepted_member_types.contains(&binding.member_type) {
+        return Err(Error::validation(format!(
+            "member type {:?} is not accepted by role slot {}",
+            binding.member_type, slot.id
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wrong_member_type_is_rejected() {
+        let ws = WorkspaceId::generate();
+        let slot = RoleSlot::new(
+            ws,
+            "statistical-reviewer",
+            vec!["independent review".to_string()],
+            vec![MemberType::Actor, MemberType::Human],
+        );
+        let ok = MemberBinding::new(slot.id.clone(), MemberType::Human, "pi-1");
+        assert!(validate_member_binding(&slot, &ok).is_ok());
+        // A device cannot fill a statistical-reviewer slot.
+        let wrong = MemberBinding::new(slot.id.clone(), MemberType::Device, "robot-1");
+        assert!(validate_member_binding(&slot, &wrong).is_err());
+    }
 
     #[test]
     fn role_slot_and_member_binding_are_separate() {

@@ -27,6 +27,8 @@ pub struct RepresentationContract {
     pub valid_until: Option<Timestamp>,
     pub revoke_anytime: bool,
     pub accountable_principal: PrincipalId,
+    pub status: String,
+    pub revoked_at: Option<Timestamp>,
 }
 
 /// A scoped, validated subset of a representation contract for a given request.
@@ -58,11 +60,37 @@ impl RepresentationContract {
             valid_until: None,
             revoke_anytime: true,
             accountable_principal,
+            status: "active".to_string(),
+            revoked_at: None,
         }
+    }
+
+    /// Revoke the contract (when revoke_anytime or after expiry).
+    pub fn revoke(&mut self) -> morn_kernel::error::Result<()> {
+        use morn_kernel::error::Error;
+        if self.status == "revoked" {
+            return Err(Error::invalid_state("contract already revoked"));
+        }
+        if !self.revoke_anytime {
+            return Err(Error::not_authorized(
+                "contract does not permit revocation at any time",
+            ));
+        }
+        self.status = "revoked".to_string();
+        self.revoked_at = Some(Timestamp::now());
+        Ok(())
     }
 
     /// Check whether `action` falls inside the representation scope.
     pub fn check(&self, action: &str) -> RepresentationScope {
+        if self.status == "revoked" {
+            return RepresentationScope {
+                contract_id: self.id.clone(),
+                action: action.to_string(),
+                allowed: false,
+                reason: "representation contract is revoked".to_string(),
+            };
+        }
         if self.cannot_represent.iter().any(|a| a == action) {
             return RepresentationScope {
                 contract_id: self.id.clone(),
@@ -91,6 +119,28 @@ impl RepresentationContract {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn representation_allow_deny_revoke() {
+        let principal = PrincipalId::generate();
+        let actor = ActorInstanceId::generate();
+        let mut contract = RepresentationContract::new(
+            principal.clone(),
+            actor,
+            vec!["proposal_feedback".to_string()],
+            vec!["board_vote".to_string(), "legal_signature".to_string()],
+            RepresentationAuthority::Advisory,
+            principal,
+        );
+        assert!(contract.check("proposal_feedback").allowed);
+        assert!(!contract.check("board_vote").allowed);
+        contract.revoke().unwrap();
+        assert_eq!(contract.status, "revoked");
+        assert!(contract.revoked_at.is_some());
+        // After revoke nothing is allowed.
+        assert!(!contract.check("proposal_feedback").allowed);
+        assert!(contract.revoke().is_err(), "double revoke must fail");
+    }
 
     #[test]
     fn representation_boundary_enforced() {

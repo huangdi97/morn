@@ -125,6 +125,8 @@ id_types!(
     MemberBindingTag,
     ResponsibilityBindingTag,
     DelegationTag,
+    AccountabilityTag,
+    DecisionPolicyAssetTag,
     CommitmentTag,
     WorkcellTag,
     WorkPackageTag,
@@ -192,6 +194,8 @@ pub type RoleSlotId = Id<RoleSlotTag>;
 pub type MemberBindingId = Id<MemberBindingTag>;
 pub type ResponsibilityBindingId = Id<ResponsibilityBindingTag>;
 pub type DelegationId = Id<DelegationTag>;
+pub type AccountabilityId = Id<AccountabilityTag>;
+pub type DecisionPolicyAssetId = Id<DecisionPolicyAssetTag>;
 pub type CommitmentId = Id<CommitmentTag>;
 pub type WorkcellId = Id<WorkcellTag>;
 pub type WorkPackageId = Id<WorkPackageTag>;
