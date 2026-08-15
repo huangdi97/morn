@@ -834,6 +834,7 @@ async fn managed_start(State(state): State<AppState>) -> ApiResult {
         SloConfig::new("reproducibility", "1.0", "independent review"),
     );
     let started = guard.managed.start(&cap, run)?;
+    guard.persist_all()?;
     Ok(Json(json!({ "run": started })))
 }
 
@@ -892,6 +893,7 @@ async fn managed_accept(State(state): State<AppState>, Json(body): Json<Value>) 
         decided_by,
         "independent acceptance",
     )?;
+    guard.persist_all()?;
     Ok(Json(json!({ "acceptance": acc })))
 }
 
@@ -922,6 +924,7 @@ async fn replacement_shadow(State(state): State<AppState>) -> ApiResult {
     let comparison = guard
         .replacement
         .shadow_compare("biolab-input-set-1", baseline, candidate);
+    guard.persist_all()?;
     Ok(Json(json!({ "comparison": comparison })))
 }
 
