@@ -13,7 +13,7 @@ pub struct MornStore {
     conn: Connection,
 }
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 impl MornStore {
     /// Open (creating if needed) a store at `path` and run migrations.
@@ -46,6 +46,7 @@ impl MornStore {
                 workspace_id TEXT NOT NULL DEFAULT '',
                 payload TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
+                immutable INTEGER NOT NULL DEFAULT 0,
                 seq INTEGER PRIMARY KEY AUTOINCREMENT,
                 UNIQUE(kind, id)
             );
@@ -82,7 +83,16 @@ impl MornStore {
                 .map_err(|e| Error::internal(e.to_string()))?;
             }
             Some(v) if v < SCHEMA_VERSION => {
-                // Forward migrations would live here; v1 is the first schema.
+                // v1 -> v2: add the immutable-history column (idempotent).
+                let _ = conn.execute(
+                    "ALTER TABLE morn_records ADD COLUMN immutable INTEGER NOT NULL DEFAULT 0",
+                    [],
+                );
+                conn.execute(
+                    "UPDATE schema_version SET version = ?1 WHERE version = ?2",
+                    params![SCHEMA_VERSION, v],
+                )
+                .map_err(|e| Error::internal(e.to_string()))?;
             }
             _ => {}
         }
@@ -118,6 +128,31 @@ impl MornStore {
         Ok(())
     }
 
+    /// Save an immutable record (receipts, release history, decisions).
+    /// Re-saving the same (kind, id) is rejected instead of silently overwritten.
+    pub fn save_record_immutable<T: serde::Serialize>(
+        &self,
+        kind: &str,
+        id: &str,
+        workspace_id: &str,
+        created_at: i64,
+        record: &T,
+    ) -> Result<()> {
+        let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
+        self.conn
+            .execute(
+                "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at, immutable) VALUES (?1, ?2, ?3, ?4, ?5, 1)",
+                params![kind, id, workspace_id, payload, created_at],
+            )
+            .map_err(|e| {
+                if e.to_string().contains("UNIQUE") {
+                    Error::conflict(format!("immutable record {kind}/{id} already exists"))
+                } else {
+                    Error::internal(e.to_string())
+                }
+            })?;
+        Ok(())
+    }
     pub fn load_record<T: serde::de::DeserializeOwned>(
         &self,
         kind: &str,
@@ -400,6 +435,261 @@ impl MornStore {
             .collect())
     }
 
+    // ---- Goal 4: Goal 3 production persistence repositories ----
+
+    pub fn save_certification_spec(
+        &self,
+        s: &morn_assurance::certification::CertificationSpec,
+    ) -> Result<()> {
+        self.save_record(
+            "certification_spec",
+            s.id.as_str(),
+            "",
+            s.created_at.millis(),
+            s,
+        )
+    }
+
+    pub fn load_certification_specs(
+        &self,
+    ) -> Result<Vec<morn_assurance::certification::CertificationSpec>> {
+        self.load_records("certification_spec")
+    }
+
+    pub fn save_certification_run(
+        &self,
+        r: &morn_assurance::certification::CertificationRun,
+    ) -> Result<()> {
+        self.save_record(
+            "certification_run",
+            r.id.as_str(),
+            "",
+            r.created_at.millis(),
+            r,
+        )
+    }
+
+    pub fn load_certification_runs(
+        &self,
+    ) -> Result<Vec<morn_assurance::certification::CertificationRun>> {
+        self.load_records("certification_run")
+    }
+
+    pub fn save_certification_decision(
+        &self,
+        d: &morn_assurance::certification::CertificationDecision,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "certification_decision",
+            d.id.as_str(),
+            "",
+            d.created_at.millis(),
+            d,
+        )
+    }
+
+    pub fn load_certification_decisions(
+        &self,
+    ) -> Result<Vec<morn_assurance::certification::CertificationDecision>> {
+        self.load_records("certification_decision")
+    }
+
+    pub fn save_certified_capability(
+        &self,
+        c: &morn_assurance::certification::CertifiedWorkCapability,
+    ) -> Result<()> {
+        self.save_record(
+            "certified_capability",
+            c.id.as_str(),
+            "",
+            c.created_at.millis(),
+            c,
+        )
+    }
+
+    pub fn load_certified_capabilities(
+        &self,
+    ) -> Result<Vec<morn_assurance::certification::CertifiedWorkCapability>> {
+        self.load_records("certified_capability")
+    }
+
+    pub fn save_capability_release(
+        &self,
+        r: &morn_assurance::certification::CapabilityRelease,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "capability_release",
+            r.id.as_str(),
+            "",
+            r.released_at.millis(),
+            r,
+        )
+    }
+
+    pub fn load_capability_releases(
+        &self,
+    ) -> Result<Vec<morn_assurance::certification::CapabilityRelease>> {
+        self.load_records("capability_release")
+    }
+
+    pub fn save_managed_run(&self, r: &morn_assurance::managed_work::ManagedWorkRun) -> Result<()> {
+        self.save_record(
+            "managed_run",
+            r.id.as_str(),
+            r.workspace_id.as_str(),
+            r.created_at.millis(),
+            r,
+        )
+    }
+
+    pub fn load_managed_runs(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Vec<morn_assurance::managed_work::ManagedWorkRun>> {
+        self.load_records_in_workspace("managed_run", workspace_id.as_str())
+    }
+
+    pub fn save_delivery_receipt(
+        &self,
+        r: &morn_assurance::managed_work::DeliveryReceipt,
+    ) -> Result<()> {
+        self.save_record_immutable("delivery_receipt", r.id.as_str(), "", 0, r)
+    }
+
+    pub fn load_delivery_receipts(
+        &self,
+    ) -> Result<Vec<morn_assurance::managed_work::DeliveryReceipt>> {
+        self.load_records("delivery_receipt")
+    }
+
+    pub fn save_acceptance_decision(
+        &self,
+        a: &morn_assurance::managed_work::AcceptanceDecision,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "acceptance_decision",
+            a.id.as_str(),
+            "",
+            a.created_at.millis(),
+            a,
+        )
+    }
+
+    pub fn load_acceptance_decisions(
+        &self,
+    ) -> Result<Vec<morn_assurance::managed_work::AcceptanceDecision>> {
+        self.load_records("acceptance_decision")
+    }
+
+    pub fn save_replacement_comparison(
+        &self,
+        c: &morn_assurance::replacement::ReplacementComparison,
+    ) -> Result<()> {
+        self.save_record("replacement_comparison", c.id.as_str(), "", 0, c)
+    }
+
+    pub fn load_replacement_comparisons(
+        &self,
+    ) -> Result<Vec<morn_assurance::replacement::ReplacementComparison>> {
+        self.load_records("replacement_comparison")
+    }
+
+    pub fn save_replacement_record(
+        &self,
+        r: &morn_assurance::replacement::ReplacementRecord,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "replacement_record",
+            r.id.as_str(),
+            "",
+            r.created_at.millis(),
+            r,
+        )
+    }
+
+    pub fn load_replacement_records(
+        &self,
+    ) -> Result<Vec<morn_assurance::replacement::ReplacementRecord>> {
+        self.load_records("replacement_record")
+    }
+
+    pub fn save_r4_candidate(
+        &self,
+        c: &morn_assurance::replacement::PartialReplaceCandidate,
+    ) -> Result<()> {
+        self.save_record("r4_candidate", c.id.as_str(), "", c.created_at.millis(), c)
+    }
+
+    pub fn load_r4_candidates(
+        &self,
+    ) -> Result<Vec<morn_assurance::replacement::PartialReplaceCandidate>> {
+        self.load_records("r4_candidate")
+    }
+
+    pub fn save_flywheel_pattern(&self, p: &morn_evolution::flywheel::Pattern) -> Result<()> {
+        self.save_record(
+            "flywheel_pattern",
+            p.id.as_str(),
+            "",
+            p.created_at.millis(),
+            p,
+        )
+    }
+
+    pub fn load_flywheel_patterns(&self) -> Result<Vec<morn_evolution::flywheel::Pattern>> {
+        self.load_records("flywheel_pattern")
+    }
+
+    pub fn save_flywheel_candidate(
+        &self,
+        c: &morn_evolution::flywheel::FlywheelCandidate,
+    ) -> Result<()> {
+        self.save_record(
+            "flywheel_candidate",
+            c.id.as_str(),
+            c.workspace_id.as_str(),
+            c.created_at.millis(),
+            c,
+        )
+    }
+
+    pub fn load_flywheel_candidates(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Vec<morn_evolution::flywheel::FlywheelCandidate>> {
+        self.load_records_in_workspace("flywheel_candidate", workspace_id.as_str())
+    }
+
+    pub fn save_distillation_candidate(
+        &self,
+        c: &morn_evolution::distillation::DistillationCandidate,
+    ) -> Result<()> {
+        self.save_record("distillation_candidate", c.id.as_str(), "", 0, c)
+    }
+
+    pub fn load_distillation_candidates(
+        &self,
+    ) -> Result<Vec<morn_evolution::distillation::DistillationCandidate>> {
+        self.load_records("distillation_candidate")
+    }
+
+    pub fn save_trace_record(&self, t: &morn_evolution::flywheel::TraceRecord) -> Result<()> {
+        self.save_record(
+            "trace_record",
+            t.id.as_str(),
+            t.workspace_id.as_str(),
+            t.created_at.millis(),
+            t,
+        )
+    }
+
+    pub fn load_trace_records(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Vec<morn_evolution::flywheel::TraceRecord>> {
+        self.load_records_in_workspace("trace_record", workspace_id.as_str())
+    }
+
     pub fn save_workflow_definition(
         &self,
         def: &morn_work::workflow::WorkflowDefinition,
@@ -576,6 +866,103 @@ mod tests {
     }
 
     #[test]
+    fn fresh_migration_is_v2() {
+        let store = MornStore::open_in_memory().unwrap();
+        assert_eq!(store.schema_version().unwrap(), 2);
+    }
+
+    #[test]
+    fn upgrade_from_v1_preserves_rows_and_immutable_column() {
+        let path = temp_db("upgrade");
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE schema_version (version INTEGER NOT NULL);
+                 INSERT INTO schema_version (version) VALUES (1);
+                 CREATE TABLE morn_records (
+                   kind TEXT NOT NULL, id TEXT NOT NULL, workspace_id TEXT NOT NULL DEFAULT '',
+                   payload TEXT NOT NULL, created_at INTEGER NOT NULL,
+                   seq INTEGER PRIMARY KEY AUTOINCREMENT, UNIQUE(kind, id));
+                 INSERT INTO morn_records (kind, id, workspace_id, payload, created_at)
+                   VALUES ('legacy', 'row-1', 'ws-1', '{}', 1);",
+            )
+            .unwrap();
+        }
+        let store = MornStore::open(&path).unwrap();
+        assert_eq!(store.schema_version().unwrap(), 2);
+        let legacy = store
+            .load_record::<serde_json::Value>("legacy", "row-1")
+            .unwrap();
+        assert!(legacy.is_some(), "v1 rows must survive the upgrade");
+        store
+            .save_record_immutable("test_imm", "i1", "ws-1", 1, &serde_json::json!({"x": 1}))
+            .unwrap();
+    }
+
+    #[test]
+    fn immutable_records_reject_overwrite() {
+        let store = MornStore::open_in_memory().unwrap();
+        store
+            .save_record_immutable(
+                "delivery_receipt",
+                "rcpt-1",
+                "ws-1",
+                1,
+                &serde_json::json!({"v": 1}),
+            )
+            .unwrap();
+        assert!(store
+            .save_record_immutable(
+                "delivery_receipt",
+                "rcpt-1",
+                "ws-1",
+                2,
+                &serde_json::json!({"v": 2})
+            )
+            .is_err());
+        store
+            .save_record("mutable", "m1", "ws-1", 1, &serde_json::json!({"v": 1}))
+            .unwrap();
+        store
+            .save_record("mutable", "m1", "ws-1", 2, &serde_json::json!({"v": 2}))
+            .unwrap();
+    }
+
+    #[test]
+    fn goal3_capability_restart_hydration() {
+        let path = temp_db("g3persist");
+        let cap = morn_assurance::certification::CertifiedWorkCapability {
+            id: morn_kernel::ids::CertifiedWorkCapabilityId::generate_with("cwc"),
+            name: "dataset-to-claim".to_string(),
+            version: morn_kernel::version::Version::v1(),
+            work_package_template: "wp".to_string(),
+            workcell_blueprint: "wc".to_string(),
+            role_harness_bindings: vec![],
+            workflow_ref: "wf".to_string(),
+            acceptance_spec_ref: "acc".to_string(),
+            outcome_contract_ref: "oc".to_string(),
+            evaluation_pack_ref: "ev".to_string(),
+            historical_case_refs: vec![],
+            deployment_profile: "local".to_string(),
+            context_of_use: vec!["biolab".to_string()],
+            status: morn_assurance::certification::CertificationStatus::Certified,
+            certification_decision_id: morn_kernel::ids::CertificationDecisionId::generate(),
+            created_at: morn_kernel::time::Timestamp::now(),
+        };
+        {
+            let store = MornStore::open(&path).unwrap();
+            store.save_certified_capability(&cap).unwrap();
+        }
+        let store = MornStore::open(&path).unwrap();
+        let loaded = store.load_certified_capabilities().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, cap.id);
+        assert_eq!(
+            loaded[0].status,
+            morn_assurance::certification::CertificationStatus::Certified
+        );
+    }
+    #[test]
     fn workspace_and_objects_persist_across_reopen() {
         let path = temp_db("ws");
         let ws = WorkspaceId::generate_with("ws-test");
@@ -583,7 +970,7 @@ mod tests {
         {
             let store = MornStore::open(&path).unwrap();
             store.save_workspace(&w).unwrap();
-            assert_eq!(store.schema_version().unwrap(), 1);
+            assert_eq!(store.schema_version().unwrap(), 2);
         }
         let store = MornStore::open(&path).unwrap();
         let loaded = store.load_workspace(&w.id).unwrap().expect("workspace");

@@ -1,23 +1,22 @@
 # 直接发给 Codex
 
 ```text
-Goal 1 和 Goal 2 已完成。
+Goal 1、Goal 2、Goal 3 已完成，我已经提供 reports/goal3_final_report.md。
 
-现在进入 Goal 3。
-请读取并严格执行根目录 GOAL3_CODEX_MASTER_PROMPT.md。
+现在开始 Goal 4。请读取并严格执行根目录 GOAL4_CODEX_MASTER_PROMPT.md。
 
-不要重做前两个 Goal。
-先跑 Goal1 + Goal2 regression，然后连续执行 GOAL3_PLAN.md 的 M1 → M9。
+不要重新造 Goal3 的 certification、managed work、replacement、flywheel。第一优先级是把 Goal3 新能力正式持久化、加 migration、restart/recovery 和 rollback execution。
 
-本阶段目标是：Certified Work Capability、Evolution Flywheel v0.2、Deterministic Distillation、Managed Work / Outcome Delivery、BioLab Replacement Pilot、Shadow Replace、Partial Replace Candidate、Evolution Center / Managed Work / Replacement UI。
+随后连续完成 OperationalEpisode、OutcomeDataset、State Representation、Predictor Registry、Duration/Failure/Cost/Human Intervention/Outcome/Transition Risk 六类预测器、Calibration/Uncertainty、Compiler Candidate Comparison、Evolution expected-vs-actual、Operational Intelligence UI，以及环境允许时的 BioLab 真实数据 pilot。
 
-普通编译错误、测试失败、依赖冲突不要停下来问我，直接修。
+不要直接训练一个没有数据支撑的大一统神经网络世界模型。先做可信 baseline，再按数据量升级。
 
-每完成一个 milestone 更新 STATUS_GOAL3.md，并同步 DECISIONS.md、BLOCKERS.md、KNOWN_FAILURES.md。
+真实 DeepSeek Harness 如果仍缺官方安装物/API 凭据：保留 blocker，不 fake smoke，不停止其他 Goal4。
+真实 BioLab 数据如果不可获得：禁止捏造；完成 adapter/manifest/provenance/validation；FULL COMPLETE 标 blocked；继续做到 CORE COMPLETE。
 
-最后逐条通过 GOAL3_ACCEPTANCE.md，生成 reports/goal3_final_report.md。
+普通编译错误、测试失败、依赖冲突直接修。每个 milestone 更新 STATUS_GOAL4.md、DECISIONS.md、BLOCKERS.md、KNOWN_FAILURES.md。
 
-禁止 fake certification、fake acceptance、fake replacement。Shadow 不得写 production。未认证 capability 不得进入 Managed Work。
+最后逐条通过 GOAL4_ACCEPTANCE.md，运行 Goal1-3 全量 regression，生成 reports/goal4_final_report.md，并明确 CORE COMPLETE / FULL COMPLETE / EXTERNAL BLOCKED。
 
 现在直接开始。
 ```
