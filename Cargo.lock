@@ -2039,6 +2039,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "morn-foundry"
+version = "0.1.0"
+dependencies = [
+ "morn-actor",
+ "morn-artifact",
+ "morn-capability",
+ "morn-harness",
+ "morn-kernel",
+ "morn-organization",
+ "morn-work",
+ "morn-world",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "morn-harness"
 version = "0.1.0"
 dependencies = [

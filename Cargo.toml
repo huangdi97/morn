@@ -1,4 +1,4 @@
-﻿[workspace]
+[workspace]
 resolver = "2"
 members = [
     "crates/morn-kernel",
@@ -11,6 +11,7 @@ members = [
     "crates/morn-organization",
     "crates/morn-work",
     "crates/morn-evolution",
+    "crates/morn-foundry",
     "crates/morn-biolab",
     "crates/morn-store",
     "crates/morn-app",
@@ -34,6 +35,7 @@ morn-actor = { path = "crates/morn-actor" }
 morn-organization = { path = "crates/morn-organization" }
 morn-work = { path = "crates/morn-work" }
 morn-evolution = { path = "crates/morn-evolution" }
+morn-foundry = { path = "crates/morn-foundry" }
 morn-biolab = { path = "crates/morn-biolab" }
 morn-store = { path = "crates/morn-store" }
 morn-app = { path = "crates/morn-app" }
