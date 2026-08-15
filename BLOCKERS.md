@@ -68,3 +68,30 @@ replay/simulation/shadow/BioLab 全部使用 MornNative + fixture），Morn 侧 
 
 无新增 blocker。Goal 1 的 B-001（真实 DeepSeek Harness smoke）仍然 Active；Goal 3 的 certification/
 managed work/replacement 全部使用本地 deterministic/evaluation 证据，不依赖真实 DSH。
+### G4-B-002 — 真实 BioLab 数据 pilot FULL blocked（无合法真实 dataset）
+Status: Active
+Category: ExternalService / Data
+
+What is blocked:
+`Dataset → Reviewed Scientific Claim` 的真实数据 pilot（pre-run predictions → managed work → actual → error →
+calibration）无法在无合法真实 BioLab dataset 时执行。禁止捏造“真实数据”。
+
+Why Codex cannot resolve locally:
+仓库/环境没有用户提供的真实 dataset，也没有已核验许可证的公开 BioLab dataset 可直接使用；下载并核验大型公共
+数据集（如 GEO 单细胞数据）超出本地自动化边界且涉及许可核验。
+
+Reproduction:
+```text
+morn-opint::RealPilotService::run_pipeline(...)  -> Err("no lawful real BioLab dataset registered; FULL pilot is BLOCKED")
+```
+
+Safe workaround（已完成）:
+- `PilotManifest`（source/license/checksum 必填，synthetic 拒绝）+ pipeline contract + 校验测试。
+- OperationalEpisode / OutcomeDataset / Predictors / Calibration / Drift 全部以权威 Morn records（fixture 受控运行）
+  验证闭环，CORE COMPLETE。
+
+Impact on acceptance:
+GOAL4 Pilot FULL 项保持 blocked；CORE 项（adapter/manifest/provenance/validation）全部通过。
+
+Resolution:
+需要用户提供合法真实 BioLab dataset（或明确授权可下载的公开数据 + 许可证）。

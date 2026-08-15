@@ -252,3 +252,73 @@ Workbench/Console/Hub 全部调用真实端点。
 
 Tests/Proof:
 Playwright UI smoke 覆盖 G3 交互；`npm run typecheck/lint/test/build` 全过。
+
+## Goal 4 Decisions
+
+### D-021 — Goal3 正式对象全部进入 canonical SQLite SoR（schema v2）
+Status: Accepted
+
+Context:
+GOAL4_PERSISTENCE_SPEC：禁止 DB 影子副本 + in-memory 真相并存；one canonical persistence path。
+
+Decision:
+`morn_records` 增加 immutable 列（v1→v2 migration）；certification/managed/replacement/flywheel/distillation/
+rollback/episode/prediction 全部经 MornStore 持久化；app 层 write-through persist_all + restart hydrate（稳定 workspace）。
+
+Tests/Proof:
+`morn-store` 10 tests（fresh v2、v1→v2 upgrade、immutable reject overwrite、capability restart hydration）；
+`morn-app::persistence_goal4` 2 tests（restart hydration、receipt immutable）。
+
+### D-022 — Rollback 只回滚 Morn 受控版本/绑定，E3 外部效果不宣称已回滚
+Status: Accepted
+
+Context:
+GOAL4：Rollback Request→Approval→Compatibility→Activate→Verify→Receipt；不删除历史。
+
+Decision:
+`morn-assurance::RollbackService`：requester != approver；previous version 必须在已知 release 内；receipt 标记
+e3_external_effects_preserved=true；request/receipt 永不删除。
+
+Tests/Proof:
+`morn-assurance::rollback` 4 tests（valid、unauthorized、incompatible、history preserved）。
+
+### D-023 — Provider 提案只形成 candidate，必须过 schema/rule/policy/capability gate
+Status: Accepted
+
+Context:
+GOAL4_REAL_PROVIDER_SPEC：provider proposal 永远不能直接 mutate production。
+
+Decision:
+`morn-evolution::EvolutionPlannerProvider` 只输出结构化 proposal；`ProposalValidator` 依次做 parse/rule/policy/
+capability 校验后才生成 FlywheelCandidate。`morn-harness::run_harness_smoke` 作为 HarnessSmokeContract；
+DSH Real 模式返回 blocker 报告，不 fake success。
+
+Tests/Proof:
+`morn-evolution::planner` 4 tests + `morn-harness::smoke` 3 tests。
+
+### D-024 — 预测只做 evidence，不做 authority；prediction 先存、actual 后记、不可改写
+Status: Accepted
+
+Context:
+GOAL4：Prediction→Actual→PredictionError→Calibration；禁止事后改写原 prediction。
+
+Decision:
+`morn-opint::PredictorRegistry`：predict() 先存 prediction（actual=None）；record_actual() 独立记录 actual 并计算
+error（重复记录被拒）；calibrate() 用 (predicted, actual) 对计算 Brier；context mismatch → 低置信度不可自动决策；
+数据不足 → insufficient-data 拒绝预测。
+
+Tests/Proof:
+`morn-opint::predictor` 7 tests；E2E goal4 验证 prediction-before-actual。
+
+### D-025 — 真实 BioLab 数据 pilot：无合法真实数据则 FULL blocked，不捏造
+Status: Accepted
+
+Context:
+GOAL4_REAL_PILOT_SPEC：真实数据优先用户提供 > 仓库已有 > 公开可下载；禁止 Codex 捏造“真实数据”。
+
+Decision:
+`morn-opint::RealPilotService` 提供 PilotManifest（source/license/checksum 必填，synthetic 拒绝注册）与 pipeline
+contract；仓库无合法真实 dataset → run_pipeline 返回 External blocker（G4-B-002），CORE 继续完成。
+
+Tests/Proof:
+`morn-opint::pilot` 2 tests（synthetic 拒绝、无 manifest pipeline blocked）。

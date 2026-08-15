@@ -3,5 +3,6 @@
 
 pub mod dataset;
 pub mod episode;
+pub mod pilot;
 pub mod predictor;
 pub mod state;

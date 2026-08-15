@@ -135,3 +135,18 @@ Goal 2 按钮改为 exact:true；点击循环透传 exact。
 
 Test added:
 `frontend/scripts/ui_smoke.mjs`。
+### KF-008 — PowerShell 保留变量 `$pid` 干扰 API smoke（fixed）
+Status: Fixed-with-workaround
+
+Reproduction:
+API smoke 脚本用 `$pid` 保存 prediction id，触发 “Cannot overwrite variable PID” 错误。
+
+Expected: 脚本正常运行。
+
+Actual: PowerShell 将 `$pid` 视为只读自动变量。
+
+Fix/Decision:
+改用非保留变量名（`$predId`）。
+
+Test added:
+手工 smoke；产品代码无影响。

@@ -179,6 +179,8 @@ id_types!(
     ModelDriftReportTag,
     ContextOfUseTag,
     StateEncoderVersionTag,
+    PilotManifestTag,
+    MonitoringReportTag,
     RollbackRequestTag,
     RollbackReceiptTag,
     WorkflowDefinitionTag,
@@ -320,6 +322,8 @@ pub type CalibrationReportId = Id<CalibrationReportTag>;
 pub type ModelDriftReportId = Id<ModelDriftReportTag>;
 pub type ContextOfUseId = Id<ContextOfUseTag>;
 pub type StateEncoderVersionId = Id<StateEncoderVersionTag>;
+pub type PilotManifestId = Id<PilotManifestTag>;
+pub type MonitoringReportId = Id<MonitoringReportTag>;
 pub type RollbackRequestId = Id<RollbackRequestTag>;
 pub type RollbackReceiptId = Id<RollbackReceiptTag>;
 pub type WorkflowDefinitionId = Id<WorkflowDefinitionTag>;

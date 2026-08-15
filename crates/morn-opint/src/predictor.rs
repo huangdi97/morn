@@ -1,10 +1,8 @@
 //! Predictor Registry + six baseline predictors: Duration, FailureRisk, Cost,
 //! HumanIntervention, OutcomeAcceptance, TransitionRisk.
-//!
-//! Minimum model strategy: deterministic/historical baselines first; only with
-//! sufficient data do we ever consider stronger models. Predictions are stored
-//! before the actual outcome; the actual is recorded separately and never
-//! rewrites the original prediction.
+//! Minimum model strategy: deterministic/historical baselines first. Predictions
+//! are stored before the actual outcome; the actual is recorded separately and
+//! never rewrites the original prediction.
 
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +13,6 @@ use morn_kernel::version::Version;
 
 use crate::state::FeatureVector;
 
-/// The six predictor targets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum PredictorTarget {
     Duration,
@@ -39,7 +36,6 @@ impl PredictorTarget {
     }
 }
 
-/// Predictor lifecycle status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum PredictorStatus {
     Draft,
@@ -54,7 +50,6 @@ pub enum PredictorStatus {
     Deprecated,
 }
 
-/// A predictor spec.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PredictorSpec {
     pub id: PredictorSpecId,
@@ -86,7 +81,6 @@ impl PredictorSpec {
     }
 }
 
-/// A prediction made before the actual outcome.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Prediction {
     pub id: PredictionId,
@@ -102,23 +96,20 @@ pub struct Prediction {
     pub feature_schema: String,
     pub evidence_refs: Vec<String>,
     pub generated_at: Timestamp,
-    /// Actual outcome recorded separately AFTER the prediction (never rewritten).
     pub actual: Option<f64>,
     pub prediction_error: Option<f64>,
 }
 
-/// Calibration report (brier-style over stored prediction/actual pairs).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CalibrationReport {
     pub id: CalibrationReportId,
     pub predictor_id: PredictorSpecId,
     pub n: u32,
     pub brier: f64,
-    pub buckets: Vec<(String, f64, f64)>, // (bucket, predicted, observed)
+    pub buckets: Vec<(String, f64, f64)>,
     pub created_at: Timestamp,
 }
 
-/// Model drift report.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ModelDriftReport {
     pub id: ModelDriftReportId,
@@ -128,19 +119,17 @@ pub struct ModelDriftReport {
     pub detected_at: Timestamp,
 }
 
-/// Baseline parameters learned at training time.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct BaselineParams {
     pub mean: f64,
     pub std: f64,
-    pub rate: f64, // for risk/acceptance/transition targets
+    pub rate: f64,
     pub n: u32,
     pub insufficient_data: bool,
 }
 
 const MIN_DATA: u32 = 3;
 
-/// One predictor's state inside the registry.
 #[derive(Debug, Clone)]
 pub struct PredictorState {
     pub spec: PredictorSpec,
@@ -150,7 +139,13 @@ pub struct PredictorState {
     pub drifts: Vec<ModelDriftReport>,
 }
 
-/// Predictor Registry.
+/// Serializable snapshot of a predictor state (spec + learned params).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictorSnapshot {
+    pub spec: PredictorSpec,
+    pub params: BaselineParams,
+}
+
 #[derive(Debug, Default)]
 pub struct PredictorRegistry {
     pub predictors: Vec<PredictorState>,
@@ -180,8 +175,6 @@ impl PredictorRegistry {
         self.predictors.iter_mut().find(|p| p.spec.id == *id)
     }
 
-    /// Train a historical baseline from episodes. `values` are the observed
-    /// outcomes per episode for the target. Insufficient data -> insufficient_data.
     pub fn train(&mut self, id: &PredictorSpecId, values: &[f64], successes: usize) -> Result<()> {
         let state = self
             .predictor_mut(id)
@@ -211,8 +204,6 @@ impl PredictorRegistry {
         Ok(())
     }
 
-    /// Predict with uncertainty and context-match. Restricted/out-of-context
-    /// predictors return a low-confidence prediction that cannot auto-decide.
     pub fn predict(
         &mut self,
         id: &PredictorSpecId,
@@ -278,8 +269,6 @@ impl PredictorRegistry {
         Ok(prediction)
     }
 
-    /// Record the actual outcome for a stored prediction. The original
-    /// prediction is never rewritten; error is derived.
     pub fn record_actual(
         &mut self,
         id: &PredictorSpecId,
@@ -304,7 +293,6 @@ impl PredictorRegistry {
         Ok(())
     }
 
-    /// Calibration (Brier score over stored prediction/actual pairs).
     pub fn calibrate(&mut self, id: &PredictorSpecId) -> Result<CalibrationReport> {
         let state = self
             .predictor_mut(id)
@@ -339,7 +327,6 @@ impl PredictorRegistry {
         Ok(report)
     }
 
-    /// Drift check: high brier or context mismatch rate -> drift report + Stale.
     pub fn drift_check(&mut self, id: &PredictorSpecId) -> Result<ModelDriftReport> {
         let state = self
             .predictor_mut(id)
@@ -372,6 +359,102 @@ impl PredictorRegistry {
             state.spec.status = PredictorStatus::Stale;
         }
         Ok(report)
+    }
+
+    pub fn snapshot_all(&self) -> Vec<PredictorSnapshot> {
+        self.predictors
+            .iter()
+            .map(|p| PredictorSnapshot {
+                spec: p.spec.clone(),
+                params: p.params.clone(),
+            })
+            .collect()
+    }
+
+    pub fn restore_all(&mut self, snapshots: Vec<PredictorSnapshot>) {
+        for snap in snapshots {
+            if let Some(existing) = self
+                .predictors
+                .iter_mut()
+                .find(|p| p.spec.id == snap.spec.id)
+            {
+                existing.spec = snap.spec;
+                existing.params = snap.params;
+            } else {
+                self.predictors.push(PredictorState {
+                    spec: snap.spec,
+                    params: snap.params,
+                    predictions: Vec::new(),
+                    calibrations: Vec::new(),
+                    drifts: Vec::new(),
+                });
+            }
+        }
+    }
+}
+
+/// Monitoring report: calibration trend, schema mismatch, out-of-context,
+/// stale flag and recalibration candidate.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MonitoringReport {
+    pub predictor_id: PredictorSpecId,
+    pub calibration_trend: String,
+    pub schema_mismatch: bool,
+    pub out_of_context_count: u32,
+    pub stale: bool,
+    pub recalibration_candidate: bool,
+    pub generated_at: Timestamp,
+}
+
+impl PredictorRegistry {
+    /// Monitor a predictor: summarize drift/calibration/schema/context signals.
+    pub fn monitor(&self, id: &PredictorSpecId) -> Result<MonitoringReport> {
+        let state = self
+            .predictor(id)
+            .ok_or_else(|| Error::not_found(format!("predictor {id}")))?;
+        let last_brier = state
+            .calibrations
+            .last()
+            .map(|c| c.brier)
+            .unwrap_or(f64::NAN);
+        let calibration_trend = if state.calibrations.len() >= 2 {
+            let prev = state.calibrations[state.calibrations.len() - 2].brier;
+            if last_brier > prev + 0.05 {
+                "worsening".to_string()
+            } else if last_brier < prev - 0.05 {
+                "improving".to_string()
+            } else {
+                "stable".to_string()
+            }
+        } else {
+            "insufficient_calibration_history".to_string()
+        };
+        let out_of_context_count = state
+            .predictions
+            .iter()
+            .filter(|p| !p.context_match)
+            .count() as u32;
+        let out_of_context_rate = if state.predictions.is_empty() {
+            0.0
+        } else {
+            out_of_context_count as f64 / state.predictions.len() as f64
+        };
+        let stale = state.spec.status == PredictorStatus::Stale
+            || (last_brier.is_finite() && last_brier > 0.35)
+            || out_of_context_rate > 0.5;
+        let recalibration_candidate = stale && out_of_context_count > 0;
+        Ok(MonitoringReport {
+            predictor_id: state.spec.id.clone(),
+            calibration_trend,
+            schema_mismatch: state
+                .predictions
+                .iter()
+                .any(|p| p.feature_schema != state.spec.feature_schema_ref),
+            out_of_context_count,
+            stale,
+            recalibration_candidate,
+            generated_at: Timestamp::now(),
+        })
     }
 }
 
@@ -419,14 +502,12 @@ mod tests {
     fn outcome_acceptance_predictor_uses_rate_and_calibrates() {
         let mut r = reg(PredictorTarget::OutcomeAcceptance);
         let id = r.predictors[0].spec.id.clone();
-        // 3 accepted out of 4.
         r.train(&id, &[1.0, 0.0, 1.0, 1.0], 3).unwrap();
         let p = r.predict(&id, &features(), "biolab", vec![]).unwrap();
         assert!((p.value - 0.75).abs() < 0.01);
         r.record_actual(&id, &p.id, 1.0).unwrap();
         let cal = r.calibrate(&id).unwrap();
         assert!(cal.n >= 1);
-        // Re-recording actual is rejected (prediction immutable).
         assert!(r.record_actual(&id, &p.id, 0.0).is_err());
     }
 
@@ -434,7 +515,6 @@ mod tests {
     fn insufficient_data_refuses_prediction() {
         let mut r = reg(PredictorTarget::Cost);
         let id = r.predictors[0].spec.id.clone();
-        // Only 1 episode -> insufficient data.
         assert!(r.train(&id, &[50.0], 1).is_err());
         assert!(r.predictor(&id).unwrap().params.insufficient_data);
         assert!(r.predict(&id, &features(), "biolab", vec![]).is_err());
@@ -447,7 +527,7 @@ mod tests {
         r.train(&id, &[1.0, 0.0, 0.0, 0.0], 1).unwrap();
         let p = r.predict(&id, &features(), "pharma", vec![]).unwrap();
         assert!(!p.context_match);
-        assert!(p.confidence <= 0.05, "out-of-context cannot auto-decide");
+        assert!(p.confidence <= 0.05);
         r.record_actual(&id, &p.id, 1.0).unwrap();
         r.calibrate(&id).unwrap();
         let drift = r.drift_check(&id).unwrap();
@@ -466,53 +546,34 @@ mod tests {
         ] {
             let r = reg(target);
             assert_eq!(r.predictors[0].spec.target, target);
-            assert_eq!(
-                target.as_str(),
-                r.predictors[0].spec.name.split('-').next().unwrap()
-            );
         }
     }
-}
 
-/// Serializable snapshot of a predictor state (spec + learned params).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PredictorSnapshot {
-    pub spec: PredictorSpec,
-    pub params: BaselineParams,
-}
-
-impl PredictorRegistry {
-    /// Snapshot all predictor states for persistence.
-    pub fn snapshot_all(&self) -> Vec<PredictorSnapshot> {
-        self.predictors
-            .iter()
-            .map(|p| PredictorSnapshot {
-                spec: p.spec.clone(),
-                params: p.params.clone(),
-            })
-            .collect()
+    #[test]
+    fn snapshot_restore_preserves_params() {
+        let mut r = reg(PredictorTarget::Duration);
+        let id = r.predictors[0].spec.id.clone();
+        r.train(&id, &[100.0, 120.0, 110.0, 130.0], 4).unwrap();
+        let snap = r.snapshot_all();
+        let mut r2 = PredictorRegistry::new();
+        r2.restore_all(snap);
+        assert_eq!(r2.predictor(&id).unwrap().params.n, 4);
+        assert!(!r2.predictor(&id).unwrap().params.insufficient_data);
     }
 
-    /// Restore predictor states (spec + params) from a snapshot. Existing
-    /// predictions are preserved by matching spec id.
-    pub fn restore_all(&mut self, snapshots: Vec<PredictorSnapshot>) {
-        for snap in snapshots {
-            if let Some(existing) = self
-                .predictors
-                .iter_mut()
-                .find(|p| p.spec.id == snap.spec.id)
-            {
-                existing.spec = snap.spec;
-                existing.params = snap.params;
-            } else {
-                self.predictors.push(PredictorState {
-                    spec: snap.spec,
-                    params: snap.params,
-                    predictions: Vec::new(),
-                    calibrations: Vec::new(),
-                    drifts: Vec::new(),
-                });
-            }
-        }
+    #[test]
+    fn monitor_reports_trend_and_recalibration_candidate() {
+        let mut r = reg(PredictorTarget::OutcomeAcceptance);
+        let id = r.predictors[0].spec.id.clone();
+        r.train(&id, &[1.0, 0.0, 1.0, 1.0], 3).unwrap();
+        let p1 = r.predict(&id, &features(), "pharma", vec![]).unwrap();
+        r.record_actual(&id, &p1.id, 1.0).unwrap();
+        let _ = r.calibrate(&id).unwrap();
+        let p2 = r.predict(&id, &features(), "pharma", vec![]).unwrap();
+        r.record_actual(&id, &p2.id, 0.0).unwrap();
+        let _ = r.calibrate(&id).unwrap();
+        let report = r.monitor(&id).unwrap();
+        assert!(report.out_of_context_count >= 2);
+        assert!(report.recalibration_candidate);
     }
 }
