@@ -11,7 +11,7 @@ Morn Core v1.0 RC 完成：删除/不安装任何领域实例（BioLab、Factory
 
 ## 1 Starting / Final Commit
 - starting: `088cf91`（Goal 4 closeout；M0 reality audit）
-- final: `5f53ba2`（G5 M3-M15）+ working tree closeout commits（morn-core-tests、回归修复、M1/M14/M15/M17 补齐）
+- final: `07dde38`（G5 全量 closeout；含 93a7077 代码补齐 + 07dde38 文档/验收）
 
 ## 2 Architecture before/after
 - Before：morn-app → morn-biolab（Core 依赖领域）；kernel 含领域 ID；compiler 含 biolab 启发式；
