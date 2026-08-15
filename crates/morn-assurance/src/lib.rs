@@ -5,6 +5,7 @@ pub mod evaluation;
 pub mod managed_work;
 pub mod replacement;
 pub mod replay;
+pub mod rollback;
 pub mod shadow;
 pub mod simulation;
 

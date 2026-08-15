@@ -86,6 +86,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/replacement/r4", post(replacement_r4))
         .route("/api/replacement/records", get(replacement_records))
         .route("/api/hub3", get(hub_v3))
+        .route("/api/rollback/request", post(rollback_request))
+        .route("/api/rollback/approve", post(rollback_approve))
+        .route("/api/rollback/execute", post(rollback_execute))
+        .route("/api/rollback/records", get(rollback_records))
         .with_state(state)
         .layer(CorsLayer::permissive())
 }
@@ -966,4 +970,70 @@ async fn hub_v3(State(state): State<AppState>) -> ApiResult {
         "certification_evidence": guard.certification.decisions.len(),
         "replacement_records": guard.replacement.records,
     })))
+}
+
+async fn rollback_request(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    let target = body
+        .get("target")
+        .and_then(Value::as_str)
+        .unwrap_or("capability_release");
+    let current = body
+        .get("current")
+        .and_then(Value::as_str)
+        .unwrap_or("1.1.0");
+    let previous = body
+        .get("previous")
+        .and_then(Value::as_str)
+        .unwrap_or("1.0.0");
+    let mut guard = state.lock();
+    let ws = guard.workspace.id.clone();
+    let req = guard
+        .rollback
+        .request(morn_assurance::rollback::RollbackRequest::new(
+            ws,
+            target,
+            "dataset-to-claim",
+            current
+                .parse()
+                .unwrap_or(morn_kernel::version::Version::new(1, 1, 0)),
+            previous
+                .parse()
+                .unwrap_or(morn_kernel::version::Version::v1()),
+            "operator",
+            "rollback after regression",
+        ))?;
+    guard.persist_all()?;
+    Ok(Json(json!({ "request": req })))
+}
+
+async fn rollback_approve(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    let req_id = body.get("request_id").and_then(Value::as_str).unwrap_or("");
+    let approver = body.get("approver").and_then(Value::as_str).unwrap_or("pi");
+    let mut guard = state.lock();
+    guard
+        .rollback
+        .approve(&morn_kernel::ids::RollbackRequestId::new(req_id), approver)?;
+    guard.persist_all()?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn rollback_execute(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    let req_id = body.get("request_id").and_then(Value::as_str).unwrap_or("");
+    let mut guard = state.lock();
+    let releases = vec![
+        morn_kernel::version::Version::v1(),
+        morn_kernel::version::Version::new(1, 1, 0),
+    ];
+    let receipt = guard
+        .rollback
+        .execute(&morn_kernel::ids::RollbackRequestId::new(req_id), &releases)?;
+    guard.persist_all()?;
+    Ok(Json(json!({ "receipt": receipt })))
+}
+
+async fn rollback_records(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    Ok(Json(
+        json!({ "requests": guard.rollback.requests, "receipts": guard.rollback.receipts }),
+    ))
 }

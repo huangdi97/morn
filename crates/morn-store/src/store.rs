@@ -673,6 +673,43 @@ impl MornStore {
         self.load_records("distillation_candidate")
     }
 
+    pub fn save_rollback_request(
+        &self,
+        r: &morn_assurance::rollback::RollbackRequest,
+    ) -> Result<()> {
+        self.save_record(
+            "rollback_request",
+            r.id.as_str(),
+            r.workspace_id.as_str(),
+            r.created_at.millis(),
+            r,
+        )
+    }
+
+    pub fn load_rollback_requests(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Vec<morn_assurance::rollback::RollbackRequest>> {
+        self.load_records_in_workspace("rollback_request", workspace_id.as_str())
+    }
+
+    pub fn save_rollback_receipt(
+        &self,
+        r: &morn_assurance::rollback::RollbackReceipt,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "rollback_receipt",
+            r.id.as_str(),
+            "",
+            r.created_at.millis(),
+            r,
+        )
+    }
+
+    pub fn load_rollback_receipts(&self) -> Result<Vec<morn_assurance::rollback::RollbackReceipt>> {
+        self.load_records("rollback_receipt")
+    }
+
     pub fn save_trace_record(&self, t: &morn_evolution::flywheel::TraceRecord) -> Result<()> {
         self.save_record(
             "trace_record",

@@ -7,6 +7,7 @@ use morn_assurance::evaluation::EvaluationRunner;
 use morn_assurance::managed_work::ManagedWorkService;
 use morn_assurance::replacement::ReplacementPilot;
 use morn_assurance::replay::ReplayRunner;
+use morn_assurance::rollback::RollbackService;
 use morn_assurance::shadow::ShadowRunner;
 use morn_biolab::dream_factory::{LoopAResult, LoopCResult};
 use morn_biolab::service::{BioLabService, E2eResult};
@@ -43,6 +44,7 @@ pub struct AppInner {
     pub replacement: ReplacementPilot,
     pub flywheel: EvolutionFlywheel,
     pub distillation: DistillationService,
+    pub rollback: RollbackService,
     pub last_problem: Option<morn_foundry::problem_spec::ProblemSpec>,
     pub last_proposed: Option<ProposedSolution>,
     pub last_approved: Option<ApprovedSolution>,
@@ -94,6 +96,7 @@ impl AppState {
             replacement: ReplacementPilot::new(),
             flywheel: EvolutionFlywheel::new(),
             distillation: DistillationService::new(),
+            rollback: RollbackService::new(),
             last_problem: None,
             last_proposed: None,
             last_approved: None,
@@ -182,6 +185,18 @@ impl AppInner {
         for c in &self.distillation.candidates {
             store.save_distillation_candidate(c)?;
         }
+        for r in &self.rollback.requests {
+            store.save_rollback_request(r)?;
+        }
+        for r in &self.rollback.receipts {
+            persist_immutable(
+                store,
+                "rollback_receipt",
+                r.id.as_str(),
+                r.created_at.millis(),
+                r,
+            )?;
+        }
         Ok(())
     }
 
@@ -202,6 +217,8 @@ impl AppInner {
         self.flywheel.candidates = store.load_flywheel_candidates(&self.workspace.id)?;
         self.flywheel.traces = store.load_trace_records(&self.workspace.id)?;
         self.distillation.candidates = store.load_distillation_candidates()?;
+        self.rollback.requests = store.load_rollback_requests(&self.workspace.id)?;
+        self.rollback.receipts = store.load_rollback_receipts()?;
         Ok(())
     }
 }
