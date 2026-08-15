@@ -14,6 +14,12 @@ members = [
     "crates/morn-foundry",
     "crates/morn-assurance",
     "crates/morn-opint",
+    "crates/morn-integration",
+    "crates/morn-process",
+    "crates/morn-node",
+    "crates/morn-domain-sdk",
+    "crates/morn-package",
+    "crates/morn-cli",
     "domain-packs/biolab-reference",
     "crates/morn-store",
     "crates/morn-app",
@@ -40,6 +46,12 @@ morn-evolution = { path = "crates/morn-evolution" }
 morn-foundry = { path = "crates/morn-foundry" }
 morn-assurance = { path = "crates/morn-assurance" }
 morn-opint = { path = "crates/morn-opint" }
+morn-integration = { path = "crates/morn-integration" }
+morn-process = { path = "crates/morn-process" }
+morn-node = { path = "crates/morn-node" }
+morn-domain-sdk = { path = "crates/morn-domain-sdk" }
+morn-package = { path = "crates/morn-package" }
+morn-cli = { path = "crates/morn-cli" }
 morn-biolab-reference = { path = "domain-packs/biolab-reference" }
 morn-store = { path = "crates/morn-store" }
 morn-app = { path = "crates/morn-app" }

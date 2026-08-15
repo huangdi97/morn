@@ -2036,6 +2036,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "morn-cli"
+version = "0.1.0"
+dependencies = [
+ "morn-app",
+ "morn-domain-sdk",
+ "morn-harness",
+ "morn-integration",
+ "morn-node",
+ "morn-package",
+ "serde_json",
+]
+
+[[package]]
 name = "morn-desktop"
 version = "0.1.0"
 dependencies = [
@@ -2043,6 +2056,15 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+]
+
+[[package]]
+name = "morn-domain-sdk"
+version = "0.1.0"
+dependencies = [
+ "morn-kernel",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2087,6 +2109,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "morn-integration"
+version = "0.1.0"
+dependencies = [
+ "morn-kernel",
+ "morn-runtime",
+ "morn-world",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "morn-kernel"
 version = "0.1.0"
 dependencies = [
@@ -2095,6 +2128,16 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
  "uuid",
+]
+
+[[package]]
+name = "morn-node"
+version = "0.1.0"
+dependencies = [
+ "morn-kernel",
+ "morn-work",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2117,6 +2160,24 @@ version = "0.1.0"
 dependencies = [
  "morn-kernel",
  "serde",
+]
+
+[[package]]
+name = "morn-package"
+version = "0.1.0"
+dependencies = [
+ "morn-kernel",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "morn-process"
+version = "0.1.0"
+dependencies = [
+ "morn-kernel",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

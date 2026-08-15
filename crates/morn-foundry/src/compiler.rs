@@ -1,4 +1,4 @@
-﻿//! SolutionCompiler: analyze -> propose -> validate -> compile.
+//! SolutionCompiler: analyze -> propose -> validate -> compile.
 //! Compiler only produces reviewable proposals; it never auto-deploys production.
 
 use serde::{Deserialize, Serialize};

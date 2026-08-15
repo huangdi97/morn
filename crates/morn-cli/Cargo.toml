@@ -1,0 +1,19 @@
+[package]
+name = "morn-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "morn"
+path = "src/main.rs"
+
+[dependencies]
+morn-app = { workspace = true }
+morn-harness = { workspace = true }
+morn-integration = { workspace = true }
+morn-node = { workspace = true }
+morn-package = { workspace = true }
+morn-domain-sdk = { workspace = true }
+serde_json = { workspace = true }

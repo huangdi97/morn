@@ -5,6 +5,7 @@ pub mod binding;
 pub mod context;
 pub mod contract;
 pub mod event;
+pub mod intelligence;
 pub mod provider;
 pub mod receipt;
 pub mod scope;
@@ -15,6 +16,10 @@ pub use binding::{HarnessBinding, RuntimeBinding};
 pub use context::RuntimeContext;
 pub use contract::run_provider_contract;
 pub use event::{ExecutionEvent, ExecutionEventKind};
+pub use intelligence::{
+    run_intelligence_conformance, IntelligenceProvider, IntelligenceRequest, IntelligenceResult,
+    RuleIntelligence, SolverIntelligence,
+};
 pub use provider::{
     DeepSeekHarnessProvider, HarnessProvider, HarnessSession, MornNativeHarness, ProviderHandle,
 };
