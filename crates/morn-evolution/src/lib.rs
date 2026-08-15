@@ -6,6 +6,7 @@ pub mod distillation;
 pub mod engine;
 pub mod evaluation;
 pub mod flywheel;
+pub mod planner;
 pub mod promotion;
 
 pub use distillation::{
@@ -15,4 +16,8 @@ pub use distillation::{
 pub use engine::EvolutionEngine;
 pub use flywheel::{
     EvolutionFlywheel, FlywheelCandidate, HumanCorrection, Pattern, PatternKind, TraceRecord,
+};
+pub use planner::{
+    DeterministicPlannerProvider, EvolutionPlannerProvider, ParsedProposal, PlannerProposal,
+    ProposalValidator,
 };

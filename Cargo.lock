@@ -2051,6 +2051,7 @@ dependencies = [
  "morn-kernel",
  "morn-work",
  "serde",
+ "serde_json",
  "uuid",
 ]
 

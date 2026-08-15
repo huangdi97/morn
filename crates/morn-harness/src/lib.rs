@@ -8,6 +8,7 @@ pub mod event;
 pub mod provider;
 pub mod receipt;
 pub mod scope;
+pub mod smoke;
 pub mod spec;
 
 pub use binding::{HarnessBinding, RuntimeBinding};
@@ -19,4 +20,5 @@ pub use provider::{
 };
 pub use receipt::ExecutionReceipt;
 pub use scope::{CapabilityScope, ScopeKind};
+pub use smoke::{run_harness_smoke, HarnessSmokeReport};
 pub use spec::{HarnessSpec, HarnessVersion};
