@@ -1,7 +1,7 @@
 # STATUS_GOAL3.md
 
 Goal: MORN-V10.2-G3-DELIVERY-EVOLUTION-REPLACEMENT
-Status: COMPLETE — M0..M9 done; Goal1+2 regression green; final report generated
+Status: COMPLETE — M0..M9 done; Goal1+2 regression green; final report generated; re-verified 2026-08-16 (run_all green)
 
 ## Baseline
 - Goal 1: green（scripts/run_all.ps1 exit 0）
@@ -69,3 +69,18 @@ frontend ui smoke (playwright) -> pass（4 surfaces + v0.2 + G3 interactions + s
 server build + demo smoke -> pass
 cargo test -p morn-app --test e2e_goal3 -> pass（goal3_full_pipeline_e2e）
 ```
+## Re-verification (2026-08-16)
+
+Full re-check against current HEAD (Goal 3 + Goal 4 + Goal 5 commits) and working tree:
+
+- `scripts/run_all.ps1` -> exit 0, `=== Verification complete ===`
+- Rust: 64 suites, **208 passed, 0 failed, 0 ignored** (includes `goal3_full_pipeline_e2e ... ok`)
+- Frontend: vitest 2 passed; typecheck/lint/build pass
+- Playwright UI smoke: /workbench /studio /console /hub + BioLab E2E + Goal 2 interactions + Goal 3 interactions (Detect Patterns & Candidates / Distill QC Step / Certify & Start Managed Work / Shadow Compare Baseline vs Candidate) + studio compiler — all OK
+- demo smoke (server + BioLab E2E): `demo smoke OK: health=ok bootstrap_objects=1 e2e_steps=7 objects=1`
+- GOAL3_ACCEPTANCE.md items A-I re-checked against current code + tests; hub_v3 still exposes certified capabilities / releases / replacement records.
+
+Changes made during re-verification (regression fixes, not new Goal 3 features):
+1. `scripts/run_all.ps1` demo smoke now builds/uses the `--all-features` server so the feature-gated `/api/biolab/*` routes exist (fixes 404 regression introduced by G5 domain neutralization).
+2. Demo smoke flow aligned with the domain-neutral architecture: POST `/api/demo/bootstrap` (generic seed) then POST `/api/biolab/run` (domain-pack E2E), then verify workbench world_objects >= 1 and work_packages >= 1 (replaces stale pre-neutralization `world_objects >= 3` assumption).
+3. `crates/morn-app/src/app.rs`: gate the `WorkspaceId` import/binding under `domain-biolab` (removes zero-domain unused-variable warning).

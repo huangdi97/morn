@@ -99,3 +99,22 @@ cargo test -p morn-app --test e2e_goal3 -> pass（goal3_full_pipeline_e2e）
    delivery receipts 持久化、rollback 执行）。
 2. Goal 4b：接入真实 LLM planner 生成 Evolution Candidate（保留 rule-based 校验与 human gate）。
 3. Goal 4c：真实 DeepSeek Harness 集成（凭据就绪后），把 BioLab 三闭环作为首个跨 harness Managed Workcell。
+---
+
+## Re-verification Addendum (2026-08-16)
+
+Full `scripts/run_all.ps1` re-run against current HEAD (Goals 3-5 committed + working tree): **exit 0**,
+`=== Verification complete ===`.
+
+- Rust: 64 suites, **208 passed, 0 failed, 0 ignored** (includes `goal3_full_pipeline_e2e ... ok`)
+- Frontend: 2 passed (vitest); typecheck / lint / build pass
+- Playwright UI smoke: 4 surfaces + BioLab E2E + Goal 2 + Goal 3 interactions + studio compiler — all OK
+- demo smoke: `demo smoke OK: health=ok bootstrap_objects=1 e2e_steps=7 objects=1`
+- GOAL3_ACCEPTANCE.md A-I re-checked against current code/tests; hub_v3 still exposes certified
+  capabilities / capability releases / replacement records.
+
+Regression fixes made during re-verification (see DECISIONS D-026 / KNOWN_FAILURES KF-009):
+1. demo smoke now builds the server with `--all-features` (fixes `/api/biolab/run` 404 after G5 domain
+   neutralization) and runs `/api/demo/bootstrap` before the BioLab E2E, asserting bootstrap-seeded
+   world_objects >= 1 and work_packages >= 1.
+2. `morn-app` zero-domain build warning fixed (`WorkspaceId` gated under `domain-biolab`).

@@ -149,4 +149,30 @@ Fix/Decision:
 改用非保留变量名（`$predId`）。
 
 Test added:
-手工 smoke；产品代码无影响。
+手工 smoke；产品代码无影响。### KF-009 — demo smoke 404 + 过期 world_objects 断言（G5 中立化回归，fixed）
+Status: Fixed (2026-08-16)
+
+Reproduction:
+`scripts/run_all.ps1` demo smoke 在 G5 领域中立后失败：
+1. 默认 feature 构建的 server 无 `/api/biolab/run` 路由（`morn-app` default features = []，
+   BioLab 路由在 `domain-biolab` feature 下注册）→ 404 Not Found；
+2. 改用 all-features server 后，workbench `world_objects >= 3` 断言失败——中立化后共享 world
+   不再默认预置 3+ 对象（BioLab 对象在其自身 WorldService 内）。
+
+Expected: demo smoke 验证 server + BioLab E2E 真实可用。
+
+Actual: 上述两步均失败。
+
+Root cause:
+G5 M1-M2 领域中立后 `morn-app` 默认零领域，demo smoke 未同步更新（构建 feature 与断言模型）。
+
+Fix/Decision:
+- demo smoke 用 `--all-features` 构建 server（与 UI smoke 一致）；
+- flow 改为 POST `/api/demo/bootstrap`（零领域通用种子）→ POST `/api/biolab/run`（领域包 E2E）→
+  校验 workbench world_objects >= 1 与 work_packages >= 1（对齐中立化架构；见 DECISIONS D-026）；
+- `crates/morn-app/src/app.rs` 将 `WorkspaceId` import/binding 置于 `domain-biolab` 下，消除
+  零领域构建的 unused-variable warning。
+
+Test added:
+`scripts/run_all.ps1` 全绿（exit 0）；手工 smoke 复现通过：
+health=ok / bootstrap objects=1 work_packages=1 / biolab all_ok=True steps=7 / workbench objects=1 work_packages=1。

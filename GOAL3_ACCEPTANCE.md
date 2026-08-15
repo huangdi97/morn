@@ -1,7 +1,7 @@
 # GOAL3_ACCEPTANCE.md
 
-> 状态：2026-08-15 逐条核对。`[x]` = 通过（代码 + 测试 + 命令）。全量验证 `scripts/run_all.ps1` exit 0；
-> Rust ~109 tests + 前端 2 tests，0 failed / 0 ignored。
+> 状态：2026-08-15 逐条核对，2026-08-16 全量 re-verify。`[x]` = 通过（代码 + 测试 + 命令）。全量验证 `scripts/run_all.ps1` exit 0；
+> Rust 208 tests（64 suites，含 goal3_full_pipeline_e2e）+ 前端 2 tests，0 failed / 0 ignored。
 
 ## A Baseline
 - [x] Goal 1 regression green（run_all exit 0：cargo test / typecheck / lint / build / Tauri / UI smoke / demo smoke）

@@ -322,3 +322,26 @@ contract；仓库无合法真实 dataset → run_pipeline 返回 External blocke
 
 Tests/Proof:
 `morn-opint::pilot` 2 tests（synthetic 拒绝、无 manifest pipeline blocked）。
+### D-026 — 领域中立后 demo smoke 走 bootstrap + 领域包 E2E，断言对齐当前架构
+Status: Accepted (2026-08-16)
+
+Context:
+G5 领域中立后，BioLab 移入 domain-packs/biolab-reference（morn-app 的 `domain-biolab` feature 默认关闭）；
+共享 app world 不再预置 3+ 实验室对象，`/api/biolab/run` 只在 all-features server 上注册。旧的
+`scripts/run_all.ps1` demo smoke 用默认 feature 构建 server 导致 `/api/biolab/run` 404，且
+`world_objects >= 3` 断言基于中立化前的预置模型。
+
+Decision:
+- demo smoke 的 server 构建改为 `--all-features`（与 UI smoke 一致），使领域包路由存在；
+- demo flow：POST `/api/demo/bootstrap`（零领域通用种子：1 object + 1 work package + 1 artifact）
+  再 POST `/api/biolab/run`（领域包 E2E，all_ok），然后验证 workbench world_objects >= 1、
+  work_packages >= 1；
+- 断言数量增加（health + bootstrap + biolab + workbench objects + work packages），不是削弱断言：
+  阈值从 3 改为 1 是因为中立化后共享世界不再默认含 3+ 对象，bootstrap 契约就是 1；领域包对象在其自身
+  WorldService 内（隔离，符合 G5 设计）。
+
+Tests/Proof:
+- 手工 smoke：health=ok, bootstrap objects=1/work_packages=1, biolab all_ok=True steps=7,
+  workbench objects=1/work_packages=1；
+- `scripts/run_all.ps1` 全绿 exit 0（208 Rust tests / 0 ignored；frontend 2；UI smoke 全部 OK；
+  demo smoke OK）。
