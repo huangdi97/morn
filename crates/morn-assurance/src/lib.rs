@@ -2,6 +2,8 @@
 
 pub mod certification;
 pub mod evaluation;
+pub mod managed_work;
+pub mod replacement;
 pub mod replay;
 pub mod shadow;
 pub mod simulation;
