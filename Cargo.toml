@@ -12,6 +12,7 @@ members = [
     "crates/morn-work",
     "crates/morn-evolution",
     "crates/morn-foundry",
+    "crates/morn-assurance",
     "crates/morn-biolab",
     "crates/morn-store",
     "crates/morn-app",
@@ -36,6 +37,7 @@ morn-organization = { path = "crates/morn-organization" }
 morn-work = { path = "crates/morn-work" }
 morn-evolution = { path = "crates/morn-evolution" }
 morn-foundry = { path = "crates/morn-foundry" }
+morn-assurance = { path = "crates/morn-assurance" }
 morn-biolab = { path = "crates/morn-biolab" }
 morn-store = { path = "crates/morn-store" }
 morn-app = { path = "crates/morn-app" }

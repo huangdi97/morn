@@ -1993,6 +1993,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "morn-assurance"
+version = "0.1.0"
+dependencies = [
+ "morn-artifact",
+ "morn-foundry",
+ "morn-kernel",
+ "morn-work",
+ "morn-world",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "morn-biolab"
 version = "0.1.0"
 dependencies = [
