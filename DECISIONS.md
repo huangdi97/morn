@@ -163,3 +163,92 @@ Decision:
 Tests/Proof:
 `frontend/scripts/ui_smoke.mjs`（Playwright）覆盖 4 surfaces + durable/replay/shadow/eval/loop/studio compiler；
 `npm run typecheck/lint/test/build` 全过。
+
+## Goal 3 Decisions
+
+### D-015 — Certified Work Capability 不是 Agent，认证必须有完整证据
+Status: Accepted
+
+Context:
+GOAL3_CERTIFICATION_SPEC：禁止一个 demo pass 就 Certified；禁止忽略失败 case；critical gap 下禁止认证。
+
+Decision:
+`morn-assurance::CertificationService` 要求证据（evaluation + replay + shadow）非空才能 start_run；
+evaluate 检查 acceptance rate / policy / recovery / reproducibility / provenance / known-failure coverage；
+human_gate_required 时 evaluate 只产生 Conditional，必须 approve 才 Certified；version 变化按
+patch_compatible / requires_reevaluation / full_recertification 判断；Restricted capability 受 context-of-use 约束；
+Suspended 不可启动 Managed Work。
+
+Tests/Proof:
+`crates/morn-assurance::certification` 5 tests（insufficient evidence、failed policy、human gate、
+version rules、context-of-use）。
+
+### D-016 — Evolution Flywheel 候选只读，不触碰 production
+Status: Accepted
+
+Context:
+GOAL3_EVOLUTION_FLYWHEEL：Candidate → Branch → Replay → Evaluation → Shadow → Certification → Promotion；
+不能直接修改 production。
+
+Decision:
+`morn-evolution::EvolutionFlywheel` 只 ingest trace/correction、检测 pattern、生成 data-only candidate
+（FlywheelCandidate 无 mutation 方法、无 production 写路径）；candidate 携带 evidence window 与 baseline metrics。
+
+Tests/Proof:
+`crates/morn-evolution::flywheel` 4 tests（pattern detection、candidate links evidence、human correction、
+no production mutation）。
+
+### D-017 — Deterministic Distillation：稳定 Actor 步骤优先确定性能力
+Status: Accepted
+
+Context:
+GOAL3 最小充分智能：至少完成一个 deterministic distillation 示例，保留长尾 fallback。
+
+Decision:
+`morn-evolution::DistillationService` 把 BioLab `qc` 稳定步骤蒸馏为 `qc-rule`（rows>0 && even），
+回归比较 program vs actor（3/3 match），special/edge 输入 fallback 回 actor，记录 cost/latency/human 对比。
+
+Tests/Proof:
+`crates/morn-evolution::distillation` 3 tests（regression passed、actor fallback、quality 不降）。
+
+### D-018 — Managed Work 只接受 Certified Capability；Acceptance 独立于执行者
+Status: Accepted
+
+Context:
+GOAL3_MANAGED_WORK_SPEC：未认证 capability 不得进入 Managed Work；执行 Actor 不能自己判定 Outcome 通过。
+
+Decision:
+`morn-assurance::ManagedWorkService::start` 只接受 Certified/Restricted capability；`decide` 拒绝
+decided_by == executor；DeliveryReceipt 必须完整；SLO/HumanFallback/RetryLiability 均有 schema 与测试。
+
+Tests/Proof:
+`crates/morn-assurance::managed_work` 4 tests（only certified can start、full lifecycle、
+executor cannot self-accept、retry exhaustion escalates）。
+
+### D-019 — Replacement 只做 R3/R4，不自动退役
+Status: Accepted
+
+Context:
+GOAL3_REPLACEMENT_PILOT：Shadow 无真实副作用；R4 只生成 PartialReplaceCandidate + evidence + human decision。
+
+Decision:
+`morn-assurance::ReplacementPilot`：shadow_compare 隔离执行（isolated_side_effects=true）比较 quality/
+acceptance/human/cost/evidence/policy/outcome；decide_r4 需要 candidate 关键指标不降 + eval passed +
+certification passed + human approved，生成带 rollback path 的 R4 candidate；不自动 retirement。
+
+Tests/Proof:
+`crates/morn-assurance::replacement` 5 tests（same-input comparison、worse candidate 拒绝、
+policy regression 拒绝、human approval 必需、R4+rollback）。
+
+### D-020 — UI v0.3 继续共用同一后端
+Status: Accepted
+
+Context:
+GOAL3_UI_SPEC：Evolution Center / Managed Work / Certification / Replacement Compare / Hub certified assets。
+
+Decision:
+新增 `/api/evolution/*`、`/api/distill/run`、`/api/certify/*`、`/api/managed/*`、`/api/replacement/*`、`/api/hub3`；
+Workbench/Console/Hub 全部调用真实端点。
+
+Tests/Proof:
+Playwright UI smoke 覆盖 G3 交互；`npm run typecheck/lint/test/build` 全过。

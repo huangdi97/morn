@@ -64,3 +64,7 @@ Resolution:
 
 无新增 blocker。Goal 1 的 B-001（真实 DeepSeek Harness smoke）仍然 Active：Goal 2 不依赖真实 DSH（compiler/durable/
 replay/simulation/shadow/BioLab 全部使用 MornNative + fixture），Morn 侧 contract tests 保持通过。
+## Goal 3 Update (2026-08-15)
+
+无新增 blocker。Goal 1 的 B-001（真实 DeepSeek Harness smoke）仍然 Active；Goal 3 的 certification/
+managed work/replacement 全部使用本地 deterministic/evaluation 证据，不依赖真实 DSH。

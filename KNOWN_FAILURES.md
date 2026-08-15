@@ -120,3 +120,18 @@ smoke 断言改为 toLowerCase() 双向比较。
 
 Test added:
 `frontend/scripts/ui_smoke.mjs`（case-insensitive 断言）。
+### KF-007 — Playwright strict-mode 按钮冲突（fixed）
+Status: Fixed
+
+Reproduction:
+`ui_smoke.mjs` 中 `/Shadow Compare/i` 同时匹配 "Shadow Compare" 与 "Shadow Compare Baseline vs Candidate"。
+
+Expected: 只点击目标按钮。
+
+Actual: strict mode violation。
+
+Fix/Decision:
+Goal 2 按钮改为 exact:true；点击循环透传 exact。
+
+Test added:
+`frontend/scripts/ui_smoke.mjs`。
