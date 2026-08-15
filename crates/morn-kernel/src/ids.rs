@@ -162,6 +162,7 @@ id_types!(
     DistillationCandidateTag,
     DistilledProgramTag,
     HumanCorrectionTag,
+    TraceRecordTag,
     WorkflowDefinitionTag,
     WorkflowRunTag,
     WorkflowStepTag,
@@ -284,6 +285,7 @@ pub type FlywheelCandidateId = Id<FlywheelCandidateTag>;
 pub type DistillationCandidateId = Id<DistillationCandidateTag>;
 pub type DistilledProgramId = Id<DistilledProgramTag>;
 pub type HumanCorrectionId = Id<HumanCorrectionTag>;
+pub type TraceRecordId = Id<TraceRecordTag>;
 pub type WorkflowDefinitionId = Id<WorkflowDefinitionTag>;
 pub type WorkflowRunId = Id<WorkflowRunTag>;
 pub type WorkflowStepId = Id<WorkflowStepTag>;
