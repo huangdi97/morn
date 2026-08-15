@@ -3,9 +3,14 @@ import {
   apiGet,
   apiPost,
   apiPostJson,
+  CertifyOutcome,
+  DistillOutcome,
   DurableRun,
   EvaluationOutcome,
+  FlywheelOutcome,
   LoopAOutcome,
+  ManagedOutcome,
+  ReplacementOutcome,
   ReplayOutcome,
   ShadowOutcome,
   WorkbenchData,
@@ -23,6 +28,10 @@ export default function Workbench() {
   const [replay, setReplay] = useState<ReplayOutcome | null>(null);
   const [loopA, setLoopA] = useState<LoopAOutcome | null>(null);
   const [loopC, setLoopC] = useState<string | null>(null);
+  const [flywheel, setFlywheel] = useState<FlywheelOutcome | null>(null);
+  const [distill, setDistill] = useState<DistillOutcome | null>(null);
+  const [managedRun, setManagedRun] = useState<ManagedOutcome | null>(null);
+  const [replacement, setReplacement] = useState<ReplacementOutcome | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -110,6 +119,55 @@ export default function Workbench() {
         sources: [{ name: "S1", source_ref: "doi:1", evidence_type: "single_cell", conclusion: "present" }],
       });
       setLoopA(r);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const runEvolutionAnalyze = async () => {
+    try {
+      const r = await apiPost<FlywheelOutcome>("/evolution/analyze");
+      setFlywheel(r);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const runDistill = async () => {
+    try {
+      const r = await apiPost<DistillOutcome>("/distill/run");
+      setDistill(r);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const startManaged = async () => {
+    try {
+      await apiPost<CertifyOutcome>("/certify/run");
+      const r = await apiPost<ManagedOutcome>("/managed/start");
+      setManagedRun(r);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const deliverAndAcceptManaged = async () => {
+    if (!managedRun) return;
+    try {
+      await apiPostJson("/managed/deliver", { run_id: managedRun.run.id });
+      await apiPostJson("/managed/accept", { run_id: managedRun.run.id, decided_by: "pi" });
+      const r = await apiPost<ManagedOutcome>("/managed/start");
+      setManagedRun(r);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const runReplacementShadow = async () => {
+    try {
+      const r = await apiPost<ReplacementOutcome>("/replacement/shadow");
+      setReplacement(r);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -251,6 +309,55 @@ export default function Workbench() {
         </div>
         {loopA && <KeyValue k="Loop A" v={`approved=${loopA.loop_a.pi_approved} ok=${loopA.loop_a.all_ok}`} />}
         {loopC && <KeyValue k="Loop C" v="manuscript release candidate created" />}
+      </Card>
+
+      <Card title="Evolution Center (v0.3)">
+        <div className="page-actions" style={{ marginBottom: 8 }}>
+          <button onClick={runEvolutionAnalyze}>Detect Patterns & Candidates</button>
+          <button onClick={runDistill}>Distill QC Step</button>
+        </div>
+        {flywheel && (
+          <>
+            <KeyValue k="Patterns" v={flywheel.patterns.length} />
+            <ul>
+              {flywheel.candidates.map((c) => (
+                <li key={c.id}>
+                  {c.candidate_type}: {c.proposed_change}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {distill && (
+          <KeyValue
+            k="Distillation regression"
+            v={`passed=${distill.regression.passed} matches=${distill.regression.program_matches_actor} fallback=${distill.regression.long_tail_fallback_count}`}
+          />
+        )}
+      </Card>
+
+      <Card title="Managed Work / Outcome Delivery (v0.3)">
+        <div className="page-actions" style={{ marginBottom: 8 }}>
+          <button onClick={startManaged}>Certify & Start Managed Work</button>
+          <button onClick={deliverAndAcceptManaged} disabled={!managedRun}>
+            Deliver & Accept
+          </button>
+        </div>
+        {managedRun && <KeyValue k="Run" v={`${managedRun.run.id} — ${managedRun.run.status}`} />}
+      </Card>
+
+      <Card title="Replacement Compare (v0.3)">
+        <div className="page-actions" style={{ marginBottom: 8 }}>
+          <button onClick={runReplacementShadow}>Shadow Compare Baseline vs Candidate</button>
+        </div>
+        {replacement && (
+          <>
+            <KeyValue k="Meets critical" v={replacement.comparison.candidate_meets_critical ? "yes" : "no"} />
+            <KeyValue k="Quality" v={`manual=${replacement.comparison.baseline.quality} → native=${replacement.comparison.candidate.quality}`} />
+            <KeyValue k="Human minutes" v={`manual=${replacement.comparison.baseline.human_minutes} → native=${replacement.comparison.candidate.human_minutes}`} />
+            <KeyValue k="Cost" v={`manual=${replacement.comparison.baseline.cost_estimate} → native=${replacement.comparison.candidate.cost_estimate}`} />
+          </>
+        )}
       </Card>
 
       {data.e2e_result && (

@@ -2,12 +2,17 @@
 
 use std::sync::{Arc, Mutex};
 
+use morn_assurance::certification::CertificationService;
 use morn_assurance::evaluation::EvaluationRunner;
+use morn_assurance::managed_work::ManagedWorkService;
+use morn_assurance::replacement::ReplacementPilot;
 use morn_assurance::replay::ReplayRunner;
 use morn_assurance::shadow::ShadowRunner;
 use morn_biolab::dream_factory::{LoopAResult, LoopCResult};
 use morn_biolab::service::{BioLabService, E2eResult};
+use morn_evolution::distillation::DistillationService;
 use morn_evolution::engine::EvolutionEngine;
+use morn_evolution::flywheel::EvolutionFlywheel;
 use morn_foundry::compiler::SolutionCompiler;
 use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
@@ -33,6 +38,11 @@ pub struct AppInner {
     pub evaluation: EvaluationRunner,
     pub shadow: ShadowRunner,
     pub replay: ReplayRunner,
+    pub certification: CertificationService,
+    pub managed: ManagedWorkService,
+    pub replacement: ReplacementPilot,
+    pub flywheel: EvolutionFlywheel,
+    pub distillation: DistillationService,
     pub last_problem: Option<morn_foundry::problem_spec::ProblemSpec>,
     pub last_proposed: Option<ProposedSolution>,
     pub last_approved: Option<ApprovedSolution>,
@@ -72,6 +82,11 @@ impl AppState {
             evaluation: EvaluationRunner::new(),
             shadow: ShadowRunner::new(),
             replay: ReplayRunner::new(),
+            certification: CertificationService::new(),
+            managed: ManagedWorkService::new(),
+            replacement: ReplacementPilot::new(),
+            flywheel: EvolutionFlywheel::new(),
+            distillation: DistillationService::new(),
             last_problem: None,
             last_proposed: None,
             last_approved: None,

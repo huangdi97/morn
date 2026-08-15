@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiGet, HubV2Data } from "../api";
+import { apiGet, HubV2Data, HubV3Data } from "../api";
 import { Card, EmptyState, ErrorBox, Loading, StatusPill } from "../components/ui";
 
 interface HubData {
@@ -46,6 +46,7 @@ function AssetTable({ title, rows }: { title: string; rows: Array<{ id: string; 
 export default function Hub() {
   const [data, setData] = useState<HubData | null>(null);
   const [v2, setV2] = useState<HubV2Data | null>(null);
+  const [v3, setV3] = useState<HubV3Data | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,6 +55,9 @@ export default function Hub() {
       .catch((e: Error) => setError(e.message));
     apiGet<HubV2Data>("/hub2")
       .then(setV2)
+      .catch(() => undefined);
+    apiGet<HubV3Data>("/hub3")
+      .then(setV3)
       .catch(() => undefined);
   }, []);
 
@@ -89,6 +93,29 @@ export default function Hub() {
                 {v2.workflow_templates.map((w) => (
                   <li key={w.id}>
                     {w.name} — signals: {w.signals.join(", ")}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </>
+        )}
+        {v3 && (
+          <>
+            <AssetTable title="Certified Work Capabilities (v0.3)" rows={v3.certified_capabilities.map((c) => ({ id: c.id, name: c.name, trust: c.status }))} />
+            <Card title="Capability Releases (v0.3)">
+              <ul>
+                {v3.capability_releases.map((r) => (
+                  <li key={r.id}>
+                    release {r.version}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+            <Card title="Replacement Records (v0.3)">
+              <ul>
+                {v3.replacement_records.map((r) => (
+                  <li key={r.id}>
+                    {r.work} — {r.decision}
                   </li>
                 ))}
               </ul>

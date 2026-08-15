@@ -53,17 +53,40 @@ try {
     const buttons = [
       { name: /Start Durable Run/i, check: (t) => t.includes("durable work runtime") && t.includes("running") },
       { name: /Run Replay \(drift\)/i, check: (t) => t.includes("replay reproduced") && t.includes("no") },
-      { name: /Shadow Compare/i, check: (t) => t.includes("shadow readiness") },
+      { name: "Shadow Compare", exact: true, check: (t) => t.includes("shadow readiness") },
       { name: /Evaluate \(approval missing\)/i, check: (t) => t.includes("evaluation decision") },
       { name: /Run Loop A/i, check: (t) => t.includes("loop a") && t.includes("approved=true") },
     ];
     for (const btn of buttons) {
       errors.length = 0;
       await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
-      await page.getByRole("button", { name: btn.name }).click();
+      const opts = btn.exact ? { name: btn.name, exact: true } : { name: btn.name };
+      await page.getByRole("button", opts).click();
       await page.waitForTimeout(3000);
       const t = (await page.locator("body").innerText()).toLowerCase();
       if (!btn.check(t)) errors.push(`button ${btn.name} result not rendered; body sample: ${t.slice(0, 300)}`);
+      if (errors.length > 0) {
+        console.error(`FAILED ${btn.name}:`, errors.join(" | "));
+        process.exitCode = 1;
+        break;
+      }
+      console.log(`OK ${btn.name}`);
+    }
+
+    // Goal 3 v0.3 interactions: evolution, distillation, managed work, replacement.
+    const g3buttons = [
+      { name: /Detect Patterns & Candidates/i, check: (t) => t.includes("patterns") && t.includes("distillation") },
+      { name: /Distill QC Step/i, check: (t) => t.includes("distillation regression") && t.includes("passed=true") },
+      { name: /Certify & Start Managed Work/i, check: (t) => t.includes("managed work") && t.includes("running") },
+      { name: /Shadow Compare Baseline vs Candidate/i, check: (t) => t.includes("meets critical") && t.includes("yes") },
+    ];
+    for (const btn of g3buttons) {
+      errors.length = 0;
+      await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
+      await page.getByRole("button", { name: btn.name }).click();
+      await page.waitForTimeout(2500);
+      const t = (await page.locator("body").innerText()).toLowerCase();
+      if (!btn.check(t)) errors.push(`button ${btn.name} result not rendered; sample: ${t.slice(0, 200)}`);
       if (errors.length > 0) {
         console.error(`FAILED ${btn.name}:`, errors.join(" | "));
         process.exitCode = 1;

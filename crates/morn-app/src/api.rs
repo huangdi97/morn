@@ -73,6 +73,19 @@ pub fn router(state: AppState) -> Router {
         .route("/api/biolab/loop-c", post(biolab_loop_c))
         .route("/api/biolab/assets", get(biolab_assets))
         .route("/api/hub2", get(hub_v2))
+        .route("/api/evolution/analyze", post(evolution_analyze))
+        .route("/api/evolution/flywheel", get(evolution_flywheel))
+        .route("/api/distill/run", post(distill_run))
+        .route("/api/certify/run", post(certify_run))
+        .route("/api/certify/list", get(certify_list))
+        .route("/api/managed/start", post(managed_start))
+        .route("/api/managed/accept", post(managed_accept))
+        .route("/api/managed/runs", get(managed_runs))
+        .route("/api/replacement/shadow", post(replacement_shadow))
+        .route("/api/managed/deliver", post(managed_deliver))
+        .route("/api/replacement/r4", post(replacement_r4))
+        .route("/api/replacement/records", get(replacement_records))
+        .route("/api/hub3", get(hub_v3))
         .with_state(state)
         .layer(CorsLayer::permissive())
 }
@@ -631,5 +644,323 @@ async fn hub_v2(State(state): State<AppState>) -> ApiResult {
         ],
         "role_blueprints": assets.get("role_blueprints"),
         "workflow_templates": [{ "id": "dataset-to-claim-durable@1.0", "name": "Durable Dataset -> Claim", "signals": ["review", "approval"] }],
+    })))
+}
+
+// ---- Goal 3 endpoints ----
+
+async fn evolution_analyze(State(state): State<AppState>) -> ApiResult {
+    let mut guard = state.lock();
+    let ws = guard.workspace.id.clone();
+    // Seed fixture traces from BioLab workcell steps.
+    for i in 0..5 {
+        guard
+            .flywheel
+            .ingest_trace(morn_evolution::flywheel::TraceRecord::new(
+                ws.clone(),
+                format!("biolab-run-{i}"),
+                "qc",
+                "succeeded",
+                "ok",
+            ));
+    }
+    guard
+        .flywheel
+        .ingest_trace(morn_evolution::flywheel::TraceRecord::new(
+            ws.clone(),
+            "biolab-run-3",
+            "review",
+            "failed",
+            "approval missing",
+        ));
+    guard
+        .flywheel
+        .ingest_human_correction(morn_evolution::flywheel::HumanCorrection::new(
+            ws.clone(),
+            "biolab-run-4",
+            "review",
+            "fix evidence link",
+        ));
+    let patterns = guard.flywheel.detect_patterns(3, 10_000);
+    let candidates = guard.flywheel.generate_candidates(&ws);
+    Ok(Json(
+        json!({ "patterns": patterns, "candidates": candidates }),
+    ))
+}
+
+async fn evolution_flywheel(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    Ok(Json(json!({
+        "patterns": guard.flywheel.patterns,
+        "candidates": guard.flywheel.candidates,
+        "traces": guard.flywheel.traces.len(),
+    })))
+}
+
+async fn distill_run(State(state): State<AppState>) -> ApiResult {
+    let mut guard = state.lock();
+    use morn_evolution::distillation::{
+        qc_rule, ActorBaseline, DistillationInput, DistillationOutput, RegressionCase,
+    };
+    let baseline = ActorBaseline {
+        quality: 1.0,
+        latency_ms: 1200,
+        cost: 4.0,
+        human_minutes: 8.0,
+    };
+    let candidate = guard
+        .distillation
+        .distill("qc", "qc-rule", qc_rule, baseline)?;
+    let cases = vec![
+        RegressionCase {
+            input: DistillationInput {
+                rows: 128,
+                special: false,
+            },
+            actor_output: DistillationOutput {
+                accepted: true,
+                reason: "ok".into(),
+            },
+            should_fallback: false,
+        },
+        RegressionCase {
+            input: DistillationInput {
+                rows: 96,
+                special: false,
+            },
+            actor_output: DistillationOutput {
+                accepted: true,
+                reason: "ok".into(),
+            },
+            should_fallback: false,
+        },
+        RegressionCase {
+            input: DistillationInput {
+                rows: 33,
+                special: false,
+            },
+            actor_output: DistillationOutput {
+                accepted: false,
+                reason: "odd".into(),
+            },
+            should_fallback: false,
+        },
+        RegressionCase {
+            input: DistillationInput {
+                rows: 0,
+                special: true,
+            },
+            actor_output: DistillationOutput {
+                accepted: false,
+                reason: "empty".into(),
+            },
+            should_fallback: true,
+        },
+    ];
+    let report = guard.distillation.run_regression(&candidate.id, &cases)?;
+    Ok(Json(
+        json!({ "candidate": candidate, "regression": report }),
+    ))
+}
+
+async fn certify_run(State(state): State<AppState>) -> ApiResult {
+    let mut guard = state.lock();
+    use morn_assurance::certification::{CertificationEvidence, CertificationSpec};
+    use morn_assurance::evaluation::EvalStep;
+    use morn_assurance::replay::{simple_hash, ReplayScenario};
+    use morn_kernel::version::Version;
+
+    let steps = vec![
+        EvalStep::new("collect", true),
+        EvalStep::new("analyze", true),
+        EvalStep::new("review", true),
+        EvalStep::new("release", true),
+    ];
+    let evaluation = guard
+        .evaluation
+        .run("cert-eval", "sol-1.0", &steps, &[], &[]);
+    let input = "cert-input";
+    let out = simple_hash(input);
+    let scenario = ReplayScenario::new("cert-replay", serde_json::json!({}), "sol-1.0")
+        .record("analyze", input, &out, "ok");
+    let replay = guard.replay.run(&scenario, None);
+    let evidence = CertificationEvidence {
+        evaluation_results: vec![evaluation],
+        replay_reports: vec![replay],
+        shadow_runs: guard.shadow.runs.clone(),
+        known_failure_cases: vec![],
+        historical_case_refs: vec![],
+    };
+    let spec = CertificationSpec::new("dataset-to-reviewed-claim", Version::v1());
+    let run = guard.certification.start_run(spec.id.clone(), evidence)?;
+    let decision = guard.certification.evaluate(&run, &spec)?;
+    let capability = guard
+        .certification
+        .certify(&run.id, &decision, &spec, "pi")?;
+    Ok(Json(
+        json!({ "capability": capability, "decision": decision }),
+    ))
+}
+
+async fn certify_list(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    Ok(Json(json!({
+        "capabilities": guard.certification.capabilities,
+        "decisions": guard.certification.decisions,
+        "releases": guard.certification.releases,
+    })))
+}
+
+async fn managed_start(State(state): State<AppState>) -> ApiResult {
+    let mut guard = state.lock();
+    use morn_assurance::managed_work::{ManagedWorkRun, SloConfig};
+    let cap = guard
+        .certification
+        .capabilities
+        .first()
+        .cloned()
+        .ok_or_else(|| {
+            AppError(morn_kernel::error::Error::validation(
+                "run /api/certify/run first",
+            ))
+        })?;
+    let ws = guard.workspace.id.clone();
+    let run = ManagedWorkRun::new(
+        ws,
+        cap.id.clone(),
+        "contract-dataset-to-claim",
+        "customer",
+        "analyst-actor",
+        SloConfig::new("reproducibility", "1.0", "independent review"),
+    );
+    let started = guard.managed.start(&cap, run)?;
+    Ok(Json(json!({ "run": started })))
+}
+
+async fn managed_deliver(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    let run_id = body.get("run_id").and_then(Value::as_str).unwrap_or("");
+    let mut guard = state.lock();
+    use morn_assurance::managed_work::DeliveryReceipt;
+    let cap = guard
+        .certification
+        .capabilities
+        .first()
+        .cloned()
+        .ok_or_else(|| {
+            AppError(morn_kernel::error::Error::validation(
+                "no certified capability",
+            ))
+        })?;
+    let receipt = DeliveryReceipt {
+        id: morn_kernel::ids::DeliveryReceiptId::generate(),
+        run_id: morn_kernel::ids::ManagedWorkRunId::new(run_id),
+        work_contract_ref: "contract-dataset-to-claim".to_string(),
+        capability_ref: cap.id.to_string(),
+        capability_version: cap.version.to_string(),
+        execution_receipt_refs: vec!["rcpt-biolab".to_string()],
+        artifacts: vec!["analysis-artifact".to_string()],
+        decisions: vec!["pi-approval".to_string()],
+        state_diffs: vec!["claim-status-released".to_string()],
+        verification: "passed".to_string(),
+        outcome: "reviewed scientific claim released".to_string(),
+        slo_result: "target met".to_string(),
+        evidence: vec![
+            "execution_receipt".to_string(),
+            "artifact_version".to_string(),
+        ],
+        failures_retries: vec![],
+        human_interventions: 1,
+        timestamps: vec!["t0".to_string()],
+    };
+    let delivered = guard
+        .managed
+        .deliver(&morn_kernel::ids::ManagedWorkRunId::new(run_id), receipt)?;
+    Ok(Json(json!({ "receipt": delivered })))
+}
+
+async fn managed_accept(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    let run_id = body.get("run_id").and_then(Value::as_str).unwrap_or("");
+    let decided_by = body
+        .get("decided_by")
+        .and_then(Value::as_str)
+        .unwrap_or("pi");
+    let mut guard = state.lock();
+    let acc = guard.managed.decide(
+        &morn_kernel::ids::ManagedWorkRunId::new(run_id),
+        "accepted",
+        morn_assurance::managed_work::AcceptanceSource::IndependentReviewer,
+        decided_by,
+        "independent acceptance",
+    )?;
+    Ok(Json(json!({ "acceptance": acc })))
+}
+
+async fn managed_runs(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    Ok(Json(
+        json!({ "runs": guard.managed.runs, "receipts": guard.managed.receipts.len() }),
+    ))
+}
+
+async fn replacement_shadow(State(state): State<AppState>) -> ApiResult {
+    let mut guard = state.lock();
+    use morn_assurance::replacement::WorkVariantMetrics;
+    let mut baseline = WorkVariantMetrics::new("manual");
+    baseline.quality = 0.9;
+    baseline.acceptance_rate = 0.85;
+    baseline.human_minutes = 120.0;
+    baseline.cycle_time_hours = 48.0;
+    baseline.cost_estimate = 200.0;
+    baseline.evidence_coverage = 0.6;
+    let mut candidate = WorkVariantMetrics::new("morn-native");
+    candidate.quality = 0.95;
+    candidate.acceptance_rate = 0.95;
+    candidate.human_minutes = 15.0;
+    candidate.cycle_time_hours = 4.0;
+    candidate.cost_estimate = 40.0;
+    candidate.evidence_coverage = 1.0;
+    let comparison = guard
+        .replacement
+        .shadow_compare("biolab-input-set-1", baseline, candidate);
+    Ok(Json(json!({ "comparison": comparison })))
+}
+
+async fn replacement_r4(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    let human = body
+        .get("human_approved")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let mut guard = state.lock();
+    let comparison = guard
+        .replacement
+        .comparisons
+        .last()
+        .cloned()
+        .ok_or_else(|| {
+            AppError(morn_kernel::error::Error::validation(
+                "run /api/replacement/shadow first",
+            ))
+        })?;
+    let r4 =
+        guard
+            .replacement
+            .decide_r4("dataset-to-reviewed-claim", &comparison, true, true, human)?;
+    Ok(Json(json!({ "r4": r4 })))
+}
+
+async fn replacement_records(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    Ok(Json(
+        json!({ "records": guard.replacement.records, "candidates": guard.replacement.candidates }),
+    ))
+}
+
+async fn hub_v3(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    Ok(Json(json!({
+        "certified_capabilities": guard.certification.capabilities,
+        "capability_releases": guard.certification.releases,
+        "certification_evidence": guard.certification.decisions.len(),
+        "replacement_records": guard.replacement.records,
     })))
 }

@@ -86,3 +86,30 @@ export interface HubV2Data {
   role_blueprints: string[] | null;
   workflow_templates: Array<{ id: string; name: string; signals: string[] }>;
 }
+export interface FlywheelOutcome {
+  patterns: Array<{ kind: string; affected_work: string; count: number }>;
+  candidates: Array<{ id: string; candidate_type: string; affected_work: string; proposed_change: string; expected_benefit: string }>;
+}
+
+export interface DistillOutcome {
+  candidate: { id: string; source_step: string; program_name: string; status: string };
+  regression: { passed: boolean; program_matches_actor: number; long_tail_fallback_count: number; cost_reduction: number };
+}
+
+export interface CertifyOutcome {
+  capability: { id: string; name: string; version: string; status: string };
+}
+
+export interface ManagedOutcome {
+  run: { id: string; status: string; slo: { metric: string; target: string; acceptance_method: string } };
+}
+
+export interface ReplacementOutcome {
+  comparison: { candidate_meets_critical: boolean; reasons: string[]; baseline: { quality: number; human_minutes: number; cost_estimate: number }; candidate: { quality: number; human_minutes: number; cost_estimate: number } };
+}
+
+export interface HubV3Data {
+  certified_capabilities: Array<{ id: string; name: string; version: string; status: string }>;
+  capability_releases: Array<{ id: string; version: string }>;
+  replacement_records: Array<{ id: string; work: string; decision: string }>;
+}

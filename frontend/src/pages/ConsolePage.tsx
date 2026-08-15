@@ -30,6 +30,9 @@ export default function ConsolePage() {
   const [error, setError] = useState<string | null>(null);
   const [durableRuns, setDurableRuns] = useState<Array<{ id: string; status: string }>>([]);
   const [attention, setAttention] = useState<Array<{ kind: string; subject: string }>>([]);
+  const [certified, setCertified] = useState<Array<{ name: string; version: string; status: string }>>([]);
+  const [managedRuns, setManagedRuns] = useState<Array<{ id: string; status: string }>>([]);
+  const [replacementRecords, setReplacementRecords] = useState<Array<{ work: string; decision: string }>>([]);
 
   useEffect(() => {
     apiGet<ConsoleData>("/console")
@@ -40,6 +43,15 @@ export default function ConsolePage() {
       .catch(() => undefined);
     apiGet<{ attention: Array<{ kind: string; subject: string }> }>("/durable/attention")
       .then((r) => setAttention(r.attention))
+      .catch(() => undefined);
+    apiGet<{ capabilities: Array<{ name: string; version: string; status: string }> }>("/certify/list")
+      .then((r) => setCertified(r.capabilities))
+      .catch(() => undefined);
+    apiGet<{ runs: Array<{ id: string; status: string }> }>("/managed/runs")
+      .then((r) => setManagedRuns(r.runs))
+      .catch(() => undefined);
+    apiGet<{ records: Array<{ work: string; decision: string }> }>("/replacement/records")
+      .then((r) => setReplacementRecords(r.records))
       .catch(() => undefined);
   }, []);
 
@@ -120,6 +132,45 @@ export default function ConsolePage() {
           <KeyValue k="Delegation model" v="scope + expiry + retained accountability" />
           <KeyValue k="Representation" v="allow / deny / revoke enforced" />
           <KeyValue k="Accountability" v="judged -> delegated -> verified -> approved -> executed -> retained" />
+        </Card>
+        <Card title="Certification (v0.3)">
+          {certified.length === 0 ? (
+            <EmptyState label="No certified capabilities yet" />
+          ) : (
+            <ul>
+              {certified.map((cap) => (
+                <li key={cap.name}>
+                  {cap.name}@{cap.version} — <StatusPill value={cap.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card title="Managed Deliveries (v0.3)">
+          {managedRuns.length === 0 ? (
+            <EmptyState label="No managed deliveries" />
+          ) : (
+            <ul>
+              {managedRuns.map((r) => (
+                <li key={r.id}>
+                  {r.id} — <StatusPill value={r.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card title="Replacement Records (v0.3)">
+          {replacementRecords.length === 0 ? (
+            <EmptyState label="No replacement records" />
+          ) : (
+            <ul>
+              {replacementRecords.map((r) => (
+                <li key={r.work}>
+                  {r.work} — {r.decision}
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
         <Card title="Trace / Errors (ledger)">
           {data.traces.length === 0 ? (
