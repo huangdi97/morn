@@ -1,83 +1,147 @@
-import { useEffect, useState } from "react";
-import { apiGet } from "../api";
-import { Card, EmptyState, ErrorBox, Loading } from "../components/ui";
+import { useState } from "react";
+import { apiGet, apiPostJson, CompilerRun } from "../api";
+import { Card, EmptyState, ErrorBox, KeyValue, StatusPill } from "../components/ui";
 
-interface StudioData {
-  work_packages: Array<{
-    id: string;
-    objective: string;
-    execution_mode: {
-      nature: string[];
-      executor: string[];
-      rationale: string;
-    } | null;
-    allowed_actions: string[];
-    prohibited_actions: string[];
-  }>;
-  object_types: Array<{ id: string; name: string; allowed_states: string[] }>;
-  roles: string[];
-  manifest_preview: Record<string, unknown>;
+interface ManifestOutcome {
+  manifest: Record<string, unknown> | null;
+  detail?: string;
 }
 
 export default function Studio() {
-  const [data, setData] = useState<StudioData | null>(null);
+  const [goal, setGoal] = useState("Dataset to Reviewed Scientific Claim");
+  const [capabilities, setCapabilities] = useState("*");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [compiled, setCompiled] = useState<CompilerRun | null>(null);
+  const [approved, setApproved] = useState(false);
+  const [manifest, setManifest] = useState<ManifestOutcome | null>(null);
 
-  useEffect(() => {
-    apiGet<StudioData>("/studio")
-      .then(setData)
-      .catch((e: Error) => setError(e.message));
-  }, []);
+  const runCompiler = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const caps = capabilities.split(",").map((c) => c.trim()).filter(Boolean);
+      const r = await apiPostJson<CompilerRun>("/compiler/run", {
+        goal,
+        domain: "biolab",
+        capabilities: caps.length ? caps : ["*"],
+        harnesses: ["morn-native"],
+      });
+      setCompiled(r);
+      setApproved(false);
+      setManifest(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  if (error) return <ErrorBox message={error} />;
-  if (!data) return <Loading />;
+  const approveAndCompile = async () => {
+    setError(null);
+    try {
+      await apiPostJson("/compiler/approve", { approver: "pi" });
+      await apiPostJson("/compiler/compile", {});
+      const m = await apiGet<ManifestOutcome>("/compiler/manifest");
+      setManifest(m);
+      setApproved(true);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   return (
     <div className="page">
       <header className="page-header">
-        <h1>Studio</h1>
+        <h1>Studio — Solution Compiler</h1>
       </header>
-      <div className="grid">
-        <Card title="WorkPackage Builder (real backend records)">
-          {data.work_packages.length === 0 ? (
-            <EmptyState label="No work packages yet" />
-          ) : (
-            data.work_packages.map((wp) => (
-              <div key={wp.id} className="builder-item">
-                <strong>{wp.objective}</strong>
-                <div>
-                  mode: {wp.execution_mode ? wp.execution_mode.nature.join(", ") : "—"} /{" "}
-                  {wp.execution_mode ? wp.execution_mode.executor.join(", ") : "—"}
+
+      <Card title="1. Describe Goal">
+        <div className="builder-item">
+          <label>Goal: </label>
+          <input
+            style={{ width: "70%", padding: 6 }}
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+          />
+        </div>
+        <div className="builder-item">
+          <label>Capabilities (comma separated, * = all): </label>
+          <input
+            style={{ width: "40%", padding: 6 }}
+            value={capabilities}
+            onChange={(e) => setCapabilities(e.target.value)}
+          />
+        </div>
+        <div className="page-actions">
+          <button onClick={runCompiler} disabled={loading}>
+            {loading ? "Compiling…" : "Run Compiler"}
+          </button>
+        </div>
+      </Card>
+
+      {error && <ErrorBox message={error} />}
+
+      {compiled && (
+        <>
+          <div className="grid">
+            <Card title="2. ProblemSpec">
+              <KeyValue k="Objective" v={compiled.problem.objective} />
+              <KeyValue k="Domain" v={compiled.problem.domain} />
+              <KeyValue k="Assumptions" v={compiled.problem.assumptions.length} />
+            </Card>
+            <Card title="3. WorkGraph">
+              {compiled.work_graph.nodes.length === 0 ? (
+                <EmptyState label="No nodes" />
+              ) : (
+                <ul>
+                  {compiled.work_graph.nodes.map((n) => (
+                    <li key={n.id}>
+                      {n.name} — <StatusPill value={n.nature} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+            <Card title="4. WorkPackages & Capability">
+              <KeyValue k="Work packages" v={compiled.proposed.work_packages.length} />
+              {compiled.proposed.capability_gaps.length === 0 ? (
+                <EmptyState label="No capability gaps" />
+              ) : (
+                <ul>
+                  {compiled.proposed.capability_gaps.map((g) => (
+                    <li key={g.requirement}>{g.detail}</li>
+                  ))}
+                </ul>
+              )}
+              <KeyValue k="Risk summary" v={compiled.proposed.risk_summary} />
+            </Card>
+            <Card title="5. Validation">
+              <KeyValue k="Passed" v={compiled.validation.passed ? "yes" : "no"} />
+              <ul>
+                {compiled.validation.issues.map((i, idx) => (
+                  <li key={idx}>
+                    {i.severity}: {i.message}
+                  </li>
+                ))}
+              </ul>
+              {compiled.validation.passed && (
+                <div className="page-actions" style={{ marginTop: 8 }}>
+                  <button onClick={approveAndCompile} disabled={approved}>
+                    {approved ? "Approved ✓" : "Approve & Compile"}
+                  </button>
                 </div>
-                <div>allowed: {wp.allowed_actions.join(", ") || "—"}</div>
-                <div>prohibited: {wp.prohibited_actions.join(", ") || "—"}</div>
-              </div>
-            ))
+              )}
+            </Card>
+          </div>
+
+          {manifest && (
+            <Card title="6. SolutionPackage Manifest">
+              <pre>{JSON.stringify(manifest.manifest ?? manifest.detail, null, 2)}</pre>
+            </Card>
           )}
-        </Card>
-
-        <Card title="Domain / World Builder">
-          <ul>
-            {data.object_types.map((t) => (
-              <li key={t.id}>
-                {t.name} — states: {t.allowed_states.join(", ")}
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card title="Role & Harness Builder">
-          <ul>
-            {data.roles.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card title="Solution Manifest Preview">
-          <pre>{JSON.stringify(data.manifest_preview, null, 2)}</pre>
-        </Card>
-      </div>
+        </>
+      )}
     </div>
   );
 }

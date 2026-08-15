@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "../api";
-import { Card, EmptyState, ErrorBox, KeyValue, Loading } from "../components/ui";
+import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
 interface Trace {
   seq: number;
@@ -28,11 +28,19 @@ interface ConsoleData {
 export default function ConsolePage() {
   const [data, setData] = useState<ConsoleData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [durableRuns, setDurableRuns] = useState<Array<{ id: string; status: string }>>([]);
+  const [attention, setAttention] = useState<Array<{ kind: string; subject: string }>>([]);
 
   useEffect(() => {
     apiGet<ConsoleData>("/console")
       .then(setData)
       .catch((e: Error) => setError(e.message));
+    apiGet<{ runs: Array<{ id: string; status: string }> }>("/durable/runs")
+      .then((r) => setDurableRuns(r.runs))
+      .catch(() => undefined);
+    apiGet<{ attention: Array<{ kind: string; subject: string }> }>("/durable/attention")
+      .then((r) => setAttention(r.attention))
+      .catch(() => undefined);
   }, []);
 
   if (error) return <ErrorBox message={error} />;
@@ -87,6 +95,31 @@ export default function ConsolePage() {
             ))
           )}
           <KeyValue k="Version rollbacks recorded" v={data.version_rollback} />
+        </Card>
+        <Card title="Durable Runs (v0.2)">
+          {durableRuns.length === 0 ? (
+            <EmptyState label="No durable runs" />
+          ) : (
+            <ul>
+              {durableRuns.map((r) => (
+                <li key={r.id}>
+                  {r.id} — <StatusPill value={r.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+          <KeyValue k="Attention items" v={attention.length} />
+          {attention.map((a) => (
+            <div key={a.subject} className="kv">
+              <span className="kv-key">{a.kind}</span>
+              <span className="kv-value">{a.subject}</span>
+            </div>
+          ))}
+        </Card>
+        <Card title="Delegation & Representation">
+          <KeyValue k="Delegation model" v="scope + expiry + retained accountability" />
+          <KeyValue k="Representation" v="allow / deny / revoke enforced" />
+          <KeyValue k="Accountability" v="judged -> delegated -> verified -> approved -> executed -> retained" />
         </Card>
         <Card title="Trace / Errors (ledger)">
           {data.traces.length === 0 ? (
