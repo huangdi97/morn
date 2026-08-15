@@ -14,6 +14,7 @@ import {
   ReplayOutcome,
   ShadowOutcome,
   WorkbenchData,
+  OpintPredictOutcome,
 } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
@@ -32,6 +33,7 @@ export default function Workbench() {
   const [distill, setDistill] = useState<DistillOutcome | null>(null);
   const [managedRun, setManagedRun] = useState<ManagedOutcome | null>(null);
   const [replacement, setReplacement] = useState<ReplacementOutcome | null>(null);
+  const [opintPrediction, setOpintPrediction] = useState<OpintPredictOutcome | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -159,6 +161,16 @@ export default function Workbench() {
       await apiPostJson("/managed/accept", { run_id: managedRun.run.id, decided_by: "pi" });
       const r = await apiPost<ManagedOutcome>("/managed/start");
       setManagedRun(r);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const runOpint = async () => {
+    try {
+      await apiPostJson("/opint/predictor/train", { target: "outcome_acceptance" });
+      const p = await apiPostJson<OpintPredictOutcome>("/opint/predict", { target: "outcome_acceptance", context: "biolab" });
+      setOpintPrediction(p);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -344,6 +356,20 @@ export default function Workbench() {
           </button>
         </div>
         {managedRun && <KeyValue k="Run" v={`${managedRun.run.id} — ${managedRun.run.status}`} />}
+      </Card>
+
+      <Card title="Operational Intelligence (v0.4)">
+        <div className="page-actions" style={{ marginBottom: 8 }}>
+          <button onClick={runOpint}>Train & Predict Outcome Acceptance</button>
+        </div>
+        {opintPrediction && (
+          <>
+            <KeyValue k="Prediction" v={opintPrediction.prediction.value.toFixed(3)} />
+            <KeyValue k="Interval" v={`[${opintPrediction.prediction.interval_lo.toFixed(3)}, ${opintPrediction.prediction.interval_hi.toFixed(3)}]`} />
+            <KeyValue k="Confidence" v={opintPrediction.prediction.confidence.toFixed(3)} />
+            <KeyValue k="Context match" v={opintPrediction.prediction.context_match ? "yes" : "no"} />
+          </>
+        )}
       </Card>
 
       <Card title="Replacement Compare (v0.3)">

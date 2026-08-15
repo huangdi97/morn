@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiGet } from "../api";
+import { apiGet, OpintRegistry } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
 interface Trace {
@@ -33,6 +33,7 @@ export default function ConsolePage() {
   const [certified, setCertified] = useState<Array<{ name: string; version: string; status: string }>>([]);
   const [managedRuns, setManagedRuns] = useState<Array<{ id: string; status: string }>>([]);
   const [replacementRecords, setReplacementRecords] = useState<Array<{ work: string; decision: string }>>([]);
+  const [opint, setOpint] = useState<OpintRegistry | null>(null);
 
   useEffect(() => {
     apiGet<ConsoleData>("/console")
@@ -52,6 +53,9 @@ export default function ConsolePage() {
       .catch(() => undefined);
     apiGet<{ records: Array<{ work: string; decision: string }> }>("/replacement/records")
       .then((r) => setReplacementRecords(r.records))
+      .catch(() => undefined);
+    apiGet<OpintRegistry>("/opint/registry")
+      .then(setOpint)
       .catch(() => undefined);
   }, []);
 
@@ -170,6 +174,24 @@ export default function ConsolePage() {
                 </li>
               ))}
             </ul>
+          )}
+        </Card>
+        <Card title="Predictor Registry & Persistence (v0.4)">
+          {opint ? (
+            <>
+              <KeyValue k="Episodes" v={opint.episodes} />
+              <KeyValue k="Snapshots" v={opint.snapshots} />
+              <KeyValue k="Rollback receipts" v={opint.rollback_receipts} />
+              <ul>
+                {opint.predictors.map((p) => (
+                  <li key={p.id}>
+                    {p.target} — n={p.n} <StatusPill value={p.insufficient_data ? "insufficient-data" : p.status} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <EmptyState label="No predictor data yet" />
           )}
         </Card>
         <Card title="Trace / Errors (ledger)">

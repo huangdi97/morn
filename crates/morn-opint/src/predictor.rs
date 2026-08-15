@@ -473,3 +473,46 @@ mod tests {
         }
     }
 }
+
+/// Serializable snapshot of a predictor state (spec + learned params).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictorSnapshot {
+    pub spec: PredictorSpec,
+    pub params: BaselineParams,
+}
+
+impl PredictorRegistry {
+    /// Snapshot all predictor states for persistence.
+    pub fn snapshot_all(&self) -> Vec<PredictorSnapshot> {
+        self.predictors
+            .iter()
+            .map(|p| PredictorSnapshot {
+                spec: p.spec.clone(),
+                params: p.params.clone(),
+            })
+            .collect()
+    }
+
+    /// Restore predictor states (spec + params) from a snapshot. Existing
+    /// predictions are preserved by matching spec id.
+    pub fn restore_all(&mut self, snapshots: Vec<PredictorSnapshot>) {
+        for snap in snapshots {
+            if let Some(existing) = self
+                .predictors
+                .iter_mut()
+                .find(|p| p.spec.id == snap.spec.id)
+            {
+                existing.spec = snap.spec;
+                existing.params = snap.params;
+            } else {
+                self.predictors.push(PredictorState {
+                    spec: snap.spec,
+                    params: snap.params,
+                    predictions: Vec::new(),
+                    calibrations: Vec::new(),
+                    drifts: Vec::new(),
+                });
+            }
+        }
+    }
+}

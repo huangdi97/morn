@@ -19,6 +19,7 @@ morn-evolution = { workspace = true }
 morn-biolab = { workspace = true }
 morn-foundry = { workspace = true }
 morn-assurance = { workspace = true }
+morn-opint = { workspace = true }
 morn-store = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

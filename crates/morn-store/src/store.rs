@@ -673,6 +673,51 @@ impl MornStore {
         self.load_records("distillation_candidate")
     }
 
+    pub fn save_opint_episode(&self, e: &morn_opint::episode::OperationalEpisode) -> Result<()> {
+        self.save_record(
+            "opint_episode",
+            e.id.as_str(),
+            e.workspace_id.as_str(),
+            e.started_at.millis(),
+            e,
+        )
+    }
+
+    pub fn load_opint_episodes(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Vec<morn_opint::episode::OperationalEpisode>> {
+        self.load_records_in_workspace("opint_episode", workspace_id.as_str())
+    }
+
+    pub fn save_predictor_states(
+        &self,
+        states: &[morn_opint::predictor::PredictorSnapshot],
+    ) -> Result<()> {
+        for s in states {
+            self.save_record(
+                "predictor_state",
+                s.spec.id.as_str(),
+                "",
+                s.spec.created_at.millis(),
+                s,
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn load_predictor_states(&self) -> Result<Vec<morn_opint::predictor::PredictorSnapshot>> {
+        self.load_records("predictor_state")
+    }
+
+    pub fn save_prediction(&self, p: &morn_opint::predictor::Prediction) -> Result<()> {
+        self.save_record("prediction", p.id.as_str(), "", p.generated_at.millis(), p)
+    }
+
+    pub fn load_predictions(&self) -> Result<Vec<morn_opint::predictor::Prediction>> {
+        self.load_records("prediction")
+    }
+
     pub fn save_rollback_request(
         &self,
         r: &morn_assurance::rollback::RollbackRequest,

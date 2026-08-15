@@ -16,6 +16,7 @@ use morn_biolab::dream_factory::LiteratureSource;
 use morn_harness::HarnessProvider;
 use morn_kernel::error::Error;
 use morn_kernel::ids::{ArtifactId, ArtifactVersionId, ScientificClaimId};
+use morn_opint::predictor::PredictorTarget;
 use morn_work::durable::{Signal, SignalKind};
 use morn_work::workflow::WorkflowStepKind;
 
@@ -90,6 +91,15 @@ pub fn router(state: AppState) -> Router {
         .route("/api/rollback/approve", post(rollback_approve))
         .route("/api/rollback/execute", post(rollback_execute))
         .route("/api/rollback/records", get(rollback_records))
+        .route("/api/opint/episode", post(opint_episode))
+        .route("/api/opint/episodes", get(opint_episodes))
+        .route("/api/opint/dataset", post(opint_dataset))
+        .route("/api/opint/predictor/train", post(opint_train))
+        .route("/api/opint/predict", post(opint_predict))
+        .route("/api/opint/actual", post(opint_actual))
+        .route("/api/opint/calibrate", post(opint_calibrate))
+        .route("/api/opint/registry", get(opint_registry))
+        .route("/api/opint/drift", get(opint_drift))
         .with_state(state)
         .layer(CorsLayer::permissive())
 }
@@ -1036,4 +1046,302 @@ async fn rollback_records(State(state): State<AppState>) -> ApiResult {
     Ok(Json(
         json!({ "requests": guard.rollback.requests, "receipts": guard.rollback.receipts }),
     ))
+}
+
+// ---- Goal 4 opint endpoints ----
+
+async fn opint_episode(State(state): State<AppState>) -> ApiResult {
+    let mut guard = state.lock();
+    use morn_assurance::managed_work::DeliveryStatus;
+    use morn_opint::episode::OperationalEpisode;
+    let ws = guard.workspace.id.clone();
+    let mut episode = OperationalEpisode::new(ws, "biolab", "dataset-to-claim");
+    if let Some(receipt) = guard.managed.receipts.last() {
+        episode.evidence.artifacts = receipt.artifacts.clone();
+        episode.outcome.delivery_receipt_ref = Some(receipt.id.to_string());
+        episode.outcome.outcome_record_ref = Some(receipt.outcome.clone());
+    }
+    if let Some(acc) = guard.managed.acceptances.last() {
+        episode.outcome.acceptance_decision_ref = Some(acc.id.to_string());
+        episode.evidence.decisions.push(acc.decision.clone());
+    }
+    if let Some(run) = guard.managed.runs.last() {
+        episode.work.package_ref = Some(run.work_contract_ref.clone());
+        episode
+            .execution
+            .harness_refs
+            .push("morn-native".to_string());
+        episode.execution.retries = run.retries;
+        episode.execution.approvals.push("pi".to_string());
+        episode.economics.human_minutes = run.human_fallbacks as f64 * 30.0;
+        episode.economics.latency_ms = 1000;
+        episode.economics.cost = run.retries as f64 * 5.0;
+        episode.economics.model_usage = 1;
+    }
+    let terminal = guard
+        .managed
+        .runs
+        .last()
+        .map(|r| r.status)
+        .unwrap_or(DeliveryStatus::Requested);
+    let acc = guard.managed.acceptances.last().cloned();
+    let final_ep = guard.episodes.finalize(episode, terminal, acc.as_ref());
+    guard.persist_all()?;
+    Ok(Json(json!({ "episode": final_ep })))
+}
+
+async fn opint_episodes(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    Ok(Json(json!({ "episodes": guard.episodes.episodes })))
+}
+
+async fn opint_dataset(State(state): State<AppState>) -> ApiResult {
+    let mut guard = state.lock();
+    use morn_kernel::version::Version;
+    use morn_opint::dataset::DatasetManifest;
+    let did = morn_kernel::ids::EpisodeDatasetId::generate_with("ds");
+    let manifest = DatasetManifest {
+        dataset_id: did.clone(),
+        source: "authoritative-morn-records".to_string(),
+        license: "internal".to_string(),
+        dataset_version: Version::v1(),
+        checksum: "fixture".to_string(),
+        acquisition_date: "2026-08-15".to_string(),
+        subset_rule: "all episodes".to_string(),
+        preprocessing: "none".to_string(),
+        schema_ref: "morn.feature.v1".to_string(),
+        reference_evidence: vec![],
+        created_at: morn_kernel::time::Timestamp::now(),
+    };
+    let episodes = guard.episodes.episodes.clone();
+    let refs: Vec<&morn_opint::episode::OperationalEpisode> = episodes.iter().collect();
+    let snapshot = guard.dataset.build_snapshot(manifest.clone(), &refs);
+    // Leakage checks (clean fixture): no duplicates/future/workspace violations.
+    let ft: Vec<(morn_kernel::ids::OperationalEpisodeId, i64)> = episodes
+        .iter()
+        .map(|e| (e.id.clone(), e.ended_at.map(|t| t.millis()).unwrap_or(0)))
+        .collect();
+    let ot: Vec<(morn_kernel::ids::OperationalEpisodeId, i64)> = episodes
+        .iter()
+        .map(|e| (e.id.clone(), e.ended_at.map(|t| t.millis()).unwrap_or(0)))
+        .collect();
+    let quality = guard.dataset.check_leakage(&did, &refs, &ft, &ot, &[]);
+    let split = if episodes.len() >= 2 {
+        Some(guard.dataset.temporal_split(&did, episodes, 0.25)?)
+    } else {
+        None
+    };
+    guard.persist_all()?;
+    Ok(Json(
+        json!({ "snapshot": snapshot, "quality": quality, "split": split }),
+    ))
+}
+
+async fn opint_train(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    let target = body
+        .get("target")
+        .and_then(Value::as_str)
+        .unwrap_or("outcome_acceptance");
+    let mut guard = state.lock();
+    let target = match target {
+        "duration" => PredictorTarget::Duration,
+        "failure_risk" => PredictorTarget::FailureRisk,
+        "cost" => PredictorTarget::Cost,
+        "human_intervention" => PredictorTarget::HumanIntervention,
+        "transition_risk" => PredictorTarget::TransitionRisk,
+        _ => PredictorTarget::OutcomeAcceptance,
+    };
+    ensure_predictor(&mut guard, target);
+    let id = predictor_id(&guard, target);
+    let values: Vec<f64> = guard
+        .episodes
+        .episodes
+        .iter()
+        .map(|e| match target {
+            PredictorTarget::Duration => e
+                .ended_at
+                .map(|t| (t.millis() - e.started_at.millis()) as f64)
+                .unwrap_or(0.0),
+            PredictorTarget::FailureRisk => {
+                if e.labels.success {
+                    0.0
+                } else {
+                    1.0
+                }
+            }
+            PredictorTarget::Cost => e.economics.cost,
+            PredictorTarget::HumanIntervention => e.economics.human_minutes,
+            PredictorTarget::OutcomeAcceptance => {
+                if e.labels.accepted.unwrap_or(false) {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            PredictorTarget::TransitionRisk => {
+                if e.labels.escalation {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+        })
+        .collect();
+    let successes = values.iter().filter(|v| **v > 0.5).count();
+    let result = guard.predictors.train(&id, &values, successes);
+    guard.persist_all()?;
+    match result {
+        Ok(()) => Ok(Json(json!({ "trained": true, "target": target.as_str() }))),
+        Err(e) => Ok(Json(
+            json!({ "trained": false, "insufficient_data": true, "detail": e.to_string() }),
+        )),
+    }
+}
+
+async fn opint_predict(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    let target = body
+        .get("target")
+        .and_then(Value::as_str)
+        .unwrap_or("outcome_acceptance");
+    let context = body
+        .get("context")
+        .and_then(Value::as_str)
+        .unwrap_or("biolab");
+    let mut guard = state.lock();
+    let target = match target {
+        "duration" => PredictorTarget::Duration,
+        "failure_risk" => PredictorTarget::FailureRisk,
+        "cost" => PredictorTarget::Cost,
+        "human_intervention" => PredictorTarget::HumanIntervention,
+        "transition_risk" => PredictorTarget::TransitionRisk,
+        _ => PredictorTarget::OutcomeAcceptance,
+    };
+    ensure_predictor(&mut guard, target);
+    let id = predictor_id(&guard, target);
+    let features = morn_opint::state::StateEncoder::new().encode(
+        &morn_opint::state::WorldState::default(),
+        &morn_opint::state::WorkState::default(),
+        &morn_opint::state::OrganizationState::default(),
+        &morn_opint::state::ExecutionState::default(),
+        &morn_opint::state::ResourceState::default(),
+        &morn_opint::state::EvidenceState::default(),
+    );
+    let prediction = guard
+        .predictors
+        .predict(&id, &features, context, vec!["ep-1".to_string()]);
+    match prediction {
+        Ok(pred) => {
+            guard.persist_all()?;
+            Ok(Json(json!({ "prediction": pred })))
+        }
+        Err(e) => Err(AppError(e)),
+    }
+}
+
+async fn opint_actual(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    let predictor = body
+        .get("predictor_id")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let prediction = body
+        .get("prediction_id")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let actual = body.get("actual").and_then(Value::as_f64).unwrap_or(0.0);
+    let mut guard = state.lock();
+    guard.predictors.record_actual(
+        &morn_kernel::ids::PredictorSpecId::new(predictor),
+        &morn_kernel::ids::PredictionId::new(prediction),
+        actual,
+    )?;
+    guard.persist_all()?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn opint_calibrate(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    let predictor = body
+        .get("predictor_id")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let mut guard = state.lock();
+    let cal = guard
+        .predictors
+        .calibrate(&morn_kernel::ids::PredictorSpecId::new(predictor))?;
+    guard.persist_all()?;
+    Ok(Json(json!({ "calibration": cal })))
+}
+
+async fn opint_registry(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    let predictors: Vec<serde_json::Value> = guard
+        .predictors
+        .predictors
+        .iter()
+        .map(|p| {
+            json!({
+                "id": p.spec.id,
+                "name": p.spec.name,
+                "target": p.spec.target,
+                "status": p.spec.status,
+                "n": p.params.n,
+                "insufficient_data": p.params.insufficient_data,
+                "predictions": p.predictions.len(),
+            })
+        })
+        .collect();
+    Ok(Json(json!({
+        "predictors": predictors,
+        "episodes": guard.episodes.episodes.len(),
+        "snapshots": guard.dataset.snapshots.len(),
+        "quality_reports": guard.dataset.quality_reports,
+        "splits": guard.dataset.splits.len(),
+        "rollback_receipts": guard.rollback.receipts.len(),
+    })))
+}
+
+async fn opint_drift(State(state): State<AppState>) -> ApiResult {
+    let mut guard = state.lock();
+    let mut drifts = Vec::new();
+    let ids: Vec<morn_kernel::ids::PredictorSpecId> = guard
+        .predictors
+        .predictors
+        .iter()
+        .map(|p| p.spec.id.clone())
+        .collect();
+    for id in ids {
+        if let Ok(d) = guard.predictors.drift_check(&id) {
+            drifts.push(d);
+        }
+    }
+    guard.persist_all()?;
+    Ok(Json(json!({ "drift_reports": drifts })))
+}
+
+fn ensure_predictor(guard: &mut crate::app::AppInner, target: PredictorTarget) {
+    use morn_opint::predictor::PredictorSpec;
+    let exists = guard
+        .predictors
+        .predictors
+        .iter()
+        .any(|p| p.spec.target == target);
+    if !exists {
+        guard.predictors.register(PredictorSpec::new(
+            format!("{}-predictor", target.as_str()),
+            target,
+            vec!["biolab".to_string()],
+        ));
+    }
+}
+
+fn predictor_id(
+    guard: &crate::app::AppInner,
+    target: PredictorTarget,
+) -> morn_kernel::ids::PredictorSpecId {
+    guard
+        .predictors
+        .predictors
+        .iter()
+        .find(|p| p.spec.target == target)
+        .map(|p| p.spec.id.clone())
+        .unwrap_or_else(morn_kernel::ids::PredictorSpecId::generate)
 }

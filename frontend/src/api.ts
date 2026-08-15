@@ -113,3 +113,13 @@ export interface HubV3Data {
   capability_releases: Array<{ id: string; version: string }>;
   replacement_records: Array<{ id: string; work: string; decision: string }>;
 }
+export interface OpintPredictOutcome {
+  prediction: { id: string; predictor_id: string; target: string; value: number; interval_lo: number; interval_hi: number; confidence: number; context_match: boolean };
+}
+
+export interface OpintRegistry {
+  predictors: Array<{ id: string; name: string; target: string; status: string; n: number; insufficient_data: boolean; predictions: number }>;
+  episodes: number;
+  snapshots: number;
+  rollback_receipts: number;
+}

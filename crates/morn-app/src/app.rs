@@ -20,6 +20,9 @@ use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
 use morn_kernel::ids::WorkspaceId;
 use morn_kernel::workspace::{Workspace, WorkspaceKind};
+use morn_opint::dataset::OutcomeDataset;
+use morn_opint::episode::EpisodeAssembler;
+use morn_opint::predictor::PredictorRegistry;
 use morn_store::store::MornStore;
 use morn_work::durable::DurableRuntime;
 use morn_work::service::DurableWorkService;
@@ -45,6 +48,9 @@ pub struct AppInner {
     pub flywheel: EvolutionFlywheel,
     pub distillation: DistillationService,
     pub rollback: RollbackService,
+    pub episodes: EpisodeAssembler,
+    pub dataset: OutcomeDataset,
+    pub predictors: PredictorRegistry,
     pub last_problem: Option<morn_foundry::problem_spec::ProblemSpec>,
     pub last_proposed: Option<ProposedSolution>,
     pub last_approved: Option<ApprovedSolution>,
@@ -97,6 +103,9 @@ impl AppState {
             flywheel: EvolutionFlywheel::new(),
             distillation: DistillationService::new(),
             rollback: RollbackService::new(),
+            episodes: EpisodeAssembler::new(),
+            dataset: OutcomeDataset::new(),
+            predictors: PredictorRegistry::new(),
             last_problem: None,
             last_proposed: None,
             last_approved: None,
@@ -197,6 +206,15 @@ impl AppInner {
                 r,
             )?;
         }
+        for e in &self.episodes.episodes {
+            store.save_opint_episode(e)?;
+        }
+        store.save_predictor_states(&self.predictors.snapshot_all())?;
+        for p in &self.predictors.predictors {
+            for pred in &p.predictions {
+                store.save_prediction(pred)?;
+            }
+        }
         Ok(())
     }
 
@@ -219,6 +237,18 @@ impl AppInner {
         self.distillation.candidates = store.load_distillation_candidates()?;
         self.rollback.requests = store.load_rollback_requests(&self.workspace.id)?;
         self.rollback.receipts = store.load_rollback_receipts()?;
+        let episodes = store.load_opint_episodes(&self.workspace.id)?;
+        self.episodes.episodes = episodes;
+        let states = store.load_predictor_states()?;
+        self.predictors.restore_all(states);
+        let predictions = store.load_predictions()?;
+        for state in &mut self.predictors.predictors {
+            state.predictions = predictions
+                .iter()
+                .filter(|p| p.predictor_id == state.spec.id)
+                .cloned()
+                .collect();
+        }
         Ok(())
     }
 }
