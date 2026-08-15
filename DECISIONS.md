@@ -345,3 +345,71 @@ Tests/Proof:
   workbench objects=1/work_packages=1；
 - `scripts/run_all.ps1` 全绿 exit 0（208 Rust tests / 0 ignored；frontend 2；UI smoke 全部 OK；
   demo smoke OK）。
+
+### D-027 — Core 编译器去领域启发式：governed-deliverable 模板由通用信号触发
+Status: Accepted (2026-08-16)
+
+Context:
+M1 领域中立审计发现 `morn-foundry::compiler` 的 decompose_nodes 用
+`goal.contains("claim") || goal.contains("hypothesis") || request.domain.contains("biolab")`
+触发 evidence/analysis/review/approval/release 模板（CORE_BUG，Core 认识领域词）。
+
+Decision:
+改为领域无关触发：goal 含 "review"/"approv"，或约束声明 governed release
+（"release" + "unapproved"/"irreversible"）时走 governed 模板；release 节点措辞改为
+"release reviewed result"，验收改为 "outcome linked to evidence/artifact/decision"。
+领域名单独不再改变分解（测试 `governed_template_is_domain_neutral` 证明）。
+
+Tests/Proof:
+`morn-foundry` 14 tests；`governed_template_is_domain_neutral` 断言 generic 域 reviewed goal=5 nodes、
+domain="biolab" 的 transform goal=2 nodes。check_domain_boundary.ps1 新增领域词启发式守卫。
+
+### D-028 — UI 领域注入用 backend domain_packs 广告，Core UI 不再硬编码 BioLab
+Status: Accepted (2026-08-16)
+
+Context:
+M14 要求零 Domain 下 Workbench/Studio/Console/Hub 完整可用；此前 Workbench 无条件渲染
+BioLab 按钮/卡片并直接调用 /biolab/*，Studio 默认 domain="biolab"。
+
+Decision:
+- `/api/workbench` 增加 `domain_packs` 字段：启用领域包时广告（如 ["biolab-reference"]），
+  零 Domain 时为空数组；
+- Workbench 通过 `biolabEnabled(domain_packs)` 数据驱动门控 BioLab 区块（extension point），
+  Core UI 无 `if domain == biolab` 硬编码；
+- Studio 默认 goal/domain 改为通用（"Deliver a reviewed report" / "generic"）；
+- `/api/compiler/run` 默认 domain 改 "generic"。
+
+Tests/Proof:
+frontend `Workbench.gating.test.ts`（zero-domain=false / enabled=true）；ui_smoke 在 all-features
+下仍通过（domain_packs 广告后按钮出现）；zero-domain server 实测 domain_packs=[] 且 /api/biolab/run 404。
+
+### D-029 — Developer CLI 补齐 provider/connector/plugin/compat/migrate，全部走 canonical services
+Status: Accepted (2026-08-16)
+
+Context:
+M15 验收要求 CLI 覆盖 doctor/status/node/provider/connector/plugin/domain/package/compat/conformance。
+
+Decision:
+`morn-cli` 新增 provider（IntelligenceProvider 双 fixture + harness smoke）、connector
+（fixture 健康/幂等）、plugin（manifest validate）、compat（semantic contract matrix）、
+migrate（schema version/preflight）。命令只调用 canonical services，不直改 DB。
+run_all.ps1 新增 developer CLI smoke 步骤覆盖全部子命令。
+
+Tests/Proof:
+`morn doctor/status/provider/connector list|health/plugin validate/compat/migrate status/node list/domain list/package inspect/conformance` 全部 exit 0。
+
+### D-030 — Pack/Plugin 名字在 Core 边界做 identifier-safe 校验（path traversal / command injection）
+Status: Accepted (2026-08-16)
+
+Context:
+M17 安全矩阵要求 path traversal / command injection 边界；此前 `safe_name` 校验缺失，
+migration_security 的对应测试只验证测试数据本身，未验证 Morn 实现。
+
+Decision:
+`morn-package::safe_name` 拒绝空名、`/`、`\`、`..`、控制字符；PackManifest::validate 与
+PluginManifest::validate（新增，校验 plugin_type 白名单 + core_compat）统一调用；
+CLI 传参用 argv（不 shell 插值）。安全测试改为断言 Morn 自身校验。
+
+Tests/Proof:
+`morn-package` 5 tests（含 unsafe_names_rejected_path_traversal_and_injection、
+plugin_manifest_validate_type_and_name）；migration_security 10 tests。

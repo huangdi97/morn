@@ -24,3 +24,19 @@ Date: 2026-08-15
 3. app：移除对 biolab 的直接依赖；领域功能经 DomainRegistry（M11/M12）注入。
 4. biolab：迁移到 domain-packs/biolab-reference（crate 名 morn-biolab-reference）。
 5. 增加架构守卫测试（Core 不得依赖 domain pack）。
+
+
+---
+
+## Resolution (2026-08-16)
+
+- CORE_BUG（kernel 领域 ID）→ 已移除，迁至 domain-packs/biolab-reference（morn-biolab-reference）。
+- CORE_BUG（compiler 领域启发式）→ 已移除（DECISIONS D-027）：governed-deliverable 模板由通用信号触发；
+  `check_domain_boundary.ps1` 新增领域词启发式守卫，run_all 通过。
+- TEST_FIXTURE（各 crate 测试中 biolab 字符串）→ 保留为 conformance/reference fixture，不构成 Core→domain 依赖。
+- 依赖方向：Core crates 无（非 optional）domain pack 依赖；morn-biolab-reference 仅依赖 public SDK crates。
+- 证明：
+  - `cargo check -p morn-app`（零领域）通过；
+  - zero-domain server：/api/workbench domain_packs=[]，/api/biolab/run 404；
+  - all-features server：domain_packs=[biolab-reference]，BioLab E2E all_ok=True；
+  - `ArchitectureConformance::core_has_no_domain_pack` + 领域词守卫通过。

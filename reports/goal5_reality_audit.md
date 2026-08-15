@@ -45,3 +45,40 @@ cargo test --workspace  ->  green（Goal1-4 全量，~142 tests，0 failed/0 ign
 - B-001：真实 DeepSeek Harness smoke（凭据/官方安装物）
 - G4-B-002：真实 BioLab 数据 pilot FULL（无合法真实 dataset）
 （Goal5 本地可完成项不依赖二者）
+
+
+---
+
+## Post-completion Audit (2026-08-16)
+
+Baseline: HEAD 5f53ba2 (G5 M3-M15) + working tree. Full regression:
+`scripts/run_all.ps1` exit 0 — Rust 64 suites / 218 passed / 0 failed / 0 ignored;
+frontend typecheck/lint/test(4)/build; CLI smoke 12 commands; Tauri build; Playwright
+UI smoke all OK; demo smoke OK.
+
+| Capability | Status (2026-08-16) | Evidence |
+|---|---|---|
+| Goal1-4 regression | DONE | run_all exit 0 |
+| Domain Neutralization | DONE | compiler heuristic removed; domain boundary guard + ArchitectureConformance test; zero-domain server domain_packs=[] |
+| Reference Extraction | DONE | domain-packs/biolab-reference; reference_e2e install/enable/disable/uninstall + history |
+| Stable Kernel Freeze | DONE | kernel contracts.rs (22 contracts, v1 snapshot, compat, deprecation) |
+| Capability Fabric | DONE | morn-capability + RuntimeProvider/IntelligenceProvider/HarnessProvider |
+| Provider SDK | DONE | harness contract tests (2 impls); intelligence conformance (2 fixtures); runtime conformance |
+| Connector SDK | DONE | morn-integration ConnectorSpec/Instance/Mapping/Cursor/Receipt + GenericFixtureConnector |
+| Generic Process Intelligence | DONE | morn-process ProcessMiner (handoff/wait/rework/loop/dup-approval/manual-copy) |
+| Morn Node | DONE | morn-node MornNode/NodeType/lease/health + 2-node failover tests |
+| Distributed Durable Runtime | DONE | DistributedRuntime claim/checkpoint/failover/dedupe/stale-lease; pure_core_e2e Phase 3 |
+| Deployment/Topology | DONE | DeploymentSpec/Topology/NodeGroup/PlacementRule + validation test |
+| Domain SDK | DONE | DomainDefinition/DomainRegistry, 13 declaration kinds |
+| Domain Pack Lifecycle | DONE | PackLifecycle init/validate/build/install/enable/disable/upgrade/uninstall/inspect/diff |
+| Plugin System | DONE | PluginManifest (deps/permissions/compat/migrations/health) + validate |
+| Generic zero-domain UI | DONE | Workbench gating (biolabEnabled), Studio generic, domain_packs API |
+| Developer CLI | DONE | doctor/status/node/provider/connector/plugin/domain/package/compat/migrate/conformance |
+| Compatibility/Migration | DONE | compat matrix + migration preflight/snapshot/dry-run/apply/verify/restore |
+| Security | DONE | workspace isolation/secret redaction/E3 approval/connector token/node auth/pack-name validation/audit |
+| Chaos | DONE | chaos.rs 7 failure-injection tests, explicit recover/block/escalate/compensate |
+| Conformance | DONE | Provider/Runtime/Connector/Plugin/DomainPack/Architecture kits |
+| Pure Core E2E | DONE | pure_core_e2e (zero-domain full chain + restart + failover + governed action) |
+| Reference Pack E2E | DONE | reference_e2e (install/enable/conformance/disable/uninstall/history) |
+
+External blockers unchanged: B-001（真实 DSH smoke）、G4-B-002（真实 BioLab 数据 pilot）。

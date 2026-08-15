@@ -176,3 +176,32 @@ Fix/Decision:
 Test added:
 `scripts/run_all.ps1` 全绿（exit 0）；手工 smoke 复现通过：
 health=ok / bootstrap objects=1 work_packages=1 / biolab all_ok=True steps=7 / workbench objects=1 work_packages=1。
+
+### KF-010 — Core 编译器领域启发式（M1 残留，fixed）
+Status: Fixed (2026-08-16)
+
+Reproduction:
+`morn-foundry::compiler` decompose_nodes 用 `goal.contains("claim") || goal.contains("hypothesis") ||
+request.domain.contains("biolab")` 触发 evidence/analysis/review/approval/release 模板——Core 认识领域词，
+违反 Domain-neutral（M1 审计 CORE_BUG）。
+
+Fix/Decision:
+改为通用 governed-deliverable 信号（goal 含 review/approv，或约束声明 governed release）；
+领域名单独不再改变分解；release 措辞通用化（见 DECISIONS D-027）。
+
+Test added:
+`governed_template_is_domain_neutral`（morn-foundry）；`check_domain_boundary.ps1` 新增领域词启发式守卫。
+
+### KF-011 — Core UI 硬编码 BioLab 卡片/按钮（M14 残留，fixed）
+Status: Fixed (2026-08-16)
+
+Reproduction:
+Workbench.tsx 无条件渲染 "Run BioLab E2E" / "BioLab Dream Factory" 卡片并直接调用 /biolab/*；
+Studio.tsx 默认 domain="biolab"——零 Domain 下 UI 仍显示领域入口（M14 违约）。
+
+Fix/Decision:
+`/api/workbench` 广告 `domain_packs`；前端 `biolabEnabled()` 数据驱动门控（见 DECISIONS D-028）；
+Studio 默认通用；compiler/run 默认 domain="generic"。
+
+Test added:
+`frontend/src/Workbench.gating.test.ts`（2 tests）；zero-domain server 实测 domain_packs=[] 且 /api/biolab/run 404。

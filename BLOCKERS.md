@@ -99,3 +99,9 @@ Resolution:
 无新增 blocker。B-001（真实 DeepSeek Harness smoke，需官方安装物或真实凭据）与 G4-B-002（真实 BioLab 数据
 pilot，需合法真实 dataset）保持 Active。Goal 3 全部本地可完成项 re-verified green：
 `scripts/run_all.ps1` exit 0（208 Rust tests / 0 ignored；frontend 2；UI smoke 全部 OK；demo smoke OK）。
+
+## Goal 5 Update (2026-08-16)
+
+无新增 blocker。B-001（真实 DeepSeek Harness smoke）与 G4-B-002（真实 BioLab 数据 pilot）保持 Active；
+二者均不阻塞 Goal 5 任何本地可完成项（Provider/Connector/Node/Distributed 全部以 fixture/conformance 证明）。
+`CORE COMPLETE = YES`（唯一非本地项即上述两个 external blocker，与 Core 本体无关）。
