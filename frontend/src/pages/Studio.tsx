@@ -8,7 +8,7 @@ interface ManifestOutcome {
 }
 
 export default function Studio() {
-  const [goal, setGoal] = useState("Dataset to Reviewed Scientific Claim");
+  const [goal, setGoal] = useState("Deliver a reviewed report");
   const [capabilities, setCapabilities] = useState("*");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export default function Studio() {
       const caps = capabilities.split(",").map((c) => c.trim()).filter(Boolean);
       const r = await apiPostJson<CompilerRun>("/compiler/run", {
         goal,
-        domain: "biolab",
+        domain: "generic",
         capabilities: caps.length ? caps : ["*"],
         harnesses: ["morn-native"],
       });

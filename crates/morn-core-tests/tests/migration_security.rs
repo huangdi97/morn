@@ -4,6 +4,8 @@ use morn_capability::effect::EffectContract;
 use morn_integration::ConnectorProvider;
 use morn_kernel::ids::WorkspaceId;
 use morn_kernel::policy::{Policy, PolicyRule};
+use morn_kernel::version::Version;
+use morn_package::{PackManifest, PluginManifest};
 use morn_runtime::gateway::ActionGateway;
 use morn_store::MornStore;
 
@@ -171,19 +173,38 @@ fn node_identity_and_lease_enforced() {
 }
 
 #[test]
-fn path_traversal_rejected() {
-    // Package/plugin names must not contain path separators.
-    for name in ["../etc/passwd", "..\\..\\secret", "a/b"] {
-        assert!(name.contains('/') || name.contains('\\') || name.contains(".."));
+fn path_traversal_rejected_by_pack_manifest() {
+    // Morn package/plugin manifests reject traversal/path-separator names at
+    // the Core boundary (PackManifest::validate / safe_name).
+    for bad in ["../etc/passwd", "..\\..\\secret", "a/b", "; rm -rf /"] {
+        let mut m = PackManifest::new("p", "domain-pack", Version::v1());
+        m.name = bad.to_string();
+        assert!(m.validate().is_err(), "unsafe name must be rejected: {bad}");
     }
 }
 
 #[test]
-fn command_injection_boundary() {
-    // CLI args are passed as arguments, never shell-interpolated.
+fn command_injection_boundary_in_pack_names() {
+    // Names with separators / traversal / control chars are rejected by Morn's
+    // own validator (identifier-safety boundary).
+    for bad in ["; rm -rf /", "..\\..\\secret", "x\ninjected"] {
+        let mut m = PluginManifest::new("p", "connector-provider");
+        m.name = bad.to_string();
+        assert!(
+            m.validate().is_err(),
+            "unsafe name must be rejected: {bad:?}"
+        );
+    }
+    // Shell metacharacters without separators are opaque identifiers: safe
+    // because the CLI passes argv, never through a shell.
+    let mut m = PluginManifest::new("p", "connector-provider");
+    m.name = "x; curl evil".to_string();
+    assert!(m.validate().is_ok());
+    // CLI boundary: a malicious-looking argv element must be treated as one
+    // argument (no second command executed).
     let out = std::process::Command::new("node")
         .arg("--version")
-        .arg("; rm -rf /") // must NOT be executed as a second command
+        .arg("; rm -rf /")
         .output()
         .unwrap();
     assert!(out.status.success());

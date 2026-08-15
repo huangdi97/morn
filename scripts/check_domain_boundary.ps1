@@ -37,7 +37,18 @@ foreach ($f in $files) {
         }
     }
 }
-# 3) Kernel must not define concrete domain IDs (exact identifiers).
+# 3) Core must not match on concrete domain words (compiler-heuristic class leak).
+$coreFiles = Get-ChildItem crates -Recurse -Filter *.rs | Where-Object { $_.FullName -notmatch "\\tests\\" }
+foreach ($f in $coreFiles) {
+    $text = Get-Content $f.FullName -Raw
+    foreach ($w in @("biolab", "claim", "hypothesis", "scientific", "aging_pilot")) {
+        if ($text -match "contains\(`"$w`"\)|`"$w`".*contains\(") {
+            Write-Host "FAIL: core domain-word heuristic -> $($f.FullName) ($w)"
+            $fail = 1
+        }
+    }
+}
+# 4) Kernel must not define concrete domain IDs (exact identifiers).
 $kernelIds = Get-Content crates/morn-kernel/src/ids.rs -Raw
 foreach ($word in @('DatasetTag','SampleTag','ScientificClaimTag','AnalysisRunTag','QCResultTag')) {
     if ($kernelIds -match "\b$word\b") { Write-Host "FAIL: kernel defines domain ID $word"; $fail = 1 }

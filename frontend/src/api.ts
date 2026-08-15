@@ -29,6 +29,7 @@ export interface WorkbenchData {
   outcomes: Array<{ id: string; objective: string; acceptance_met: boolean }>;
   harness: { native: { provider: string; status: string }; dsh: { provider: string; status: string } };
   evolution_candidates: number;
+  domain_packs: string[];
   e2e_result: { all_ok: boolean; steps: Array<{ step: string; ok: boolean; detail: string }>; claim_id: string } | null;
 }
 

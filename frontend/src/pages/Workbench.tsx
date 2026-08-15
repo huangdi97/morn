@@ -18,6 +18,14 @@ import {
 } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
+/** Domain-gated UI extension point: BioLab reference UI is only rendered when
+ *  the backend advertises the biolab-reference domain pack (zero-domain builds
+ *  advertise none, so the Core surfaces stay domain-free). */
+export function biolabEnabled(domainPacks: string[]): boolean {
+  return domainPacks.includes("biolab-reference");
+}
+
+
 export default function Workbench() {
   const [data, setData] = useState<WorkbenchData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +67,7 @@ export default function Workbench() {
   if (loading) return <Loading />;
   if (error) return <ErrorBox message={error} />;
   if (!data) return <EmptyState label="No workbench data" />;
+  const biolab = biolabEnabled(data.domain_packs);
 
   const startDurable = async () => {
     try {
@@ -199,7 +208,7 @@ export default function Workbench() {
       <header className="page-header">
         <h1>Workbench</h1>
         <div className="page-actions">
-          <button onClick={runE2e}>Run BioLab E2E</button>
+          {biolab && <button onClick={runE2e}>Run BioLab E2E</button>}
         </div>
       </header>
 
@@ -312,6 +321,7 @@ export default function Workbench() {
         {evaluation && <KeyValue k="Evaluation decision" v={evaluation.result.decision} />}
       </Card>
 
+      {biolab && (
       <Card title="BioLab Dream Factory — Loops A & C">
         <div className="page-actions" style={{ marginBottom: 8 }}>
           <button onClick={runLoopA}>Run Loop A</button>
@@ -322,6 +332,7 @@ export default function Workbench() {
         {loopA && <KeyValue k="Loop A" v={`approved=${loopA.loop_a.pi_approved} ok=${loopA.loop_a.all_ok}`} />}
         {loopC && <KeyValue k="Loop C" v="manuscript release candidate created" />}
       </Card>
+      )}
 
       <Card title="Evolution Center (v0.3)">
         <div className="page-actions" style={{ marginBottom: 8 }}>

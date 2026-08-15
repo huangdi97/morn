@@ -2043,6 +2043,7 @@ dependencies = [
  "morn-domain-sdk",
  "morn-harness",
  "morn-integration",
+ "morn-kernel",
  "morn-node",
  "morn-package",
  "serde_json",

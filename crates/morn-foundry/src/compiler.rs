@@ -121,11 +121,15 @@ impl SolutionCompiler {
                     .with_acceptance(acceptance.into_iter().map(String::from).collect()),
             );
         };
-        // Domain-aware template: biolab-like flows get evidence/review/approval nodes.
-        if goal.contains("claim")
-            || goal.contains("hypothesis")
-            || request.domain.contains("biolab")
-        {
+        // Generic governed-deliverable template: reviewed/approved outcomes get
+        // evidence -> analysis -> review -> approval -> release nodes. The trigger is
+        // domain-neutral (goal wording or governed-release constraints), never a
+        // concrete domain name.
+        let governed_release = request.constraints.iter().any(|c| {
+            let c = c.to_lowercase();
+            c.contains("release") && (c.contains("unapproved") || c.contains("irreversible"))
+        });
+        if goal.contains("review") || goal.contains("approv") || governed_release {
             push(
                 "evidence",
                 "collect and lock evidence",
@@ -160,11 +164,11 @@ impl SolutionCompiler {
             );
             push(
                 "release",
-                "release claim/result",
+                "release reviewed result",
                 WorkNature::Regulated,
                 vec!["approval"],
                 vec!["released outcome"],
-                vec!["claim linked to evidence/artifact/decision"],
+                vec!["outcome linked to evidence/artifact/decision"],
             );
             return nodes;
         }
@@ -548,6 +552,32 @@ mod tests {
         assert_eq!(graph.nodes.len(), 5);
         assert!(graph.validate().is_ok());
         assert!(!compiler.decision_sources.is_empty());
+    }
+
+    #[test]
+    fn governed_template_is_domain_neutral() {
+        // A reviewed deliverable triggers the governed template with a generic domain...
+        let ws = morn_kernel::ids::WorkspaceId::generate();
+        let mut req = SolutionRequest::new(ws.clone(), "Deliver a reviewed report", "generic");
+        req.constraints
+            .push("no unapproved irreversible release".to_string());
+        let mut compiler = SolutionCompiler::new();
+        let (_, graph) = compiler.analyze(&req).unwrap();
+        assert_eq!(
+            graph.nodes.len(),
+            5,
+            "governed template for reviewed deliverable"
+        );
+        // ...and a domain name alone must NOT trigger the governed template.
+        let mut req2 = SolutionRequest::new(ws, "Convert CSV to standard report", "biolab");
+        req2.available_capabilities.push("*".to_string());
+        let mut compiler2 = SolutionCompiler::new();
+        let (_, graph2) = compiler2.analyze(&req2).unwrap();
+        assert_eq!(
+            graph2.nodes.len(),
+            2,
+            "domain name alone must not change decomposition"
+        );
     }
 
     #[test]

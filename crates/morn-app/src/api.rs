@@ -131,6 +131,11 @@ async fn workbench(State(state): State<AppState>) -> ApiResult {
         e2e.map(|r| json!({ "all_ok": r.all_ok(), "steps": r.steps, "claim_id": r.claim_id }));
     #[cfg(not(feature = "domain-biolab"))]
     let e2e_value: Option<Value> = None;
+    // Enabled domain packs advertised to the UI as an extension point.
+    #[cfg(feature = "domain-biolab")]
+    let domain_packs: Vec<&str> = vec!["biolab-reference"];
+    #[cfg(not(feature = "domain-biolab"))]
+    let domain_packs: Vec<&str> = vec![];
 
     let objects: Vec<Value> = world
         .objects()
@@ -169,6 +174,7 @@ async fn workbench(State(state): State<AppState>) -> ApiResult {
             "dsh": { "provider": guard.dsh_harness.provider_name(), "status": "fixture-mode" }
         },
         "evolution_candidates": guard.evolution.candidates().len(),
+        "domain_packs": domain_packs,
         "e2e_result": e2e_value,
     })))
 }
@@ -332,11 +338,11 @@ async fn compiler_run(State(state): State<AppState>, Json(body): Json<Value>) ->
     let goal = body
         .get("goal")
         .and_then(Value::as_str)
-        .unwrap_or("Dataset to Reviewed Scientific Claim");
+        .unwrap_or("Deliver a reviewed report");
     let domain = body
         .get("domain")
         .and_then(Value::as_str)
-        .unwrap_or("biolab");
+        .unwrap_or("generic");
     let mut guard = state.lock();
     let ws = guard.workspace.id.clone();
     let mut request = morn_foundry::problem_spec::SolutionRequest::new(ws, goal, domain);
@@ -1272,7 +1278,7 @@ async fn opint_predict(State(state): State<AppState>, Json(body): Json<Value>) -
     let context = body
         .get("context")
         .and_then(Value::as_str)
-        .unwrap_or("biolab");
+        .unwrap_or("generic");
     let mut guard = state.lock();
     let target = match target {
         "duration" => PredictorTarget::Duration,

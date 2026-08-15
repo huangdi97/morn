@@ -8,7 +8,9 @@ use morn_integration::{
 use morn_kernel::error::Error;
 use morn_kernel::ids::WorkspaceId;
 use morn_kernel::time::Timestamp;
+use morn_kernel::version::Version;
 use morn_node::{DistributedRuntime, MornNode, NodeType, WorkflowRunId};
+use morn_package::{PackLifecycle, PackManifest};
 use morn_work::durable::{DurableRuntime, Signal, SignalKind};
 use morn_work::workflow::{RunStatus, WorkflowDefinition, WorkflowStep, WorkflowStepKind};
 
@@ -131,4 +133,21 @@ fn migration_failure_does_not_corrupt() {
 
 fn crate_plan() -> Result<(), String> {
     Err("downgrade 2 -> 1 rejected without restore plan".to_string())
+}
+
+#[test]
+fn plugin_init_failure_blocks_without_partial_state() {
+    // A broken plugin/pack manifest fails init explicitly — never a silent
+    // partial lifecycle state.
+    let mut lc = PackLifecycle::new();
+    let bad = PackManifest::new("../escape", "domain-pack", Version::v1());
+    assert!(
+        lc.init(bad).is_err(),
+        "unsafe manifest name must block init"
+    );
+    assert!(lc.packs.is_empty(), "no partial pack state");
+    assert!(
+        !lc.history.iter().any(|h| h.contains("installed")),
+        "no installed history for a failed init"
+    );
 }

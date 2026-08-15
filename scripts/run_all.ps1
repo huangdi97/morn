@@ -30,6 +30,18 @@ Run-Step "cargo test" { cargo test --workspace --all-features }
 Run-Step "domain boundary guard" { powershell -ExecutionPolicy Bypass -File scripts\check_domain_boundary.ps1 }
 Run-Step "zero-domain Core build" { cargo check -p morn-app }
 Run-Step "core-tests (zero-domain: migration/security/chaos/conformance/pure-core E2E)" { cargo test -p morn-core-tests }
+Run-Step "developer CLI smoke" {
+    cargo build -p morn-cli | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "morn-cli build failed" }
+    $cli = Join-Path $root "target\debug\morn.exe"
+    $cmds = @("doctor", "status", "provider", "connector list", "connector health", "plugin validate", "compat", "migrate status", "node list", "domain list", "package inspect", "conformance")
+    foreach ($c in $cmds) {
+        $parts = $c -split " "
+        & $cli @parts | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "morn $c failed with exit code $LASTEXITCODE" }
+    }
+    Write-Host "CLI smoke OK: doctor/status/provider/connector/plugin/compat/migrate/node/domain/package/conformance"
+}
 
 # ---- Frontend ----
 $frontend = Join-Path $root "frontend"

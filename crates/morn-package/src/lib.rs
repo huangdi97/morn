@@ -69,8 +69,9 @@ impl PackManifest {
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        if self.name.trim().is_empty() || self.sdk_version.trim().is_empty() {
-            return Err("name/sdk_version required".to_string());
+        safe_name(&self.name)?;
+        if self.sdk_version.trim().is_empty() {
+            return Err("sdk_version required".to_string());
         }
         if !self.core_compat.starts_with("1.") {
             return Err("core_compat must target Core 1.x".to_string());
@@ -99,6 +100,28 @@ pub struct PluginManifest {
 }
 
 impl PluginManifest {
+    pub fn validate(&self) -> Result<(), String> {
+        safe_name(&self.name)?;
+        const KNOWN: [&str; 9] = [
+            "capability-provider",
+            "harness-provider",
+            "runtime-provider",
+            "connector-provider",
+            "domain-pack",
+            "evaluation-pack",
+            "simulation-pack",
+            "ui-extension",
+            "cli-extension",
+        ];
+        if !KNOWN.contains(&self.plugin_type.as_str()) {
+            return Err(format!("unknown plugin_type {:?}", self.plugin_type));
+        }
+        if !self.core_compat.starts_with("1.") {
+            return Err("core_compat must target Core 1.x".to_string());
+        }
+        Ok(())
+    }
+
     pub fn new(name: &str, plugin_type: &str) -> Self {
         Self {
             id: PluginId::generate_with("plugin"),
@@ -233,12 +256,58 @@ impl PackLifecycle {
     }
 }
 
+/// Validate a pack/plugin name is safe to use as an identifier: non-empty and
+/// free of path separators / traversal / control characters. This is the Core
+/// boundary that rejects path traversal and shell-injection style names.
+pub(crate) fn safe_name(name: &str) -> Result<(), String> {
+    if name.trim().is_empty() {
+        return Err("name required".to_string());
+    }
+    if name.contains('/')
+        || name.contains('\\')
+        || name.contains("..")
+        || name.chars().any(char::is_control)
+    {
+        return Err(format!(
+            "unsafe name {name:?}: must not contain path separators, '..', or control chars"
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn pack() -> PackManifest {
         PackManifest::new("biolab", "domain-pack", Version::v1())
+    }
+
+    #[test]
+    fn unsafe_names_rejected_path_traversal_and_injection() {
+        for bad in [
+            "../etc/passwd",
+            "..\\..\\secret",
+            "a/b",
+            "; rm -rf /",
+            "name\0with-nul",
+        ] {
+            let mut m = pack();
+            m.name = bad.to_string();
+            assert!(m.validate().is_err(), "unsafe name must be rejected: {bad}");
+        }
+        assert!(pack().validate().is_ok());
+    }
+
+    #[test]
+    fn plugin_manifest_validate_type_and_name() {
+        let mut p = PluginManifest::new("hello-plugin", "capability-provider");
+        assert!(p.validate().is_ok());
+        p.plugin_type = "not-a-type".to_string();
+        assert!(p.validate().is_err());
+        p.plugin_type = "connector-provider".to_string();
+        p.name = "../escape".to_string();
+        assert!(p.validate().is_err());
     }
 
     #[test]

@@ -63,7 +63,7 @@ impl DomainDefinition {
         {
             return Err("domain/version/sdk_version required".to_string());
         }
-        const KINDS: [&str; 11] = [
+        const KINDS: [&str; 13] = [
             "object_type",
             "relation",
             "action",
@@ -74,6 +74,8 @@ impl DomainDefinition {
             "work_template",
             "policy",
             "capability",
+            "connector_requirement",
+            "evaluation",
             "ui_extension",
         ];
         for d in &self.declarations {
@@ -158,6 +160,24 @@ mod tests {
         reg.disable("biolab");
         assert!(!reg.is_enabled("biolab"));
         assert!(reg.declarations_for("biolab", "object_type").is_empty());
+    }
+
+    #[test]
+    fn connector_requirement_and_evaluation_kinds_valid() {
+        let mut reg = DomainRegistry::new();
+        let def = DomainDefinition::new("d", "1", "1")
+            .declare(
+                "connector_requirement",
+                "lims",
+                serde_json::json!({"auth": "oauth"}),
+            )
+            .declare(
+                "evaluation",
+                "eval-pack",
+                serde_json::json!({"scenarios": []}),
+            );
+        reg.install(def).unwrap();
+        assert_eq!(reg.definitions[0].declarations.len(), 2);
     }
 
     #[test]

@@ -4,6 +4,7 @@
 use morn_integration::ConnectorProvider;
 use morn_kernel::version::Version;
 use morn_package::{PackLifecycle, PackManifest, PackStatus};
+use morn_runtime::RuntimeProvider;
 use morn_work::durable::{Signal, SignalKind};
 
 #[test]
@@ -28,6 +29,26 @@ fn provider_conformance_two_fixtures() {
     assert!(morn_harness::run_harness_smoke(&mut dsh, &ctx)
         .unwrap()
         .all_ok());
+}
+
+#[test]
+fn runtime_provider_conformance_fixture() {
+    // Public RuntimeProvider protocol (morn-runtime): start -> checkpoint ->
+    // restore -> signal -> events -> health, plus explicit error on malformed
+    // restore and duplicate start.
+    let mut rt = morn_runtime::FixtureRuntime::new();
+    morn_runtime::run_runtime_conformance(&mut rt).unwrap();
+    assert_eq!(rt.provider_name(), "fixture-runtime");
+    assert!(rt.health());
+    rt.start_run("r2").unwrap();
+    assert!(
+        rt.start_run("r2").is_err(),
+        "duplicate start must be rejected"
+    );
+    assert!(
+        rt.restore("garbage").is_err(),
+        "malformed restore must be rejected"
+    );
 }
 
 #[test]
