@@ -144,6 +144,41 @@ id_types!(
     SolutionManifestTag,
     DomainPackTag,
     HubAssetTag,
+    WorkflowDefinitionTag,
+    WorkflowRunTag,
+    WorkflowStepTag,
+    SignalTag,
+    TimerWaitTag,
+    RetryPolicyTag,
+    CompensationPlanTag,
+    EscalationTag,
+    BudgetGuardTag,
+    DriftRecordTag,
+    ProblemSpecTag,
+    WorkGraphTag,
+    WorkNodeTag,
+    WorkEdgeTag,
+    CapabilityRequirementTag,
+    MemberTypePlanTag,
+    HarnessPlanTag,
+    RuntimeProfileTag,
+    EvaluationPlanTag,
+    ProposedSolutionTag,
+    ValidationReportTag,
+    ApprovedSolutionTag,
+    SolutionPackageTag,
+    SolutionVersionTag,
+    ReplayScenarioTag,
+    ReplayRunTag,
+    ReplayReportTag,
+    SimulationScenarioTag,
+    SimulationRunTag,
+    FaultInjectionTag,
+    EvaluationSuiteTag,
+    EvaluationRunTag,
+    EvaluationResultTag,
+    ShadowProfileTag,
+    ShadowComparisonTag,
     DatasetTag,
     SessionIdTag,
     SampleTag,
@@ -213,6 +248,41 @@ pub type ShadowRunId = Id<ShadowRunTag>;
 pub type SolutionManifestId = Id<SolutionManifestTag>;
 pub type DomainPackId = Id<DomainPackTag>;
 pub type HubAssetId = Id<HubAssetTag>;
+pub type WorkflowDefinitionId = Id<WorkflowDefinitionTag>;
+pub type WorkflowRunId = Id<WorkflowRunTag>;
+pub type WorkflowStepId = Id<WorkflowStepTag>;
+pub type SignalId = Id<SignalTag>;
+pub type TimerWaitId = Id<TimerWaitTag>;
+pub type RetryPolicyId = Id<RetryPolicyTag>;
+pub type CompensationPlanId = Id<CompensationPlanTag>;
+pub type EscalationId = Id<EscalationTag>;
+pub type BudgetGuardId = Id<BudgetGuardTag>;
+pub type DriftRecordId = Id<DriftRecordTag>;
+pub type ProblemSpecId = Id<ProblemSpecTag>;
+pub type WorkGraphId = Id<WorkGraphTag>;
+pub type WorkNodeId = Id<WorkNodeTag>;
+pub type WorkEdgeId = Id<WorkEdgeTag>;
+pub type CapabilityRequirementId = Id<CapabilityRequirementTag>;
+pub type MemberTypePlanId = Id<MemberTypePlanTag>;
+pub type HarnessPlanId = Id<HarnessPlanTag>;
+pub type RuntimeProfileId = Id<RuntimeProfileTag>;
+pub type EvaluationPlanId = Id<EvaluationPlanTag>;
+pub type ProposedSolutionId = Id<ProposedSolutionTag>;
+pub type ValidationReportId = Id<ValidationReportTag>;
+pub type ApprovedSolutionId = Id<ApprovedSolutionTag>;
+pub type SolutionPackageId = Id<SolutionPackageTag>;
+pub type SolutionVersionId = Id<SolutionVersionTag>;
+pub type ReplayScenarioId = Id<ReplayScenarioTag>;
+pub type ReplayRunId = Id<ReplayRunTag>;
+pub type ReplayReportId = Id<ReplayReportTag>;
+pub type SimulationScenarioId = Id<SimulationScenarioTag>;
+pub type SimulationRunId = Id<SimulationRunTag>;
+pub type FaultInjectionId = Id<FaultInjectionTag>;
+pub type EvaluationSuiteId = Id<EvaluationSuiteTag>;
+pub type EvaluationRunId = Id<EvaluationRunTag>;
+pub type EvaluationResultId = Id<EvaluationResultTag>;
+pub type ShadowProfileId = Id<ShadowProfileTag>;
+pub type ShadowComparisonId = Id<ShadowComparisonTag>;
 pub type DatasetId = Id<DatasetTag>;
 pub type SampleId = Id<SampleTag>;
 pub type AnalysisRunId = Id<AnalysisRunTag>;

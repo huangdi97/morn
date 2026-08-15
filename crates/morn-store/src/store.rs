@@ -400,6 +400,56 @@ impl MornStore {
             .collect())
     }
 
+    pub fn save_workflow_definition(
+        &self,
+        def: &morn_work::workflow::WorkflowDefinition,
+    ) -> Result<()> {
+        self.save_record(
+            "workflow_definition",
+            def.id.as_str(),
+            def.workspace_id.as_str(),
+            def.created_at.millis(),
+            def,
+        )
+    }
+
+    pub fn load_workflow_definitions(
+        &self,
+    ) -> Result<Vec<morn_work::workflow::WorkflowDefinition>> {
+        self.load_records("workflow_definition")
+    }
+
+    pub fn save_workflow_run(&self, run: &morn_work::workflow::WorkflowRun) -> Result<()> {
+        self.save_record(
+            "workflow_run",
+            run.id.as_str(),
+            run.workspace_id.as_str(),
+            run.created_at.millis(),
+            run,
+        )
+    }
+
+    pub fn load_workflow_runs(
+        &self,
+        workspace_id: &WorkspaceId,
+    ) -> Result<Vec<morn_work::workflow::WorkflowRun>> {
+        self.load_records_in_workspace("workflow_run", workspace_id.as_str())
+    }
+
+    pub fn save_signal(&self, signal: &morn_work::durable::Signal) -> Result<()> {
+        self.save_record(
+            "signal",
+            signal.id.as_str(),
+            "",
+            signal.created_at.millis(),
+            signal,
+        )
+    }
+
+    pub fn load_signals(&self) -> Result<Vec<morn_work::durable::Signal>> {
+        self.load_records("signal")
+    }
+
     pub fn save_evolution_candidate(
         &self,
         c: &morn_evolution::candidate::EvolutionCandidate,
@@ -513,6 +563,7 @@ mod tests {
     use morn_kernel::ids::{PrincipalId, WorkspaceId};
     use morn_kernel::status::ArtifactStatus;
     use morn_kernel::workspace::{Workspace, WorkspaceKind};
+    use morn_work::workflow::RunStatus;
     use serde_json::json;
 
     fn temp_db(name: &str) -> String {
@@ -655,6 +706,74 @@ mod tests {
             decisions[0].new_version,
             Some(morn_kernel::version::Version::new(1, 1, 0))
         );
+    }
+
+    #[test]
+    fn durable_run_restart_resumes_via_sqlite() {
+        use morn_work::durable::{DurableRuntime, Signal, SignalKind};
+        use morn_work::workflow::{WorkflowDefinition, WorkflowStep, WorkflowStepKind};
+
+        let path = temp_db("durable");
+        let ws = WorkspaceId::generate();
+
+        // Process A: register workflow, start run, wait for human signal, checkpoint.
+        let def = WorkflowDefinition::new(ws.clone(), "dataset-to-claim")
+            .add_step(WorkflowStep::new("analyze", WorkflowStepKind::Auto))
+            .add_step(WorkflowStep::new("review", WorkflowStepKind::SignalWait))
+            .add_step(WorkflowStep::new("release", WorkflowStepKind::Auto));
+        let def_id = def.id.clone();
+        let mut rt_a = DurableRuntime::new();
+        rt_a.register_workflow(def.clone());
+        let run = rt_a.start_run(&def_id, None).unwrap();
+        let run_id = run.id.clone();
+        rt_a.wait_for_signal(&run_id, SignalKind::HumanApproval, 3600)
+            .unwrap();
+        let cp = rt_a.checkpoint(&run_id).unwrap();
+
+        let run_waited = rt_a.run(&run_id).unwrap().clone();
+        {
+            let store = MornStore::open(&path).unwrap();
+            store.save_workflow_definition(&def).unwrap();
+            store.save_workflow_run(&run_waited).unwrap();
+            store.save_checkpoint(&cp).unwrap();
+        }
+
+        // Process restart: fresh runtime + fresh store read; drift check then resume.
+        let store = MornStore::open(&path).unwrap();
+        let def_loaded = store
+            .load_workflow_definitions()
+            .unwrap()
+            .into_iter()
+            .find(|d| d.id == def_id)
+            .expect("workflow definition persisted");
+        let run_loaded = store
+            .load_workflow_runs(&ws)
+            .unwrap()
+            .into_iter()
+            .find(|r| r.id == run_id)
+            .expect("run persisted");
+        let cps = store
+            .load_checkpoints(&morn_kernel::ids::WorkPackageId::new(run_id.to_string()))
+            .unwrap();
+        assert!(!cps.is_empty(), "checkpoint persisted");
+
+        let mut rt_b = DurableRuntime::new();
+        rt_b.register_workflow(def_loaded);
+        rt_b.restore_run(run_loaded);
+        // No world drift -> resumes to Running.
+        rt_b.load_and_resume(&run_id, "world-v1", "world-v1", true)
+            .unwrap();
+        assert_eq!(rt_b.run(&run_id).unwrap().status, RunStatus::Running);
+        // Deliver the human approval signal after restart.
+        rt_b.deliver_signal(Signal::new(
+            run_id.clone(),
+            SignalKind::HumanApproval,
+            "approved",
+            "pi-1",
+            "pi",
+        ))
+        .unwrap();
+        assert_eq!(rt_b.run(&run_id).unwrap().status, RunStatus::Running);
     }
 
     #[test]

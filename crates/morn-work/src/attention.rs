@@ -16,6 +16,8 @@ pub enum AttentionKind {
     LowConfidence,
     IrreversibleAction,
     RepresentationBoundary,
+    ResumeDrift,
+    CapabilityGap,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
