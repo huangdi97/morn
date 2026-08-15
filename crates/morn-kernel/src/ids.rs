@@ -144,6 +144,24 @@ id_types!(
     SolutionManifestTag,
     DomainPackTag,
     HubAssetTag,
+    CertificationSpecTag,
+    CertificationRunTag,
+    CertificationDecisionTag,
+    CertifiedWorkCapabilityTag,
+    CapabilityReleaseTag,
+    ManagedWorkRunTag,
+    DeliveryReceiptTag,
+    AcceptanceDecisionTag,
+    ExistingSystemMappingTag,
+    ReplacementRecordTag,
+    ReplacementDecisionTag,
+    PartialReplaceCandidateTag,
+    ReplacementComparisonTag,
+    FlywheelPatternTag,
+    FlywheelCandidateTag,
+    DistillationCandidateTag,
+    DistilledProgramTag,
+    HumanCorrectionTag,
     WorkflowDefinitionTag,
     WorkflowRunTag,
     WorkflowStepTag,
@@ -248,6 +266,24 @@ pub type ShadowRunId = Id<ShadowRunTag>;
 pub type SolutionManifestId = Id<SolutionManifestTag>;
 pub type DomainPackId = Id<DomainPackTag>;
 pub type HubAssetId = Id<HubAssetTag>;
+pub type CertificationSpecId = Id<CertificationSpecTag>;
+pub type CertificationRunId = Id<CertificationRunTag>;
+pub type CertificationDecisionId = Id<CertificationDecisionTag>;
+pub type CertifiedWorkCapabilityId = Id<CertifiedWorkCapabilityTag>;
+pub type CapabilityReleaseId = Id<CapabilityReleaseTag>;
+pub type ManagedWorkRunId = Id<ManagedWorkRunTag>;
+pub type DeliveryReceiptId = Id<DeliveryReceiptTag>;
+pub type AcceptanceDecisionId = Id<AcceptanceDecisionTag>;
+pub type ExistingSystemMappingId = Id<ExistingSystemMappingTag>;
+pub type ReplacementRecordId = Id<ReplacementRecordTag>;
+pub type ReplacementDecisionId = Id<ReplacementDecisionTag>;
+pub type PartialReplaceCandidateId = Id<PartialReplaceCandidateTag>;
+pub type ReplacementComparisonId = Id<ReplacementComparisonTag>;
+pub type FlywheelPatternId = Id<FlywheelPatternTag>;
+pub type FlywheelCandidateId = Id<FlywheelCandidateTag>;
+pub type DistillationCandidateId = Id<DistillationCandidateTag>;
+pub type DistilledProgramId = Id<DistilledProgramTag>;
+pub type HumanCorrectionId = Id<HumanCorrectionTag>;
 pub type WorkflowDefinitionId = Id<WorkflowDefinitionTag>;
 pub type WorkflowRunId = Id<WorkflowRunTag>;
 pub type WorkflowStepId = Id<WorkflowStepTag>;

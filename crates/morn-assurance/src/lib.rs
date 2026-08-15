@@ -1,5 +1,6 @@
 //! Morn Assurance: replay, simulation, evaluation and shadow.
 
+pub mod certification;
 pub mod evaluation;
 pub mod replay;
 pub mod shadow;
