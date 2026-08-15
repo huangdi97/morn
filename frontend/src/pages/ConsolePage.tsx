@@ -25,6 +25,15 @@ interface ConsoleData {
   version_rollback: number;
 }
 
+function fmtVersion(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") {
+    const o = v as { major?: number; minor?: number; patch?: number };
+    return `${o.major ?? 0}.${o.minor ?? 0}.${o.patch ?? 0}`;
+  }
+  return String(v);
+}
+
 export default function ConsolePage() {
   const [data, setData] = useState<ConsoleData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,8 +152,8 @@ export default function ConsolePage() {
           ) : (
             <ul>
               {certified.map((cap) => (
-                <li key={cap.name}>
-                  {cap.name}@{cap.version} — <StatusPill value={cap.status} />
+                <li key={`${cap.name}-${fmtVersion(cap.version)}`}>
+                  {cap.name}@{fmtVersion(cap.version)} — <StatusPill value={cap.status} />
                 </li>
               ))}
             </ul>
@@ -168,8 +177,8 @@ export default function ConsolePage() {
             <EmptyState label="No replacement records" />
           ) : (
             <ul>
-              {replacementRecords.map((r) => (
-                <li key={r.work}>
+              {replacementRecords.map((r, idx) => (
+                <li key={`${r.work}-${idx}`}>
                   {r.work} — {r.decision}
                 </li>
               ))}

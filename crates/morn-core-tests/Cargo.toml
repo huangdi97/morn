@@ -1,0 +1,30 @@
+[package]
+name = "morn-core-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+morn-app = { workspace = true }
+morn-kernel = { workspace = true }
+morn-harness = { workspace = true }
+morn-integration = { workspace = true }
+morn-node = { workspace = true }
+morn-package = { workspace = true }
+morn-domain-sdk = { workspace = true }
+morn-process = { workspace = true }
+morn-runtime = { workspace = true }
+morn-capability = { workspace = true }
+morn-world = { workspace = true }
+morn-work = { workspace = true }
+morn-artifact = { workspace = true }
+morn-store = { workspace = true }
+morn-biolab-reference = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+
+[features]
+default = []
+domain-biolab = ["morn-biolab-reference"]

@@ -133,6 +133,10 @@ impl WorldService {
         &self.outcomes
     }
 
+    pub fn restore_outcomes(&mut self, outcomes: Vec<OutcomeRecord>) {
+        self.outcomes = outcomes;
+    }
+
     // ---- governed state commit ----
 
     /// The only way to change canonical object state.

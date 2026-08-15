@@ -20,6 +20,7 @@ members = [
     "crates/morn-domain-sdk",
     "crates/morn-package",
     "crates/morn-cli",
+    "crates/morn-core-tests",
     "domain-packs/biolab-reference",
     "crates/morn-store",
     "crates/morn-app",
@@ -52,6 +53,7 @@ morn-node = { path = "crates/morn-node" }
 morn-domain-sdk = { path = "crates/morn-domain-sdk" }
 morn-package = { path = "crates/morn-package" }
 morn-cli = { path = "crates/morn-cli" }
+morn-core-tests = { path = "crates/morn-core-tests" }
 morn-biolab-reference = { path = "domain-packs/biolab-reference" }
 morn-store = { path = "crates/morn-store" }
 morn-app = { path = "crates/morn-app" }

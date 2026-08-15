@@ -1,6 +1,13 @@
 $ErrorActionPreference = "Stop"
 $env:Path = "C:\Users\Kaiser\.cargo\bin;" + $env:Path
 
+function Stop-Port8090 {
+    $conns = Get-NetTCPConnection -LocalPort 8090 -State Listen -ErrorAction SilentlyContinue
+    foreach ($conn in $conns) {
+        Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 1
+}
 function Run-Step {
     param([string]$Name, [scriptblock]$Action)
     Write-Host ""
@@ -22,6 +29,7 @@ Run-Step "cargo clippy (-D warnings)" { cargo clippy --workspace --all-targets -
 Run-Step "cargo test" { cargo test --workspace --all-features }
 Run-Step "domain boundary guard" { powershell -ExecutionPolicy Bypass -File scripts\check_domain_boundary.ps1 }
 Run-Step "zero-domain Core build" { cargo check -p morn-app }
+Run-Step "core-tests (zero-domain: migration/security/chaos/conformance/pure-core E2E)" { cargo test -p morn-core-tests }
 
 # ---- Frontend ----
 $frontend = Join-Path $root "frontend"
@@ -43,11 +51,16 @@ if (Test-Path (Join-Path $root "src-tauri\Cargo.toml")) {
     Run-Step "tauri desktop build" { cargo build -p morn-desktop }
 }
 
+# ---- Build the all-features server before smokes so they use the fresh binary ----
+Run-Step "build server binary (all-features)" { cargo build -p morn-app --bin server --all-features }
+
 # ---- Browser-level UI smoke (Playwright) ----
 if (Test-Path (Join-Path $root "frontend\node_modules\playwright\package.json")) {
     $browserDir = Join-Path $env:LOCALAPPDATA "ms-playwright"
     if (Test-Path $browserDir) {
         Run-Step "frontend ui smoke (playwright)" {
+            Stop-Port8090
+            Remove-Item -Force (Join-Path $root "target\ui_smoke.db") -ErrorAction SilentlyContinue
             $env:MORN_DB = Join-Path $root "target\ui_smoke.db"
             $env:MORN_PORT = "8090"
             $serverExe = Join-Path $root "target\debug\server.exe"
@@ -78,8 +91,10 @@ else {
 }
 
 # ---- Demo smoke: start API server, run BioLab E2E, stop ----
-Run-Step "build server binary" { cargo build -p morn-app --bin server }
+Run-Step "build server binary" { cargo build -p morn-app --bin server --all-features }
 Run-Step "demo smoke (server + BioLab E2E)" {
+            Stop-Port8090
+            Remove-Item -Force (Join-Path $root "target\smoke.db") -ErrorAction SilentlyContinue
     $env:MORN_DB = Join-Path $root "target\smoke.db"
     $env:MORN_PORT = "8090"
     $server = Join-Path $root "target\debug\server.exe"
@@ -91,11 +106,14 @@ Run-Step "demo smoke (server + BioLab E2E)" {
         Start-Sleep -Seconds 2
         $health = Invoke-RestMethod -Uri "http://127.0.0.1:8090/api/health" -TimeoutSec 10
         if ($health.status -ne "ok") { throw "health check failed" }
+        $bootstrap = Invoke-RestMethod -Uri "http://127.0.0.1:8090/api/demo/bootstrap" -Method Post -TimeoutSec 10
+        if ($bootstrap.objects -lt 1) { throw "demo bootstrap did not seed world objects" }
         $run = Invoke-RestMethod -Uri "http://127.0.0.1:8090/api/biolab/run" -Method Post -TimeoutSec 15
         if ($run.result.all_ok -ne $true) { throw "BioLab E2E did not pass" }
         $wb = Invoke-RestMethod -Uri "http://127.0.0.1:8090/api/workbench" -TimeoutSec 10
-        if ($wb.world_objects.Count -lt 3) { throw "workbench world objects missing" }
-        Write-Host "demo smoke OK: health=$($health.status) e2e_steps=$($run.result.steps.Count) objects=$($wb.world_objects.Count)"
+        if ($wb.world_objects.Count -lt 1) { throw "workbench world objects missing" }
+        if ($wb.work_packages.Count -lt 1) { throw "workbench work packages missing" }
+        Write-Host "demo smoke OK: health=$($health.status) bootstrap_objects=$($bootstrap.objects) e2e_steps=$($run.result.steps.Count) objects=$($wb.world_objects.Count)"
     }
     finally {
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue

@@ -2049,6 +2049,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "morn-core-tests"
+version = "0.1.0"
+dependencies = [
+ "morn-app",
+ "morn-artifact",
+ "morn-biolab-reference",
+ "morn-capability",
+ "morn-domain-sdk",
+ "morn-harness",
+ "morn-integration",
+ "morn-kernel",
+ "morn-node",
+ "morn-package",
+ "morn-process",
+ "morn-runtime",
+ "morn-store",
+ "morn-work",
+ "morn-world",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "morn-desktop"
 version = "0.1.0"
 dependencies = [

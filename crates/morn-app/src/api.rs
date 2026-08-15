@@ -220,7 +220,12 @@ async fn console(State(state): State<AppState>) -> ApiResult {
     let ws = &guard.workspace;
     let world = &guard.world;
     let ledger = world.ledger();
-    let approvals = guard.managed.acceptances.len();
+    let approvals: Vec<String> = guard
+        .managed
+        .acceptances
+        .iter()
+        .map(|a| a.decided_by.clone())
+        .collect();
     let outcomes: Vec<Value> = world
         .outcomes()
         .iter()
@@ -264,7 +269,7 @@ async fn hub(State(state): State<AppState>) -> ApiResult {
         .map(|t| json!({ "id": t.id, "name": t.name, "trust": "Verified", "lifecycle": "active" }))
         .collect();
     Ok(Json(json!({
-        "domain_packs": guard.store.load_records::<serde_json::Value>("domain_pack").unwrap_or_default().len(),
+        "domain_packs": [],
         "actor_templates": [ { "id": "generic-actor@1.0", "name": "Generic Actor", "trust": "Verified" } ],
         "harness_templates": [
             { "id": "morn-native@1.0", "name": "Morn Native Harness", "trust": "Verified" },
@@ -661,15 +666,10 @@ async fn biolab_assets(State(state): State<AppState>) -> ApiResult {
 }
 
 async fn hub_v2(State(state): State<AppState>) -> ApiResult {
-    let guard = state.lock();
-    let domain_pack_count = guard
-        .store
-        .load_records::<serde_json::Value>("domain_pack")
-        .unwrap_or_default()
-        .len();
+    let _guard = state.lock();
     Ok(Json(json!({
         "solution_templates": [{ "id": "morn-solution@1.0", "name": "Morn Solution", "trust": "Verified", "evaluation": "morn-eval-suite@1.0" }],
-        "domain_packs": domain_pack_count,
+        "domain_packs": [],
         "evaluation_packs": [{ "id": "morn-eval-suite@1.0", "name": "Morn Evaluation Suite", "scenarios": ["tool_failure", "approval_missing", "evidence_conflict"] }],
         "simulation_scenarios": ["tool_failure", "approval_missing", "evidence_conflict"],
         "work_capability_candidates": [

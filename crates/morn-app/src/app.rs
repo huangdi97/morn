@@ -21,6 +21,7 @@ use morn_foundry::compiler::SolutionCompiler;
 use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
+#[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;
 use morn_kernel::workspace::{Workspace, WorkspaceKind};
 use morn_opint::dataset::OutcomeDataset;
@@ -93,10 +94,12 @@ impl AppState {
                     morn_kernel::ids::PrincipalId::generate_with("lab-owner"),
                 )
             });
-        let workspace_id: WorkspaceId = workspace.id.clone();
         store.save_workspace(&workspace)?;
         #[cfg(feature = "domain-biolab")]
-        let biolab = BioLabService::new(workspace_id);
+        let biolab = {
+            let workspace_id: WorkspaceId = workspace.id.clone();
+            BioLabService::new(workspace_id)
+        };
         let mut inner = AppInner {
             store,
             workspace,
@@ -227,6 +230,31 @@ impl AppInner {
                 r,
             )?;
         }
+        for o in self.world.objects() {
+            store.save_object(o)?;
+        }
+        for wp in self.work.work_packages() {
+            store.save_work_package(wp)?;
+        }
+        for a in self.artifacts.all_artifacts() {
+            store.save_artifact(a)?;
+        }
+        let mut artifact_versions: Vec<morn_artifact::artifact::ArtifactVersion> = Vec::new();
+        for a in self.artifacts.all_artifacts() {
+            artifact_versions.extend(self.artifacts.versions_of(&a.id).into_iter().cloned());
+        }
+        for v in artifact_versions {
+            store.save_artifact_version(&v)?;
+        }
+        for o in self.world.outcomes() {
+            store.save_record(
+                "world_outcome",
+                o.id.as_str(),
+                self.workspace.id.as_str(),
+                o.created_at.millis(),
+                o,
+            )?;
+        }
         for e in &self.episodes.episodes {
             store.save_opint_episode(e)?;
         }
@@ -258,6 +286,21 @@ impl AppInner {
         self.distillation.candidates = store.load_distillation_candidates()?;
         self.rollback.requests = store.load_rollback_requests(&self.workspace.id)?;
         self.rollback.receipts = store.load_rollback_receipts()?;
+        let objects = store.list_objects(&self.workspace.id)?;
+        for o in objects {
+            self.world.register_object(o);
+        }
+        let work_packages = store.list_work_packages(&self.workspace.id)?;
+        for wp in work_packages {
+            self.work.add_work_package(wp);
+        }
+        let artifacts = store.load_records::<morn_artifact::artifact::Artifact>("artifact")?;
+        self.artifacts.restore_artifacts(artifacts);
+        let versions =
+            store.load_records::<morn_artifact::artifact::ArtifactVersion>("artifact_version")?;
+        self.artifacts.restore_versions(versions);
+        let outcomes = store.load_records::<morn_world::outcome::OutcomeRecord>("world_outcome")?;
+        self.world.restore_outcomes(outcomes);
         let episodes = store.load_opint_episodes(&self.workspace.id)?;
         self.episodes.episodes = episodes;
         let states = store.load_predictor_states()?;

@@ -68,6 +68,20 @@ impl ArtifactService {
         self.versions.iter().find(|v| v.id == *id)
     }
 
+    pub fn restore_artifacts(&mut self, artifacts: Vec<Artifact>) {
+        for a in artifacts {
+            self.artifacts.insert(a.id.clone(), a);
+        }
+    }
+
+    pub fn restore_versions(&mut self, versions: Vec<ArtifactVersion>) {
+        self.versions = versions;
+    }
+
+    pub fn all_artifacts(&self) -> Vec<&Artifact> {
+        self.artifacts.values().collect()
+    }
+
     pub fn all_version_count(&self) -> usize {
         self.versions.len()
     }
