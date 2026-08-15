@@ -1,0 +1,16 @@
+[package]
+name = "morn-opint"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+morn-kernel = { workspace = true }
+morn-world = { workspace = true }
+morn-work = { workspace = true }
+morn-artifact = { workspace = true }
+morn-assurance = { workspace = true }
+morn-evolution = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

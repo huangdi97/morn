@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn deterministic_provider_proposal_validates_to_candidate() {
-        let provider = DeterministicPlannerProvider::default();
+        let provider = DeterministicPlannerProvider;
         let validator = ProposalValidator::new();
         let p = pattern();
         let proposal = provider.propose(&p).unwrap();

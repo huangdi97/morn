@@ -2097,6 +2097,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "morn-opint"
+version = "0.1.0"
+dependencies = [
+ "morn-artifact",
+ "morn-assurance",
+ "morn-evolution",
+ "morn-kernel",
+ "morn-work",
+ "morn-world",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "morn-organization"
 version = "0.1.0"
 dependencies = [

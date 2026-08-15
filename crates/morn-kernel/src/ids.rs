@@ -163,6 +163,22 @@ id_types!(
     DistilledProgramTag,
     HumanCorrectionTag,
     TraceRecordTag,
+    OperationalEpisodeTag,
+    EpisodeDatasetTag,
+    DatasetSnapshotTag,
+    LabelDefinitionTag,
+    FeatureSchemaTag,
+    SplitManifestTag,
+    DataQualityReportTag,
+    PredictorSpecTag,
+    PredictorVersionTag,
+    TrainingRunTag,
+    PredictionTag,
+    PredictionEvidenceTag,
+    CalibrationReportTag,
+    ModelDriftReportTag,
+    ContextOfUseTag,
+    StateEncoderVersionTag,
     RollbackRequestTag,
     RollbackReceiptTag,
     WorkflowDefinitionTag,
@@ -288,6 +304,22 @@ pub type DistillationCandidateId = Id<DistillationCandidateTag>;
 pub type DistilledProgramId = Id<DistilledProgramTag>;
 pub type HumanCorrectionId = Id<HumanCorrectionTag>;
 pub type TraceRecordId = Id<TraceRecordTag>;
+pub type OperationalEpisodeId = Id<OperationalEpisodeTag>;
+pub type EpisodeDatasetId = Id<EpisodeDatasetTag>;
+pub type DatasetSnapshotId = Id<DatasetSnapshotTag>;
+pub type LabelDefinitionId = Id<LabelDefinitionTag>;
+pub type FeatureSchemaId = Id<FeatureSchemaTag>;
+pub type SplitManifestId = Id<SplitManifestTag>;
+pub type DataQualityReportId = Id<DataQualityReportTag>;
+pub type PredictorSpecId = Id<PredictorSpecTag>;
+pub type PredictorVersionId = Id<PredictorVersionTag>;
+pub type TrainingRunId = Id<TrainingRunTag>;
+pub type PredictionId = Id<PredictionTag>;
+pub type PredictionEvidenceId = Id<PredictionEvidenceTag>;
+pub type CalibrationReportId = Id<CalibrationReportTag>;
+pub type ModelDriftReportId = Id<ModelDriftReportTag>;
+pub type ContextOfUseId = Id<ContextOfUseTag>;
+pub type StateEncoderVersionId = Id<StateEncoderVersionTag>;
 pub type RollbackRequestId = Id<RollbackRequestTag>;
 pub type RollbackReceiptId = Id<RollbackReceiptTag>;
 pub type WorkflowDefinitionId = Id<WorkflowDefinitionTag>;
