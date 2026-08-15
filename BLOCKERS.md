@@ -1,4 +1,4 @@
-﻿# BLOCKERS.md
+# BLOCKERS.md
 
 只记录 **无法通过继续编码/测试在当前环境解决** 的真实阻塞。
 
@@ -60,3 +60,7 @@ Impact on acceptance:
 
 Resolution:
 需要（a）官方 DSH 安装途径，或（b）真实 DeepSeek API 凭据。Morn 侧 contract tests 在两种情况都保持通过。
+## Goal 2 Update (2026-08-15)
+
+无新增 blocker。Goal 1 的 B-001（真实 DeepSeek Harness smoke）仍然 Active：Goal 2 不依赖真实 DSH（compiler/durable/
+replay/simulation/shadow/BioLab 全部使用 MornNative + fixture），Morn 侧 contract tests 保持通过。

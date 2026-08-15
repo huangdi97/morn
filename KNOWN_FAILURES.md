@@ -102,3 +102,21 @@ Fix/Decision:
 
 Test added:
 `npm test` / `npm run build` / Tauri build（tauri.conf.json 严格 JSON 解析）均通过。
+### KF-006 — UI smoke 的 innerText 大小写问题（fixed）
+Status: Fixed
+
+Reproduction:
+`frontend/scripts/ui_smoke.mjs` 断言 `body.includes("Durable Work Runtime")` 失败；实际卡片已渲染。
+
+Expected: 断言通过。
+
+Actual: CSS `text-transform: uppercase` 使 `innerText` 返回 "DURABLE WORK RUNTIME (V0.2)"，大小写不匹配。
+
+Root cause:
+断言使用混合大小写字符串与 CSS 变换后的 innerText 比较。
+
+Fix/Decision:
+smoke 断言改为 toLowerCase() 双向比较。
+
+Test added:
+`frontend/scripts/ui_smoke.mjs`（case-insensitive 断言）。

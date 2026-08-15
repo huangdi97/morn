@@ -89,3 +89,77 @@ Decision:
 
 Tests/Proof:
 `demo smoke` 在 `run_all.ps1` 中启动 server 并验证 health + E2E + workbench 对象数。
+
+## Goal 2 Decisions
+
+### D-010 — Solution Compiler 使用规则型参考 planner，LLM 仅作候选
+Status: Accepted
+
+Context:
+GOAL2_COMPILER_SPEC 要求 compiler 真能编译、可解释、不虚构 capability。
+
+Decision:
+`morn-foundry::SolutionCompiler` 用规则/模板做 analyze→propose→validate→compile；每个 planner decision 记录
+`CompilerDecisionSource`（source_facts / rules_or_templates / model_provider="rule-based (no LLM)" / assumptions /
+confidence / alternatives / human_review_status）。缺失 capability 输出 CapabilityGap 并阻止 compile。
+Compile 只在 ApprovedSolution 后生成 SolutionPackage，绝不自动 deploy production。
+
+Tests/Proof:
+`crates/morn-foundry` 13 tests（含 golden cases：deterministic→program、capability gap 阻止 compile、
+incompatible harness validation fail、regulated approval gate、explainability）。
+
+### D-011 — Durable v0.2 以本地 SQLite 为真实持久化，不用内存冒充
+Status: Accepted
+
+Context:
+GOAL2 恢复指令 C：“内存状态不算 durable”。
+
+Decision:
+`morn-work::DurableRuntime` 支持 checkpoint→process restart→load→drift check→resume；`morn-store` 持久化
+workflow definition/run/checkpoint/signal，并有 SQLite 重启恢复集成测试。
+
+Tests/Proof:
+`morn-store::durable_run_restart_resumes_via_sqlite`；`morn-work` durable 12 tests（signal idempotency、
+retry exhausted、E2 compensation、budget stop、drift attention）。
+
+### D-012 — Replay/Simulation/Shadow 使用隔离 state，绝不写 production
+Status: Accepted
+
+Context:
+GOAL2_ARCHITECTURE_FREEZE：Replay/Simulation/Shadow 默认 read production snapshot、write isolated run state。
+
+Decision:
+`morn-assurance`：ReplayRunner/EvaluationRunner/ShadowRunner 只读 scenario/recorded events 并写入自身 report
+集合；EvaluationRunner 注入 12 类故障；Shadow 只比较 evaluation 结果并输出 readiness，不执行外部动作。
+
+Tests/Proof:
+`crates/morn-assurance` 11 tests（replay reproduced/deviation、evaluation pass/fail/conditional/regression、
+shadow ready/not-ready/conditional、replay 不触碰 production）。
+
+### D-013 — BioLab 三闭环全部走后端真实 artifact/approval 路径
+Status: Accepted
+
+Context:
+GOAL2_BIOLAB_DREAM_FACTORY：Loop A/B/C 必须真实可复现，湿实验保持 Human/Device gate。
+
+Decision:
+Loop A/B/C 通过 BioLabService + ArtifactService（immutable version + review + PI approval）实现；
+Loop C 的一致性检查比较 figure/analysis 行数与 claim 证据链接（真实数据检查，非硬编码成功）。
+
+Tests/Proof:
+`crates/morn-biolab` 5 tests + `morn-app` E2E 全链路（Goal→Compile→Replay→Eval PASS→Shadow Ready→BioLab
+三闭环→Outcome→Final EvaluationReport）。
+
+### D-014 — UI v0.2 继续共用同一后端，不引入模拟数据
+Status: Accepted
+
+Context:
+GOAL2_UI_SPEC：Workbench/Studio/Console/Hub v0.2 必须接真实 backend API。
+
+Decision:
+新增 `/api/compiler/*`、`/api/durable/*`、`/api/evaluation/run`、`/api/shadow/compare`、`/api/replay/run`、
+`/api/biolab/loop-a|c|assets`、`/api/hub2`；四个页面全部调用这些真实端点。
+
+Tests/Proof:
+`frontend/scripts/ui_smoke.mjs`（Playwright）覆盖 4 surfaces + durable/replay/shadow/eval/loop/studio compiler；
+`npm run typecheck/lint/test/build` 全过。
