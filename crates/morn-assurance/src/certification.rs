@@ -15,7 +15,7 @@ use morn_kernel::ids::{
 use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
 
-use crate::evaluation::{EvaluationDecision, EvaluationResult};
+use crate::evaluation::EvaluationResult;
 use crate::replay::ReplayReport;
 use crate::shadow::ShadowRun;
 
@@ -310,6 +310,11 @@ impl CertificationService {
         spec: &CertificationSpec,
         approved_by: &str,
     ) -> Result<CertifiedWorkCapability> {
+        if decision.run_id != *run_id {
+            return Err(Error::validation(
+                "decision does not match the certification run",
+            ));
+        }
         if decision.status == CertificationStatus::Failed {
             return Err(Error::validation("cannot certify a failed decision"));
         }
@@ -427,7 +432,7 @@ impl CertificationService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evaluation::{EvalStep, EvaluationRunner};
+    use crate::evaluation::{EvalStep, EvaluationDecision, EvaluationRunner};
 
     fn eval_runner(decision: EvaluationDecision) -> EvaluationResult {
         let mut runner = EvaluationRunner::new();
@@ -507,7 +512,7 @@ mod tests {
 
     #[test]
     fn version_change_requires_recertification_when_major_changes() {
-        let mut svc = CertificationService::new();
+        let svc = CertificationService::new();
         assert_eq!(
             svc.version_compatibility(&Version::new(1, 2, 0), &Version::new(1, 2, 1)),
             "patch_compatible"
