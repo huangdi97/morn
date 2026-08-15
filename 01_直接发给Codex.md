@@ -1,22 +1,24 @@
 # 直接发给 Codex
 
 ```text
-Goal 1、Goal 2、Goal 3 已完成，我已经提供 reports/goal3_final_report.md。
+Goal 1、Goal 2、Goal 3、Goal 4 已完成。
+现在开始 Goal 5：MORN-G5-CORE-COMPLETION-V1RC。
 
-现在开始 Goal 4。请读取并严格执行根目录 GOAL4_CODEX_MASTER_PROMPT.md。
+请读取并严格执行根目录 GOAL5_CODEX_MASTER_PROMPT.md。
 
-不要重新造 Goal3 的 certification、managed work、replacement、flywheel。第一优先级是把 Goal3 新能力正式持久化、加 migration、restart/recovery 和 rollback execution。
+这一阶段不是做 BioLab、Factory、Pharma 等实例，而是今晚把所有仍属于 Morn 本体、且不依赖真人账号/真实外部系统/真实硬件的底层能力连续做完，形成 Morn Core v1.0 Release Candidate。
 
-随后连续完成 OperationalEpisode、OutcomeDataset、State Representation、Predictor Registry、Duration/Failure/Cost/Human Intervention/Outcome/Transition Risk 六类预测器、Calibration/Uncertainty、Compiler Candidate Comparison、Evolution expected-vs-actual、Operational Intelligence UI，以及环境允许时的 BioLab 真实数据 pilot。
+先真实审计当前仓库；不要重复已有 canonical implementation；不要并行造 V2/V3 空壳。
 
-不要直接训练一个没有数据支撑的大一统神经网络世界模型。先做可信 baseline，再按数据量升级。
+连续完成：Domain Neutralization、BioLab Reference Pack 抽离、Stable Kernel v1 Freeze、Capability Fabric、Provider SDK、Connector SDK、Generic Process Intelligence、Morn Node、Distributed Durable Runtime、本地多节点 failover/dedupe/checkpoint、Deployment/Topology、Domain SDK、Domain Pack Lifecycle、Plugin System、zero-domain Workbench/Studio/Console/Hub、Developer CLI、Compatibility/Migration、Security、Chaos、Conformance、Pure Core E2E、Reference Pack E2E、Goal1–4 全量 regression。
 
-真实 DeepSeek Harness 如果仍缺官方安装物/API 凭据：保留 blocker，不 fake smoke，不停止其他 Goal4。
-真实 BioLab 数据如果不可获得：禁止捏造；完成 adapter/manifest/provenance/validation；FULL COMPLETE 标 blocked；继续做到 CORE COMPLETE。
+普通编译错误、测试失败、依赖冲突、UI bug、migration bug 不要停下来问我，直接修。
+只有真实 Secret、账号、许可证、不可逆外部操作、真实硬件、不可恢复数据风险才允许记录 blocker；即使有 blocker 也继续其他工作。
 
-普通编译错误、测试失败、依赖冲突直接修。每个 milestone 更新 STATUS_GOAL4.md、DECISIONS.md、BLOCKERS.md、KNOWN_FAILURES.md。
+禁止 fake distributed runtime、fake connector/provider、static fake UI、ignored test、降低断言、todo!/unimplemented!、把 BioLab 改名就声称领域无关、插件绕过 Core 权限、Connector 绕过 Action Gateway、卸载 pack 删除历史 provenance。
 
-最后逐条通过 GOAL4_ACCEPTANCE.md，运行 Goal1-3 全量 regression，生成 reports/goal4_final_report.md，并明确 CORE COMPLETE / FULL COMPLETE / EXTERNAL BLOCKED。
-
+每完成一个 milestone 更新 STATUS_GOAL5.md、DECISIONS.md、BLOCKERS.md、KNOWN_FAILURES.md。
+持续执行 M0→M20，不要停。
+最终逐条通过 GOAL5_ACCEPTANCE.md，生成 reports/goal5_final_report.md，并明确 CORE COMPLETE = YES 或列出唯一剩余真实外部 blocker。
 现在直接开始。
 ```

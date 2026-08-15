@@ -1,3 +1,4 @@
+#![cfg(feature = "domain-biolab")]
 //! Goal 2 full E2E: Goal -> Compiler -> ProposedSolution -> Human Review ->
 //! SolutionPackage -> Replay -> Evaluation PASS -> Shadow -> BioLab execution ->
 //! Artifact/Decision/Outcome -> Final EvaluationReport.
@@ -6,9 +7,10 @@ use morn_app::AppState;
 use morn_assurance::evaluation::{EvalStep, EvaluationDecision};
 use morn_assurance::replay::{simple_hash, ReplayScenario};
 use morn_assurance::shadow::Readiness;
-use morn_biolab::dream_factory::LiteratureSource;
+use morn_biolab_reference::dream_factory::LiteratureSource;
+use morn_biolab_reference::ids::ScientificClaimId;
 use morn_foundry::problem_spec::SolutionRequest;
-use morn_kernel::ids::{ArtifactId, ArtifactVersionId, ScientificClaimId, ShadowProfileId};
+use morn_kernel::ids::{ArtifactId, ArtifactVersionId, ShadowProfileId};
 use serde_json::json;
 
 fn temp_db(name: &str) -> String {

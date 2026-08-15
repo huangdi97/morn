@@ -1,3 +1,4 @@
+#![cfg(feature = "domain-biolab")]
 //! Goal 3 E2E: Goal2 Solution -> repeated runs -> trace -> Evolution Candidate ->
 //! Distillation -> Replay/Evaluation -> Shadow -> Certification ->
 //! Certified Work Capability -> Managed Delivery -> DeliveryReceipt ->

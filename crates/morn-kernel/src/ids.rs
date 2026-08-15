@@ -218,12 +218,7 @@ id_types!(
     EvaluationResultTag,
     ShadowProfileTag,
     ShadowComparisonTag,
-    DatasetTag,
     SessionIdTag,
-    SampleTag,
-    AnalysisRunTag,
-    QCResultTag,
-    ScientificClaimTag,
 );
 
 pub type WorkspaceId = Id<WorkspaceTag>;
@@ -361,8 +356,3 @@ pub type EvaluationRunId = Id<EvaluationRunTag>;
 pub type EvaluationResultId = Id<EvaluationResultTag>;
 pub type ShadowProfileId = Id<ShadowProfileTag>;
 pub type ShadowComparisonId = Id<ShadowComparisonTag>;
-pub type DatasetId = Id<DatasetTag>;
-pub type SampleId = Id<SampleTag>;
-pub type AnalysisRunId = Id<AnalysisRunTag>;
-pub type QCResultId = Id<QCResultTag>;
-pub type ScientificClaimId = Id<ScientificClaimTag>;

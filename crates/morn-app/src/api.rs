@@ -12,10 +12,12 @@ use tower_http::cors::CorsLayer;
 
 use morn_assurance::evaluation::EvalStep;
 use morn_assurance::simulation::{FaultInjection, FaultKind};
-use morn_biolab::dream_factory::LiteratureSource;
+#[cfg(feature = "domain-biolab")]
+use morn_biolab_reference::dream_factory::LiteratureSource;
 use morn_harness::HarnessProvider;
 use morn_kernel::error::Error;
-use morn_kernel::ids::{ArtifactId, ArtifactVersionId, ScientificClaimId};
+#[cfg(feature = "domain-biolab")]
+use morn_kernel::ids::{ArtifactId, ArtifactVersionId};
 use morn_opint::predictor::PredictorTarget;
 use morn_work::durable::{Signal, SignalKind};
 use morn_work::workflow::WorkflowStepKind;
@@ -49,7 +51,7 @@ type ApiResult = Result<Json<Value>, AppError>;
 
 /// Build the API router shared by all product surfaces.
 pub fn router(state: AppState) -> Router {
-    Router::new()
+    let app = Router::new()
         .route("/api/health", get(health))
         .route("/api/workspaces", get(list_workspaces))
         .route("/api/workbench", get(workbench))
@@ -57,8 +59,6 @@ pub fn router(state: AppState) -> Router {
         .route("/api/console", get(console))
         .route("/api/hub", get(hub))
         .route("/api/evolution", get(evolution_center))
-        .route("/api/biolab/run", post(run_biolab))
-        .route("/api/biolab/result", get(biolab_result))
         .route("/api/compiler/run", post(compiler_run))
         .route("/api/compiler/approve", post(compiler_approve))
         .route("/api/compiler/compile", post(compiler_compile))
@@ -70,9 +70,6 @@ pub fn router(state: AppState) -> Router {
         .route("/api/evaluation/run", post(evaluation_run))
         .route("/api/shadow/compare", post(shadow_compare))
         .route("/api/replay/run", post(replay_run))
-        .route("/api/biolab/loop-a", post(biolab_loop_a))
-        .route("/api/biolab/loop-c", post(biolab_loop_c))
-        .route("/api/biolab/assets", get(biolab_assets))
         .route("/api/hub2", get(hub_v2))
         .route("/api/evolution/analyze", post(evolution_analyze))
         .route("/api/evolution/flywheel", get(evolution_flywheel))
@@ -100,8 +97,15 @@ pub fn router(state: AppState) -> Router {
         .route("/api/opint/calibrate", post(opint_calibrate))
         .route("/api/opint/registry", get(opint_registry))
         .route("/api/opint/drift", get(opint_drift))
-        .with_state(state)
-        .layer(CorsLayer::permissive())
+        .route("/api/demo/bootstrap", post(demo_bootstrap));
+    #[cfg(feature = "domain-biolab")]
+    let app = app
+        .route("/api/biolab/run", post(run_biolab))
+        .route("/api/biolab/result", get(biolab_result))
+        .route("/api/biolab/loop-a", post(biolab_loop_a))
+        .route("/api/biolab/loop-c", post(biolab_loop_c))
+        .route("/api/biolab/assets", get(biolab_assets));
+    app.with_state(state).layer(CorsLayer::permissive())
 }
 
 async fn health() -> ApiResult {
@@ -117,10 +121,16 @@ async fn list_workspaces(State(state): State<AppState>) -> ApiResult {
 async fn workbench(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     let ws = &guard.workspace;
-    let world = &guard.biolab.world;
-    let work = &guard.biolab.work;
+    let world = &guard.world;
+    let work = &guard.work;
     let durable = &guard.durable;
+    #[cfg(feature = "domain-biolab")]
     let e2e = guard.e2e_result.as_ref();
+    #[cfg(feature = "domain-biolab")]
+    let e2e_value: Option<Value> =
+        e2e.map(|r| json!({ "all_ok": r.all_ok(), "steps": r.steps, "claim_id": r.claim_id }));
+    #[cfg(not(feature = "domain-biolab"))]
+    let e2e_value: Option<Value> = None;
 
     let objects: Vec<Value> = world
         .objects()
@@ -159,18 +169,18 @@ async fn workbench(State(state): State<AppState>) -> ApiResult {
             "dsh": { "provider": guard.dsh_harness.provider_name(), "status": "fixture-mode" }
         },
         "evolution_candidates": guard.evolution.candidates().len(),
-        "e2e_result": e2e.map(|r| json!({ "all_ok": r.all_ok(), "steps": r.steps, "claim_id": r.claim_id })),
+        "e2e_result": e2e_value,
     })))
 }
 
 fn artifacts_count(guard: &crate::app::AppInner) -> Value {
-    json!({ "versions": guard.biolab.artifacts.all_version_count() })
+    json!({ "versions": guard.artifacts.all_version_count() })
 }
 
 async fn studio(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
-    let work = &guard.biolab.work;
-    let world = &guard.biolab.world;
+    let work = &guard.work;
+    let world = &guard.world;
     let wps: Vec<Value> = work
         .work_packages()
         .iter()
@@ -196,11 +206,11 @@ async fn studio(State(state): State<AppState>) -> ApiResult {
     Ok(Json(json!({
         "work_packages": wps,
         "object_types": object_types,
-        "roles": ["analyst", "pipeline", "statistical_reviewer", "pi"],
+        "roles": ["analyst", "reviewer", "approver"],
         "manifest_preview": {
-            "morn": { "domain": "biolab", "version": "1.0" },
-            "workcontracts": { "dataset_to_claim": { "acceptance": "dataset_to_reviewed_claim" } },
-            "roles": { "pi": { "member_type": "human" }, "analyst": { "member_type": "actor" } }
+            "morn": { "domain": "generic", "version": "1.0" },
+            "workcontracts": { "generic_work": { "acceptance": "generic_acceptance" } },
+            "roles": { "approver": { "member_type": "human" }, "analyst": { "member_type": "actor" } }
         }
     })))
 }
@@ -208,9 +218,9 @@ async fn studio(State(state): State<AppState>) -> ApiResult {
 async fn console(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     let ws = &guard.workspace;
-    let world = &guard.biolab.world;
+    let world = &guard.world;
     let ledger = world.ledger();
-    let approvals = &guard.biolab.gateway.approved_roles;
+    let approvals = guard.managed.acceptances.len();
     let outcomes: Vec<Value> = world
         .outcomes()
         .iter()
@@ -230,14 +240,14 @@ async fn console(State(state): State<AppState>) -> ApiResult {
     Ok(Json(json!({
         "identity": { "workspace": ws.name, "owner": ws.owner },
         "world_state": world.objects().len(),
-        "work": guard.biolab.work.work_packages().len(),
+        "work": guard.work.work_packages().len(),
         "harness_health": {
             "native": guard.native_harness.provider_name(),
             "dsh": guard.dsh_harness.provider_name()
         },
         "approvals_satisfied": approvals,
         "attention": guard.durable.open_attention().len(),
-        "policy": "biolab-policy@1.0",
+        "policy": "morn-core-policy@1.0",
         "traces": traces,
         "outcomes": outcomes,
         "evolution_promotions": promotion_decisions,
@@ -247,22 +257,22 @@ async fn console(State(state): State<AppState>) -> ApiResult {
 
 async fn hub(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
-    let world = &guard.biolab.world;
+    let world = &guard.world;
     let object_types: Vec<Value> = world
         .object_types()
         .iter()
         .map(|t| json!({ "id": t.id, "name": t.name, "trust": "Verified", "lifecycle": "active" }))
         .collect();
     Ok(Json(json!({
-        "domain_packs": [ { "id": "biolab@1.0", "name": "BioLab Domain Pack", "trust": "Verified" } ],
-        "actor_templates": [ { "id": "analyst@1.0", "name": "Bioinformatics Analyst", "trust": "CommunityTested" } ],
+        "domain_packs": guard.store.load_records::<serde_json::Value>("domain_pack").unwrap_or_default().len(),
+        "actor_templates": [ { "id": "generic-actor@1.0", "name": "Generic Actor", "trust": "Verified" } ],
         "harness_templates": [
             { "id": "morn-native@1.0", "name": "Morn Native Harness", "trust": "Verified" },
             { "id": "deepseek-harness@0.1", "name": "DeepSeek Harness (spike)", "trust": "Unverified" }
         ],
-        "work_package_templates": [ { "id": "dataset_to_claim@1.0", "name": "Dataset -> Reviewed Claim", "trust": "Verified" } ],
-        "workcell_blueprints": [ { "id": "analysis-workcell@1.0", "name": "Analysis Workcell", "trust": "CommunityTested" } ],
-        "evaluation_packs": [ { "id": "biolab-analysis-suite@1.0", "name": "BioLab Analysis Suite", "trust": "Verified" } ],
+        "work_package_templates": [ { "id": "generic-work@1.0", "name": "Generic Work Package", "trust": "Verified" } ],
+        "workcell_blueprints": [ { "id": "generic-workcell@1.0", "name": "Generic Workcell", "trust": "Verified" } ],
+        "evaluation_packs": [ { "id": "morn-eval-suite@1.0", "name": "Morn Evaluation Suite", "trust": "Verified" } ],
         "operational_object_types": object_types,
     })))
 }
@@ -292,6 +302,7 @@ async fn evolution_center(State(state): State<AppState>) -> ApiResult {
     })))
 }
 
+#[cfg(feature = "domain-biolab")]
 async fn run_biolab(State(state): State<AppState>) -> ApiResult {
     let mut guard = state.lock();
     let result = guard.biolab.run_dataset_to_claim_e2e("aging_pilot", 128)?;
@@ -299,6 +310,7 @@ async fn run_biolab(State(state): State<AppState>) -> ApiResult {
     Ok(Json(json!({ "ok": true, "result": result })))
 }
 
+#[cfg(feature = "domain-biolab")]
 async fn biolab_result(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     match guard.e2e_result.as_ref() {
@@ -590,6 +602,7 @@ async fn replay_run(State(state): State<AppState>, Json(body): Json<Value>) -> A
     Ok(Json(json!({ "replay_report": report })))
 }
 
+#[cfg(feature = "domain-biolab")]
 async fn biolab_loop_a(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     let question = body
         .get("question")
@@ -625,6 +638,7 @@ async fn biolab_loop_a(State(state): State<AppState>, Json(body): Json<Value>) -
     Ok(Json(json!({ "loop_a": result })))
 }
 
+#[cfg(feature = "domain-biolab")]
 async fn biolab_loop_c(State(state): State<AppState>) -> ApiResult {
     let mut guard = state.lock();
     let e2e = guard.e2e_result.as_ref().ok_or_else(|| {
@@ -632,7 +646,7 @@ async fn biolab_loop_c(State(state): State<AppState>) -> ApiResult {
             "run BioLab E2E first",
         ))
     })?;
-    let claim = ScientificClaimId::new(e2e.claim_id.clone());
+    let claim = morn_biolab_reference::ids::ScientificClaimId::new(e2e.claim_id.clone());
     let artifact = ArtifactId::new(e2e.artifact_id.clone());
     let version = ArtifactVersionId::new(e2e.artifact_version_id.clone());
     let result = guard.biolab.run_loop_c(&claim, &artifact, &version)?;
@@ -640,6 +654,7 @@ async fn biolab_loop_c(State(state): State<AppState>) -> ApiResult {
     Ok(Json(json!({ "loop_c": result })))
 }
 
+#[cfg(feature = "domain-biolab")]
 async fn biolab_assets(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     Ok(Json(guard.biolab.export_dream_factory_assets()))
@@ -647,21 +662,72 @@ async fn biolab_assets(State(state): State<AppState>) -> ApiResult {
 
 async fn hub_v2(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
-    let assets = guard.biolab.export_dream_factory_assets();
+    let domain_pack_count = guard
+        .store
+        .load_records::<serde_json::Value>("domain_pack")
+        .unwrap_or_default()
+        .len();
     Ok(Json(json!({
-        "solution_templates": [{ "id": "biolab-solution@1.0", "name": "BioLab Solution", "trust": "Verified", "evaluation": "biolab-analysis-suite@1.0" }],
-        "domain_packs": assets.get("domain_pack"),
-        "evaluation_packs": [{ "id": "biolab-analysis-suite@1.0", "name": "BioLab Analysis Suite", "scenarios": ["tool_failure", "approval_missing", "evidence_conflict"] }],
-        "simulation_scenarios": assets.get("simulation_scenarios"),
+        "solution_templates": [{ "id": "morn-solution@1.0", "name": "Morn Solution", "trust": "Verified", "evaluation": "morn-eval-suite@1.0" }],
+        "domain_packs": domain_pack_count,
+        "evaluation_packs": [{ "id": "morn-eval-suite@1.0", "name": "Morn Evaluation Suite", "scenarios": ["tool_failure", "approval_missing", "evidence_conflict"] }],
+        "simulation_scenarios": ["tool_failure", "approval_missing", "evidence_conflict"],
         "work_capability_candidates": [
-            { "id": "dataset-to-reviewed-claim@1.0", "name": "Dataset -> Reviewed Claim", "status": "candidate", "trust": "CommunityTested" }
+            { "id": "generic-work@1.0", "name": "Generic Work", "status": "candidate", "trust": "CommunityTested" }
         ],
-        "role_blueprints": assets.get("role_blueprints"),
-        "workflow_templates": [{ "id": "dataset-to-claim-durable@1.0", "name": "Durable Dataset -> Claim", "signals": ["review", "approval"] }],
+        "role_blueprints": ["analyst", "reviewer", "approver"],
+        "workflow_templates": [{ "id": "generic-durable-workflow@1.0", "name": "Generic Durable Workflow", "signals": ["review", "approval"] }],
     })))
 }
 
-// ---- Goal 3 endpoints ----
+/// Generic (zero-domain) demo bootstrap: seeds a generic object, work package
+/// and artifact through the canonical services so the surfaces render real
+/// records without any domain pack.
+async fn demo_bootstrap(State(state): State<AppState>) -> ApiResult {
+    let mut guard = state.lock();
+    let ws = guard.workspace.id.clone();
+    let obj_type = morn_world::object::ObjectType::new(
+        "generic.Object",
+        ws.clone(),
+        vec!["status".to_string()],
+        vec!["created".to_string(), "done".to_string()],
+        vec![],
+    );
+    guard.world.register_object_type(obj_type.clone());
+    let obj = morn_world::object::Object::new(
+        morn_kernel::ids::ObjectId::generate_with("obj"),
+        obj_type.id.clone(),
+        ws.clone(),
+        {
+            let mut s = std::collections::BTreeMap::new();
+            s.insert("status".to_string(), serde_json::json!("created"));
+            s
+        },
+    );
+    guard.world.register_object(obj);
+
+    let owner = morn_kernel::ids::PrincipalId::generate_with("owner");
+    let wp = morn_work::work_package::WorkPackage::new(ws.clone(), "Generic work package", owner);
+    let _wp_id = wp.id.clone();
+    guard.work.add_work_package(wp);
+
+    let (artifact, version) = guard.artifacts.create(
+        "generic.artifact",
+        "morn/generic@1",
+        ws.clone(),
+        morn_kernel::ids::PrincipalId::generate_with("author"),
+        "ref://generic",
+        serde_json::json!({ "kind": "generic" }),
+        "generic-checksum",
+    )?;
+    let _ = version;
+    guard.persist_all()?;
+    Ok(Json(json!({
+        "objects": guard.world.objects().len(),
+        "work_packages": guard.work.work_packages().len(),
+        "artifact": artifact.id,
+    })))
+} // ---- Goal 3 endpoints ----
 
 async fn evolution_analyze(State(state): State<AppState>) -> ApiResult {
     let mut guard = state.lock();

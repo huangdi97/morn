@@ -14,7 +14,7 @@ members = [
     "crates/morn-foundry",
     "crates/morn-assurance",
     "crates/morn-opint",
-    "crates/morn-biolab",
+    "domain-packs/biolab-reference",
     "crates/morn-store",
     "crates/morn-app",
     "src-tauri",
@@ -40,7 +40,7 @@ morn-evolution = { path = "crates/morn-evolution" }
 morn-foundry = { path = "crates/morn-foundry" }
 morn-assurance = { path = "crates/morn-assurance" }
 morn-opint = { path = "crates/morn-opint" }
-morn-biolab = { path = "crates/morn-biolab" }
+morn-biolab-reference = { path = "domain-packs/biolab-reference" }
 morn-store = { path = "crates/morn-store" }
 morn-app = { path = "crates/morn-app" }
 serde = { version = "1", features = ["derive"] }

@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use morn_artifact::service::ArtifactService;
 use morn_assurance::certification::CertificationService;
 use morn_assurance::evaluation::EvaluationRunner;
 use morn_assurance::managed_work::ManagedWorkService;
@@ -9,8 +10,10 @@ use morn_assurance::replacement::ReplacementPilot;
 use morn_assurance::replay::ReplayRunner;
 use morn_assurance::rollback::RollbackService;
 use morn_assurance::shadow::ShadowRunner;
-use morn_biolab::dream_factory::{LoopAResult, LoopCResult};
-use morn_biolab::service::{BioLabService, E2eResult};
+#[cfg(feature = "domain-biolab")]
+use morn_biolab_reference::dream_factory::{LoopAResult, LoopCResult};
+#[cfg(feature = "domain-biolab")]
+use morn_biolab_reference::service::{BioLabService, E2eResult};
 use morn_evolution::distillation::DistillationService;
 use morn_evolution::engine::EvolutionEngine;
 use morn_evolution::flywheel::EvolutionFlywheel;
@@ -25,12 +28,19 @@ use morn_opint::episode::EpisodeAssembler;
 use morn_opint::predictor::PredictorRegistry;
 use morn_store::store::MornStore;
 use morn_work::durable::DurableRuntime;
-use morn_work::service::DurableWorkService;
+use morn_work::service::{DurableWorkService, WorkService};
+use morn_world::service::WorldService;
 
 /// The shared application backend state.
 pub struct AppInner {
     pub store: MornStore,
     pub workspace: Workspace,
+    /// Generic (domain-neutral) world/work/artifact services used by the
+    /// product surfaces. Domain packs provide their own instances.
+    pub world: WorldService,
+    pub work: WorkService,
+    pub artifacts: ArtifactService,
+    #[cfg(feature = "domain-biolab")]
     pub biolab: BioLabService,
     pub native_harness: MornNativeHarness,
     pub dsh_harness: DeepSeekHarnessProvider,
@@ -55,8 +65,11 @@ pub struct AppInner {
     pub last_proposed: Option<ProposedSolution>,
     pub last_approved: Option<ApprovedSolution>,
     pub last_package: Option<SolutionPackage>,
+    #[cfg(feature = "domain-biolab")]
     pub loop_a_result: Option<LoopAResult>,
+    #[cfg(feature = "domain-biolab")]
     pub loop_c_result: Option<LoopCResult>,
+    #[cfg(feature = "domain-biolab")]
     pub e2e_result: Option<E2eResult>,
 }
 
@@ -82,10 +95,15 @@ impl AppState {
             });
         let workspace_id: WorkspaceId = workspace.id.clone();
         store.save_workspace(&workspace)?;
+        #[cfg(feature = "domain-biolab")]
         let biolab = BioLabService::new(workspace_id);
         let mut inner = AppInner {
             store,
             workspace,
+            world: WorldService::new(),
+            work: WorkService::new(),
+            artifacts: ArtifactService::new(),
+            #[cfg(feature = "domain-biolab")]
             biolab,
             native_harness: MornNativeHarness::new(),
             dsh_harness: DeepSeekHarnessProvider::new(DshMode::Fixture),
@@ -110,8 +128,11 @@ impl AppState {
             last_proposed: None,
             last_approved: None,
             last_package: None,
+            #[cfg(feature = "domain-biolab")]
             loop_a_result: None,
+            #[cfg(feature = "domain-biolab")]
             loop_c_result: None,
+            #[cfg(feature = "domain-biolab")]
             e2e_result: None,
         };
         inner.hydrate_all()?;

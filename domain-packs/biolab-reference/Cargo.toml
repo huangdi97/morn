@@ -1,5 +1,5 @@
 [package]
-name = "morn-biolab"
+name = "morn-biolab-reference"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

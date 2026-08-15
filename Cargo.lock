@@ -1967,7 +1967,7 @@ dependencies = [
  "morn-actor",
  "morn-artifact",
  "morn-assurance",
- "morn-biolab",
+ "morn-biolab-reference",
  "morn-capability",
  "morn-evolution",
  "morn-foundry",
@@ -2010,7 +2010,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "morn-biolab"
+name = "morn-biolab-reference"
 version = "0.1.0"
 dependencies = [
  "morn-actor",

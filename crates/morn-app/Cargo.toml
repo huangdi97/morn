@@ -16,7 +16,7 @@ morn-actor = { workspace = true }
 morn-organization = { workspace = true }
 morn-work = { workspace = true }
 morn-evolution = { workspace = true }
-morn-biolab = { workspace = true }
+morn-biolab-reference = { workspace = true, optional = true }
 morn-foundry = { workspace = true }
 morn-assurance = { workspace = true }
 morn-opint = { workspace = true }
@@ -28,3 +28,6 @@ tokio = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
+[features]
+default = []
+domain-biolab = ["morn-biolab-reference"]

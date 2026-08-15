@@ -2,6 +2,7 @@
 
 pub mod domain;
 pub mod dream_factory;
+pub mod ids;
 pub mod service;
 
 pub use dream_factory::{LiteratureSource, LoopAResult, LoopCResult};

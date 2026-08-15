@@ -20,6 +20,8 @@ Run-Step "cargo fmt --check" { cargo fmt --all -- --check }
 Run-Step "cargo check" { cargo check --workspace --all-targets }
 Run-Step "cargo clippy (-D warnings)" { cargo clippy --workspace --all-targets --all-features -- -D warnings }
 Run-Step "cargo test" { cargo test --workspace --all-features }
+Run-Step "domain boundary guard" { powershell -ExecutionPolicy Bypass -File scripts\check_domain_boundary.ps1 }
+Run-Step "zero-domain Core build" { cargo check -p morn-app }
 
 # ---- Frontend ----
 $frontend = Join-Path $root "frontend"

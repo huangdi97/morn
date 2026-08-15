@@ -6,10 +6,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::ids::ScientificClaimId;
 use morn_artifact::approval::ArtifactApproval;
 use morn_artifact::review::{Review, ReviewDecision};
 use morn_kernel::error::{Error, Result};
-use morn_kernel::ids::{ArtifactId, ArtifactVersionId, ScientificClaimId};
+use morn_kernel::ids::{ArtifactId, ArtifactVersionId};
 
 use crate::service::BioLabService;
 
@@ -293,8 +294,9 @@ impl BioLabService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::ScientificClaimId;
     use crate::service::BioLabService;
-    use morn_kernel::ids::{ArtifactVersionId, ScientificClaimId, WorkspaceId};
+    use morn_kernel::ids::{ArtifactVersionId, WorkspaceId};
     use morn_kernel::status::ArtifactStatus;
 
     #[test]
