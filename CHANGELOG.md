@@ -23,6 +23,9 @@
     final report `reports/morn_v1_ga_final_report.md`.
 
 ### Fixed
+- CI (GitHub Actions, Linux): 3 `Cargo.toml` files carried UTF-8 BOM, which
+  Linux cargo/toml rejects; BOM stripped and `scripts/check_no_bom.ps1` guard
+  added to CI (KF-012).
 - Hub `/api/hub` returned a hardcoded empty `domain_packs`; now derived from
   the same feature advertisement as `/api/workbench`.
 - `crates/morn-app/tests/e2e_goal4.rs`: removed a misleading `placeholder`

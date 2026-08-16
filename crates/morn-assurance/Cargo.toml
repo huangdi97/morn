@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "morn-assurance"
 version.workspace = true
 edition.workspace = true

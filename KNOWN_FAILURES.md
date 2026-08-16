@@ -205,3 +205,31 @@ Studio 默认通用；compiler/run 默认 domain="generic"。
 
 Test added:
 `frontend/src/Workbench.gating.test.ts`（2 tests）；zero-domain server 实测 domain_packs=[] 且 /api/biolab/run 404。
+
+
+### KF-012 — 3 个 Cargo.toml 带 UTF-8 BOM 导致 Linux CI 解析失败（fixed）
+Status: Fixed (2026-08-16)
+
+Reproduction:
+GitHub Actions (ubuntu) `cargo clippy` / `cargo build` 报
+`Error parsing Cargo.toml manifest ... Invalid TOML document: only letter, numbers,
+dashes and underscores are allowed in keys`（morn-assurance / morn-foundry /
+morn-harness）。
+
+Expected: CI 与本地一样通过。
+
+Actual: `crates/morn-assurance/Cargo.toml`、`crates/morn-foundry/Cargo.toml`、
+`crates/morn-harness/Cargo.toml` 含 UTF-8 BOM；Windows cargo 容忍 BOM，Linux
+cargo/toml parser 拒绝，导致 CI 失败。
+
+Root cause:
+早期写文件时的编码选择（KF-004 同类问题漏网）。
+
+Fix/Decision:
+- 去除 3 个 Cargo.toml 的 BOM（UTF-8 no-BOM）。
+- 新增 `scripts/check_no_bom.ps1` 守卫（扫描 tracked 文本文件，拒绝 BOM），
+  并接入 CI（backend job 首个步骤）防止回归。
+
+Test added:
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_no_bom.ps1`
+exit 0；CI 全绿。
