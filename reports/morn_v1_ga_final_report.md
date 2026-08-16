@@ -129,10 +129,10 @@ LEGACY_TAG_PUSH=SUCCESS
 
 NEW_MORN_BRANCH=morn-v1
 NEW_MORN_BRANCH_PUSH=SUCCESS
-NEW_MORN_BRANCH_COMMIT=8f4c258bf2e717a5b3977d3cb385c4546f88071c
+NEW_MORN_BRANCH_COMMIT=cb587fd (final content commit; verified on main/morn-v1)
 
 NEW_MAIN_TAKEOVER=SUCCESS
-REMOTE_MAIN_COMMIT=8f4c258bf2e717a5b3977d3cb385c4546f88071c
+REMOTE_MAIN_COMMIT=cb587fd (final content commit; takeover verified)
 DEFAULT_BRANCH_CHECK=main (default branch remains main; points to new Morn)
 RC_TAG=v1.0.0-rc.1
 ```
@@ -144,7 +144,14 @@ Executed 2026-08-16 with `gh` (authenticated as huangdi97):
 5. `git push --force-with-lease origin HEAD:main` (no plain --force); verified `origin/main == 8f4c258`.
 6. Confirmed no merge between histories: old `main` is not an ancestor of new `main`.
 7. Default branch check via `gh api`: `main`.
-8. Post-push: fast-forward of the SHA-record commit and `v1.0.0-rc.1` annotated tag on the new mainline.
+8. Post-push: SHA-record + CI portability fixes fast-forwarded to `main`/`morn-v1`;
+   `v1.0.0-rc.1` annotated tag moved to the final tip; CI verified green on GitHub
+   Actions (Backend/Desktop/E2E/Frontend).
+9. Final remote state (verified 2026-08-16 after all pushes): `origin/main` and
+   `origin/morn-v1` point at the same new-Morn mainline whose content-final
+   commit is `cb587fd` (the literal tip is the SHA-record commit recorded in the
+   Git history); `legacy/pre-rewrite` -> `2cd9fbd6...`, `legacy-pre-rewrite`
+   annotated tag -> `2cd9fbd6...` (unchanged), `v1.0.0-rc.1` -> final tip.
 Safety: no merge, no pull of old code, no --allow-unrelated-histories, no plain
 --force; only `git push --force-with-lease origin HEAD:main` after legacy
 backup + morn-v1 verify + fresh fetch + old main unchanged.
