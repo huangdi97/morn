@@ -24,7 +24,7 @@ Get-ChildItem crates -Directory | ForEach-Object {
     }
 }
 # 2) Core lib sources must not import a concrete domain crate (feature-gated imports allowed).
-$files = Get-ChildItem crates -Recurse -Filter *.rs | Where-Object { $_.FullName -notmatch '\\tests\\' }
+$files = Get-ChildItem crates -Recurse -Filter *.rs | Where-Object { $_.FullName -notmatch '[/\\]tests[/\\]' }
 foreach ($f in $files) {
     $lines = Get-Content $f.FullName
     for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -38,7 +38,7 @@ foreach ($f in $files) {
     }
 }
 # 3) Core must not match on concrete domain words (compiler-heuristic class leak).
-$coreFiles = Get-ChildItem crates -Recurse -Filter *.rs | Where-Object { $_.FullName -notmatch "\\tests\\" }
+$coreFiles = Get-ChildItem crates -Recurse -Filter *.rs | Where-Object { $_.FullName -notmatch "[/\\]tests[/\\]" }
 foreach ($f in $coreFiles) {
     $text = Get-Content $f.FullName -Raw
     foreach ($w in @("biolab", "claim", "hypothesis", "scientific", "aging_pilot")) {
