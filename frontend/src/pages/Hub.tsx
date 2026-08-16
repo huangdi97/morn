@@ -3,7 +3,7 @@ import { apiGet, HubV2Data, HubV3Data } from "../api";
 import { Card, EmptyState, ErrorBox, Loading, StatusPill } from "../components/ui";
 
 interface HubData {
-  domain_packs: Array<{ id: string; name: string; trust: string }>;
+  domain_packs: string[];
   actor_templates: Array<{ id: string; name: string; trust: string }>;
   harness_templates: Array<{ id: string; name: string; trust: string }>;
   work_package_templates: Array<{ id: string; name: string; trust: string }>;
@@ -122,7 +122,10 @@ export default function Hub() {
             </Card>
           </>
         )}
-        <AssetTable title="Domain Packs" rows={data.domain_packs} />
+        <AssetTable
+          title="Domain Packs"
+          rows={data.domain_packs.map((d) => ({ id: d, name: d, trust: "Enabled" }))}
+        />
         <AssetTable title="Actor Templates" rows={data.actor_templates} />
         <AssetTable title="Harness Templates" rows={data.harness_templates} />
         <AssetTable title="WorkPackage Templates" rows={data.work_package_templates} />

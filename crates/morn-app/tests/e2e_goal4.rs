@@ -277,8 +277,8 @@ fn goal4_full_pipeline_e2e() {
     assert!(actual_delta.contains("prediction_error"));
 
     // Phase 6: Real pilot FULL is EXTERNAL BLOCKED (no lawful real BioLab dataset).
-    let pilot = &mut guard.episodes; // placeholder
-    let _ = pilot;
+    // Episodes remain fixture-controlled; see BLOCKERS.md G4-B-002.
+    let _ = &guard.episodes;
     let mut pilot_svc = morn_opint::pilot::RealPilotService::new();
     assert!(pilot_svc
         .run_pipeline(

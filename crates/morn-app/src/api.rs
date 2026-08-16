@@ -269,13 +269,19 @@ async fn console(State(state): State<AppState>) -> ApiResult {
 async fn hub(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     let world = &guard.world;
+    // Enabled domain packs advertised to the UI as an extension point (same
+    // signal as /api/workbench, D-028): zero-domain builds advertise none.
+    #[cfg(feature = "domain-biolab")]
+    let domain_packs: Vec<&str> = vec!["biolab-reference"];
+    #[cfg(not(feature = "domain-biolab"))]
+    let domain_packs: Vec<&str> = vec![];
     let object_types: Vec<Value> = world
         .object_types()
         .iter()
         .map(|t| json!({ "id": t.id, "name": t.name, "trust": "Verified", "lifecycle": "active" }))
         .collect();
     Ok(Json(json!({
-        "domain_packs": [],
+        "domain_packs": domain_packs,
         "actor_templates": [ { "id": "generic-actor@1.0", "name": "Generic Actor", "trust": "Verified" } ],
         "harness_templates": [
             { "id": "morn-native@1.0", "name": "Morn Native Harness", "trust": "Verified" },
