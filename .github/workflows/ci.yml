@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  push:
+    branches: [main, morn-v1, "**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (fmt / clippy / tests / zero-domain)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+      - name: cargo clippy (-D warnings)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: cargo test (workspace, all features)
+        run: cargo test --workspace --all-features
+      - name: Domain boundary guard
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check_domain_boundary.ps1
+      - name: Zero-domain Core build (no domain packs)
+        run: cargo check -p morn-app
+      - name: "Core tests (zero-domain: migration/security/chaos/conformance/pure-core E2E)"
+        run: cargo test -p morn-core-tests
+      - name: Developer CLI smoke
+        shell: pwsh
+        run: |
+          cargo build -p morn-cli
+          $cli = Join-Path $PWD "target/debug/morn"
+          foreach ($c in @("doctor","status","provider","connector list","connector health","plugin validate","compat","migrate status","node list","domain list","package inspect","conformance")) {
+            $parts = $c -split " "
+            & $cli @parts | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "morn $c failed" }
+          }
+          Write-Host "CLI smoke OK"
+
+  frontend:
+    name: Frontend (typecheck / lint / test / build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  e2e-smoke:
+    name: E2E (server + BioLab + Playwright UI smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Build all-features server
+        run: cargo build -p morn-app --bin server --all-features
+      - name: Demo smoke (health / bootstrap / BioLab E2E / workbench)
+        run: |
+          set -euo pipefail
+          export MORN_DB="$PWD/target/ci_smoke.db" MORN_PORT=8090
+          ./target/debug/server &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          sleep 3
+          curl -fsS http://127.0.0.1:8090/api/health | grep -q '"status":"ok"'
+          curl -fsS -X POST http://127.0.0.1:8090/api/demo/bootstrap | grep -q '"objects":1'
+          curl -fsS -X POST http://127.0.0.1:8090/api/biolab/run | grep -q '"all_ok":true'
+          curl -fsS http://127.0.0.1:8090/api/workbench | grep -q '"world_objects"'
+          echo "demo smoke OK"
+      - name: UI smoke (Playwright, four surfaces + BioLab)
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          export MORN_DB="$PWD/../target/ci_ui_smoke.db" MORN_PORT=8090
+          ../target/debug/server &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          sleep 3
+          npx vite --port 5173 --strictPort &
+          VITE_PID=$!
+          trap 'kill $VITE_PID $SERVER_PID 2>/dev/null || true' EXIT
+          sleep 5
+          node scripts/ui_smoke.mjs
+
+  desktop:
+    name: Desktop (Tauri build)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Build Tauri desktop shell
+        shell: pwsh
+        working-directory: .
+        run: cargo build -p morn-desktop
