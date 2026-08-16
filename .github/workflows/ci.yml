@@ -25,6 +25,10 @@ jobs:
       - name: No UTF-8 BOM in tracked text files
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check_no_bom.ps1
+      - name: Install Tauri Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
       - name: cargo clippy (-D warnings)
@@ -96,7 +100,10 @@ jobs:
           ./target/debug/server &
           SERVER_PID=$!
           trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
-          sleep 3
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8090/api/health 2>/dev/null | grep -q '"status":"ok"'; then break; fi
+            sleep 1
+          done
           curl -fsS http://127.0.0.1:8090/api/health | grep -q '"status":"ok"'
           curl -fsS -X POST http://127.0.0.1:8090/api/demo/bootstrap | grep -q '"objects":1'
           curl -fsS -X POST http://127.0.0.1:8090/api/biolab/run | grep -q '"all_ok":true'
@@ -110,11 +117,17 @@ jobs:
           ../target/debug/server &
           SERVER_PID=$!
           trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
-          sleep 3
-          npx vite --port 5173 --strictPort &
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8090/api/health 2>/dev/null | grep -q '"status":"ok"'; then break; fi
+            sleep 1
+          done
+          npx vite --host 127.0.0.1 --port 5173 --strictPort &
           VITE_PID=$!
           trap 'kill $VITE_PID $SERVER_PID 2>/dev/null || true' EXIT
-          sleep 5
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:5173/ 2>/dev/null; then break; fi
+            sleep 1
+          done
           node scripts/ui_smoke.mjs
 
   desktop:
