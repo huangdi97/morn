@@ -1,24 +1,89 @@
 # 直接发给 Codex
 
 ```text
-Goal 1、Goal 2、Goal 3、Goal 4 已完成。
-现在开始 Goal 5：MORN-G5-CORE-COMPLETION-V1RC。
+当前本地 Morn 是从头开发的全新工程。
 
-请读取并严格执行根目录 GOAL5_CODEX_MASTER_PROMPT.md。
+GitHub 上已有一个很久以前的旧 morn 仓库，
+但旧仓库与当前工程不是继承关系。
 
-这一阶段不是做 BioLab、Factory、Pharma 等实例，而是今晚把所有仍属于 Morn 本体、且不依赖真人账号/真实外部系统/真实硬件的底层能力连续做完，形成 Morn Core v1.0 Release Candidate。
+现在请执行最终 Goal：
 
-先真实审计当前仓库；不要重复已有 canonical implementation；不要并行造 V2/V3 空壳。
+MORN-G6R-V1-GA-REFOUNDATION-GITHUB-TAKEOVER
 
-连续完成：Domain Neutralization、BioLab Reference Pack 抽离、Stable Kernel v1 Freeze、Capability Fabric、Provider SDK、Connector SDK、Generic Process Intelligence、Morn Node、Distributed Durable Runtime、本地多节点 failover/dedupe/checkpoint、Deployment/Topology、Domain SDK、Domain Pack Lifecycle、Plugin System、zero-domain Workbench/Studio/Console/Hub、Developer CLI、Compatibility/Migration、Security、Chaos、Conformance、Pure Core E2E、Reference Pack E2E、Goal1–4 全量 regression。
+读取并严格执行根目录 MASTER_CODEX_PROMPT.md。
 
-普通编译错误、测试失败、依赖冲突、UI bug、migration bug 不要停下来问我，直接修。
-只有真实 Secret、账号、许可证、不可逆外部操作、真实硬件、不可恢复数据风险才允许记录 blocker；即使有 blocker 也继续其他工作。
+不要 merge 旧 GitHub 源码。
+不要 pull unrelated history。
+不要使用 --allow-unrelated-histories。
 
-禁止 fake distributed runtime、fake connector/provider、static fake UI、ignored test、降低断言、todo!/unimplemented!、把 BioLab 改名就声称领域无关、插件绕过 Core 权限、Connector 绕过 Action Gateway、卸载 pack 删除历史 provenance。
+先完成所有本地最终收口：
 
-每完成一个 milestone 更新 STATUS_GOAL5.md、DECISIONS.md、BLOCKERS.md、KNOWN_FAILURES.md。
-持续执行 M0→M20，不要停。
-最终逐条通过 GOAL5_ACCEPTANCE.md，生成 reports/goal5_final_report.md，并明确 CORE COMPLETE = YES 或列出唯一剩余真实外部 blocker。
-现在直接开始。
+- Goal1–5 regression
+- 全仓 TODO/FIXME/mock/placeholder/ignored 审计
+- MUST_FIX_NOW 清零
+- 架构检查
+- Rust/backend 代码质量与风格
+- API/数据库/migration
+- Provider/Runtime/Connector/Distributed Runtime
+- Domain/Plugin/SDK
+- Workbench/Studio/Console/Hub 全部 UI
+- 共享 UX
+- CLI/DX
+- Security
+- Chaos
+- Performance baseline
+- Full Test Matrix
+- Playwright/Tauri
+- Docs
+- GitHub Actions
+- Packaging
+- Git cleanup
+- logical commits
+- final local regression
+- git status clean
+
+然后处理 GitHub：
+
+1. fetch 旧 morn；
+2. 识别旧 default branch；
+3. 将旧版 tip 归档为：
+   legacy/pre-rewrite
+4. 创建并 push：
+   legacy-pre-rewrite annotated tag
+5. 验证 legacy branch/tag；
+6. 当前全新 Morn 先 push 到：
+   morn-v1
+7. 验证 morn-v1 == LOCAL_FINAL_COMMIT；
+8. fresh fetch；
+9. 确认旧 main 在归档后没有被别人更新；
+10. 不 merge 两套历史；
+11. 在所有安全条件满足后，使用：
+    git push --force-with-lease origin HEAD:main
+    让当前全新 Morn 接管正式 main；
+12. 禁止普通 --force；
+13. push 后再次 fetch 验证 origin/main == LOCAL_FINAL_COMMIT；
+14. 如果版本策略明确，创建并 push v1.0.0-rc.1；
+15. 生成 reports/morn_v1_ga_final_report.md。
+
+只有真实 GitHub auth/permission/branch protection/remote/network，
+真实 Secret、许可证、真实外部系统、硬件或数据风险
+才允许成为 blocker。
+
+任何 external blocker 出现后，继续完成其他所有任务。
+
+最终必须明确：
+
+MUST_FIX_NOW=0
+ALL_LOCAL_TESTS=PASS
+GIT_STATUS=CLEAN
+MORN_V1_GA_LOCAL_COMPLETE=YES
+LEGACY_GITHUB_BACKUP=SUCCESS
+NEW_MORN_BRANCH_PUSH=SUCCESS
+NEW_MAIN_TAKEOVER=SUCCESS
+
+或者 main takeover 只剩唯一真实 GitHub external blocker。
+
+不要只给计划。
+不要停下来问下一步。
+现在直接连续执行到结束。
 ```
