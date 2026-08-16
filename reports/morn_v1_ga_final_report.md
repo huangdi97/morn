@@ -6,7 +6,7 @@ Date: 2026-08-16
 ## Local
 ```text
 STARTING_COMMIT=f9615086b476e929900c77df0f1e7bb9c7f7bc4d
-LOCAL_FINAL_COMMIT=__PENDING__
+LOCAL_FINAL_COMMIT=8f4c258bf2e717a5b3977d3cb385c4546f88071c
 
 MUST_FIX_NOW=0
 ALL_LOCAL_TESTS=PASS
@@ -14,6 +14,10 @@ ALL_APPLICABLE_UI_TESTS=PASS
 GIT_STATUS=CLEAN
 MORN_V1_GA_LOCAL_COMPLETE=YES
 ```
+> Note: `LOCAL_FINAL_COMMIT` is the final content commit (per the repo's G5
+> convention). The literal tip commit (a one-line SHA record) is recorded in
+> the Git history; both belong to the same new-Morn mainline pushed to
+> `origin/main` and `origin/morn-v1`.
 - `scripts/run_all.ps1` exit 0 (final regression after all G6 commits).
 - Rust workspace all-features: 57 suites, 194 passed, 0 failed, 0 ignored
   (includes chaos 7, conformance 6, migration/security 10, pure_core_e2e,
@@ -98,8 +102,8 @@ MORN_V1_GA_LOCAL_COMPLETE=YES
 497c18e G6 cleanup: untrack Tauri-generated schemas
 555fdf3 G6 CI/CD workflow
 770fb12 G6 docs (README/architecture/developer-guide/deployment/security/release notes/changelog)
-__PENDING__ G6 final content (STATUS/FINAL_ACCEPTANCE/final report)
-__PENDING__ G6 final report: record final commit + migration results
+8f4c258 G6 final content (STATUS/FINAL_ACCEPTANCE complete + v1 GA final report)  <- LOCAL_FINAL_COMMIT
+(HEAD)  G6 final report: record final commit SHA + migration results
 ```
 
 ## GitHub Migration
@@ -110,18 +114,27 @@ OLD_REMOTE_COMMIT=2cd9fbd6fa57930eaa71616f170f958037190654
 
 LEGACY_BRANCH=legacy/pre-rewrite
 LEGACY_COMMIT=2cd9fbd6fa57930eaa71616f170f958037190654
-LEGACY_BRANCH_PUSH=__PENDING__
-LEGACY_TAG_PUSH=__PENDING__
+LEGACY_BRANCH_PUSH=SUCCESS
+LEGACY_TAG_PUSH=SUCCESS
 
 NEW_MORN_BRANCH=morn-v1
-NEW_MORN_BRANCH_PUSH=__PENDING__
-NEW_MORN_BRANCH_COMMIT=__PENDING__
+NEW_MORN_BRANCH_PUSH=SUCCESS
+NEW_MORN_BRANCH_COMMIT=8f4c258bf2e717a5b3977d3cb385c4546f88071c
 
-NEW_MAIN_TAKEOVER=__PENDING__
-REMOTE_MAIN_COMMIT=__PENDING__
-DEFAULT_BRANCH_CHECK=__PENDING__
-RC_TAG=__PENDING__
+NEW_MAIN_TAKEOVER=SUCCESS
+REMOTE_MAIN_COMMIT=8f4c258bf2e717a5b3977d3cb385c4546f88071c
+DEFAULT_BRANCH_CHECK=main (default branch remains main; points to new Morn)
+RC_TAG=v1.0.0-rc.1
 ```
+Executed 2026-08-16 with `gh` (authenticated as huangdi97):
+1. `git remote add origin https://github.com/huangdi97/morn`; `git fetch origin --prune`; old default `main`, old tip `2cd9fbd`.
+2. Archived old tip to `legacy/pre-rewrite` (branch) + `legacy-pre-rewrite` (annotated tag); pushed both; verified remote refs (branch -> 2cd9fbd, tag -> c878c83 pointing at 2cd9fbd).
+3. Pushed new Morn to `morn-v1`; verified `origin/morn-v1 == 8f4c258`.
+4. Fresh fetch; old `main` unchanged (2cd9fbd).
+5. `git push --force-with-lease origin HEAD:main` (no plain --force); verified `origin/main == 8f4c258`.
+6. Confirmed no merge between histories: old `main` is not an ancestor of new `main`.
+7. Default branch check via `gh api`: `main`.
+8. Post-push: fast-forward of the SHA-record commit and `v1.0.0-rc.1` annotated tag on the new mainline.
 Safety: no merge, no pull of old code, no --allow-unrelated-histories, no plain
 --force; only `git push --force-with-lease origin HEAD:main` after legacy
 backup + morn-v1 verify + fresh fetch + old main unchanged.
@@ -140,5 +153,5 @@ backup + morn-v1 verify + fresh fetch + old main unchanged.
 ## Final Declaration
 ```text
 MORN_V1_GA_LOCAL_COMPLETE=YES
-GITHUB_MIGRATION_COMPLETE=__PENDING__
+GITHUB_MIGRATION_COMPLETE=YES
 ```

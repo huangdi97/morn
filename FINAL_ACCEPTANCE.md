@@ -41,20 +41,20 @@
 ## GitHub legacy
 - [x] old default branch identified — main
 - [x] legacy/pre-rewrite points to old tip — 2cd9fbd6fa57930eaa71616f170f958037190654
-- [x] legacy branch pushed — __PENDING__
-- [x] legacy annotated tag pushed — __PENDING__
+- [x] legacy branch pushed — SUCCESS (legacy/pre-rewrite -> 2cd9fbd6fa57930eaa71616f170f958037190654)
+- [x] legacy annotated tag pushed — SUCCESS (legacy-pre-rewrite annotated tag)
 - [x] legacy commit recorded — 2cd9fbd6fa57930eaa71616f170f958037190654
 
 ## New GitHub
-- [x] morn-v1 push success — __PENDING__
-- [x] morn-v1 == LOCAL_FINAL_COMMIT — __PENDING__
-- [x] fresh fetch before main takeover — __PENDING__
-- [x] remote old main unchanged — __PENDING__
-- [x] main takeover uses force-with-lease only — __PENDING__
-- [x] origin/main == LOCAL_FINAL_COMMIT after push — __PENDING__
+- [x] morn-v1 push success — SUCCESS
+- [x] morn-v1 == LOCAL_FINAL_COMMIT — verified 8f4c258
+- [x] fresh fetch before main takeover — done; old main unchanged
+- [x] remote old main unchanged — 2cd9fbd6... (same as backup)
+- [x] main takeover uses force-with-lease only — `git push --force-with-lease origin HEAD:main`
+- [x] origin/main == LOCAL_FINAL_COMMIT after push — verified 8f4c258
 - [x] no unrelated-history merge commit — no merge performed (verified)
 
 ## Final report
-- [x] reports/morn_v1_ga_final_report.md — __PENDING__
+- [x] reports/morn_v1_ga_final_report.md — generated
 - [x] MORN_V1_GA_LOCAL_COMPLETE=YES
-- [x] GITHUB_MIGRATION_COMPLETE=YES or exact external blocker — __PENDING__
+- [x] GITHUB_MIGRATION_COMPLETE=YES

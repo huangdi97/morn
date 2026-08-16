@@ -15,23 +15,23 @@ Goal: `MORN-G6R-V1-GA-REFOUNDATION-GITHUB-TAKEOVER` (2026-08-16)
 - CI: ADDED — `.github/workflows/ci.yml` (fmt/clippy/backend/frontend/E2E/desktop)
 - Package: PASS — cargo build workspace all-features, Tauri desktop build, frontend production build (JS 187.7 kB / gzip 59.9 kB)
 - Git clean: YES
-- LOCAL_FINAL_COMMIT: __PENDING__ (recorded in reports/morn_v1_ga_final_report.md)
+- LOCAL_FINAL_COMMIT: 8f4c258bf2e717a5b3977d3cb385c4546f88071c (final content commit; tip commit records this SHA)
 
 ## GitHub
 - REMOTE_URL: https://github.com/huangdi97/morn
 - OLD_DEFAULT_BRANCH: main
 - OLD_REMOTE_COMMIT: 2cd9fbd6fa57930eaa71616f170f958037190654
 - LEGACY_BRANCH: legacy/pre-rewrite
-- LEGACY_BRANCH_PUSH: __PENDING__
-- LEGACY_TAG_PUSH: __PENDING__
+- LEGACY_BRANCH_PUSH: SUCCESS
+- LEGACY_TAG_PUSH: SUCCESS
 - NEW_MORN_BRANCH: morn-v1
-- NEW_MORN_BRANCH_PUSH: __PENDING__
-- NEW_MAIN_TAKEOVER: __PENDING__
-- REMOTE_MAIN_COMMIT: __PENDING__
-- DEFAULT_BRANCH_CHECK: __PENDING__
-- RC_TAG: __PENDING__
+- NEW_MORN_BRANCH_PUSH: SUCCESS
+- NEW_MAIN_TAKEOVER: SUCCESS
+- REMOTE_MAIN_COMMIT: 8f4c258 (main takeover, verified; tip fast-forwarded to SHA-record commit)
+- DEFAULT_BRANCH_CHECK: main (default branch remains main; points to new Morn)
+- RC_TAG: v1.0.0-rc.1 (annotated tag on new main)
 
 ## Final
-- MORN_V1_GA_LOCAL_COMPLETE: __PENDING__
-- GITHUB_MIGRATION_COMPLETE: __PENDING__
+- MORN_V1_GA_LOCAL_COMPLETE: YES
+- GITHUB_MIGRATION_COMPLETE: YES
 - External blockers: B-001 (real DeepSeek Harness smoke), G4-B-002 (real BioLab data pilot) — both unchanged, neither blocks local GA
