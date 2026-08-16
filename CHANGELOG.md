@@ -1,5 +1,38 @@
 # CHANGELOG.md
 
+## [1.0.0-rc.1] — 2026-08-16 — Morn v1.0 GA Re-Foundation
+
+### Added
+- Goal 6 finalization (`MORN-G6R-V1-GA-REFOUNDATION-GITHUB-TAKEOVER`):
+  - Full local regression + reality/backlog/architecture audits
+    (`reports/final_reality_audit.md`, `reports/final_backlog_audit.md`).
+  - CI/CD: `.github/workflows/ci.yml` — fmt/clippy/backend tests/
+    zero-domain core/CLI smoke/frontend/E2E+Playwright/desktop.
+  - Documentation: `README.md`, `docs/architecture.md`,
+    `docs/developer-guide.md`, `docs/deployment.md`, `docs/security.md`,
+    `RELEASE_NOTES.md`.
+  - Hub now advertises enabled `domain_packs` consistently with Workbench
+    (D-028); zero-domain Hub no longer hardcodes an empty pack list.
+  - `.gitattributes` (LF normalization) and `.gitignore` entry for Tauri
+    generated schemas (`src-tauri/gen/`); generated schemas untracked.
+  - `scripts/run_all.ps1` runs the domain boundary guard with `-NoProfile` to
+    avoid nested PowerShell profile noise.
+  - Performance baseline recorded (`reports/performance_baseline.md`).
+  - GitHub migration: old `morn` history archived to `legacy/pre-rewrite` +
+    `legacy-pre-rewrite` annotated tag; new Morn on `morn-v1` and `main`;
+    final report `reports/morn_v1_ga_final_report.md`.
+
+### Fixed
+- Hub `/api/hub` returned a hardcoded empty `domain_packs`; now derived from
+  the same feature advertisement as `/api/workbench`.
+- `crates/morn-app/tests/e2e_goal4.rs`: removed a misleading `placeholder`
+  comment in the external-blocked pilot phase.
+
+### Notes
+- External blockers unchanged: B-001 (real DeepSeek Harness smoke),
+  G4-B-002 (real BioLab data pilot). Both are credential/data blockers, not
+  local defects.
+
 ## [0.1.0] — 2026-08-15 — Morn v10.2 Tonight Baseline
 
 ### Added
