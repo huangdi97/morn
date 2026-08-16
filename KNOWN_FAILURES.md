@@ -233,3 +233,32 @@ Fix/Decision:
 Test added:
 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_no_bom.ps1`
 exit 0；CI 全绿。
+
+
+### KF-013 — CI 跨平台问题（Linux runner 初次全绿前修复，fixed）
+Status: Fixed (2026-08-16)
+
+Reproduction:
+GitHub Actions (ubuntu) 上 CI 首次运行失败：
+1. 3 个 Cargo.toml 带 UTF-8 BOM → cargo/clippy 解析失败（KF-012，已单独修复）。
+2. Tauri 依赖 glib-sys/soup3 在 ubuntu 无系统库 → workspace clippy 失败 →
+   安装 libwebkit2gtk-4.1-dev 等系统依赖。
+3. `tauri::generate_context!()` 需要 `frontend/dist` 与 PNG 图标：
+   - ubuntu 上缺 frontend/dist → 先 `npm run build`；
+   - 仓库只有 icon.ico → 补充 icon.png/32x32/128x128/128x128@2x 并更新
+     tauri.conf.json bundle.icon。
+4. `check_domain_boundary.ps1` 用 Windows 路径分隔符 `\tests\` 过滤测试文件，
+   Linux 路径 `/tests/` 不匹配 → 误报 core import FAIL →
+   改为跨平台正则 `[/\\]tests[/\\]`。
+5. E2E UI smoke：vite 默认 localhost 在 ubuntu 绑定 IPv6-only → 127.0.0.1 拒绝 →
+   `--host 127.0.0.1` + 就绪重试循环。
+
+Expected: 四个 job 全绿。
+
+Actual: 修复后 GitHub Actions 全绿（Backend/Desktop/E2E/Frontend）。
+
+Fix/Decision:
+见上述 1–5 对应 commit；新增 `scripts/check_no_bom.ps1` 守卫并接入 CI。
+
+Test added:
+GitHub Actions run（main/morn-v1）全部 job ✓。

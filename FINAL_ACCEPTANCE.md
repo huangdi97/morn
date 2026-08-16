@@ -27,7 +27,7 @@
 - [x] SDK docs — docs/developer-guide.md
 - [x] Deployment/Upgrade/Troubleshooting — docs/deployment.md (+ security.md)
 - [x] CHANGELOG/Release Notes — CHANGELOG.md, RELEASE_NOTES.md
-- [x] GitHub Actions — .github/workflows/ci.yml
+- [x] GitHub Actions — .github/workflows/ci.yml, verified green on GitHub Actions (Backend/Desktop/E2E/Frontend)
 - [x] release build/package — workspace all-features build, Tauri desktop, frontend dist
 
 ## Local Git

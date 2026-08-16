@@ -12,10 +12,10 @@ Goal: `MORN-G6R-V1-GA-REFOUNDATION-GITHUB-TAKEOVER` (2026-08-16)
 - Chaos: PASS — chaos 7 tests (provider/connector/node/duplicate signal/checkpoint/migration/plugin)
 - Tests: PASS — full matrix incl. pure_core_e2e, reference_e2e (all-features), Goal1-5 regressions, frontend 4, CLI smoke 12, Tauri, UI+demo smoke
 - Docs: PASS — README.md, docs/architecture.md, docs/developer-guide.md, docs/deployment.md, docs/security.md, RELEASE_NOTES.md, CHANGELOG
-- CI: ADDED — `.github/workflows/ci.yml` (fmt/clippy/backend/frontend/E2E/desktop)
+- CI: GREEN — `.github/workflows/ci.yml` verified on GitHub Actions 2026-08-16 (Backend/Desktop/E2E/Frontend all pass; BOM guard, Tauri Linux deps, icons, cross-platform guard, E2E readiness)
 - Package: PASS — cargo build workspace all-features, Tauri desktop build, frontend production build (JS 187.7 kB / gzip 59.9 kB)
 - Git clean: YES
-- LOCAL_FINAL_COMMIT: 8f4c258bf2e717a5b3977d3cb385c4546f88071c (final content commit; tip commit records this SHA)
+- LOCAL_FINAL_COMMIT: cb587fd (final content commit incl. CI portability fixes; tip commit records this SHA)
 
 ## GitHub
 - REMOTE_URL: https://github.com/huangdi97/morn

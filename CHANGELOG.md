@@ -23,9 +23,19 @@
     final report `reports/morn_v1_ga_final_report.md`.
 
 ### Fixed
-- CI (GitHub Actions, Linux): 3 `Cargo.toml` files carried UTF-8 BOM, which
-  Linux cargo/toml rejects; BOM stripped and `scripts/check_no_bom.ps1` guard
-  added to CI (KF-012).
+- CI (GitHub Actions, Linux) portability (KF-012/KF-013):
+  - 3 `Cargo.toml` files carried UTF-8 BOM (Linux cargo/toml rejects);
+    stripped and `scripts/check_no_bom.ps1` guard added to CI.
+  - Tauri Linux system deps installed (libwebkit2gtk-4.1-dev etc.) so the full
+    workspace clippy/tests run on Ubuntu.
+  - `frontend/dist` built before workspace clippy (tauri `generate_context!`
+    embeds the frontend assets).
+  - Added PNG icon set (icon.png/32x32/128x128/128x128@2x) and updated
+    `tauri.conf.json` bundle.icon so `generate_context!` works on Linux.
+  - `check_domain_boundary.ps1` test-path filter made cross-platform.
+  - E2E UI smoke: vite `--host 127.0.0.1` + readiness loops (IPv6/localhost
+    binding on Ubuntu).
+  - Result: all four CI jobs green on GitHub Actions.
 - Hub `/api/hub` returned a hardcoded empty `domain_packs`; now derived from
   the same feature advertisement as `/api/workbench`.
 - `crates/morn-app/tests/e2e_goal4.rs`: removed a misleading `placeholder`

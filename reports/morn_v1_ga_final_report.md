@@ -6,7 +6,7 @@ Date: 2026-08-16
 ## Local
 ```text
 STARTING_COMMIT=f9615086b476e929900c77df0f1e7bb9c7f7bc4d
-LOCAL_FINAL_COMMIT=8f4c258bf2e717a5b3977d3cb385c4546f88071c
+LOCAL_FINAL_COMMIT=cb587fd (final content commit incl. CI portability fixes)
 
 MUST_FIX_NOW=0
 ALL_LOCAL_TESTS=PASS
@@ -92,7 +92,11 @@ MORN_V1_GA_LOCAL_COMPLETE=YES
 - README.md, docs/architecture.md, docs/developer-guide.md, docs/deployment.md,
   docs/security.md, RELEASE_NOTES.md, CHANGELOG.md.
 - `.github/workflows/ci.yml`: fmt/clippy/backend/zero-domain/CLI smoke,
-  frontend, E2E+Playwright, Tauri desktop.
+  frontend, E2E+Playwright, Tauri desktop — **verified GREEN on GitHub Actions
+  2026-08-16** (Backend / Desktop / E2E / Frontend jobs all pass).
+- CI portability fixes (KF-012/KF-013): Cargo.toml BOM strip + guard,
+  Tauri Linux system deps, frontend assets before clippy, PNG icon set,
+  cross-platform domain boundary guard, E2E readiness + vite --host.
 - Packaging: workspace all-features build, Tauri desktop build, frontend dist.
 
 ## Logical commits (this goal)
@@ -102,8 +106,14 @@ MORN_V1_GA_LOCAL_COMPLETE=YES
 497c18e G6 cleanup: untrack Tauri-generated schemas
 555fdf3 G6 CI/CD workflow
 770fb12 G6 docs (README/architecture/developer-guide/deployment/security/release notes/changelog)
-8f4c258 G6 final content (STATUS/FINAL_ACCEPTANCE complete + v1 GA final report)  <- LOCAL_FINAL_COMMIT
-(HEAD)  G6 final report: record final commit SHA + migration results
+8f4c258 G6 final content (STATUS/FINAL_ACCEPTANCE complete + v1 GA final report)
+6b43e68 G6 final report: record final commit SHA + migration results
+0dfd248 G6 CI fix: Cargo.toml BOM strip + check_no_bom.ps1 guard (KF-012)
+aad0cd9 G6 CI fix: Tauri Linux deps + E2E readiness loops + vite --host
+0125913 G6 CI fix: frontend assets before workspace clippy
+581ed33 G6 CI fix: PNG icon set for tauri generate_context! on Linux
+cb587fd G6 CI fix: cross-platform domain boundary guard  <- LOCAL_FINAL_COMMIT
+(HEAD)  G6 final report: CI green record
 ```
 
 ## GitHub Migration
