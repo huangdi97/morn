@@ -3,9 +3,14 @@ use crate::core::error::MornError;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+#[cfg(unix)]
 use std::process::Command;
 
 use uuid::Uuid;
+
+#[cfg(not(unix))]
+#[path = "code_tool_runner.rs"]
+mod runner;
 
 #[cfg(feature = "sandbox")]
 #[allow(unused_imports)]
@@ -22,6 +27,7 @@ pub struct CodeToolResult {
 #[derive(Debug, Clone)]
 pub struct CodeToolExecutor {
     timeout_secs: u64,
+    #[cfg_attr(not(unix), allow(dead_code))] // memory ceiling is only read by run_unix
     max_memory_mb: u64,
     forbidden_patterns: Vec<String>,
     #[cfg(feature = "sandbox")]
@@ -85,6 +91,11 @@ impl CodeToolExecutor {
     pub fn execute(&self, code: &str, language: &str) -> Result<CodeToolResult, MornError> {
         let ext = match language {
             "python" | "py" => "py",
+            // COMPATIBILITY: Windows has no `.sh` file association and no
+            // `timeout`/`ulimit`; shell scripts run as .cmd batch files there.
+            #[cfg(windows)]
+            "shell" | "sh" | "bash" => "cmd",
+            #[cfg(not(windows))]
             "shell" | "sh" | "bash" => "sh",
             other => {
                 return Err(MornError::Internal(format!(
@@ -130,23 +141,55 @@ impl CodeToolExecutor {
             .map_err(|e| MornError::Internal(format!("failed to create temp dir: {}", e)))?;
         let file_path = temp_dir.join(&file_name);
 
+        // COMPATIBILITY: cmd.exe batch parsing is line-ending sensitive;
+        // write shell text as CRLF on Windows.
+        let content = if ext == "cmd" {
+            code.replace("\r\n", "\n").replace('\n', "\r\n")
+        } else {
+            code.to_string()
+        };
+
         let mut file = fs::File::create(&file_path)
             .map_err(|e| MornError::Internal(format!("failed to create temp file: {}", e)))?;
-        file.write_all(code.as_bytes()).map_err(|e| {
+        file.write_all(content.as_bytes()).map_err(|e| {
             MornError::Internal(format!("failed to write code to temp file: {}", e))
         })?;
         drop(file);
 
-        let result = if ext == "py" {
-            self.run_with_limits("python3", &file_path)
-                .or_else(|_| self.run_with_limits("python", &file_path))
+        let candidates: &[&str] = if ext == "py" {
+            // COMPATIBILITY: on Windows the `python3` alias is a Microsoft
+            // Store stub; real installs expose `python.exe`/`py.exe`.
+            #[cfg(windows)]
+            {
+                &["python", "py"]
+            }
+            #[cfg(not(windows))]
+            {
+                &["python3", "python"]
+            }
         } else {
-            self.run_with_limits("bash", &file_path)
+            #[cfg(windows)]
+            {
+                &["cmd"]
+            }
+            #[cfg(not(windows))]
+            {
+                &["bash"]
+            }
         };
 
+        let mut last_err: Option<MornError> = None;
+        for candidate in candidates {
+            match self.run_with_limits(candidate, &file_path) {
+                Ok(result) => {
+                    let _ = fs::remove_file(&file_path);
+                    return Ok(result);
+                }
+                Err(e) => last_err = Some(e),
+            }
+        }
         let _ = fs::remove_file(&file_path);
-
-        result
+        Err(last_err.unwrap_or_else(|| MornError::Internal("no interpreter available".into())))
     }
 
     fn run_with_limits(
@@ -154,6 +197,14 @@ impl CodeToolExecutor {
         interpreter: &str,
         file_path: &Path,
     ) -> Result<CodeToolResult, MornError> {
+        #[cfg(unix)]
+        return self.run_unix(interpreter, file_path);
+        #[cfg(not(unix))]
+        return self.run_windows(interpreter, file_path);
+    }
+
+    #[cfg(unix)]
+    fn run_unix(&self, interpreter: &str, file_path: &Path) -> Result<CodeToolResult, MornError> {
         let mem_limit_kb = self.max_memory_mb * 1024;
 
         let output = Command::new("timeout")
@@ -179,69 +230,17 @@ impl CodeToolExecutor {
             timed_out,
         })
     }
+
+    #[cfg(not(unix))]
+    fn run_windows(
+        &self,
+        interpreter: &str,
+        file_path: &Path,
+    ) -> Result<CodeToolResult, MornError> {
+        runner::run_windows(self.timeout_secs, interpreter, file_path)
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_unsupported_language() {
-        let executor = CodeToolExecutor::new();
-        let result = executor.execute("print('hi')", "ruby");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("unsupported language"));
-    }
-
-    #[test]
-    fn test_dangerous_pattern_blocked() {
-        let executor = CodeToolExecutor::new();
-        let result = executor.execute("rm -rf /", "sh");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("dangerous pattern"));
-    }
-
-    #[test]
-    fn test_python_execution() {
-        let executor = CodeToolExecutor::new();
-        let result = executor
-            .execute("print('hello from code_tool')", "python")
-            .unwrap();
-        assert!(result.stdout.contains("hello from code_tool"));
-        assert_eq!(result.exit_code, 0);
-        assert!(!result.timed_out);
-    }
-
-    #[test]
-    fn test_shell_execution() {
-        let executor = CodeToolExecutor::new();
-        let result = executor.execute("echo 'shell test'", "sh").unwrap();
-        assert!(result.stdout.contains("shell test"));
-        assert_eq!(result.exit_code, 0);
-        assert!(!result.timed_out);
-    }
-
-    #[test]
-    fn test_timeout() {
-        let executor = CodeToolExecutor::new().with_timeout(1);
-        let result = executor.execute("sleep 10", "sh").unwrap();
-        assert!(result.timed_out);
-        assert!(result.exit_code == 124 || result.exit_code == -1);
-    }
-
-    #[test]
-    fn test_stderr_capture() {
-        let executor = CodeToolExecutor::new();
-        let result = executor
-            .execute("import sys; sys.stderr.write('error msg')", "py")
-            .unwrap();
-        assert!(result.stderr.contains("error msg"));
-    }
-
-    #[test]
-    fn test_exit_code_nonzero() {
-        let executor = CodeToolExecutor::new();
-        let result = executor.execute("exit 42", "sh").unwrap();
-        assert_eq!(result.exit_code, 42);
-    }
-}
+#[path = "code_tool_tests.rs"]
+mod tests;

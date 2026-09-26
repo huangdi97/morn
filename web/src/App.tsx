@@ -698,7 +698,7 @@ onSelect={async (template) => {
         {isTyping ? (
           <button className="stop-btn" onClick={handleStop}>■ {t('chat.stop')}</button>
         ) : (
-          <button onClick={(e) => { (e.currentTarget as HTMLElement).classList.add('pressing'); setTimeout(() => (e.currentTarget as HTMLElement).classList.remove('pressing'), 250); sendMessage(); }} disabled={!input.trim()}>
+          <button className="send-btn" onClick={(e) => { (e.currentTarget as HTMLElement).classList.add('pressing'); setTimeout(() => (e.currentTarget as HTMLElement).classList.remove('pressing'), 250); sendMessage(); }} disabled={!input.trim()}>
             {t('chat.send')}
           </button>
         )}

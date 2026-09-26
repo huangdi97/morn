@@ -192,9 +192,9 @@ impl SelfEvolutionSkill {
     }
 
     pub(crate) fn error_log_path() -> Option<PathBuf> {
-        std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .map(|home| home.join(".hermes").join("logs").join("error.log"))
+        // COMPATIBILITY: Windows does not set HOME; USERPROFILE is the standard
+        // home marker there. dirs::home_dir() resolves both conventions.
+        dirs::home_dir().map(|home| home.join(".hermes").join("logs").join("error.log"))
     }
 
     fn scan_time() -> String {

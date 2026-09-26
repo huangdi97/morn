@@ -12,7 +12,8 @@ const STORAGE_KEY = 'morn-locale';
 function getInitialLocale(): Locale {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === 'zh' || stored === 'en') return stored;
-  return navigator.language.startsWith('zh') ? 'zh' : 'en';
+  // 中文默认: Chinese-first product; a stored preference always wins.
+  return 'zh';
 }
 
 type LocaleContextType = {

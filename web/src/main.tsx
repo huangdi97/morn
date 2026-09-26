@@ -2,6 +2,7 @@ import { registerPlugin } from "./slots/SlotRegistry";
 import { useState } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { LocaleProvider } from "./i18n";
 import WelcomeGuide from "./welcome/WelcomeGuide";
 import "./App.css";
 
@@ -16,7 +17,11 @@ function Root() {
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <Root />
+  // LocaleProvider must wrap the welcome gate too, otherwise the welcome flow
+  // renders raw i18n keys via the default context t().
+  <LocaleProvider>
+    <Root />
+  </LocaleProvider>
 );
 
 function DemoFooter() {

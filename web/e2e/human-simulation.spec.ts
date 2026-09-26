@@ -72,8 +72,9 @@ test.describe('Morn 真人模拟完整测试', () => {
     await page.waitForTimeout(500);
 
     const navBtns = page.locator('.main-tabs button');
-    await expect(navBtns).toHaveCount(4);
-    await expect(navBtns.nth(0)).toContainText('Workbench');
+    // Dev server renders 5 tabs (workbench/studio/hub/console + DEV-only Design).
+    await expect(navBtns).toHaveCount(5);
+    await expect(navBtns.nth(0)).toContainText('工作台');
 
     await expect(page.locator('.agent-bar')).toBeVisible();
     const agents = page.locator('.agent-bar .agent-item');
@@ -85,8 +86,8 @@ test.describe('Morn 真人模拟完整测试', () => {
 
     const textarea = page.locator('textarea');
     await expect(textarea).toBeVisible();
-    await expect(textarea).toHaveAttribute('placeholder', 'Type a message...');
-    await expect(page.locator('footer.input-bar button')).toBeDisabled();
+    await expect(textarea).toHaveAttribute('placeholder', '输入消息...');
+    await expect(page.locator('footer.input-bar .send-btn')).toBeDisabled();
   });
 
   // ========= ③ 发消息 =========
@@ -95,7 +96,7 @@ test.describe('Morn 真人模拟完整测试', () => {
     await page.waitForTimeout(500);
 
     const textarea = page.locator('textarea');
-    const sendBtn = page.locator('footer.input-bar button');
+    const sendBtn = page.locator('footer.input-bar .send-btn');
 
     await textarea.fill('你好 Morn');
     await sendBtn.click();
@@ -226,7 +227,7 @@ test.describe('Morn 真人模拟完整测试', () => {
 
     // 发消息
     const textarea = page.locator('textarea');
-    const sendBtn = page.locator('footer.input-bar button');
+    const sendBtn = page.locator('footer.input-bar .send-btn');
     await textarea.fill('持久化测试');
     await sendBtn.click();
     await page.waitForTimeout(300);
@@ -283,7 +284,7 @@ test.describe('Morn 真人模拟完整测试', () => {
     // Step 5: Workbench 发消息
     const textarea = page.locator('textarea');
     await textarea.fill('帮我写一个 Python 爬虫');
-    await page.locator('footer.input-bar button').click();
+    await page.locator('footer.input-bar .send-btn').click();
     await page.waitForTimeout(300);
     await expect(page.locator('.message.user')).toContainText('Python 爬虫');
 
