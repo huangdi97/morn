@@ -1,0 +1,127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "morn:schema:capability/v1",
+  "title": "Morn Capability Supply Chain",
+  "description": "Capability = Implementation + Manifest + Qualification + Authority Envelope + Provenance. Declared / Observed / Qualified / Admitted must be separated. Asset lifecycle and site admission are separate.",
+  "type": "object",
+  "definitions": {
+    "CapabilityState": {
+      "type": "object",
+      "description": "The four capability states must stay separated: registered != qualified != admitted.",
+      "required": ["capability_ref", "state"],
+      "properties": {
+        "capability_ref": { "type": "string" },
+        "state": { "enum": ["DECLARED", "OBSERVED", "QUALIFIED", "ADMITTED", "DEPRECATED", "REVOKED"] },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "evidence_ref": { "type": "string" }
+      }
+    },
+    "CapabilityLifecycle": {
+      "type": "object",
+      "required": ["capability_ref", "stage"],
+      "properties": {
+        "capability_ref": { "type": "string" },
+        "stage": { "enum": ["DISCOVERED", "EXTRACTED", "WRAPPED", "EXECUTABLE", "VERIFIED", "QUALIFIED", "RELEASED", "SITE_BOUND", "DEPRECATED", "REVOKED"] },
+        "recorded_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "SideEffects": {
+      "type": "object",
+      "required": ["level"],
+      "properties": { "level": { "enum": ["none", "read", "external-write"] }, "description": { "type": "string" } }
+    },
+    "ExecutionRequirements": {
+      "type": "object",
+      "properties": {
+        "harness_compatible": { "type": "array", "items": { "type": "string" } },
+        "minimum_isolation": { "enum": ["process", "container", "microvm", "vm"] },
+        "network": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "AuthorityCeiling": {
+      "type": "object",
+      "properties": { "maximum": { "type": "array", "items": { "type": "string" }, "description": "Maximum permissions, e.g. historian.read / cmms.read" } }
+    },
+    "Economics": {
+      "type": "object",
+      "properties": {
+        "expected_latency_p95_seconds": { "type": "number", "minimum": 0 },
+        "expected_cost": { "type": "object", "properties": { "amount": { "type": "number", "minimum": 0 }, "currency": { "type": "string" } } }
+      }
+    },
+    "CapabilityManifest": {
+      "type": "object",
+      "required": ["name", "version", "digest", "spec"],
+      "properties": {
+        "name": { "type": "string", "description": "e.g. equipment-investigator" },
+        "version": { "type": "string" },
+        "digest": { "type": "string", "description": "Content-addressed digest, e.g. sha256:..." },
+        "api_version": { "const": "capability.morn.io/v1alpha1" },
+        "kind": { "enum": ["agent", "rule", "solver", "human", "connector", "model", "workflow", "api"] },
+        "spec": {
+          "type": "object",
+          "required": ["provides"],
+          "properties": {
+            "provides": { "type": "array", "items": { "type": "string" } },
+            "semantic": { "type": "object", "properties": { "suitable_for": { "type": "array", "items": { "type": "string" } }, "not_suitable_for": { "type": "array", "items": { "type": "string" } } } },
+            "interfaces": { "type": "object", "properties": { "input_schema": { "type": "string" }, "output_schema": { "type": "string" } } },
+            "side_effects": { "$ref": "#/definitions/SideEffects" },
+            "idempotency": { "type": "boolean" },
+            "compensation": { "type": ["string", "null"] },
+            "execution": { "$ref": "#/definitions/ExecutionRequirements" },
+            "authority": { "$ref": "#/definitions/AuthorityCeiling" },
+            "economics": { "$ref": "#/definitions/Economics" },
+            "provenance": { "type": "object", "properties": { "source_ref": { "type": "string" }, "license": { "type": "string" }, "owner": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "CapabilityRelease": {
+      "type": "object",
+      "required": ["name", "version", "digest", "released_at"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "digest": { "type": "string" },
+        "manifest_ref": { "type": "string" },
+        "released_at": { "type": "string", "format": "date-time" },
+        "provenance": { "type": "object" },
+        "deprecated": { "type": "boolean" }
+      }
+    },
+    "QualificationRecord": {
+      "type": "object",
+      "required": ["id", "capability_digest", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "capability_digest": { "type": "string" },
+        "runtime_provider": { "type": "string" },
+        "execution_environment": { "type": "string" },
+        "environment_digest": { "type": "string" },
+        "input_scope": { "type": "string" },
+        "expected_outputs": { "type": "array", "items": { "type": "string" } },
+        "failure_modes": { "type": "array", "items": { "type": "string" } },
+        "cost_evidence": { "type": "object" },
+        "evaluator_identity": { "type": "string" },
+        "status": { "enum": ["PASSED", "FAILED", "EXPIRED", "PENDING"] },
+        "version": { "type": "string" },
+        "qualified_at": { "type": ["string", "null"], "format": "date-time" },
+        "limitations": { "type": "string" }
+      }
+    },
+    "SiteAdmission": {
+      "type": "object",
+      "required": ["id", "capability_digest", "site", "admitted_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "capability_digest": { "type": "string" },
+        "site": { "type": "string" },
+        "profile_ref": { "type": "string" },
+        "scope": { "type": "string" },
+        "admitted_at": { "type": "string", "format": "date-time" },
+        "admitted_by": { "type": "string" },
+        "revoked": { "type": "boolean" }
+      }
+    }
+  }
+}

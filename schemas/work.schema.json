@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "morn:schema:work/v1",
+  "title": "Morn Work Resource",
+  "description": "Work is the unit of coordination. spec = desired state/contract; status = observed state. Conditions are semantic gates; implementations are replaceable, gates are not silently bypassable.",
+  "type": "object",
+  "definitions": {
+    "CostAmount": {
+      "type": "object",
+      "required": ["amount", "currency"],
+      "properties": { "amount": { "type": "number", "minimum": 0 }, "currency": { "type": "string", "description": "ISO 4217, e.g. CNY" } }
+    },
+    "Budget": {
+      "type": "object",
+      "properties": {
+        "max_cost": { "$ref": "#/definitions/CostAmount" },
+        "max_human_minutes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "AcceptanceRequirement": {
+      "type": "object",
+      "required": ["criterion"],
+      "properties": {
+        "criterion": { "type": "string", "description": "e.g. machine_operational_verified / affected_orders_accounted / production_owner_accepts" },
+        "required_roles": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" }
+      }
+    },
+    "AuthorityRequirement": {
+      "type": "object",
+      "properties": {
+        "required_for": { "type": "array", "items": { "type": "string" }, "description": "action classes requiring authority, e.g. external-side-effect" },
+        "profile_ref": { "type": "string" }
+      }
+    },
+    "WorkSpec": {
+      "type": "object",
+      "description": "Desired state and running constraints.",
+      "required": ["work_type", "goal"],
+      "properties": {
+        "work_type": { "type": "string", "description": "e.g. factory.equipment-exception" },
+        "goal": { "type": "string", "description": "Desired state / goal, e.g. restore_operational_readiness" },
+        "target_refs": { "type": "array", "items": { "type": "object" } },
+        "constraints": { "type": "array", "items": { "type": "string" } },
+        "acceptance": { "type": "object", "required": ["required"], "properties": { "required": { "type": "array", "items": { "$ref": "#/definitions/AcceptanceRequirement" } } } },
+        "authority": { "$ref": "#/definitions/AuthorityRequirement" },
+        "budget": { "$ref": "#/definitions/Budget" },
+        "profile_ref": { "type": "string", "description": "Guarantee profile pin, e.g. morn.factory.readonly/v1alpha1" },
+        "source_refs": { "type": "array", "items": { "type": "object" } },
+        "owner": { "type": "string", "description": "Owner / commitment principal" },
+        "generation": { "type": "integer", "minimum": 1 },
+        "contract_version": { "type": "string" }
+      }
+    },
+    "WorkStatus": {
+      "type": "object",
+      "description": "Current observation, not user expectation.",
+      "required": ["observed_generation", "phase"],
+      "properties": {
+        "observed_generation": { "type": "integer", "minimum": 0 },
+        "phase": { "enum": ["DRAFT", "RESOLVING", "AWAITING_AUTHORITY", "EXECUTING", "RECONCILING", "VERIFYING", "COMPLETED", "CANCELLED", "BLOCKED"] },
+        "conditions": { "type": "array", "items": { "$ref": "#/definitions/Condition" } },
+        "active_binding_refs": { "type": "array", "items": { "type": "string" } },
+        "active_attempt_refs": { "type": "array", "items": { "type": "string" } },
+        "unresolved_unknowns": { "type": "array", "items": { "type": "string" } },
+        "observed_outcome_refs": { "type": "array", "items": { "type": "string" } },
+        "acceptance_state": { "enum": ["PENDING", "ACCEPTED", "REJECTED", "CONDITIONAL"] },
+        "blocker_refs": { "type": "array", "items": { "type": "string" } },
+        "updated_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Condition": {
+      "type": "object",
+      "required": ["type", "status"],
+      "properties": {
+        "type": { "enum": ["CapabilityResolved", "AuthoritySatisfied", "EvidenceSufficient", "ExecutionBound", "ActionCommitted", "ExternalActionVerified", "OutcomeObserved", "AcceptanceSatisfied", "ProfileConformant"] },
+        "status": { "enum": ["True", "False", "Unknown"] },
+        "reason": { "type": "string" },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "source_ref": { "type": "object" }
+      }
+    },
+    "Work": {
+      "type": "object",
+      "required": ["id", "spec", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "const": "Work" },
+        "api_version": { "const": "work.morn.io/v1alpha1" },
+        "generation": { "type": "integer", "minimum": 1 },
+        "spec": { "$ref": "#/definitions/WorkSpec" },
+        "status": { "$ref": "#/definitions/WorkStatus" }
+      }
+    }
+  }
+}

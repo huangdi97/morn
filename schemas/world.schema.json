@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "morn:schema:world/v1",
+  "title": "Morn World Record Semantics",
+  "description": "Observation and Situation: external systems remain the source of truth; Morn observes, it does not own world facts. Dual-time semantics apply to observations.",
+  "type": "object",
+  "definitions": {
+    "Observation": {
+      "type": "object",
+      "required": ["id", "source", "kind", "value", "unit", "valid_time", "recorded_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "source": { "type": "object", "required": ["system"], "properties": { "system": { "type": "string" }, "external_id": { "type": "string" }, "uri": { "type": "string" } } },
+        "kind": { "type": "string", "description": "e.g. vibration / temperature / spindle_load / order_delay" },
+        "value": { "type": "number" },
+        "unit": { "type": "string", "description": "Explicit unit, e.g. mm/s / min / C" },
+        "asset_ref": { "type": "object", "required": ["kind", "id"], "properties": { "kind": { "type": "string" }, "id": { "type": "string" }, "source": { "type": "object" } } },
+        "valid_time": { "type": "string", "format": "date-time" },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "supersedes": { "type": "string" },
+        "invalidated": { "type": "boolean" },
+        "notes": { "type": "string" }
+      }
+    },
+    "Situation": {
+      "type": "object",
+      "required": ["id", "kind", "created_at", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string", "description": "e.g. possible_equipment_degradation" },
+        "work_ref": { "type": ["string", "null"] },
+        "asset_refs": { "type": "array", "items": { "type": "object" } },
+        "current_order": { "type": ["string", "null"] },
+        "batch": { "type": ["string", "null"] },
+        "observation_ids": { "type": "array", "items": { "type": "string" } },
+        "status": { "enum": ["OPEN", "CLOSED", "SUPERSEDED"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

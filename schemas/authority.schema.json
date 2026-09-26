@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "morn:schema:authority/v1",
+  "title": "Morn Authority Contracts",
+  "description": "Authority expresses WHO acts on behalf of WHOM, for WHICH WORK/OBJECT/SITE/STATE, within WHICH TIME WINDOW, with WHICH PARAMETERS and BUDGET, under WHAT DELEGATION DEPTH. Policy decision and enforcement are separated.",
+  "type": "object",
+  "definitions": {
+    "TimeWindow": {
+      "type": "object",
+      "properties": {
+        "not_before": { "type": "string", "format": "date-time" },
+        "not_after": { "type": "string", "format": "date-time" }
+      }
+    },
+    "DelegationDepth": {
+      "type": "object",
+      "required": ["current", "max"],
+      "properties": { "current": { "type": "integer", "minimum": 0 }, "max": { "type": "integer", "minimum": 0 } }
+    },
+    "AuthorityRequest": {
+      "type": "object",
+      "required": ["id", "principal", "action", "created_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "principal": { "type": "string", "description": "WHO" },
+        "acting_for": { "type": "string", "description": "on behalf of WHOM" },
+        "work_ref": { "type": "string" },
+        "site": { "type": "string" },
+        "resource": { "type": "string", "description": "WHICH OBJECT" },
+        "action": { "type": "string", "description": "WHICH ACTION, e.g. cmms.create-order" },
+        "parameter_envelope": { "type": "object", "description": "WITH WHICH PARAMETERS (hash-pinned)" },
+        "time_window": { "$ref": "#/definitions/TimeWindow" },
+        "budget": { "type": "object", "properties": { "amount": { "type": "number", "minimum": 0 }, "currency": { "type": "string" } } },
+        "preconditions": { "type": "array", "items": { "type": "string" } },
+        "approval_refs": { "type": "array", "items": { "type": "string" } },
+        "delegation_depth": { "$ref": "#/definitions/DelegationDepth" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "AuthorityDecision": {
+      "type": "object",
+      "required": ["id", "request_ref", "decision", "decided_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "request_ref": { "type": "string" },
+        "decision": { "enum": ["GRANT", "DENY", "GRANT_WITH_CONDITIONS"] },
+        "conditions": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": "string" },
+        "decided_by": { "type": "string", "description": "Policy provider / human approver identity" },
+        "decided_at": { "type": "string", "format": "date-time" },
+        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+        "expires_at": { "type": ["string", "null"], "format": "date-time" },
+        "revoked": { "type": "boolean" },
+        "revocation_reason": { "type": ["string", "null"] }
+      }
+    },
+    "AuthorityEvidence": {
+      "type": "object",
+      "required": ["source", "content"],
+      "properties": { "source": { "type": "string" }, "content": { "type": "string" }, "recorded_at": { "type": "string", "format": "date-time" } }
+    }
+  }
+}

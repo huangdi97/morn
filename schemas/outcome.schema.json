@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "morn:schema:outcome/v1",
+  "title": "Morn Outcome / Acceptance / Value",
+  "description": "ObservedOutcome comes from an identifiable source (external system, sensor, human observation, validated computation). Agent self-reported success is not an outcome. ExecutionFinished != Delivered != OutcomeObserved != Accepted.",
+  "type": "object",
+  "definitions": {
+    "OutcomeMetric": {
+      "type": "object",
+      "required": ["key", "value", "unit"],
+      "properties": { "key": { "type": "string", "description": "e.g. downtime / order_A_delay / machine_vibration" }, "value": { "type": "number" }, "unit": { "type": "string" } }
+    },
+    "ObservedOutcome": {
+      "type": "object",
+      "required": ["id", "work_ref", "source", "recorded_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "work_ref": { "type": "string" },
+        "source": { "enum": ["EXTERNAL_SYSTEM", "SENSOR", "HUMAN_OBSERVATION", "VALIDATED_COMPUTATION"] },
+        "source_ref": { "type": "string", "description": "Identifiable source ref" },
+        "valid_time": { "type": "string", "format": "date-time" },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "metrics": { "type": "array", "items": { "$ref": "#/definitions/OutcomeMetric" } },
+        "notes": { "type": "string" },
+        "supersedes": { "type": "string" }
+      }
+    },
+    "AcceptanceDecision": {
+      "type": "object",
+      "required": ["id", "work_ref", "decision", "actor", "decided_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "work_ref": { "type": "string" },
+        "decision": { "enum": ["ACCEPT", "REJECT", "CONDITIONAL"] },
+        "criteria_refs": { "type": "array", "items": { "type": "string" } },
+        "outcome_refs": { "type": "array", "items": { "type": "string" } },
+        "actor": { "type": "string" },
+        "principal": { "type": "string" },
+        "reason": { "type": "string" },
+        "decided_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ValueAssessment": {
+      "type": "object",
+      "required": ["id", "work_ref", "recorded_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "work_ref": { "type": "string" },
+        "total_duration_minutes": { "type": "number", "minimum": 0 },
+        "human_minutes": { "type": "number", "minimum": 0 },
+        "model_runtime_cost": { "type": "object", "properties": { "amount": { "type": "number", "minimum": 0 }, "currency": { "type": "string" } } },
+        "retries": { "type": "integer", "minimum": 0 },
+        "unknown_outcomes": { "type": "integer", "minimum": 0 },
+        "baseline_comparison_ref": { "type": "string" },
+        "accepted": { "type": "boolean" },
+        "reopened": { "type": "boolean" },
+        "kpis": { "type": "array", "items": { "$ref": "#/definitions/OutcomeMetric" } },
+        "recorded_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "morn:schema:common/v1",
+  "title": "Morn Common Semantic Primitives",
+  "description": "Language-neutral primitives shared by all Morn semantic contracts: object references, source bindings, provenance, and historical-fact semantics. Self-contained by design (no cross-file $ref).",
+  "type": "object",
+  "definitions": {
+    "ObjectRef": {
+      "type": "object",
+      "description": "Reference to any object (internal or external). kind is open-world: any external system may be referenced.",
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "type": "string", "description": "Open-world resource kind, e.g. asset / work / work_order / capability / site" },
+        "id": { "type": "string" },
+        "source": { "$ref": "#/definitions/SourceRef" }
+      }
+    },
+    "SourceRef": {
+      "type": "object",
+      "description": "Binding to the external system that owns a fact. The external system remains the source of truth.",
+      "required": ["system"],
+      "properties": {
+        "system": { "type": "string", "description": "Owning system identity, e.g. cmms / mes / scada / human / sensor" },
+        "external_id": { "type": "string" },
+        "uri": { "type": "string" }
+      }
+    },
+    "Provenance": {
+      "type": "object",
+      "description": "Who recorded a fact, when, and why. Required on historical facts.",
+      "required": ["actor", "recorded_at"],
+      "properties": {
+        "actor": { "type": "string" },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string" }
+      }
+    },
+    "HistoricalRecord": {
+      "type": "object",
+      "description": "Non-destructive historical envelope: records may be superseded/retracted but never silently rewritten. Dual-time semantics: valid_time (when the fact held in reality) vs recorded_at (when the system learned it).",
+      "required": ["id", "record_type", "payload", "recorded_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "record_type": { "type": "string" },
+        "payload": { "type": "object" },
+        "supersedes": { "type": "string", "description": "id of the record this one supersedes" },
+        "retracts": { "type": "string", "description": "id of the record this one retracts" },
+        "valid_time": { "type": "string", "format": "date-time", "description": "When the fact held in the real world" },
+        "recorded_at": { "type": "string", "format": "date-time", "description": "When the system recorded it (transaction time)" },
+        "provenance": { "$ref": "#/definitions/Provenance" },
+        "contract_version": { "type": "string", "description": "Version of the semantic contract the payload was written under" }
+      }
+    }
+  }
+}

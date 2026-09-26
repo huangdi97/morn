@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "morn:schema:execution/v1",
+  "title": "Morn Execution Semantics",
+  "description": "ExecutionBinding is a fixed binding of a Work/Capability/Provider/Policy/Profile/Runtime combination within a specific execution scope. Attempt starts require a Binding; active Attempts pin their Binding; provider hot-reload only affects future resolution. Transport ack != business commit.",
+  "type": "object",
+  "definitions": {
+    "ExecutionBinding": {
+      "type": "object",
+      "required": ["binding_id", "work_ref", "capability_release_digest", "provider_id", "created_at", "binding_generation"],
+      "properties": {
+        "binding_id": { "type": "string" },
+        "work_ref": { "type": "string" },
+        "capability_release_digest": { "type": "string" },
+        "provider_id": { "type": "string" },
+        "provider_version": { "type": "string" },
+        "runtime_ref": { "type": "string", "description": "Harness / runtime ref" },
+        "execution_environment_ref": { "type": "string" },
+        "authority_decision_ref": { "type": "string" },
+        "profile_ref": { "type": "string" },
+        "site_ref": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "binding_generation": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["BOUND", "SUSPENDED", "REVOKED", "MIGRATED"] }
+      }
+    },
+    "AttemptStatus": {
+      "enum": ["PROPOSED", "AUTHORIZED", "DISPATCHED", "ACKNOWLEDGED", "COMMITTED", "OBSERVED", "VERIFIED", "FAILED_BEFORE_COMMIT", "OUTCOME_UNKNOWN", "RECONCILING", "COMPENSATING", "COMPENSATED", "MANUAL_INTERVENTION_REQUIRED", "SUSPENDED"]
+    },
+    "ActionAttempt": {
+      "type": "object",
+      "required": ["id", "work_ref", "binding_ref", "action", "idempotency_key", "status", "created_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "work_ref": { "type": "string" },
+        "binding_ref": { "type": "string", "description": "Attempt must pin its Binding" },
+        "capability_ref": { "type": "string" },
+        "action": { "type": "string" },
+        "idempotency_key": { "type": "string" },
+        "business_key": { "type": "string" },
+        "source_system": { "type": "string" },
+        "request_hash": { "type": "string" },
+        "status": { "$ref": "#/definitions/AttemptStatus" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "Receipt": {
+      "type": "object",
+      "description": "Evidence that an external action happened. Comes from an identifiable source; transport ack is not business commit.",
+      "required": ["id", "attempt_ref", "source", "recorded_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "attempt_ref": { "type": "string" },
+        "external_ref": { "type": "string", "description": "e.g. MO-88273" },
+        "source": { "type": "string", "description": "e.g. cmms-readback / connector-ack / human-confirmation" },
+        "integrity_hash": { "type": "string" },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "provenance": { "type": "object", "properties": { "actor": { "type": "string" }, "reason": { "type": "string" } } },
+        "payload_summary": { "type": "object" }
+      }
+    },
+    "ReconciliationRecord": {
+      "type": "object",
+      "description": "Source-of-truth readback wins over Agent self-description.",
+      "required": ["id", "attempt_ref", "result", "recorded_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "attempt_ref": { "type": "string" },
+        "query": { "type": "object", "properties": { "source_system": { "type": "string" }, "business_key": { "type": "string" }, "queried_at": { "type": "string", "format": "date-time" } } },
+        "found": { "enum": ["YES", "NO", "UNKNOWN"] },
+        "external_ref_found": { "type": ["string", "null"] },
+        "result": { "enum": ["COMMITTED", "NOT_COMMITTED", "UNKNOWN"] },
+        "decided_by": { "type": "string" },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

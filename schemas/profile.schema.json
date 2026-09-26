@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "morn:schema:profile/v1",
+  "title": "Morn Domain Profiles",
+  "description": "Profile is a guarantee requirements profile, not a provider list. Released profile versions are frozen; evolution creates new versions. production_write is forbidden in initial Factory readonly profile.",
+  "type": "object",
+  "definitions": {
+    "ProfileRequirement": {
+      "type": "object",
+      "required": ["requirement", "level"],
+      "properties": {
+        "requirement": { "type": "string", "description": "e.g. durable_work_state / authority_before_external_side_effect / production_write" },
+        "level": { "enum": ["REQUIRED", "FORBIDDEN", "OPTIONAL"] },
+        "condition": { "type": ["string", "null"], "description": "For REQUIRED_IF semantics, e.g. outcome-unknown" }
+      }
+    },
+    "Profile": {
+      "type": "object",
+      "required": ["name", "version", "requirements"],
+      "properties": {
+        "name": { "type": "string", "description": "e.g. morn.factory.readonly" },
+        "version": { "type": "string" },
+        "api_version": { "const": "profile.morn.io/v1alpha1" },
+        "digest": { "type": "string" },
+        "requirements": { "type": "array", "items": { "$ref": "#/definitions/ProfileRequirement" } },
+        "human_gates": { "type": "array", "items": { "type": "string" }, "description": "Actions requiring human decision" },
+        "execution": { "type": "object", "properties": { "minimum_isolation": { "enum": ["process", "container", "microvm", "vm"] } } },
+        "observability": { "type": "object", "properties": { "trace_required": { "type": "boolean" } } }
+      }
+    },
+    "SolutionPackage": {
+      "type": "object",
+      "required": ["id", "name", "version", "profile_ref"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "work_blueprint_ref": { "type": "string" },
+        "capability_release_refs": { "type": "array", "items": { "type": "string" } },
+        "profile_ref": { "type": "string" },
+        "digest": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "provenance": { "type": "object" }
+      }
+    }
+  }
+}
