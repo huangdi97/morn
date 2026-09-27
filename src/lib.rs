@@ -9,6 +9,7 @@ pub mod config;
 pub mod console;
 pub mod core;
 
+pub mod control;
 pub mod hub;
 #[cfg(feature = "mcp")]
 pub mod mcp;

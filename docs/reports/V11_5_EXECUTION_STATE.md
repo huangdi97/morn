@@ -2,11 +2,12 @@
 
 > 本文件由 Agent 自主运行机制维护（Goal §30）。下一 Agent 必须从本文件 + `docs/canonical/CURRENT.md` + canonical 母版开始，不从聊天记忆猜测。
 
-**最后更新：** Phase 1 完成后（2026-09-25）
+**最后更新：** Phase 2 完成后（2026-09-25）
+
 
 ## Current HEAD
 
-`main` @（Phase 1 commit，见 Git log 最新一条）；Phase 0 基线 HEAD 为 `2cd9fbd6fa57930eaa71616f170f958037190654`。
+`main` @（Phase 2 commit，见 Git log 最新一条）；Phase 0 基线 HEAD 为 `2cd9fbd6fa57930eaa71616f170f958037190654`。
 
 ## Completed phases
 
@@ -17,17 +18,22 @@
   - canonical 落位：`docs/canonical/`（母版 + GOAL + HANDOFF + README + `CURRENT.md`），旧文档未删除
 - **Phase 1 — Semantic Specification**（G1 = PASS）
   - `schemas/` 8 份 JSON Schema（common/world/work/authority/capability/execution/outcome/profile，self-contained + $ref）
-  - `src/work/` 语义模块（12 文件）：ObjectRef/SourceRef/Provenance/HistoricalRecord（supersede/retract/双时间）、Observation/Situation、Work.spec/status（observedGeneration/phase/conditions/unknowns/acceptance/blockers）、9 个 Condition 语义 Gate、Principal/Actor/Role/Commitment、AuthorityRequest/Decision/Evidence（time window/budget/delegation depth/revocation，deny-by-default）、Capability 四态+Lifecycle/Manifest/Release/QualificationRecord/SiteAdmission、ExecutionBinding/ActionAttempt（AttemptStatus 全状态机含 OUTCOME_UNKNOWN/RECONCILING）/Receipt/ReconciliationRecord、ObservedOutcome/AcceptanceDecision/ValueAssessment、Profile（morn.lite/enterprise/factory.readonly/research，production_write=FORBIDDEN）/SolutionPackage
-  - `src/work/validation.rs`：真实 schema 验证器（$ref + definition 入口 + type/required/enum/const/minimum/items）
-  - 测试：17 个 schema validation/round-trip/mapping 测试 + 1 个模块隔离测试（tests/work_module_isolation.rs：无 cordis/deepseek/dsh::/temporal/kafka/rusqlite/sled 耦合）
-  - G1 证据：schema round-trip ✓、旧记录兼容映射（TaskRecord→Work carrier，不建第二账本）✓、protocol types 无 Cordis/DSH/Pi 依赖 ✓
+  - `src/work/` 语义模块（12 文件）：Work.spec/status、9 个 Condition 语义 Gate、AuthorityRequest/Decision（deny-by-default）、Capability 四态、ExecutionBinding/ActionAttempt（全状态机）/Receipt/Reconciliation、ObservedOutcome/Acceptance/Value、Profile（production_write=FORBIDDEN）、HistoricalRecord（supersede/retract/双时间）
+  - `src/work/validation.rs`：真实 schema 验证器（$ref + definition 入口）；17 个 schema 测试 + 1 个模块隔离测试
+  - G1 证据：schema round-trip ✓、TaskRecord→Work carrier 映射（不建第二账本）✓、protocol types 无 Cordis/DSH/Pi 依赖 ✓
+- **Phase 2 — Durable Control Plane Minimum**（G2 = PASS）
+  - `src/control/`：ControlPlaneStore（SQLite，14 张 cp_* 表：work/condition/semantic_event/binding/attempt/receipt/reconciliation/outcome/acceptance/capability_release/qualification/profile_release/outbox/controller_lease，DDL 独立 ddl.rs）
+  - event history（append idempotent + supersede/retract 显式字段 + contract/schema version 元数据）+ deterministic projection（replay 规则：retract 取消效果、last-write-wins phase）
+  - 12 个 reference controllers（WorkController 阶段推进幂等、BindingController、AuthorityController time-window 检查、ExecutionController 幂等 dispatch + Binding 前置检查、ReceiptController transport-ack≠business-commit 区分、ReconciliationController business-key 回读、OutcomeController、AcceptanceController、QualificationController、ProfileConformanceController、SituationController、CapabilityResolverController）
+  - outbox（claim/complete/requeue，exactly-once）+ controller lease/checkpoint（exclusive lease）
+  - G2 证据（tests/control_plane_g2.rs，7 测试全绿）：**真进程 kill**（子进程写 Work/Binding/Attempt 后被真 kill）→ 重启（fresh store）→ Work 存活 ✓、Attempt/Binding 不丢 ✓、reconcile 继续 → VERIFIED ✓、duplicate idempotency key 被拒 ✓；deterministic replay ✓；outbox exactly-once ✓；lease 互斥 ✓；from_value 回归测试 ✓
 
 ## Current gate status
 
 ```text
 G0  Reality Audit          PASS
 G1  Semantic Mapping       PASS
-G2  Durable State          （Phase 2 进行中）
+G2  Durable State          PASS
 G3  Cordis Isolation       前置证据已就绪（isolation test）；G3 在 Phase 3 收口
 G4-G11                     未开始
 G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
@@ -35,7 +41,7 @@ G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 
 ## Tests last run
 
-- Rust: `cargo test --workspace` = **1335 passed, 0 failed**（1300 lib + 34 integration + 1 isolation）；`cargo fmt --check` PASS；`cargo clippy --lib` PASS
+- Rust: `cargo test --workspace` = **1342 passed, 0 failed**（1300 lib + 7 G2 + 34 integration + 1 isolation）；`cargo fmt --check` PASS；`cargo clippy --lib -- -D warnings` PASS（CI 标准）
 - Web: vitest 6 passed；tsc PASS；build PASS（Phase 0 时点）
 - e2e（chromium 1228）: 2 passed / 8 failed（③–⑩ UI 结构漂移 → Phase 16 重写）
 - `npm audit`: 11 vulnerabilities（记录，Phase 21 评估）
@@ -50,10 +56,10 @@ G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 6. AgentLoop 硬编码输出记录为 Reality Gap（agent loop 属 Harness 职责，Phase 4 处理 Harness 时说明）。
 7. 语义模块内部统一 `crate::work::<Type>` re-export 引用风格；`resource.rs` 承载 Work 资源类型（避免 `work::work` 命名冲突）。
 
-## Files changed（Phase 1）
+## Files changed（Phase 2）
 
-- 新增：`schemas/`（8 schema）、`src/work/`（mod/common/world/resource/condition/principal/authority/capability/execution/outcome/profile/validation/tests）、`tests/work_module_isolation.rs`
-- 修改：`src/lib.rs`（+pub mod work）
+- 新增：`src/control/`（mod/store/ddl/store_execution/store_records/store_runtime/projection/controllers/{mod,state_loop,execution_flow,resolve_loop,outcome_flow}）、`tests/control_plane_g2.rs`
+- 修改：`src/lib.rs`（+pub mod control）
 
 ## Open root causes
 
@@ -76,6 +82,6 @@ G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 ## Next exact actions
 
 1. Phase 2：durable control plane minimum——SQLite 扩展表（work/work_condition/semantic_event/execution_binding/action_attempt/receipt/reconciliation/observed_outcome/acceptance/outbox/controller_lease）+ append/supersede event history + deterministic projection + replay/crash 恢复测试 + event idempotency + outbox。
-2. Phase 2 controllers：WorkController 等 reference controllers（幂等/可重入/crash-safe/lease/checkpoint，输出 condition changes）。
-3. Phase 2 G2：进程在 Attempt 后 kill → 重启 → Work 仍在 → Attempt/Binding 不丢 → Reconciliation 继续 → 不重复执行已提交副作用。
-4. 测试 → 取证 → 更新本文件 → commit → Phase 3。
+1. Phase 3：Cordis Spike——确认 upstream Cordis exact version/commit（公开仓库核验）、exact pin、许可证记录、`src/runtime/cordis/` adapter（service slot/provider swap/scope/lifecycle/config reload/adapter boundary）。
+2. Phase 3 G3：代码扫描/依赖图证明 domain/spec/control-plane 无大面积 Cordis coupling；active Attempt 不因 Cordis provider reload 被偷偷换 Binding。
+3. 测试 → 取证 → 更新本文件 → commit → Phase 4。

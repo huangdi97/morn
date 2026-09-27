@@ -1,7 +1,7 @@
 ﻿//! capability — Capability supply chain semantics.
 //!
-//! Capability = Implementation + Manifest + Qualification + Authority Envelope
-//! + Provenance. The four states (Declared / Observed / Qualified / Admitted)
+//! Capability = Implementation, Manifest, Qualification, Authority Envelope,
+//! and Provenance. The four states (Declared / Observed / Qualified / Admitted)
 //! must stay separated: a capability self-description is not a qualification,
 //! and a qualification is not a site admission. Asset lifecycle and site
 //! admission are separate stages.
