@@ -5,7 +5,7 @@
 **最后更新：** Phase 2 完成后（2026-09-25）
 
 
-## Current HEAD
+**最后更新：** Phase 3 完成后（2026-09-25）
 
 `main` @（Phase 2 commit，见 Git log 最新一条）；Phase 0 基线 HEAD 为 `2cd9fbd6fa57930eaa71616f170f958037190654`。
 
@@ -27,21 +27,26 @@
   - 12 个 reference controllers（WorkController 阶段推进幂等、BindingController、AuthorityController time-window 检查、ExecutionController 幂等 dispatch + Binding 前置检查、ReceiptController transport-ack≠business-commit 区分、ReconciliationController business-key 回读、OutcomeController、AcceptanceController、QualificationController、ProfileConformanceController、SituationController、CapabilityResolverController）
   - outbox（claim/complete/requeue，exactly-once）+ controller lease/checkpoint（exclusive lease）
   - G2 证据（tests/control_plane_g2.rs，7 测试全绿）：**真进程 kill**（子进程写 Work/Binding/Attempt 后被真 kill）→ 重启（fresh store）→ Work 存活 ✓、Attempt/Binding 不丢 ✓、reconcile 继续 → VERIFIED ✓、duplicate idempotency key 被拒 ✓；deterministic replay ✓；outbox exactly-once ✓；lease 互斥 ✓；from_value 回归测试 ✓
-
+- **Phase 3 — Cordis Reference Composition Runtime**（G3 = PASS）
+  - **Cordis Spike 完成**（真实 dependency，非 fork）：upstream `cordis-rs` =0.8.39（facade over cordis-core 0.3.24），github.com/dshbox/cordis-rs，MIT，DeepSeek Harness Cordis 4.x 的 Rust port，MSRV 1.85（本机 rustc 1.97.1 ✓）；crates.io API 核验（max_version 0.8.39，72 versions，pre-1.0 rapid）；exact pin 在根 Cargo.toml（`cordis-rs = "=0.8.39"`，无宽泛 semver）
+  - `src/runtime/cordis/`（唯一直接依赖 Cordis 的区域）：mod.rs（facade + 禁止等价映射文档 + upstream pin 常量）、slots.rs（8 个 Morn service slot：capabilities/harnesses/solvers/executionEnvironments/connectors/policy/identity/telemetry，inherent CONTRACT 常量 + Service trait NAME）、host.rs（CompositionHost：mount/unmount/upgrade/scoped，Cordis 错误 → ServiceSlotError）
+  - G3 证据（tests/runtime_cordis_g3.rs，8 测试全绿）：provider register/unregister ✓、provider reload 不 rebind active Attempt（**binding pin**：reload 后 Binding 仍 BOUND/同 provider/同 generation，Attempt 仍 pin 原 Binding）✓、provider upgrade 身份保持 ✓、scoped service 隔离 ✓、unavailable typed 错误 ✓、slot contract names 稳定 ✓、upstream pin 记录 ✓、Work lifecycle Morn-owned（Fiber ≠ Work）✓
+  - 隔离测试扩展（tests/work_module_isolation.rs）：扫描 src/work + src/control（含 controllers 子目录）共 24+ 文件，import-path 级检测（cordis::/use cordis/deepseek/dsh::/temporal::/kafka::/sled::）= 0 violations ✓
+  - 附带根因修复：self_evolution 测试并发 bug（mod.rs 与 scan.rs 两个独立 guard 不互斥 → 统一迁入 scan_tests.rs 单 guard；scan.rs 313 行超限 → 拆分 scan.rs 210 + scan_tests.rs 178）
 ## Current gate status
 
 ```text
 G0  Reality Audit          PASS
 G1  Semantic Mapping       PASS
 G2  Durable State          PASS
-G3  Cordis Isolation       前置证据已就绪（isolation test）；G3 在 Phase 3 收口
+G3  Cordis Isolation       PASS
 G4-G11                     未开始
 G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 ```
 
 ## Tests last run
 
-- Rust: `cargo test --workspace` = **1342 passed, 0 failed**（1300 lib + 7 G2 + 34 integration + 1 isolation）；`cargo fmt --check` PASS；`cargo clippy --lib -- -D warnings` PASS（CI 标准）
+- Rust: `cargo test --workspace` = **1350 passed, 0 failed**（1300 lib + 7 G2 + 8 G3 + 34 integration + 1 isolation）；`cargo fmt --check` PASS；`cargo clippy --lib -- -D warnings` PASS（CI 标准）
 - Web: vitest 6 passed；tsc PASS；build PASS（Phase 0 时点）
 - e2e（chromium 1228）: 2 passed / 8 failed（③–⑩ UI 结构漂移 → Phase 16 重写）
 - `npm audit`: 11 vulnerabilities（记录，Phase 21 评估）
@@ -80,8 +85,6 @@ G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 | Cordis upstream 可用性 | 需确认 upstream Cordis exact version/commit（公开仓库核验） | Phase 3 Spike 时核验（网络可达则自动） | exact pin + 许可证记录 |
 
 ## Next exact actions
-
-1. Phase 2：durable control plane minimum——SQLite 扩展表（work/work_condition/semantic_event/execution_binding/action_attempt/receipt/reconciliation/observed_outcome/acceptance/outbox/controller_lease）+ append/supersede event history + deterministic projection + replay/crash 恢复测试 + event idempotency + outbox。
-1. Phase 3：Cordis Spike——确认 upstream Cordis exact version/commit（公开仓库核验）、exact pin、许可证记录、`src/runtime/cordis/` adapter（service slot/provider swap/scope/lifecycle/config reload/adapter boundary）。
-2. Phase 3 G3：代码扫描/依赖图证明 domain/spec/control-plane 无大面积 Cordis coupling；active Attempt 不因 Cordis provider reload 被偷偷换 Binding。
-3. 测试 → 取证 → 更新本文件 → commit → Phase 4。
+1. Phase 4：Execution Plane——HarnessProvider 统一合同（capabilities/startSession/resumeSession/submit/cancel/checkpoint/getEvents/getUsage/health/close）+ DSH Provider skeleton（无真实凭据 → REAL_PROVIDER_INTEGRATION_BLOCKED）+ Pi Provider skeleton + deterministic fake provider 验证控制平面 + Solver Provider（deterministic）+ Human Provider（assignment/approval/reject/acceptance/timeout）+ Fake CMMS/CMMS connector。
+2. Phase 4 G4/G5：DSH/Pi contract tests（skeleton + BLOCKED_EXTERNAL 诚实标记，不假装 pass）。
+3. 测试 → 取证 → 更新本文件 → commit → Phase 5。

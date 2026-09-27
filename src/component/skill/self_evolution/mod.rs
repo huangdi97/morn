@@ -112,37 +112,6 @@ impl Skill for SelfEvolutionSkill {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use std::sync::{Mutex, OnceLock};
-
-    fn log_guard() -> &'static Mutex<()> {
-        static GUARD: OnceLock<Mutex<()>> = OnceLock::new();
-        GUARD.get_or_init(|| Mutex::new(()))
-    }
-
-    fn with_error_log<T>(content: &str, test: impl FnOnce() -> T) -> T {
-        let _guard = log_guard().lock().unwrap();
-        let path = SelfEvolutionSkill::error_log_path()
-            .unwrap_or_else(|| panic!("HOME should be set for tests"));
-        let original = fs::read(&path).ok();
-
-        let parent = path
-            .parent()
-            .unwrap_or_else(|| panic!("error log should have parent"));
-        fs::create_dir_all(parent).unwrap();
-        fs::write(&path, content).unwrap();
-
-        let result = test();
-
-        match original {
-            Some(bytes) => fs::write(&path, bytes).unwrap(),
-            None => {
-                let _ = fs::remove_file(&path);
-            }
-        }
-
-        result
-    }
 
     #[test]
     fn test_new_creates_correctly() {
@@ -154,30 +123,6 @@ mod tests {
         assert_eq!(skill.type_name(), "skill");
     }
 
-    #[test]
-    fn test_scan_for_issues_returns_results() {
-        with_error_log(
-            "info: startup complete\nwarning: unused import: `Path`\nerror[E0425]: cannot find value `x`\n",
-            || {
-                let issues = SelfEvolutionSkill::scan_for_issues();
-
-                assert_eq!(issues.len(), 2);
-                assert!(issues.iter().any(|issue| issue.contains("warning")));
-                assert!(issues.iter().any(|issue| issue.contains("error")));
-            },
-        );
-    }
-
-    #[test]
-    fn test_report_structure() {
-        with_error_log("compile error: mismatched types\n", || {
-            let report = SelfEvolutionSkill::report();
-
-            assert!(!report.scan_time.is_empty());
-            assert_eq!(report.issues_found, vec!["compile error: mismatched types"]);
-            assert_eq!(report.auto_fixes_applied.len(), 1);
-            assert_eq!(report.fixes_successful, 1);
-            assert_eq!(report.fixes_failed, 0);
-        });
-    }
+    // Tests that touch the real user-home error log live in scan_tests.rs
+    // (single shared guard; two guards would not be mutually exclusive).
 }
