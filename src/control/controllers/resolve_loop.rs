@@ -78,4 +78,21 @@ impl QualificationController {
         };
         Ok(ControllerOutcome::new(Self::ID, &record.capability_digest).with_note(note))
     }
+
+    /// G8 strict-profile gate: a capability may enter a strict-profile
+    /// critical binding ONLY when its latest qualification is PASSED and not
+    /// expired. FAILED/EXPIRED/absent qualifications block the binding.
+    pub fn capability_qualified_for_strict(
+        store: &ControlPlaneStore,
+        capability_digest: &str,
+    ) -> Result<bool, MornError> {
+        match store.get_latest_qualification(capability_digest)? {
+            None => Ok(false),
+            Some((status, _qualified_at)) => {
+                Ok(serde_json::from_str::<QualificationStatus>(&status)
+                    .map(|s| s == QualificationStatus::Passed)
+                    .unwrap_or(false))
+            }
+        }
+    }
 }

@@ -206,6 +206,35 @@ impl ControlPlaneStore {
         Ok(inserted > 0)
     }
 
+    /// Returns the latest qualification for a capability digest (by
+    /// qualified_at, then rowid). Source for the strict-profile binding gate.
+    pub fn get_latest_qualification(
+        &self,
+        capability_digest: &str,
+    ) -> Result<Option<(String, String)>, MornError> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT status, qualified_at FROM cp_qualification
+                 WHERE capability_digest = ?1
+                 ORDER BY qualified_at DESC, rowid DESC LIMIT 1",
+            )
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(params![capability_digest], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                ))
+            })
+            .map_err(|e| MornError::Internal(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(pair)) => Ok(Some(pair)),
+            Some(Err(e)) => Err(MornError::Internal(e.to_string())),
+            None => Ok(None),
+        }
+    }
+
     /// Records a Profile release (idempotent by name+version).
     pub fn insert_profile_release(&self, profile: &Profile) -> Result<bool, MornError> {
         let conn = self.conn()?;
