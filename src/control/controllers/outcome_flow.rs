@@ -37,7 +37,17 @@ impl ReceiptController {
         // COMPATIBILITY: a connector ack proves transport, not business commit.
         // Only a source-of-truth readback verifies the external action.
         if receipt.source == "cmms-readback" || receipt.source == "human-confirmation" {
-            store.update_attempt_status(&receipt.attempt_ref, AttemptStatus::Observed)?;
+            // SAFETY: the attempt state machine never downgrades — OBSERVED
+            // precedes VERIFIED, so a readback receipt on an already-observed
+            // or verified attempt is an idempotent re-record, not a step back.
+            let current = store.get_attempt(&receipt.attempt_ref)?.map(|a| a.status);
+            let would_downgrade = matches!(
+                current,
+                Some(AttemptStatus::Observed) | Some(AttemptStatus::Verified)
+            );
+            if !would_downgrade {
+                store.update_attempt_status(&receipt.attempt_ref, AttemptStatus::Observed)?;
+            }
             outcome = outcome
                 .with_condition(Condition::satisfied(ConditionType::ExternalActionVerified))
                 .with_note("external action verified by source-of-truth readback");
