@@ -13,6 +13,7 @@
 //! Gateway/PEP → AuthorityDecision → Binding → Provider → Receipt.
 
 pub mod connector;
+pub mod connector_persistent;
 pub mod credential;
 pub mod harness;
 pub mod harness_dsh;
@@ -22,6 +23,7 @@ pub mod human;
 pub mod solver;
 
 pub use connector::{ConnectorProvider, FakeCmmsConnector, FakeMesConnector};
+pub use connector_persistent::PersistentFakeCmmsConnector;
 pub use credential::{CredentialProvider, EnvCredentialProvider};
 pub use harness::{
     HarnessCapabilities, HarnessEvent, HarnessEventKind, HarnessHealth, HarnessInput,
