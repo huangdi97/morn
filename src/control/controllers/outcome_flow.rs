@@ -195,12 +195,33 @@ impl AcceptanceController {
                 AcceptanceType::Reject => crate::work::WorkAcceptanceState::Rejected,
                 AcceptanceType::Conditional => crate::work::WorkAcceptanceState::Conditional,
             };
-            work.set_condition(Condition::satisfied(ConditionType::AcceptanceSatisfied));
+            // SAFETY: AcceptanceSatisfied means the outcome was ACCEPTED — a
+            // rejection or conditional decision is recorded as business truth
+            // but does not satisfy the acceptance gate.
+            let gate = match acceptance.decision {
+                AcceptanceType::Accept => Condition::satisfied(ConditionType::AcceptanceSatisfied),
+                AcceptanceType::Reject => {
+                    Condition::unsatisfied(ConditionType::AcceptanceSatisfied, "rejected")
+                }
+                AcceptanceType::Conditional => {
+                    Condition::unsatisfied(ConditionType::AcceptanceSatisfied, "conditional")
+                }
+            };
+            work.set_condition(gate);
             store.update_work_status(&acceptance.work_ref, &work.status)?;
         }
 
+        let gate = match acceptance.decision {
+            AcceptanceType::Accept => Condition::satisfied(ConditionType::AcceptanceSatisfied),
+            AcceptanceType::Reject => {
+                Condition::unsatisfied(ConditionType::AcceptanceSatisfied, "rejected")
+            }
+            AcceptanceType::Conditional => {
+                Condition::unsatisfied(ConditionType::AcceptanceSatisfied, "conditional")
+            }
+        };
         Ok(ControllerOutcome::new(Self::ID, &acceptance.work_ref)
-            .with_condition(Condition::satisfied(ConditionType::AcceptanceSatisfied))
+            .with_condition(gate)
             .with_note(&format!(
                 "acceptance {} recorded ({:?})",
                 acceptance.id, acceptance.decision
