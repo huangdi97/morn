@@ -1,6 +1,6 @@
 //! execution — ExecutionBinding / ActionAttempt / Receipt / ReconciliationRecord.
 //!
-//! Binding rules (v11.5 master 搂10):
+//! Binding rules (v11.5 master §10):
 //! 1. An Attempt requires a Binding before it starts;
 //! 2. An active Attempt pins its Binding;
 //! 3. Provider hot-reload only affects future resolution, never the active

@@ -17,6 +17,7 @@ pub mod mcp;
 pub mod org;
 #[cfg(feature = "protocol")]
 pub mod protocol;
+pub mod providers;
 pub mod runtime;
 #[cfg(feature = "sandbox")]
 pub mod sandbox;
