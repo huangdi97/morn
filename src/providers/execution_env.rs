@@ -192,7 +192,6 @@ impl ExecutionEnvironmentProvider for ContainerProvider {
 }
 
 /// Future providers: contracts exist, no implementation — never simulated.
-
 macro_rules! future_provider {
     ($provider:ident, $id:literal, $isolation:expr, $doc:literal) => {
         #[doc = $doc]
