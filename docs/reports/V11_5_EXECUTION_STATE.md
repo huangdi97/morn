@@ -2,12 +2,9 @@
 
 > 本文件由 Agent 自主运行机制维护（Goal §30）。下一 Agent 必须从本文件 + `docs/canonical/CURRENT.md` + canonical 母版开始，不从聊天记忆猜测。
 
-**最后更新：** Phase 2 完成后（2026-09-25）
+ **最后更新：** Phase 4 完成后（2026-09-28）
 
-
-**最后更新：** Phase 3 完成后（2026-09-25）
-
-`main` @（Phase 2 commit，见 Git log 最新一条）；Phase 0 基线 HEAD 为 `2cd9fbd6fa57930eaa71616f170f958037190654`。
+ `main` @ `e21756f`（Phase 4 commit）；Phase 0 基线 HEAD 为 `2cd9fbd6fa57930eaa71616f170f958037190654`。
 
 ## Completed phases
 
@@ -33,20 +30,30 @@
   - G3 证据（tests/runtime_cordis_g3.rs，8 测试全绿）：provider register/unregister ✓、provider reload 不 rebind active Attempt（**binding pin**：reload 后 Binding 仍 BOUND/同 provider/同 generation，Attempt 仍 pin 原 Binding）✓、provider upgrade 身份保持 ✓、scoped service 隔离 ✓、unavailable typed 错误 ✓、slot contract names 稳定 ✓、upstream pin 记录 ✓、Work lifecycle Morn-owned（Fiber ≠ Work）✓
   - 隔离测试扩展（tests/work_module_isolation.rs）：扫描 src/work + src/control（含 controllers 子目录）共 24+ 文件，import-path 级检测（cordis::/use cordis/deepseek/dsh::/temporal::/kafka::/sled::）= 0 violations ✓
   - 附带根因修复：self_evolution 测试并发 bug（mod.rs 与 scan.rs 两个独立 guard 不互斥 → 统一迁入 scan_tests.rs 单 guard；scan.rs 313 行超限 → 拆分 scan.rs 210 + scan_tests.rs 178）
+ - **Phase 4 — Execution Plane**（G4 = PASS_WITH_LIMITATIONS，G5 = PASS_WITH_LIMITATIONS）
+   - 收编上一轮未提交半成品（Goal §27）：`src/providers/` 9 文件 + `tests/providers_g4g5.rs` + `src/lib.rs`（+pub mod providers），commit `e21756f`
+   - HarnessProvider 统一最小合同（capabilities/startSession/resumeSession/submit/cancel/checkpoint/getEvents/getUsage/health/close；session events 仅 Harness evidence）
+   - DshHarnessProvider / PiHarnessProvider：out-of-process skeleton，CredentialProvider 注入（凭据不硬编码不入 git），`REAL_PROVIDER_INTEGRATION_BLOCKED` 诚实标记（无凭据/无 endpoint → ExternalBlocked，不伪造 session）
+   - FakeHarnessProvider（deterministic，control-plane 验证）+ ReferenceCpsatSolver（4 候选，无 Agent）+ ReferenceHumanProvider（assign/decision-once/escalate）+ FakeCmms/FakeMes Connector（business-key 幂等 + timeout-after-commit 模式）
+   - EnvCredentialProvider：scope→value 映射不越界 + redacted fingerprint（安全日志）
+   - G4/G5 证据（tests/providers_g4g5.rs，9 测试全绿）：fake 全合同 ✓、DSH/Pi honest blocker 合同 ✓、同 trait 对象（harness-neutral）✓、credential 边界 ✓、solver deterministic 无 Agent ✓、human 全路径 ✓、Fake CMMS 幂等/无重复 ✓、timeout-after-commit→unknown 真实存在 ✓
+   - 附带根因修复：上一轮工具 UTF-8→GBK 双重编码乱码（11 处注释）→ 字节级替换修复（tests/providers_g4g5.rs 10 处 + src/work/execution.rs 1 处），mojibake=0 验证
 ## Current gate status
 
 ```text
-G0  Reality Audit          PASS
+ G0  Reality Audit          PASS
 G1  Semantic Mapping       PASS
 G2  Durable State          PASS
 G3  Cordis Isolation       PASS
-G4-G11                     未开始
+ G4  DSH Provider           PASS_WITH_LIMITATIONS（skeleton contract + honest blocker；真实接入 BLOCKED_EXTERNAL）
+ G5  Pi / Second Harness    PASS_WITH_LIMITATIONS（同一合同 + harness-neutral；真实 swap BLOCKED_EXTERNAL）
+ G6-G11                     未开始
 G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 ```
 
 ## Tests last run
 
-- Rust: `cargo test --workspace` = **1350 passed, 0 failed**（1300 lib + 7 G2 + 8 G3 + 34 integration + 1 isolation）；`cargo fmt --check` PASS；`cargo clippy --lib -- -D warnings` PASS（CI 标准）
+- Rust: `cargo test --workspace` = **1359 passed, 0 failed**（1300 lib + 7 G2 + 9 G4/G5 + 8 G3 + 34 integration + 1 isolation）；cargo fmt --check PASS；cargo clippy --lib -- -D warnings PASS（CI 标准）；`cargo fmt --check` PASS；`cargo clippy --lib -- -D warnings` PASS（CI 标准）
 - Web: vitest 6 passed；tsc PASS；build PASS（Phase 0 时点）
 - e2e（chromium 1228）: 2 passed / 8 failed（③–⑩ UI 结构漂移 → Phase 16 重写）
 - `npm audit`: 11 vulnerabilities（记录，Phase 21 评估）
@@ -66,6 +73,11 @@ G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 - 新增：`src/control/`（mod/store/ddl/store_execution/store_records/store_runtime/projection/controllers/{mod,state_loop,execution_flow,resolve_loop,outcome_flow}）、`tests/control_plane_g2.rs`
 - 修改：`src/lib.rs`（+pub mod control）
 
+## Files changed（Phase 4）
+
+- 新增：`src/providers/`（mod/harness/harness_dsh/harness_pi/harness_fake/solver/human/connector/credential）、`tests/providers_g4g5.rs`
+- 修改：`src/lib.rs`（+pub mod providers）、`src/work/execution.rs`（注释乱码修复）
+
 ## Open root causes
 
 - e2e ③–⑩ 失败：e2e 预期与 v0.2.0 UI 结构漂移（Studio 8 tab、Store/Console 结构、消息流 DOM）→ Phase 16
@@ -79,12 +91,12 @@ G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 
 | 项 | 缺什么 | 谁才能解除 | 解除后的验收步骤 |
 |---|---|---|---|
-| DSH Harness Provider 真实接入 | DeepSeek Harness 进程/接口访问 + API key | 用户提供 DSH 运行环境与凭据 | Phase 4：DSH contract smoke（start/resume/cancel/events）真跑 |
-| Pi Harness Provider 真实接入 | Pi 访问 + 凭据 | 用户提供 | Phase 5：Pi contract + swap benchmark 真跑 |
+| DSH Harness Provider 真实接入 | DeepSeek Harness 进程/接口访问 + API key | 用户提供 DSH 运行环境与凭据 | skeleton + contract tests 已完成（e21756f）；解除后：DSH contract smoke（start/resume/cancel/events）真跑 |
+| Pi Harness Provider 真实接入 | Pi 访问 + 凭据 | 用户提供 | skeleton + contract tests 已完成（e21756f）；解除后：Pi contract + swap benchmark 真跑 |
 | 真实客户数据 / 现场（G12） | 客户授权数据、现场安全/回滚/审批条件 | 客户 + 人类授权 | 母版 0.2 边界重新验证；read-only/shadow 计划 |
 | Cordis upstream 可用性 | 需确认 upstream Cordis exact version/commit（公开仓库核验） | Phase 3 Spike 时核验（网络可达则自动） | exact pin + 许可证记录 |
 
 ## Next exact actions
-1. Phase 4：Execution Plane——HarnessProvider 统一合同（capabilities/startSession/resumeSession/submit/cancel/checkpoint/getEvents/getUsage/health/close）+ DSH Provider skeleton（无真实凭据 → REAL_PROVIDER_INTEGRATION_BLOCKED）+ Pi Provider skeleton + deterministic fake provider 验证控制平面 + Solver Provider（deterministic）+ Human Provider（assignment/approval/reject/acceptance/timeout）+ Fake CMMS/CMMS connector。
-2. Phase 4 G4/G5：DSH/Pi contract tests（skeleton + BLOCKED_EXTERNAL 诚实标记，不假装 pass）。
-3. 测试 → 取证 → 更新本文件 → commit → Phase 5。
+1. Phase 5：ExecutionBinding 故障注入测试——执行中卸载/restart provider/load 第二 provider，证明 active Attempt 不被静默迁移（G6 Binding Pin Gate）；Attempt 侧已发生 side effect 时先 reconcile 再迁移。
+2. Phase 6：Action/Receipt/Reconciliation 强化——Fake CMMS POST → committed → timeout → OUTCOME_UNKNOWN → reconcile by business key → VERIFIED → no duplicate order（G7）。
+3. 测试 → 取证 → 更新本文件 → commit → Phase 7。
