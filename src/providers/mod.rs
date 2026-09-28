@@ -15,6 +15,7 @@
 pub mod connector;
 pub mod connector_persistent;
 pub mod credential;
+pub mod execution_env;
 pub mod gateway;
 pub mod harness;
 pub mod harness_dsh;
@@ -27,6 +28,11 @@ pub mod solver;
 pub use connector::{ConnectorProvider, FakeCmmsConnector, FakeMesConnector};
 pub use connector_persistent::PersistentFakeCmmsConnector;
 pub use credential::{CredentialProvider, EnvCredentialProvider};
+pub use execution_env::{
+    admit_capability, CloudSandboxProvider, ContainerProvider, EnvironmentHealth,
+    ExecutionEnvironmentProvider, ExecutionEnvironmentSpec, FullVmProvider, IsolationLevel,
+    LocalProcessProvider, MicroVmProvider,
+};
 pub use gateway::{ActionGateway, GatewayDecision};
 pub use harness::{
     HarnessCapabilities, HarnessEvent, HarnessEventKind, HarnessHealth, HarnessInput,
