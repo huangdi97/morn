@@ -135,6 +135,12 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
+    /// SAFETY: tests that mutate process env vars must not run
+    /// concurrently — set_var/remove_var in one test races with var()
+    /// reads in another; every env-touching test holds this lock.
+    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
     use super::*;
 
     #[test]
@@ -178,6 +184,7 @@ mod tests {
 
     #[test]
     fn test_model_config_from_env() {
+        let _env_guard = ENV_TEST_LOCK.lock().unwrap();
         let original_provider = env::var("MORN_MODEL_PROVIDER").ok();
         let original_name = env::var("MORN_MODEL_NAME").ok();
         let original_base_url = env::var("MORN_MODEL_BASE_URL").ok();
@@ -226,6 +233,7 @@ mod tests {
 
     #[test]
     fn test_model_config_from_env_fallback() {
+        let _env_guard = ENV_TEST_LOCK.lock().unwrap();
         let original_provider = env::var("MORN_MODEL_PROVIDER").ok();
         let original_name = env::var("MORN_MODEL_NAME").ok();
         env::remove_var("MORN_MODEL_PROVIDER");
@@ -269,6 +277,7 @@ mod tests {
 
     #[test]
     fn test_channels_config_env_override() {
+        let _env_guard = ENV_TEST_LOCK.lock().unwrap();
         let original_cli = env::var("MORN_CHANNEL_CLI").ok();
         let original_desktop = env::var("MORN_CHANNEL_DESKTOP").ok();
         let original_api = env::var("MORN_CHANNEL_REST_API").ok();
@@ -309,6 +318,7 @@ mod tests {
 
     #[test]
     fn test_server_config_env_override() {
+        let _env_guard = ENV_TEST_LOCK.lock().unwrap();
         let original_enabled = env::var("MORN_SERVER_ENABLED").ok();
         let original_host = env::var("MORN_SERVER_HOST").ok();
         let original_port = env::var("MORN_SERVER_PORT").ok();
@@ -341,6 +351,7 @@ mod tests {
 
     #[test]
     fn test_env_bool() {
+        let _env_guard = ENV_TEST_LOCK.lock().unwrap();
         let original_1 = env::var("_TEST_BOOL_1").ok();
         let original_2 = env::var("_TEST_BOOL_2").ok();
 
@@ -366,6 +377,7 @@ mod tests {
 
     #[test]
     fn test_env_u16() {
+        let _env_guard = ENV_TEST_LOCK.lock().unwrap();
         let original = env::var("_TEST_U16").ok();
         env::set_var("_TEST_U16", "8080");
         assert_eq!(env_u16("_TEST_U16", 0), 8080);

@@ -15,16 +15,19 @@
 pub mod connector;
 pub mod connector_persistent;
 pub mod credential;
+pub mod gateway;
 pub mod harness;
 pub mod harness_dsh;
 pub mod harness_fake;
 pub mod harness_pi;
 pub mod human;
+pub mod policy;
 pub mod solver;
 
 pub use connector::{ConnectorProvider, FakeCmmsConnector, FakeMesConnector};
 pub use connector_persistent::PersistentFakeCmmsConnector;
 pub use credential::{CredentialProvider, EnvCredentialProvider};
+pub use gateway::{ActionGateway, GatewayDecision};
 pub use harness::{
     HarnessCapabilities, HarnessEvent, HarnessEventKind, HarnessHealth, HarnessInput,
     HarnessProvider, HarnessSession, HarnessUsage,
@@ -33,4 +36,5 @@ pub use harness_dsh::DshHarnessProvider;
 pub use harness_fake::FakeHarnessProvider;
 pub use harness_pi::PiHarnessProvider;
 pub use human::{HumanAssignment, HumanDecision, HumanProvider, HumanTaskKind};
+pub use policy::{PolicyProvider, ReferencePolicyProvider};
 pub use solver::{Assignment as SolverAssignment, SolverCandidate, SolverOutput, SolverProvider};
