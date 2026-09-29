@@ -2,9 +2,9 @@
 
 > 本文件由 Agent 自主运行机制维护（Goal §30）。下一 Agent 必须从本文件 + `docs/canonical/CURRENT.md` + canonical 母版开始，不从聊天记忆猜测。
 
- **最后更新：** Phase 4 完成后（2026-09-28）
+ **最后更新：** Phase 22 完成——Goal 收口（ENGINEERING_COMPLETE_WITH_EXTERNAL_BLOCKERS，2026-09-28）
 
- `main` @ `e21756f`（Phase 4 commit）；Phase 0 基线 HEAD 为 `2cd9fbd6fa57930eaa71616f170f958037190654`。
+ `main` @ `b26162a`（Phase 22 commit）；Phase 0 基线 HEAD 为 `2cd9fbd6fa57930eaa71616f170f958037190654`。
 
 ## Completed phases
 
@@ -38,6 +38,24 @@
    - EnvCredentialProvider：scope→value 映射不越界 + redacted fingerprint（安全日志）
    - G4/G5 证据（tests/providers_g4g5.rs，9 测试全绿）：fake 全合同 ✓、DSH/Pi honest blocker 合同 ✓、同 trait 对象（harness-neutral）✓、credential 边界 ✓、solver deterministic 无 Agent ✓、human 全路径 ✓、Fake CMMS 幂等/无重复 ✓、timeout-after-commit→unknown 真实存在 ✓
    - 附带根因修复：上一轮工具 UTF-8→GBK 双重编码乱码（11 处注释）→ 字节级替换修复（tests/providers_g4g5.rs 10 处 + src/work/execution.rs 1 处），mojibake=0 验证
+- **Phase 5 — Binding Pin**（G6 = PASS）：`tests/binding_pin_g6.rs` 4 故障注入（unload 中执行 pin 不变/restart 无重复副作用/second provider 新 Binding/side-effect attempt 先 reconcile）+ 根因修复：receipt readback 不降级 verified attempt（965c4e0）
+- **Phase 6 — Receipt/Reconciliation**（G7 = PASS）：`tests/receipt_reconciliation_g7.rs` 5 测试（完整 gateway 链/retry storm/duplicate receipt/crash-after-commit 持久 fake CMMS）（e5b7704）
+- **Phase 7 — Outcome/Acceptance/Value**：`tests/outcome_acceptance_value.rs` 5 测试 + 根因修复：REJECT/CONDITIONAL 不 satisfy acceptance gate（e24c72e）
+- **Phase 8 — Trust/Governance**：PolicyProvider（deny-by-default）+ ActionGateway PEP + enforcement 测试 + env-var test race 修复（bb05aeb）
+- **Phase 9 — Execution Environment**：ExecutionEnvironmentSpec（DSec）+ local-process/container + future providers 诚实 FutureProvider + admission 检查（84b2919 + 27bead7）
+- **Phase 10 — Capability Supply Chain**（G8 = PASS）：四态分离 + lifecycle + strict-profile qualification gate + get_latest_qualification（e22521d）
+- **Phase 11 — Resolver/Workcell**：WorkcellResolver（硬约束 vs 软评分）+ typed resolution failures + 0-Agent/Agent+Rule/Agent+Solver+Human（7a87719）
+- **Phase 12 — Artifact2Capability**：OpenAPI2Capability + Repo2Capability 确定性 compiler + 结构化失败状态 + qualification-gated release（dbc8165）
+- **Phase 13 — Package/Provenance**：content-addressed SHA-256（ring，OCI-mappable）+ LOCAL_UNSIGNED provenance + tampering detection + PackageInputs options object（clippy）（a26b092 + 75398d9）
+- **Phase 14 — Profiles**（G9 = PASS）：四 Profile conformance suite + 机器可读报告 + required-condition gate + frozen version（9c7b55e）
+- **Phase 15 — Factory Thin Slice**（G10 = PASS）：CNC-17 deterministic scenario + 全 canonical 链 + evidence bundle（binding pin/no-duplicate/audit timeline）+ swap 入口（13e1080）
+- **Phase 16 — UI**：playwright config msedge channel（browser provider 修复）+ e2e 真跑（2 passed/8 failed——welcome-flow 时序/遮挡 + UI 结构漂移，已知 gap P3）
+- **Phase 17 — Telemetry**：morn.* 11 semantic attrs + CloudEvents envelope + secret redaction（b845dd6）
+- **Phase 18 — Threat Model**：18 威胁矩阵（docs/security/MORN_V11_5_THREAT_MODEL.md）+ reordered/duplicate/slow/upgrade fault injection + 根因修复：projection retract 取消被 retract 事件效果（2591513）
+- **Phase 19 — Conformance/Swap**（G11 = PASS_WITH_LIMITATIONS）：swap benchmark（Run A=fake-dsh Run B=fake-pi 业务不变条件一致）+ provider conformance 同一合同（d869886）
+- **Phase 20 — Docs/ADR**：ADR-MORN-001..010 + 5 guides + ARCHITECTURE.md 六 Plane 映射 + CURRENT 指针（b367db2）
+- **Phase 21 — Verify 收口**：scripts/verify-all.ps1 统一 gate（fmt/clippy/Rust tests/web vitest+build/e2e SKIP_EXTERNAL 显式，fail-fast）——RESULT: ALL_LOCAL_GATES_PASS（3922f69）
+- **Phase 22 — Release/Evidence Bundle**：7 份收口报告（Gate Matrix/Provider Swap/Factory Scenario/Security/Failure/Migration/Final）+ evidence bundle（HEAD/依赖/测试计数/场景 ID/timeline/screenshots/blockers）（b26162a）
 ## Current gate status
 
 ```text
@@ -53,7 +71,7 @@ G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 
 ## Tests last run
 
-- Rust: `cargo test --workspace` = **1359 passed, 0 failed**（1300 lib + 7 G2 + 9 G4/G5 + 8 G3 + 34 integration + 1 isolation）；cargo fmt --check PASS；cargo clippy --lib -- -D warnings PASS（CI 标准）；`cargo fmt --check` PASS；`cargo clippy --lib -- -D warnings` PASS（CI 标准）
+- Rust: `cargo test --workspace` = **1434 passed, 0 failed**（1301 lib + 34 integration + 99 conformance/G-gates，连续两次运行一致）；cargo fmt --check PASS；cargo clippy --lib -- -D warnings PASS（CI 标准）；`cargo fmt --check` PASS；`cargo clippy --lib -- -D warnings` PASS（CI 标准）
 - Web: vitest 6 passed；tsc PASS；build PASS（Phase 0 时点）
 - e2e（chromium 1228）: 2 passed / 8 failed（③–⑩ UI 结构漂移 → Phase 16 重写）
 - `npm audit`: 11 vulnerabilities（记录，Phase 21 评估）
