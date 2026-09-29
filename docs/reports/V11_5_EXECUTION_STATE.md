@@ -115,6 +115,7 @@ G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 | Cordis upstream 可用性 | 需确认 upstream Cordis exact version/commit（公开仓库核验） | Phase 3 Spike 时核验（网络可达则自动） | exact pin + 许可证记录 |
 
 ## Next exact actions
-1. Phase 5：ExecutionBinding 故障注入测试——执行中卸载/restart provider/load 第二 provider，证明 active Attempt 不被静默迁移（G6 Binding Pin Gate）；Attempt 侧已发生 side effect 时先 reconcile 再迁移。
-2. Phase 6：Action/Receipt/Reconciliation 强化——Fake CMMS POST → committed → timeout → OUTCOME_UNKNOWN → reconcile by business key → VERIFIED → no duplicate order（G7）。
-3. 测试 → 取证 → 更新本文件 → commit → Phase 7。
+Goal 已收口：ENGINEERING_COMPLETE_WITH_EXTERNAL_BLOCKERS。
+1. 解除外部阻塞（见 External blockers 表）：DSH/Pi 凭据、真实客户授权、Sigstore signer、OPA 部署。
+2. push plan：git push origin main（无 force push；推前确认 branch policy）。
+3. 下一产品步骤（需人类授权）：read-only shadow → DSH/Pi 真实接入 → 第二站点复用验证。
