@@ -10,6 +10,7 @@ pub mod console;
 pub mod core;
 
 pub mod control;
+pub mod domains;
 pub mod hub;
 #[cfg(feature = "mcp")]
 pub mod mcp;
