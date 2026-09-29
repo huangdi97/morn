@@ -92,8 +92,20 @@ impl FactoryScenarioRunner {
         fixture: &ScenarioFixture,
         cmms_orders_path: PathBuf,
     ) -> Result<ScenarioEvidence, MornError> {
+        Self::run_with_harness(fixture, cmms_orders_path, "fake-dsh")
+    }
+
+    /// The swap-benchmark entry (Goal §23.3): the same scenario with a
+    /// different harness provider id (Run A = fake-dsh, Run B = fake-pi).
+    /// Business-invariant conditions stay: same Work contract, same
+    /// authority boundary, same receipt semantics, no duplicate side effect.
+    pub fn run_with_harness(
+        fixture: &ScenarioFixture,
+        cmms_orders_path: PathBuf,
+        harness_provider_id: &str,
+    ) -> Result<ScenarioEvidence, MornError> {
         let store = ControlPlaneStore::in_memory()?;
-        let harness = FakeHarnessProvider::new("fake-dsh");
+        let harness = FakeHarnessProvider::new(harness_provider_id);
         let solver = crate::providers::solver::ReferenceCpsatSolver::new();
         let human = crate::providers::human::ReferenceHumanProvider::new();
         let connector = PersistentFakeCmmsConnector::with_path(cmms_orders_path);
@@ -146,7 +158,7 @@ impl FactoryScenarioRunner {
             "binding-cnc17",
             "work-cnc17",
             "sha256:equipment-investigator",
-            "fake-dsh",
+            harness_provider_id,
         );
         BindingController.bind(&store, &binding)?;
         timeline.push(
@@ -278,7 +290,7 @@ impl FactoryScenarioRunner {
             .get_binding("binding-cnc17")?
             .ok_or_else(|| MornError::Internal("binding lost".into()))?;
         let binding_pinned = binding_after.status == crate::work::BindingStatus::Bound
-            && binding_after.provider_id == "fake-dsh"
+            && binding_after.provider_id == harness_provider_id
             && binding_after.binding_generation == 1;
 
         // 14. Fake MES/QMS/APS observed states → ObservedOutcome.
