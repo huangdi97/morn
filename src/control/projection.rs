@@ -37,10 +37,21 @@ pub mod event_types {
 /// - events with `retracts` cancel the effect of the event they retract;
 /// - superseded events keep history but do not change the projection twice.
 pub fn project_work(mut status: WorkStatus, events: &[StoredEvent]) -> WorkStatus {
+    // SAFETY: a retraction cancels the effect of the event it names — the
+    // retracted ids are collected first, then their effects are skipped
+    // during replay (regardless of arrival order). The retraction itself
+    // changes nothing else.
+    let retracted: std::collections::HashSet<&str> = events
+        .iter()
+        .filter_map(|event| event.retracts.as_deref())
+        .collect();
     for event in events {
         if event.retracts.is_some() {
-            // A retraction cancels the effect of the event it retracts; the
-            // retraction itself changes nothing else.
+            // The retraction event itself changes nothing.
+            continue;
+        }
+        if retracted.contains(event.id.as_str()) {
+            // This event's effect is canceled by a retraction.
             continue;
         }
         let Ok(payload) = serde_json::from_str::<serde_json::Value>(&event.payload_json) else {
