@@ -1,4 +1,5 @@
 //! studio — Exposes studio modules for managing, publishing, and testing capabilities.
+pub mod artifact2capability;
 pub mod editors;
 pub mod executor;
 pub mod manager;
