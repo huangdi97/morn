@@ -16,6 +16,7 @@ pub mod store;
 pub mod store_execution;
 pub mod store_records;
 pub mod store_runtime;
+pub mod workcell;
 
 pub use controllers::{
     AcceptanceController, AuthorityController, BindingController, CapabilityResolverController,
@@ -27,4 +28,8 @@ pub use projection::project_work;
 pub use store::ControlPlaneStore;
 
 /// Event schema version metadata stamped on every stored semantic event.
+pub use workcell::{
+    CandidateCapability, ExecutorKind, ResolutionFailure, ResolutionRequirements, Workcell,
+    WorkcellMember, WorkcellResolver,
+};
 pub const EVENT_SCHEMA_VERSION: &str = "v1";
