@@ -13,6 +13,20 @@
 - `docs/canonical/Morn_v11.5-R1_全量连续执行_GOAL_2026-09-25.md`
   - 状态：已批准的连续执行 Goal（Phase 0–22），执行状态见 `docs/reports/V11_5_EXECUTION_STATE.md`
 
+## ADR（架构决策记录，Phase 20 冻结）
+
+- `docs/adr/ADR-MORN-001..010` — Cordis composition only；DSH/Pi 是 Harness Provider；durable truth 独立；hot-swap 不改 active Attempt；capability 供应链治理；标准优先；Factory read-first；control loop + reconciliation；non-destructive evolution；domain 语义不绑定 Cordis types
+
+## Guides（Phase 20）
+
+- `docs/guides/provider-authoring.md` — HarnessProvider/Connector/Policy/ExecutionEnvironment 合同与规则
+- `docs/guides/capability-authoring.md` — 四态分离、Manifest、Artifact2Capability、Qualification、Release
+- `docs/guides/profile-authoring.md` — Guarantee Profile 与 conformance
+- `docs/guides/local-development.md` — 本地构建环境与工程规范
+- `docs/guides/factory-reference-scenario.md` — CNC-17 reference scenario 运行指南
+- `ARCHITECTURE.md` — 六 Plane 现状映射
+- `docs/security/MORN_V11_5_THREAT_MODEL.md` — 威胁模型（18 项）+ fault injection 矩阵
+
 ## 辅助文件
 
 - `docs/canonical/Morn_v11.5-R1_AGENT_HANDOFF_TEMPLATE.md` — Agent 交接模板
