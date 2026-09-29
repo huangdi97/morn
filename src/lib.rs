@@ -23,4 +23,5 @@ pub mod runtime;
 #[cfg(feature = "sandbox")]
 pub mod sandbox;
 pub mod studio;
+pub mod telemetry;
 pub mod work;
