@@ -13,12 +13,15 @@
 //!   the same layout.
 
 use morn::studio::package::{
-    sha256_hex, LocalPackageBuilder, LocalUnsignedProvenanceProvider, ProvenanceProvider,
-    ProvenanceStatus,
+    sha256_hex, LocalPackageBuilder, LocalUnsignedProvenanceProvider, PackageInputs,
+    ProvenanceProvider, ProvenanceStatus,
 };
 
-fn temp_root() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join("morn_pkg_test");
+fn temp_root(label: &str) -> std::path::PathBuf {
+    // Test isolation: a unique directory per test — concurrent tests must not
+    // remove each other's packages (the layout is content-addressed under
+    // the root).
+    let dir = std::env::temp_dir().join(format!("morn_pkg_test_{label}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -42,18 +45,22 @@ fn g_sha256_is_a_real_digest() {
 
 #[test]
 fn g_package_builds_content_addressed_layout() {
-    let root = temp_root();
+    let root = temp_root("layout");
     let package = LocalPackageBuilder::build(
         &root,
-        "equipment-investigator",
-        "1.4.0",
-        r#"{"name":"equipment-investigator","version":"1.4.0"}"#,
-        vec!["schema://equipment-investigation-input/v1".to_string()],
-        Some(r#"{"harnessCompatible":["dsh","pi"]}"#.to_string()),
-        Some(r#"{"status":"PASSED","evaluator":"qualification-runner"}"#.to_string()),
-        vec!["tests/equipment.yaml".to_string()],
-        Some(r#"{"sourceRef":"repo://..."}"#.to_string()),
-        vec!["docs/README.md".to_string()],
+        &PackageInputs {
+            name: "equipment-investigator".to_string(),
+            version: "1.4.0".to_string(),
+            manifest_json: r#"{"name":"equipment-investigator","version":"1.4.0"}"#.to_string(),
+            schema_refs: vec!["schema://equipment-investigation-input/v1".to_string()],
+            runtime_json: Some(r#"{"harnessCompatible":["dsh","pi"]}"#.to_string()),
+            qualification_json: Some(
+                r#"{"status":"PASSED","evaluator":"qualification-runner"}"#.to_string(),
+            ),
+            test_refs: vec!["tests/equipment.yaml".to_string()],
+            provenance_json: Some(r#"{"sourceRef":"repo://..."}"#.to_string()),
+            doc_refs: vec!["docs/README.md".to_string()],
+        },
     )
     .expect("package builds");
 
@@ -78,32 +85,26 @@ fn g_package_builds_content_addressed_layout() {
 #[test]
 fn g_package_build_is_deterministic() {
     // Same content → same digest (content addressing).
-    let root = temp_root();
+    let root = temp_root("determinism");
     let manifest = r#"{"name":"demo","version":"1.0.0"}"#;
     let a = LocalPackageBuilder::build(
         &root,
-        "demo",
-        "1.0.0",
-        manifest,
-        vec![],
-        None,
-        None,
-        vec![],
-        None,
-        vec![],
+        &PackageInputs {
+            name: "demo".to_string(),
+            version: "1.0.0".to_string(),
+            manifest_json: manifest.to_string(),
+            ..Default::default()
+        },
     )
     .expect("build a");
     let b = LocalPackageBuilder::build(
         &root,
-        "demo",
-        "1.0.0",
-        manifest,
-        vec![],
-        None,
-        None,
-        vec![],
-        None,
-        vec![],
+        &PackageInputs {
+            name: "demo".to_string(),
+            version: "1.0.0".to_string(),
+            manifest_json: manifest.to_string(),
+            ..Default::default()
+        },
     )
     .expect("build b");
     assert_eq!(
@@ -114,15 +115,12 @@ fn g_package_build_is_deterministic() {
     // Different content → different digest.
     let c = LocalPackageBuilder::build(
         &root,
-        "demo",
-        "1.0.1",
-        manifest,
-        vec![],
-        None,
-        None,
-        vec![],
-        None,
-        vec![],
+        &PackageInputs {
+            name: "demo".to_string(),
+            version: "1.0.1".to_string(),
+            manifest_json: manifest.to_string(),
+            ..Default::default()
+        },
     )
     .expect("build c");
     assert_ne!(a.digest, c.digest);
@@ -130,18 +128,15 @@ fn g_package_build_is_deterministic() {
 
 #[test]
 fn g_package_verify_detects_tampering() {
-    let root = temp_root();
+    let root = temp_root("tamper");
     let package = LocalPackageBuilder::build(
         &root,
-        "demo",
-        "1.0.0",
-        r#"{"name":"demo","version":"1.0.0"}"#,
-        vec![],
-        None,
-        None,
-        vec![],
-        None,
-        vec![],
+        &PackageInputs {
+            name: "demo".to_string(),
+            version: "1.0.0".to_string(),
+            manifest_json: r#"{"name":"demo","version":"1.0.0"}"#.to_string(),
+            ..Default::default()
+        },
     )
     .expect("build");
 

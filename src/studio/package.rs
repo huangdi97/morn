@@ -113,6 +113,20 @@ impl ProvenanceProvider for LocalUnsignedProvenanceProvider {
     }
 }
 
+/// Typed inputs for a package build (options object — never 10 loose args).
+#[derive(Debug, Clone, Default)]
+pub struct PackageInputs {
+    pub name: String,
+    pub version: String,
+    pub manifest_json: String,
+    pub schema_refs: Vec<String>,
+    pub runtime_json: Option<String>,
+    pub qualification_json: Option<String>,
+    pub test_refs: Vec<String>,
+    pub provenance_json: Option<String>,
+    pub doc_refs: Vec<String>,
+}
+
 /// LocalPackageBuilder — builds a content-addressed package on disk.
 pub struct LocalPackageBuilder;
 
@@ -122,27 +136,22 @@ impl LocalPackageBuilder {
     /// laid out under `<root>/<digest>/` — the OCI-mappable layout.
     pub fn build(
         root: &std::path::Path,
-        name: &str,
-        version: &str,
-        manifest_json: &str,
-        schema_refs: Vec<String>,
-        runtime_json: Option<String>,
-        qualification_json: Option<String>,
-        test_refs: Vec<String>,
-        provenance_json: Option<String>,
-        doc_refs: Vec<String>,
+        inputs: &PackageInputs,
     ) -> Result<CapabilityPackage, String> {
-        if name.is_empty() || version.is_empty() {
+        if inputs.name.is_empty() || inputs.version.is_empty() {
             return Err("package requires name and version".to_string());
         }
         // Content address: a real SHA-256 over the canonical content.
         let content = format!(
-            "{name}\n{version}\n{manifest_json}\n{}\n{}\n{}\n{}\n{}",
-            schema_refs.join("\n"),
-            runtime_json.as_deref().unwrap_or(""),
-            qualification_json.as_deref().unwrap_or(""),
-            test_refs.join("\n"),
-            provenance_json.as_deref().unwrap_or(""),
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            inputs.name,
+            inputs.version,
+            inputs.manifest_json,
+            inputs.schema_refs.join("\n"),
+            inputs.runtime_json.as_deref().unwrap_or(""),
+            inputs.qualification_json.as_deref().unwrap_or(""),
+            inputs.test_refs.join("\n"),
+            inputs.provenance_json.as_deref().unwrap_or(""),
         );
         let digest = sha256_hex(content.as_bytes());
 
@@ -151,30 +160,31 @@ impl LocalPackageBuilder {
         std::fs::create_dir_all(pkg_dir.join("schemas")).map_err(|e| e.to_string())?;
         std::fs::create_dir_all(pkg_dir.join("tests")).map_err(|e| e.to_string())?;
         std::fs::create_dir_all(pkg_dir.join("docs")).map_err(|e| e.to_string())?;
-        std::fs::write(pkg_dir.join("manifest.json"), manifest_json).map_err(|e| e.to_string())?;
-        if let Some(runtime) = &runtime_json {
+        std::fs::write(pkg_dir.join("manifest.json"), &inputs.manifest_json)
+            .map_err(|e| e.to_string())?;
+        if let Some(runtime) = &inputs.runtime_json {
             std::fs::write(pkg_dir.join("runtime.json"), runtime).map_err(|e| e.to_string())?;
         }
-        if let Some(qualification) = &qualification_json {
+        if let Some(qualification) = &inputs.qualification_json {
             std::fs::write(pkg_dir.join("qualification.json"), qualification)
                 .map_err(|e| e.to_string())?;
         }
-        if let Some(provenance) = &provenance_json {
+        if let Some(provenance) = &inputs.provenance_json {
             std::fs::write(pkg_dir.join("provenance.json"), provenance)
                 .map_err(|e| e.to_string())?;
         }
 
         Ok(CapabilityPackage {
-            name: name.to_string(),
-            version: version.to_string(),
+            name: inputs.name.clone(),
+            version: inputs.version.clone(),
             digest,
-            manifest_json: manifest_json.to_string(),
-            schema_refs,
-            runtime_json,
-            qualification_json,
-            test_refs,
-            provenance_json,
-            doc_refs,
+            manifest_json: inputs.manifest_json.clone(),
+            schema_refs: inputs.schema_refs.clone(),
+            runtime_json: inputs.runtime_json.clone(),
+            qualification_json: inputs.qualification_json.clone(),
+            test_refs: inputs.test_refs.clone(),
+            provenance_json: inputs.provenance_json.clone(),
+            doc_refs: inputs.doc_refs.clone(),
             sbom_json: None,
         })
     }
