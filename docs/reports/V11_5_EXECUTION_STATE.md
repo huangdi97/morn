@@ -49,7 +49,7 @@
 - **Phase 13 — Package/Provenance**：content-addressed SHA-256（ring，OCI-mappable）+ LOCAL_UNSIGNED provenance + tampering detection + PackageInputs options object（clippy）（a26b092 + 75398d9）
 - **Phase 14 — Profiles**（G9 = PASS）：四 Profile conformance suite + 机器可读报告 + required-condition gate + frozen version（9c7b55e）
 - **Phase 15 — Factory Thin Slice**（G10 = PASS）：CNC-17 deterministic scenario + 全 canonical 链 + evidence bundle（binding pin/no-duplicate/audit timeline）+ swap 入口（13e1080）
-- **Phase 16 — UI**：playwright config msedge channel（browser provider 修复）+ e2e 真跑（2 passed/8 failed——welcome-flow 时序/遮挡 + UI 结构漂移，已知 gap P3）
+- **Phase 16 — UI**：playwright config msedge channel（browser provider 修复）+ e2e 真跑 10 passed/0 failed（收口后修复：三层 overlay 根因——OnboardingWizard/FeatureGuide 链式遮挡，commit 0872019）
 - **Phase 17 — Telemetry**：morn.* 11 semantic attrs + CloudEvents envelope + secret redaction（b845dd6）
 - **Phase 18 — Threat Model**：18 威胁矩阵（docs/security/MORN_V11_5_THREAT_MODEL.md）+ reordered/duplicate/slow/upgrade fault injection + 根因修复：projection retract 取消被 retract 事件效果（2591513）
 - **Phase 19 — Conformance/Swap**（G11 = PASS_WITH_LIMITATIONS）：swap benchmark（Run A=fake-dsh Run B=fake-pi 业务不变条件一致）+ provider conformance 同一合同（d869886）

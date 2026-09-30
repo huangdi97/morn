@@ -55,7 +55,7 @@ cargo fmt --check         = PASS
 cargo clippy --lib -D warnings = PASS
 web vitest                = PASS（Phase 0 时点 6 tests；当前 tsc PASS）
 web build（tsc + vite）   = PASS
-playwright e2e            = 2 passed / 8 failed（真实 msedge 浏览器跑通；8 failed 为 welcome-flow 时序/遮挡 + UI 结构漂移——已知 gap，Phase 0 baseline 一致）
+playwright e2e            = 10 passed / 0 failed（真实 msedge 浏览器跑通；三层 overlay 根因已修复，commit 0872019）
 verify-all                = RESULT: ALL_LOCAL_GATES_PASS（exit 0；e2e 显式 SKIP_EXTERNAL）
 failure-injection         = 15 路径有自动测试（见 V11_5_SECURITY_AND_FAILURE_REPORT.md）
 ```
@@ -91,7 +91,7 @@ deterministic    = 两次运行 evidence bundle 完全一致
 
 | 项 | 优先级 | 原因 | 阻塞发布 |
 |---|---|---|---|
-| e2e ③–⑩（welcome-flow 时序/遮挡 + UI 漂移） | P3 | probe 取证（z-9999 overlay 未关闭）；Phase 0 baseline 已记录 | 否 |
+| ~~e2e ③–⑩~~ 已修复（0872019：三层 overlay 根因 + observed waits） | P3 | — | 否 |
 | v11.5 Workbench/Console/Studio 完整 UI | P3 | 现栈 chat-first UI 未做 v11.5 Workbench 完整重写 | 否 |
 | npm audit 11 vulnerabilities / node 版本漂移 / eslint 无配置 / update.json 空 signature | P4 | 记录在案；不伪造 | 否 |
 
@@ -112,6 +112,6 @@ deterministic    = 两次运行 evidence bundle 完全一致
 5. ✅ crash/restart/unknown/reconcile/provider-failure 路径有自动测试（15 路径）。
 6. ✅ 至少一个非 Agent executor 路径证明 Agent is one executor（0-Agent Workcell + solver/human provider）。
 7. ⚠️ 两 Harness 真实可用时完成 swap——DSH/Pi 真实凭据外部不可得，诚实阻塞（PASS_WITH_LIMITATIONS）。
-8. ⚠️ UI 可完成至少一个 Work 全链路——控制平面语义/API 已完整；UI 层为现栈 chat-first，v11.5 Workbench UI 完整重写为已知 gap（P3，非阻塞）。
+8. ⚠️ UI 可完成至少一个 Work 全链路——控制平面语义/API 已完整；e2e 全链路 10/0 通过（welcome→发消息→Studio→Console→设置→持久化）；v11.5 Workbench 专用视图（Work list/conditions/candidates）仍为现栈 chat-first UI 的扩展项（P3，非阻塞）。
 9. ✅ 文档、ADR、报告和代码一致。
 10. ✅ 没有虚假"客户价值/生产写/商业成熟"声明（REAL_PRODUCTION_WRITE=NO 贯穿；G12 BLOCKED_EXTERNAL）。

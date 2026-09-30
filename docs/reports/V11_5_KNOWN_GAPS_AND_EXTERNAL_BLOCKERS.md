@@ -15,7 +15,7 @@
 
 | 项 | 优先级 | 原因 | 是否阻塞发布 |
 |---|---|---|---|
-| e2e ③–⑩ 失败（welcome-flow 时序/遮挡 + UI 结构漂移） | P3 | probe 取证：欢迎页 overlay（z-9999 fixed）在 skipWelcome 点击后未关闭导致 send-btn 被遮挡；Studio 8 tab/Store/Console 结构与 v0.2.0 UI 漂移 | 否（Phase 0 baseline 已记录；核心链路在 Rust 层全绿） |
+| ~~e2e ③–⑩ 失败~~ **已修复**（commit 0872019） | P3 | 三层 overlay 叠加根因：OnboardingWizard（z-9999，morn_onboarding_done 未设时显示）+ FeatureGuide（z-10000，wizard 完成后链式显示）拦截点击；修复 = OnboardingWizard step-0 加跳过按钮 + e2e 跳过三层 overlay + observed waits 替代固定 sleep + Studio tab count 跟踪 UI 事实源（9 tab） | 否（e2e 10 passed / 0 failed） |
 | v11.5 Workbench/Console/Studio 完整 UI（Work list、conditions、candidates、active workcell 等） | P3 | 当前 web UI 是现栈 chat-first UI；v11.5 Workbench 概念未做完整 UI 重写（Goal §20 要求延续现栈，不为重写换框架） | 否（控制平面语义/API 已完整；UI 是 UX 层） |
 | npm audit 11 vulnerabilities | P4 | web 依赖审计 | 否（Phase 21 评估记录） |
 | node 版本 ci.yml=20 vs release.yml=22 | P4 | CI 配置漂移 | 否 |
