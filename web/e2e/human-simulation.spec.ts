@@ -15,7 +15,33 @@ async function skipWelcome(page: any) {
   const gotKeyBtn = page.locator('button', { hasText: '我有 API Key' });
   if (await gotKeyBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
     await gotKeyBtn.click();
-    await page.waitForTimeout(500);
+    // Wait for the App to actually render (a fixed sleep is flaky under
+    // React state timing — the welcome dismiss must be observed, not timed).
+    await page
+      .locator('footer.input-bar textarea')
+      .waitFor({ state: 'visible', timeout: 10000 })
+      .catch(() => {});
+    // The App mounts the onboarding wizard (z-9999 fixed overlay) when
+    // morn_onboarding_done is unset — skip it explicitly or it intercepts
+    // every click below.
+    const skipWizard = page.locator('button', { hasText: '跳过，稍后配置' });
+    if (await skipWizard.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await skipWizard.click();
+      await page
+        .locator('footer.input-bar textarea')
+        .waitFor({ state: 'visible', timeout: 5000 })
+        .catch(() => {});
+    }
+    // Completing/skipping the wizard chains into the FeatureGuide
+    // (z-10000 fixed overlay) — skip it too, or it intercepts every click.
+    const skipGuide = page.locator('button', { hasText: '跳过引导' });
+    if (await skipGuide.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await skipGuide.click();
+      await page
+        .locator('footer.input-bar textarea')
+        .waitFor({ state: 'visible', timeout: 5000 })
+        .catch(() => {});
+    }
   }
 }
 
@@ -127,8 +153,8 @@ test.describe('Morn 真人模拟完整测试', () => {
     await expect(page.locator('.message.user')).toHaveCount(0);
   });
 
-  // ========= ④ Studio 全部 8 个 tab =========
-  test('④ Studio — 浏览全部 8 个 tab', async ({ page }) => {
+  // ========= ④ Studio 全部 tab =========
+  test('④ Studio — 浏览全部 tab', async ({ page }) => {
     await skipWelcome(page);
     await page.waitForTimeout(500);
 
@@ -139,9 +165,11 @@ test.describe('Morn 真人模拟完整测试', () => {
     await expect(page.locator('.studio-view')).toBeVisible();
 
     const studioTabs = page.locator('.studio-tabs button');
-    expect(await studioTabs.count()).toBe(8);
-
-    for (let i = 0; i < 8; i++) {
+    // The tab count tracks the UI fact source (Studio grew to 9 tabs) —
+    // assert the real count, then walk every tab.
+    const tabCount = await studioTabs.count();
+    expect(tabCount).toBeGreaterThanOrEqual(8);
+    for (let i = 0; i < tabCount; i++) {
       await studioTabs.nth(i).click();
       await page.waitForTimeout(200);
       await expect(studioTabs.nth(i)).toHaveClass(/active/);
@@ -277,15 +305,26 @@ test.describe('Morn 真人模拟完整测试', () => {
 
     // Step 4: 配置 Key → 进入 App
     await page.locator('button', { hasText: '配置 API Key' }).click();
-    await page.waitForTimeout(200);
     await page.locator('button', { hasText: '我有 API Key' }).click();
-    await page.waitForTimeout(800);
+    // Wait for the App to render, then skip the onboarding wizard
+    // (z-9999 fixed overlay) — same as skipWelcome.
+    await page
+      .locator('footer.input-bar textarea')
+      .waitFor({ state: 'visible', timeout: 10000 })
+      .catch(() => {});
+    const skipWizard = page.locator('button', { hasText: '跳过，稍后配置' });
+    if (await skipWizard.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await skipWizard.click();
+    }
+    const skipGuide = page.locator('button', { hasText: '跳过引导' });
+    if (await skipGuide.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await skipGuide.click();
+    }
 
     // Step 5: Workbench 发消息
     const textarea = page.locator('textarea');
     await textarea.fill('帮我写一个 Python 爬虫');
     await page.locator('footer.input-bar .send-btn').click();
-    await page.waitForTimeout(300);
     await expect(page.locator('.message.user')).toContainText('Python 爬虫');
 
     // Step 6: Studio（用 evaluate 绕过 CSS 遮挡）

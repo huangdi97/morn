@@ -145,7 +145,17 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
           <div>
-            {step === 0 && <span />}
+            {step === 0 && (
+              <button
+                onClick={onComplete}
+                style={{
+                  padding: "8px 20px", borderRadius: 8, border: "none",
+                  background: "transparent", color: "var(--text-secondary, #8b949e)", cursor: "pointer", fontSize: 13,
+                }}
+              >
+                {t('onboarding.skip')}
+              </button>
+            )}
             {step > 0 && (
               <button
                 onClick={() => setStep(s => s - 1)}
