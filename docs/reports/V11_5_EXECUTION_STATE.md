@@ -2,9 +2,9 @@
 
 > 本文件由 Agent 自主运行机制维护（Goal §30）。下一 Agent 必须从本文件 + `docs/canonical/CURRENT.md` + canonical 母版开始，不从聊天记忆猜测。
 
- **最后更新：** Phase 22 完成——Goal 收口（ENGINEERING_COMPLETE_WITH_EXTERNAL_BLOCKERS，2026-09-28）
+ **最后更新：** 收口后 P3/P4 债务清偿完成（e2e 10/0 + npm audit 5 + node 漂移修复，2026-09-28）
 
- `main` @ `b26162a`（Phase 22 commit）；Phase 0 基线 HEAD 为 `2cd9fbd6fa57930eaa71616f170f958037190654`。
+ `main` @（见 Git log 最新一条）；Phase 0 基线 HEAD 为 `2cd9fbd6fa57930eaa71616f170f958037190654`。
 
 ## Completed phases
 
@@ -119,3 +119,14 @@ Goal 已收口：ENGINEERING_COMPLETE_WITH_EXTERNAL_BLOCKERS。
 1. 解除外部阻塞（见 External blockers 表）：DSH/Pi 凭据、真实客户授权、Sigstore signer、OPA 部署。
 2. push plan：git push origin main（无 force push；推前确认 branch policy）。
 3. 下一产品步骤（需人类授权）：read-only shadow → DSH/Pi 真实接入 → 第二站点复用验证。
+
+## 收口后债务清偿（Post-closure P3/P4，2026-09-28）
+
+- **e2e ③–⑩ 修复（10 passed / 0 failed，commit 0872019）**：三层 overlay 叠加根因（probe3/probe4 取证）——
+  1. OnboardingWizard（z-9999 fixed 全屏）在 `morn_onboarding_done` 未设时显示 → 拦截一切点击 → 根因修复：step-0 加"跳过，稍后配置"按钮（UX 显式跳过）；
+  2. FeatureGuide（z-10000 fixed 全屏）在 wizard 完成后 `setShowGuide(true)` 链式显示 → 拦截一切点击 → e2e 补"跳过引导"步骤；
+  3. e2e skipWelcome 固定 500ms sleep 时序脆弱 → 改为 observed waits（textarea visible 信号）；
+  4. Studio tab count 硬编码 8 过时（UI 演进 9 tab）→ 动态 count 跟踪 UI 事实源。
+- **npm audit 11 → 5（commit 12cce87）**：`npm audit fix`（非 breaking）；剩余 5 项需 breaking changes——不 force，诚实记录。
+- **node 版本漂移修复（commit c664155）**：ci.yml 20 → 22（与 release.yml、本地 v22.15.0 一致）。
+- **verify-all -WithE2E 终跑：RESULT: ALL_LOCAL_GATES_PASS**（fmt + clippy + Rust 1434/0 + web vitest + web build + e2e 10/0 真跑——e2e 不再是 SKIP_EXTERNAL）。

@@ -56,7 +56,7 @@ cargo clippy --lib -D warnings = PASS
 web vitest                = PASS（Phase 0 时点 6 tests；当前 tsc PASS）
 web build（tsc + vite）   = PASS
 playwright e2e            = 10 passed / 0 failed（真实 msedge 浏览器跑通；三层 overlay 根因已修复，commit 0872019）
-verify-all                = RESULT: ALL_LOCAL_GATES_PASS（exit 0；e2e 显式 SKIP_EXTERNAL）
+verify-all                = RESULT: ALL_LOCAL_GATES_PASS（-WithE2E 终跑 exit 0：fmt + clippy + Rust 1434/0 + web + e2e 10/0 真跑）
 failure-injection         = 15 路径有自动测试（见 V11_5_SECURITY_AND_FAILURE_REPORT.md）
 ```
 
@@ -91,9 +91,9 @@ deterministic    = 两次运行 evidence bundle 完全一致
 
 | 项 | 优先级 | 原因 | 阻塞发布 |
 |---|---|---|---|
-| ~~e2e ③–⑩~~ 已修复（0872019：三层 overlay 根因 + observed waits） | P3 | — | 否 |
+
 | v11.5 Workbench/Console/Studio 完整 UI | P3 | 现栈 chat-first UI 未做 v11.5 Workbench 完整重写 | 否 |
-| npm audit 11 vulnerabilities / node 版本漂移 / eslint 无配置 / update.json 空 signature | P4 | 记录在案；不伪造 | 否 |
+| npm audit 5（从 11 修复）/ node 漂移已修复（c664155）/ eslint 无配置 / update.json 空 signature | P4 | 剩余需 breaking changes 或人工决策；不伪造 | 否 |
 
 ## H. Next Product Step
 
