@@ -74,7 +74,7 @@ G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 - Rust: `cargo test --workspace` = **1434 passed, 0 failed**（1301 lib + 34 integration + 99 conformance/G-gates，连续两次运行一致）；cargo fmt --check PASS；cargo clippy --lib -- -D warnings PASS（CI 标准）；`cargo fmt --check` PASS；`cargo clippy --lib -- -D warnings` PASS（CI 标准）
 - Web: vitest 6 passed；tsc PASS；build PASS（Phase 0 时点）
 - e2e（chromium 1228）: 2 passed / 8 failed（③–⑩ UI 结构漂移 → Phase 16 重写）
-- `npm audit`: 11 vulnerabilities（记录，Phase 21 评估）
+- `npm audit`: 5 vulnerabilities（从 11 修复，commit 12cce87；剩余 5 项需 breaking changes，不 force）
 
 ## Architecture decisions
 
@@ -99,7 +99,7 @@ G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
 ## Open root causes
 
 - e2e ③–⑩ 失败：e2e 预期与 v0.2.0 UI 结构漂移（Studio 8 tab、Store/Console 结构、消息流 DOM）→ Phase 16
-- npm audit 11 vulnerabilities → Phase 21
+- npm audit 5 vulnerabilities（从 11 修复；剩余需 breaking，不 force）
 - node 版本 ci.yml=20 vs release.yml=22 → Phase 21
 - web lint 脚本无 eslint 配置 → Phase 21
 - update.json 空 signature → Phase 22（不伪造）
