@@ -1,121 +1,56 @@
-# Morn v11.5-R1 Execution State
+﻿# Morn v11.5-R1 Execution State
 
-> 本文件由 Agent 自主运行机制维护（Goal §30）。下一 Agent 必须从本文件 + `docs/canonical/CURRENT.md` + canonical 母版开始，不从聊天记忆猜测。
-
- **最后更新：** Phase 22 完成——Goal 收口（ENGINEERING_COMPLETE_WITH_EXTERNAL_BLOCKERS，2026-09-28）
-
- `main` @ `b26162a`（Phase 22 commit）；Phase 0 基线 HEAD 为 `2cd9fbd6fa57930eaa71616f170f958037190654`。
-
+> 鏈枃浠剁敱 Agent 鑷富杩愯鏈哄埗缁存姢锛圙oal 搂30锛夈€備笅涓€ Agent 蹇呴』浠庢湰鏂囦欢 + `docs/canonical/CURRENT.md` + canonical 姣嶇増寮€濮嬶紝涓嶄粠鑱婂ぉ璁板繂鐚滄祴銆?
+ **鏈€鍚庢洿鏂帮細** Phase 22 瀹屾垚鈥斺€擥oal 鏀跺彛锛圗NGINEERING_COMPLETE_WITH_EXTERNAL_BLOCKERS锛?026-09-28锛?
+ `main` @ `b26162a`锛圥hase 22 commit锛夛紱Phase 0 鍩虹嚎 HEAD 涓?`2cd9fbd6fa57930eaa71616f170f958037190654`銆?
 ## Completed phases
 
-- **Phase 0 — Reality Audit**（G0 = PASS）
-  - `docs/reports/V11_5_REALITY_AUDIT.md`（真实仓库事实 + 成熟度分级）
-  - `docs/reports/V11_5_BASELINE_TEST_REPORT.md`（先跑后记录，含初始失败与根因修复）
-  - `docs/reports/V11_5_CODE_MAPPING_AND_MIGRATION_MATRIX.md`（对象级矩阵）
-  - canonical 落位：`docs/canonical/`（母版 + GOAL + HANDOFF + README + `CURRENT.md`），旧文档未删除
-- **Phase 1 — Semantic Specification**（G1 = PASS）
-  - `schemas/` 8 份 JSON Schema（common/world/work/authority/capability/execution/outcome/profile，self-contained + $ref）
-  - `src/work/` 语义模块（12 文件）：Work.spec/status、9 个 Condition 语义 Gate、AuthorityRequest/Decision（deny-by-default）、Capability 四态、ExecutionBinding/ActionAttempt（全状态机）/Receipt/Reconciliation、ObservedOutcome/Acceptance/Value、Profile（production_write=FORBIDDEN）、HistoricalRecord（supersede/retract/双时间）
-  - `src/work/validation.rs`：真实 schema 验证器（$ref + definition 入口）；17 个 schema 测试 + 1 个模块隔离测试
-  - G1 证据：schema round-trip ✓、TaskRecord→Work carrier 映射（不建第二账本）✓、protocol types 无 Cordis/DSH/Pi 依赖 ✓
-- **Phase 2 — Durable Control Plane Minimum**（G2 = PASS）
-  - `src/control/`：ControlPlaneStore（SQLite，14 张 cp_* 表：work/condition/semantic_event/binding/attempt/receipt/reconciliation/outcome/acceptance/capability_release/qualification/profile_release/outbox/controller_lease，DDL 独立 ddl.rs）
-  - event history（append idempotent + supersede/retract 显式字段 + contract/schema version 元数据）+ deterministic projection（replay 规则：retract 取消效果、last-write-wins phase）
-  - 12 个 reference controllers（WorkController 阶段推进幂等、BindingController、AuthorityController time-window 检查、ExecutionController 幂等 dispatch + Binding 前置检查、ReceiptController transport-ack≠business-commit 区分、ReconciliationController business-key 回读、OutcomeController、AcceptanceController、QualificationController、ProfileConformanceController、SituationController、CapabilityResolverController）
-  - outbox（claim/complete/requeue，exactly-once）+ controller lease/checkpoint（exclusive lease）
-  - G2 证据（tests/control_plane_g2.rs，7 测试全绿）：**真进程 kill**（子进程写 Work/Binding/Attempt 后被真 kill）→ 重启（fresh store）→ Work 存活 ✓、Attempt/Binding 不丢 ✓、reconcile 继续 → VERIFIED ✓、duplicate idempotency key 被拒 ✓；deterministic replay ✓；outbox exactly-once ✓；lease 互斥 ✓；from_value 回归测试 ✓
-- **Phase 3 — Cordis Reference Composition Runtime**（G3 = PASS）
-  - **Cordis Spike 完成**（真实 dependency，非 fork）：upstream `cordis-rs` =0.8.39（facade over cordis-core 0.3.24），github.com/dshbox/cordis-rs，MIT，DeepSeek Harness Cordis 4.x 的 Rust port，MSRV 1.85（本机 rustc 1.97.1 ✓）；crates.io API 核验（max_version 0.8.39，72 versions，pre-1.0 rapid）；exact pin 在根 Cargo.toml（`cordis-rs = "=0.8.39"`，无宽泛 semver）
-  - `src/runtime/cordis/`（唯一直接依赖 Cordis 的区域）：mod.rs（facade + 禁止等价映射文档 + upstream pin 常量）、slots.rs（8 个 Morn service slot：capabilities/harnesses/solvers/executionEnvironments/connectors/policy/identity/telemetry，inherent CONTRACT 常量 + Service trait NAME）、host.rs（CompositionHost：mount/unmount/upgrade/scoped，Cordis 错误 → ServiceSlotError）
-  - G3 证据（tests/runtime_cordis_g3.rs，8 测试全绿）：provider register/unregister ✓、provider reload 不 rebind active Attempt（**binding pin**：reload 后 Binding 仍 BOUND/同 provider/同 generation，Attempt 仍 pin 原 Binding）✓、provider upgrade 身份保持 ✓、scoped service 隔离 ✓、unavailable typed 错误 ✓、slot contract names 稳定 ✓、upstream pin 记录 ✓、Work lifecycle Morn-owned（Fiber ≠ Work）✓
-  - 隔离测试扩展（tests/work_module_isolation.rs）：扫描 src/work + src/control（含 controllers 子目录）共 24+ 文件，import-path 级检测（cordis::/use cordis/deepseek/dsh::/temporal::/kafka::/sled::）= 0 violations ✓
-  - 附带根因修复：self_evolution 测试并发 bug（mod.rs 与 scan.rs 两个独立 guard 不互斥 → 统一迁入 scan_tests.rs 单 guard；scan.rs 313 行超限 → 拆分 scan.rs 210 + scan_tests.rs 178）
- - **Phase 4 — Execution Plane**（G4 = PASS_WITH_LIMITATIONS，G5 = PASS_WITH_LIMITATIONS）
-   - 收编上一轮未提交半成品（Goal §27）：`src/providers/` 9 文件 + `tests/providers_g4g5.rs` + `src/lib.rs`（+pub mod providers），commit `e21756f`
-   - HarnessProvider 统一最小合同（capabilities/startSession/resumeSession/submit/cancel/checkpoint/getEvents/getUsage/health/close；session events 仅 Harness evidence）
-   - DshHarnessProvider / PiHarnessProvider：out-of-process skeleton，CredentialProvider 注入（凭据不硬编码不入 git），`REAL_PROVIDER_INTEGRATION_BLOCKED` 诚实标记（无凭据/无 endpoint → ExternalBlocked，不伪造 session）
-   - FakeHarnessProvider（deterministic，control-plane 验证）+ ReferenceCpsatSolver（4 候选，无 Agent）+ ReferenceHumanProvider（assign/decision-once/escalate）+ FakeCmms/FakeMes Connector（business-key 幂等 + timeout-after-commit 模式）
-   - EnvCredentialProvider：scope→value 映射不越界 + redacted fingerprint（安全日志）
-   - G4/G5 证据（tests/providers_g4g5.rs，9 测试全绿）：fake 全合同 ✓、DSH/Pi honest blocker 合同 ✓、同 trait 对象（harness-neutral）✓、credential 边界 ✓、solver deterministic 无 Agent ✓、human 全路径 ✓、Fake CMMS 幂等/无重复 ✓、timeout-after-commit→unknown 真实存在 ✓
-   - 附带根因修复：上一轮工具 UTF-8→GBK 双重编码乱码（11 处注释）→ 字节级替换修复（tests/providers_g4g5.rs 10 处 + src/work/execution.rs 1 处），mojibake=0 验证
-- **Phase 5 — Binding Pin**（G6 = PASS）：`tests/binding_pin_g6.rs` 4 故障注入（unload 中执行 pin 不变/restart 无重复副作用/second provider 新 Binding/side-effect attempt 先 reconcile）+ 根因修复：receipt readback 不降级 verified attempt（965c4e0）
-- **Phase 6 — Receipt/Reconciliation**（G7 = PASS）：`tests/receipt_reconciliation_g7.rs` 5 测试（完整 gateway 链/retry storm/duplicate receipt/crash-after-commit 持久 fake CMMS）（e5b7704）
-- **Phase 7 — Outcome/Acceptance/Value**：`tests/outcome_acceptance_value.rs` 5 测试 + 根因修复：REJECT/CONDITIONAL 不 satisfy acceptance gate（e24c72e）
-- **Phase 8 — Trust/Governance**：PolicyProvider（deny-by-default）+ ActionGateway PEP + enforcement 测试 + env-var test race 修复（bb05aeb）
-- **Phase 9 — Execution Environment**：ExecutionEnvironmentSpec（DSec）+ local-process/container + future providers 诚实 FutureProvider + admission 检查（84b2919 + 27bead7）
-- **Phase 10 — Capability Supply Chain**（G8 = PASS）：四态分离 + lifecycle + strict-profile qualification gate + get_latest_qualification（e22521d）
-- **Phase 11 — Resolver/Workcell**：WorkcellResolver（硬约束 vs 软评分）+ typed resolution failures + 0-Agent/Agent+Rule/Agent+Solver+Human（7a87719）
-- **Phase 12 — Artifact2Capability**：OpenAPI2Capability + Repo2Capability 确定性 compiler + 结构化失败状态 + qualification-gated release（dbc8165）
-- **Phase 13 — Package/Provenance**：content-addressed SHA-256（ring，OCI-mappable）+ LOCAL_UNSIGNED provenance + tampering detection + PackageInputs options object（clippy）（a26b092 + 75398d9）
-- **Phase 14 — Profiles**（G9 = PASS）：四 Profile conformance suite + 机器可读报告 + required-condition gate + frozen version（9c7b55e）
-- **Phase 15 — Factory Thin Slice**（G10 = PASS）：CNC-17 deterministic scenario + 全 canonical 链 + evidence bundle（binding pin/no-duplicate/audit timeline）+ swap 入口（13e1080）
-- **Phase 16 — UI**：playwright config msedge channel（browser provider 修复）+ e2e 真跑 10 passed/0 failed（收口后修复：三层 overlay 根因——OnboardingWizard/FeatureGuide 链式遮挡，commit 0872019）
-- **Phase 17 — Telemetry**：morn.* 11 semantic attrs + CloudEvents envelope + secret redaction（b845dd6）
-- **Phase 18 — Threat Model**：18 威胁矩阵（docs/security/MORN_V11_5_THREAT_MODEL.md）+ reordered/duplicate/slow/upgrade fault injection + 根因修复：projection retract 取消被 retract 事件效果（2591513）
-- **Phase 19 — Conformance/Swap**（G11 = PASS_WITH_LIMITATIONS）：swap benchmark（Run A=fake-dsh Run B=fake-pi 业务不变条件一致）+ provider conformance 同一合同（d869886）
-- **Phase 20 — Docs/ADR**：ADR-MORN-001..010 + 5 guides + ARCHITECTURE.md 六 Plane 映射 + CURRENT 指针（b367db2）
-- **Phase 21 — Verify 收口**：scripts/verify-all.ps1 统一 gate（fmt/clippy/Rust tests/web vitest+build/e2e SKIP_EXTERNAL 显式，fail-fast）——RESULT: ALL_LOCAL_GATES_PASS（3922f69）
-- **Phase 22 — Release/Evidence Bundle**：7 份收口报告（Gate Matrix/Provider Swap/Factory Scenario/Security/Failure/Migration/Final）+ evidence bundle（HEAD/依赖/测试计数/场景 ID/timeline/screenshots/blockers）（b26162a）
-## Current gate status
+- **Phase 0 鈥?Reality Audit**锛圙0 = PASS锛?  - `docs/reports/V11_5_REALITY_AUDIT.md`锛堢湡瀹炰粨搴撲簨瀹?+ 鎴愮啛搴﹀垎绾э級
+  - `docs/reports/V11_5_BASELINE_TEST_REPORT.md`锛堝厛璺戝悗璁板綍锛屽惈鍒濆澶辫触涓庢牴鍥犱慨澶嶏級
+  - `docs/reports/V11_5_CODE_MAPPING_AND_MIGRATION_MATRIX.md`锛堝璞＄骇鐭╅樀锛?  - canonical 钀戒綅锛歚docs/canonical/`锛堟瘝鐗?+ GOAL + HANDOFF + README + `CURRENT.md`锛夛紝鏃ф枃妗ｆ湭鍒犻櫎
+- **Phase 1 鈥?Semantic Specification**锛圙1 = PASS锛?  - `schemas/` 8 浠?JSON Schema锛坈ommon/world/work/authority/capability/execution/outcome/profile锛宻elf-contained + $ref锛?  - `src/work/` 璇箟妯″潡锛?2 鏂囦欢锛夛細Work.spec/status銆? 涓?Condition 璇箟 Gate銆丄uthorityRequest/Decision锛坉eny-by-default锛夈€丆apability 鍥涙€併€丒xecutionBinding/ActionAttempt锛堝叏鐘舵€佹満锛?Receipt/Reconciliation銆丱bservedOutcome/Acceptance/Value銆丳rofile锛坧roduction_write=FORBIDDEN锛夈€丠istoricalRecord锛坰upersede/retract/鍙屾椂闂达級
+  - `src/work/validation.rs`锛氱湡瀹?schema 楠岃瘉鍣紙$ref + definition 鍏ュ彛锛夛紱17 涓?schema 娴嬭瘯 + 1 涓ā鍧楅殧绂绘祴璇?  - G1 璇佹嵁锛歴chema round-trip 鉁撱€乀askRecord鈫扺ork carrier 鏄犲皠锛堜笉寤虹浜岃处鏈級鉁撱€乸rotocol types 鏃?Cordis/DSH/Pi 渚濊禆 鉁?- **Phase 2 鈥?Durable Control Plane Minimum**锛圙2 = PASS锛?  - `src/control/`锛欳ontrolPlaneStore锛圫QLite锛?4 寮?cp_* 琛細work/condition/semantic_event/binding/attempt/receipt/reconciliation/outcome/acceptance/capability_release/qualification/profile_release/outbox/controller_lease锛孌DL 鐙珛 ddl.rs锛?  - event history锛坅ppend idempotent + supersede/retract 鏄惧紡瀛楁 + contract/schema version 鍏冩暟鎹級+ deterministic projection锛坮eplay 瑙勫垯锛歳etract 鍙栨秷鏁堟灉銆乴ast-write-wins phase锛?  - 12 涓?reference controllers锛圵orkController 闃舵鎺ㄨ繘骞傜瓑銆丅indingController銆丄uthorityController time-window 妫€鏌ャ€丒xecutionController 骞傜瓑 dispatch + Binding 鍓嶇疆妫€鏌ャ€丷eceiptController transport-ack鈮燽usiness-commit 鍖哄垎銆丷econciliationController business-key 鍥炶銆丱utcomeController銆丄cceptanceController銆丵ualificationController銆丳rofileConformanceController銆丼ituationController銆丆apabilityResolverController锛?  - outbox锛坈laim/complete/requeue锛宔xactly-once锛? controller lease/checkpoint锛坋xclusive lease锛?  - G2 璇佹嵁锛坱ests/control_plane_g2.rs锛? 娴嬭瘯鍏ㄧ豢锛夛細**鐪熻繘绋?kill**锛堝瓙杩涚▼鍐?Work/Binding/Attempt 鍚庤鐪?kill锛夆啋 閲嶅惎锛坒resh store锛夆啋 Work 瀛樻椿 鉁撱€丄ttempt/Binding 涓嶄涪 鉁撱€乺econcile 缁х画 鈫?VERIFIED 鉁撱€乨uplicate idempotency key 琚嫆 鉁擄紱deterministic replay 鉁擄紱outbox exactly-once 鉁擄紱lease 浜掓枼 鉁擄紱from_value 鍥炲綊娴嬭瘯 鉁?- **Phase 3 鈥?Cordis Reference Composition Runtime**锛圙3 = PASS锛?  - **Cordis Spike 瀹屾垚**锛堢湡瀹?dependency锛岄潪 fork锛夛細upstream `cordis-rs` =0.8.39锛坒acade over cordis-core 0.3.24锛夛紝github.com/dshbox/cordis-rs锛孧IT锛孌eepSeek Harness Cordis 4.x 鐨?Rust port锛孧SRV 1.85锛堟湰鏈?rustc 1.97.1 鉁擄級锛沜rates.io API 鏍搁獙锛坢ax_version 0.8.39锛?2 versions锛宲re-1.0 rapid锛夛紱exact pin 鍦ㄦ牴 Cargo.toml锛坄cordis-rs = "=0.8.39"`锛屾棤瀹芥硾 semver锛?  - `src/runtime/cordis/`锛堝敮涓€鐩存帴渚濊禆 Cordis 鐨勫尯鍩燂級锛歮od.rs锛坒acade + 绂佹绛変环鏄犲皠鏂囨。 + upstream pin 甯搁噺锛夈€乻lots.rs锛? 涓?Morn service slot锛歝apabilities/harnesses/solvers/executionEnvironments/connectors/policy/identity/telemetry锛宨nherent CONTRACT 甯搁噺 + Service trait NAME锛夈€乭ost.rs锛圕ompositionHost锛歮ount/unmount/upgrade/scoped锛孋ordis 閿欒 鈫?ServiceSlotError锛?  - G3 璇佹嵁锛坱ests/runtime_cordis_g3.rs锛? 娴嬭瘯鍏ㄧ豢锛夛細provider register/unregister 鉁撱€乸rovider reload 涓?rebind active Attempt锛?*binding pin**锛歳eload 鍚?Binding 浠?BOUND/鍚?provider/鍚?generation锛孉ttempt 浠?pin 鍘?Binding锛夆湏銆乸rovider upgrade 韬唤淇濇寔 鉁撱€乻coped service 闅旂 鉁撱€乽navailable typed 閿欒 鉁撱€乻lot contract names 绋冲畾 鉁撱€乽pstream pin 璁板綍 鉁撱€乄ork lifecycle Morn-owned锛團iber 鈮?Work锛夆湏
+  - 闅旂娴嬭瘯鎵╁睍锛坱ests/work_module_isolation.rs锛夛細鎵弿 src/work + src/control锛堝惈 controllers 瀛愮洰褰曪級鍏?24+ 鏂囦欢锛宨mport-path 绾ф娴嬶紙cordis::/use cordis/deepseek/dsh::/temporal::/kafka::/sled::锛? 0 violations 鉁?  - 闄勫甫鏍瑰洜淇锛歴elf_evolution 娴嬭瘯骞跺彂 bug锛坢od.rs 涓?scan.rs 涓や釜鐙珛 guard 涓嶄簰鏂?鈫?缁熶竴杩佸叆 scan_tests.rs 鍗?guard锛泂can.rs 313 琛岃秴闄?鈫?鎷嗗垎 scan.rs 210 + scan_tests.rs 178锛? - **Phase 4 鈥?Execution Plane**锛圙4 = PASS_WITH_LIMITATIONS锛孏5 = PASS_WITH_LIMITATIONS锛?   - 鏀剁紪涓婁竴杞湭鎻愪氦鍗婃垚鍝侊紙Goal 搂27锛夛細`src/providers/` 9 鏂囦欢 + `tests/providers_g4g5.rs` + `src/lib.rs`锛?pub mod providers锛夛紝commit `e21756f`
+   - HarnessProvider 缁熶竴鏈€灏忓悎鍚岋紙capabilities/startSession/resumeSession/submit/cancel/checkpoint/getEvents/getUsage/health/close锛泂ession events 浠?Harness evidence锛?   - DshHarnessProvider / PiHarnessProvider锛歰ut-of-process skeleton锛孋redentialProvider 娉ㄥ叆锛堝嚟鎹笉纭紪鐮佷笉鍏?git锛夛紝`REAL_PROVIDER_INTEGRATION_BLOCKED` 璇氬疄鏍囪锛堟棤鍑嵁/鏃?endpoint 鈫?ExternalBlocked锛屼笉浼€?session锛?   - FakeHarnessProvider锛坉eterministic锛宑ontrol-plane 楠岃瘉锛? ReferenceCpsatSolver锛? 鍊欓€夛紝鏃?Agent锛? ReferenceHumanProvider锛坅ssign/decision-once/escalate锛? FakeCmms/FakeMes Connector锛坆usiness-key 骞傜瓑 + timeout-after-commit 妯″紡锛?   - EnvCredentialProvider锛歴cope鈫抳alue 鏄犲皠涓嶈秺鐣?+ redacted fingerprint锛堝畨鍏ㄦ棩蹇楋級
+   - G4/G5 璇佹嵁锛坱ests/providers_g4g5.rs锛? 娴嬭瘯鍏ㄧ豢锛夛細fake 鍏ㄥ悎鍚?鉁撱€丏SH/Pi honest blocker 鍚堝悓 鉁撱€佸悓 trait 瀵硅薄锛坔arness-neutral锛夆湏銆乧redential 杈圭晫 鉁撱€乻olver deterministic 鏃?Agent 鉁撱€乭uman 鍏ㄨ矾寰?鉁撱€丗ake CMMS 骞傜瓑/鏃犻噸澶?鉁撱€乼imeout-after-commit鈫抲nknown 鐪熷疄瀛樺湪 鉁?   - 闄勫甫鏍瑰洜淇锛氫笂涓€杞伐鍏?UTF-8鈫扜BK 鍙岄噸缂栫爜涔辩爜锛?1 澶勬敞閲婏級鈫?瀛楄妭绾ф浛鎹慨澶嶏紙tests/providers_g4g5.rs 10 澶?+ src/work/execution.rs 1 澶勶級锛宮ojibake=0 楠岃瘉
+- **Phase 5 鈥?Binding Pin**锛圙6 = PASS锛夛細`tests/binding_pin_g6.rs` 4 鏁呴殰娉ㄥ叆锛坲nload 涓墽琛?pin 涓嶅彉/restart 鏃犻噸澶嶅壇浣滅敤/second provider 鏂?Binding/side-effect attempt 鍏?reconcile锛? 鏍瑰洜淇锛歳eceipt readback 涓嶉檷绾?verified attempt锛?65c4e0锛?- **Phase 6 鈥?Receipt/Reconciliation**锛圙7 = PASS锛夛細`tests/receipt_reconciliation_g7.rs` 5 娴嬭瘯锛堝畬鏁?gateway 閾?retry storm/duplicate receipt/crash-after-commit 鎸佷箙 fake CMMS锛夛紙e5b7704锛?- **Phase 7 鈥?Outcome/Acceptance/Value**锛歚tests/outcome_acceptance_value.rs` 5 娴嬭瘯 + 鏍瑰洜淇锛歊EJECT/CONDITIONAL 涓?satisfy acceptance gate锛坋24c72e锛?- **Phase 8 鈥?Trust/Governance**锛歅olicyProvider锛坉eny-by-default锛? ActionGateway PEP + enforcement 娴嬭瘯 + env-var test race 淇锛坆b05aeb锛?- **Phase 9 鈥?Execution Environment**锛欵xecutionEnvironmentSpec锛圖Sec锛? local-process/container + future providers 璇氬疄 FutureProvider + admission 妫€鏌ワ紙84b2919 + 27bead7锛?- **Phase 10 鈥?Capability Supply Chain**锛圙8 = PASS锛夛細鍥涙€佸垎绂?+ lifecycle + strict-profile qualification gate + get_latest_qualification锛坋22521d锛?- **Phase 11 鈥?Resolver/Workcell**锛歐orkcellResolver锛堢‖绾︽潫 vs 杞瘎鍒嗭級+ typed resolution failures + 0-Agent/Agent+Rule/Agent+Solver+Human锛?a87719锛?- **Phase 12 鈥?Artifact2Capability**锛歄penAPI2Capability + Repo2Capability 纭畾鎬?compiler + 缁撴瀯鍖栧け璐ョ姸鎬?+ qualification-gated release锛坉bc8165锛?- **Phase 13 鈥?Package/Provenance**锛歝ontent-addressed SHA-256锛坮ing锛孫CI-mappable锛? LOCAL_UNSIGNED provenance + tampering detection + PackageInputs options object锛坈lippy锛夛紙a26b092 + 75398d9锛?- **Phase 14 鈥?Profiles**锛圙9 = PASS锛夛細鍥?Profile conformance suite + 鏈哄櫒鍙鎶ュ憡 + required-condition gate + frozen version锛?c7b55e锛?- **Phase 15 鈥?Factory Thin Slice**锛圙10 = PASS锛夛細CNC-17 deterministic scenario + 鍏?canonical 閾?+ evidence bundle锛坆inding pin/no-duplicate/audit timeline锛? swap 鍏ュ彛锛?3e1080锛?- **Phase 16 鈥?UI**锛歱laywright config msedge channel锛坆rowser provider 淇锛? e2e 鐪熻窇 10 passed/0 failed锛堟敹鍙ｅ悗淇锛氫笁灞?overlay 鏍瑰洜鈥斺€擮nboardingWizard/FeatureGuide 閾惧紡閬尅锛宑ommit 0872019锛?- **Phase 17 鈥?Telemetry**锛歮orn.* 11 semantic attrs + CloudEvents envelope + secret redaction锛坆845dd6锛?- **Phase 18 鈥?Threat Model**锛?8 濞佽儊鐭╅樀锛坉ocs/security/MORN_V11_5_THREAT_MODEL.md锛? reordered/duplicate/slow/upgrade fault injection + 鏍瑰洜淇锛歱rojection retract 鍙栨秷琚?retract 浜嬩欢鏁堟灉锛?591513锛?- **Phase 19 鈥?Conformance/Swap**锛圙11 = PASS_WITH_LIMITATIONS锛夛細swap benchmark锛圧un A=fake-dsh Run B=fake-pi 涓氬姟涓嶅彉鏉′欢涓€鑷达級+ provider conformance 鍚屼竴鍚堝悓锛坉869886锛?- **Phase 20 鈥?Docs/ADR**锛欰DR-MORN-001..010 + 5 guides + ARCHITECTURE.md 鍏?Plane 鏄犲皠 + CURRENT 鎸囬拡锛坆367db2锛?- **Phase 21 鈥?Verify 鏀跺彛**锛歴cripts/verify-all.ps1 缁熶竴 gate锛坒mt/clippy/Rust tests/web vitest+build/e2e SKIP_EXTERNAL 鏄惧紡锛宖ail-fast锛夆€斺€擱ESULT: ALL_LOCAL_GATES_PASS锛?922f69锛?- **Phase 22 鈥?Release/Evidence Bundle**锛? 浠芥敹鍙ｆ姤鍛婏紙Gate Matrix/Provider Swap/Factory Scenario/Security/Failure/Migration/Final锛? evidence bundle锛圚EAD/渚濊禆/娴嬭瘯璁℃暟/鍦烘櫙 ID/timeline/screenshots/blockers锛夛紙b26162a锛?## Current gate status
 
 ```text
  G0  Reality Audit          PASS
 G1  Semantic Mapping       PASS
 G2  Durable State          PASS
 G3  Cordis Isolation       PASS
- G4  DSH Provider           PASS_WITH_LIMITATIONS（skeleton contract + honest blocker；真实接入 BLOCKED_EXTERNAL）
- G5  Pi / Second Harness    PASS_WITH_LIMITATIONS（同一合同 + harness-neutral；真实 swap BLOCKED_EXTERNAL）
- G6-G11                     未开始
-G12 Customer Gate          BLOCKED_EXTERNAL（无真实客户授权数据）
-```
+ G4  DSH Provider           PASS_WITH_LIMITATIONS锛坰keleton contract + honest blocker锛涚湡瀹炴帴鍏?BLOCKED_EXTERNAL锛? G5  Pi / Second Harness    PASS_WITH_LIMITATIONS锛堝悓涓€鍚堝悓 + harness-neutral锛涚湡瀹?swap BLOCKED_EXTERNAL锛? G6-G11                     鏈紑濮?G12 Customer Gate          BLOCKED_EXTERNAL锛堟棤鐪熷疄瀹㈡埛鎺堟潈鏁版嵁锛?```
 
 ## Tests last run
 
-- Rust: `cargo test --workspace` = **1434 passed, 0 failed**（1301 lib + 34 integration + 99 conformance/G-gates，连续两次运行一致）；cargo fmt --check PASS；cargo clippy --lib -- -D warnings PASS（CI 标准）；`cargo fmt --check` PASS；`cargo clippy --lib -- -D warnings` PASS（CI 标准）
-- Web: vitest 6 passed；tsc PASS；build PASS（Phase 0 时点）
-- e2e（chromium 1228）: 2 passed / 8 failed（③–⑩ UI 结构漂移 → Phase 16 重写）
-- `npm audit`: 11 vulnerabilities（记录，Phase 21 评估）
-
+- Rust: `cargo test --workspace` = **1434 passed, 0 failed**锛?301 lib + 34 integration + 99 conformance/G-gates锛岃繛缁袱娆¤繍琛屼竴鑷达級锛沜argo fmt --check PASS锛沜argo clippy --lib -- -D warnings PASS锛圕I 鏍囧噯锛夛紱`cargo fmt --check` PASS锛沗cargo clippy --lib -- -D warnings` PASS锛圕I 鏍囧噯锛?- Web: vitest 6 passed锛泃sc PASS锛沚uild PASS锛圥hase 0 鏃剁偣锛?- e2e锛坈hromium 1228锛? 2 passed / 8 failed锛堚憿鈥撯懇 UI 缁撴瀯婕傜Щ 鈫?Phase 16 閲嶅啓锛?- `npm audit`: 11 vulnerabilities锛堣褰曪紝Phase 21 璇勪及锛?
 ## Architecture decisions
 
-1. v11.5 canonical 落位 `docs/canonical/`，`CURRENT.md` 为指针；12 个 `docs/*.md` 标记 LEGACY（仅追溯）。
-2. 目录等价映射（不强制大迁移）：语义层 = `src/work/`（schemas = `schemas/`）；控制平面扩展 `src/core/storage/` + 新 controllers；Cordis adapter 计划 `src/runtime/cordis/`；providers 计划 `src/providers/`；Factory 计划 `src/domains/factory/`。
-3. SQLite 保持为第一版 durable store（母版 §32 允许；不引入 Kafka/K8s/Temporal）。
-4. Windows 本地构建需会话级 `INCLUDE`/`LIB`（MSVC 在 `D:\Code\Visual Studio\Visual Studio\VC\Tools\MSVC\14.50.35717` + SDK 10.0.26100.0）；E: 盘空间紧张（target/ 15GB），构建前清理 `target/debug/incremental`；verify 脚本需处理。
-5. 旧资产映射：TaskRecord→Work 载体（HistoricalRecord 引用，不复制）、approval→Authority 前身、capability registry→Capability 声明层、skill→Manifest 条目、checkpoint→controller checkpoint、cost→ValueAssessment、hash-chain→receipt 完整性。TF/RV/LC/BIOFERM 保持 LEGACY 不迁移。
-6. AgentLoop 硬编码输出记录为 Reality Gap（agent loop 属 Harness 职责，Phase 4 处理 Harness 时说明）。
-7. 语义模块内部统一 `crate::work::<Type>` re-export 引用风格；`resource.rs` 承载 Work 资源类型（避免 `work::work` 命名冲突）。
-
-## Files changed（Phase 2）
-
-- 新增：`src/control/`（mod/store/ddl/store_execution/store_records/store_runtime/projection/controllers/{mod,state_loop,execution_flow,resolve_loop,outcome_flow}）、`tests/control_plane_g2.rs`
-- 修改：`src/lib.rs`（+pub mod control）
-
-## Files changed（Phase 4）
-
-- 新增：`src/providers/`（mod/harness/harness_dsh/harness_pi/harness_fake/solver/human/connector/credential）、`tests/providers_g4g5.rs`
-- 修改：`src/lib.rs`（+pub mod providers）、`src/work/execution.rs`（注释乱码修复）
+1. v11.5 canonical 钀戒綅 `docs/canonical/`锛宍CURRENT.md` 涓烘寚閽堬紱12 涓?`docs/*.md` 鏍囪 LEGACY锛堜粎杩芥函锛夈€?2. 鐩綍绛変环鏄犲皠锛堜笉寮哄埗澶ц縼绉伙級锛氳涔夊眰 = `src/work/`锛坰chemas = `schemas/`锛夛紱鎺у埗骞抽潰鎵╁睍 `src/core/storage/` + 鏂?controllers锛汣ordis adapter 璁″垝 `src/runtime/cordis/`锛沺roviders 璁″垝 `src/providers/`锛汧actory 璁″垝 `src/domains/factory/`銆?3. SQLite 淇濇寔涓虹涓€鐗?durable store锛堟瘝鐗?搂32 鍏佽锛涗笉寮曞叆 Kafka/K8s/Temporal锛夈€?4. Windows 鏈湴鏋勫缓闇€浼氳瘽绾?`INCLUDE`/`LIB`锛圡SVC 鍦?`D:\Code\Visual Studio\Visual Studio\VC\Tools\MSVC\14.50.35717` + SDK 10.0.26100.0锛夛紱E: 鐩樼┖闂寸揣寮狅紙target/ 15GB锛夛紝鏋勫缓鍓嶆竻鐞?`target/debug/incremental`锛泇erify 鑴氭湰闇€澶勭悊銆?5. 鏃ц祫浜ф槧灏勶細TaskRecord鈫扺ork 杞戒綋锛圚istoricalRecord 寮曠敤锛屼笉澶嶅埗锛夈€乤pproval鈫扐uthority 鍓嶈韩銆乧apability registry鈫扖apability 澹版槑灞傘€乻kill鈫扢anifest 鏉＄洰銆乧heckpoint鈫抍ontroller checkpoint銆乧ost鈫扸alueAssessment銆乭ash-chain鈫抮eceipt 瀹屾暣鎬с€俆F/RV/LC/BIOFERM 淇濇寔 LEGACY 涓嶈縼绉汇€?6. AgentLoop 纭紪鐮佽緭鍑鸿褰曚负 Reality Gap锛坅gent loop 灞?Harness 鑱岃矗锛孭hase 4 澶勭悊 Harness 鏃惰鏄庯級銆?7. 璇箟妯″潡鍐呴儴缁熶竴 `crate::work::<Type>` re-export 寮曠敤椋庢牸锛沗resource.rs` 鎵胯浇 Work 璧勬簮绫诲瀷锛堥伩鍏?`work::work` 鍛藉悕鍐茬獊锛夈€?
+## Files changed锛圥hase 2锛?
+- 鏂板锛歚src/control/`锛坢od/store/ddl/store_execution/store_records/store_runtime/projection/controllers/{mod,state_loop,execution_flow,resolve_loop,outcome_flow}锛夈€乣tests/control_plane_g2.rs`
+- 淇敼锛歚src/lib.rs`锛?pub mod control锛?
+## Files changed锛圥hase 4锛?
+- 鏂板锛歚src/providers/`锛坢od/harness/harness_dsh/harness_pi/harness_fake/solver/human/connector/credential锛夈€乣tests/providers_g4g5.rs`
+- 淇敼锛歚src/lib.rs`锛?pub mod providers锛夈€乣src/work/execution.rs`锛堟敞閲婁贡鐮佷慨澶嶏級
 
 ## Open root causes
 
-- e2e ③–⑩ 失败：e2e 预期与 v0.2.0 UI 结构漂移（Studio 8 tab、Store/Console 结构、消息流 DOM）→ Phase 16
-- npm audit 11 vulnerabilities → Phase 21
-- node 版本 ci.yml=20 vs release.yml=22 → Phase 21
-- web lint 脚本无 eslint 配置 → Phase 21
-- update.json 空 signature → Phase 22（不伪造）
-- E: 盘空间紧张 → 构建前清理 incremental（已临时处理）
-
+- e2e 鈶⑩€撯懇 澶辫触锛歟2e 棰勬湡涓?v0.2.0 UI 缁撴瀯婕傜Щ锛圫tudio 8 tab銆丼tore/Console 缁撴瀯銆佹秷鎭祦 DOM锛夆啋 Phase 16
+- npm audit 11 vulnerabilities 鈫?Phase 21
+- node 鐗堟湰 ci.yml=20 vs release.yml=22 鈫?Phase 21
+- web lint 鑴氭湰鏃?eslint 閰嶇疆 鈫?Phase 21
+- update.json 绌?signature 鈫?Phase 22锛堜笉浼€狅級
+- E: 鐩樼┖闂寸揣寮?鈫?鏋勫缓鍓嶆竻鐞?incremental锛堝凡涓存椂澶勭悊锛?
 ## External blockers
 
-| 项 | 缺什么 | 谁才能解除 | 解除后的验收步骤 |
+| 椤?| 缂轰粈涔?| 璋佹墠鑳借В闄?| 瑙ｉ櫎鍚庣殑楠屾敹姝ラ |
 |---|---|---|---|
-| DSH Harness Provider 真实接入 | DeepSeek Harness 进程/接口访问 + API key | 用户提供 DSH 运行环境与凭据 | skeleton + contract tests 已完成（e21756f）；解除后：DSH contract smoke（start/resume/cancel/events）真跑 |
-| Pi Harness Provider 真实接入 | Pi 访问 + 凭据 | 用户提供 | skeleton + contract tests 已完成（e21756f）；解除后：Pi contract + swap benchmark 真跑 |
-| 真实客户数据 / 现场（G12） | 客户授权数据、现场安全/回滚/审批条件 | 客户 + 人类授权 | 母版 0.2 边界重新验证；read-only/shadow 计划 |
-| Cordis upstream 可用性 | 需确认 upstream Cordis exact version/commit（公开仓库核验） | Phase 3 Spike 时核验（网络可达则自动） | exact pin + 许可证记录 |
+| DSH Harness Provider 鐪熷疄鎺ュ叆 | DeepSeek Harness 杩涚▼/鎺ュ彛璁块棶 + API key | 鐢ㄦ埛鎻愪緵 DSH 杩愯鐜涓庡嚟鎹?| skeleton + contract tests 宸插畬鎴愶紙e21756f锛夛紱瑙ｉ櫎鍚庯細DSH contract smoke锛坰tart/resume/cancel/events锛夌湡璺?|
+| Pi Harness Provider 鐪熷疄鎺ュ叆 | Pi 璁块棶 + 鍑嵁 | 鐢ㄦ埛鎻愪緵 | skeleton + contract tests 宸插畬鎴愶紙e21756f锛夛紱瑙ｉ櫎鍚庯細Pi contract + swap benchmark 鐪熻窇 |
+| 鐪熷疄瀹㈡埛鏁版嵁 / 鐜板満锛圙12锛?| 瀹㈡埛鎺堟潈鏁版嵁銆佺幇鍦哄畨鍏?鍥炴粴/瀹℃壒鏉′欢 | 瀹㈡埛 + 浜虹被鎺堟潈 | 姣嶇増 0.2 杈圭晫閲嶆柊楠岃瘉锛況ead-only/shadow 璁″垝 |
+| Cordis upstream 鍙敤鎬?| 闇€纭 upstream Cordis exact version/commit锛堝叕寮€浠撳簱鏍搁獙锛?| Phase 3 Spike 鏃舵牳楠岋紙缃戠粶鍙揪鍒欒嚜鍔級 | exact pin + 璁稿彲璇佽褰?|
 
 ## Next exact actions
-Goal 已收口：ENGINEERING_COMPLETE_WITH_EXTERNAL_BLOCKERS。
-1. 解除外部阻塞（见 External blockers 表）：DSH/Pi 凭据、真实客户授权、Sigstore signer、OPA 部署。
-2. push plan：git push origin main（无 force push；推前确认 branch policy）。
-3. 下一产品步骤（需人类授权）：read-only shadow → DSH/Pi 真实接入 → 第二站点复用验证。
+Goal 宸叉敹鍙ｏ細ENGINEERING_COMPLETE_WITH_EXTERNAL_BLOCKERS銆?1. 瑙ｉ櫎澶栭儴闃诲锛堣 External blockers 琛級锛欴SH/Pi 鍑嵁銆佺湡瀹炲鎴锋巿鏉冦€丼igstore signer銆丱PA 閮ㄧ讲銆?2. push plan锛歡it push origin main锛堟棤 force push锛涙帹鍓嶇‘璁?branch policy锛夈€?3. 涓嬩竴浜у搧姝ラ锛堥渶浜虹被鎺堟潈锛夛細read-only shadow 鈫?DSH/Pi 鐪熷疄鎺ュ叆 鈫?绗簩绔欑偣澶嶇敤楠岃瘉銆?
