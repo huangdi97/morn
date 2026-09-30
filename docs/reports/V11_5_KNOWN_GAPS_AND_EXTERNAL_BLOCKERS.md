@@ -17,7 +17,7 @@
 |---|---|---|---|
 | ~~e2e ③–⑩ 失败~~ **已修复**（commit 0872019） | P3 | 三层 overlay 叠加根因：OnboardingWizard（z-9999，morn_onboarding_done 未设时显示）+ FeatureGuide（z-10000，wizard 完成后链式显示）拦截点击；修复 = OnboardingWizard step-0 加跳过按钮 + e2e 跳过三层 overlay + observed waits 替代固定 sleep + Studio tab count 跟踪 UI 事实源（9 tab） | 否（e2e 10 passed / 0 failed） |
 | v11.5 Workbench/Console/Studio 完整 UI（Work list、conditions、candidates、active workcell 等） | P3 | 当前 web UI 是现栈 chat-first UI；v11.5 Workbench 概念未做完整 UI 重写（Goal §20 要求延续现栈，不为重写换框架） | 否（控制平面语义/API 已完整；UI 是 UX 层） |
-| npm audit 11 vulnerabilities | P4 | web 依赖审计 | 否（Phase 21 评估记录） |
+| npm audit 5 vulnerabilities（从 11 修复，commit 12cce87） | P4 | 剩余 5 项需 breaking changes（npm audit fix --force 才能修）——不 force，诚实记录 | 否 |
 | node 版本 ci.yml=20 vs release.yml=22 | P4 | CI 配置漂移 | 否 |
 | web lint 脚本无 eslint 配置 | P4 | 无配置 | 否 |
 | update.json 空 signature | P4 | 不伪造签名（Phase 22） | 否（诚实标记） |
