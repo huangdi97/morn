@@ -19,6 +19,8 @@ members = [
     "crates/morn-node",
     "crates/morn-domain-sdk",
     "crates/morn-package",
+    "crates/morn-profile",
+    "crates/morn-control-plane",
     "crates/morn-cli",
     "crates/morn-core-tests",
     "domain-packs/biolab-reference",
@@ -52,6 +54,8 @@ morn-process = { path = "crates/morn-process" }
 morn-node = { path = "crates/morn-node" }
 morn-domain-sdk = { path = "crates/morn-domain-sdk" }
 morn-package = { path = "crates/morn-package" }
+morn-profile = { path = "crates/morn-profile" }
+morn-control-plane = { path = "crates/morn-control-plane" }
 morn-cli = { path = "crates/morn-cli" }
 morn-core-tests = { path = "crates/morn-core-tests" }
 morn-biolab-reference = { path = "domain-packs/biolab-reference" }
@@ -70,4 +74,3 @@ tower-http = { version = "0.5", features = ["cors", "trace"] }
 
 [profile.release]
 lto = "thin"
-

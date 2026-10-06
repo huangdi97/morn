@@ -1,0 +1,14 @@
+[package]
+name = "morn-control-plane"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+morn-kernel = { workspace = true }
+morn-work = { workspace = true }
+morn-runtime = { workspace = true }
+morn-profile = { workspace = true }
+morn-store = { workspace = true }
+serde = { workspace = true }

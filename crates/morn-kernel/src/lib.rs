@@ -1,5 +1,6 @@
-//! Morn Kernel: the stable semantic kernel. Small, low-coupling, domain-agnostic.
-//! Owns Identity / Workspace / Policy / Approval / Ledger / Lifecycle semantics.
+//! Morn Kernel: compact domain-neutral primitives shared by the reference
+//! implementation. Business semantics evolve through versioned protocol
+//! contracts; providers must not silently redefine an active contract.
 
 pub mod approval;
 pub mod contracts;
@@ -9,6 +10,7 @@ pub mod ids;
 pub mod ledger;
 pub mod lifecycle;
 pub mod policy;
+pub mod protocol;
 pub mod status;
 pub mod time;
 pub mod version;
@@ -18,3 +20,7 @@ pub use contracts::{
     Compatibility, ContractCompatibility, ContractSnapshot, DeprecationPolicy, SEMANTIC_CONTRACT_V1,
 };
 pub use error::{Error, Result};
+pub use protocol::{
+    HistoryMutation, HistoryMutationKind, ProtocolSnapshot, PublishedContractRef,
+    MORN_PROTOCOL_V11_5,
+};
