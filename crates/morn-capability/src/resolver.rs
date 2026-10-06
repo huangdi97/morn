@@ -50,10 +50,7 @@ impl CapabilityResolver {
                 }
             }
             if !request.allowed_kinds.is_empty()
-                && !request
-                    .allowed_kinds
-                    .iter()
-                    .any(|kind| *kind == manifest.kind)
+                && !request.allowed_kinds.contains(&manifest.kind)
             {
                 continue;
             }
