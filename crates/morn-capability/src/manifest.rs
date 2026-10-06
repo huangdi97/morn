@@ -16,9 +16,7 @@ use crate::registry::CapabilityKind;
 pub struct CapabilityManifestTag;
 pub type CapabilityManifestId = Id<CapabilityManifestTag>;
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
 pub enum IsolationLevel {
     NoIsolation,
     Process,

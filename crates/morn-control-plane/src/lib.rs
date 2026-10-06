@@ -117,11 +117,8 @@ pub trait ControlPlaneStore {
     fn save_execution_binding(&self, work: &WorkResource, binding: &ExecutionBinding)
         -> Result<()>;
     fn save_action_attempt(&self, work: &WorkResource, attempt: &ActionAttempt) -> Result<()>;
-    fn save_reconciliation(
-        &self,
-        work: &WorkResource,
-        record: &ReconciliationRecord,
-    ) -> Result<()>;
+    fn save_reconciliation(&self, work: &WorkResource, record: &ReconciliationRecord)
+        -> Result<()>;
 }
 
 impl ControlPlaneStore for MornStore {
@@ -233,7 +230,9 @@ mod tests {
         );
         attempt.transition(AttemptState::Authorized).unwrap();
         attempt.transition(AttemptState::Dispatched).unwrap();
-        attempt.mark_outcome_unknown("client timed out after remote commit").unwrap();
+        attempt
+            .mark_outcome_unknown("client timed out after remote commit")
+            .unwrap();
 
         let reconciliation = ReconciliationController
             .reconcile(&mut attempt, &CmmsLookup)

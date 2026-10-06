@@ -50,7 +50,10 @@ impl CapabilityResolver {
                 }
             }
             if !request.allowed_kinds.is_empty()
-                && !request.allowed_kinds.iter().any(|kind| *kind == manifest.kind)
+                && !request
+                    .allowed_kinds
+                    .iter()
+                    .any(|kind| *kind == manifest.kind)
             {
                 continue;
             }
@@ -67,8 +70,16 @@ impl CapabilityResolver {
                 }
             }
             if !request.required_authority.iter().all(|needed| {
-                manifest.authority.allow.iter().any(|allowed| allowed == needed)
-                    && !manifest.authority.deny.iter().any(|denied| denied == needed)
+                manifest
+                    .authority
+                    .allow
+                    .iter()
+                    .any(|allowed| allowed == needed)
+                    && !manifest
+                        .authority
+                        .deny
+                        .iter()
+                        .any(|denied| denied == needed)
             }) {
                 continue;
             }

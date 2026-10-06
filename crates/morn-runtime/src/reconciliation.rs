@@ -41,9 +41,7 @@ pub fn reconcile_attempt(
     attempt: &mut ActionAttempt,
     provider: &dyn OutcomeReconciler,
 ) -> Result<ReconciliationRecord> {
-    if attempt.state != AttemptState::OutcomeUnknown
-        && attempt.state != AttemptState::Reconciling
-    {
+    if attempt.state != AttemptState::OutcomeUnknown && attempt.state != AttemptState::Reconciling {
         return Err(Error::invalid_state(
             "only OutcomeUnknown/Reconciling attempts can be reconciled",
         ));
@@ -54,7 +52,9 @@ pub fn reconcile_attempt(
     }
 
     let observation = provider.reconcile(attempt)?;
-    attempt.evidence_refs.extend(observation.evidence_refs.clone());
+    attempt
+        .evidence_refs
+        .extend(observation.evidence_refs.clone());
 
     match (observation.committed, observation.observed) {
         (Some(true), Some(true)) => {
