@@ -64,6 +64,22 @@ jobs:
           }
           Write-Host "CLI smoke OK"
 
+  composition-runtime:
+    name: Composition runtime (Cordis)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: runtime/cordis-host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install exact-pinned Cordis host
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: npm run smoke
+
   frontend:
     name: Frontend (typecheck / lint / test / build)
     runs-on: ubuntu-latest
