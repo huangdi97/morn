@@ -56,6 +56,15 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/status", get(v115_status))
         .route("/api/v115/control-plane", get(v115_control_plane))
         .route("/api/v115/solutions", get(v115_solutions))
+        .route("/api/v115/capabilities", get(v115_capabilities))
+        .route("/api/v115/capability/observe", post(v115_capability_observe))
+        .route("/api/v115/capability/qualify", post(v115_capability_qualify))
+        .route("/api/v115/capability/release", post(v115_capability_release))
+        .route("/api/v115/capability/admit", post(v115_capability_admit))
+        .route(
+            "/api/v115/capability/revoke-release",
+            post(v115_capability_revoke_release),
+        )
         .route("/api/v115/creator/draft", post(v115_creator_draft))
         .route(
             "/api/v115/artifact/openapi/compile",
@@ -231,6 +240,371 @@ async fn v115_solutions(State(state): State<AppState>) -> ApiResult {
     })))
 }
 
+
+fn json_strings(body: &Value, key: &str) -> Vec<String> {
+    body.get(key)
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn register_v115_candidate(
+    state: &AppState,
+    record: &morn_capability::CapabilityRecord,
+) -> Result<(), Error> {
+    let mut guard = state.lock();
+    guard.store.save_record(
+        "capability_record_v115",
+        record.manifest.id.as_str(),
+        guard.workspace.id.as_str(),
+        record.manifest.declared_at.millis(),
+        record,
+    )?;
+    guard
+        .v115_capabilities
+        .retain(|existing| existing.manifest.id != record.manifest.id);
+    guard.v115_capabilities.push(record.clone());
+    Ok(())
+}
+
+async fn v115_capabilities(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    Ok(Json(json!({
+        "capabilities": guard.v115_capabilities,
+        "observations": guard.v115_admission.observations,
+        "qualifications": guard.v115_admission.qualifications,
+        "releases": guard.v115_admission.releases,
+        "admissions": guard.v115_admission.admissions,
+        "invariant": "compile != observe != qualify != release != site admission"
+    })))
+}
+
+async fn v115_capability_observe(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    let manifest_id = body
+        .get("manifest_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("manifest_id is required")))?;
+    let evidence_refs = json_strings(&body, "evidence_refs");
+    let evaluator_identity = body
+        .get("evaluator_identity")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("evaluator_identity is required")))?;
+
+    let mut guard = state.lock();
+    let index = guard
+        .v115_capabilities
+        .iter()
+        .position(|capability| capability.manifest.id.as_str() == manifest_id)
+        .ok_or_else(|| AppError(Error::not_found(format!("CapabilityManifest {manifest_id}"))))?;
+    let observation = {
+        let inner = &mut *guard;
+        let capability = &mut inner.v115_capabilities[index];
+        inner
+            .v115_admission
+            .observe(capability, evidence_refs, evaluator_identity)?
+    };
+    guard.persist_all()?;
+    Ok(Json(json!({
+        "observation": observation,
+        "stage": guard.v115_capabilities[index].stage,
+        "next": ["strict-qualification"]
+    })))
+}
+
+async fn v115_capability_qualify(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_assurance::{QualificationEvidence, StrictQualificationRequest};
+    use morn_kernel::time::Timestamp;
+
+    let manifest_id = body
+        .get("manifest_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("manifest_id is required")))?;
+    let candidate_ref = body
+        .get("candidate_ref")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("candidate_ref is required")))?;
+    let decision_ref = body
+        .get("decision_ref")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("decision_ref is required")))?;
+    let evaluator_identity = body
+        .get("evaluator_identity")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("evaluator_identity is required")))?;
+    let environment_digest = body
+        .get("environment_digest")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let valid_until = body
+        .get("valid_until_millis")
+        .and_then(Value::as_i64)
+        .map(Timestamp::from_millis);
+
+    let request = StrictQualificationRequest {
+        candidate_ref: candidate_ref.to_string(),
+        decision_ref: decision_ref.to_string(),
+        evidence_refs: json_strings(&body, "evidence_refs"),
+        qualification_evidence: QualificationEvidence {
+            test_suite_refs: json_strings(&body, "test_suite_refs"),
+            environment_digest,
+            input_scope: json_strings(&body, "input_scope"),
+            expected_properties: json_strings(&body, "expected_properties"),
+            known_failure_modes: json_strings(&body, "known_failure_modes"),
+            cost_evidence_ref: body
+                .get("cost_evidence_ref")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            latency_evidence_ref: body
+                .get("latency_evidence_ref")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            evaluator_identity: Some(evaluator_identity.to_string()),
+        },
+        context_of_use: json_strings(&body, "context_of_use"),
+        valid_until,
+    };
+
+    let mut guard = state.lock();
+    let index = guard
+        .v115_capabilities
+        .iter()
+        .position(|capability| capability.manifest.id.as_str() == manifest_id)
+        .ok_or_else(|| AppError(Error::not_found(format!("CapabilityManifest {manifest_id}"))))?;
+    let qualification = {
+        let inner = &mut *guard;
+        let capability = &mut inner.v115_capabilities[index];
+        inner
+            .v115_admission
+            .qualify_with_evidence(capability, request)?
+    };
+    guard.persist_all()?;
+    Ok(Json(json!({
+        "qualification": qualification,
+        "stage": guard.v115_capabilities[index].stage,
+        "next": ["content-addressed-release"]
+    })))
+}
+
+async fn v115_capability_release(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    let manifest_id = body
+        .get("manifest_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("manifest_id is required")))?;
+    let qualification_id = body
+        .get("qualification_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("qualification_id is required")))?;
+    let package_ref = body
+        .get("package_ref")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("package_ref is required")))?;
+    let content_digest = body
+        .get("content_digest")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("content_digest is required")))?;
+    let signature_ref = body
+        .get("signature_ref")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let provenance_ref = body
+        .get("provenance_ref")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
+    let mut guard = state.lock();
+    let qualification = guard
+        .v115_admission
+        .qualifications
+        .iter()
+        .find(|item| item.id.as_str() == qualification_id)
+        .cloned()
+        .ok_or_else(|| AppError(Error::not_found(format!("Qualification {qualification_id}"))))?;
+    let index = guard
+        .v115_capabilities
+        .iter()
+        .position(|capability| capability.manifest.id.as_str() == manifest_id)
+        .ok_or_else(|| AppError(Error::not_found(format!("CapabilityManifest {manifest_id}"))))?;
+    let release = {
+        let inner = &mut *guard;
+        let capability = &mut inner.v115_capabilities[index];
+        inner.v115_admission.record_release(
+            capability,
+            &qualification,
+            package_ref,
+            content_digest,
+            signature_ref,
+            provenance_ref,
+        )?
+    };
+    guard.persist_all()?;
+    Ok(Json(json!({
+        "release": release,
+        "stage": guard.v115_capabilities[index].stage,
+        "next": ["profile-conformance", "site-admission"]
+    })))
+}
+
+async fn v115_capability_admit(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use std::collections::BTreeSet;
+    use morn_kernel::ExecutionGuarantee;
+    use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile};
+
+    let manifest_id = body
+        .get("manifest_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("manifest_id is required")))?;
+    let qualification_id = body
+        .get("qualification_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("qualification_id is required")))?;
+    let site_ref = body
+        .get("site_ref")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("site_ref is required")))?;
+    let profile_ref = body
+        .get("profile_ref")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("profile_ref is required")))?;
+    let approved_by = body
+        .get("approved_by")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("approved_by is required")))?;
+
+    let profile = DomainProfile::from_ref(profile_ref)
+        .ok_or_else(|| AppError(Error::validation(format!("unknown Profile {profile_ref}"))))?;
+    let mut execution_guarantees = BTreeSet::new();
+    for raw in json_strings(&body, "execution_guarantees") {
+        let parsed = ExecutionGuarantee::parse(&raw).ok_or_else(|| {
+            AppError(Error::validation(format!(
+                "unknown execution guarantee {raw}"
+            )))
+        })?;
+        execution_guarantees.insert(parsed);
+    }
+    let evidence = ConformanceEvidence {
+        satisfied_semantics: json_strings(&body, "satisfied_semantics")
+            .into_iter()
+            .collect(),
+        forbidden_semantics_present: json_strings(&body, "forbidden_semantics_present")
+            .into_iter()
+            .collect(),
+        isolation: body
+            .get("isolation")
+            .and_then(Value::as_str)
+            .unwrap_or("no-isolation")
+            .to_string(),
+        execution_guarantees,
+        durable_work_state: body
+            .get("durable_work_state")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        source_of_truth_bound: body
+            .get("source_of_truth_bound")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        provenance_ready: body
+            .get("provenance_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    };
+    let conformance = evaluate_profile(&profile, &evidence);
+    if !conformance.passed {
+        return Ok(Json(json!({
+            "admitted": false,
+            "conformance": conformance,
+            "note": "profile conformance failed closed; no SiteAdmission created"
+        })));
+    }
+
+    let mut guard = state.lock();
+    let qualification = guard
+        .v115_admission
+        .qualifications
+        .iter()
+        .find(|item| item.id.as_str() == qualification_id)
+        .cloned()
+        .ok_or_else(|| AppError(Error::not_found(format!("Qualification {qualification_id}"))))?;
+    let index = guard
+        .v115_capabilities
+        .iter()
+        .position(|capability| capability.manifest.id.as_str() == manifest_id)
+        .ok_or_else(|| AppError(Error::not_found(format!("CapabilityManifest {manifest_id}"))))?;
+    let admission = {
+        let inner = &mut *guard;
+        let capability = &mut inner.v115_capabilities[index];
+        inner.v115_admission.admit(
+            capability,
+            &qualification,
+            site_ref,
+            profile_ref,
+            &conformance,
+            approved_by,
+        )?
+    };
+    guard.persist_all()?;
+    Ok(Json(json!({
+        "admitted": true,
+        "admission": admission,
+        "conformance": conformance,
+        "stage": guard.v115_capabilities[index].stage
+    })))
+}
+
+async fn v115_capability_revoke_release(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_assurance::CapabilityDistributionReleaseId;
+
+    let manifest_id = body
+        .get("manifest_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("manifest_id is required")))?;
+    let release_id = body
+        .get("release_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("release_id is required")))?;
+
+    let mut guard = state.lock();
+    let index = guard
+        .v115_capabilities
+        .iter()
+        .position(|capability| capability.manifest.id.as_str() == manifest_id)
+        .ok_or_else(|| AppError(Error::not_found(format!("CapabilityManifest {manifest_id}"))))?;
+    {
+        let inner = &mut *guard;
+        let capability = &mut inner.v115_capabilities[index];
+        inner
+            .v115_admission
+            .revoke_release(capability, &CapabilityDistributionReleaseId::new(release_id))?;
+    }
+    guard.persist_all()?;
+    Ok(Json(json!({
+        "revoked": true,
+        "release_id": release_id,
+        "stage": guard.v115_capabilities[index].stage,
+        "admission_refs": guard.v115_capabilities[index].admission_refs
+    })))
+}
+
 async fn v115_creator_draft(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_foundry::{draft_creator_solution, CreatorAutonomy, CreatorRequest};
 
@@ -298,7 +672,7 @@ async fn v115_creator_draft(State(state): State<AppState>, Json(body): Json<Valu
     })))
 }
 
-async fn v115_compile_openapi(Json(body): Json<Value>) -> ApiResult {
+async fn v115_compile_openapi(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_foundry::{ArtifactCompiler, ArtifactKind, ArtifactSource, OpenApiJsonCompiler};
 
     let name = body
@@ -326,6 +700,7 @@ async fn v115_compile_openapi(Json(body): Json<Value>) -> ApiResult {
         content: content.to_string(),
     };
     let candidate = OpenApiJsonCompiler.compile(&source)?;
+    register_v115_candidate(&state, &candidate.record)?;
     Ok(Json(json!({
         "candidate": candidate,
         "admission": "not-qualified-not-admitted",
@@ -333,7 +708,7 @@ async fn v115_compile_openapi(Json(body): Json<Value>) -> ApiResult {
     })))
 }
 
-async fn v115_compile_procedure(Json(body): Json<Value>) -> ApiResult {
+async fn v115_compile_procedure(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_foundry::{ArtifactCompiler, ArtifactKind, ArtifactSource, ProcedureJsonCompiler};
 
     let name = body
@@ -361,6 +736,7 @@ async fn v115_compile_procedure(Json(body): Json<Value>) -> ApiResult {
         content: content.to_string(),
     };
     let candidate = ProcedureJsonCompiler.compile(&source)?;
+    register_v115_candidate(&state, &candidate.record)?;
     Ok(Json(json!({
         "candidate": candidate,
         "admission": "not-qualified-not-admitted",
@@ -368,7 +744,7 @@ async fn v115_compile_procedure(Json(body): Json<Value>) -> ApiResult {
     })))
 }
 
-async fn v115_compile_repository(Json(body): Json<Value>) -> ApiResult {
+async fn v115_compile_repository(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_foundry::{
         ArtifactCompiler, ArtifactKind, ArtifactSource, RepositoryManifestCompiler,
     };
@@ -400,6 +776,7 @@ async fn v115_compile_repository(Json(body): Json<Value>) -> ApiResult {
             .to_string(),
     };
     let candidate = RepositoryManifestCompiler.compile(&source)?;
+    register_v115_candidate(&state, &candidate.record)?;
     Ok(Json(json!({
         "candidate": candidate,
         "admission": "not-qualified-not-admitted",
@@ -407,7 +784,7 @@ async fn v115_compile_repository(Json(body): Json<Value>) -> ApiResult {
     })))
 }
 
-async fn v115_compile_paper(Json(body): Json<Value>) -> ApiResult {
+async fn v115_compile_paper(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_foundry::{
         ArtifactCompiler, ArtifactKind, ArtifactSource, ReviewedPaperManifestCompiler,
     };
@@ -439,6 +816,7 @@ async fn v115_compile_paper(Json(body): Json<Value>) -> ApiResult {
             .to_string(),
     };
     let candidate = ReviewedPaperManifestCompiler.compile(&source)?;
+    register_v115_candidate(&state, &candidate.record)?;
     Ok(Json(json!({
         "candidate": candidate,
         "admission": "not-qualified-not-admitted",
