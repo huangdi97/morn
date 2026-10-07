@@ -393,6 +393,11 @@ async fn v115_instantiate_solution(
         .and_then(Value::as_str)
         .unwrap_or("morn.lite@1.0.0")
         .to_string();
+    let profile = morn_profile::DomainProfile::from_ref(&profile_ref).ok_or_else(|| {
+        AppError(Error::validation(format!(
+            "unknown or unsupported Profile reference {profile_ref}"
+        )))
+    })?;
 
     let mut request =
         SolutionInstantiationRequest::new(guard.workspace.id.clone(), goal, profile_ref);
@@ -417,17 +422,19 @@ async fn v115_instantiate_solution(
                 .collect()
         })
         .unwrap_or_default();
-    request.required_conditions = body
-        .get("required_conditions")
-        .and_then(Value::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default();
+    request.required_conditions = profile.pre_execution_work_conditions();
+    request.required_conditions.extend(
+        body.get("required_conditions")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
+    );
 
     let plan = instantiate_approved_solution(&package, request)?;
     guard.store.save_work_resource(&plan.work)?;
