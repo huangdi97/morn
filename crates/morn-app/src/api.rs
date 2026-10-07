@@ -281,7 +281,8 @@ async fn v115_capabilities(State(state): State<AppState>) -> ApiResult {
         "qualifications": guard.v115_admission.qualifications,
         "releases": guard.v115_admission.releases,
         "admissions": guard.v115_admission.admissions,
-        "invariant": "compile != observe != qualify != release != site admission"
+        "lifecycle_events": guard.v115_admission.events,
+        "invariant": "compile != observe != qualify != release != site admission; lifecycle projection changes append events"
     })))
 }
 
