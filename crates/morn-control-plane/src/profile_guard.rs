@@ -187,6 +187,75 @@ pub fn issue_external_action_permit(
     })
 }
 
+/// Preferred v11.5 permitting path. Consequential actions register a
+/// per-permit Work finalizer before the caller can dispatch the attempt.
+pub fn issue_external_action_permit_for_work(
+    work: &mut morn_work::control::WorkResource,
+    profile: &DomainProfile,
+    mode: ExternalActionMode,
+    authority: &BoundAuthorityDecision,
+    binding: &ExecutionBinding,
+) -> Result<(ExternalActionPermit, Option<String>)> {
+    if !binding.matches_work_generation(work) {
+        return Err(Error::conflict(
+            "cannot issue external action under a stale Work generation binding",
+        ));
+    }
+    if work.termination_requested_at.is_some() {
+        return Err(Error::invalid_state(
+            "cannot issue a new external action after Work termination is requested",
+        ));
+    }
+
+    let permit = issue_external_action_permit(profile, mode, authority, binding)?;
+    let consequential = matches!(
+        mode,
+        ExternalActionMode::SandboxWrite
+            | ExternalActionMode::ShadowWrite
+            | ExternalActionMode::ProductionWrite
+            | ExternalActionMode::PhysicalControl
+    );
+    let finalizer = if consequential {
+        let key = format!("morn.io/external-action-{}", permit.id);
+        work.add_finalizer(key.clone())?;
+        Some(key)
+    } else {
+        None
+    };
+    Ok((permit, finalizer))
+}
+
+/// Clear a permit finalizer only after the corresponding attempt has reached a
+/// terminal consequence state. Unknown/reconciling/committed-but-unverified
+/// effects keep the Work in Terminating when cancellation has been requested.
+pub fn resolve_external_action_finalizer(
+    work: &mut morn_work::control::WorkResource,
+    permit: &ExternalActionPermit,
+    attempt: &morn_runtime::ActionAttempt,
+) -> Result<bool> {
+    use morn_runtime::AttemptState;
+
+    if permit.work_ref != work.id.to_string()
+        || attempt.external_action_permit_ref.as_deref() != Some(permit.id.as_str())
+    {
+        return Err(Error::validation(
+            "finalizer resolution must match the exact Work and external-action permit",
+        ));
+    }
+    if !matches!(
+        attempt.state,
+        AttemptState::Verified | AttemptState::Failed | AttemptState::Cancelled
+    ) {
+        return Err(Error::invalid_state(format!(
+            "cannot resolve external-action finalizer while attempt is {:?}",
+            attempt.state
+        )));
+    }
+
+    let key = format!("morn.io/external-action-{}", permit.id);
+    Ok(work.remove_finalizer(&key))
+}
+
 pub fn enforce_profile_action(decision: &ProfileActionDecision) -> Result<()> {
     if decision.allowed {
         Ok(())
@@ -276,6 +345,58 @@ mod tests {
         let profile = DomainProfile::enterprise_v1();
         let decision = evaluate_profile_action(&profile, ExternalActionMode::PhysicalControl);
         assert!(!decision.allowed);
+    }
+
+    #[test]
+    fn consequential_action_finalizer_survives_unknown_outcome() {
+        let profile = DomainProfile::factory_readonly_v1();
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "fixture",
+            profile.canonical_ref(),
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        let mut binding = ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        binding.effect_ceiling = Some(morn_capability::EffectClass::E2Compensatable);
+        binding.compensation_ref = Some("cmms.cancel".to_string());
+        let authority = bound_authority(&work, &binding, "cmms.sandbox.write", "CMMS-fixture");
+
+        let (permit, finalizer) = issue_external_action_permit_for_work(
+            &mut work,
+            &profile,
+            ExternalActionMode::SandboxWrite,
+            &authority,
+            &binding,
+        )
+        .unwrap();
+        let finalizer = finalizer.unwrap();
+        assert!(work.finalizers.contains(&finalizer));
+
+        let mut attempt = crate::begin_external_attempt_with_effect(
+            &permit,
+            &binding,
+            morn_capability::effect::EffectContract::e2("cmms.cancel"),
+            "work-key",
+            "cmms.sandbox.write",
+        )
+        .unwrap();
+        attempt.transition(morn_runtime::AttemptState::Dispatched).unwrap();
+        attempt
+            .mark_outcome_unknown("timeout after commit")
+            .unwrap();
+
+        work.request_termination("operator cancellation").unwrap();
+        assert!(resolve_external_action_finalizer(&mut work, &permit, &attempt).is_err());
+        assert!(!work.can_finalize_termination());
+
+        attempt.transition(morn_runtime::AttemptState::Reconciling).unwrap();
+        attempt.transition(morn_runtime::AttemptState::Observed).unwrap();
+        attempt.transition(morn_runtime::AttemptState::Verified).unwrap();
+        assert!(resolve_external_action_finalizer(&mut work, &permit, &attempt).unwrap());
+        assert!(work.can_finalize_termination());
+        work.finalize_termination().unwrap();
+        assert_eq!(work.status.phase, morn_work::control::WorkPhase::Cancelled);
     }
 
     #[test]
