@@ -335,6 +335,11 @@ export default function Workbench() {
               v={`${v115.architecture.composition_runtime.name} ${v115.architecture.composition_runtime.reference_version} — ${v115.architecture.composition_runtime.role}`}
             />
             <KeyValue k="Factory profile" v={v115.factory_profile.id} />
+            <KeyValue k="Isolation floor" v={v115.factory_profile.minimum_isolation} />
+            <KeyValue
+              k="Execution guarantees"
+              v={v115.factory_profile.required_execution_guarantees.join(", ")}
+            />
             <KeyValue k="Production write" v={v115.factory_profile.production_write ? "enabled" : "not entered"} />
             <KeyValue k="Capability lifecycle" v={v115.capability_supply_chain.stages.join(" → ")} />
           </Card>
