@@ -1,5 +1,6 @@
 //! Morn Assurance: replay, simulation, evaluation and shadow.
 
+pub mod admission;
 pub mod certification;
 pub mod evaluation;
 pub mod managed_work;
@@ -9,6 +10,10 @@ pub mod rollback;
 pub mod shadow;
 pub mod simulation;
 
+pub use admission::{
+    AdmissionService, QualificationRecord, QualificationRecordId, QualificationStatus,
+    SiteAdmission, SiteAdmissionId, SiteAdmissionStatus,
+};
 pub use evaluation::{EvalStep, EvaluationDecision, EvaluationResult, EvaluationRunner};
 pub use replay::{ReplayReport, ReplayRunner, ReplayScenario};
 pub use shadow::{ShadowComparison, ShadowRun, ShadowRunner};
