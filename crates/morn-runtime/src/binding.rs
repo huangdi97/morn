@@ -33,6 +33,9 @@ pub struct BindingMigrationRequest {
     pub reason: BindingMigrationReason,
     pub requested_by: String,
     pub evidence_refs: Vec<String>,
+    pub new_effect_ceiling: Option<EffectClass>,
+    pub new_compensation_ref: Option<String>,
+    pub new_idempotency_key_required: Option<bool>,
 }
 
 impl BindingMigrationRequest {
@@ -50,11 +53,26 @@ impl BindingMigrationRequest {
             reason,
             requested_by: requested_by.into(),
             evidence_refs: Vec::new(),
+            new_effect_ceiling: None,
+            new_compensation_ref: None,
+            new_idempotency_key_required: None,
         }
     }
 
     pub fn with_evidence(mut self, evidence_refs: Vec<String>) -> Self {
         self.evidence_refs = evidence_refs;
+        self
+    }
+
+    pub fn with_effect_semantics(
+        mut self,
+        effect_ceiling: EffectClass,
+        compensation_ref: Option<String>,
+        idempotency_key_required: bool,
+    ) -> Self {
+        self.new_effect_ceiling = Some(effect_ceiling);
+        self.new_compensation_ref = compensation_ref;
+        self.new_idempotency_key_required = Some(idempotency_key_required);
         self
     }
 }
@@ -159,6 +177,7 @@ impl ExecutionBinding {
         work: &WorkResource,
         request: BindingMigrationRequest,
     ) -> (Self, BindingMigrationDecision) {
+        let same_capability = request.capability_manifest_ref == self.capability_manifest_ref;
         let mut replacement = Self::for_work(
             work,
             request.capability_manifest_ref,
@@ -167,6 +186,19 @@ impl ExecutionBinding {
         );
         replacement.provider_digest = None;
         replacement.runtime_ref = None;
+        replacement.effect_ceiling = request
+            .new_effect_ceiling
+            .or(if same_capability { self.effect_ceiling } else { None });
+        replacement.compensation_ref = request
+            .new_compensation_ref
+            .or_else(|| if same_capability { self.compensation_ref.clone() } else { None });
+        replacement.idempotency_key_required = request
+            .new_idempotency_key_required
+            .unwrap_or(if same_capability {
+                self.idempotency_key_required
+            } else {
+                false
+            });
         replacement.authority_decision_ref = None;
         replacement.migration_from = Some(self.id.clone());
 
