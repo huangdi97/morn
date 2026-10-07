@@ -211,7 +211,10 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     let policy = Policy::new(
         workspace.clone(),
         "factory-readonly",
-        vec![PolicyRule::allow("historian.read")],
+        vec![
+            PolicyRule::allow("historian.read"),
+            PolicyRule::allow("cmms.sandbox.write"),
+        ],
     );
     let authority = NativePolicyAuthority::new(policy);
     let authority_decision = authority
@@ -319,6 +322,35 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     binding.runtime_ref = Some(environment.runtime_ref.clone());
     binding.authority_decision_ref = Some(authority_decision.id.to_string());
     work.status.active_binding = Some(binding.id.clone());
+
+    // The external fixture write is allowed only as SandboxWrite: policy
+    // authority and the active Factory profile must both issue a permit.
+    let sandbox_authority_decision = authority
+        .decide(&AuthorityRequest {
+            principal: "factory-slice-controller".to_string(),
+            action: "cmms.sandbox.write".to_string(),
+            resource: "CMMS-fixture".to_string(),
+            work_ref: Some(work_package_id.to_string()),
+            context: BTreeMap::new(),
+        })
+        .unwrap();
+    let sandbox_permit = issue_external_action_permit(
+        &profile,
+        ExternalActionMode::SandboxWrite,
+        &sandbox_authority_decision,
+        work.id.to_string(),
+        binding.id.to_string(),
+    )
+    .unwrap();
+    assert_eq!(sandbox_permit.binding_ref, binding.id.to_string());
+    assert!(issue_external_action_permit(
+        &profile,
+        ExternalActionMode::ProductionWrite,
+        &sandbox_authority_decision,
+        work.id.to_string(),
+        binding.id.to_string(),
+    )
+    .is_err());
 
     // Simulate the classic timeout-after-remote-commit ambiguity.
     let mut attempt = ActionAttempt::new(
