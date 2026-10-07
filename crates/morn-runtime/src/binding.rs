@@ -70,6 +70,10 @@ pub struct BindingMigrationDecision {
     pub to_provider: String,
     pub from_profile: String,
     pub to_profile: String,
+    #[serde(default)]
+    pub from_site_ref: Option<String>,
+    #[serde(default)]
+    pub to_site_ref: Option<String>,
     pub created_at: Timestamp,
 }
 
@@ -85,6 +89,8 @@ pub struct ExecutionBinding {
     pub runtime_ref: Option<String>,
     pub authority_decision_ref: Option<String>,
     pub profile_ref: String,
+    #[serde(default)]
+    pub site_ref: Option<String>,
     pub migration_from: Option<RuntimeBindingId>,
     pub created_at: Timestamp,
 }
@@ -107,6 +113,7 @@ impl ExecutionBinding {
             runtime_ref: None,
             authority_decision_ref: None,
             profile_ref: work.spec.profile_ref.clone(),
+            site_ref: work.spec.site_ref.clone(),
             migration_from: None,
             created_at: Timestamp::now(),
         }
@@ -145,6 +152,8 @@ impl ExecutionBinding {
             to_provider: replacement.provider_ref.clone(),
             from_profile: self.profile_ref.clone(),
             to_profile: replacement.profile_ref.clone(),
+            from_site_ref: self.site_ref.clone(),
+            to_site_ref: replacement.site_ref.clone(),
             created_at: Timestamp::now(),
         };
         (replacement, decision)
@@ -177,10 +186,9 @@ mod tests {
     #[test]
     fn explicit_rebind_records_provider_and_profile_migration() {
         let work_id = WorkPackageId::generate_with("wp");
-        let old_work = WorkResource::new(
-            WorkspaceId::generate(),
-            WorkSpec::new(work_id.clone(), "investigate", "factory/v1"),
-        );
+        let mut old_spec = WorkSpec::new(work_id.clone(), "investigate", "factory/v1");
+        old_spec.site_ref = Some("plant-a".to_string());
+        let old_work = WorkResource::new(WorkspaceId::generate(), old_spec);
         let old = ExecutionBinding::for_work(&old_work, "manifest:a", "dsh", "1");
 
         let mut next_work = old_work.clone();
@@ -209,6 +217,8 @@ mod tests {
         assert_eq!(decision.to_provider, "pi");
         assert_eq!(decision.from_profile, "factory/v1");
         assert_eq!(decision.to_profile, "factory/v2");
+        assert_eq!(decision.from_site_ref.as_deref(), Some("plant-a"));
+        assert_eq!(decision.to_site_ref.as_deref(), Some("plant-a"));
     }
 
     #[test]
