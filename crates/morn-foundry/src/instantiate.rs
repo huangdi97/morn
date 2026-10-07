@@ -105,10 +105,11 @@ pub fn instantiate_approved_solution(
     }
 
     let package_ref = solution_package_ref(package);
+    let profile_ref = request.profile_ref.clone();
     let mut spec = WorkSpec::new(
         WorkPackageId::generate_with("work"),
         request.goal,
-        request.profile_ref,
+        profile_ref.clone(),
     );
     spec.source_solution_ref = Some(package_ref.clone());
     spec.site_ref = request.site_ref.clone();
@@ -117,7 +118,7 @@ pub fn instantiate_approved_solution(
 
     // Only pre-execution readiness gates belong here. Binding/receipt/outcome/
     // acceptance conditions are reconciled after Work becomes executable.
-    let mut required = DomainProfile::from_ref(&request.profile_ref)
+    let mut required = DomainProfile::from_ref(&profile_ref)
         .map(|profile| profile.pre_execution_work_conditions())
         .unwrap_or_else(|| vec!["CapabilityResolved".to_string()]);
     required.extend(request.required_conditions);
