@@ -509,3 +509,23 @@ The current Factory read-only profile forbids `ProductionWrite` regardless of
 IAM permissions. Deterministic fixture paths use `SandboxWrite`, which allows
 reconciliation/failure tests without implying production authority. Physical
 control fails closed unless a future exact profile explicitly enables it.
+
+
+## Durable controller event delivery
+
+The reconciliation control plane assumes at-least-once event delivery and
+restart. The reference store therefore provides:
+
+```text
+inbound event
+ -> stable event-id claim / dedupe
+ -> idempotent controller reconcile
+ -> canonical state mutation
+ -> durable outbox delivery intent
+ -> transport retry with same event id
+```
+
+This is deliberately separate from `ActionAttempt` effect idempotency. An
+event being delivered exactly once does not prove an ERP/MES/CMMS action
+happened exactly once; external-effect ambiguity still uses business keys,
+Receipt and Reconciliation.
