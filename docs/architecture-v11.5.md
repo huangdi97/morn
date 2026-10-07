@@ -495,3 +495,17 @@ agents.
 This keeps Role as the human-facing organizational interface, Work as the
 coordination truth, Capability as the composition unit, and Harness sessions as
 replaceable runtime state.
+
+
+## Profile action intent vs authority
+
+Morn evaluates two independent questions before a governed external effect:
+
+1. **Profile gate** — is this effect mode permitted by the exact Domain Profile?
+2. **Authority gate** — is this principal/delegation allowed to perform the
+   specific action/resource under the current Work/Binding context?
+
+The current Factory read-only profile forbids `ProductionWrite` regardless of
+IAM permissions. Deterministic fixture paths use `SandboxWrite`, which allows
+reconciliation/failure tests without implying production authority. Physical
+control fails closed unless a future exact profile explicitly enables it.
