@@ -13,7 +13,17 @@ pub struct MornStore {
     conn: Connection,
 }
 
-const SCHEMA_VERSION: i64 = 2;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutboxEvent {
+    pub event_id: String,
+    pub workspace_id: String,
+    pub event_type: String,
+    pub payload: String,
+    pub created_at: i64,
+    pub dispatched_at: Option<i64>,
+}
+
+const SCHEMA_VERSION: i64 = 3;
 
 impl MornStore {
     /// Open (creating if needed) a store at `path` and run migrations.
@@ -64,6 +74,23 @@ impl MornStore {
                 created_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_ledger_workspace ON ledger_entries(workspace_id);
+
+            CREATE TABLE IF NOT EXISTS control_event_inbox (
+                event_id TEXT NOT NULL PRIMARY KEY,
+                source TEXT NOT NULL,
+                recorded_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS control_event_outbox (
+                event_id TEXT NOT NULL PRIMARY KEY,
+                workspace_id TEXT NOT NULL DEFAULT '',
+                event_type TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                dispatched_at INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_outbox_pending
+                ON control_event_outbox(dispatched_at, created_at);
             "#,
         )
         .map_err(|e| Error::internal(e.to_string()))?;
@@ -83,7 +110,8 @@ impl MornStore {
                 .map_err(|e| Error::internal(e.to_string()))?;
             }
             Some(v) if v < SCHEMA_VERSION => {
-                // v1 -> v2: add the immutable-history column (idempotent).
+                // v1/v2 -> v3: immutable-history column is idempotent; inbox/outbox
+                // tables are created above with IF NOT EXISTS.
                 let _ = conn.execute(
                     "ALTER TABLE morn_records ADD COLUMN immutable INTEGER NOT NULL DEFAULT 0",
                     [],
@@ -105,6 +133,109 @@ impl MornStore {
                 r.get(0)
             })
             .map_err(|e| Error::internal(e.to_string()))
+    }
+
+    // ---- durable controller inbox/outbox ----
+
+    /// Atomically claim an inbound event id. Returns true only to the first
+    /// observer; duplicate/redelivered events are safe to ignore.
+    pub fn claim_inbound_event(
+        &self,
+        event_id: &str,
+        source: &str,
+        recorded_at: i64,
+    ) -> Result<bool> {
+        if event_id.trim().is_empty() || source.trim().is_empty() {
+            return Err(Error::validation(
+                "inbound event claim requires non-empty id and source",
+            ));
+        }
+        let inserted = self
+            .conn
+            .execute(
+                "INSERT OR IGNORE INTO control_event_inbox (event_id, source, recorded_at) VALUES (?1, ?2, ?3)",
+                params![event_id, source, recorded_at],
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Ok(inserted == 1)
+    }
+
+    /// Enqueue an outbound event exactly once by event id. The caller commits
+    /// canonical state first, then records a delivery intent; dispatcher retry
+    /// never requires fabricating a new event id.
+    pub fn enqueue_outbox_event(
+        &self,
+        event_id: &str,
+        workspace_id: &str,
+        event_type: &str,
+        payload: &str,
+        created_at: i64,
+    ) -> Result<bool> {
+        if event_id.trim().is_empty() || event_type.trim().is_empty() {
+            return Err(Error::validation(
+                "outbox event requires non-empty event id and type",
+            ));
+        }
+        let inserted = self
+            .conn
+            .execute(
+                "INSERT OR IGNORE INTO control_event_outbox
+                 (event_id, workspace_id, event_type, payload, created_at, dispatched_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, NULL)",
+                params![event_id, workspace_id, event_type, payload, created_at],
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Ok(inserted == 1)
+    }
+
+    pub fn pending_outbox_events(&self, limit: usize) -> Result<Vec<OutboxEvent>> {
+        let limit = i64::try_from(limit)
+            .map_err(|_| Error::validation("outbox limit is too large"))?;
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT event_id, workspace_id, event_type, payload, created_at, dispatched_at
+                 FROM control_event_outbox
+                 WHERE dispatched_at IS NULL
+                 ORDER BY created_at, event_id
+                 LIMIT ?1",
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        let rows = stmt
+            .query_map([limit], |row| {
+                Ok(OutboxEvent {
+                    event_id: row.get(0)?,
+                    workspace_id: row.get(1)?,
+                    event_type: row.get(2)?,
+                    payload: row.get(3)?,
+                    created_at: row.get(4)?,
+                    dispatched_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| Error::internal(e.to_string()))?;
+        let mut events = Vec::new();
+        for row in rows {
+            events.push(row.map_err(|e| Error::internal(e.to_string()))?);
+        }
+        Ok(events)
+    }
+
+    pub fn mark_outbox_dispatched(&self, event_id: &str, dispatched_at: i64) -> Result<()> {
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE control_event_outbox
+                 SET dispatched_at = ?2
+                 WHERE event_id = ?1 AND dispatched_at IS NULL",
+                params![event_id, dispatched_at],
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        if updated == 0 {
+            return Err(Error::not_found(format!(
+                "pending outbox event {event_id}"
+            )));
+        }
+        Ok(())
     }
 
     // ---- generic typed records ----
@@ -1263,4 +1394,46 @@ mod tests {
         assert_eq!(store.list_workspaces().unwrap().len(), 2);
         let _ = ws_b;
     }
+
+    #[test]
+    fn inbox_deduplicates_and_outbox_retries_keep_event_identity() {
+        let store = MornStore::open_in_memory().unwrap();
+        assert_eq!(store.schema_version().unwrap(), 3);
+
+        assert!(store
+            .claim_inbound_event("evt-in-1", "cmms://plant-a", 10)
+            .unwrap());
+        assert!(!store
+            .claim_inbound_event("evt-in-1", "cmms://plant-a", 11)
+            .unwrap());
+
+        assert!(store
+            .enqueue_outbox_event(
+                "evt-out-1",
+                "workspace-1",
+                "io.morn.work.changed.v1",
+                "{\"work\":\"work-1\"}",
+                20,
+            )
+            .unwrap());
+        assert!(!store
+            .enqueue_outbox_event(
+                "evt-out-1",
+                "workspace-1",
+                "io.morn.work.changed.v1",
+                "{\"work\":\"work-1\"}",
+                21,
+            )
+            .unwrap());
+
+        let pending = store.pending_outbox_events(10).unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].event_id, "evt-out-1");
+        assert!(pending[0].dispatched_at.is_none());
+
+        store.mark_outbox_dispatched("evt-out-1", 30).unwrap();
+        assert!(store.pending_outbox_events(10).unwrap().is_empty());
+        assert!(store.mark_outbox_dispatched("evt-out-1", 31).is_err());
+    }
+
 }
