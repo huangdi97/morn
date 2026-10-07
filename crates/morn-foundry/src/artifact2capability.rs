@@ -132,6 +132,7 @@ impl ArtifactCompiler for OpenApiJsonCompiler {
         });
         manifest.provenance.source_ref = source.source_ref.clone();
         manifest.provenance.source_digest = source.source_digest.clone();
+        let missing_compensation = has_write && manifest.compensation_ref.is_none();
 
         Ok(CandidateCapability {
             record: CapabilityRecord::new(manifest),
@@ -143,7 +144,7 @@ impl ArtifactCompiler for OpenApiJsonCompiler {
                     let mut warnings = vec![
                         "compiled candidate is not qualified or site-admitted".to_string(),
                     ];
-                    if has_write && manifest.compensation_ref.is_none() {
+                    if missing_compensation {
                         warnings.push(
                             "write operations have no explicit compensation; candidate is classified E3 until reviewed"
                                 .to_string(),
