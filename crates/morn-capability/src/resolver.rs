@@ -79,19 +79,7 @@ impl WorkcellPlan {
 }
 
 fn isolation_satisfies(actual: IsolationLevel, required: IsolationLevel) -> bool {
-    use IsolationLevel::*;
-    match required {
-        NoIsolation => true,
-        Process => matches!(actual, Process | Container | MicroVm | FullVm),
-        Container => matches!(actual, Container | MicroVm | FullVm),
-        MicroVm => matches!(actual, MicroVm | FullVm),
-        FullVm => matches!(actual, FullVm),
-        // Remote and Physical are topology/executor classes, not "more isolated"
-        // than a VM. They satisfy only an explicit same-class requirement until
-        // a provider supplies richer attested guarantees.
-        Remote => matches!(actual, Remote),
-        Physical => matches!(actual, Physical),
-    }
+    actual.satisfies(required)
 }
 
 fn effect_rank(effect: crate::effect::EffectClass) -> u8 {
