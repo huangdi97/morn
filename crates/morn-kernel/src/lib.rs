@@ -6,6 +6,7 @@ pub mod approval;
 pub mod contracts;
 pub mod error;
 pub mod event_envelope;
+pub mod history;
 pub mod identity;
 pub mod ids;
 pub mod ledger;
@@ -22,6 +23,7 @@ pub use contracts::{
 };
 pub use error::{Error, Result};
 pub use event_envelope::EventEnvelope;
+pub use history::{HistoricalFact, HistoricalFactId, HistoricalFactLog, HistoricalFactStatus};
 pub use protocol::{
     HistoryMutation, HistoryMutationKind, ProtocolSnapshot, PublishedContractRef,
     MORN_PROTOCOL_V11_5,
