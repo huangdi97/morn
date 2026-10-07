@@ -115,7 +115,6 @@ pub struct SolutionPackage {
     pub created_at: Timestamp,
 }
 
-
 /// Typed view over the v11.5 fields embedded in SolutionPackage.manifest.
 ///
 /// The persisted SolutionPackage keeps its historical JSON manifest for backward
