@@ -152,12 +152,13 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     );
     let authority = NativePolicyAuthority::new(policy);
     let authority_decision = authority
-        .decide(&AuthorityRequest {
-            principal: "equipment-investigator".to_string(),
-            action: "historian.read".to_string(),
-            resource: "CNC-17".to_string(),
-            work_ref: Some(work_package_id.to_string()),
-            context: BTreeMap::new(),
+        .decide(&{
+            let mut request =
+                AuthorityRequest::new("equipment-investigator", "historian.read", "CNC-17");
+            request.work_ref = Some(work_package_id.to_string());
+            request.site_ref = Some("plant-a".to_string());
+            request.scope = vec!["historian.read".to_string()];
+            request
         })
         .unwrap();
     enforce_authority(&authority_decision).unwrap();
