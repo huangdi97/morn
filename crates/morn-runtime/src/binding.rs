@@ -10,7 +10,7 @@ use morn_capability::{EffectClass, ResolvedCapability};
 
 use morn_kernel::ids::{Id, RuntimeBindingId, WorkPackageId};
 use morn_kernel::time::Timestamp;
-use morn_work::control::WorkResource;
+use morn_work::control::{AutonomyPosture, WorkResource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct BindingMigrationDecisionTag;
@@ -116,6 +116,8 @@ pub struct ExecutionBinding {
     #[serde(default)]
     pub idempotency_key_required: bool,
     pub authority_decision_ref: Option<String>,
+    #[serde(default)]
+    pub autonomy_posture: AutonomyPosture,
     pub profile_ref: String,
     #[serde(default)]
     pub site_ref: Option<String>,
@@ -143,6 +145,7 @@ impl ExecutionBinding {
             compensation_ref: None,
             idempotency_key_required: false,
             authority_decision_ref: None,
+            autonomy_posture: work.spec.autonomy_posture,
             profile_ref: work.spec.profile_ref.clone(),
             site_ref: work.spec.site_ref.clone(),
             migration_from: None,
@@ -251,6 +254,16 @@ mod tests {
     use super::*;
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
     use morn_work::control::{WorkResource, WorkSpec};
+
+    #[test]
+    fn autonomy_posture_is_pinned_with_binding() {
+        let work_id = WorkPackageId::generate_with("wp");
+        let mut spec = WorkSpec::new(work_id, "assist only", "morn.lite@1.0.0");
+        spec.autonomy_posture = AutonomyPosture::Assist;
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let binding = ExecutionBinding::for_work(&work, "manifest:a", "provider:a", "1");
+        assert_eq!(binding.autonomy_posture, AutonomyPosture::Assist);
+    }
 
     #[test]
     fn resolved_binding_pins_effect_semantics() {
