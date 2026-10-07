@@ -21,6 +21,7 @@ morn-foundry = { workspace = true }
 morn-assurance = { workspace = true }
 morn-opint = { workspace = true }
 morn-store = { workspace = true }
+morn-profile = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 axum = { workspace = true }
