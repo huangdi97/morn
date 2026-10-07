@@ -99,7 +99,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         CapabilityId::generate_with("cap"),
         "equipment-investigator",
         "harness://dsh",
-        CapabilityKind::Llm,
+        CapabilityKind::Agent,
         EffectClass::E0LifecycleReversible,
     );
     manifest.provides = vec!["equipment.anomaly.investigate".to_string()];
@@ -171,7 +171,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     let resolved = CapabilityResolver.resolve(
         &CapabilityRequest {
             required_provides: vec!["equipment.anomaly.investigate".to_string()],
-            allowed_kinds: vec![CapabilityKind::Llm],
+            allowed_kinds: vec![CapabilityKind::Agent],
             minimum_isolation: Some(IsolationLevel::Container),
             required_authority: vec!["historian.read".to_string()],
             site_ref: Some("plant-a".to_string()),
