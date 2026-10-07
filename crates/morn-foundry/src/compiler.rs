@@ -679,11 +679,7 @@ mod tests {
     #[test]
     fn compiled_v115_manifest_pins_profile_scope_without_pinning_harness_provider() {
         let ws = morn_kernel::ids::WorkspaceId::generate();
-        let mut req = SolutionRequest::new(
-            ws,
-            "Deliver a reviewed report",
-            "generic",
-        );
+        let mut req = SolutionRequest::new(ws, "Deliver a reviewed report", "generic");
         req.constraints = vec![
             "profile=morn.factory.readonly@1.0.0".to_string(),
             "site=plant-a".to_string(),
