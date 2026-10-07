@@ -76,4 +76,4 @@ floor. See ADR-014.
 Implementations are replaceable; published semantic laws are non-bypassable
 within a protocol version. Work/Authority/Binding/external-effect truth/
 Outcome/Acceptance/history/profile semantics cannot be silently redefined by a
-plugin. See ADR-016. See ADR-015.
+plugin. See ADR-016.
