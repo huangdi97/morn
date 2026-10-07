@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-020 in `docs/adr/`
+3. ADR-002 through ADR-021 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -111,3 +111,12 @@ Composition ownership is not business identity. Cordis Context/Fiber selects
 software registration/lifecycle ownership only; Morn Work, Actor,
 ExecutionBinding and Attempt identities remain explicit typed references.
 Provider hot reload cannot infer or mutate business identity. See ADR-014.
+
+
+## Durable control-plane concurrency
+
+Mutable Work projections use an explicit persistence revision and compare-and-
+swap writes. Work generation remains a desired-spec generation, not a storage
+revision. Redundant controllers coordinate with expiring leases plus monotonic
+fencing tokens; stale leaders cannot overwrite newer control state. This is
+separate from business Authority. See ADR-021.
