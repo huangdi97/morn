@@ -224,6 +224,14 @@ impl AdmissionService {
                 "qualification is suspended, rejected or expired",
             ));
         }
+        if !qualification
+            .qualification_evidence
+            .is_strict_enough_for_site_admission()
+        {
+            return Err(Error::validation(
+                "site admission requires strict qualification evidence; legacy/minimal qualification is insufficient",
+            ));
+        }
         if qualification.manifest_id != capability.manifest.id {
             return Err(Error::validation(
                 "qualification does not belong to capability manifest",
@@ -348,12 +356,20 @@ mod tests {
         assert_eq!(capability.stage, CapabilityStage::Declared);
 
         let qualification = service
-            .qualify(
+            .qualify_with_evidence(
                 &mut capability,
                 "release:1",
                 "certification-decision:1",
                 vec!["eval:1".to_string()],
+                QualificationEvidence {
+                    test_suite_refs: vec!["suite:factory".to_string()],
+                    environment_digest: Some("sha256:env".to_string()),
+                    expected_properties: vec!["safe-reconcile".to_string()],
+                    evaluator_identity: Some("evaluator:independent".to_string()),
+                    ..Default::default()
+                },
                 vec!["factory-readonly".to_string()],
+                None,
             )
             .unwrap();
         assert_eq!(capability.stage, CapabilityStage::Qualified);
@@ -374,6 +390,41 @@ mod tests {
         assert_eq!(admission.status, SiteAdmissionStatus::Admitted);
         assert_eq!(capability.stage, CapabilityStage::Admitted);
         assert_eq!(capability.admitted_sites, vec!["plant-a".to_string()]);
+    }
+
+    #[test]
+    fn legacy_qualification_cannot_be_site_admitted() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        let qualification = service
+            .qualify(
+                &mut capability,
+                "release:legacy",
+                "decision:legacy",
+                vec!["eval:legacy".to_string()],
+                vec!["factory-readonly".to_string()],
+            )
+            .unwrap();
+        qualification
+            .qualification_evidence
+            .test_suite_refs
+            .first()
+            .expect("legacy marker exists");
+        let profile = DomainProfile::factory_readonly_v1();
+        let report = passing_conformance(&profile);
+        // Legacy adapter metadata is deliberately not considered real strict evidence.
+        let mut legacy = qualification.clone();
+        legacy.qualification_evidence = QualificationEvidence::default();
+        assert!(service
+            .admit(
+                &mut capability,
+                &legacy,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .is_err());
     }
 
     #[test]
