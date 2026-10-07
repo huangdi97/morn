@@ -21,8 +21,7 @@ pub use authority::{
     AuthorityRequest, NativePolicyAuthority,
 };
 pub use binding::{
-    BindingMigrationDecision, BindingMigrationDecisionId, BindingMigrationReason,
-    ExecutionBinding,
+    BindingMigrationDecision, BindingMigrationDecisionId, BindingMigrationReason, ExecutionBinding,
 };
 pub use credentials::{
     CredentialHandle, CredentialHandleId, CredentialProvider, CredentialRequest,
