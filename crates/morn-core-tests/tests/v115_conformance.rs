@@ -12,7 +12,9 @@ use morn_kernel::ids::{CapabilityId, RuntimeBindingId, WorkPackageId, WorkspaceI
 use morn_kernel::protocol::{HistoryMutation, HistoryMutationKind, ProtocolSnapshot};
 use morn_kernel::time::Timestamp;
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
-use morn_runtime::{ActionAttempt, AttemptState, BindingMigrationReason, ExecutionBinding};
+use morn_runtime::{
+    ActionAttempt, AttemptState, BindingMigrationReason, BindingMigrationRequest, ExecutionBinding,
+};
 use morn_work::{WorkResource, WorkSpec};
 use serde_json::json;
 
@@ -354,12 +356,14 @@ fn work_truth_survives_harness_provider_migration() {
 
     let (second, decision) = first.rebind_for_work(
         &work,
-        "capability:investigator@sha256:pi",
-        "pi",
-        "fixture-v1",
-        BindingMigrationReason::RuntimeRecovery,
-        "work-controller",
-        vec!["provider:deepseek-harness-unavailable".to_string()],
+        BindingMigrationRequest::new(
+            "capability:investigator@sha256:pi",
+            "pi",
+            "fixture-v1",
+            BindingMigrationReason::RuntimeRecovery,
+            "work-controller",
+        )
+        .with_evidence(vec!["provider:deepseek-harness-unavailable".to_string()]),
     );
     let second_attempt = ActionAttempt::new(
         second.id.clone(),
