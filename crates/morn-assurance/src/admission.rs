@@ -44,9 +44,15 @@ pub struct QualificationEvidence {
 impl QualificationEvidence {
     pub fn is_strict_enough_for_site_admission(&self) -> bool {
         !self.test_suite_refs.is_empty()
-            && self.environment_digest.as_deref().is_some_and(|value| !value.trim().is_empty())
+            && self
+                .environment_digest
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
             && !self.expected_properties.is_empty()
-            && self.evaluator_identity.as_deref().is_some_and(|value| !value.trim().is_empty())
+            && self
+                .evaluator_identity
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
     }
 }
 
@@ -147,7 +153,6 @@ impl AdmissionService {
         Ok(record)
     }
 
-
     pub fn qualify_with_evidence(
         &mut self,
         capability: &mut CapabilityRecord,
@@ -166,13 +171,16 @@ impl AdmissionService {
                 "only declared/observed/qualified capabilities can be qualified",
             ));
         }
-        if evidence_refs.is_empty() || !qualification_evidence.is_strict_enough_for_site_admission() {
+        if evidence_refs.is_empty() || !qualification_evidence.is_strict_enough_for_site_admission()
+        {
             return Err(Error::validation(
                 "strict qualification requires evidence, tests, environment digest, expected properties and evaluator identity",
             ));
         }
         if valid_until.is_some_and(|end| end < Timestamp::now()) {
-            return Err(Error::validation("qualification validity has already expired"));
+            return Err(Error::validation(
+                "qualification validity has already expired",
+            ));
         }
         let release_ref = release_ref.into();
         let decision_ref = decision_ref.into();
