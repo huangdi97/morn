@@ -613,6 +613,13 @@ impl AdmissionService {
         } else {
             CapabilityStage::Admitted
         };
+        self.record_event(
+            capability.manifest.id.clone(),
+            admission_id.to_string(),
+            "SiteAdmissionSuspended",
+            "site admission suspended",
+            "system",
+        );
         Ok(())
     }
 }
