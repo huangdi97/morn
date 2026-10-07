@@ -69,8 +69,12 @@ bindings directly.
 ## Consequences
 
 Morn can offer “one-click instances” without creating an Agent-first ontology.
-The same package may instantiate many Work resources across sites and profiles,
-while every execution remains independently governed and auditable.
+A portable package may instantiate many Work resources, but portability is
+explicit. A package reviewed with a concrete `profile_ref` cannot be silently
+instantiated under a different guarantee profile; a package reviewed with a
+concrete `site_ref` cannot be silently moved to another site. Those changes
+require explicit revalidation/migration and a new reviewed package/binding as
+appropriate. Every execution remains independently governed and auditable.
 
 Product labels such as Digital Employee, Factory Copilot or Research Assistant
 become packaged experiences/profile compositions, not new kernel semantics.
@@ -101,3 +105,22 @@ ExecutionBinding or Acceptance gates.
 Creator requires explicit acceptance criteria before drafting. A Factory
 read-only Creator request also preserves the ProductionWrite prohibition and
 site/source-of-truth readiness requirements.
+
+
+## Package policy binding
+
+The v11.5 SolutionPackage manifest carries a typed policy view:
+
+- schema/version;
+- optional profile scope;
+- optional site scope;
+- acceptance criteria;
+- resolved capability requirements;
+- provider-neutral harness policy;
+- whether ProductionWrite was allowed by the reviewed design.
+
+This policy is design-time governance, not runtime Authority. Instantiation may
+narrow constraints further, but it may not silently widen an effect boundary or
+reinterpret a package under another profile/site. Older packages without the
+v11.5 schema remain readable through the legacy manifest path and require
+explicit migration before stronger guarantees can be claimed.
