@@ -8,6 +8,7 @@ pub mod manifest;
 pub mod problem_spec;
 pub mod solution;
 pub mod work_graph;
+pub mod workcell_plan;
 
 pub use artifact2capability::{
     ArtifactCompiler, ArtifactKind, ArtifactSource, CandidateCapability, CompilationReport,
@@ -26,3 +27,5 @@ pub use solution::{
     ApprovedSolution, ProposedSolution, SolutionPackage, ValidationIssue, ValidationReport,
 };
 pub use work_graph::{WorkEdge, WorkEdgeKind, WorkGraph, WorkGraphError, WorkNature, WorkNode};
+
+pub use workcell_plan::materialize_workcell_plan;
