@@ -274,7 +274,11 @@ impl ReconciliationController {
 /// attempt state are mutable projections. Bindings and reconciliation records
 /// are immutable historical facts once written.
 pub trait ControlPlaneStore {
+    /// Legacy projection save retained for v1 compatibility paths.
     fn save_work_resource(&self, work: &WorkResource) -> Result<()>;
+    /// Preferred v11.5 durable save. Uses Work.resource_version as an
+    /// optimistic-concurrency token and updates it after a successful write.
+    fn save_work_resource_cas(&self, work: &mut WorkResource) -> Result<u64>;
     fn save_execution_binding(&self, work: &WorkResource, binding: &ExecutionBinding)
         -> Result<()>;
     fn save_binding_migration(
@@ -312,6 +316,22 @@ impl ControlPlaneStore for MornStore {
             work.created_at.millis(),
             work,
         )
+    }
+
+    fn save_work_resource_cas(&self, work: &mut WorkResource) -> Result<u64> {
+        let expected = work.resource_version;
+        let mut next = work.clone();
+        next.resource_version = expected.saturating_add(1);
+        let revision = self.save_record_cas(
+            "work_resource_v115",
+            work.id.as_str(),
+            work.workspace_id.as_str(),
+            work.created_at.millis(),
+            expected,
+            &next,
+        )?;
+        work.mark_persisted_revision(revision);
+        Ok(revision)
     }
 
     fn save_execution_binding(
@@ -438,6 +458,29 @@ mod tests {
                 evidence_refs: vec!["cmms://orders/MO-88273".into()],
             })
         }
+    }
+
+    #[test]
+    fn stale_work_projection_cannot_overwrite_newer_controller_state() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work_id = WorkPackageId::generate_with("wp");
+        let spec = WorkSpec::new(work_id, "goal", "morn.lite@1.0.0");
+        let mut primary = WorkResource::new(WorkspaceId::generate(), spec);
+        assert_eq!(store.save_work_resource_cas(&mut primary).unwrap(), 1);
+
+        let mut stale = primary.clone();
+        primary.status.phase = WorkPhase::Ready;
+        assert_eq!(store.save_work_resource_cas(&mut primary).unwrap(), 2);
+
+        stale.status.phase = WorkPhase::Blocked;
+        assert!(store.save_work_resource_cas(&mut stale).is_err());
+
+        let restored: WorkResource = store
+            .load_record("work_resource_v115", primary.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(restored.resource_version, 2);
+        assert_eq!(restored.status.phase, WorkPhase::Ready);
     }
 
     #[test]
