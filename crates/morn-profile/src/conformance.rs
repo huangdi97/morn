@@ -8,6 +8,8 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
+use morn_kernel::ExecutionGuarantee;
+
 use crate::{DomainProfile, RequirementLevel};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -15,6 +17,8 @@ pub struct ConformanceEvidence {
     pub satisfied_semantics: BTreeSet<String>,
     pub forbidden_semantics_present: BTreeSet<String>,
     pub isolation: String,
+    #[serde(default)]
+    pub execution_guarantees: BTreeSet<ExecutionGuarantee>,
     pub durable_work_state: bool,
     pub source_of_truth_bound: bool,
     pub provenance_ready: bool,
@@ -103,6 +107,11 @@ pub fn evaluate_profile(
     if !isolation_satisfies(&evidence.isolation, &profile.minimum_isolation) {
         missing.push(format!("IsolationSatisfies({})", profile.minimum_isolation));
     }
+    for required in &profile.required_execution_guarantees {
+        if !evidence.execution_guarantees.contains(required) {
+            missing.push(format!("ExecutionGuarantee({})", required.key()));
+        }
+    }
 
     missing.sort();
     missing.dedup();
@@ -129,6 +138,11 @@ mod tests {
         let profile = DomainProfile::factory_readonly_v1();
         let mut evidence = ConformanceEvidence {
             isolation: "container".to_string(),
+            execution_guarantees: profile
+                .required_execution_guarantees
+                .iter()
+                .copied()
+                .collect(),
             durable_work_state: true,
             source_of_truth_bound: true,
             provenance_ready: true,
@@ -155,6 +169,11 @@ mod tests {
         let profile = DomainProfile::factory_readonly_v1();
         let mut evidence = ConformanceEvidence {
             isolation: "remote".to_string(),
+            execution_guarantees: profile
+                .required_execution_guarantees
+                .iter()
+                .copied()
+                .collect(),
             durable_work_state: true,
             source_of_truth_bound: true,
             provenance_ready: true,
@@ -176,10 +195,47 @@ mod tests {
     }
 
     #[test]
+    fn missing_network_egress_guarantee_fails_factory_profile() {
+        let profile = DomainProfile::factory_readonly_v1();
+        let mut evidence = ConformanceEvidence {
+            isolation: "container".to_string(),
+            execution_guarantees: profile
+                .required_execution_guarantees
+                .iter()
+                .copied()
+                .filter(|guarantee| *guarantee != ExecutionGuarantee::NetworkEgressPolicy)
+                .collect(),
+            durable_work_state: true,
+            source_of_truth_bound: true,
+            provenance_ready: true,
+            ..Default::default()
+        };
+        evidence.satisfied_semantics.extend(
+            profile
+                .requirements
+                .iter()
+                .filter(|requirement| requirement.level == RequirementLevel::Required)
+                .map(|requirement| requirement.semantic.clone()),
+        );
+
+        let report = evaluate_profile(&profile, &evidence);
+        assert!(!report.passed);
+        assert!(report
+            .missing
+            .iter()
+            .any(|item| item == "ExecutionGuarantee(network-egress-policy)"));
+    }
+
+    #[test]
     fn provider_names_are_irrelevant_to_profile_conformance() {
         let profile = DomainProfile::factory_readonly_v1();
         let mut evidence = ConformanceEvidence {
             isolation: "microvm".to_string(),
+            execution_guarantees: profile
+                .required_execution_guarantees
+                .iter()
+                .copied()
+                .collect(),
             durable_work_state: true,
             source_of_truth_bound: true,
             provenance_ready: true,
