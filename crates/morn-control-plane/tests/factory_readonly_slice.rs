@@ -5,9 +5,9 @@
 //! reconciliation, accepted outcome and durable persistence. All external
 //! systems are deterministic fixtures; this is not production evidence.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
-use morn_assurance::AdmissionService;
+use morn_assurance::{AdmissionService, QualificationEvidence};
 use morn_capability::{
     CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityRequest, CapabilityResolver,
     CapabilityStage, EffectClass, IsolationLevel,
@@ -29,10 +29,12 @@ use morn_runtime::{
 };
 use morn_store::MornStore;
 use morn_work::acceptance::AcceptanceSpec;
+use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
 use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
 use morn_work::service::{AcceptanceEvidence, WorkService};
+use morn_work::value::{ValueAssessment, ValueEvidenceClass};
 use morn_work::work_package::WorkPackage;
-use morn_world::outcome::OutcomeRecord;
+use morn_world::{ObservedOutcome, OutcomeSourceKind};
 
 struct CmmsCommittedAfterTimeout;
 
@@ -110,12 +112,26 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     assert!(conformance.passed);
     let mut admission = AdmissionService::default();
     let qualification = admission
-        .qualify(
+        .qualify_with_evidence(
             &mut capability,
             "release:equipment-investigator@1",
             "certification-decision:factory-fixture",
             vec!["evaluation:factory-fixture".to_string()],
+            QualificationEvidence {
+                test_suite_refs: vec!["suite:factory-timeout-reconcile".to_string()],
+                environment_digest: Some("sha256:fixture-environment".to_string()),
+                input_scope: vec!["synthetic:CNC-17".to_string()],
+                expected_properties: vec![
+                    "no-blind-retry".to_string(),
+                    "binding-pinned".to_string(),
+                ],
+                known_failure_modes: vec!["timeout-after-commit".to_string()],
+                cost_evidence_ref: Some("fixture://metrics/cost".to_string()),
+                latency_evidence_ref: Some("fixture://metrics/latency".to_string()),
+                evaluator_identity: Some("morn-conformance-suite".to_string()),
+            },
             vec!["factory-readonly".to_string()],
+            None,
         )
         .unwrap();
     admission
@@ -268,14 +284,49 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             },
         )
         .unwrap();
-    let mut outcome = OutcomeRecord::new(
+    let mut outcome = ObservedOutcome::new(
         workspace.clone(),
+        work_package_id.clone(),
         "delivery impact reviewed with reconciled maintenance reference",
-        true,
+        OutcomeSourceKind::ExternalSystem,
+        "cmms://orders/MO-88273",
+        serde_json::json!({
+            "maintenance_order": "MO-88273",
+            "delivery_impact_review": "produced"
+        }),
     );
-    outcome.work_package_id = Some(work_package_id.clone());
-    outcome.related_artifacts = vec!["delivery-impact-review".to_string()];
-    assert!(outcome.acceptance_met);
+    outcome
+        .evidence_refs
+        .push("cmms://orders/MO-88273/receipt".to_string());
+    outcome
+        .evidence_refs
+        .push("artifact://delivery-impact-review".to_string());
+    assert!(outcome.is_source_grounded());
+
+    let mut acceptance_decision = AcceptanceDecision::new(
+        work_package_id.clone(),
+        acceptance_id,
+        AcceptanceDisposition::Accept,
+        PrincipalId::generate_with("production-owner"),
+        "production-owner",
+        "source-grounded outcome and delivery-impact review accepted",
+    );
+    acceptance_decision.outcome_refs.push(outcome.id.clone());
+    acceptance_decision
+        .evidence_refs
+        .extend(outcome.evidence_refs.clone());
+    assert!(acceptance_decision.is_final_acceptance());
+
+    let mut value = ValueAssessment::new(
+        work_package_id.clone(),
+        outcome.id.clone(),
+        ValueEvidenceClass::Fixture,
+    );
+    value.acceptance_ref = Some(acceptance_decision.id.clone());
+    value.unknown_outcome_count = 1;
+    value.retry_count = 0;
+    value.evidence_refs = vec!["fixture://factory-readonly-slice".to_string()];
+    assert!(!value.is_customer_value_claim());
 
     // Durable control-plane state survives serialization independently of harness sessions.
     let store = MornStore::open_in_memory().unwrap();
