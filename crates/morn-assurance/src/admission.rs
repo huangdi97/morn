@@ -654,6 +654,56 @@ mod tests {
     }
 
     #[test]
+    fn revoked_release_suspends_dependent_site_admission() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        let qualification = service
+            .qualify_with_evidence(
+                &mut capability,
+                "candidate:1",
+                "decision:1",
+                vec!["eval:1".to_string()],
+                QualificationEvidence {
+                    test_suite_refs: vec!["suite:factory".to_string()],
+                    environment_digest: Some("sha256:env".to_string()),
+                    expected_properties: vec!["safe-reconcile".to_string()],
+                    evaluator_identity: Some("evaluator:independent".to_string()),
+                    ..Default::default()
+                },
+                vec!["factory-readonly".to_string()],
+                None,
+            )
+            .unwrap();
+        let release = record_fixture_release(&mut service, &mut capability, &qualification);
+        let profile = DomainProfile::factory_readonly_v1();
+        let report = passing_conformance(&profile);
+        let admission = service
+            .admit(
+                &mut capability,
+                &qualification,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .unwrap();
+        service.revoke_release(&mut capability, &release.id).unwrap();
+
+        assert_eq!(
+            service
+                .admissions
+                .iter()
+                .find(|item| item.id == admission.id)
+                .unwrap()
+                .status,
+            SiteAdmissionStatus::Suspended
+        );
+        assert!(capability.admission_refs.is_empty());
+        assert!(capability.admitted_sites.is_empty());
+        assert_eq!(capability.stage, CapabilityStage::Suspended);
+    }
+
+    #[test]
     fn legacy_qualification_cannot_be_site_admitted() {
         let mut capability = candidate();
         let mut service = AdmissionService::default();
