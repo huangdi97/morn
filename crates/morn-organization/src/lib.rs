@@ -3,8 +3,8 @@
 
 pub mod accountability;
 pub mod decision_policy;
-pub mod digital_role;
 pub mod delegation;
+pub mod digital_role;
 pub mod role;
 pub mod workcell;
 
