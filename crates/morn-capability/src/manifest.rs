@@ -179,6 +179,8 @@ pub struct CapabilityRecord {
     pub manifest: CapabilityManifest,
     pub stage: CapabilityStage,
     pub qualification_refs: Vec<String>,
+    /// Content-addressed release/package records associated with this manifest.
+    pub release_refs: Vec<String>,
     /// Legacy/site summary retained for compatibility and display.
     pub admitted_sites: Vec<String>,
     /// Exact site + profile admissions used by v11.5 governed resolution.
@@ -191,6 +193,7 @@ impl CapabilityRecord {
             manifest,
             stage: CapabilityStage::Declared,
             qualification_refs: Vec::new(),
+            release_refs: Vec::new(),
             admitted_sites: Vec::new(),
             admission_refs: Vec::new(),
         }
