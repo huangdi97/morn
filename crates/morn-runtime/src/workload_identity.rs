@@ -79,7 +79,8 @@ impl WorkloadIdentityProvider for FixtureWorkloadIdentityProvider {
         let path = request
             .workload_ref
             .trim_matches('/')
-            .replace([' ', ':'], "-");
+            .replace(' ', "-")
+            .replace(':', "-");
         let subject_uri = format!("spiffe://{}/{}", request.trust_domain, path);
         let identity = WorkloadIdentity {
             id: id.clone(),
