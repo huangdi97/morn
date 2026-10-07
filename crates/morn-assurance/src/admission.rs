@@ -593,6 +593,29 @@ mod tests {
     }
 
     #[test]
+    fn strict_qualification_rejects_unobserved_candidate() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        let result = service.qualify_with_evidence(
+            &mut capability,
+            "candidate:1",
+            "decision:1",
+            vec!["eval:1".to_string()],
+            QualificationEvidence {
+                test_suite_refs: vec!["suite:factory".to_string()],
+                environment_digest: Some("sha256:env".to_string()),
+                expected_properties: vec!["safe-reconcile".to_string()],
+                evaluator_identity: Some("evaluator:independent".to_string()),
+                ..Default::default()
+            },
+            vec!["factory-readonly".to_string()],
+            None,
+        );
+        assert!(result.is_err());
+        assert_eq!(capability.stage, CapabilityStage::Declared);
+    }
+
+    #[test]
     fn compile_is_not_qualification_and_qualification_is_not_admission() {
         let mut capability = candidate();
         let mut service = AdmissionService::default();
@@ -640,6 +663,7 @@ mod tests {
     fn admission_is_scoped_to_profile_as_well_as_site() {
         let mut capability = candidate();
         let mut service = AdmissionService::default();
+        observe_candidate(&mut service, &mut capability);
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
@@ -681,6 +705,7 @@ mod tests {
     fn qualification_without_release_cannot_be_site_admitted() {
         let mut capability = candidate();
         let mut service = AdmissionService::default();
+        observe_candidate(&mut service, &mut capability);
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
@@ -716,6 +741,7 @@ mod tests {
     fn revoked_release_suspends_dependent_site_admission() {
         let mut capability = candidate();
         let mut service = AdmissionService::default();
+        observe_candidate(&mut service, &mut capability);
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
@@ -768,6 +794,7 @@ mod tests {
     fn legacy_qualification_cannot_be_site_admitted() {
         let mut capability = candidate();
         let mut service = AdmissionService::default();
+        observe_candidate(&mut service, &mut capability);
         let qualification = service
             .qualify(
                 &mut capability,
@@ -836,6 +863,7 @@ mod tests {
     fn failed_profile_conformance_blocks_site_admission() {
         let mut capability = candidate();
         let mut service = AdmissionService::default();
+        observe_candidate(&mut service, &mut capability);
         let qualification = service
             .qualify(
                 &mut capability,
