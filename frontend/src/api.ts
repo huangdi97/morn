@@ -20,6 +20,40 @@ export async function apiPost<T = unknown>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface V115Status {
+  architecture: {
+    definition: string;
+    protocol_version: { major: number; minor: number; patch: number };
+    semantic_slots: string[];
+    control_model: string;
+    composition_runtime: { name: string; role: string; reference_version: string; business_truth: boolean };
+  };
+  providers: {
+    harness: Array<{ id: string; status: string }>;
+    execution_environment: string[];
+    authority: string;
+  };
+  capability_supply_chain: {
+    stages: string[];
+    artifact_compilers: string[];
+    qualification_is_not_admission: boolean;
+  };
+  factory_profile: {
+    id: string;
+    version: { major: number; minor: number; patch: number };
+    minimum_isolation: string;
+    required_guarantees: string[];
+    production_write: boolean;
+    first_wedge: string;
+  };
+  claims: {
+    local_engineering: string;
+    real_dsh: string;
+    real_factory: string;
+    production_write: string;
+  };
+}
+
 export interface WorkbenchData {
   mission: { id: string; name: string; kind: string; status: string };
   world_objects: Array<{ id: string; type: string; state: Record<string, unknown>; version: number }>;
