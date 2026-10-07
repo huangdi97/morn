@@ -2,6 +2,7 @@
 
 pub mod artifact2capability;
 pub mod compiler;
+pub mod instantiate;
 pub mod manifest;
 pub mod problem_spec;
 pub mod solution;
@@ -13,6 +14,10 @@ pub use artifact2capability::{
     ReviewedPaperManifestCompiler,
 };
 pub use compiler::{CompilerDecisionSource, SolutionCompiler};
+pub use instantiate::{
+    instantiate_approved_solution, solution_package_ref, InstantiationPlan,
+    SolutionInstantiationRequest,
+};
 pub use manifest::ManifestService;
 pub use problem_spec::{Assumption, Constraint, ProblemSpec, ProblemSpecBuilder, SolutionRequest};
 pub use solution::{
