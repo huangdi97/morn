@@ -6,6 +6,7 @@
 //! sandboxes can never become canonical business truth.
 
 pub mod attempt;
+pub mod authority;
 pub mod binding;
 pub mod environment;
 pub mod gateway;
@@ -13,6 +14,10 @@ pub mod reconciliation;
 pub mod runtime_provider;
 
 pub use attempt::{ActionAttempt, ActionAttemptId, AttemptState};
+pub use authority::{
+    enforce_authority, AuthorityDecisionId, AuthorityDecisionRecord, AuthorityProvider,
+    AuthorityRequest, NativePolicyAuthority,
+};
 pub use binding::ExecutionBinding;
 pub use environment::{
     ExecutionEnvironmentHandle, ExecutionEnvironmentId, ExecutionEnvironmentProvider,
