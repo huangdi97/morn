@@ -1081,7 +1081,7 @@ mod tests {
     #[test]
     fn fresh_migration_is_v2() {
         let store = MornStore::open_in_memory().unwrap();
-        assert_eq!(store.schema_version().unwrap(), 2);
+        assert_eq!(store.schema_version().unwrap(), 3);
     }
 
     #[test]
@@ -1102,7 +1102,7 @@ mod tests {
             .unwrap();
         }
         let store = MornStore::open(&path).unwrap();
-        assert_eq!(store.schema_version().unwrap(), 2);
+        assert_eq!(store.schema_version().unwrap(), 3);
         let legacy = store
             .load_record::<serde_json::Value>("legacy", "row-1")
             .unwrap();
@@ -1183,7 +1183,7 @@ mod tests {
         {
             let store = MornStore::open(&path).unwrap();
             store.save_workspace(&w).unwrap();
-            assert_eq!(store.schema_version().unwrap(), 2);
+            assert_eq!(store.schema_version().unwrap(), 3);
         }
         let store = MornStore::open(&path).unwrap();
         let loaded = store.load_workspace(&w.id).unwrap().expect("workspace");
