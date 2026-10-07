@@ -60,6 +60,8 @@ pub struct WorkSpec {
     pub acceptance_ref: Option<String>,
     #[serde(default)]
     pub source_solution_ref: Option<String>,
+    #[serde(default)]
+    pub site_ref: Option<String>,
     pub profile_ref: String,
 }
 
@@ -76,6 +78,7 @@ impl WorkSpec {
             required_conditions: Vec::new(),
             acceptance_ref: None,
             source_solution_ref: None,
+            site_ref: None,
             profile_ref: profile_ref.into(),
         }
     }
@@ -170,6 +173,19 @@ impl WorkResource {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn site_scope_survives_generation_change() {
+        let ws = WorkspaceId::generate();
+        let work_id = WorkPackageId::generate_with("wp");
+        let mut spec = WorkSpec::new(work_id, "investigate", "morn.factory.readonly@1.0.0");
+        spec.site_ref = Some("plant-a".to_string());
+        let mut resource = WorkResource::new(ws, spec.clone());
+
+        spec.goal = "investigate and verify".to_string();
+        resource.replace_spec(spec);
+        assert_eq!(resource.spec.site_ref.as_deref(), Some("plant-a"));
+    }
 
     #[test]
     fn source_solution_reference_survives_generation_change() {
