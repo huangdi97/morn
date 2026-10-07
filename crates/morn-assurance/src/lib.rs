@@ -12,7 +12,8 @@ pub mod simulation;
 
 pub use admission::{
     AdmissionService, CapabilityDistributionRelease, CapabilityDistributionReleaseId,
-    CapabilityDistributionReleaseStatus, QualificationEvidence, QualificationRecord,
+    CapabilityDistributionReleaseStatus, CapabilityObservation, CapabilityObservationId,
+    QualificationEvidence, QualificationRecord,
     QualificationRecordId, QualificationStatus, SiteAdmission, SiteAdmissionId,
     SiteAdmissionStatus,
 };
