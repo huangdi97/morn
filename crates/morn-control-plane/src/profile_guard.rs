@@ -135,7 +135,18 @@ pub fn enforce_profile_action(decision: &ProfileActionDecision) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use morn_kernel::ids::AuthorityDecisionId;
+    use morn_runtime::AuthorityDecisionId;
+
+    fn allowed_authority() -> AuthorityDecisionRecord {
+        AuthorityDecisionRecord {
+            id: AuthorityDecisionId::generate_with("authz"),
+            provider: "fixture-authority".to_string(),
+            allowed: true,
+            reason: "allowed".to_string(),
+            evidence_refs: vec!["policy://fixture".to_string()],
+            decided_at: Timestamp::now(),
+        }
+    }
 
     #[test]
     fn factory_readonly_rejects_production_write_even_if_other_policy_would_allow() {
@@ -158,5 +169,32 @@ mod tests {
         let profile = DomainProfile::enterprise_v1();
         let decision = evaluate_profile_action(&profile, ExternalActionMode::PhysicalControl);
         assert!(!decision.allowed);
+    }
+
+    #[test]
+    fn external_action_permit_requires_both_authority_and_profile() {
+        let profile = DomainProfile::factory_readonly_v1();
+        let authority = allowed_authority();
+
+        assert!(issue_external_action_permit(
+            &profile,
+            ExternalActionMode::ProductionWrite,
+            &authority,
+            "work-1",
+            "binding-1",
+        )
+        .is_err());
+
+        let permit = issue_external_action_permit(
+            &profile,
+            ExternalActionMode::SandboxWrite,
+            &authority,
+            "work-1",
+            "binding-1",
+        )
+        .unwrap();
+        assert_eq!(permit.work_ref, "work-1");
+        assert_eq!(permit.binding_ref, "binding-1");
+        assert_eq!(permit.authority_decision_ref, authority.id.to_string());
     }
 }
