@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-016 in `docs/adr/`
+3. ADR-002 through ADR-017 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -77,3 +77,12 @@ Implementations are replaceable; published semantic laws are non-bypassable
 within a protocol version. Work/Authority/Binding/external-effect truth/
 Outcome/Acceptance/history/profile semantics cannot be silently redefined by a
 plugin. See ADR-016.
+
+
+## Digital employee mapping
+
+“Digital Employee” is a product/organization projection over the existing
+`RoleSlot + MemberBinding` semantics. It is not a new AgentInstance/Work source
+of truth. The concrete Workcell for a Work still resolves the minimum-sufficient
+mix of human, agent, rule, solver, program, service or device capabilities. See
+ADR-017.
