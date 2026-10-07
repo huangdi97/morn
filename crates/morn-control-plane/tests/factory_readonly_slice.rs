@@ -15,7 +15,8 @@ use morn_capability::{
 };
 use morn_control_plane::{
     begin_external_attempt_with_effect, enforce_profile_action, evaluate_profile_action,
-    issue_external_action_permit, ControlPlaneStore, ControllerInputs, ExternalActionMode,
+    issue_external_action_permit_for_work, resolve_external_action_finalizer, ControlPlaneStore,
+    ControllerInputs, ExternalActionMode,
     ReconciliationController, WorkController, WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
@@ -429,7 +430,8 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     sandbox_authority_request.site_ref = Some("plant-a".to_string());
     sandbox_authority_request.scope = vec!["maintenance-order:create".to_string()];
     let sandbox_authority_decision = decide_bound(&authority, &sandbox_authority_request).unwrap();
-    let sandbox_permit = issue_external_action_permit(
+    let (sandbox_permit, sandbox_finalizer) = issue_external_action_permit_for_work(
+        &mut work,
         &profile,
         ExternalActionMode::SandboxWrite,
         &sandbox_authority_decision,
@@ -437,6 +439,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     )
     .unwrap();
     assert_eq!(sandbox_permit.binding_ref, cmms_binding.id.to_string());
+    assert!(sandbox_finalizer.is_some());
     assert!(issue_external_action_permit(
         &profile,
         ExternalActionMode::ProductionWrite,
