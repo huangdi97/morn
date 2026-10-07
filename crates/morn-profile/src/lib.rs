@@ -188,7 +188,9 @@ mod tests {
             DomainProfile::research_v1(),
         ];
         assert_eq!(profiles.len(), 4);
-        assert!(profiles.iter().all(|profile| profile.version == Version::new(1, 0, 0)));
+        assert!(profiles
+            .iter()
+            .all(|profile| profile.version == Version::new(1, 0, 0)));
         assert!(DomainProfile::factory_readonly_v1().forbids("ProductionWrite"));
     }
 
