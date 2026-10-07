@@ -98,9 +98,9 @@ impl ArtifactCompiler for OpenApiJsonCompiler {
             ));
         }
 
-        let has_write = operations.iter().any(|operation| {
-            !operation.starts_with("get:")
-        });
+        let has_write = operations
+            .iter()
+            .any(|operation| !operation.starts_with("get:"));
         let compensation_ref = doc
             .get("x-morn-compensation")
             .and_then(serde_json::Value::as_str)
@@ -141,9 +141,8 @@ impl ArtifactCompiler for OpenApiJsonCompiler {
                 source_ref: source.source_ref.clone(),
                 discovered_operations: operations,
                 warnings: {
-                    let mut warnings = vec![
-                        "compiled candidate is not qualified or site-admitted".to_string(),
-                    ];
+                    let mut warnings =
+                        vec!["compiled candidate is not qualified or site-admitted".to_string()];
                     if missing_compensation {
                         warnings.push(
                             "write operations have no explicit compensation; candidate is classified E3 until reviewed"
@@ -256,9 +255,7 @@ impl ArtifactCompiler for ProcedureJsonCompiler {
                 .get("compensation_ref")
                 .and_then(serde_json::Value::as_str)
                 .ok_or_else(|| {
-                    Error::validation(
-                        "procedure E2 requires top-level compensation_ref",
-                    )
+                    Error::validation("procedure E2 requires top-level compensation_ref")
                 })?;
             manifest.compensation_ref = Some(compensation_ref.to_string());
         }
@@ -388,9 +385,7 @@ impl ArtifactCompiler for RepositoryManifestCompiler {
             let compensation_ref = doc
                 .get("compensation_ref")
                 .and_then(serde_json::Value::as_str)
-                .ok_or_else(|| {
-                    Error::validation("repository E2 requires compensation_ref")
-                })?;
+                .ok_or_else(|| Error::validation("repository E2 requires compensation_ref"))?;
             manifest.compensation_ref = Some(compensation_ref.to_string());
         }
         manifest.interfaces.push(CapabilityInterface {
