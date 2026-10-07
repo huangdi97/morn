@@ -126,7 +126,6 @@ impl ArtifactCompiler for OpenApiJsonCompiler {
     }
 }
 
-
 /// Structured SOP/procedure compiler. It accepts an explicit JSON procedure
 /// document and produces a candidate capability without inferring hidden steps.
 /// The compiler intentionally refuses an empty or malformed procedure.
@@ -156,7 +155,9 @@ impl ArtifactCompiler for ProcedureJsonCompiler {
             .and_then(serde_json::Value::as_array)
             .ok_or_else(|| Error::invalid_state("procedure document has no steps array"))?;
         if steps.is_empty() {
-            return Err(Error::invalid_state("procedure must contain at least one step"));
+            return Err(Error::invalid_state(
+                "procedure must contain at least one step",
+            ));
         }
 
         let mut discovered = Vec::new();
@@ -274,7 +275,6 @@ mod tests {
             .iter()
             .any(|operation| operation == "post:/orders"));
     }
-
 
     #[test]
     fn procedure_compiler_preserves_explicit_steps_and_stays_declared() {
