@@ -127,9 +127,10 @@ Declared -> Observed -> Qualified -> Admitted -> Suspended/Retired
 
 Compilation is not qualification. Qualification is not site admission.
 
-The first Artifact2Capability compiler in this branch converts OpenAPI JSON into
-a **Declared** capability candidate and records source provenance. Studio exposes
-this flow without pretending the generated candidate is production-ready.
+The first Artifact2Capability compilers convert OpenAPI JSON and structured SOP
+documents into **Declared** capability candidates with source provenance. Studio
+currently exposes the OpenAPI flow; neither compiler pretends the generated
+candidate is qualified or production-ready.
 
 ## Work control and external effects
 
