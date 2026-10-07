@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-021 in `docs/adr/`
+3. ADR-002 through ADR-022 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -120,3 +120,12 @@ swap writes. Work generation remains a desired-spec generation, not a storage
 revision. Redundant controllers coordinate with expiring leases plus monotonic
 fencing tokens; stale leaders cannot overwrite newer control state. This is
 separate from business Authority. See ADR-021.
+
+
+## Work termination
+
+Work termination is a two-phase control-plane operation. Termination intent is
+durable and monotonic; finalizers keep the Work in `Terminating` until
+outstanding control obligations are resolved. Finalization does not erase
+Attempts, Receipts, Outcomes or other history and does not pretend irreversible
+effects were rolled back. See ADR-022.
