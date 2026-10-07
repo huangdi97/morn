@@ -15,6 +15,7 @@ pub mod policy;
 pub mod protocol;
 pub mod status;
 pub mod time;
+pub mod telemetry;
 pub mod version;
 pub mod workspace;
 
@@ -24,6 +25,7 @@ pub use contracts::{
 pub use error::{Error, Result};
 pub use event_envelope::EventEnvelope;
 pub use history::{HistoricalFact, HistoricalFactId, HistoricalFactLog, HistoricalFactStatus};
+pub use telemetry::TelemetryContext;
 pub use protocol::{
     HistoryMutation, HistoryMutationKind, ProtocolSnapshot, PublishedContractRef,
     MORN_PROTOCOL_V11_5,
