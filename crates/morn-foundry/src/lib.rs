@@ -2,6 +2,7 @@
 
 pub mod artifact2capability;
 pub mod compiler;
+pub mod creator;
 pub mod instantiate;
 pub mod manifest;
 pub mod problem_spec;
@@ -14,6 +15,7 @@ pub use artifact2capability::{
     ReviewedPaperManifestCompiler,
 };
 pub use compiler::{CompilerDecisionSource, SolutionCompiler};
+pub use creator::{draft_creator_solution, CreatorAutonomy, CreatorDraft, CreatorRequest};
 pub use instantiate::{
     instantiate_approved_solution, solution_package_ref, InstantiationPlan,
     SolutionInstantiationRequest,
