@@ -120,9 +120,8 @@ mod tests {
             version: Version::new(1, 2, 0),
             manifest: json!({"kind":"reference"}),
             proposed_solution_id: ProposedSolutionId::generate_with("proposed"),
-            approved_solution_id: approved.then(|| {
-                morn_kernel::ids::ApprovedSolutionId::generate_with("approved")
-            }),
+            approved_solution_id: approved
+                .then(|| morn_kernel::ids::ApprovedSolutionId::generate_with("approved")),
             created_at: Timestamp::now(),
         }
     }
@@ -166,7 +165,10 @@ mod tests {
             .spec
             .required_conditions
             .contains(&"ProfileVersionPinned".to_string()));
-        assert_eq!(plan.work.status.phase, morn_work::control::WorkPhase::Proposed);
+        assert_eq!(
+            plan.work.status.phase,
+            morn_work::control::WorkPhase::Proposed
+        );
     }
 
     #[test]
