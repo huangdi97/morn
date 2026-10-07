@@ -348,6 +348,7 @@ Implemented locally on the v11.5 branch:
   ReviewedPaper2Capability candidate compilers;
 - CloudEvents-compatible event envelope;
 - OCI/Sigstore/SLSA-oriented capability package descriptor;
+- simple Creator draft -> existing solution pipeline;
 - approved SolutionPackage -> persisted Work instantiation;
 - Factory read-only vertical-slice integration test;
 - API/UI exposure in Workbench, Studio, Console and Hub.
@@ -455,3 +456,19 @@ filesystem-write policy, network-egress policy and secret indirection.
 This is intentionally compatible with heterogeneous execution systems such as
 containers, microVMs, DSec-like elastic sandbox platforms and AgentScope-style
 runtime providers without hard-wiring any one of them into Morn semantics.
+
+
+## Creator product layer
+
+Creator is the lightweight entry point for users who do not want to manually
+assemble WorkGraph, harness, runtime and provider details. A Creator request
+contains goal, guarantee profile, acceptance criteria, optional site,
+capability hints and autonomy posture. It translates into the existing
+ProblemSpec/WorkGraph/ProposedSolution pipeline.
+
+Creator does not write canonical Work and does not create a new AgentInstance
+truth model. Review/approval produces the existing SolutionPackage; only
+SolutionPackage instantiation creates canonical WorkResource. This keeps the
+product simple while preserving one business object model.
+
+See ADR-014, ADR-015 and ADR-016.
