@@ -39,7 +39,6 @@ pub struct BindingMigrationDecision {
     pub created_at: Timestamp,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecutionBinding {
     pub id: RuntimeBindingId,
