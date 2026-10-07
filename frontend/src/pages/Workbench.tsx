@@ -16,6 +16,7 @@ import {
   WorkbenchData,
   OpintPredictOutcome,
   V115Status,
+  V115ControlPlaneData,
 } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
@@ -44,6 +45,7 @@ export default function Workbench() {
   const [replacement, setReplacement] = useState<ReplacementOutcome | null>(null);
   const [opintPrediction, setOpintPrediction] = useState<OpintPredictOutcome | null>(null);
   const [v115, setV115] = useState<V115Status | null>(null);
+  const [v115Control, setV115Control] = useState<V115ControlPlaneData | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -54,6 +56,9 @@ export default function Workbench() {
       .finally(() => setLoading(false));
     apiGet<V115Status>("/v115/status")
       .then(setV115)
+      .catch(() => undefined);
+    apiGet<V115ControlPlaneData>("/v115/control-plane")
+      .then(setV115Control)
       .catch(() => undefined);
   }, []);
 
@@ -293,6 +298,29 @@ export default function Workbench() {
           <KeyValue k="DeepSeek Harness" v={`${data.harness.dsh.provider} (${data.harness.dsh.status})`} />
           <KeyValue k="Evolution candidates" v={data.evolution_candidates} />
         </Card>
+
+        {v115Control && (
+          <Card title="v11.5 Durable Work Truth">
+            <KeyValue k="Work resources" v={v115Control.work.length} />
+            <KeyValue k="Bindings" v={v115Control.execution_bindings.length} />
+            <KeyValue k="Attempts" v={v115Control.attempts.length} />
+            <KeyValue k="Reconciliations" v={v115Control.reconciliations.length} />
+            <KeyValue k="Observed outcomes" v={v115Control.outcomes.length} />
+            <KeyValue k="Acceptance decisions" v={v115Control.acceptance_decisions.length} />
+            {v115Control.work.length === 0 ? (
+              <EmptyState label="No persisted v11.5 Work yet" />
+            ) : (
+              <ul>
+                {v115Control.work.map((work) => (
+                  <li key={work.id}>
+                    {work.spec.goal} — <StatusPill value={work.status.phase} /> — generation{" "}
+                    {work.status.observed_generation}/{work.generation}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
 
         {v115 && (
           <Card title="Morn v11.5 Control Plane">
