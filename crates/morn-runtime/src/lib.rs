@@ -28,7 +28,8 @@ pub use credentials::{
     FixtureCredentialProvider,
 };
 pub use environment::{
-    ExecutionEnvironmentHandle, ExecutionEnvironmentId, ExecutionEnvironmentProvider,
+    ExecutionEnvironmentHandle, ExecutionEnvironmentId, ExecutionEnvironmentOffer,
+    ExecutionEnvironmentProvider, ExecutionEnvironmentResolver, ExecutionEnvironmentSelection,
     ExecutionEnvironmentSpec, FixtureEnvironmentProvider, IsolationClass,
 };
 pub use gateway::{
