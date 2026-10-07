@@ -17,6 +17,9 @@ use morn_control_plane::{
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
+use morn_integration::{
+    ConflictPolicy, SourceOfTruthBinding, SourceOfTruthBindingId, TruthAuthorityKind,
+};
 use morn_kernel::error::Result;
 use morn_kernel::ids::{ActorInstanceId, CapabilityId, PrincipalId, WorkspaceId};
 use morn_kernel::policy::{Policy, PolicyRule};
@@ -65,7 +68,7 @@ fn passing_factory_conformance(profile: &DomainProfile) -> morn_profile::Conform
             satisfied_semantics: semantics,
             isolation: "container".to_string(),
             durable_work_state: true,
-            source_of_truth_bound: true,
+            source_of_truth_bound: source_binding.validate().is_ok(),
             provenance_ready: true,
             ..Default::default()
         },
@@ -187,6 +190,22 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             ..Default::default()
         })
         .unwrap();
+
+    let source_binding = SourceOfTruthBinding {
+        id: SourceOfTruthBindingId::generate_with("sot"),
+        site_ref: Some("plant-a".to_string()),
+        source_ref: "cmms://plant-a".to_string(),
+        authority_kind: TruthAuthorityKind::SystemOfRecord,
+        authoritative_fact_types: vec!["maintenance.order".to_string()],
+        key_mapping_ref: "mapping://cmms-order-key@1".to_string(),
+        query_capability_ref: "capability://cmms.read-order@1".to_string(),
+        freshness_sla_ms: Some(30_000),
+        conflict_policy: ConflictPolicy::ReconcileBeforeUse,
+        version_ref: "binding:v1".to_string(),
+        created_at: morn_kernel::time::Timestamp::now(),
+    };
+    source_binding.validate().unwrap();
+    assert!(source_binding.authoritative_for("maintenance.order"));
 
     // Work desired/observed state is canonical; harness state is not.
     let mut work_spec = WorkSpec::new(
