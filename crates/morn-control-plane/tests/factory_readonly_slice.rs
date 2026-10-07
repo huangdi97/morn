@@ -123,6 +123,14 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     let conformance = passing_factory_conformance(&profile);
     assert!(conformance.passed);
     let mut admission = AdmissionService::default();
+    admission
+        .observe(
+            &mut capability,
+            vec!["evaluation-observation:factory-fixture".to_string()],
+            "morn-conformance-suite",
+        )
+        .unwrap();
+    assert_eq!(capability.stage, CapabilityStage::Observed);
     let qualification = admission
         .qualify_with_evidence(
             &mut capability,
