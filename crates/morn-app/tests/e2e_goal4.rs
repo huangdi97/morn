@@ -126,7 +126,7 @@ fn goal4_full_pipeline_e2e() {
         assert_eq!(guard.managed.runs.len(), 4);
         assert_eq!(guard.managed.receipts.len(), 4);
         assert_eq!(guard.episodes.episodes.len(), 4);
-        assert_eq!(guard.store.schema_version().unwrap(), 2);
+        assert_eq!(guard.store.schema_version().unwrap(), 3);
     }
 
     // Phase 3: dataset -> predictor -> prediction -> actual -> error -> calibration.
