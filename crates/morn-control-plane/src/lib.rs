@@ -107,7 +107,7 @@ impl WorkController {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct WorkProgressInputs<'a> {
     pub binding: Option<&'a ExecutionBinding>,
     pub attempt: Option<&'a ActionAttempt>,
