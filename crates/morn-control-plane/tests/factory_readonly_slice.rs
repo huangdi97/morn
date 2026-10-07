@@ -487,12 +487,13 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     WorkProgressController.reconcile(
         &mut work,
         &WorkProgressInputs {
-            binding: Some(&binding),
+            binding: Some(&cmms_binding),
             attempt: Some(&attempt),
             ..Default::default()
         },
     );
     assert!(work.condition_is_true("ProfileVersionPinned"));
+    assert!(work.condition_is_true("ExecutionBindingConsistent"));
     assert!(work.condition_is_true("ReceiptAfterExternalAction"));
     assert!(work.condition_is_true("ReconciliationOnUnknown"));
 
@@ -509,7 +510,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .with_evidence(vec!["harness-neutrality:passed".to_string()]),
     );
     assert_eq!(binding.provider_ref, "harness://dsh");
-    assert_eq!(attempt.binding_id, binding.id);
+    assert_eq!(attempt.binding_id, cmms_binding.id);
     assert_eq!(migrated.migration_from, Some(binding.id.clone()));
     assert_eq!(migrated.provider_ref, "pi");
     assert_eq!(migration_decision.from_binding, binding.id);
