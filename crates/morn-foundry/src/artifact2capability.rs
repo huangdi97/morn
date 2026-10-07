@@ -243,6 +243,270 @@ impl ArtifactCompiler for ProcedureJsonCompiler {
     }
 }
 
+
+#[derive(Debug, Default)]
+pub struct RepositoryManifestCompiler;
+
+impl ArtifactCompiler for RepositoryManifestCompiler {
+    fn compiler_name(&self) -> &str {
+        "repository-manifest-json"
+    }
+
+    fn supports(&self, kind: &ArtifactKind) -> bool {
+        *kind == ArtifactKind::Repository
+    }
+
+    fn compile(&self, source: &ArtifactSource) -> Result<CandidateCapability> {
+        if !self.supports(&source.kind) {
+            return Err(Error::invalid_state(
+                "compiler does not support artifact kind",
+            ));
+        }
+
+        let doc: serde_json::Value = serde_json::from_str(&source.content)
+            .map_err(|error| Error::external(format!("invalid repository manifest JSON: {error}")))?;
+        let provides: Vec<String> = doc
+            .get("provides")
+            .and_then(serde_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if provides.is_empty() {
+            return Err(Error::validation(
+                "repository manifest must explicitly declare provides",
+            ));
+        }
+        let entrypoints: Vec<String> = doc
+            .get("entrypoints")
+            .and_then(serde_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if entrypoints.is_empty() {
+            return Err(Error::validation(
+                "repository manifest must explicitly declare at least one entrypoint",
+            ));
+        }
+
+        let kind = match doc
+            .get("kind")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("program")
+        {
+            "program" => CapabilityKind::Program,
+            "service" => CapabilityKind::Service,
+            "solver" => CapabilityKind::Solver,
+            "model" => CapabilityKind::Model,
+            "llm" => CapabilityKind::Llm,
+            "hybrid" => CapabilityKind::Hybrid,
+            other => {
+                return Err(Error::validation(format!(
+                    "unsupported repository capability kind {other}"
+                )))
+            }
+        };
+
+        let maximum_effect = match doc
+            .get("maximum_effect")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("E0")
+        {
+            "E0" => EffectClass::E0LifecycleReversible,
+            "E1" => EffectClass::E1Transactional,
+            "E2" => EffectClass::E2Compensatable,
+            "E3" => EffectClass::E3Irreversible,
+            other => {
+                return Err(Error::validation(format!(
+                    "unsupported repository maximum_effect {other}"
+                )))
+            }
+        };
+
+        let mut manifest = CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            &source.name,
+            &source.source_ref,
+            kind,
+            maximum_effect,
+        );
+        manifest.provides = provides;
+        manifest.interfaces.push(CapabilityInterface {
+            protocol: "repository-entrypoint".to_string(),
+            input_schema_ref: format!("{}#input", source.source_ref),
+            output_schema_ref: format!("{}#output", source.source_ref),
+        });
+        manifest.provenance.source_ref = source.source_ref.clone();
+        manifest.provenance.source_digest = source.source_digest.clone();
+
+        Ok(CandidateCapability {
+            record: CapabilityRecord::new(manifest),
+            report: CompilationReport {
+                compiler: self.compiler_name().to_string(),
+                source_ref: source.source_ref.clone(),
+                discovered_operations: entrypoints,
+                warnings: vec![
+                    "repository compiler trusts only explicitly declared entrypoints/provides"
+                        .to_string(),
+                    "compiled candidate is not qualified or site-admitted".to_string(),
+                ],
+            },
+        })
+    }
+}
+
+/// Paper/research compiler inspired by Paper2Agent, but deliberately requires a
+/// reviewed structured extraction manifest. It does not infer executable tools
+/// directly from free-form paper text.
+#[derive(Debug, Default)]
+pub struct ReviewedPaperManifestCompiler;
+
+impl ArtifactCompiler for ReviewedPaperManifestCompiler {
+    fn compiler_name(&self) -> &str {
+        "reviewed-paper-manifest-json"
+    }
+
+    fn supports(&self, kind: &ArtifactKind) -> bool {
+        *kind == ArtifactKind::Paper
+    }
+
+    fn compile(&self, source: &ArtifactSource) -> Result<CandidateCapability> {
+        if !self.supports(&source.kind) {
+            return Err(Error::invalid_state(
+                "compiler does not support artifact kind",
+            ));
+        }
+
+        let doc: serde_json::Value = serde_json::from_str(&source.content)
+            .map_err(|error| Error::external(format!("invalid paper manifest JSON: {error}")))?;
+
+        let reviewed = doc
+            .get("reviewed")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        if !reviewed {
+            return Err(Error::validation(
+                "paper capability extraction must be explicitly reviewed",
+            ));
+        }
+
+        let provides: Vec<String> = doc
+            .get("provides")
+            .and_then(serde_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if provides.is_empty() {
+            return Err(Error::validation(
+                "paper manifest must explicitly declare provides",
+            ));
+        }
+
+        let code_bindings: Vec<String> = doc
+            .get("code_bindings")
+            .and_then(serde_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let evidence_refs: Vec<String> = doc
+            .get("evidence_refs")
+            .and_then(serde_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if evidence_refs.is_empty() {
+            return Err(Error::validation(
+                "paper manifest requires explicit evidence references",
+            ));
+        }
+
+        let executable = doc
+            .get("executable")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        if executable && code_bindings.is_empty() {
+            return Err(Error::validation(
+                "executable paper-derived capability requires real code bindings",
+            ));
+        }
+
+        let kind = if executable {
+            CapabilityKind::Program
+        } else {
+            CapabilityKind::Model
+        };
+        let mut manifest = CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            &source.name,
+            &source.source_ref,
+            kind,
+            EffectClass::E0LifecycleReversible,
+        );
+        manifest.provides = provides;
+        manifest.interfaces.push(CapabilityInterface {
+            protocol: if executable {
+                "paper-code-binding".to_string()
+            } else {
+                "paper-evidence".to_string()
+            },
+            input_schema_ref: format!("{}#input", source.source_ref),
+            output_schema_ref: format!("{}#output", source.source_ref),
+        });
+        manifest.provenance.source_ref = source.source_ref.clone();
+        manifest.provenance.source_digest = source.source_digest.clone();
+
+        let mut warnings = vec![
+            "paper-derived capability remains Declared until independent evaluation"
+                .to_string(),
+        ];
+        if !executable {
+            warnings.push(
+                "non-executable paper capability represents reviewed knowledge/evidence only"
+                    .to_string(),
+            );
+        }
+
+        Ok(CandidateCapability {
+            record: CapabilityRecord::new(manifest),
+            report: CompilationReport {
+                compiler: self.compiler_name().to_string(),
+                source_ref: source.source_ref.clone(),
+                discovered_operations: if executable {
+                    code_bindings
+                } else {
+                    evidence_refs
+                },
+                warnings,
+            },
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,6 +576,67 @@ mod tests {
             content: r#"{"provides":["x"],"steps":[]}"#.to_string(),
         };
         assert!(ProcedureJsonCompiler.compile(&source).is_err());
+    }
+
+    #[test]
+    fn repository_compiler_requires_explicit_entrypoints() {
+        let source = ArtifactSource {
+            kind: ArtifactKind::Repository,
+            name: "capacity-solver".to_string(),
+            source_ref: "repo://solver".to_string(),
+            source_digest: Some("sha256:repo".to_string()),
+            content: r#"{
+                "kind":"solver",
+                "provides":["capacity.optimize"],
+                "entrypoints":["bin/solve"],
+                "maximum_effect":"E0"
+            }"#
+            .to_string(),
+        };
+        let candidate = RepositoryManifestCompiler.compile(&source).unwrap();
+        assert_eq!(candidate.record.stage, CapabilityStage::Declared);
+        assert_eq!(candidate.report.discovered_operations, vec!["bin/solve"]);
+    }
+
+    #[test]
+    fn executable_paper_capability_requires_review_and_code_binding() {
+        let source = ArtifactSource {
+            kind: ArtifactKind::Paper,
+            name: "paper-method".to_string(),
+            source_ref: "doi://example".to_string(),
+            source_digest: Some("sha256:paper".to_string()),
+            content: r#"{
+                "reviewed":true,
+                "executable":true,
+                "provides":["method.execute"],
+                "code_bindings":["repo://paper-code#run"],
+                "evidence_refs":["doi://example#method"]
+            }"#
+            .to_string(),
+        };
+        let candidate = ReviewedPaperManifestCompiler.compile(&source).unwrap();
+        assert_eq!(candidate.record.stage, CapabilityStage::Declared);
+        assert_eq!(
+            candidate.report.discovered_operations,
+            vec!["repo://paper-code#run".to_string()]
+        );
+    }
+
+    #[test]
+    fn unreviewed_paper_does_not_become_a_capability() {
+        let source = ArtifactSource {
+            kind: ArtifactKind::Paper,
+            name: "unreviewed".to_string(),
+            source_ref: "doi://unreviewed".to_string(),
+            source_digest: None,
+            content: r#"{
+                "reviewed":false,
+                "provides":["x"],
+                "evidence_refs":["doi://unreviewed"]
+            }"#
+            .to_string(),
+        };
+        assert!(ReviewedPaperManifestCompiler.compile(&source).is_err());
     }
 
     #[test]
