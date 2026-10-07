@@ -88,11 +88,9 @@ pub fn instantiate_approved_solution(
     }
     spec.acceptance_ref = request.acceptance_ref;
 
-    let mut required = vec![
-        "CapabilityResolved".to_string(),
-        "ProfileVersionPinned".to_string(),
-        "ProvenanceReady".to_string(),
-    ];
+    // Only pre-execution readiness gates belong here. Binding/receipt/outcome/
+    // acceptance conditions are reconciled after Work becomes executable.
+    let mut required = vec!["CapabilityResolved".to_string()];
     required.extend(request.required_conditions);
     required.sort();
     required.dedup();
@@ -163,6 +161,11 @@ mod tests {
             .spec
             .required_conditions
             .contains(&"SourceOfTruthBound".to_string()));
+        assert!(!plan
+            .work
+            .spec
+            .required_conditions
+            .contains(&"ProfileVersionPinned".to_string()));
         assert_eq!(plan.work.status.phase, morn_work::control::WorkPhase::Proposed);
     }
 
