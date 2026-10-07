@@ -6,6 +6,8 @@ interface HubData {
   domain_packs: string[];
   actor_templates: Array<{ id: string; name: string; trust: string }>;
   harness_templates: Array<{ id: string; name: string; trust: string }>;
+  composition_runtimes: Array<{ id: string; name: string; trust: string }>;
+  capability_compilers: Array<{ id: string; name: string; trust: string }>;
   work_package_templates: Array<{ id: string; name: string; trust: string }>;
   workcell_blueprints: Array<{ id: string; name: string; trust: string }>;
   evaluation_packs: Array<{ id: string; name: string; trust: string }>;
@@ -128,6 +130,8 @@ export default function Hub() {
         />
         <AssetTable title="Actor Templates" rows={data.actor_templates} />
         <AssetTable title="Harness Templates" rows={data.harness_templates} />
+        <AssetTable title="Composition Runtimes" rows={data.composition_runtimes} />
+        <AssetTable title="Capability Compilers" rows={data.capability_compilers} />
         <AssetTable title="WorkPackage Templates" rows={data.work_package_templates} />
         <AssetTable title="Workcell Blueprints" rows={data.workcell_blueprints} />
         <AssetTable title="Evaluation Packs" rows={data.evaluation_packs} />
