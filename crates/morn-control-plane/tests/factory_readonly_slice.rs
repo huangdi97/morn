@@ -157,6 +157,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             minimum_isolation: Some(IsolationLevel::Container),
             required_authority: vec!["historian.read".to_string()],
             site_ref: Some("plant-a".to_string()),
+            profile_ref: Some(conformance.profile_ref.clone()),
             ..Default::default()
         },
         &[capability.clone()],
