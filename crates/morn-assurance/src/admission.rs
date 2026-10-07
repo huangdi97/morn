@@ -17,6 +17,19 @@ use morn_kernel::version::Version;
 use morn_profile::ConformanceReport;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct CapabilityObservationTag;
+pub type CapabilityObservationId = Id<CapabilityObservationTag>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CapabilityObservation {
+    pub id: CapabilityObservationId,
+    pub manifest_id: CapabilityManifestId,
+    pub evidence_refs: Vec<String>,
+    pub evaluator_identity: String,
+    pub created_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct QualificationRecordTag;
 pub type QualificationRecordId = Id<QualificationRecordTag>;
 
@@ -132,12 +145,53 @@ pub struct SiteAdmission {
 
 #[derive(Debug, Default)]
 pub struct AdmissionService {
+    pub observations: Vec<CapabilityObservation>,
     pub qualifications: Vec<QualificationRecord>,
     pub releases: Vec<CapabilityDistributionRelease>,
     pub admissions: Vec<SiteAdmission>,
 }
 
 impl AdmissionService {
+    pub fn observe(
+        &mut self,
+        capability: &mut CapabilityRecord,
+        evidence_refs: Vec<String>,
+        evaluator_identity: impl Into<String>,
+    ) -> Result<CapabilityObservation> {
+        if !matches!(
+            capability.stage,
+            CapabilityStage::Declared | CapabilityStage::Observed
+        ) {
+            return Err(Error::invalid_state(
+                "only declared/observed capabilities can record evaluation observation",
+            ));
+        }
+        if evidence_refs.is_empty() {
+            return Err(Error::validation(
+                "capability observation requires evaluation evidence",
+            ));
+        }
+        let evaluator_identity = evaluator_identity.into();
+        if evaluator_identity.trim().is_empty() {
+            return Err(Error::validation(
+                "capability observation requires evaluator identity",
+            ));
+        }
+
+        let observation = CapabilityObservation {
+            id: CapabilityObservationId::generate_with("cap-observation"),
+            manifest_id: capability.manifest.id.clone(),
+            evidence_refs,
+            evaluator_identity,
+            created_at: Timestamp::now(),
+        };
+        capability.stage = CapabilityStage::Observed;
+        self.observations.push(observation.clone());
+        Ok(observation)
+    }
+
+    /// Legacy qualification path retained for compatibility. It may normalize
+    /// older certification evidence but remains insufficient for site admission.
     pub fn qualify(
         &mut self,
         capability: &mut CapabilityRecord,
@@ -198,10 +252,10 @@ impl AdmissionService {
     ) -> Result<QualificationRecord> {
         if !matches!(
             capability.stage,
-            CapabilityStage::Declared | CapabilityStage::Observed | CapabilityStage::Qualified
+            CapabilityStage::Observed | CapabilityStage::Qualified
         ) {
             return Err(Error::invalid_state(
-                "only declared/observed/qualified capabilities can be qualified",
+                "strict qualification requires an observed/evaluated capability",
             ));
         }
         if evidence_refs.is_empty() || !qualification_evidence.is_strict_enough_for_site_admission()
