@@ -58,6 +58,8 @@ pub struct WorkSpec {
     pub constraints: Vec<String>,
     pub required_conditions: Vec<String>,
     pub acceptance_ref: Option<String>,
+    #[serde(default)]
+    pub source_solution_ref: Option<String>,
     pub profile_ref: String,
 }
 
@@ -73,6 +75,7 @@ impl WorkSpec {
             constraints: Vec::new(),
             required_conditions: Vec::new(),
             acceptance_ref: None,
+            source_solution_ref: None,
             profile_ref: profile_ref.into(),
         }
     }
@@ -167,6 +170,27 @@ impl WorkResource {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_solution_reference_survives_generation_change() {
+        let ws = WorkspaceId::generate();
+        let work_id = WorkPackageId::generate_with("wp");
+        let mut spec = WorkSpec::new(work_id, "investigate", "morn.lite@1.0.0");
+        spec.source_solution_ref = Some("solution://review@1.0.0".to_string());
+        let mut resource = WorkResource::new(ws, spec.clone());
+        assert_eq!(
+            resource.spec.source_solution_ref.as_deref(),
+            Some("solution://review@1.0.0")
+        );
+
+        spec.goal = "investigate and verify".to_string();
+        resource.replace_spec(spec);
+        assert_eq!(resource.generation, 2);
+        assert_eq!(
+            resource.spec.source_solution_ref.as_deref(),
+            Some("solution://review@1.0.0")
+        );
+    }
 
     #[test]
     fn desired_and_observed_generation_are_distinct() {
