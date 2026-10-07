@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use morn_kernel::ExecutionGuarantee;
+
 use crate::manifest::{CapabilityManifestId, CapabilityRecord, CapabilityStage, IsolationLevel};
 use crate::registry::CapabilityKind;
 
@@ -16,6 +18,7 @@ pub struct CapabilityRequest {
     pub maximum_effect: Option<crate::effect::EffectClass>,
     pub required_runtime_kinds: Vec<String>,
     pub required_harness_compatibility: Vec<String>,
+    pub required_execution_guarantees: Vec<ExecutionGuarantee>,
     pub site_ref: Option<String>,
     pub profile_ref: Option<String>,
     pub unavailable_providers: Vec<String>,
@@ -42,6 +45,7 @@ pub struct WorkcellRequest {
     pub maximum_effect: Option<crate::effect::EffectClass>,
     pub required_runtime_kinds: Vec<String>,
     pub required_harness_compatibility: Vec<String>,
+    pub required_execution_guarantees: Vec<ExecutionGuarantee>,
     pub site_ref: Option<String>,
     pub profile_ref: Option<String>,
     pub unavailable_providers: Vec<String>,
@@ -215,6 +219,15 @@ impl CapabilityResolver {
             {
                 continue;
             }
+            if !request.required_execution_guarantees.iter().all(|required| {
+                manifest
+                    .execution
+                    .required_guarantees
+                    .iter()
+                    .any(|provided| provided == required)
+            }) {
+                continue;
+            }
 
             let mut rationale = vec!["semantic requirements satisfied".to_string()];
             let mut score = 50;
@@ -269,6 +282,7 @@ impl CapabilityResolver {
             maximum_effect: request.maximum_effect,
             required_runtime_kinds: request.required_runtime_kinds.clone(),
             required_harness_compatibility: request.required_harness_compatibility.clone(),
+            required_execution_guarantees: request.required_execution_guarantees.clone(),
             site_ref: request.site_ref.clone(),
             profile_ref: request.profile_ref.clone(),
             unavailable_providers: request.unavailable_providers.clone(),
@@ -524,6 +538,48 @@ mod tests {
             &[remote],
         );
         assert_eq!(explicit_remote.len(), 1);
+    }
+
+    #[test]
+    fn resolver_requires_declared_execution_guarantees() {
+        let mut record = admitted(
+            "sandboxed-program",
+            "program-provider",
+            CapabilityKind::Program,
+            &["observe"],
+            10,
+        );
+        record.manifest.execution.required_guarantees = vec![
+            ExecutionGuarantee::FilesystemWritePolicy,
+            ExecutionGuarantee::NetworkEgressPolicy,
+        ];
+
+        let ok = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["observe".to_string()],
+                required_execution_guarantees: vec![
+                    ExecutionGuarantee::FilesystemWritePolicy,
+                    ExecutionGuarantee::NetworkEgressPolicy,
+                ],
+                site_ref: Some("plant-a".to_string()),
+                ..Default::default()
+            },
+            &[record.clone()],
+        );
+        assert_eq!(ok.len(), 1);
+
+        let blocked = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["observe".to_string()],
+                required_execution_guarantees: vec![
+                    ExecutionGuarantee::RuntimeAttestation,
+                ],
+                site_ref: Some("plant-a".to_string()),
+                ..Default::default()
+            },
+            &[record],
+        );
+        assert!(blocked.is_empty());
     }
 
     #[test]
