@@ -56,6 +56,25 @@ pub enum WorkPhase {
     Cancelled,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum AutonomyPosture {
+    /// Observe/analyse/draft only. No external write-like effects.
+    Assist,
+    /// Side effects may proceed only through explicit profile/authority/approval gates.
+    #[default]
+    Governed,
+    /// The system may act without per-step human confirmation only inside the
+    /// same explicit Profile + Authority boundary. This does not widen rights.
+    AutonomousWithinPolicy,
+}
+
+impl AutonomyPosture {
+    pub const fn permits_write_like(self) -> bool {
+        !matches!(self, Self::Assist)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkSpec {
     pub work_package_id: WorkPackageId,
@@ -67,6 +86,8 @@ pub struct WorkSpec {
     pub source_solution_ref: Option<String>,
     #[serde(default)]
     pub site_ref: Option<String>,
+    #[serde(default)]
+    pub autonomy_posture: AutonomyPosture,
     pub profile_ref: String,
 }
 
@@ -84,6 +105,7 @@ impl WorkSpec {
             acceptance_ref: None,
             source_solution_ref: None,
             site_ref: None,
+            autonomy_posture: AutonomyPosture::Governed,
             profile_ref: profile_ref.into(),
         }
     }
@@ -301,6 +323,17 @@ impl WorkResource {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn assist_posture_is_a_real_effect_ceiling() {
+        assert!(!AutonomyPosture::Assist.permits_write_like());
+        assert!(AutonomyPosture::Governed.permits_write_like());
+        assert!(AutonomyPosture::AutonomousWithinPolicy.permits_write_like());
+
+        let work_id = WorkPackageId::generate_with("wp");
+        let spec = WorkSpec::new(work_id, "draft review", "morn.lite@1.0.0");
+        assert_eq!(spec.autonomy_posture, AutonomyPosture::Governed);
+    }
 
     #[test]
     fn termination_is_monotonic_and_waits_for_finalizers() {
