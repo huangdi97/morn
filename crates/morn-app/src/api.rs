@@ -151,7 +151,7 @@ async fn v115_status() -> ApiResult {
         },
         "capability_supply_chain": {
             "stages": ["Declared", "Observed", "Qualified", "Admitted", "Suspended", "Retired"],
-            "artifact_compilers": ["OpenAPI2Capability"],
+            "artifact_compilers": ["OpenAPI2Capability", "SOP2ProcedureCapability"],
             "qualification_is_not_admission": true
         },
         "factory_profile": {
