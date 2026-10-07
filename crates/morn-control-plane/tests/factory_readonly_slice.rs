@@ -350,7 +350,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     // Durable control-plane state survives serialization independently of harness sessions.
     let store = MornStore::open_in_memory().unwrap();
     store.save_work_resource(&work).unwrap();
-    store.save_source_of_truth_binding(&work, &source_binding).unwrap();
+    store
+        .save_source_of_truth_binding(&work, &source_binding)
+        .unwrap();
     store.save_execution_binding(&work, &binding).unwrap();
     store.save_action_attempt(&work, &attempt).unwrap();
     store.save_reconciliation(&work, &reconciliation).unwrap();
