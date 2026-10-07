@@ -233,7 +233,6 @@ impl CapabilityRecord {
     }
 }
 
-
 #[cfg(test)]
 mod governance_tests {
     use super::*;
