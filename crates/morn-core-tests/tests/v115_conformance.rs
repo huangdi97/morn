@@ -163,7 +163,7 @@ fn minimum_sufficient_workcell_does_not_default_to_agents() {
         admitted(
             "general-agent",
             "dsh",
-            CapabilityKind::Llm,
+            CapabilityKind::Agent,
             &["alarm.classify"],
             50,
         ),
