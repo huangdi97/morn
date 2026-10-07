@@ -60,7 +60,7 @@ User-facing “blueprint” maps to an approved `SolutionPackage`; a runtime
 “instance” maps to canonical `WorkResource`. Work stores
 `source_solution_ref` for package provenance. Workcell remains a
 minimum-sufficient executor composition for a Work, not a second source of
-business truth. See ADR-014.
+business truth. See ADR-015.
 
 ## Execution guarantees
 
@@ -76,4 +76,4 @@ floor. See ADR-014.
 Implementations are replaceable; published semantic laws are non-bypassable
 within a protocol version. Work/Authority/Binding/external-effect truth/
 Outcome/Acceptance/history/profile semantics cannot be silently redefined by a
-plugin. See ADR-015.
+plugin. See ADR-016. See ADR-015.
