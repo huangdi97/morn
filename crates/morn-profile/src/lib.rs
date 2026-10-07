@@ -8,6 +8,7 @@ pub mod conformance;
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::version::Version;
+use morn_kernel::ExecutionGuarantee;
 
 pub use conformance::{evaluate_profile, ConformanceEvidence, ConformanceReport};
 
@@ -57,6 +58,8 @@ pub struct DomainProfile {
     pub version: Version,
     pub requirements: Vec<GuaranteeRequirement>,
     pub minimum_isolation: String,
+    #[serde(default)]
+    pub required_execution_guarantees: Vec<ExecutionGuarantee>,
     pub source_of_truth_binding_required: bool,
     pub durable_work_state_required: bool,
     pub provenance_required: bool,
@@ -87,6 +90,7 @@ impl DomainProfile {
             ]
             .to_vec(),
             minimum_isolation: "process".to_string(),
+            required_execution_guarantees: Vec::new(),
             source_of_truth_binding_required: false,
             durable_work_state_required: false,
             provenance_required: false,
@@ -111,6 +115,9 @@ impl DomainProfile {
             .map(GuaranteeRequirement::required)
             .collect(),
             minimum_isolation: "container".to_string(),
+            required_execution_guarantees: vec![
+                ExecutionGuarantee::SecretIndirection,
+            ],
             source_of_truth_binding_required: false,
             durable_work_state_required: true,
             provenance_required: true,
@@ -134,6 +141,11 @@ impl DomainProfile {
             .map(GuaranteeRequirement::required)
             .collect(),
             minimum_isolation: "container".to_string(),
+            required_execution_guarantees: vec![
+                ExecutionGuarantee::FilesystemWritePolicy,
+                ExecutionGuarantee::NetworkEgressPolicy,
+                ExecutionGuarantee::SecretIndirection,
+            ],
             source_of_truth_binding_required: false,
             durable_work_state_required: true,
             provenance_required: true,
@@ -168,6 +180,11 @@ impl DomainProfile {
                 requirements
             },
             minimum_isolation: "container".to_string(),
+            required_execution_guarantees: vec![
+                ExecutionGuarantee::FilesystemWritePolicy,
+                ExecutionGuarantee::NetworkEgressPolicy,
+                ExecutionGuarantee::SecretIndirection,
+            ],
             source_of_truth_binding_required: true,
             durable_work_state_required: true,
             provenance_required: true,
@@ -192,6 +209,17 @@ mod tests {
             .iter()
             .all(|profile| profile.version == Version::new(1, 0, 0)));
         assert!(DomainProfile::factory_readonly_v1().forbids("ProductionWrite"));
+    }
+
+    #[test]
+    fn factory_profile_requires_network_and_secret_guarantees() {
+        let profile = DomainProfile::factory_readonly_v1();
+        assert!(profile
+            .required_execution_guarantees
+            .contains(&ExecutionGuarantee::NetworkEgressPolicy));
+        assert!(profile
+            .required_execution_guarantees
+            .contains(&ExecutionGuarantee::SecretIndirection));
     }
 
     #[test]
