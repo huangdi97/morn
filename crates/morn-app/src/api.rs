@@ -67,10 +67,7 @@ pub fn router(state: AppState) -> Router {
             "/api/v115/artifact/repository/compile",
             post(v115_compile_repository),
         )
-        .route(
-            "/api/v115/artifact/paper/compile",
-            post(v115_compile_paper),
-        )
+        .route("/api/v115/artifact/paper/compile", post(v115_compile_paper))
         .route("/api/workspaces", get(list_workspaces))
         .route("/api/workbench", get(workbench))
         .route("/api/studio", get(studio))
@@ -309,7 +306,11 @@ async fn v115_compile_repository(Json(body): Json<Value>) -> ApiResult {
         content: body
             .get("content")
             .and_then(Value::as_str)
-            .ok_or_else(|| AppError(Error::validation("content must contain repository manifest JSON")))?
+            .ok_or_else(|| {
+                AppError(Error::validation(
+                    "content must contain repository manifest JSON",
+                ))
+            })?
             .to_string(),
     };
     let candidate = RepositoryManifestCompiler.compile(&source)?;
@@ -344,7 +345,11 @@ async fn v115_compile_paper(Json(body): Json<Value>) -> ApiResult {
         content: body
             .get("content")
             .and_then(Value::as_str)
-            .ok_or_else(|| AppError(Error::validation("content must contain reviewed paper manifest JSON")))?
+            .ok_or_else(|| {
+                AppError(Error::validation(
+                    "content must contain reviewed paper manifest JSON",
+                ))
+            })?
             .to_string(),
     };
     let candidate = ReviewedPaperManifestCompiler.compile(&source)?;
