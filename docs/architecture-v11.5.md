@@ -622,3 +622,17 @@ A stale controller cannot overwrite a newer Work projection merely because it
 started earlier. A stale controller lease also does not grant Authority or make
 an external effect valid: real actions still traverse profile, authority,
 credential and binding enforcement gates.
+
+
+## Graceful Work termination
+
+A Work is not an ephemeral process and therefore cannot be deleted like an
+agent session. The reference control resource carries monotonic termination
+intent plus qualified finalizers. Controllers register cleanup/reconciliation
+obligations before termination; a terminating Work remains addressable until
+the finalizer set is empty. Terminal cancellation is still retained as
+historical business state.
+
+This borrows the finalizer pattern used by mature reconciliation control planes
+while preserving Morn-specific semantics: finalization means consequence
+accounting is complete, not that every real-world effect was undone.
