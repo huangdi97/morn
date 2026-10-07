@@ -266,9 +266,9 @@ impl AdmissionService {
         if package_ref.trim().is_empty() {
             return Err(Error::validation("release requires package reference"));
         }
-        let digest = content_digest.strip_prefix("sha256:").ok_or_else(|| {
-            Error::validation("release content digest must use sha256:<64 hex>")
-        })?;
+        let digest = content_digest
+            .strip_prefix("sha256:")
+            .ok_or_else(|| Error::validation("release content digest must use sha256:<64 hex>"))?;
         if digest.len() != 64 || !digest.chars().all(|ch| ch.is_ascii_hexdigit()) {
             return Err(Error::validation(
                 "release content digest must use sha256:<64 hex>",
@@ -687,7 +687,9 @@ mod tests {
                 "site-owner",
             )
             .unwrap();
-        service.revoke_release(&mut capability, &release.id).unwrap();
+        service
+            .revoke_release(&mut capability, &release.id)
+            .unwrap();
 
         assert_eq!(
             service
