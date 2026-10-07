@@ -30,9 +30,8 @@ use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, Require
 use morn_runtime::{
     decide_bound, enforce_authority, ActionAttempt, AttemptState, AuthorityProvider,
     AuthorityRequest, BindingMigrationReason, BindingMigrationRequest, ExecutionBinding,
-    ExecutionEnvironmentOffer,
-    ExecutionEnvironmentProvider, ExecutionEnvironmentResolver, ExecutionEnvironmentSpec,
-    FixtureEnvironmentProvider, NativePolicyAuthority, OutcomeReconciler,
+    ExecutionEnvironmentOffer, ExecutionEnvironmentProvider, ExecutionEnvironmentResolver,
+    ExecutionEnvironmentSpec, FixtureEnvironmentProvider, NativePolicyAuthority, OutcomeReconciler,
     ReconciliationObservation,
 };
 use morn_store::MornStore;
@@ -315,8 +314,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .all_passed());
 
     // The active attempt pins the exact provider/runtime selection.
-    let mut binding =
-        ExecutionBinding::for_resolved_capability(&work, &resolved[0], "fixture-v1");
+    let mut binding = ExecutionBinding::for_resolved_capability(&work, &resolved[0], "fixture-v1");
     binding.provider_digest = Some("sha256:dsh-fixture".to_string());
     binding.runtime_ref = Some(environment.runtime_ref.clone());
     binding.authority_decision_ref = Some(authority_decision.id.to_string());
@@ -337,8 +335,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     cmms_manifest.compensation_ref = Some("cmms.sandbox.cancel-order".to_string());
     cmms_manifest.idempotency_key_required = true;
     cmms_manifest.execution.minimum_isolation = IsolationLevel::Container;
-    cmms_manifest.execution.required_guarantees =
-        profile.required_execution_guarantees.clone();
+    cmms_manifest.execution.required_guarantees = profile.required_execution_guarantees.clone();
     cmms_manifest.provenance.source_ref = "openapi://fixture/cmms".to_string();
     cmms_manifest.provenance.source_digest = Some("sha256:cmms-fixture".to_string());
     cmms_manifest.validate_governance().unwrap();
@@ -431,8 +428,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     sandbox_authority_request.work_ref = Some(work_package_id.to_string());
     sandbox_authority_request.site_ref = Some("plant-a".to_string());
     sandbox_authority_request.scope = vec!["maintenance-order:create".to_string()];
-    let sandbox_authority_decision =
-        decide_bound(&authority, &sandbox_authority_request).unwrap();
+    let sandbox_authority_decision = decide_bound(&authority, &sandbox_authority_request).unwrap();
     let sandbox_permit = issue_external_action_permit(
         &profile,
         ExternalActionMode::SandboxWrite,
@@ -604,9 +600,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .save_source_of_truth_binding(&work, &source_binding)
         .unwrap();
     store.save_execution_binding(&work, &binding).unwrap();
-    store
-        .save_execution_binding(&work, &cmms_binding)
-        .unwrap();
+    store.save_execution_binding(&work, &cmms_binding).unwrap();
     store
         .save_binding_migration(&work, &migration_decision)
         .unwrap();
