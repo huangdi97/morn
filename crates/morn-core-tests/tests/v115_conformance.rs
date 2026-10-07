@@ -240,6 +240,16 @@ fn site_admission_requires_strict_nonexpired_qualification() {
             None,
         )
         .unwrap();
+    service
+        .record_release(
+            &mut capability,
+            &qualification,
+            format!("oci://fixture/morn/investigator@sha256:{}", "b".repeat(64)),
+            format!("sha256:{}", "b".repeat(64)),
+            Some("sigstore://fixture/investigator".to_string()),
+            Some("slsa://fixture/investigator".to_string()),
+        )
+        .unwrap();
 
     let profile = DomainProfile::factory_readonly_v1();
     let report = passing_profile(&profile);
