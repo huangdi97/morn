@@ -4,6 +4,7 @@
 //! code. Real connector attempts must be created through this boundary so the
 //! Work/profile/authority permit and pinned ExecutionBinding cannot be skipped.
 
+use morn_capability::effect::{EffectClass, EffectContract};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::time::Timestamp;
 use morn_runtime::{ActionAttempt, AttemptState, ExecutionBinding};
@@ -13,6 +14,22 @@ use crate::ExternalActionPermit;
 pub fn begin_external_attempt(
     permit: &ExternalActionPermit,
     binding: &ExecutionBinding,
+    business_key: impl Into<String>,
+    action_name: impl Into<String>,
+) -> Result<ActionAttempt> {
+    begin_external_attempt_with_effect(
+        permit,
+        binding,
+        EffectContract::e0(),
+        business_key,
+        action_name,
+    )
+}
+
+pub fn begin_external_attempt_with_effect(
+    permit: &ExternalActionPermit,
+    binding: &ExecutionBinding,
+    effect: EffectContract,
     business_key: impl Into<String>,
     action_name: impl Into<String>,
 ) -> Result<ActionAttempt> {
@@ -60,7 +77,31 @@ pub fn begin_external_attempt(
         )));
     }
 
+    let effect_ceiling = binding.effect_ceiling.unwrap_or(EffectClass::E0LifecycleReversible);
+    if !effect_ceiling.permits(effect.class) {
+        return Err(Error::not_authorized(format!(
+            "binding effect ceiling {} does not permit requested effect {}",
+            effect_ceiling, effect.class
+        )));
+    }
+    if effect.class == EffectClass::E2Compensatable {
+        let requested_compensation = effect
+            .compensation_action
+            .as_deref()
+            .ok_or_else(|| Error::validation("E2 external action requires compensation action"))?;
+        if binding
+            .compensation_ref
+            .as_deref()
+            .is_some_and(|expected| expected != requested_compensation)
+        {
+            return Err(Error::validation(
+                "attempt compensation action does not match pinned binding",
+            ));
+        }
+    }
+
     let mut attempt = ActionAttempt::new(binding.id.clone(), business_key, action_name);
+    attempt.set_effect_contract(effect)?;
     attempt.resource_ref = Some(permit.resource.clone());
     attempt.site_ref = permit.site_ref.clone();
     attempt.authority_decision_ref = Some(permit.authority_decision_ref.clone());
@@ -76,6 +117,94 @@ mod tests {
 
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
     use morn_work::control::{WorkResource, WorkSpec};
+
+    #[test]
+    fn effect_ceiling_blocks_write_from_read_only_binding() {
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "test",
+            "morn.factory.readonly@1.0.0",
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let binding = ExecutionBinding::for_work(&work, "capability:read", "provider:a", "1");
+        let permit = ExternalActionPermit {
+            id: crate::ExternalActionPermitId::generate_with("permit"),
+            profile_ref: binding.profile_ref.clone(),
+            mode: crate::ExternalActionMode::SandboxWrite,
+            authority_decision_ref: "authz:test".to_string(),
+            principal: "controller".to_string(),
+            acting_for: None,
+            action: "cmms.create-order".to_string(),
+            resource: "cmms://fixture".to_string(),
+            site_ref: binding.site_ref.clone(),
+            scope: vec![],
+            parameter_envelope: BTreeMap::new(),
+            work_ref: work.id.to_string(),
+            binding_ref: binding.id.to_string(),
+            not_before: None,
+            expires_at: None,
+            issued_at: Timestamp::now(),
+        };
+        assert!(begin_external_attempt_with_effect(
+            &permit,
+            &binding,
+            EffectContract::e2("cmms.cancel-order"),
+            "business-key",
+            "cmms.create-order",
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn e2_attempt_must_match_pinned_compensation() {
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "test",
+            "morn.factory.readonly@1.0.0",
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let mut binding = ExecutionBinding::for_work(&work, "capability:write", "provider:a", "1");
+        binding.effect_ceiling = Some(EffectClass::E2Compensatable);
+        binding.compensation_ref = Some("cmms.cancel-order".to_string());
+
+        let permit = ExternalActionPermit {
+            id: crate::ExternalActionPermitId::generate_with("permit"),
+            profile_ref: binding.profile_ref.clone(),
+            mode: crate::ExternalActionMode::SandboxWrite,
+            authority_decision_ref: "authz:test".to_string(),
+            principal: "controller".to_string(),
+            acting_for: None,
+            action: "cmms.create-order".to_string(),
+            resource: "cmms://fixture".to_string(),
+            site_ref: binding.site_ref.clone(),
+            scope: vec![],
+            parameter_envelope: BTreeMap::new(),
+            work_ref: work.id.to_string(),
+            binding_ref: binding.id.to_string(),
+            not_before: None,
+            expires_at: None,
+            issued_at: Timestamp::now(),
+        };
+
+        assert!(begin_external_attempt_with_effect(
+            &permit,
+            &binding,
+            EffectContract::e2("cmms.other-cancel"),
+            "business-key",
+            "cmms.create-order",
+        )
+        .is_err());
+        assert!(begin_external_attempt_with_effect(
+            &permit,
+            &binding,
+            EffectContract::e2("cmms.cancel-order"),
+            "business-key",
+            "cmms.create-order",
+        )
+        .is_ok());
+    }
 
     #[test]
     fn permit_cannot_be_replayed_for_a_different_action() {
