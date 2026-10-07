@@ -8,21 +8,15 @@ use serde::{Deserialize, Serialize};
 
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::Id;
-use morn_kernel::ExecutionGuarantee;
+use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct ExecutionEnvironmentTag;
 pub type ExecutionEnvironmentId = Id<ExecutionEnvironmentTag>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash, PartialOrd, Ord)]
-pub enum IsolationClass {
-    Process,
-    Container,
-    MicroVm,
-    FullVm,
-    Remote,
-    Physical,
-}
+/// Compatibility alias retained for the public runtime API. The canonical
+/// execution topology vocabulary lives in morn-kernel.
+pub type IsolationClass = ExecutionClass;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecutionEnvironmentSpec {
