@@ -189,8 +189,8 @@ impl MornStore {
     }
 
     pub fn pending_outbox_events(&self, limit: usize) -> Result<Vec<OutboxEvent>> {
-        let limit = i64::try_from(limit)
-            .map_err(|_| Error::validation("outbox limit is too large"))?;
+        let limit =
+            i64::try_from(limit).map_err(|_| Error::validation("outbox limit is too large"))?;
         let mut stmt = self
             .conn
             .prepare(
@@ -231,9 +231,7 @@ impl MornStore {
             )
             .map_err(|e| Error::internal(e.to_string()))?;
         if updated == 0 {
-            return Err(Error::not_found(format!(
-                "pending outbox event {event_id}"
-            )));
+            return Err(Error::not_found(format!("pending outbox event {event_id}")));
         }
         Ok(())
     }
@@ -1435,5 +1433,4 @@ mod tests {
         assert!(store.pending_outbox_events(10).unwrap().is_empty());
         assert!(store.mark_outbox_dispatched("evt-out-1", 31).is_err());
     }
-
 }
