@@ -401,7 +401,7 @@ impl MornStore {
                    AND holder = ?2
                    AND fencing_token = ?3
                    AND expires_at > ?5",
-                params![lease.lease_name, lease.holder, token, expires_at, now],
+                params![&lease.lease_name, &lease.holder, token, expires_at, now],
             )
             .map_err(|e| Error::internal(e.to_string()))?;
         if updated == 0 {
