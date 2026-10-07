@@ -51,13 +51,7 @@ impl CapabilityArtifactDescriptor {
         if require_signature && self.signature_ref.as_deref().unwrap_or("").is_empty() {
             return Err("signature reference required by profile".to_string());
         }
-        if require_provenance
-            && self
-                .slsa_provenance_ref
-                .as_deref()
-                .unwrap_or("")
-                .is_empty()
-        {
+        if require_provenance && self.slsa_provenance_ref.as_deref().unwrap_or("").is_empty() {
             return Err("SLSA provenance reference required by profile".to_string());
         }
         for layer in &self.layers {
@@ -103,7 +97,9 @@ mod tests {
                 annotations: vec![],
             }],
             sbom_ref: Some("oci://registry.example/sbom@sha256:fixture".to_string()),
-            slsa_provenance_ref: Some("oci://registry.example/provenance@sha256:fixture".to_string()),
+            slsa_provenance_ref: Some(
+                "oci://registry.example/provenance@sha256:fixture".to_string(),
+            ),
             signature_ref: Some("sigstore://rekor/fixture".to_string()),
         };
         assert!(descriptor.validate(true, true).is_ok());
