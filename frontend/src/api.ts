@@ -65,6 +65,7 @@ export interface V115Status {
     id: string;
     version: { major: number; minor: number; patch: number };
     minimum_isolation: string;
+    required_execution_guarantees: string[];
     required_guarantees: string[];
     production_write: boolean;
     first_wedge: string;
