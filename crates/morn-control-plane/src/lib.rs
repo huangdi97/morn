@@ -137,7 +137,7 @@ impl WorkProgressController {
 
         if let Some(binding) = inputs.binding {
             if binding.work_id == work.id && binding.work_generation == work.generation {
-                work.status.active_binding = Some(binding.id.clone());
+                work.record_active_binding(binding.id.clone());
                 let mut condition =
                     WorkCondition::new("ProfileVersionPinned", ConditionStatus::True);
                 condition.reason = format!("binding {} pins {}", binding.id, binding.profile_ref);
@@ -248,7 +248,9 @@ impl WorkProgressController {
             return;
         }
 
-        work.status.phase = if work.status.active_binding.is_some() {
+        work.status.phase = if !work.status.active_bindings.is_empty()
+            || work.status.active_binding.is_some()
+        {
             WorkPhase::Running
         } else {
             WorkPhase::Ready
