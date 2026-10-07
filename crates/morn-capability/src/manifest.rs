@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::ids::{CapabilityId, Id};
+use morn_kernel::ExecutionGuarantee;
 use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
 
@@ -40,6 +41,8 @@ pub struct ExecutionRequirements {
     pub os: Option<String>,
     pub runtime_kinds: Vec<String>,
     pub harness_compatibility: Vec<String>,
+    #[serde(default)]
+    pub required_guarantees: Vec<ExecutionGuarantee>,
     pub network_allowlist: Vec<String>,
     pub writable_paths: Vec<String>,
     pub secret_refs: Vec<String>,
@@ -58,6 +61,7 @@ impl Default for ExecutionRequirements {
             os: None,
             runtime_kinds: Vec::new(),
             harness_compatibility: Vec::new(),
+            required_guarantees: Vec::new(),
             network_allowlist: Vec::new(),
             writable_paths: Vec::new(),
             secret_refs: Vec::new(),
