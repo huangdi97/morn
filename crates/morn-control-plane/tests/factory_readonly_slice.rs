@@ -14,6 +14,7 @@ use morn_capability::{
 };
 use morn_control_plane::{
     ControlPlaneStore, ControllerInputs, ReconciliationController, WorkController,
+    WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
@@ -274,6 +275,15 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .mark_outcome_unknown("client timeout after external commit")
         .unwrap();
     assert!(attempt.transition(AttemptState::Dispatched).is_err());
+    WorkProgressController.reconcile(
+        &mut work,
+        &WorkProgressInputs {
+            binding: Some(&binding),
+            attempt: Some(&attempt),
+            ..Default::default()
+        },
+    );
+    assert_eq!(work.status.phase, WorkPhase::Reconciling);
 
     let reconciliation = ReconciliationController
         .reconcile(&mut attempt, &CmmsCommittedAfterTimeout)
@@ -332,6 +342,15 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .evidence_refs
         .push("artifact://delivery-impact-review".to_string());
     assert!(outcome.is_source_grounded());
+    WorkProgressController.reconcile(
+        &mut work,
+        &WorkProgressInputs {
+            binding: Some(&binding),
+            outcome: Some(&outcome),
+            ..Default::default()
+        },
+    );
+    assert_eq!(work.status.phase, WorkPhase::Delivered);
 
     let mut acceptance_decision = AcceptanceDecision::new(
         work_package_id.clone(),
@@ -346,6 +365,16 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .evidence_refs
         .extend(outcome.evidence_refs.clone());
     assert!(acceptance_decision.is_final_acceptance());
+    WorkProgressController.reconcile(
+        &mut work,
+        &WorkProgressInputs {
+            binding: Some(&binding),
+            outcome: Some(&outcome),
+            acceptance: Some(&acceptance_decision),
+            ..Default::default()
+        },
+    );
+    assert_eq!(work.status.phase, WorkPhase::Accepted);
 
     let mut value = ValueAssessment::new(
         work_package_id.clone(),
@@ -377,7 +406,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .load_record("work_resource_v115", work.id.as_str())
         .unwrap()
         .unwrap();
-    assert_eq!(restored.status.phase, WorkPhase::Ready);
+    assert_eq!(restored.status.phase, WorkPhase::Accepted);
     assert_eq!(restored.status.active_binding, Some(binding.id.clone()));
 
     let restored_outcome: ObservedOutcome = store
