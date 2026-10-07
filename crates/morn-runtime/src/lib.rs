@@ -16,7 +16,7 @@ pub mod reconciliation;
 pub mod runtime_provider;
 pub mod workload_identity;
 
-pub use attempt::{ActionAttempt, ActionAttemptId, AttemptState};
+pub use attempt::{ActionAttempt, ActionAttemptId, AttemptState, CancellationDisposition};
 pub use authority::{
     decide_bound, enforce_authority, AuthorityDecisionId, AuthorityDecisionRecord,
     AuthorityProvider, AuthorityRequest, BoundAuthorityDecision, NativePolicyAuthority,
