@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-019 in `docs/adr/`
+3. ADR-002 through ADR-020 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -68,7 +68,7 @@ Execution environment topology and security guarantees are separate. Profiles,
 capability manifests and environment providers use a typed execution-guarantee
 vector; Factory read-only currently requires filesystem-write policy,
 network-egress policy and secret indirection in addition to its containment
-floor. See ADR-014.
+floor. See ADR-020.
 
 
 ## Semantic constitution
