@@ -20,9 +20,17 @@ export default function Studio() {
   );
   const [artifactCandidate, setArtifactCandidate] = useState<OpenApiCompileOutcome | null>(null);
   const [procedureText, setProcedureText] = useState(
-    '{"steps":[{"id":"inspect","action":"inspect machine"},{"id":"review","action":"review evidence"}]}',
+    '{"provides":["factory.outage.review"],"steps":[{"id":"inspect","capability":"historian.read","effect":"E0"},{"id":"review","capability":"human.approve","effect":"E0"}]}',
   );
   const [procedureCandidate, setProcedureCandidate] = useState<OpenApiCompileOutcome | null>(null);
+  const [repositoryText, setRepositoryText] = useState(
+    '{"kind":"solver","provides":["capacity.optimize"],"entrypoints":["bin/solve"],"maximum_effect":"E0"}',
+  );
+  const [repositoryCandidate, setRepositoryCandidate] = useState<OpenApiCompileOutcome | null>(null);
+  const [paperText, setPaperText] = useState(
+    '{"reviewed":true,"executable":true,"provides":["method.execute"],"code_bindings":["repo://paper-code#run"],"evidence_refs":["doi://example#method"]}',
+  );
+  const [paperCandidate, setPaperCandidate] = useState<OpenApiCompileOutcome | null>(null);
 
   const runCompiler = async () => {
     setError(null);
@@ -68,6 +76,34 @@ export default function Studio() {
         content: procedureText,
       });
       setProcedureCandidate(result);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const compileRepository = async () => {
+    setError(null);
+    try {
+      const result = await apiPostJson<OpenApiCompileOutcome>("/v115/artifact/repository/compile", {
+        name: "studio-repository-capability",
+        source_ref: "repo://studio/declared-manifest",
+        content: repositoryText,
+      });
+      setRepositoryCandidate(result);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const compilePaper = async () => {
+    setError(null);
+    try {
+      const result = await apiPostJson<OpenApiCompileOutcome>("/v115/artifact/paper/compile", {
+        name: "studio-paper-derived-capability",
+        source_ref: "paper://reviewed-manifest",
+        content: paperText,
+      });
+      setPaperCandidate(result);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -137,6 +173,55 @@ export default function Studio() {
             />
             <KeyValue k="Procedure admission" v={procedureCandidate.admission} />
             <KeyValue k="Procedure next gates" v={procedureCandidate.next.join(" → ")} />
+          </>
+        )}
+
+        <hr style={{ margin: "20px 0" }} />
+        <p>
+          Repository conversion requires an explicit capability manifest. Morn does not scan a
+          repository and invent hidden entrypoints.
+        </p>
+        <textarea
+          style={{ width: "100%", minHeight: 110, padding: 8 }}
+          value={repositoryText}
+          onChange={(e) => setRepositoryText(e.target.value)}
+        />
+        <div className="page-actions" style={{ marginTop: 8 }}>
+          <button onClick={compileRepository}>Compile Repository Manifest</button>
+        </div>
+        {repositoryCandidate && (
+          <>
+            <KeyValue k="Repository stage" v={repositoryCandidate.candidate.record.stage} />
+            <KeyValue
+              k="Entrypoints"
+              v={repositoryCandidate.candidate.report.discovered_operations.join(", ")}
+            />
+            <KeyValue k="Repository admission" v={repositoryCandidate.admission} />
+          </>
+        )}
+
+        <hr style={{ margin: "20px 0" }} />
+        <p>
+          Paper-derived capabilities require reviewed extraction. Executable candidates must bind
+          to real code; free-form paper text is never promoted directly.
+        </p>
+        <textarea
+          style={{ width: "100%", minHeight: 110, padding: 8 }}
+          value={paperText}
+          onChange={(e) => setPaperText(e.target.value)}
+        />
+        <div className="page-actions" style={{ marginTop: 8 }}>
+          <button onClick={compilePaper}>Compile Reviewed Paper Manifest</button>
+        </div>
+        {paperCandidate && (
+          <>
+            <KeyValue k="Paper stage" v={paperCandidate.candidate.record.stage} />
+            <KeyValue
+              k="Code / evidence bindings"
+              v={paperCandidate.candidate.report.discovered_operations.join(", ")}
+            />
+            <KeyValue k="Paper admission" v={paperCandidate.admission} />
+            <KeyValue k="Paper next gates" v={paperCandidate.next.join(" → ")} />
           </>
         )}
       </Card>
