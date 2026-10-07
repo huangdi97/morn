@@ -24,6 +24,40 @@ pub enum BindingMigrationReason {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BindingMigrationRequest {
+    pub capability_manifest_ref: String,
+    pub provider_ref: String,
+    pub provider_version: String,
+    pub reason: BindingMigrationReason,
+    pub requested_by: String,
+    pub evidence_refs: Vec<String>,
+}
+
+impl BindingMigrationRequest {
+    pub fn new(
+        capability_manifest_ref: impl Into<String>,
+        provider_ref: impl Into<String>,
+        provider_version: impl Into<String>,
+        reason: BindingMigrationReason,
+        requested_by: impl Into<String>,
+    ) -> Self {
+        Self {
+            capability_manifest_ref: capability_manifest_ref.into(),
+            provider_ref: provider_ref.into(),
+            provider_version: provider_version.into(),
+            reason,
+            requested_by: requested_by.into(),
+            evidence_refs: Vec::new(),
+        }
+    }
+
+    pub fn with_evidence(mut self, evidence_refs: Vec<String>) -> Self {
+        self.evidence_refs = evidence_refs;
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BindingMigrationDecision {
     pub id: BindingMigrationDecisionId,
     pub work_id: WorkPackageId,
@@ -86,18 +120,13 @@ impl ExecutionBinding {
     pub fn rebind_for_work(
         &self,
         work: &WorkResource,
-        capability_manifest_ref: impl Into<String>,
-        provider_ref: impl Into<String>,
-        provider_version: impl Into<String>,
-        reason: BindingMigrationReason,
-        requested_by: impl Into<String>,
-        evidence_refs: Vec<String>,
+        request: BindingMigrationRequest,
     ) -> (Self, BindingMigrationDecision) {
         let mut replacement = Self::for_work(
             work,
-            capability_manifest_ref,
-            provider_ref,
-            provider_version,
+            request.capability_manifest_ref,
+            request.provider_ref,
+            request.provider_version,
         );
         replacement.provider_digest = None;
         replacement.runtime_ref = None;
@@ -109,9 +138,9 @@ impl ExecutionBinding {
             work_id: work.id.clone(),
             from_binding: self.id.clone(),
             to_binding: replacement.id.clone(),
-            reason,
-            requested_by: requested_by.into(),
-            evidence_refs,
+            reason: request.reason,
+            requested_by: request.requested_by,
+            evidence_refs: request.evidence_refs,
             from_provider: self.provider_ref.clone(),
             to_provider: replacement.provider_ref.clone(),
             from_profile: self.profile_ref.clone(),
@@ -161,12 +190,14 @@ mod tests {
 
         let (next, decision) = old.rebind_for_work(
             &next_work,
-            "manifest:b",
-            "pi",
-            "2",
-            BindingMigrationReason::ProfileUpgrade,
-            "operator",
-            vec!["evaluation:profile-v2".to_string()],
+            BindingMigrationRequest::new(
+                "manifest:b",
+                "pi",
+                "2",
+                BindingMigrationReason::ProfileUpgrade,
+                "operator",
+            )
+            .with_evidence(vec!["evaluation:profile-v2".to_string()]),
         );
 
         assert_eq!(next.migration_from, Some(old.id.clone()));
