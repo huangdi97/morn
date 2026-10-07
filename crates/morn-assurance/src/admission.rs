@@ -494,6 +494,23 @@ mod tests {
         ))
     }
 
+    fn record_fixture_release(
+        service: &mut AdmissionService,
+        capability: &mut CapabilityRecord,
+        qualification: &QualificationRecord,
+    ) -> CapabilityDistributionRelease {
+        service
+            .record_release(
+                capability,
+                qualification,
+                format!("oci://fixture/morn/capability@sha256:{}", "a".repeat(64)),
+                format!("sha256:{}", "a".repeat(64)),
+                Some("sigstore://fixture/signature".to_string()),
+                Some("slsa://fixture/provenance".to_string()),
+            )
+            .unwrap()
+    }
+
     fn passing_conformance(profile: &DomainProfile) -> ConformanceReport {
         let mut semantics = BTreeSet::new();
         semantics.extend(
@@ -542,6 +559,7 @@ mod tests {
         assert_eq!(capability.stage, CapabilityStage::Qualified);
         assert!(capability.admitted_sites.is_empty());
 
+        let _release = record_fixture_release(&mut service, &mut capability, &qualification);
         let profile = DomainProfile::factory_readonly_v1();
         let report = passing_conformance(&profile);
         let admission = service
@@ -580,6 +598,7 @@ mod tests {
                 None,
             )
             .unwrap();
+        let _release = record_fixture_release(&mut service, &mut capability, &qualification);
         let profile = DomainProfile::factory_readonly_v1();
         let report = passing_conformance(&profile);
         let admission = service
@@ -597,6 +616,41 @@ mod tests {
                 && reference.site_ref == "plant-a"
                 && reference.profile_ref == report.profile_ref
         }));
+    }
+
+    #[test]
+    fn qualification_without_release_cannot_be_site_admitted() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        let qualification = service
+            .qualify_with_evidence(
+                &mut capability,
+                "candidate:1",
+                "decision:1",
+                vec!["eval:1".to_string()],
+                QualificationEvidence {
+                    test_suite_refs: vec!["suite:factory".to_string()],
+                    environment_digest: Some("sha256:env".to_string()),
+                    expected_properties: vec!["safe-reconcile".to_string()],
+                    evaluator_identity: Some("evaluator:independent".to_string()),
+                    ..Default::default()
+                },
+                vec!["factory-readonly".to_string()],
+                None,
+            )
+            .unwrap();
+        let profile = DomainProfile::factory_readonly_v1();
+        let report = passing_conformance(&profile);
+        assert!(service
+            .admit(
+                &mut capability,
+                &qualification,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .is_err());
     }
 
     #[test]
