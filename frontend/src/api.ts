@@ -85,6 +85,31 @@ export async function apiPostJson<T = unknown>(path: string, body: unknown): Pro
   return (await res.json()) as T;
 }
 
+export interface OpenApiCompileOutcome {
+  candidate: {
+    record: {
+      manifest: {
+        id: string;
+        name: string;
+        provider_ref: string;
+        provides: string[];
+        kind: string;
+      };
+      stage: string;
+      qualification_refs: string[];
+      admitted_sites: string[];
+    };
+    report: {
+      compiler: string;
+      source_ref: string;
+      discovered_operations: string[];
+      warnings: string[];
+    };
+  };
+  admission: string;
+  next: string[];
+}
+
 export interface CompilerRun {
   problem: { objective: string; domain: string; assumptions: Array<{ name: string; value: string }> };
   work_graph: { nodes: Array<{ id: string; name: string; nature: string; acceptance: string[] }>; edges: unknown[] };
