@@ -23,7 +23,7 @@ pub struct OutboxEvent {
     pub dispatched_at: Option<i64>,
 }
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 impl MornStore {
     /// Open (creating if needed) a store at `path` and run migrations.
@@ -57,6 +57,7 @@ impl MornStore {
                 payload TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 immutable INTEGER NOT NULL DEFAULT 0,
+                revision INTEGER NOT NULL DEFAULT 1,
                 seq INTEGER PRIMARY KEY AUTOINCREMENT,
                 UNIQUE(kind, id)
             );
@@ -110,10 +111,15 @@ impl MornStore {
                 .map_err(|e| Error::internal(e.to_string()))?;
             }
             Some(v) if v < SCHEMA_VERSION => {
-                // v1/v2 -> v3: immutable-history column is idempotent; inbox/outbox
-                // tables are created above with IF NOT EXISTS.
+                // Older stores are upgraded idempotently. SQLite may report a
+                // duplicate-column error when a previous migration already
+                // installed one of these columns; that is safe to ignore here.
                 let _ = conn.execute(
                     "ALTER TABLE morn_records ADD COLUMN immutable INTEGER NOT NULL DEFAULT 0",
+                    [],
+                );
+                let _ = conn.execute(
+                    "ALTER TABLE morn_records ADD COLUMN revision INTEGER NOT NULL DEFAULT 1",
                     [],
                 );
                 conn.execute(
@@ -250,9 +256,11 @@ impl MornStore {
         let changed = self
             .conn
             .execute(
-                "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at) VALUES (?1, ?2, ?3, ?4, ?5)
+                "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at, revision) VALUES (?1, ?2, ?3, ?4, ?5, 1)
                  ON CONFLICT(kind, id) DO UPDATE
-                 SET payload = excluded.payload, workspace_id = excluded.workspace_id
+                 SET payload = excluded.payload,
+                     workspace_id = excluded.workspace_id,
+                     revision = morn_records.revision + 1
                  WHERE morn_records.immutable = 0",
                 params![kind, id, workspace_id, payload, created_at],
             )
@@ -263,6 +271,98 @@ impl MornStore {
             )));
         }
         Ok(())
+    }
+
+    /// Read the optimistic-concurrency revision for a mutable record.
+    pub fn record_revision(&self, kind: &str, id: &str) -> Result<Option<u64>> {
+        let revision: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT revision FROM morn_records WHERE kind = ?1 AND id = ?2",
+                params![kind, id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+        revision
+            .map(|value| {
+                u64::try_from(value)
+                    .map_err(|_| Error::internal("record revision must be non-negative"))
+            })
+            .transpose()
+    }
+
+    /// Compare-and-swap save for mutable control-plane projections.
+    ///
+    /// expected_revision = 0 means "create only". Existing immutable records
+    /// or stale revisions fail closed rather than allowing last-writer-wins.
+    pub fn save_record_cas<T: serde::Serialize>(
+        &self,
+        kind: &str,
+        id: &str,
+        workspace_id: &str,
+        created_at: i64,
+        expected_revision: u64,
+        record: &T,
+    ) -> Result<u64> {
+        let payload =
+            serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
+        let expected_i64 = i64::try_from(expected_revision)
+            .map_err(|_| Error::validation("expected revision is too large"))?;
+
+        match self.record_revision(kind, id)? {
+            None => {
+                if expected_revision != 0 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} does not exist at expected revision {expected_revision}"
+                    )));
+                }
+                self.conn
+                    .execute(
+                        "INSERT INTO morn_records
+                         (kind, id, workspace_id, payload, created_at, immutable, revision)
+                         VALUES (?1, ?2, ?3, ?4, ?5, 0, 1)",
+                        params![kind, id, workspace_id, payload, created_at],
+                    )
+                    .map_err(|e| {
+                        if e.to_string().contains("UNIQUE") {
+                            Error::conflict(format!(
+                                "record {kind}/{id} was created concurrently"
+                            ))
+                        } else {
+                            Error::internal(e.to_string())
+                        }
+                    })?;
+                Ok(1)
+            }
+            Some(actual) => {
+                if actual != expected_revision {
+                    return Err(Error::conflict(format!(
+                        "stale record {kind}/{id}: expected revision {expected_revision}, actual {actual}"
+                    )));
+                }
+                let updated = self
+                    .conn
+                    .execute(
+                        "UPDATE morn_records
+                         SET payload = ?3,
+                             workspace_id = ?4,
+                             revision = revision + 1
+                         WHERE kind = ?1
+                           AND id = ?2
+                           AND immutable = 0
+                           AND revision = ?5",
+                        params![kind, id, payload, workspace_id, expected_i64],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if updated != 1 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} changed concurrently or is immutable"
+                    )));
+                }
+                Ok(actual + 1)
+            }
+        }
     }
 
     /// Save an immutable record (receipts, release history, decisions).
@@ -278,7 +378,7 @@ impl MornStore {
         let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
         self.conn
             .execute(
-                "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at, immutable) VALUES (?1, ?2, ?3, ?4, ?5, 1)",
+                "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at, immutable, revision) VALUES (?1, ?2, ?3, ?4, ?5, 1, 1)",
                 params![kind, id, workspace_id, payload, created_at],
             )
             .map_err(|e| {
@@ -1466,5 +1566,43 @@ mod tests {
         store.mark_outbox_dispatched("evt-out-1", 30).unwrap();
         assert!(store.pending_outbox_events(10).unwrap().is_empty());
         assert!(store.mark_outbox_dispatched("evt-out-1", 31).is_err());
+    }
+}
+
+
+#[cfg(test)]
+mod v115_revision_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn compare_and_swap_rejects_stale_control_plane_write() {
+        let store = MornStore::open_in_memory().unwrap();
+        let first = json!({"state":"proposed"});
+        assert_eq!(
+            store
+                .save_record_cas("work_resource_v115", "work-1", "ws-1", 1, 0, &first)
+                .unwrap(),
+            1
+        );
+
+        let second = json!({"state":"ready"});
+        assert_eq!(
+            store
+                .save_record_cas("work_resource_v115", "work-1", "ws-1", 1, 1, &second)
+                .unwrap(),
+            2
+        );
+
+        let stale = json!({"state":"blocked"});
+        assert!(store
+            .save_record_cas("work_resource_v115", "work-1", "ws-1", 1, 1, &stale)
+            .is_err());
+        assert_eq!(
+            store
+                .record_revision("work_resource_v115", "work-1")
+                .unwrap(),
+            Some(2)
+        );
     }
 }
