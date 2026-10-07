@@ -14,7 +14,7 @@ pub use admission::{
     AdmissionService, CapabilityDistributionRelease, CapabilityDistributionReleaseId,
     CapabilityDistributionReleaseStatus, CapabilityObservation, CapabilityObservationId,
     QualificationEvidence, QualificationRecord, QualificationRecordId, QualificationStatus,
-    SiteAdmission, SiteAdmissionId, SiteAdmissionStatus,
+    SiteAdmission, SiteAdmissionId, SiteAdmissionStatus, StrictQualificationRequest,
 };
 pub use evaluation::{EvalStep, EvaluationDecision, EvaluationResult, EvaluationRunner};
 pub use replay::{ReplayReport, ReplayRunner, ReplayScenario};
