@@ -247,13 +247,21 @@ impl MornStore {
         record: &T,
     ) -> Result<()> {
         let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
-        self.conn
+        let changed = self
+            .conn
             .execute(
                 "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at) VALUES (?1, ?2, ?3, ?4, ?5)
-                 ON CONFLICT(kind, id) DO UPDATE SET payload = excluded.payload, workspace_id = excluded.workspace_id",
+                 ON CONFLICT(kind, id) DO UPDATE
+                 SET payload = excluded.payload, workspace_id = excluded.workspace_id
+                 WHERE morn_records.immutable = 0",
                 params![kind, id, workspace_id, payload, created_at],
             )
             .map_err(|e| Error::internal(e.to_string()))?;
+        if changed == 0 {
+            return Err(Error::conflict(format!(
+                "record {kind}/{id} is immutable and cannot be overwritten"
+            )));
+        }
         Ok(())
     }
 
@@ -1074,6 +1082,32 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         path.to_string_lossy().to_string()
+    }
+
+    #[test]
+    fn mutable_save_cannot_overwrite_immutable_record() {
+        let store = MornStore::open_in_memory().unwrap();
+        store
+            .save_record_immutable(
+                "receipt",
+                "r-1",
+                "ws-1",
+                1,
+                &serde_json::json!({"status":"original"}),
+            )
+            .unwrap();
+
+        let overwrite = store.save_record(
+            "receipt",
+            "r-1",
+            "ws-1",
+            2,
+            &serde_json::json!({"status":"rewritten"}),
+        );
+        assert!(overwrite.is_err());
+
+        let loaded: serde_json::Value = store.load_record("receipt", "r-1").unwrap().unwrap();
+        assert_eq!(loaded["status"], "original");
     }
 
     #[test]
