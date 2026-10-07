@@ -109,6 +109,37 @@ export async function apiPostJson<T = unknown>(path: string, body: unknown): Pro
   return (await res.json()) as T;
 }
 
+export interface CreatorDraftOutcome {
+  draft: {
+    name: string;
+    profile_ref: string;
+    site_ref: string | null;
+    autonomy: string;
+    problem: {
+      objective: string;
+      domain: string;
+      constraints: Array<{ name: string; value: string; source: string }>;
+    };
+    work_graph: {
+      nodes: Array<{ id: string; name: string; nature: string; acceptance: string[] }>;
+      edges: unknown[];
+    };
+    proposed: {
+      work_packages: string[];
+      capability_gaps: Array<{ requirement: string; detail: string }>;
+      unresolved_gaps: string[];
+      risk_summary: string;
+    };
+    validation: { passed: boolean; issues: Array<{ severity: string; message: string }> };
+    readiness_gates: string[];
+    unresolved: string[];
+    execution_started: boolean;
+    canonicalization: string;
+  };
+  canonical_write: boolean;
+  next: string[];
+}
+
 export interface OpenApiCompileOutcome {
   candidate: {
     record: {
