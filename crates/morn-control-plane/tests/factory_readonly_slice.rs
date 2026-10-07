@@ -363,12 +363,14 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     // Provider migration never edits the binding used by the already-started attempt.
     let (migrated, migration_decision) = binding.rebind_for_work(
         &work,
-        capability.manifest.id.to_string(),
-        "pi",
-        "fixture-v1",
-        BindingMigrationReason::ProviderReplacement,
-        "factory-slice-controller",
-        vec!["harness-neutrality:passed".to_string()],
+        BindingMigrationRequest::new(
+            capability.manifest.id.to_string(),
+            "pi",
+            "fixture-v1",
+            BindingMigrationReason::ProviderReplacement,
+            "factory-slice-controller",
+        )
+        .with_evidence(vec!["harness-neutrality:passed".to_string()]),
     );
     assert_eq!(binding.provider_ref, "harness://dsh");
     assert_eq!(attempt.binding_id, binding.id);
