@@ -228,6 +228,13 @@ fn site_admission_requires_strict_nonexpired_qualification() {
     manifest.provides = vec!["investigate".to_string()];
     let mut capability = CapabilityRecord::new(manifest);
     let mut service = AdmissionService::default();
+    service
+        .observe(
+            &mut capability,
+            vec!["evaluation-observation:core-conformance".to_string()],
+            "evaluator:1",
+        )
+        .unwrap();
     let qualification = service
         .qualify_with_evidence(
             &mut capability,
