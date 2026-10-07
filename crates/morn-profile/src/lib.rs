@@ -33,6 +33,22 @@ impl GuaranteeRequirement {
             contexts: Vec::new(),
         }
     }
+
+    pub fn optional(semantic: impl Into<String>) -> Self {
+        Self {
+            semantic: semantic.into(),
+            level: RequirementLevel::Optional,
+            contexts: Vec::new(),
+        }
+    }
+
+    pub fn forbidden(semantic: impl Into<String>) -> Self {
+        Self {
+            semantic: semantic.into(),
+            level: RequirementLevel::Forbidden,
+            contexts: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,6 +69,77 @@ impl DomainProfile {
         })
     }
 
+    pub fn forbids(&self, semantic: &str) -> bool {
+        self.requirements.iter().any(|requirement| {
+            requirement.semantic == semantic && requirement.level == RequirementLevel::Forbidden
+        })
+    }
+
+    pub fn lite_v1() -> Self {
+        Self {
+            id: "morn.lite".to_string(),
+            version: Version::new(1, 0, 0),
+            requirements: [
+                GuaranteeRequirement::required("WorkTruthIndependentOfHarness"),
+                GuaranteeRequirement::required("ExplicitAcceptanceWhenDeclared"),
+                GuaranteeRequirement::optional("DurableWorkState"),
+                GuaranteeRequirement::optional("Provenance"),
+            ]
+            .to_vec(),
+            minimum_isolation: "process".to_string(),
+            source_of_truth_binding_required: false,
+            durable_work_state_required: false,
+            provenance_required: false,
+        }
+    }
+
+    pub fn enterprise_v1() -> Self {
+        Self {
+            id: "morn.enterprise".to_string(),
+            version: Version::new(1, 0, 0),
+            requirements: [
+                "DurableWorkState",
+                "CapabilityQualification",
+                "AuthorityBeforeSideEffect",
+                "ReceiptAfterExternalAction",
+                "ReconciliationOnUnknown",
+                "IndependentAcceptance",
+                "ProfileVersionPinned",
+                "Provenance",
+            ]
+            .into_iter()
+            .map(GuaranteeRequirement::required)
+            .collect(),
+            minimum_isolation: "container".to_string(),
+            source_of_truth_binding_required: false,
+            durable_work_state_required: true,
+            provenance_required: true,
+        }
+    }
+
+    pub fn research_v1() -> Self {
+        Self {
+            id: "morn.research".to_string(),
+            version: Version::new(1, 0, 0),
+            requirements: [
+                "DurableWorkState",
+                "DatasetVersionPinned",
+                "CodeVersionPinned",
+                "EnvironmentDigest",
+                "ReproducibilityEvidence",
+                "IndependentAcceptance",
+                "Provenance",
+            ]
+            .into_iter()
+            .map(GuaranteeRequirement::required)
+            .collect(),
+            minimum_isolation: "container".to_string(),
+            source_of_truth_binding_required: false,
+            durable_work_state_required: true,
+            provenance_required: true,
+        }
+    }
+
     /// First Factory product profile: brownfield/read-first. It requires
     /// governance and reconciliation semantics but does not grant production
     /// write authority merely because the profile is installed.
@@ -60,20 +147,26 @@ impl DomainProfile {
         Self {
             id: "morn.factory.readonly".to_string(),
             version: Version::new(1, 0, 0),
-            requirements: [
-                "DurableWorkState",
-                "SourceOfTruthBinding",
-                "CapabilityQualification",
-                "AuthorityBeforeSideEffect",
-                "ReceiptAfterExternalAction",
-                "ReconciliationOnUnknown",
-                "OutcomeObservation",
-                "IndependentAcceptance",
-                "Provenance",
-            ]
-            .into_iter()
-            .map(GuaranteeRequirement::required)
-            .collect(),
+            requirements: {
+                let mut requirements: Vec<GuaranteeRequirement> = [
+                    "DurableWorkState",
+                    "SourceOfTruthBinding",
+                    "CapabilityQualification",
+                    "AuthorityBeforeSideEffect",
+                    "ReceiptAfterExternalAction",
+                    "ReconciliationOnUnknown",
+                    "OutcomeObservation",
+                    "AcceptedOutcomeSemantics",
+                    "IndependentAcceptance",
+                    "ProfileVersionPinned",
+                    "Provenance",
+                ]
+                .into_iter()
+                .map(GuaranteeRequirement::required)
+                .collect();
+                requirements.push(GuaranteeRequirement::forbidden("ProductionWrite"));
+                requirements
+            },
             minimum_isolation: "container".to_string(),
             source_of_truth_binding_required: true,
             durable_work_state_required: true,
@@ -85,6 +178,19 @@ impl DomainProfile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_family_is_machine_readable() {
+        let profiles = [
+            DomainProfile::lite_v1(),
+            DomainProfile::enterprise_v1(),
+            DomainProfile::factory_readonly_v1(),
+            DomainProfile::research_v1(),
+        ];
+        assert_eq!(profiles.len(), 4);
+        assert!(profiles.iter().all(|profile| profile.version == Version::new(1, 0, 0)));
+        assert!(DomainProfile::factory_readonly_v1().forbids("ProductionWrite"));
+    }
 
     #[test]
     fn factory_profile_requires_reconciliation_but_does_not_name_a_provider() {
