@@ -67,7 +67,9 @@ impl ArtifactCompiler for OpenApiJsonCompiler {
 
     fn compile(&self, source: &ArtifactSource) -> Result<CandidateCapability> {
         if !self.supports(&source.kind) {
-            return Err(Error::invalid_state("compiler does not support artifact kind"));
+            return Err(Error::invalid_state(
+                "compiler does not support artifact kind",
+            ));
         }
 
         let doc: serde_json::Value = serde_json::from_str(&source.content)
@@ -118,9 +120,7 @@ impl ArtifactCompiler for OpenApiJsonCompiler {
                 compiler: self.compiler_name().to_string(),
                 source_ref: source.source_ref.clone(),
                 discovered_operations: operations,
-                warnings: vec![
-                    "compiled candidate is not qualified or site-admitted".to_string(),
-                ],
+                warnings: vec!["compiled candidate is not qualified or site-admitted".to_string()],
             },
         })
     }
