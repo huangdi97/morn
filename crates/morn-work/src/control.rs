@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 use morn_kernel::ids::{RuntimeBindingId, WorkPackageId, WorkspaceId};
 use morn_kernel::time::Timestamp;
 
+fn default_persisted_resource_version() -> u64 {
+    1
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum ConditionStatus {
     Unknown,
@@ -111,6 +115,11 @@ impl Default for WorkControlStatus {
 pub struct WorkResource {
     pub id: WorkPackageId,
     pub workspace_id: WorkspaceId,
+    /// Persistence CAS revision. Newly constructed resources start at 0 and
+    /// become 1 on first durable write. Older serialized v11.5 rows without
+    /// this field deserialize as revision 1.
+    #[serde(default = "default_persisted_resource_version")]
+    pub resource_version: u64,
     pub generation: u64,
     pub spec: WorkSpec,
     pub status: WorkControlStatus,
@@ -122,6 +131,7 @@ impl WorkResource {
         Self {
             id: spec.work_package_id.clone(),
             workspace_id,
+            resource_version: 0,
             generation: 1,
             spec,
             status: WorkControlStatus::default(),
@@ -168,11 +178,26 @@ impl WorkResource {
         self.status.observed_generation = self.generation;
         self.status.updated_at = Timestamp::now();
     }
+
+    pub fn mark_persisted_revision(&mut self, revision: u64) {
+        self.resource_version = revision;
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_resource_starts_unpersisted_and_revision_is_store_managed() {
+        let ws = WorkspaceId::generate();
+        let work_id = WorkPackageId::generate_with("wp");
+        let spec = WorkSpec::new(work_id, "goal", "morn.lite@1.0.0");
+        let mut resource = WorkResource::new(ws, spec);
+        assert_eq!(resource.resource_version, 0);
+        resource.mark_persisted_revision(1);
+        assert_eq!(resource.resource_version, 1);
+    }
 
     #[test]
     fn site_scope_survives_generation_change() {
