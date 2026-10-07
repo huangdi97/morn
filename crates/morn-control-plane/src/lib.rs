@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub mod external_action;
 pub mod profile_guard;
 
-pub use external_action::begin_external_attempt;
+pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
 
 pub use profile_guard::{
     enforce_profile_action, evaluate_profile_action, issue_external_action_permit,
