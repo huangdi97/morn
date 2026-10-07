@@ -115,7 +115,7 @@ mod tests {
     fn serialized_keys_are_stable_and_provider_neutral() {
         assert_eq!(
             serde_json::to_string(&ExecutionGuarantee::NetworkEgressPolicy).unwrap(),
-            ""network-egress-policy""
+            "\"network-egress-policy\""
         );
         assert_eq!(
             ExecutionGuarantee::RuntimeAttestation.key(),
