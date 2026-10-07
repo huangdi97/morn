@@ -6,9 +6,39 @@
 
 use serde::{Deserialize, Serialize};
 
-use morn_kernel::ids::{RuntimeBindingId, WorkPackageId};
+use morn_kernel::ids::{Id, RuntimeBindingId, WorkPackageId};
 use morn_kernel::time::Timestamp;
 use morn_work::control::WorkResource;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct BindingMigrationDecisionTag;
+pub type BindingMigrationDecisionId = Id<BindingMigrationDecisionTag>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum BindingMigrationReason {
+    ProviderReplacement,
+    CapabilityUpgrade,
+    ProfileUpgrade,
+    RuntimeRecovery,
+    ManualRebind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BindingMigrationDecision {
+    pub id: BindingMigrationDecisionId,
+    pub work_id: WorkPackageId,
+    pub from_binding: RuntimeBindingId,
+    pub to_binding: RuntimeBindingId,
+    pub reason: BindingMigrationReason,
+    pub requested_by: String,
+    pub evidence_refs: Vec<String>,
+    pub from_provider: String,
+    pub to_provider: String,
+    pub from_profile: String,
+    pub to_profile: String,
+    pub created_at: Timestamp,
+}
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecutionBinding {
@@ -54,6 +84,46 @@ impl ExecutionBinding {
     }
 
     /// Provider migration creates a new binding. The old binding is not edited.
+    pub fn rebind_for_work(
+        &self,
+        work: &WorkResource,
+        capability_manifest_ref: impl Into<String>,
+        provider_ref: impl Into<String>,
+        provider_version: impl Into<String>,
+        reason: BindingMigrationReason,
+        requested_by: impl Into<String>,
+        evidence_refs: Vec<String>,
+    ) -> (Self, BindingMigrationDecision) {
+        let mut replacement = Self::for_work(
+            work,
+            capability_manifest_ref,
+            provider_ref,
+            provider_version,
+        );
+        replacement.provider_digest = None;
+        replacement.runtime_ref = None;
+        replacement.authority_decision_ref = None;
+        replacement.migration_from = Some(self.id.clone());
+
+        let decision = BindingMigrationDecision {
+            id: BindingMigrationDecisionId::generate_with("binding-migration"),
+            work_id: work.id.clone(),
+            from_binding: self.id.clone(),
+            to_binding: replacement.id.clone(),
+            reason,
+            requested_by: requested_by.into(),
+            evidence_refs,
+            from_provider: self.provider_ref.clone(),
+            to_provider: replacement.provider_ref.clone(),
+            from_profile: self.profile_ref.clone(),
+            to_profile: replacement.profile_ref.clone(),
+            created_at: Timestamp::now(),
+        };
+        (replacement, decision)
+    }
+
+    /// Legacy provider-only convenience retained for compatibility. New v11.5
+    /// code should prefer rebind_for_work so migration is explicitly recorded.
     pub fn migrate_to_provider(
         &self,
         provider_ref: impl Into<String>,
@@ -75,6 +145,41 @@ mod tests {
     use super::*;
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
     use morn_work::control::{WorkResource, WorkSpec};
+
+    #[test]
+    fn explicit_rebind_records_provider_and_profile_migration() {
+        let work_id = WorkPackageId::generate_with("wp");
+        let old_work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(work_id.clone(), "investigate", "factory/v1"),
+        );
+        let old = ExecutionBinding::for_work(&old_work, "manifest:a", "dsh", "1");
+
+        let mut next_work = old_work.clone();
+        let mut next_spec = next_work.spec.clone();
+        next_spec.profile_ref = "factory/v2".to_string();
+        next_work.replace_spec(next_spec);
+
+        let (next, decision) = old.rebind_for_work(
+            &next_work,
+            "manifest:b",
+            "pi",
+            "2",
+            BindingMigrationReason::ProfileUpgrade,
+            "operator",
+            vec!["evaluation:profile-v2".to_string()],
+        );
+
+        assert_eq!(next.migration_from, Some(old.id.clone()));
+        assert_eq!(next.work_generation, next_work.generation);
+        assert_eq!(next.profile_ref, "factory/v2");
+        assert_eq!(decision.from_binding, old.id);
+        assert_eq!(decision.to_binding, next.id);
+        assert_eq!(decision.from_provider, "dsh");
+        assert_eq!(decision.to_provider, "pi");
+        assert_eq!(decision.from_profile, "factory/v1");
+        assert_eq!(decision.to_profile, "factory/v2");
+    }
 
     #[test]
     fn binding_is_pinned_to_work_generation_and_provider() {
