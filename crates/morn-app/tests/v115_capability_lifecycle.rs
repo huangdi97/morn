@@ -116,7 +116,10 @@ fn capability_lifecycle_survives_restart_and_revocation_keeps_history() {
                 .record_release(
                     &mut inner.v115_capabilities[index],
                     &qualification,
-                    format!("oci://registry.example/morn/cmms-read@sha256:{}", "c".repeat(64)),
+                    format!(
+                        "oci://registry.example/morn/cmms-read@sha256:{}",
+                        "c".repeat(64)
+                    ),
                     format!("sha256:{}", "c".repeat(64)),
                     Some("sigstore://rekor/cmms-read".to_string()),
                     Some("slsa://provenance/cmms-read".to_string()),
