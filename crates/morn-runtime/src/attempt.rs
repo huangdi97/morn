@@ -63,6 +63,14 @@ pub struct ActionAttempt {
     pub binding_id: RuntimeBindingId,
     pub business_key: String,
     pub action: String,
+    #[serde(default)]
+    pub resource_ref: Option<String>,
+    #[serde(default)]
+    pub site_ref: Option<String>,
+    #[serde(default)]
+    pub authority_decision_ref: Option<String>,
+    #[serde(default)]
+    pub external_action_permit_ref: Option<String>,
     pub state: AttemptState,
     pub external_ref: Option<String>,
     pub evidence_refs: Vec<String>,
@@ -83,6 +91,10 @@ impl ActionAttempt {
             binding_id,
             business_key: business_key.into(),
             action: action.into(),
+            resource_ref: None,
+            site_ref: None,
+            authority_decision_ref: None,
+            external_action_permit_ref: None,
             state: AttemptState::Proposed,
             external_ref: None,
             evidence_refs: Vec::new(),
