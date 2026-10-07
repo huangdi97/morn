@@ -7,7 +7,8 @@
 use serde::{Deserialize, Serialize};
 
 pub use profile_guard::{
-    enforce_profile_action, evaluate_profile_action, ExternalActionMode, ProfileActionDecision,
+    enforce_profile_action, evaluate_profile_action, issue_external_action_permit,
+    ExternalActionMode, ExternalActionPermit, ProfileActionDecision,
 };
 
 use morn_integration::SourceOfTruthBinding;
