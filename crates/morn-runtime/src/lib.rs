@@ -11,6 +11,7 @@ pub mod binding;
 pub mod credentials;
 pub mod environment;
 pub mod gateway;
+pub mod provider_registry;
 pub mod reconciliation;
 pub mod runtime_provider;
 pub mod workload_identity;
@@ -34,6 +35,10 @@ pub use environment::{
 };
 pub use gateway::{
     ActionGateway, ActionPreview, AuthorizedAction, ExecutionOutcome, WorldCommitter,
+};
+pub use provider_registry::{
+    reference_provider_catalog, ProviderDescriptor, ProviderFamily, ProviderObservation,
+    ProviderRegistry, ProviderStatus,
 };
 pub use reconciliation::{
     reconcile_attempt, OutcomeReconciler, ReconciliationObservation, ReconciliationRecord,
