@@ -66,6 +66,46 @@ pub struct DomainProfile {
 }
 
 impl DomainProfile {
+    pub fn canonical_ref(&self) -> String {
+        format!(
+            "{}@{}.{}.{}",
+            self.id, self.version.major, self.version.minor, self.version.patch
+        )
+    }
+
+    pub fn from_ref(profile_ref: &str) -> Option<Self> {
+        [
+            Self::lite_v1(),
+            Self::enterprise_v1(),
+            Self::factory_readonly_v1(),
+            Self::research_v1(),
+        ]
+        .into_iter()
+        .find(|profile| profile.canonical_ref() == profile_ref)
+    }
+
+    /// Work readiness gates are a subset of Profile guarantees. Post-execution
+    /// guarantees (receipt, reconciliation, outcome and acceptance) must not
+    /// block a Work from becoming Ready before an ExecutionBinding exists.
+    pub fn pre_execution_work_conditions(&self) -> Vec<String> {
+        let mut conditions = vec!["CapabilityResolved".to_string()];
+        if self.requires("CapabilityQualification") {
+            conditions.push("CapabilityQualified".to_string());
+        }
+        if self.requires("AuthorityBeforeSideEffect") {
+            conditions.push("AuthoritySatisfied".to_string());
+        }
+        if self.requires("SourceOfTruthBinding") {
+            conditions.push("SourceOfTruthBound".to_string());
+        }
+        if self.requires("Provenance") {
+            conditions.push("ProvenanceReady".to_string());
+        }
+        conditions.sort();
+        conditions.dedup();
+        conditions
+    }
+
     pub fn requires(&self, semantic: &str) -> bool {
         self.requirements.iter().any(|requirement| {
             requirement.semantic == semantic && requirement.level == RequirementLevel::Required
@@ -209,6 +249,21 @@ mod tests {
             .iter()
             .all(|profile| profile.version == Version::new(1, 0, 0)));
         assert!(DomainProfile::factory_readonly_v1().forbids("ProductionWrite"));
+    }
+
+    #[test]
+    fn pre_execution_conditions_do_not_require_post_execution_receipts() {
+        let profile = DomainProfile::factory_readonly_v1();
+        let conditions = profile.pre_execution_work_conditions();
+        assert!(conditions.contains(&"CapabilityResolved".to_string()));
+        assert!(conditions.contains(&"CapabilityQualified".to_string()));
+        assert!(conditions.contains(&"SourceOfTruthBound".to_string()));
+        assert!(!conditions.contains(&"ReceiptAfterExternalAction".to_string()));
+        assert!(!conditions.contains(&"IndependentAcceptance".to_string()));
+        assert_eq!(
+            DomainProfile::from_ref(&profile.canonical_ref()),
+            Some(profile)
+        );
     }
 
     #[test]
