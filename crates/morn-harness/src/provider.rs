@@ -265,12 +265,11 @@ impl HarnessProvider for MornNativeHarness {
 // ---------------------------------------------------------------------------
 // DeepSeekHarnessProvider: provider boundary for the DeepSeek Harness.
 //
-// Honest status: real DSH install/run is currently ENV-BLOCKED in this
-// workspace (no DSH binary/package available; external install requires
-// network/approval that is not granted for DSH). The provider implements the
-// same contract; in `Fixture` mode it is driven by deterministic fixture
-// events so that the Morn-side provider contract suite runs identically for
-// both providers. Real `start`/`send` operations return External errors.
+// Honest status: DeepSeek now publishes the official DSH runtime and a public
+// out-of-process SDK/JSON-RPC boundary. This Rust reference provider has not yet
+// wired that external transport, so Fixture mode proves only the Morn-side
+// contract. Real mode fails closed instead of pretending that a live DSH
+// session exists.
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -305,8 +304,8 @@ impl DeepSeekHarnessProvider {
 
     fn real_unavailable(&self) -> Error {
         Error::external(
-            "DeepSeek Harness is not installed/startable in this environment; \
-             only the Morn-side provider contract (fixture) is available",
+            "DeepSeek Harness real SDK transport is not configured in this Morn build; \
+             official DSH exists externally, but only the Morn-side fixture contract is wired",
         )
     }
 }
