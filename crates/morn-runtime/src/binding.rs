@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use morn_capability::{EffectClass, ResolvedCapability};
+
 use morn_kernel::ids::{Id, RuntimeBindingId, WorkPackageId};
 use morn_kernel::time::Timestamp;
 use morn_work::control::WorkResource;
@@ -87,6 +89,14 @@ pub struct ExecutionBinding {
     pub provider_version: String,
     pub provider_digest: Option<String>,
     pub runtime_ref: Option<String>,
+    /// Maximum real-world effect the selected capability declared and was
+    /// resolved under. None is legacy/untyped and must not authorize a write.
+    #[serde(default)]
+    pub effect_ceiling: Option<EffectClass>,
+    #[serde(default)]
+    pub compensation_ref: Option<String>,
+    #[serde(default)]
+    pub idempotency_key_required: bool,
     pub authority_decision_ref: Option<String>,
     pub profile_ref: String,
     #[serde(default)]
@@ -111,12 +121,32 @@ impl ExecutionBinding {
             provider_version: provider_version.into(),
             provider_digest: None,
             runtime_ref: None,
+            effect_ceiling: None,
+            compensation_ref: None,
+            idempotency_key_required: false,
             authority_decision_ref: None,
             profile_ref: work.spec.profile_ref.clone(),
             site_ref: work.spec.site_ref.clone(),
             migration_from: None,
             created_at: Timestamp::now(),
         }
+    }
+
+    pub fn for_resolved_capability(
+        work: &WorkResource,
+        capability: &ResolvedCapability,
+        provider_version: impl Into<String>,
+    ) -> Self {
+        let mut binding = Self::for_work(
+            work,
+            capability.manifest_id.to_string(),
+            capability.provider_ref.clone(),
+            provider_version,
+        );
+        binding.effect_ceiling = Some(capability.maximum_effect);
+        binding.compensation_ref = capability.compensation_ref.clone();
+        binding.idempotency_key_required = capability.idempotency_key_required;
+        binding
     }
 
     pub fn matches_work_generation(&self, work: &WorkResource) -> bool {
@@ -182,6 +212,38 @@ mod tests {
     use super::*;
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
     use morn_work::control::{WorkResource, WorkSpec};
+
+    #[test]
+    fn resolved_binding_pins_effect_semantics() {
+        use morn_capability::{CapabilityKind, ResolvedCapability};
+        use morn_capability::manifest::CapabilityManifestId;
+
+        let work_id = WorkPackageId::generate_with("wp");
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(work_id, "create order", "factory/v2"),
+        );
+        let resolved = ResolvedCapability {
+            manifest_id: CapabilityManifestId::generate_with("cmanifest"),
+            provider_ref: "cmms-provider".to_string(),
+            kind: CapabilityKind::Api,
+            estimated_cost_micros: Some(1),
+            maximum_effect: EffectClass::E2Compensatable,
+            compensation_ref: Some("cmms.cancel-order".to_string()),
+            idempotency_key_required: true,
+            required_execution_class: morn_kernel::ExecutionClass::Container,
+            required_execution_guarantees: vec![],
+            score: 100,
+            rationale: vec![],
+        };
+        let binding = ExecutionBinding::for_resolved_capability(&work, &resolved, "1");
+        assert_eq!(binding.effect_ceiling, Some(EffectClass::E2Compensatable));
+        assert_eq!(
+            binding.compensation_ref.as_deref(),
+            Some("cmms.cancel-order")
+        );
+        assert!(binding.idempotency_key_required);
+    }
 
     #[test]
     fn explicit_rebind_records_provider_and_profile_migration() {
