@@ -148,6 +148,7 @@ async fn v115_status() -> ApiResult {
             "definition": "protocol-driven outcome-oriented work control plane",
             "protocol_version": protocol.protocol_version,
             "semantic_slots": protocol.semantic_slots,
+            "semantic_invariants": protocol.invariants,
             "control_model": "desired/observed + controllers + reconciliation",
             "composition_runtime": {
                 "name": "Cordis",
