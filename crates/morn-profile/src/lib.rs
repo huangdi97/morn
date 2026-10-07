@@ -3,9 +3,13 @@
 //! A profile is not a plugin list. It declares guarantees that a composition
 //! must satisfy; providers are free to vary as long as conformance stays true.
 
+pub mod conformance;
+
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::version::Version;
+
+pub use conformance::{evaluate_profile, ConformanceEvidence, ConformanceReport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum RequirementLevel {
