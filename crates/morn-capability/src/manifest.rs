@@ -37,24 +37,36 @@ pub struct CapabilityInterface {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecutionRequirements {
     pub minimum_isolation: IsolationLevel,
+    pub os: Option<String>,
+    pub runtime_kinds: Vec<String>,
+    pub harness_compatibility: Vec<String>,
     pub network_allowlist: Vec<String>,
     pub writable_paths: Vec<String>,
     pub secret_refs: Vec<String>,
     pub cpu_millis: Option<u64>,
     pub memory_mb: Option<u64>,
+    pub gpu_count: Option<u32>,
     pub persistence_scope: String,
+    pub timeout_ms: Option<u64>,
+    pub side_effect_policy: String,
 }
 
 impl Default for ExecutionRequirements {
     fn default() -> Self {
         Self {
             minimum_isolation: IsolationLevel::NoIsolation,
+            os: None,
+            runtime_kinds: Vec::new(),
+            harness_compatibility: Vec::new(),
             network_allowlist: Vec::new(),
             writable_paths: Vec::new(),
             secret_refs: Vec::new(),
             cpu_millis: None,
             memory_mb: None,
+            gpu_count: None,
             persistence_scope: "attempt".to_string(),
+            timeout_ms: None,
+            side_effect_policy: "profile-governed".to_string(),
         }
     }
 }
@@ -98,15 +110,22 @@ pub struct CapabilityManifest {
     pub definition_id: CapabilityId,
     pub name: String,
     pub version: Version,
+    pub digest: Option<String>,
     pub provider_ref: String,
     pub kind: CapabilityKind,
     pub provides: Vec<String>,
     pub requires: Vec<String>,
+    pub preconditions: Vec<String>,
+    pub postconditions: Vec<String>,
     pub interfaces: Vec<CapabilityInterface>,
+    pub idempotency_key_required: bool,
+    pub compensation_ref: Option<String>,
     pub execution: ExecutionRequirements,
     pub authority: AuthorityEnvelope,
     pub economics: CapabilityEconomics,
     pub provenance: CapabilityProvenance,
+    pub owner: Option<String>,
+    pub license: Option<String>,
     pub declared_at: Timestamp,
 }
 
@@ -123,11 +142,16 @@ impl CapabilityManifest {
             definition_id,
             name: name.into(),
             version: Version::v1(),
+            digest: None,
             provider_ref: provider_ref.into(),
             kind,
             provides: Vec::new(),
             requires: Vec::new(),
+            preconditions: Vec::new(),
+            postconditions: Vec::new(),
             interfaces: Vec::new(),
+            idempotency_key_required: false,
+            compensation_ref: None,
             execution: ExecutionRequirements::default(),
             authority: AuthorityEnvelope {
                 allow: Vec::new(),
@@ -136,6 +160,8 @@ impl CapabilityManifest {
             },
             economics: CapabilityEconomics::default(),
             provenance: CapabilityProvenance::default(),
+            owner: None,
+            license: None,
             declared_at: Timestamp::now(),
         }
     }
