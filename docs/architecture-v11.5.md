@@ -340,7 +340,7 @@ Implemented locally on the v11.5 branch:
 - ExecutionEnvironmentProvider abstraction;
 - profile conformance evaluator;
 - QualificationRecord + SiteAdmission bridge;
-- OpenAPI2Capability candidate compiler;
+- OpenAPI2Capability and structured SOP2ProcedureCapability candidate compilers;
 - CloudEvents-compatible event envelope;
 - OCI/Sigstore/SLSA-oriented capability package descriptor;
 - Factory read-only vertical-slice integration test;
