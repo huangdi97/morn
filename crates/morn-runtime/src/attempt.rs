@@ -160,14 +160,16 @@ impl ActionAttempt {
             }
             Committed | Observed => {
                 let disposition = match self.effect_contract.as_ref().map(|effect| effect.class) {
-                    Some(EffectClass::E3Irreversible) => CancellationDisposition::IrreversibleEffect,
+                    Some(EffectClass::E3Irreversible) => {
+                        CancellationDisposition::IrreversibleEffect
+                    }
                     Some(EffectClass::E2Compensatable) => {
                         CancellationDisposition::RequiresCompensation
                     }
                     _ => CancellationDisposition::RequiresReconciliation,
                 };
                 Ok(disposition)
-            },
+            }
             Verified | Failed | Cancelled => Ok(CancellationDisposition::AlreadyTerminal),
         }
     }
