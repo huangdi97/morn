@@ -595,3 +595,30 @@ Accepted phase only when:
 
 An agent/task/session reporting success can therefore never close Work by
 manufacturing an unlinked outcome id.
+
+
+## Control-plane concurrency and fencing
+
+A Kubernetes-like desired/observed model also needs Kubernetes-like conflict
+discipline. Morn therefore separates:
+
+```text
+Work.generation       desired-spec generation
+resource_version      mutable projection CAS revision
+controller fence      controller leadership epoch
+ExecutionBinding      exact execution identity
+```
+
+They are not interchangeable.
+
+The reference SQLite store now provides:
+
+- compare-and-swap projection writes;
+- durable controller leases;
+- monotonic fencing tokens on takeover;
+- inbox dedupe and transactional-intent outbox.
+
+A stale controller cannot overwrite a newer Work projection merely because it
+started earlier. A stale controller lease also does not grant Authority or make
+an external effect valid: real actions still traverse profile, authority,
+credential and binding enforcement gates.
