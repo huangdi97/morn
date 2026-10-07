@@ -92,7 +92,7 @@ pub struct QualificationRecord {
     pub id: QualificationRecordId,
     pub manifest_id: CapabilityManifestId,
     pub qualification_version: Version,
-    pub release_ref: String,
+    pub candidate_ref: String,
     pub decision_ref: String,
     pub evidence_refs: Vec<String>,
     pub qualification_evidence: QualificationEvidence,
@@ -141,7 +141,7 @@ impl AdmissionService {
     pub fn qualify(
         &mut self,
         capability: &mut CapabilityRecord,
-        release_ref: impl Into<String>,
+        candidate_ref: impl Into<String>,
         decision_ref: impl Into<String>,
         evidence_refs: Vec<String>,
         context_of_use: Vec<String>,
@@ -154,11 +154,11 @@ impl AdmissionService {
                 "only declared/observed/qualified capabilities can be qualified",
             ));
         }
-        let release_ref = release_ref.into();
+        let candidate_ref = candidate_ref.into();
         let decision_ref = decision_ref.into();
-        if release_ref.trim().is_empty() || decision_ref.trim().is_empty() {
+        if candidate_ref.trim().is_empty() || decision_ref.trim().is_empty() {
             return Err(Error::validation(
-                "qualification requires explicit release and decision references",
+                "qualification requires explicit candidate/build and decision references",
             ));
         }
         if evidence_refs.is_empty() {
@@ -171,7 +171,7 @@ impl AdmissionService {
             id: QualificationRecordId::generate_with("qual"),
             manifest_id: capability.manifest.id.clone(),
             qualification_version: Version::v1(),
-            release_ref,
+            candidate_ref,
             decision_ref,
             qualification_evidence: QualificationEvidence::default(),
             evidence_refs,
@@ -189,7 +189,7 @@ impl AdmissionService {
     pub fn qualify_with_evidence(
         &mut self,
         capability: &mut CapabilityRecord,
-        release_ref: impl Into<String>,
+        candidate_ref: impl Into<String>,
         decision_ref: impl Into<String>,
         evidence_refs: Vec<String>,
         qualification_evidence: QualificationEvidence,
@@ -215,11 +215,11 @@ impl AdmissionService {
                 "qualification validity has already expired",
             ));
         }
-        let release_ref = release_ref.into();
+        let candidate_ref = candidate_ref.into();
         let decision_ref = decision_ref.into();
-        if release_ref.trim().is_empty() || decision_ref.trim().is_empty() {
+        if candidate_ref.trim().is_empty() || decision_ref.trim().is_empty() {
             return Err(Error::validation(
-                "qualification requires explicit release and decision references",
+                "qualification requires explicit candidate/build and decision references",
             ));
         }
 
@@ -227,7 +227,7 @@ impl AdmissionService {
             id: QualificationRecordId::generate_with("qual"),
             manifest_id: capability.manifest.id.clone(),
             qualification_version: Version::v1(),
-            release_ref,
+            candidate_ref,
             decision_ref,
             evidence_refs,
             qualification_evidence,
@@ -542,7 +542,7 @@ mod tests {
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
-                "release:1",
+                "candidate:1",
                 "certification-decision:1",
                 vec!["eval:1".to_string()],
                 QualificationEvidence {
@@ -584,7 +584,7 @@ mod tests {
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
-                "release:1",
+                "candidate:1",
                 "decision:1",
                 vec!["eval:1".to_string()],
                 QualificationEvidence {
@@ -660,7 +660,7 @@ mod tests {
         let qualification = service
             .qualify(
                 &mut capability,
-                "release:legacy",
+                "candidate:legacy",
                 "decision:legacy",
                 vec!["eval:legacy".to_string()],
                 vec!["factory-readonly".to_string()],
@@ -697,7 +697,7 @@ mod tests {
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
-                "release:1",
+                "candidate:1",
                 "decision:1",
                 vec!["eval:1".to_string()],
                 evidence,
@@ -728,7 +728,7 @@ mod tests {
         let qualification = service
             .qualify(
                 &mut capability,
-                "release:1",
+                "candidate:1",
                 "decision:1",
                 vec!["eval:1".to_string()],
                 vec![],
