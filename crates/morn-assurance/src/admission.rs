@@ -7,7 +7,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use morn_capability::manifest::{CapabilityManifestId, CapabilityRecord, CapabilityStage};
+use morn_capability::manifest::{
+    CapabilityAdmissionRef, CapabilityManifestId, CapabilityRecord, CapabilityStage,
+};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::Id;
 use morn_kernel::time::Timestamp;
@@ -281,8 +283,16 @@ impl AdmissionService {
             .iter()
             .any(|site| site == &site_ref)
         {
-            capability.admitted_sites.push(site_ref);
+            capability.admitted_sites.push(site_ref.clone());
         }
+        capability.admission_refs.retain(|existing| {
+            !(existing.site_ref == site_ref && existing.profile_ref == admission.profile_ref)
+        });
+        capability.admission_refs.push(CapabilityAdmissionRef {
+            admission_ref: admission.id.to_string(),
+            site_ref: site_ref.clone(),
+            profile_ref: admission.profile_ref.clone(),
+        });
         self.admissions.push(admission.clone());
         Ok(admission)
     }
@@ -389,6 +399,46 @@ mod tests {
         assert_eq!(admission.status, SiteAdmissionStatus::Admitted);
         assert_eq!(capability.stage, CapabilityStage::Admitted);
         assert_eq!(capability.admitted_sites, vec!["plant-a".to_string()]);
+    }
+
+    #[test]
+    fn admission_is_scoped_to_profile_as_well_as_site() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        let qualification = service
+            .qualify_with_evidence(
+                &mut capability,
+                "release:1",
+                "decision:1",
+                vec!["eval:1".to_string()],
+                QualificationEvidence {
+                    test_suite_refs: vec!["suite:factory".to_string()],
+                    environment_digest: Some("sha256:env".to_string()),
+                    expected_properties: vec!["safe-reconcile".to_string()],
+                    evaluator_identity: Some("evaluator:independent".to_string()),
+                    ..Default::default()
+                },
+                vec!["factory-readonly".to_string()],
+                None,
+            )
+            .unwrap();
+        let profile = DomainProfile::factory_readonly_v1();
+        let report = passing_conformance(&profile);
+        let admission = service
+            .admit(
+                &mut capability,
+                &qualification,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .unwrap();
+        assert!(capability.admission_refs.iter().any(|reference| {
+            reference.admission_ref == admission.id.to_string()
+                && reference.site_ref == "plant-a"
+                && reference.profile_ref == report.profile_ref
+        }));
     }
 
     #[test]
