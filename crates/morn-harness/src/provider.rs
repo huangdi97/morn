@@ -42,10 +42,47 @@ pub struct HarnessSession {
     pub status: String,
 }
 
+/// Provider feature negotiation. Optional lifecycle features are explicit:
+/// Morn must never invent cancellation/resume semantics a wire protocol lacks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HarnessProviderFeatures {
+    pub interrupt: bool,
+    pub resume: bool,
+    pub session_close: bool,
+    pub durable_events: bool,
+    pub multi_session: bool,
+}
+
+impl HarnessProviderFeatures {
+    pub const fn full_reference() -> Self {
+        Self {
+            interrupt: true,
+            resume: true,
+            session_close: true,
+            durable_events: true,
+            multi_session: true,
+        }
+    }
+
+    pub const fn dsh_sdk_current() -> Self {
+        Self {
+            interrupt: false,
+            resume: false,
+            session_close: false,
+            durable_events: true,
+            multi_session: true,
+        }
+    }
+}
+
 /// The Morn harness provider seam. Runtime/harness can only produce events,
 /// proposals and receipts — never mutate canonical Morn state directly.
 pub trait HarnessProvider: Send + Sync {
     fn provider_name(&self) -> &str;
+
+    fn features(&self) -> HarnessProviderFeatures {
+        HarnessProviderFeatures::full_reference()
+    }
 
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle>;
     fn unmount(&mut self, handle: &ProviderHandle) -> Result<()>;
@@ -313,6 +350,13 @@ impl DeepSeekHarnessProvider {
 impl HarnessProvider for DeepSeekHarnessProvider {
     fn provider_name(&self) -> &str {
         &self.name
+    }
+
+    fn features(&self) -> HarnessProviderFeatures {
+        match self.mode {
+            DshMode::Fixture => HarnessProviderFeatures::full_reference(),
+            DshMode::Real => HarnessProviderFeatures::dsh_sdk_current(),
+        }
     }
 
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
