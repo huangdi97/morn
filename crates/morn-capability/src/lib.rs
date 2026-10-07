@@ -15,9 +15,9 @@ pub use definition::{
 };
 pub use effect::{EffectClass, EffectContract};
 pub use manifest::{
-    AuthorityEnvelope, CapabilityAdmissionRef, CapabilityEconomics, CapabilityInterface, CapabilityManifest,
-    CapabilityManifestId, CapabilityProvenance, CapabilityRecord, CapabilityStage,
-    ExecutionRequirements, IsolationLevel,
+    AuthorityEnvelope, CapabilityAdmissionRef, CapabilityEconomics, CapabilityInterface,
+    CapabilityManifest, CapabilityManifestId, CapabilityProvenance, CapabilityRecord,
+    CapabilityStage, ExecutionRequirements, IsolationLevel,
 };
 pub use registry::{CapabilityBinding, CapabilityKind, CapabilityRegistry, InvocationResult};
 pub use resolver::{
