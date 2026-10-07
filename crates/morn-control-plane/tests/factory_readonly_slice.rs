@@ -26,7 +26,7 @@ use morn_kernel::policy::{Policy, PolicyRule};
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
     enforce_authority, ActionAttempt, AttemptState, AuthorityProvider, AuthorityRequest,
-    ExecutionBinding, ExecutionEnvironmentProvider, ExecutionEnvironmentSpec,
+    BindingMigrationReason, ExecutionBinding, ExecutionEnvironmentProvider, ExecutionEnvironmentSpec,
     FixtureEnvironmentProvider, IsolationClass, NativePolicyAuthority, OutcomeReconciler,
     ReconciliationObservation,
 };
@@ -282,11 +282,21 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     attempt.transition(AttemptState::Verified).unwrap();
 
     // Provider migration never edits the binding used by the already-started attempt.
-    let migrated = binding.migrate_to_provider("pi", "fixture-v1");
+    let (migrated, migration_decision) = binding.rebind_for_work(
+        &work,
+        capability.manifest.id.to_string(),
+        "pi",
+        "fixture-v1",
+        BindingMigrationReason::ProviderReplacement,
+        "factory-slice-controller",
+        vec!["harness-neutrality:passed".to_string()],
+    );
     assert_eq!(binding.provider_ref, "harness://dsh");
     assert_eq!(attempt.binding_id, binding.id);
     assert_eq!(migrated.migration_from, Some(binding.id.clone()));
     assert_eq!(migrated.provider_ref, "pi");
+    assert_eq!(migration_decision.from_binding, binding.id);
+    assert_eq!(migration_decision.to_binding, migrated.id);
 
     // Independent acceptance closes the business outcome.
     let mut work_service = WorkService::new();
@@ -354,6 +364,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .save_source_of_truth_binding(&work, &source_binding)
         .unwrap();
     store.save_execution_binding(&work, &binding).unwrap();
+    store.save_binding_migration(&work, &migration_decision).unwrap();
     store.save_action_attempt(&work, &attempt).unwrap();
     store.save_reconciliation(&work, &reconciliation).unwrap();
     store.save_observed_outcome(&work, &outcome).unwrap();
