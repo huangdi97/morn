@@ -393,11 +393,7 @@ async fn v115_instantiate_solution(
         guard
             .store
             .load_record::<morn_foundry::SolutionPackage>("solution_package_v115", package_id)?
-            .ok_or_else(|| {
-                AppError(Error::not_found(format!(
-                    "SolutionPackage {package_id}"
-                )))
-            })?
+            .ok_or_else(|| AppError(Error::not_found(format!("SolutionPackage {package_id}"))))?
     } else {
         guard.last_package.clone().ok_or_else(|| {
             AppError(Error::validation(
