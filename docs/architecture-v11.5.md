@@ -390,3 +390,17 @@ production agent runtimes are treated as possible execution/provider families,
 not as architectural parents. Their state persistence, interruption, sandbox,
 MCP/A2A and deployment services can be integrated behind Morn contracts without
 turning Agent state into Work truth.
+
+
+## Agent is an explicit executor kind
+
+Morn does not infer "agent" from the presence of an LLM or model. Capability
+kinds distinguish `Agent`, `Llm` and `Model`:
+
+- `Agent`: an autonomous/semi-autonomous executor with an agent/harness loop;
+- `Llm`: a language-model inference capability;
+- `Model`: a non-agent model/predictor/classifier capability.
+
+A Workcell's agent count therefore counts only explicit `Agent` capabilities.
+A model + deterministic controller does not become an agent by naming
+convention, and a zero-agent Workcell remains a first-class valid plan.
