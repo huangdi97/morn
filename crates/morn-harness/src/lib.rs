@@ -4,6 +4,7 @@
 pub mod binding;
 pub mod context;
 pub mod contract;
+pub mod dsh_sdk;
 pub mod event;
 pub mod intelligence;
 pub mod neutrality;
@@ -17,6 +18,10 @@ pub mod spec;
 pub use binding::{HarnessBinding, RuntimeBinding};
 pub use context::RuntimeContext;
 pub use contract::run_provider_contract;
+pub use dsh_sdk::{
+    assistant_text_from_session_event, DshNotification, DshSdkConfig, DshSdkStdioClient,
+    DSH_METHOD_INITIALIZE, DSH_METHOD_SESSION_PROMPT, DSH_METHOD_SHUTDOWN,
+};
 pub use event::{ExecutionEvent, ExecutionEventKind};
 pub use intelligence::{
     run_intelligence_conformance, IntelligenceProvider, IntelligenceRequest, IntelligenceResult,
@@ -25,7 +30,8 @@ pub use intelligence::{
 pub use neutrality::{run_harness_neutrality, HarnessNeutralityReport};
 pub use pi::{PiHarnessProvider, PiMode};
 pub use provider::{
-    DeepSeekHarnessProvider, HarnessProvider, HarnessSession, MornNativeHarness, ProviderHandle,
+    DeepSeekHarnessProvider, HarnessProvider, HarnessProviderFeatures, HarnessSession,
+    MornNativeHarness, ProviderHandle,
 };
 pub use receipt::ExecutionReceipt;
 pub use scope::{CapabilityScope, ScopeKind};
