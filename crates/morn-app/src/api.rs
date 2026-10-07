@@ -147,7 +147,12 @@ async fn v115_status() -> ApiResult {
         "providers": {
             "harness": [
                 { "id": "morn-native", "status": "reference" },
-                { "id": "deepseek-harness", "status": "fixture-contract; real external" },
+                {
+                    "id": "deepseek-harness",
+                    "status": "fixture contract + real SDK stdio wire client; external runtime/model credentials required",
+                    "wire_methods": ["initialize", "session/prompt", "shutdown"],
+                    "cancel_method": false
+                },
                 { "id": "pi", "status": "fixture-contract; real transport not configured" }
             ],
             "execution_environment": ["process", "container", "microvm", "full-vm", "remote", "physical"],
@@ -158,6 +163,12 @@ async fn v115_status() -> ApiResult {
             "artifact_compilers": ["OpenAPI2Capability", "SOP2ProcedureCapability"],
             "qualification_is_not_admission": true
         },
+        "profiles": [
+            { "id": morn_profile::DomainProfile::lite_v1().id, "version": morn_profile::DomainProfile::lite_v1().version },
+            { "id": morn_profile::DomainProfile::enterprise_v1().id, "version": morn_profile::DomainProfile::enterprise_v1().version },
+            { "id": profile.id.clone(), "version": profile.version },
+            { "id": morn_profile::DomainProfile::research_v1().id, "version": morn_profile::DomainProfile::research_v1().version }
+        ],
         "factory_profile": {
             "id": profile.id,
             "version": profile.version,
@@ -168,7 +179,7 @@ async fn v115_status() -> ApiResult {
         },
         "claims": {
             "local_engineering": "reference implementation + fixture/conformance tests",
-            "real_dsh": "external-blocked until real DSH distribution/configuration is available",
+            "real_dsh": "wire adapter implemented; runtime/model/credential smoke remains external-blocked",
             "real_factory": "external-blocked until lawful site data/authority exists",
             "production_write": "not entered"
         }
