@@ -1,11 +1,12 @@
 //! Harness fabric: HarnessSpec/Binding, CapabilityScope, ExecutionEvent/Receipt,
-//! providers (MornNative + DeepSeekHarness boundary) and contract suite.
+//! providers (MornNative + DeepSeekHarness + Pi boundaries) and contract suite.
 
 pub mod binding;
 pub mod context;
 pub mod contract;
 pub mod event;
 pub mod intelligence;
+pub mod pi;
 pub mod provider;
 pub mod receipt;
 pub mod scope;
@@ -20,6 +21,7 @@ pub use intelligence::{
     run_intelligence_conformance, IntelligenceProvider, IntelligenceRequest, IntelligenceResult,
     RuleIntelligence, SolverIntelligence,
 };
+pub use pi::{PiHarnessProvider, PiMode};
 pub use provider::{
     DeepSeekHarnessProvider, HarnessProvider, HarnessSession, MornNativeHarness, ProviderHandle,
 };
