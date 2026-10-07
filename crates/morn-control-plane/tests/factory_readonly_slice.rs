@@ -350,15 +350,37 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     // Durable control-plane state survives serialization independently of harness sessions.
     let store = MornStore::open_in_memory().unwrap();
     store.save_work_resource(&work).unwrap();
+    store.save_source_of_truth_binding(&work, &source_binding).unwrap();
     store.save_execution_binding(&work, &binding).unwrap();
     store.save_action_attempt(&work, &attempt).unwrap();
     store.save_reconciliation(&work, &reconciliation).unwrap();
+    store.save_observed_outcome(&work, &outcome).unwrap();
+    store
+        .save_acceptance_decision(&work, &acceptance_decision)
+        .unwrap();
+    store.save_value_assessment(&work, &value).unwrap();
     let restored: WorkResource = store
         .load_record("work_resource_v115", work.id.as_str())
         .unwrap()
         .unwrap();
     assert_eq!(restored.status.phase, WorkPhase::Ready);
     assert_eq!(restored.status.active_binding, Some(binding.id.clone()));
+
+    let restored_outcome: ObservedOutcome = store
+        .load_record("observed_outcome_v115", outcome.id.as_str())
+        .unwrap()
+        .unwrap();
+    let restored_acceptance: AcceptanceDecision = store
+        .load_record("acceptance_decision_v115", acceptance_decision.id.as_str())
+        .unwrap()
+        .unwrap();
+    let restored_value: ValueAssessment = store
+        .load_record("value_assessment_v115", value.id.as_str())
+        .unwrap()
+        .unwrap();
+    assert!(restored_outcome.is_source_grounded());
+    assert!(restored_acceptance.is_final_acceptance());
+    assert!(!restored_value.is_customer_value_claim());
 
     environment_provider.release(&environment).unwrap();
 }
