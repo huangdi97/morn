@@ -180,6 +180,7 @@ async fn v115_status() -> ApiResult {
             "id": profile.id,
             "version": profile.version,
             "minimum_isolation": profile.minimum_isolation,
+            "required_execution_guarantees": profile.required_execution_guarantees,
             "required_guarantees": required_guarantees,
             "production_write": false,
             "first_wedge": "outage/insert-order -> capacity -> delivery-impact review"
