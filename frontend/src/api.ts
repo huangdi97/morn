@@ -48,6 +48,7 @@ export interface V115Status {
     definition: string;
     protocol_version: { major: number; minor: number; patch: number };
     semantic_slots: string[];
+    semantic_invariants: Array<{ id: string; summary: string }>;
     control_model: string;
     composition_runtime: { name: string; role: string; reference_version: string; business_truth: boolean };
   };
