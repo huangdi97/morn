@@ -38,3 +38,23 @@ runtime state from Morn's point of view.
   capabilities.
 - The integration crate exposes explicit MCP/A2A descriptors and binding types
   while keeping canonical Work records elsewhere.
+
+
+## Current protocol research note
+
+The interoperability boundary is deliberately version-neutral. Current public
+A2A documentation identifies **1.0.0** as the latest released specification;
+its Task remains an A2A-managed stateful unit with Messages/Artifacts around it.
+That reinforces, rather than removes, the boundary: an A2A Task is a remote
+agent protocol object, not a Morn Work identity.
+
+Current MCP HTTP authorization requires resource-bound authorization flows when
+authorization is used. The client identifies the target protected resource, and
+credential material must not be passed through indiscriminately to another
+server. Morn therefore carries an optional resource/audience reference on
+credential requests/handles and keeps credential resolution behind the
+execution/enforcement boundary.
+
+These protocol details may evolve. Morn pins/records the concrete protocol
+version on an interface/provider binding when needed, while the Work/Authority/
+Outcome/Acceptance distinction stays in the Morn protocol version.
