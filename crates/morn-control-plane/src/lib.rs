@@ -6,6 +6,11 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod external_action;
+pub mod profile_guard;
+
+pub use external_action::begin_external_attempt;
+
 pub use profile_guard::{
     enforce_profile_action, evaluate_profile_action, issue_external_action_permit,
     ExternalActionMode, ExternalActionPermit, ExternalActionPermitId, ProfileActionDecision,
@@ -14,8 +19,6 @@ pub use profile_guard::{
 use morn_integration::SourceOfTruthBinding;
 use morn_kernel::error::Result;
 use morn_profile::DomainProfile;
-pub mod profile_guard;
-
 use morn_runtime::{
     reconcile_attempt, ActionAttempt, BindingMigrationDecision, ExecutionBinding,
     OutcomeReconciler, ReconciliationRecord,
