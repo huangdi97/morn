@@ -13,6 +13,7 @@ pub mod environment;
 pub mod gateway;
 pub mod reconciliation;
 pub mod runtime_provider;
+pub mod workload_identity;
 
 pub use attempt::{ActionAttempt, ActionAttemptId, AttemptState};
 pub use authority::{
@@ -39,3 +40,8 @@ pub use reconciliation::{
     ReconciliationRecordId,
 };
 pub use runtime_provider::{run_runtime_conformance, FixtureRuntime, RuntimeProvider};
+
+pub use workload_identity::{
+    FixtureWorkloadIdentityProvider, WorkloadIdentity, WorkloadIdentityId,
+    WorkloadIdentityProvider, WorkloadIdentityRequest,
+};
