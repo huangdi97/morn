@@ -82,6 +82,17 @@ pub fn evaluate_profile_action(
         };
     }
 
+    // Consequential production/physical effects are fail-closed. Merely
+    // omitting a Forbidden marker is not an opt-in.
+    if mode == ExternalActionMode::ProductionWrite && !profile.requires("ProductionWrite") {
+        return ProfileActionDecision {
+            profile_ref: profile.canonical_ref(),
+            mode,
+            allowed: false,
+            reason: "production write requires an explicit profile guarantee".to_string(),
+        };
+    }
+
     // Physical control is fail-closed unless a profile opts in explicitly with
     // a required semantic. The v11.5 profiles intentionally do not.
     if mode == ExternalActionMode::PhysicalControl && !profile.requires("PhysicalControl") {
@@ -116,6 +127,19 @@ pub fn issue_external_action_permit(
     if !authority.request.valid_now(Timestamp::now()) {
         return Err(Error::not_authorized(
             "authority request is revoked or outside its validity window",
+        ));
+    }
+
+    let write_like = matches!(
+        mode,
+        ExternalActionMode::SandboxWrite
+            | ExternalActionMode::ShadowWrite
+            | ExternalActionMode::ProductionWrite
+            | ExternalActionMode::PhysicalControl
+    );
+    if write_like && !binding.autonomy_posture.permits_write_like() {
+        return Err(Error::not_authorized(
+            "Assist autonomy posture cannot issue write-like external-action permits",
         ));
     }
 
@@ -206,6 +230,37 @@ mod tests {
         let decision = evaluate_profile_action(&profile, ExternalActionMode::ProductionWrite);
         assert!(!decision.allowed);
         assert!(enforce_profile_action(&decision).is_err());
+    }
+
+    #[test]
+    fn enterprise_profile_does_not_implicitly_enable_production_write() {
+        let profile = DomainProfile::enterprise_v1();
+        let decision = evaluate_profile_action(&profile, ExternalActionMode::ProductionWrite);
+        assert!(!decision.allowed);
+        assert!(decision.reason.contains("explicit profile guarantee"));
+    }
+
+    #[test]
+    fn assist_posture_cannot_smuggle_a_sandbox_write() {
+        let profile = DomainProfile::factory_readonly_v1();
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "assist-only fixture",
+            profile.canonical_ref(),
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        spec.autonomy_posture = morn_work::control::AutonomyPosture::Assist;
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let binding = ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        let authority = bound_authority(&work, &binding, "cmms.sandbox.write", "CMMS-fixture");
+
+        assert!(issue_external_action_permit(
+            &profile,
+            ExternalActionMode::SandboxWrite,
+            &authority,
+            &binding,
+        )
+        .is_err());
     }
 
     #[test]
