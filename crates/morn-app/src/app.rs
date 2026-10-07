@@ -3,19 +3,19 @@
 use std::sync::{Arc, Mutex};
 
 use morn_artifact::service::ArtifactService;
-use morn_capability::CapabilityRecord;
 use morn_assurance::certification::CertificationService;
-use morn_assurance::AdmissionService;
 use morn_assurance::evaluation::EvaluationRunner;
 use morn_assurance::managed_work::ManagedWorkService;
 use morn_assurance::replacement::ReplacementPilot;
 use morn_assurance::replay::ReplayRunner;
 use morn_assurance::rollback::RollbackService;
 use morn_assurance::shadow::ShadowRunner;
+use morn_assurance::AdmissionService;
 #[cfg(feature = "domain-biolab")]
 use morn_biolab_reference::dream_factory::{LoopAResult, LoopCResult};
 #[cfg(feature = "domain-biolab")]
 use morn_biolab_reference::service::{BioLabService, E2eResult};
+use morn_capability::CapabilityRecord;
 use morn_evolution::distillation::DistillationService;
 use morn_evolution::engine::EvolutionEngine;
 use morn_evolution::flywheel::EvolutionFlywheel;
@@ -341,15 +341,12 @@ impl AppInner {
         self.certification.capabilities = store.load_certified_capabilities()?;
         self.certification.releases = store.load_capability_releases()?;
         self.v115_capabilities = store.load_records("capability_record_v115")?;
-        self.v115_admission.observations =
-            store.load_records("capability_observation_v115")?;
-        self.v115_admission.qualifications =
-            store.load_records("qualification_record_v115")?;
+        self.v115_admission.observations = store.load_records("capability_observation_v115")?;
+        self.v115_admission.qualifications = store.load_records("qualification_record_v115")?;
         self.v115_admission.releases =
             store.load_records("capability_distribution_release_v115")?;
         self.v115_admission.admissions = store.load_records("site_admission_v115")?;
-        self.v115_admission.events =
-            store.load_records("capability_lifecycle_event_v115")?;
+        self.v115_admission.events = store.load_records("capability_lifecycle_event_v115")?;
         self.managed.runs = store.load_managed_runs(&self.workspace.id)?;
         self.managed.receipts = store.load_delivery_receipts()?;
         self.managed.acceptances = store.load_acceptance_decisions()?;
