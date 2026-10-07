@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{WorkPackageId, WorkspaceId};
+use morn_profile::DomainProfile;
 use morn_work::control::{WorkResource, WorkSpec};
 
 use crate::solution::SolutionPackage;
@@ -116,7 +117,9 @@ pub fn instantiate_approved_solution(
 
     // Only pre-execution readiness gates belong here. Binding/receipt/outcome/
     // acceptance conditions are reconciled after Work becomes executable.
-    let mut required = vec!["CapabilityResolved".to_string()];
+    let mut required = DomainProfile::from_ref(&request.profile_ref)
+        .map(|profile| profile.pre_execution_work_conditions())
+        .unwrap_or_else(|| vec!["CapabilityResolved".to_string()]);
     required.extend(request.required_conditions);
     required.sort();
     required.dedup();
@@ -196,6 +199,32 @@ mod tests {
             plan.work.status.phase,
             morn_work::control::WorkPhase::Proposed
         );
+    }
+
+    #[test]
+    fn known_profile_injects_non_bypassable_pre_execution_gates() {
+        let pkg = package(true);
+        let profile = morn_profile::DomainProfile::factory_readonly_v1();
+        let plan = instantiate_approved_solution(
+            &pkg,
+            SolutionInstantiationRequest {
+                workspace_id: WorkspaceId::generate(),
+                goal: "review outage".to_string(),
+                profile_ref: profile.canonical_ref(),
+                site_ref: Some("plant-a".to_string()),
+                constraints: vec![],
+                acceptance_ref: None,
+                required_conditions: vec![],
+            },
+        )
+        .unwrap();
+
+        for required in profile.pre_execution_work_conditions() {
+            assert!(
+                plan.work.spec.required_conditions.contains(&required),
+                "missing profile readiness gate {required}"
+            );
+        }
     }
 
     #[test]
