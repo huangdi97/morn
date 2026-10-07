@@ -53,7 +53,9 @@ impl WorkBlueprint {
         self.validate()?;
         let objective = objective.into();
         if objective.trim().is_empty() {
-            return Err(Error::validation("instantiated Work objective must not be empty"));
+            return Err(Error::validation(
+                "instantiated Work objective must not be empty",
+            ));
         }
 
         let mut acceptance = AcceptanceSpec::new(format!("{} acceptance", self.name));
