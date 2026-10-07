@@ -5,6 +5,7 @@
 pub mod approval;
 pub mod contracts;
 pub mod error;
+pub mod event_envelope;
 pub mod identity;
 pub mod ids;
 pub mod ledger;
@@ -20,6 +21,7 @@ pub use contracts::{
     Compatibility, ContractCompatibility, ContractSnapshot, DeprecationPolicy, SEMANTIC_CONTRACT_V1,
 };
 pub use error::{Error, Result};
+pub use event_envelope::EventEnvelope;
 pub use protocol::{
     HistoryMutation, HistoryMutationKind, ProtocolSnapshot, PublishedContractRef,
     MORN_PROTOCOL_V11_5,
