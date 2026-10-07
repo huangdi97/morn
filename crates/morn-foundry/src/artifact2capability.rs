@@ -308,6 +308,7 @@ impl ArtifactCompiler for RepositoryManifestCompiler {
             "solver" => CapabilityKind::Solver,
             "model" => CapabilityKind::Model,
             "llm" => CapabilityKind::Llm,
+            "agent" => CapabilityKind::Agent,
             "hybrid" => CapabilityKind::Hybrid,
             other => {
                 return Err(Error::validation(format!(
