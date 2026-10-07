@@ -19,6 +19,10 @@ export default function Studio() {
     '{"openapi":"3.1.0","paths":{"/orders":{"get":{},"post":{}}}}',
   );
   const [artifactCandidate, setArtifactCandidate] = useState<OpenApiCompileOutcome | null>(null);
+  const [procedureText, setProcedureText] = useState(
+    '{"steps":[{"id":"inspect","action":"inspect machine"},{"id":"review","action":"review evidence"}]}',
+  );
+  const [procedureCandidate, setProcedureCandidate] = useState<OpenApiCompileOutcome | null>(null);
 
   const runCompiler = async () => {
     setError(null);
@@ -50,6 +54,20 @@ export default function Studio() {
         content: openApiText,
       });
       setArtifactCandidate(result);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const compileProcedure = async () => {
+    setError(null);
+    try {
+      const result = await apiPostJson<OpenApiCompileOutcome>("/v115/artifact/procedure/compile", {
+        name: "studio-procedure-capability",
+        source_ref: "studio://inline-procedure",
+        content: procedureText,
+      });
+      setProcedureCandidate(result);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -96,6 +114,29 @@ export default function Studio() {
             />
             <KeyValue k="Admission" v={artifactCandidate.admission} />
             <KeyValue k="Next gates" v={artifactCandidate.next.join(" → ")} />
+          </>
+        )}
+        <hr style={{ margin: "20px 0" }} />
+        <p>
+          SOP / Procedure uses the same supply-chain rule: generation creates a candidate only.
+        </p>
+        <textarea
+          style={{ width: "100%", minHeight: 110, padding: 8 }}
+          value={procedureText}
+          onChange={(e) => setProcedureText(e.target.value)}
+        />
+        <div className="page-actions" style={{ marginTop: 8 }}>
+          <button onClick={compileProcedure}>Compile SOP / Procedure</button>
+        </div>
+        {procedureCandidate && (
+          <>
+            <KeyValue k="Procedure stage" v={procedureCandidate.candidate.record.stage} />
+            <KeyValue
+              k="Discovered steps"
+              v={procedureCandidate.candidate.report.discovered_operations.join(", ")}
+            />
+            <KeyValue k="Procedure admission" v={procedureCandidate.admission} />
+            <KeyValue k="Procedure next gates" v={procedureCandidate.next.join(" → ")} />
           </>
         )}
       </Card>
