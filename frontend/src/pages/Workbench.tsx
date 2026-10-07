@@ -15,6 +15,7 @@ import {
   ShadowOutcome,
   WorkbenchData,
   OpintPredictOutcome,
+  V115Status,
 } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
@@ -42,6 +43,7 @@ export default function Workbench() {
   const [managedRun, setManagedRun] = useState<ManagedOutcome | null>(null);
   const [replacement, setReplacement] = useState<ReplacementOutcome | null>(null);
   const [opintPrediction, setOpintPrediction] = useState<OpintPredictOutcome | null>(null);
+  const [v115, setV115] = useState<V115Status | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -50,6 +52,9 @@ export default function Workbench() {
       .then(setData)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
+    apiGet<V115Status>("/v115/status")
+      .then(setV115)
+      .catch(() => undefined);
   }, []);
 
   useEffect(load, [load]);
@@ -288,6 +293,23 @@ export default function Workbench() {
           <KeyValue k="DeepSeek Harness" v={`${data.harness.dsh.provider} (${data.harness.dsh.status})`} />
           <KeyValue k="Evolution candidates" v={data.evolution_candidates} />
         </Card>
+
+        {v115 && (
+          <Card title="Morn v11.5 Control Plane">
+            <KeyValue
+              k="Protocol"
+              v={`${v115.architecture.protocol_version.major}.${v115.architecture.protocol_version.minor}.${v115.architecture.protocol_version.patch}`}
+            />
+            <KeyValue k="Control model" v={v115.architecture.control_model} />
+            <KeyValue
+              k="Composition"
+              v={`${v115.architecture.composition_runtime.name} ${v115.architecture.composition_runtime.reference_version} — ${v115.architecture.composition_runtime.role}`}
+            />
+            <KeyValue k="Factory profile" v={v115.factory_profile.id} />
+            <KeyValue k="Production write" v={v115.factory_profile.production_write ? "enabled" : "not entered"} />
+            <KeyValue k="Capability lifecycle" v={v115.capability_supply_chain.stages.join(" → ")} />
+          </Card>
+        )}
       </div>
 
       <Card title="Durable Work Runtime (v0.2)">
