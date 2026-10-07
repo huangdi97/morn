@@ -20,6 +20,28 @@ export async function apiPost<T = unknown>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface V115ControlPlaneData {
+  work: Array<{
+    id: string;
+    generation: number;
+    spec: { goal: string; profile_ref: string; required_conditions: string[] };
+    status: {
+      phase: string;
+      observed_generation: number;
+      conditions: Array<{ condition_type: string; status: string; reason: string }>;
+      active_binding: string | null;
+    };
+  }>;
+  source_of_truth_bindings: Array<Record<string, unknown>>;
+  execution_bindings: Array<Record<string, unknown>>;
+  attempts: Array<Record<string, unknown>>;
+  reconciliations: Array<Record<string, unknown>>;
+  outcomes: Array<Record<string, unknown>>;
+  acceptance_decisions: Array<Record<string, unknown>>;
+  value_assessments: Array<Record<string, unknown>>;
+  note: string;
+}
+
 export interface V115Status {
   architecture: {
     definition: string;
