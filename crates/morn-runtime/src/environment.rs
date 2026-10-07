@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::Id;
+use morn_kernel::ExecutionGuarantee;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct ExecutionEnvironmentTag;
@@ -28,6 +29,8 @@ pub struct ExecutionEnvironmentSpec {
     pub minimum_isolation: IsolationClass,
     pub os: Option<String>,
     pub runtime: Option<String>,
+    #[serde(default)]
+    pub required_guarantees: Vec<ExecutionGuarantee>,
     pub cpu_millis: Option<u64>,
     pub memory_mb: Option<u64>,
     pub gpu_count: Option<u32>,
@@ -45,6 +48,7 @@ impl Default for ExecutionEnvironmentSpec {
             minimum_isolation: IsolationClass::Process,
             os: None,
             runtime: None,
+            required_guarantees: Vec::new(),
             cpu_millis: None,
             memory_mb: None,
             gpu_count: None,
@@ -63,6 +67,8 @@ pub struct ExecutionEnvironmentHandle {
     pub id: ExecutionEnvironmentId,
     pub provider: String,
     pub isolation: IsolationClass,
+    #[serde(default)]
+    pub guarantees: Vec<ExecutionGuarantee>,
     pub runtime_ref: String,
 }
 
@@ -72,6 +78,7 @@ pub trait ExecutionEnvironmentProvider: Send + Sync {
     fn supports_isolation(&self, class: IsolationClass) -> bool {
         self.supported_isolation_classes().contains(&class)
     }
+    fn supported_guarantees(&self, class: IsolationClass) -> Vec<ExecutionGuarantee>;
     fn provision(&mut self, spec: &ExecutionEnvironmentSpec) -> Result<ExecutionEnvironmentHandle>;
     fn release(&mut self, handle: &ExecutionEnvironmentHandle) -> Result<()>;
 }
@@ -94,6 +101,26 @@ impl ExecutionEnvironmentProvider for FixtureEnvironmentProvider {
         ]
     }
 
+    fn supported_guarantees(&self, class: IsolationClass) -> Vec<ExecutionGuarantee> {
+        let mut guarantees = vec![
+            ExecutionGuarantee::FilesystemReadPolicy,
+            ExecutionGuarantee::FilesystemWritePolicy,
+            ExecutionGuarantee::ResourceLimits,
+            ExecutionGuarantee::SecretIndirection,
+        ];
+        if matches!(
+            class,
+            IsolationClass::Container | IsolationClass::MicroVm | IsolationClass::FullVm
+        ) {
+            guarantees.push(ExecutionGuarantee::ProcessBoundary);
+            guarantees.push(ExecutionGuarantee::NetworkEgressPolicy);
+        }
+        if matches!(class, IsolationClass::MicroVm | IsolationClass::FullVm) {
+            guarantees.push(ExecutionGuarantee::KernelBoundary);
+        }
+        guarantees
+    }
+
     fn provision(&mut self, spec: &ExecutionEnvironmentSpec) -> Result<ExecutionEnvironmentHandle> {
         if !self.supports_isolation(spec.minimum_isolation) {
             return Err(Error::external(format!(
@@ -102,12 +129,26 @@ impl ExecutionEnvironmentProvider for FixtureEnvironmentProvider {
                 self.provider_name()
             )));
         }
+        let provided_guarantees = self.supported_guarantees(spec.minimum_isolation);
+        if let Some(missing) = spec
+            .required_guarantees
+            .iter()
+            .find(|required| !provided_guarantees.contains(required))
+        {
+            return Err(Error::external(format!(
+                "missing execution guarantee {} from provider {}",
+                missing.key(),
+                self.provider_name()
+            )));
+        }
+
         let id = ExecutionEnvironmentId::generate_with("env");
         self.active.push(id.clone());
         Ok(ExecutionEnvironmentHandle {
             id,
             provider: self.provider_name().to_string(),
             isolation: spec.minimum_isolation,
+            guarantees: provided_guarantees,
             runtime_ref: "fixture://local".to_string(),
         })
     }
@@ -136,6 +177,32 @@ mod tests {
         assert!(provider.supports_isolation(IsolationClass::MicroVm));
         assert!(!provider.supports_isolation(IsolationClass::Remote));
         assert!(!provider.supports_isolation(IsolationClass::Physical));
+    }
+
+    #[test]
+    fn environment_provider_enforces_guarantee_vector() {
+        let mut provider = FixtureEnvironmentProvider::default();
+        let ok = provider
+            .provision(&ExecutionEnvironmentSpec {
+                minimum_isolation: IsolationClass::Container,
+                required_guarantees: vec![
+                    ExecutionGuarantee::FilesystemWritePolicy,
+                    ExecutionGuarantee::NetworkEgressPolicy,
+                    ExecutionGuarantee::SecretIndirection,
+                ],
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(ok
+            .guarantees
+            .contains(&ExecutionGuarantee::NetworkEgressPolicy));
+
+        let blocked = provider.provision(&ExecutionEnvironmentSpec {
+            minimum_isolation: IsolationClass::Container,
+            required_guarantees: vec![ExecutionGuarantee::RuntimeAttestation],
+            ..Default::default()
+        });
+        assert!(blocked.is_err());
     }
 
     #[test]
