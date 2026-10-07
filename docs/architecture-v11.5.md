@@ -472,3 +472,26 @@ SolutionPackage instantiation creates canonical WorkResource. This keeps the
 product simple while preserving one business object model.
 
 See ADR-014, ADR-015 and ADR-016.
+
+
+## Digital employee / role interface
+
+Digital Employee is retained as a useful organizational/product surface, but it
+does not become a new canonical record family. The reference mapping is:
+
+```text
+Digital Employee view
+  = RoleSlot
+  + MemberBinding
+  + projected responsibilities/capability requirements/authority ceiling
+```
+
+The role is stable while execution is dynamic. One role may participate in
+different Workcells and may use DSH, Pi, deterministic programs, solvers or
+other providers across Works. A Workcell is assembled around a concrete Work
+using the minimum-sufficient capability mix and can legitimately contain zero
+agents.
+
+This keeps Role as the human-facing organizational interface, Work as the
+coordination truth, Capability as the composition unit, and Harness sessions as
+replaceable runtime state.
