@@ -13,8 +13,9 @@ use morn_capability::{
     CapabilityStage, EffectClass, IsolationLevel,
 };
 use morn_control_plane::{
-    ControlPlaneStore, ControllerInputs, ReconciliationController, WorkController,
-    WorkProgressController, WorkProgressInputs,
+    enforce_profile_action, evaluate_profile_action, ControlPlaneStore, ControllerInputs,
+    ExternalActionMode, ReconciliationController, WorkController, WorkProgressController,
+    WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
