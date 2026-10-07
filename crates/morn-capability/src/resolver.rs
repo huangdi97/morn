@@ -30,6 +30,9 @@ pub struct ResolvedCapability {
     pub provider_ref: String,
     pub kind: CapabilityKind,
     pub estimated_cost_micros: Option<u64>,
+    pub maximum_effect: crate::effect::EffectClass,
+    pub compensation_ref: Option<String>,
+    pub idempotency_key_required: bool,
     /// Effective execution floor after merging Work/Profile and capability
     /// requirements. This is a requirement for environment selection, not
     /// evidence that the capability provider already satisfies it.
@@ -260,6 +263,9 @@ impl CapabilityResolver {
                 provider_ref: manifest.provider_ref.clone(),
                 kind: manifest.kind,
                 estimated_cost_micros: manifest.economics.estimated_cost_micros,
+                maximum_effect: manifest.authority.maximum_effect,
+                compensation_ref: manifest.compensation_ref.clone(),
+                idempotency_key_required: manifest.idempotency_key_required,
                 required_execution_class,
                 required_execution_guarantees,
                 score,
