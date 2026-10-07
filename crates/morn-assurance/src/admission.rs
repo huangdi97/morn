@@ -530,7 +530,10 @@ impl AdmissionService {
             capability.manifest.id.clone(),
             admission.id.to_string(),
             "SiteAdmitted",
-            format!("admitted to {} under {}", admission.site_ref, admission.profile_ref),
+            format!(
+                "admitted to {} under {}",
+                admission.site_ref, admission.profile_ref
+            ),
             admission.approved_by.clone(),
         );
         Ok(admission)
