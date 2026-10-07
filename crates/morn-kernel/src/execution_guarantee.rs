@@ -60,9 +60,7 @@ impl ExecutionClass {
     }
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "kebab-case")]
 pub enum ExecutionGuarantee {
     FilesystemReadPolicy,
