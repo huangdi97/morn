@@ -99,6 +99,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     .with_acceptance_spec(acceptance_id.clone());
     let work_package_id = work_package.id.clone();
 
+    // Factory profile drives capability/environment requirements from the start.
+    let profile = DomainProfile::factory_readonly_v1();
+
     // Capability begins only as a declaration.
     let mut manifest = CapabilityManifest::new(
         CapabilityId::generate_with("cap"),
@@ -110,13 +113,13 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     manifest.provides = vec!["equipment.anomaly.investigate".to_string()];
     manifest.authority.allow = vec!["historian.read".to_string()];
     manifest.execution.minimum_isolation = IsolationLevel::Container;
+    manifest.execution.required_guarantees = profile.required_execution_guarantees.clone();
     manifest.provenance.source_ref = "repo://factory/equipment-investigator".to_string();
     manifest.provenance.source_digest = Some("sha256:capability-fixture".to_string());
     let mut capability = CapabilityRecord::new(manifest);
     assert_eq!(capability.stage, CapabilityStage::Declared);
 
     // Qualification and site admission are separate gates.
-    let profile = DomainProfile::factory_readonly_v1();
     let conformance = passing_factory_conformance(&profile);
     assert!(conformance.passed);
     let mut admission = AdmissionService::default();
@@ -179,6 +182,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             allowed_kinds: vec![CapabilityKind::Agent],
             minimum_isolation: Some(IsolationLevel::Container),
             required_authority: vec!["historian.read".to_string()],
+            required_execution_guarantees: profile.required_execution_guarantees.clone(),
             site_ref: Some("plant-a".to_string()),
             profile_ref: Some(conformance.profile_ref.clone()),
             ..Default::default()
