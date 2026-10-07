@@ -68,6 +68,11 @@ fn passing_factory_conformance(profile: &DomainProfile) -> morn_profile::Conform
         &ConformanceEvidence {
             satisfied_semantics: semantics,
             isolation: "container".to_string(),
+            execution_guarantees: profile
+                .required_execution_guarantees
+                .iter()
+                .copied()
+                .collect(),
             durable_work_state: true,
             source_of_truth_bound: true,
             provenance_ready: true,
