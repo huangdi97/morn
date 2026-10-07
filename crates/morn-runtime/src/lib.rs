@@ -19,7 +19,10 @@ pub use authority::{
     enforce_authority, AuthorityDecisionId, AuthorityDecisionRecord, AuthorityProvider,
     AuthorityRequest, NativePolicyAuthority,
 };
-pub use binding::ExecutionBinding;
+pub use binding::{
+    BindingMigrationDecision, BindingMigrationDecisionId, BindingMigrationReason,
+    ExecutionBinding,
+};
 pub use credentials::{
     CredentialHandle, CredentialHandleId, CredentialProvider, CredentialRequest,
     FixtureCredentialProvider,
