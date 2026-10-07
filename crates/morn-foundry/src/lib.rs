@@ -9,7 +9,8 @@ pub mod work_graph;
 
 pub use artifact2capability::{
     ArtifactCompiler, ArtifactKind, ArtifactSource, CandidateCapability, CompilationReport,
-    OpenApiJsonCompiler, ProcedureJsonCompiler,
+    OpenApiJsonCompiler, ProcedureJsonCompiler, RepositoryManifestCompiler,
+    ReviewedPaperManifestCompiler,
 };
 pub use compiler::{CompilerDecisionSource, SolutionCompiler};
 pub use manifest::ManifestService;
