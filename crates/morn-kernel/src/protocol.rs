@@ -70,11 +70,27 @@ impl HistoryMutation {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SemanticInvariant {
+    pub id: String,
+    pub summary: String,
+}
+
+impl SemanticInvariant {
+    pub fn required(id: impl Into<String>, summary: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            summary: summary.into(),
+        }
+    }
+}
+
 /// Versioned semantic snapshot used by conformance and runtime manifests.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProtocolSnapshot {
     pub protocol_version: Version,
     pub semantic_slots: Vec<String>,
+    pub invariants: Vec<SemanticInvariant>,
 }
 
 impl ProtocolSnapshot {
@@ -97,11 +113,59 @@ impl ProtocolSnapshot {
             .into_iter()
             .map(str::to_string)
             .collect(),
+            invariants: vec![
+                SemanticInvariant::required(
+                    "work-truth-independent-of-executor",
+                    "Harness/session/workflow runtime state cannot replace canonical Work truth.",
+                ),
+                SemanticInvariant::required(
+                    "active-binding-pinned",
+                    "An active Attempt keeps the exact ExecutionBinding it started with.",
+                ),
+                SemanticInvariant::required(
+                    "authority-before-restricted-effect",
+                    "Restricted external side effects require an explicit authority decision before dispatch.",
+                ),
+                SemanticInvariant::required(
+                    "proposal-execution-receipt-outcome-acceptance-distinct",
+                    "Proposal, execution, receipt, observed outcome and acceptance are distinct facts.",
+                ),
+                SemanticInvariant::required(
+                    "unknown-requires-reconciliation",
+                    "Ambiguous external effects are not blindly retried; they enter reconciliation.",
+                ),
+                SemanticInvariant::required(
+                    "compiler-not-qualification",
+                    "Artifact compilation can only create a candidate capability.",
+                ),
+                SemanticInvariant::required(
+                    "qualification-not-admission",
+                    "Qualification alone never grants site/profile admission.",
+                ),
+                SemanticInvariant::required(
+                    "profile-version-pinned",
+                    "A running Work/Binding is interpreted under an explicit profile version.",
+                ),
+                SemanticInvariant::required(
+                    "history-no-silent-rewrite",
+                    "Historical correction is explicit supersession/retraction/redaction/migration, not silent overwrite.",
+                ),
+                SemanticInvariant::required(
+                    "profile-guarantees-not-provider-names",
+                    "Domain Profiles constrain guarantees and semantics rather than naming specific vendors.",
+                ),
+            ],
         }
     }
 
     pub fn requires(&self, slot: &str) -> bool {
         self.semantic_slots.iter().any(|item| item == slot)
+    }
+
+    pub fn requires_invariant(&self, invariant_id: &str) -> bool {
+        self.invariants
+            .iter()
+            .any(|invariant| invariant.id == invariant_id)
     }
 }
 
@@ -117,6 +181,12 @@ mod tests {
         assert!(snapshot.requires("ExecutionBinding"));
         assert!(snapshot.requires("Reconciliation"));
         assert!(snapshot.requires("Acceptance"));
+        assert!(snapshot.requires_invariant("active-binding-pinned"));
+        assert!(snapshot.requires_invariant("history-no-silent-rewrite"));
+        assert!(snapshot
+            .invariants
+            .iter()
+            .all(|invariant| !invariant.summary.trim().is_empty()));
     }
 
     #[test]
