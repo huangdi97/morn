@@ -6,9 +6,9 @@
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::ids::{CapabilityId, Id};
-use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
+use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 
 use crate::effect::EffectClass;
 use crate::registry::CapabilityKind;
