@@ -624,7 +624,7 @@ mod tests {
     }
 
     #[test]
-    fn resolver_requires_declared_execution_guarantees() {
+    fn resolver_merges_execution_requirements_for_environment_selection() {
         let mut record = admitted(
             "sandboxed-program",
             "program-provider",
@@ -637,21 +637,7 @@ mod tests {
             ExecutionGuarantee::NetworkEgressPolicy,
         ];
 
-        let ok = CapabilityResolver.resolve(
-            &CapabilityRequest {
-                required_provides: vec!["observe".to_string()],
-                required_execution_guarantees: vec![
-                    ExecutionGuarantee::FilesystemWritePolicy,
-                    ExecutionGuarantee::NetworkEgressPolicy,
-                ],
-                site_ref: Some("plant-a".to_string()),
-                ..Default::default()
-            },
-            &[record.clone()],
-        );
-        assert_eq!(ok.len(), 1);
-
-        let blocked = CapabilityResolver.resolve(
+        let resolved = CapabilityResolver.resolve(
             &CapabilityRequest {
                 required_provides: vec!["observe".to_string()],
                 required_execution_guarantees: vec![ExecutionGuarantee::RuntimeAttestation],
@@ -660,7 +646,16 @@ mod tests {
             },
             &[record],
         );
-        assert!(blocked.is_empty());
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved[0]
+            .required_execution_guarantees
+            .contains(&ExecutionGuarantee::FilesystemWritePolicy));
+        assert!(resolved[0]
+            .required_execution_guarantees
+            .contains(&ExecutionGuarantee::NetworkEgressPolicy));
+        assert!(resolved[0]
+            .required_execution_guarantees
+            .contains(&ExecutionGuarantee::RuntimeAttestation));
     }
 
     #[test]
