@@ -10,7 +10,8 @@ use morn_integration::SourceOfTruthBinding;
 use morn_kernel::error::Result;
 use morn_profile::DomainProfile;
 use morn_runtime::{
-    reconcile_attempt, ActionAttempt, ExecutionBinding, OutcomeReconciler, ReconciliationRecord,
+    reconcile_attempt, ActionAttempt, BindingMigrationDecision, ExecutionBinding, OutcomeReconciler,
+    ReconciliationRecord,
 };
 use morn_store::MornStore;
 use morn_work::acceptance_decision::AcceptanceDecision;
@@ -120,6 +121,11 @@ pub trait ControlPlaneStore {
     fn save_work_resource(&self, work: &WorkResource) -> Result<()>;
     fn save_execution_binding(&self, work: &WorkResource, binding: &ExecutionBinding)
         -> Result<()>;
+    fn save_binding_migration(
+        &self,
+        work: &WorkResource,
+        decision: &BindingMigrationDecision,
+    ) -> Result<()>;
     fn save_action_attempt(&self, work: &WorkResource, attempt: &ActionAttempt) -> Result<()>;
     fn save_reconciliation(&self, work: &WorkResource, record: &ReconciliationRecord)
         -> Result<()>;
@@ -166,6 +172,20 @@ impl ControlPlaneStore for MornStore {
         )
     }
 
+    fn save_binding_migration(
+        &self,
+        work: &WorkResource,
+        decision: &BindingMigrationDecision,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "binding_migration_v115",
+            decision.id.as_str(),
+            work.workspace_id.as_str(),
+            decision.created_at.millis(),
+            decision,
+        )
+    }
+
     fn save_action_attempt(&self, work: &WorkResource, attempt: &ActionAttempt) -> Result<()> {
         self.save_record(
             "action_attempt_v115",
@@ -187,6 +207,58 @@ impl ControlPlaneStore for MornStore {
             work.workspace_id.as_str(),
             record.created_at.millis(),
             record,
+        )
+    }
+
+    fn save_source_of_truth_binding(
+        &self,
+        work: &WorkResource,
+        binding: &SourceOfTruthBinding,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "source_of_truth_binding_v115",
+            binding.id.as_str(),
+            work.workspace_id.as_str(),
+            binding.created_at.millis(),
+            binding,
+        )
+    }
+
+    fn save_observed_outcome(&self, work: &WorkResource, outcome: &ObservedOutcome) -> Result<()> {
+        self.save_record_immutable(
+            "observed_outcome_v115",
+            outcome.id.as_str(),
+            work.workspace_id.as_str(),
+            outcome.observed_at.millis(),
+            outcome,
+        )
+    }
+
+    fn save_acceptance_decision(
+        &self,
+        work: &WorkResource,
+        decision: &AcceptanceDecision,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "acceptance_decision_v115",
+            decision.id.as_str(),
+            work.workspace_id.as_str(),
+            decision.decided_at.millis(),
+            decision,
+        )
+    }
+
+    fn save_value_assessment(
+        &self,
+        work: &WorkResource,
+        assessment: &ValueAssessment,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "value_assessment_v115",
+            assessment.id.as_str(),
+            work.workspace_id.as_str(),
+            assessment.created_at.millis(),
+            assessment,
         )
     }
 }
