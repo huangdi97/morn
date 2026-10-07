@@ -48,6 +48,7 @@ pub enum WorkPhase {
     Running,
     Waiting,
     Reconciling,
+    Terminating,
     Blocked,
     Delivered,
     Accepted,
@@ -129,6 +130,14 @@ pub struct WorkResource {
     pub generation: u64,
     pub spec: WorkSpec,
     pub status: WorkControlStatus,
+    /// Graceful termination is monotonic. Once requested, it cannot be silently
+    /// unset; finalizers must be cleared by the responsible controllers.
+    #[serde(default)]
+    pub termination_requested_at: Option<Timestamp>,
+    #[serde(default)]
+    pub termination_reason: Option<String>,
+    #[serde(default)]
+    pub finalizers: Vec<String>,
     pub created_at: Timestamp,
 }
 
@@ -141,6 +150,9 @@ impl WorkResource {
             generation: 1,
             spec,
             status: WorkControlStatus::default(),
+            termination_requested_at: None,
+            termination_reason: None,
+            finalizers: Vec::new(),
             created_at: Timestamp::now(),
         }
     }
@@ -180,6 +192,79 @@ impl WorkResource {
             .all(|required| self.condition_is_true(required))
     }
 
+    pub fn add_finalizer(
+        &mut self,
+        finalizer: impl Into<String>,
+    ) -> morn_kernel::error::Result<()> {
+        let finalizer = finalizer.into();
+        if finalizer.trim().is_empty() || !finalizer.contains('/') {
+            return Err(morn_kernel::error::Error::validation(
+                "Work finalizer must be a qualified non-empty key",
+            ));
+        }
+        if self.termination_requested_at.is_some() {
+            return Err(morn_kernel::error::Error::invalid_state(
+                "cannot add a new Work finalizer after termination is requested",
+            ));
+        }
+        if !self.finalizers.iter().any(|existing| existing == &finalizer) {
+            self.finalizers.push(finalizer);
+            self.finalizers.sort();
+        }
+        self.status.updated_at = Timestamp::now();
+        Ok(())
+    }
+
+    pub fn request_termination(
+        &mut self,
+        reason: impl Into<String>,
+    ) -> morn_kernel::error::Result<()> {
+        let reason = reason.into();
+        if reason.trim().is_empty() {
+            return Err(morn_kernel::error::Error::validation(
+                "Work termination requires a reason",
+            ));
+        }
+        if self.termination_requested_at.is_none() {
+            self.termination_requested_at = Some(Timestamp::now());
+            self.termination_reason = Some(reason);
+        }
+        self.status.phase = WorkPhase::Terminating;
+        self.status.updated_at = Timestamp::now();
+        Ok(())
+    }
+
+    pub fn remove_finalizer(&mut self, finalizer: &str) -> bool {
+        let before = self.finalizers.len();
+        self.finalizers.retain(|existing| existing != finalizer);
+        let removed = self.finalizers.len() != before;
+        if removed {
+            self.status.updated_at = Timestamp::now();
+        }
+        removed
+    }
+
+    pub fn can_finalize_termination(&self) -> bool {
+        self.termination_requested_at.is_some() && self.finalizers.is_empty()
+    }
+
+    pub fn finalize_termination(&mut self) -> morn_kernel::error::Result<()> {
+        if self.termination_requested_at.is_none() {
+            return Err(morn_kernel::error::Error::invalid_state(
+                "termination has not been requested",
+            ));
+        }
+        if !self.finalizers.is_empty() {
+            return Err(morn_kernel::error::Error::conflict(format!(
+                "Work cannot terminate while finalizers remain: {:?}",
+                self.finalizers
+            )));
+        }
+        self.status.phase = WorkPhase::Cancelled;
+        self.status.updated_at = Timestamp::now();
+        Ok(())
+    }
+
     pub fn record_active_binding(&mut self, binding_id: RuntimeBindingId) {
         if self.status.active_binding.is_none() {
             self.status.active_binding = Some(binding_id.clone());
@@ -216,6 +301,27 @@ impl WorkResource {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn termination_is_monotonic_and_waits_for_finalizers() {
+        let ws = WorkspaceId::generate();
+        let work_id = WorkPackageId::generate_with("wp");
+        let spec = WorkSpec::new(work_id, "goal", "morn.enterprise@1.0.0");
+        let mut resource = WorkResource::new(ws, spec);
+        resource
+            .add_finalizer("morn.io/external-effects")
+            .unwrap();
+        resource.request_termination("operator cancelled").unwrap();
+        assert_eq!(resource.status.phase, WorkPhase::Terminating);
+        assert!(resource.finalize_termination().is_err());
+        assert!(resource
+            .add_finalizer("morn.io/new-finalizer")
+            .is_err());
+        assert!(resource.remove_finalizer("morn.io/external-effects"));
+        resource.finalize_termination().unwrap();
+        assert_eq!(resource.status.phase, WorkPhase::Cancelled);
+        assert!(resource.termination_requested_at.is_some());
+    }
 
     #[test]
     fn work_can_track_multiple_active_bindings_without_parallel_truth() {
