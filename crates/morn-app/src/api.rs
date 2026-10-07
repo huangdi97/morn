@@ -54,7 +54,10 @@ pub fn router(state: AppState) -> Router {
     let app = Router::new()
         .route("/api/health", get(health))
         .route("/api/v115/status", get(v115_status))
-        .route("/api/v115/artifact/openapi/compile", post(v115_compile_openapi))
+        .route(
+            "/api/v115/artifact/openapi/compile",
+            post(v115_compile_openapi),
+        )
         .route("/api/workspaces", get(list_workspaces))
         .route("/api/workbench", get(workbench))
         .route("/api/studio", get(studio))
@@ -169,9 +172,7 @@ async fn v115_status() -> ApiResult {
 }
 
 async fn v115_compile_openapi(Json(body): Json<Value>) -> ApiResult {
-    use morn_foundry::{
-        ArtifactCompiler, ArtifactKind, ArtifactSource, OpenApiJsonCompiler,
-    };
+    use morn_foundry::{ArtifactCompiler, ArtifactKind, ArtifactSource, OpenApiJsonCompiler};
 
     let name = body
         .get("name")
