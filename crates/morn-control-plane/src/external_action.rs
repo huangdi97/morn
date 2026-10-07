@@ -77,7 +77,9 @@ pub fn begin_external_attempt_with_effect(
         )));
     }
 
-    let effect_ceiling = binding.effect_ceiling.unwrap_or(EffectClass::E0LifecycleReversible);
+    let effect_ceiling = binding
+        .effect_ceiling
+        .unwrap_or(EffectClass::E0LifecycleReversible);
     if !effect_ceiling.permits(effect.class) {
         return Err(Error::not_authorized(format!(
             "binding effect ceiling {} does not permit requested effect {}",
@@ -235,13 +237,9 @@ mod tests {
             issued_at: Timestamp::now(),
         };
 
-        assert!(begin_external_attempt(
-            &permit,
-            &binding,
-            "business-key",
-            "cmms.delete-order"
-        )
-        .is_err());
+        assert!(
+            begin_external_attempt(&permit, &binding, "business-key", "cmms.delete-order").is_err()
+        );
     }
 
     #[test]
