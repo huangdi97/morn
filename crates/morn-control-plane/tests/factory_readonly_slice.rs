@@ -27,9 +27,9 @@ use morn_kernel::policy::{Policy, PolicyRule};
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
     enforce_authority, ActionAttempt, AttemptState, AuthorityProvider, AuthorityRequest,
-    BindingMigrationReason, ExecutionBinding, ExecutionEnvironmentProvider,
-    ExecutionEnvironmentSpec, FixtureEnvironmentProvider, NativePolicyAuthority, OutcomeReconciler,
-    ReconciliationObservation,
+    BindingMigrationReason, ExecutionBinding, ExecutionEnvironmentOffer,
+    ExecutionEnvironmentProvider, ExecutionEnvironmentResolver, ExecutionEnvironmentSpec,
+    FixtureEnvironmentProvider, NativePolicyAuthority, OutcomeReconciler, ReconciliationObservation,
 };
 use morn_store::MornStore;
 use morn_work::acceptance::AcceptanceSpec;
@@ -224,13 +224,21 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .unwrap();
     enforce_authority(&authority_decision).unwrap();
 
-    // Execution environment is selected by requirements rather than hard-coded.
+    // Execution environment is selected from provider offers by requirements.
     let mut environment_provider = FixtureEnvironmentProvider::default();
+    let environment_spec = ExecutionEnvironmentSpec {
+        minimum_isolation: resolved[0].required_execution_class,
+        required_guarantees: resolved[0].required_execution_guarantees.clone(),
+        ..Default::default()
+    };
+    let offers = ExecutionEnvironmentOffer::from_provider(&environment_provider, Some(1));
+    let environment_selection = ExecutionEnvironmentResolver
+        .resolve(&environment_spec, &offers)
+        .expect("Factory slice requires a conformant execution environment");
     let environment = environment_provider
         .provision(&ExecutionEnvironmentSpec {
-            minimum_isolation: resolved[0].required_execution_class,
-            required_guarantees: resolved[0].required_execution_guarantees.clone(),
-            ..Default::default()
+            minimum_isolation: environment_selection.isolation,
+            ..environment_spec.clone()
         })
         .unwrap();
     for required in &resolved[0].required_execution_guarantees {
