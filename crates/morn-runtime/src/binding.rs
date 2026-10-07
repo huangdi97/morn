@@ -186,19 +186,26 @@ impl ExecutionBinding {
         );
         replacement.provider_digest = None;
         replacement.runtime_ref = None;
-        replacement.effect_ceiling = request
-            .new_effect_ceiling
-            .or(if same_capability { self.effect_ceiling } else { None });
-        replacement.compensation_ref = request
-            .new_compensation_ref
-            .or_else(|| if same_capability { self.compensation_ref.clone() } else { None });
-        replacement.idempotency_key_required = request
-            .new_idempotency_key_required
-            .unwrap_or(if same_capability {
-                self.idempotency_key_required
+        replacement.effect_ceiling = request.new_effect_ceiling.or(if same_capability {
+            self.effect_ceiling
+        } else {
+            None
+        });
+        replacement.compensation_ref = request.new_compensation_ref.or_else(|| {
+            if same_capability {
+                self.compensation_ref.clone()
             } else {
-                false
-            });
+                None
+            }
+        });
+        replacement.idempotency_key_required =
+            request
+                .new_idempotency_key_required
+                .unwrap_or(if same_capability {
+                    self.idempotency_key_required
+                } else {
+                    false
+                });
         replacement.authority_decision_ref = None;
         replacement.migration_from = Some(self.id.clone());
 
@@ -247,8 +254,8 @@ mod tests {
 
     #[test]
     fn resolved_binding_pins_effect_semantics() {
-        use morn_capability::{CapabilityKind, ResolvedCapability};
         use morn_capability::manifest::CapabilityManifestId;
+        use morn_capability::{CapabilityKind, ResolvedCapability};
 
         let work_id = WorkPackageId::generate_with("wp");
         let work = WorkResource::new(
