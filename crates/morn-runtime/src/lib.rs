@@ -8,6 +8,7 @@
 pub mod attempt;
 pub mod authority;
 pub mod binding;
+pub mod credentials;
 pub mod environment;
 pub mod gateway;
 pub mod reconciliation;
@@ -19,6 +20,10 @@ pub use authority::{
     AuthorityRequest, NativePolicyAuthority,
 };
 pub use binding::ExecutionBinding;
+pub use credentials::{
+    CredentialHandle, CredentialHandleId, CredentialProvider, CredentialRequest,
+    FixtureCredentialProvider,
+};
 pub use environment::{
     ExecutionEnvironmentHandle, ExecutionEnvironmentId, ExecutionEnvironmentProvider,
     ExecutionEnvironmentSpec, FixtureEnvironmentProvider, IsolationClass,
