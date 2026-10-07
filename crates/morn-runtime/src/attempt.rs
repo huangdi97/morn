@@ -57,6 +57,14 @@ impl AttemptState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum CancellationDisposition {
+    CancelledBeforeDispatch,
+    RequiresReconciliation,
+    RequiresCompensation,
+    AlreadyTerminal,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionAttempt {
     pub id: ActionAttemptId,
@@ -121,11 +129,64 @@ impl ActionAttempt {
         self.last_error = Some(error.into());
         Ok(())
     }
+
+    /// Request cancellation without pretending an already-dispatched real-world
+    /// side effect can be rolled back by changing local state.
+    pub fn request_cancel(&mut self) -> Result<CancellationDisposition> {
+        use AttemptState::*;
+        match self.state {
+            Proposed | Authorized => {
+                self.transition(Cancelled)?;
+                Ok(CancellationDisposition::CancelledBeforeDispatch)
+            }
+            Dispatched | Acknowledged | OutcomeUnknown | Reconciling => {
+                Ok(CancellationDisposition::RequiresReconciliation)
+            }
+            Committed | Observed => Ok(CancellationDisposition::RequiresCompensation),
+            Verified | Failed | Cancelled => Ok(CancellationDisposition::AlreadyTerminal),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cancellation_after_dispatch_never_erases_external_effect_uncertainty() {
+        let mut attempt = ActionAttempt::new(
+            RuntimeBindingId::generate_with("binding"),
+            "work-1:create-order",
+            "create-order",
+        );
+        attempt.transition(AttemptState::Authorized).unwrap();
+        assert_eq!(
+            attempt.request_cancel().unwrap(),
+            CancellationDisposition::CancelledBeforeDispatch
+        );
+        assert_eq!(attempt.state, AttemptState::Cancelled);
+
+        let mut dispatched = ActionAttempt::new(
+            RuntimeBindingId::generate_with("binding"),
+            "work-2:create-order",
+            "create-order",
+        );
+        dispatched.transition(AttemptState::Authorized).unwrap();
+        dispatched.transition(AttemptState::Dispatched).unwrap();
+        assert_eq!(
+            dispatched.request_cancel().unwrap(),
+            CancellationDisposition::RequiresReconciliation
+        );
+        assert_eq!(dispatched.state, AttemptState::Dispatched);
+
+        dispatched.transition(AttemptState::Acknowledged).unwrap();
+        dispatched.transition(AttemptState::Committed).unwrap();
+        assert_eq!(
+            dispatched.request_cancel().unwrap(),
+            CancellationDisposition::RequiresCompensation
+        );
+        assert_eq!(dispatched.state, AttemptState::Committed);
+    }
 
     #[test]
     fn unknown_outcome_cannot_be_blindly_redispatched() {
