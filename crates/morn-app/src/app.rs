@@ -3,7 +3,9 @@
 use std::sync::{Arc, Mutex};
 
 use morn_artifact::service::ArtifactService;
+use morn_capability::CapabilityRecord;
 use morn_assurance::certification::CertificationService;
+use morn_assurance::AdmissionService;
 use morn_assurance::evaluation::EvaluationRunner;
 use morn_assurance::managed_work::ManagedWorkService;
 use morn_assurance::replacement::ReplacementPilot;
@@ -54,6 +56,10 @@ pub struct AppInner {
     pub shadow: ShadowRunner,
     pub replay: ReplayRunner,
     pub certification: CertificationService,
+    /// v11.5 capability supply-chain state. These are semantic lifecycle
+    /// records, separate from the legacy certification service.
+    pub v115_admission: AdmissionService,
+    pub v115_capabilities: Vec<CapabilityRecord>,
     pub managed: ManagedWorkService,
     pub replacement: ReplacementPilot,
     pub flywheel: EvolutionFlywheel,
@@ -119,6 +125,8 @@ impl AppState {
             shadow: ShadowRunner::new(),
             replay: ReplayRunner::new(),
             certification: CertificationService::new(),
+            v115_admission: AdmissionService::default(),
+            v115_capabilities: Vec::new(),
             managed: ManagedWorkService::new(),
             replacement: ReplacementPilot::new(),
             flywheel: EvolutionFlywheel::new(),
@@ -174,6 +182,51 @@ impl AppInner {
                 r.id.as_str(),
                 r.released_at.millis(),
                 r,
+            )?;
+        }
+        for capability in &self.v115_capabilities {
+            store.save_record(
+                "capability_record_v115",
+                capability.manifest.id.as_str(),
+                self.workspace.id.as_str(),
+                capability.manifest.declared_at.millis(),
+                capability,
+            )?;
+        }
+        for observation in &self.v115_admission.observations {
+            persist_immutable(
+                store,
+                "capability_observation_v115",
+                observation.id.as_str(),
+                observation.created_at.millis(),
+                observation,
+            )?;
+        }
+        for qualification in &self.v115_admission.qualifications {
+            persist_immutable(
+                store,
+                "qualification_record_v115",
+                qualification.id.as_str(),
+                qualification.created_at.millis(),
+                qualification,
+            )?;
+        }
+        for release in &self.v115_admission.releases {
+            persist_immutable(
+                store,
+                "capability_distribution_release_v115",
+                release.id.as_str(),
+                release.created_at.millis(),
+                release,
+            )?;
+        }
+        for admission in &self.v115_admission.admissions {
+            persist_immutable(
+                store,
+                "site_admission_v115",
+                admission.id.as_str(),
+                admission.created_at.millis(),
+                admission,
             )?;
         }
         for r in &self.managed.runs {
@@ -274,6 +327,14 @@ impl AppInner {
         self.certification.decisions = store.load_certification_decisions()?;
         self.certification.capabilities = store.load_certified_capabilities()?;
         self.certification.releases = store.load_capability_releases()?;
+        self.v115_capabilities = store.load_records("capability_record_v115")?;
+        self.v115_admission.observations =
+            store.load_records("capability_observation_v115")?;
+        self.v115_admission.qualifications =
+            store.load_records("qualification_record_v115")?;
+        self.v115_admission.releases =
+            store.load_records("capability_distribution_release_v115")?;
+        self.v115_admission.admissions = store.load_records("site_admission_v115")?;
         self.managed.runs = store.load_managed_runs(&self.workspace.id)?;
         self.managed.receipts = store.load_delivery_receipts()?;
         self.managed.acceptances = store.load_acceptance_decisions()?;
