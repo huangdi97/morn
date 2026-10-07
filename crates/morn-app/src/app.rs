@@ -212,21 +212,34 @@ impl AppInner {
             )?;
         }
         for release in &self.v115_admission.releases {
-            persist_immutable(
-                store,
+            // Release bytes/digest are immutable, while lifecycle status is a
+            // mutable projection. Revocation history is append-only below.
+            store.save_record(
                 "capability_distribution_release_v115",
                 release.id.as_str(),
+                self.workspace.id.as_str(),
                 release.created_at.millis(),
                 release,
             )?;
         }
         for admission in &self.v115_admission.admissions {
-            persist_immutable(
-                store,
+            // Admission status is a current projection; lifecycle events retain
+            // the non-destructive history of admission/suspension.
+            store.save_record(
                 "site_admission_v115",
                 admission.id.as_str(),
+                self.workspace.id.as_str(),
                 admission.created_at.millis(),
                 admission,
+            )?;
+        }
+        for event in &self.v115_admission.events {
+            persist_immutable(
+                store,
+                "capability_lifecycle_event_v115",
+                event.id.as_str(),
+                event.created_at.millis(),
+                event,
             )?;
         }
         for r in &self.managed.runs {
@@ -335,6 +348,8 @@ impl AppInner {
         self.v115_admission.releases =
             store.load_records("capability_distribution_release_v115")?;
         self.v115_admission.admissions = store.load_records("site_admission_v115")?;
+        self.v115_admission.events =
+            store.load_records("capability_lifecycle_event_v115")?;
         self.managed.runs = store.load_managed_runs(&self.workspace.id)?;
         self.managed.receipts = store.load_delivery_receipts()?;
         self.managed.acceptances = store.load_acceptance_decisions()?;
