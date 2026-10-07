@@ -53,6 +53,7 @@ type ApiResult = Result<Json<Value>, AppError>;
 pub fn router(state: AppState) -> Router {
     let app = Router::new()
         .route("/api/health", get(health))
+        .route("/api/v115/status", get(v115_status))
         .route("/api/workspaces", get(list_workspaces))
         .route("/api/workbench", get(workbench))
         .route("/api/studio", get(studio))
@@ -110,6 +111,60 @@ pub fn router(state: AppState) -> Router {
 
 async fn health() -> ApiResult {
     Ok(Json(json!({ "status": "ok", "service": "morn-app" })))
+}
+
+async fn v115_status() -> ApiResult {
+    let protocol = morn_kernel::protocol::ProtocolSnapshot::v11_5();
+    let profile = morn_profile::DomainProfile::factory_readonly_v1();
+    let required_guarantees: Vec<String> = profile
+        .requirements
+        .iter()
+        .filter(|item| item.level == morn_profile::RequirementLevel::Required)
+        .map(|item| item.semantic.clone())
+        .collect();
+
+    Ok(Json(json!({
+        "architecture": {
+            "definition": "protocol-driven outcome-oriented work control plane",
+            "protocol_version": protocol.protocol_version,
+            "semantic_slots": protocol.semantic_slots,
+            "control_model": "desired/observed + controllers + reconciliation",
+            "composition_runtime": {
+                "name": "Cordis",
+                "role": "node-local composition runtime",
+                "reference_version": "4.0.4",
+                "business_truth": false
+            }
+        },
+        "providers": {
+            "harness": [
+                { "id": "morn-native", "status": "reference" },
+                { "id": "deepseek-harness", "status": "fixture-contract; real external" },
+                { "id": "pi", "status": "fixture-contract; real transport not configured" }
+            ],
+            "execution_environment": ["process", "container", "microvm", "full-vm", "remote", "physical"],
+            "authority": "provider-neutral; native policy reference, OPA/Cedar/customer IAM compatible by contract"
+        },
+        "capability_supply_chain": {
+            "stages": ["Declared", "Observed", "Qualified", "Admitted", "Suspended", "Retired"],
+            "artifact_compilers": ["OpenAPI2Capability"],
+            "qualification_is_not_admission": true
+        },
+        "factory_profile": {
+            "id": profile.id,
+            "version": profile.version,
+            "minimum_isolation": profile.minimum_isolation,
+            "required_guarantees": required_guarantees,
+            "production_write": false,
+            "first_wedge": "outage/insert-order -> capacity -> delivery-impact review"
+        },
+        "claims": {
+            "local_engineering": "reference implementation + fixture/conformance tests",
+            "real_dsh": "external-blocked until real DSH distribution/configuration is available",
+            "real_factory": "external-blocked until lawful site data/authority exists",
+            "production_write": "not entered"
+        }
+    })))
 }
 
 async fn list_workspaces(State(state): State<AppState>) -> ApiResult {
