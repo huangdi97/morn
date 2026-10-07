@@ -150,22 +150,21 @@ impl ExecutionEnvironmentResolver {
                 .then_with(|| left.provider.cmp(&right.provider))
         });
 
-        candidates.first().map(|offer| ExecutionEnvironmentSelection {
-            provider: offer.provider.clone(),
-            isolation: offer.isolation,
-            guarantees: offer.guarantees.clone(),
-            estimated_cost_micros: offer.estimated_cost_micros,
-            rationale: vec![
-                format!(
-                    "satisfies execution class {}",
-                    spec.minimum_isolation.key()
-                ),
-                format!(
-                    "satisfies {} required guarantee(s)",
-                    spec.required_guarantees.len()
-                ),
-            ],
-        })
+        candidates
+            .first()
+            .map(|offer| ExecutionEnvironmentSelection {
+                provider: offer.provider.clone(),
+                isolation: offer.isolation,
+                guarantees: offer.guarantees.clone(),
+                estimated_cost_micros: offer.estimated_cost_micros,
+                rationale: vec![
+                    format!("satisfies execution class {}", spec.minimum_isolation.key()),
+                    format!(
+                        "satisfies {} required guarantee(s)",
+                        spec.required_guarantees.len()
+                    ),
+                ],
+            })
     }
 }
 
