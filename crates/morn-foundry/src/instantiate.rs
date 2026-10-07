@@ -110,10 +110,8 @@ pub fn instantiate_approved_solution(
         request.profile_ref,
     );
     spec.source_solution_ref = Some(package_ref.clone());
+    spec.site_ref = request.site_ref.clone();
     spec.constraints = request.constraints;
-    if let Some(site) = &request.site_ref {
-        spec.constraints.push(format!("site={site}"));
-    }
     spec.acceptance_ref = request.acceptance_ref;
 
     // Only pre-execution readiness gates belong here. Binding/receipt/outcome/
@@ -178,6 +176,7 @@ mod tests {
             plan.work.spec.source_solution_ref.as_deref(),
             Some(plan.solution_package_ref.as_str())
         );
+        assert_eq!(plan.work.spec.site_ref.as_deref(), Some("plant-a"));
         assert!(plan
             .work
             .spec
