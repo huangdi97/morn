@@ -378,7 +378,14 @@ async fn hub(State(state): State<AppState>) -> ApiResult {
         "actor_templates": [ { "id": "generic-actor@1.0", "name": "Generic Actor", "trust": "Verified" } ],
         "harness_templates": [
             { "id": "morn-native@1.0", "name": "Morn Native Harness", "trust": "Verified" },
-            { "id": "deepseek-harness@0.1", "name": "DeepSeek Harness (spike)", "trust": "Unverified" }
+            { "id": "deepseek-harness@fixture", "name": "DeepSeek Harness Provider", "trust": "ContractVerified" },
+            { "id": "pi@fixture", "name": "Pi Harness Provider", "trust": "ContractVerified" }
+        ],
+        "composition_runtimes": [
+            { "id": "cordis@4.0.4", "name": "Cordis Reference Composition Runtime", "trust": "Reference" }
+        ],
+        "capability_compilers": [
+            { "id": "openapi2capability@v11.5", "name": "OpenAPI → Capability Candidate", "trust": "LocalVerified" }
         ],
         "work_package_templates": [ { "id": "generic-work@1.0", "name": "Generic Work Package", "trust": "Verified" } ],
         "workcell_blueprints": [ { "id": "generic-workcell@1.0", "name": "Generic Workcell", "trust": "Verified" } ],
