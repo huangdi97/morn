@@ -17,6 +17,7 @@ pub struct CapabilityRequest {
     pub required_runtime_kinds: Vec<String>,
     pub required_harness_compatibility: Vec<String>,
     pub site_ref: Option<String>,
+    pub profile_ref: Option<String>,
     pub unavailable_providers: Vec<String>,
 }
 
@@ -42,6 +43,7 @@ pub struct WorkcellRequest {
     pub required_runtime_kinds: Vec<String>,
     pub required_harness_compatibility: Vec<String>,
     pub site_ref: Option<String>,
+    pub profile_ref: Option<String>,
     pub unavailable_providers: Vec<String>,
 }
 
@@ -125,6 +127,17 @@ impl CapabilityResolver {
             if let Some(site) = &request.site_ref {
                 if candidate.stage != CapabilityStage::Admitted
                     || !candidate.admitted_sites.iter().any(|value| value == site)
+                {
+                    continue;
+                }
+            }
+            if let Some(profile) = &request.profile_ref {
+                let site = request.site_ref.as_deref();
+                if candidate.stage != CapabilityStage::Admitted
+                    || !candidate.admission_refs.iter().any(|admission| {
+                        admission.profile_ref == *profile
+                            && site.is_none_or(|expected_site| admission.site_ref == expected_site)
+                    })
                 {
                     continue;
                 }
@@ -262,6 +275,7 @@ impl CapabilityResolver {
             required_runtime_kinds: request.required_runtime_kinds.clone(),
             required_harness_compatibility: request.required_harness_compatibility.clone(),
             site_ref: request.site_ref.clone(),
+            profile_ref: request.profile_ref.clone(),
             unavailable_providers: request.unavailable_providers.clone(),
         };
 
@@ -557,6 +571,44 @@ mod tests {
             &[record],
         );
         assert!(blocked.is_empty());
+    }
+
+    #[test]
+    fn resolver_rejects_site_admission_from_wrong_profile() {
+        let mut record = admitted(
+            "investigator",
+            "provider",
+            CapabilityKind::Program,
+            &["investigate"],
+            10,
+        );
+        record.admission_refs.push(crate::manifest::CapabilityAdmissionRef {
+            admission_ref: "admission:1".to_string(),
+            site_ref: "plant-a".to_string(),
+            profile_ref: "morn.factory.readonly@1.0.0".to_string(),
+        });
+
+        let accepted = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["investigate".to_string()],
+                site_ref: Some("plant-a".to_string()),
+                profile_ref: Some("morn.factory.readonly@1.0.0".to_string()),
+                ..Default::default()
+            },
+            &[record.clone()],
+        );
+        assert_eq!(accepted.len(), 1);
+
+        let rejected = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["investigate".to_string()],
+                site_ref: Some("plant-a".to_string()),
+                profile_ref: Some("morn.factory.readonly@2.0.0".to_string()),
+                ..Default::default()
+            },
+            &[record],
+        );
+        assert!(rejected.is_empty());
     }
 
     #[test]
