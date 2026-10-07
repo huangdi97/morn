@@ -98,14 +98,33 @@ impl ArtifactCompiler for OpenApiJsonCompiler {
             ));
         }
 
+        let has_write = operations.iter().any(|operation| {
+            !operation.starts_with("get:")
+        });
+        let compensation_ref = doc
+            .get("x-morn-compensation")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
+        let maximum_effect = if !has_write {
+            EffectClass::E0LifecycleReversible
+        } else if compensation_ref.is_some() {
+            EffectClass::E2Compensatable
+        } else {
+            // A write API with no explicit compensation contract is conservatively
+            // treated as irreversible until evaluation proves otherwise.
+            EffectClass::E3Irreversible
+        };
+
         let mut manifest = CapabilityManifest::new(
             CapabilityId::generate_with("cap"),
             &source.name,
             &source.source_ref,
             CapabilityKind::Api,
-            EffectClass::E2Compensatable,
+            maximum_effect,
         );
         manifest.provides = operations.clone();
+        manifest.compensation_ref = compensation_ref;
+        manifest.idempotency_key_required = has_write;
         manifest.interfaces.push(CapabilityInterface {
             protocol: "openapi".to_string(),
             input_schema_ref: format!("{}#request", source.source_ref),
@@ -120,7 +139,18 @@ impl ArtifactCompiler for OpenApiJsonCompiler {
                 compiler: self.compiler_name().to_string(),
                 source_ref: source.source_ref.clone(),
                 discovered_operations: operations,
-                warnings: vec!["compiled candidate is not qualified or site-admitted".to_string()],
+                warnings: {
+                    let mut warnings = vec![
+                        "compiled candidate is not qualified or site-admitted".to_string(),
+                    ];
+                    if has_write && manifest.compensation_ref.is_none() {
+                        warnings.push(
+                            "write operations have no explicit compensation; candidate is classified E3 until reviewed"
+                                .to_string(),
+                        );
+                    }
+                    warnings
+                },
             },
         })
     }
@@ -220,6 +250,17 @@ impl ArtifactCompiler for ProcedureJsonCompiler {
             maximum_effect,
         );
         manifest.provides = provides;
+        if maximum_effect == EffectClass::E2Compensatable {
+            let compensation_ref = doc
+                .get("compensation_ref")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    Error::validation(
+                        "procedure E2 requires top-level compensation_ref",
+                    )
+                })?;
+            manifest.compensation_ref = Some(compensation_ref.to_string());
+        }
         manifest.interfaces.push(CapabilityInterface {
             protocol: "morn-procedure-json".to_string(),
             input_schema_ref: format!("{}#input", source.source_ref),
@@ -342,6 +383,15 @@ impl ArtifactCompiler for RepositoryManifestCompiler {
             maximum_effect,
         );
         manifest.provides = provides;
+        if maximum_effect == EffectClass::E2Compensatable {
+            let compensation_ref = doc
+                .get("compensation_ref")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    Error::validation("repository E2 requires compensation_ref")
+                })?;
+            manifest.compensation_ref = Some(compensation_ref.to_string());
+        }
         manifest.interfaces.push(CapabilityInterface {
             protocol: "repository-entrypoint".to_string(),
             input_schema_ref: format!("{}#input", source.source_ref),
@@ -580,6 +630,54 @@ mod tests {
     }
 
     #[test]
+    fn openapi_write_without_compensation_is_conservatively_irreversible() {
+        let source = ArtifactSource {
+            kind: ArtifactKind::OpenApi,
+            name: "cmms".to_string(),
+            source_ref: "openapi://cmms".to_string(),
+            source_digest: Some("sha256:fixture".to_string()),
+            content: r#"{
+                "openapi":"3.1.0",
+                "paths":{"/orders":{"post":{}}}
+            }"#
+            .to_string(),
+        };
+        let candidate = OpenApiJsonCompiler.compile(&source).unwrap();
+        assert_eq!(
+            candidate.record.manifest.authority.maximum_effect,
+            EffectClass::E3Irreversible
+        );
+        assert!(candidate.record.manifest.compensation_ref.is_none());
+        assert!(candidate.record.manifest.idempotency_key_required);
+    }
+
+    #[test]
+    fn openapi_explicit_compensation_allows_e2_classification() {
+        let source = ArtifactSource {
+            kind: ArtifactKind::OpenApi,
+            name: "cmms".to_string(),
+            source_ref: "openapi://cmms".to_string(),
+            source_digest: Some("sha256:fixture".to_string()),
+            content: r#"{
+                "openapi":"3.1.0",
+                "x-morn-compensation":"cmms.cancel-order",
+                "paths":{"/orders":{"post":{}}}
+            }"#
+            .to_string(),
+        };
+        let candidate = OpenApiJsonCompiler.compile(&source).unwrap();
+        assert_eq!(
+            candidate.record.manifest.authority.maximum_effect,
+            EffectClass::E2Compensatable
+        );
+        assert_eq!(
+            candidate.record.manifest.compensation_ref.as_deref(),
+            Some("cmms.cancel-order")
+        );
+        candidate.record.manifest.validate_governance().unwrap();
+    }
+
+    #[test]
     fn repository_compiler_requires_explicit_entrypoints() {
         let source = ArtifactSource {
             kind: ArtifactKind::Repository,
@@ -597,6 +695,24 @@ mod tests {
         let candidate = RepositoryManifestCompiler.compile(&source).unwrap();
         assert_eq!(candidate.record.stage, CapabilityStage::Declared);
         assert_eq!(candidate.report.discovered_operations, vec!["bin/solve"]);
+    }
+
+    #[test]
+    fn repository_e2_without_compensation_is_rejected() {
+        let source = ArtifactSource {
+            kind: ArtifactKind::Repository,
+            name: "writer".to_string(),
+            source_ref: "repo://writer".to_string(),
+            source_digest: Some("sha256:repo".to_string()),
+            content: r#"{
+                "kind":"service",
+                "provides":["order.create"],
+                "entrypoints":["bin/create"],
+                "maximum_effect":"E2"
+            }"#
+            .to_string(),
+        };
+        assert!(RepositoryManifestCompiler.compile(&source).is_err());
     }
 
     #[test]
