@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiGet, OpintRegistry } from "../api";
+import { apiGet, OpintRegistry, V115Status } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
 interface Trace {
@@ -43,6 +43,7 @@ export default function ConsolePage() {
   const [managedRuns, setManagedRuns] = useState<Array<{ id: string; status: string }>>([]);
   const [replacementRecords, setReplacementRecords] = useState<Array<{ work: string; decision: string }>>([]);
   const [opint, setOpint] = useState<OpintRegistry | null>(null);
+  const [v115, setV115] = useState<V115Status | null>(null);
 
   useEffect(() => {
     apiGet<ConsoleData>("/console")
@@ -65,6 +66,9 @@ export default function ConsolePage() {
       .catch(() => undefined);
     apiGet<OpintRegistry>("/opint/registry")
       .then(setOpint)
+      .catch(() => undefined);
+    apiGet<V115Status>("/v115/status")
+      .then(setV115)
       .catch(() => undefined);
   }, []);
 
@@ -92,6 +96,16 @@ export default function ConsolePage() {
           <KeyValue k="Native" v={data.harness_health.native} />
           <KeyValue k="DeepSeek Harness" v={data.harness_health.dsh} />
         </Card>
+        {v115 && (
+          <Card title="v11.5 Control / Trust / Composition">
+            <KeyValue k="Semantic slots" v={v115.architecture.semantic_slots.join(", ")} />
+            <KeyValue k="Authority" v={v115.providers.authority} />
+            <KeyValue k="Execution environments" v={v115.providers.execution_environment.join(", ")} />
+            <KeyValue k="Factory guarantees" v={v115.factory_profile.required_guarantees.length} />
+            <KeyValue k="Real DSH" v={v115.claims.real_dsh} />
+            <KeyValue k="Real factory" v={v115.claims.real_factory} />
+          </Card>
+        )}
         <Card title="Outcomes / Metrics">
           {data.outcomes.length === 0 ? (
             <EmptyState label="No outcomes yet" />
