@@ -77,7 +77,9 @@ mod tests {
             OutcomeRecordId::generate_with("out"),
             ValueEvidenceClass::Fixture,
         );
-        assessment.kpis.push(("delivery_risk_delta".to_string(), 0.2));
+        assessment
+            .kpis
+            .push(("delivery_risk_delta".to_string(), 0.2));
         assert!(!assessment.is_customer_value_claim());
     }
 }
