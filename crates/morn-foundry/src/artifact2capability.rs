@@ -177,14 +177,15 @@ impl ArtifactCompiler for ProcedureJsonCompiler {
                 .unwrap_or("E0");
             maximum_effect = match effect {
                 "E0" => maximum_effect,
-                "E1" if matches!(maximum_effect, EffectClass::E0LifecycleReversible) => {
-                    EffectClass::E1Transactional
-                }
-                "E2" if !matches!(maximum_effect, EffectClass::E3Irreversible) => {
-                    EffectClass::E2Compensatable
-                }
+                "E1" => match maximum_effect {
+                    EffectClass::E0LifecycleReversible => EffectClass::E1Transactional,
+                    current => current,
+                },
+                "E2" => match maximum_effect {
+                    EffectClass::E3Irreversible => EffectClass::E3Irreversible,
+                    _ => EffectClass::E2Compensatable,
+                },
                 "E3" => EffectClass::E3Irreversible,
-                "E0" | "E1" | "E2" => maximum_effect,
                 other => {
                     return Err(Error::validation(format!(
                         "unsupported procedure effect class {other}"
