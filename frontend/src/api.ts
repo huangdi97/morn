@@ -134,6 +134,34 @@ export interface OpenApiCompileOutcome {
   next: string[];
 }
 
+export interface SolutionInstantiationOutcome {
+  plan: {
+    solution_package_ref: string;
+    site_ref: string | null;
+    work: {
+      id: string;
+      generation: number;
+      spec: {
+        goal: string;
+        constraints: string[];
+        required_conditions: string[];
+        acceptance_ref: string | null;
+        source_solution_ref: string | null;
+        profile_ref: string;
+      };
+      status: {
+        observed_generation: number;
+        phase: string;
+        active_binding: string | null;
+      };
+    };
+    unresolved_gates: string[];
+  };
+  state: string;
+  execution_started: boolean;
+  note: string;
+}
+
 export interface CompilerRun {
   problem: { objective: string; domain: string; assumptions: Array<{ name: string; value: string }> };
   work_graph: { nodes: Array<{ id: string; name: string; nature: string; acceptance: string[] }>; edges: unknown[] };
