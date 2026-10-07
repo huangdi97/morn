@@ -7,6 +7,8 @@
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::error::{Error, Result};
+use morn_kernel::time::Timestamp;
+use morn_runtime::AuthorityDecisionRecord;
 use morn_profile::DomainProfile;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -39,6 +41,16 @@ pub struct ProfileActionDecision {
     pub mode: ExternalActionMode,
     pub allowed: bool,
     pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalActionPermit {
+    pub profile_ref: String,
+    pub mode: ExternalActionMode,
+    pub authority_decision_ref: String,
+    pub work_ref: String,
+    pub binding_ref: String,
+    pub issued_at: Timestamp,
 }
 
 pub fn evaluate_profile_action(
@@ -74,6 +86,41 @@ pub fn evaluate_profile_action(
     }
 }
 
+pub fn issue_external_action_permit(
+    profile: &DomainProfile,
+    mode: ExternalActionMode,
+    authority: &AuthorityDecisionRecord,
+    work_ref: impl Into<String>,
+    binding_ref: impl Into<String>,
+) -> Result<ExternalActionPermit> {
+    if !authority.allowed {
+        return Err(Error::not_authorized(format!(
+            "authority provider {} denied external action: {}",
+            authority.provider, authority.reason
+        )));
+    }
+
+    let profile_decision = evaluate_profile_action(profile, mode);
+    enforce_profile_action(&profile_decision)?;
+
+    let work_ref = work_ref.into();
+    let binding_ref = binding_ref.into();
+    if work_ref.trim().is_empty() || binding_ref.trim().is_empty() {
+        return Err(Error::validation(
+            "external action permit requires Work and ExecutionBinding references",
+        ));
+    }
+
+    Ok(ExternalActionPermit {
+        profile_ref: profile_decision.profile_ref,
+        mode,
+        authority_decision_ref: authority.id.to_string(),
+        work_ref,
+        binding_ref,
+        issued_at: Timestamp::now(),
+    })
+}
+
 pub fn enforce_profile_action(decision: &ProfileActionDecision) -> Result<()> {
     if decision.allowed {
         Ok(())
@@ -88,6 +135,7 @@ pub fn enforce_profile_action(decision: &ProfileActionDecision) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use morn_kernel::ids::AuthorityDecisionId;
 
     #[test]
     fn factory_readonly_rejects_production_write_even_if_other_policy_would_allow() {
