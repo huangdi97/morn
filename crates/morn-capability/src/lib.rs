@@ -20,4 +20,7 @@ pub use manifest::{
     ExecutionRequirements, IsolationLevel,
 };
 pub use registry::{CapabilityBinding, CapabilityKind, CapabilityRegistry, InvocationResult};
-pub use resolver::{CapabilityRequest, CapabilityResolver, ResolvedCapability};
+pub use resolver::{
+    CapabilityRequest, CapabilityResolver, ResolvedCapability, WorkcellMember, WorkcellPlan,
+    WorkcellRequest,
+};
