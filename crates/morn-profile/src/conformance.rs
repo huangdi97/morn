@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
-use morn_kernel::ExecutionGuarantee;
+use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 
 use crate::{DomainProfile, RequirementLevel};
 
@@ -32,38 +32,12 @@ pub struct ConformanceReport {
     pub violations: Vec<String>,
 }
 
-fn normalized_isolation(value: &str) -> &str {
-    match value {
-        "none" | "noisolation" => "none",
-        "process" => "process",
-        "container" => "container",
-        "microvm" | "micro_vm" => "microvm",
-        "fullvm" | "full_vm" | "vm" => "fullvm",
-        "remote" => "remote",
-        "physical" => "physical",
-        _ => "unknown",
-    }
-}
-
 fn isolation_satisfies(actual: &str, required: &str) -> bool {
-    let actual = actual.to_ascii_lowercase();
-    let required = required.to_ascii_lowercase();
-    match normalized_isolation(&required) {
-        "none" => true,
-        "process" => matches!(
-            normalized_isolation(&actual),
-            "process" | "container" | "microvm" | "fullvm"
-        ),
-        "container" => matches!(
-            normalized_isolation(&actual),
-            "container" | "microvm" | "fullvm"
-        ),
-        "microvm" => matches!(normalized_isolation(&actual), "microvm" | "fullvm"),
-        "fullvm" => normalized_isolation(&actual) == "fullvm",
-        // Remote and physical are executor/topology classes. They are not
-        // ordinal security levels above a VM.
-        "remote" => normalized_isolation(&actual) == "remote",
-        "physical" => normalized_isolation(&actual) == "physical",
+    match (
+        ExecutionClass::parse(actual),
+        ExecutionClass::parse(required),
+    ) {
+        (Some(actual), Some(required)) => actual.satisfies(required),
         _ => false,
     }
 }
