@@ -29,9 +29,9 @@ fn check(report: &mut Vec<(String, bool)>, name: &str, ok: bool) {
 
 /// Run the Morn provider contract against any `HarnessProvider`.
 ///
-/// Covers: lifecycle (mount/start/send/inspect/interrupt/resume/terminate),
+/// Covers the baseline lifecycle plus explicitly advertised optional features,
 /// E0 unmount cleanup, scope isolation, and event normalization to Morn
-/// `ExecutionEvent`s.
+/// `ExecutionEvent`s. Unsupported lifecycle operations are not fabricated.
 pub fn run_provider_contract(
     provider: &mut dyn HarnessProvider,
     ctx: &RuntimeContext,
@@ -94,19 +94,37 @@ pub fn run_provider_contract(
             .is_ok_and(|s| s.status == "running"),
     );
 
-    check(
-        &mut report,
-        "interrupt",
-        provider.interrupt(&session.id).is_ok(),
-    );
-    check(&mut report, "resume", provider.resume(&session.id).is_ok());
+    let features = provider.features();
+    if features.interrupt {
+        check(
+            &mut report,
+            "interrupt",
+            provider.interrupt(&session.id).is_ok(),
+        );
+    } else {
+        check(&mut report, "interrupt unsupported explicitly", true);
+    }
 
-    let receipt = provider.terminate(&session.id);
-    check(
-        &mut report,
-        "terminate -> receipt",
-        receipt.is_ok_and(|r| !r.trace_refs.is_empty()),
-    );
+    if features.resume {
+        if features.interrupt {
+            check(&mut report, "resume", provider.resume(&session.id).is_ok());
+        } else {
+            check(&mut report, "resume requires interrupt capability", false);
+        }
+    } else {
+        check(&mut report, "resume unsupported explicitly", true);
+    }
+
+    if features.session_close {
+        let receipt = provider.terminate(&session.id);
+        check(
+            &mut report,
+            "terminate -> receipt",
+            receipt.is_ok_and(|r| !r.trace_refs.is_empty()),
+        );
+    } else {
+        check(&mut report, "session close unsupported explicitly", true);
+    }
 
     // E0 unmount cleanup: first unmount succeeds, second must fail (already gone).
     let unmount1 = provider.unmount(&handle);
