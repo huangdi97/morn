@@ -28,7 +28,7 @@ use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, Require
 use morn_runtime::{
     enforce_authority, ActionAttempt, AttemptState, AuthorityProvider, AuthorityRequest,
     BindingMigrationReason, ExecutionBinding, ExecutionEnvironmentProvider,
-    ExecutionEnvironmentSpec, FixtureEnvironmentProvider, IsolationClass, NativePolicyAuthority,
+    ExecutionEnvironmentSpec, FixtureEnvironmentProvider, NativePolicyAuthority,
     OutcomeReconciler, ReconciliationObservation,
 };
 use morn_store::MornStore;
