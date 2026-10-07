@@ -54,6 +54,7 @@ pub fn router(state: AppState) -> Router {
     let app = Router::new()
         .route("/api/health", get(health))
         .route("/api/v115/status", get(v115_status))
+        .route("/api/v115/artifact/openapi/compile", post(v115_compile_openapi))
         .route("/api/workspaces", get(list_workspaces))
         .route("/api/workbench", get(workbench))
         .route("/api/studio", get(studio))
@@ -164,6 +165,43 @@ async fn v115_status() -> ApiResult {
             "real_factory": "external-blocked until lawful site data/authority exists",
             "production_write": "not entered"
         }
+    })))
+}
+
+async fn v115_compile_openapi(Json(body): Json<Value>) -> ApiResult {
+    use morn_foundry::{
+        ArtifactCompiler, ArtifactKind, ArtifactSource, OpenApiJsonCompiler,
+    };
+
+    let name = body
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("openapi-capability");
+    let source_ref = body
+        .get("source_ref")
+        .and_then(Value::as_str)
+        .unwrap_or("inline://openapi");
+    let source_digest = body
+        .get("source_digest")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let content = body
+        .get("content")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("content must contain OpenAPI JSON")))?;
+
+    let source = ArtifactSource {
+        kind: ArtifactKind::OpenApi,
+        name: name.to_string(),
+        source_ref: source_ref.to_string(),
+        source_digest,
+        content: content.to_string(),
+    };
+    let candidate = OpenApiJsonCompiler.compile(&source)?;
+    Ok(Json(json!({
+        "candidate": candidate,
+        "admission": "not-qualified-not-admitted",
+        "next": ["evaluate", "qualify", "release", "site-conformance", "admit"]
     })))
 }
 
