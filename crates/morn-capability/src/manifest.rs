@@ -127,6 +127,42 @@ pub struct CapabilityManifest {
 }
 
 impl CapabilityManifest {
+    pub fn validate_governance(&self) -> morn_kernel::error::Result<()> {
+        use morn_kernel::error::Error;
+
+        if self.name.trim().is_empty() || self.provider_ref.trim().is_empty() {
+            return Err(Error::validation(
+                "capability manifest requires non-empty name and provider_ref",
+            ));
+        }
+        if self
+            .authority
+            .allow
+            .iter()
+            .any(|allowed| self.authority.deny.iter().any(|denied| denied == allowed))
+        {
+            return Err(Error::validation(
+                "capability authority allow/deny sets must not conflict",
+            ));
+        }
+        if self.authority.maximum_effect == EffectClass::E2Compensatable
+            && self
+                .compensation_ref
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "E2 compensatable capability requires compensation_ref",
+            ));
+        }
+        if self.provenance.source_ref.trim().is_empty() {
+            return Err(Error::validation(
+                "capability manifest requires provenance source_ref",
+            ));
+        }
+        Ok(())
+    }
+
     pub fn new(
         definition_id: CapabilityId,
         name: impl Into<String>,
@@ -194,5 +230,42 @@ impl CapabilityRecord {
             admitted_sites: Vec::new(),
             admission_refs: Vec::new(),
         }
+    }
+}
+
+
+#[cfg(test)]
+mod governance_tests {
+    use super::*;
+
+    #[test]
+    fn e2_manifest_requires_compensation_reference() {
+        let mut manifest = CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            "cmms-create-order",
+            "cmms-provider",
+            CapabilityKind::Api,
+            EffectClass::E2Compensatable,
+        );
+        manifest.provenance.source_ref = "openapi://cmms".to_string();
+        assert!(manifest.validate_governance().is_err());
+
+        manifest.compensation_ref = Some("cmms.cancel-order".to_string());
+        assert!(manifest.validate_governance().is_ok());
+    }
+
+    #[test]
+    fn conflicting_authority_envelope_fails_closed() {
+        let mut manifest = CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            "reader",
+            "provider",
+            CapabilityKind::Program,
+            EffectClass::E0LifecycleReversible,
+        );
+        manifest.provenance.source_ref = "repo://reader".to_string();
+        manifest.authority.allow.push("historian.read".to_string());
+        manifest.authority.deny.push("historian.read".to_string());
+        assert!(manifest.validate_governance().is_err());
     }
 }
