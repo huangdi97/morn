@@ -3,6 +3,7 @@ import {
   apiGet,
   apiPostJson,
   CompilerRun,
+  CreatorDraftOutcome,
   OpenApiCompileOutcome,
   SolutionInstantiationOutcome,
 } from "../api";
@@ -15,6 +16,10 @@ interface ManifestOutcome {
 
 export default function Studio() {
   const [goal, setGoal] = useState("Deliver a reviewed report");
+  const [creatorName, setCreatorName] = useState("My Morn worker");
+  const [creatorAcceptance, setCreatorAcceptance] = useState("reviewed outcome exists");
+  const [creatorAutonomy, setCreatorAutonomy] = useState("governed");
+  const [creatorDraft, setCreatorDraft] = useState<CreatorDraftOutcome | null>(null);
   const [capabilities, setCapabilities] = useState("*");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +45,30 @@ export default function Studio() {
   const [profileRef, setProfileRef] = useState("morn.lite@1.0.0");
   const [siteRef, setSiteRef] = useState("");
   const [instantiated, setInstantiated] = useState<SolutionInstantiationOutcome | null>(null);
+
+  const runCreatorDraft = async () => {
+    setError(null);
+    try {
+      const caps = capabilities.split(",").map((item) => item.trim()).filter(Boolean);
+      const acceptance = creatorAcceptance
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const result = await apiPostJson<CreatorDraftOutcome>("/v115/creator/draft", {
+        name: creatorName,
+        goal,
+        profile_ref: profileRef,
+        site_ref: siteRef || undefined,
+        required_capabilities: caps.length ? caps : ["*"],
+        constraints: [],
+        acceptance,
+        autonomy: creatorAutonomy,
+      });
+      setCreatorDraft(result);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   const runCompiler = async () => {
     setError(null);
@@ -151,6 +180,95 @@ export default function Studio() {
       <header className="page-header">
         <h1>Studio — Solution Compiler</h1>
       </header>
+
+      <Card title="Creator — simple composition">
+        <p>
+          Start from a goal, guarantee profile and explicit acceptance. Creator only drafts an
+          existing Solution pipeline; it does not create a parallel Agent/Blueprint truth model.
+        </p>
+        <div className="builder-item">
+          <label>Name: </label>
+          <input
+            value={creatorName}
+            onChange={(e) => setCreatorName(e.target.value)}
+            style={{ width: "45%", padding: 6 }}
+          />
+        </div>
+        <div className="builder-item">
+          <label>Goal: </label>
+          <input
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            style={{ width: "70%", padding: 6 }}
+          />
+        </div>
+        <div className="builder-item">
+          <label>Guarantee profile: </label>
+          <select
+            value={profileRef}
+            onChange={(e) => setProfileRef(e.target.value)}
+            style={{ padding: 6 }}
+          >
+            <option value="morn.lite@1.0.0">Morn Lite</option>
+            <option value="morn.enterprise@1.0.0">Morn Enterprise</option>
+            <option value="morn.factory.readonly@1.0.0">Morn Factory — read only</option>
+            <option value="morn.research@1.0.0">Morn Research</option>
+          </select>
+        </div>
+        <div className="builder-item">
+          <label>Site (when applicable): </label>
+          <input
+            value={siteRef}
+            onChange={(e) => setSiteRef(e.target.value)}
+            placeholder="plant-a"
+            style={{ width: "40%", padding: 6 }}
+          />
+        </div>
+        <div className="builder-item">
+          <label>Autonomy: </label>
+          <select
+            value={creatorAutonomy}
+            onChange={(e) => setCreatorAutonomy(e.target.value)}
+            style={{ padding: 6 }}
+          >
+            <option value="assist">Assist</option>
+            <option value="governed">Governed</option>
+            <option value="autonomous-within-policy">Autonomous within policy</option>
+          </select>
+        </div>
+        <div className="builder-item">
+          <label>Acceptance (one criterion per line): </label>
+          <textarea
+            value={creatorAcceptance}
+            onChange={(e) => setCreatorAcceptance(e.target.value)}
+            style={{ width: "70%", minHeight: 70, padding: 8 }}
+          />
+        </div>
+        <div className="page-actions">
+          <button onClick={runCreatorDraft}>Draft composition</button>
+        </div>
+        {creatorDraft && (
+          <>
+            <KeyValue k="Canonical write" v={creatorDraft.canonical_write ? "yes" : "no"} />
+            <KeyValue k="Profile" v={creatorDraft.draft.profile_ref} />
+            <KeyValue k="Work nodes" v={creatorDraft.draft.work_graph.nodes.length} />
+            <KeyValue
+              k="Readiness gates"
+              v={creatorDraft.draft.readiness_gates.join(" → ")}
+            />
+            <KeyValue
+              k="Unresolved"
+              v={
+                creatorDraft.draft.unresolved.length
+                  ? creatorDraft.draft.unresolved.join(", ")
+                  : "none"
+              }
+            />
+            <KeyValue k="Canonicalization" v={creatorDraft.draft.canonicalization} />
+            <KeyValue k="Next" v={creatorDraft.next.join(" → ")} />
+          </>
+        )}
+      </Card>
 
       <Card title="Artifact → Capability Candidate">
         <p>
