@@ -57,9 +57,18 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/control-plane", get(v115_control_plane))
         .route("/api/v115/solutions", get(v115_solutions))
         .route("/api/v115/capabilities", get(v115_capabilities))
-        .route("/api/v115/capability/observe", post(v115_capability_observe))
-        .route("/api/v115/capability/qualify", post(v115_capability_qualify))
-        .route("/api/v115/capability/release", post(v115_capability_release))
+        .route(
+            "/api/v115/capability/observe",
+            post(v115_capability_observe),
+        )
+        .route(
+            "/api/v115/capability/qualify",
+            post(v115_capability_qualify),
+        )
+        .route(
+            "/api/v115/capability/release",
+            post(v115_capability_release),
+        )
         .route("/api/v115/capability/admit", post(v115_capability_admit))
         .route(
             "/api/v115/capability/revoke-release",
@@ -240,7 +249,6 @@ async fn v115_solutions(State(state): State<AppState>) -> ApiResult {
     })))
 }
 
-
 fn json_strings(body: &Value, key: &str) -> Vec<String> {
     body.get(key)
         .and_then(Value::as_array)
@@ -305,7 +313,11 @@ async fn v115_capability_observe(
         .v115_capabilities
         .iter()
         .position(|capability| capability.manifest.id.as_str() == manifest_id)
-        .ok_or_else(|| AppError(Error::not_found(format!("CapabilityManifest {manifest_id}"))))?;
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "CapabilityManifest {manifest_id}"
+            )))
+        })?;
     let observation = {
         let inner = &mut *guard;
         let capability = &mut inner.v115_capabilities[index];
@@ -382,7 +394,11 @@ async fn v115_capability_qualify(
         .v115_capabilities
         .iter()
         .position(|capability| capability.manifest.id.as_str() == manifest_id)
-        .ok_or_else(|| AppError(Error::not_found(format!("CapabilityManifest {manifest_id}"))))?;
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "CapabilityManifest {manifest_id}"
+            )))
+        })?;
     let qualification = {
         let inner = &mut *guard;
         let capability = &mut inner.v115_capabilities[index];
@@ -434,12 +450,20 @@ async fn v115_capability_release(
         .iter()
         .find(|item| item.id.as_str() == qualification_id)
         .cloned()
-        .ok_or_else(|| AppError(Error::not_found(format!("Qualification {qualification_id}"))))?;
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "Qualification {qualification_id}"
+            )))
+        })?;
     let index = guard
         .v115_capabilities
         .iter()
         .position(|capability| capability.manifest.id.as_str() == manifest_id)
-        .ok_or_else(|| AppError(Error::not_found(format!("CapabilityManifest {manifest_id}"))))?;
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "CapabilityManifest {manifest_id}"
+            )))
+        })?;
     let release = {
         let inner = &mut *guard;
         let capability = &mut inner.v115_capabilities[index];
@@ -464,9 +488,9 @@ async fn v115_capability_admit(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> ApiResult {
-    use std::collections::BTreeSet;
     use morn_kernel::ExecutionGuarantee;
     use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile};
+    use std::collections::BTreeSet;
 
     let manifest_id = body
         .get("manifest_id")
@@ -542,12 +566,20 @@ async fn v115_capability_admit(
         .iter()
         .find(|item| item.id.as_str() == qualification_id)
         .cloned()
-        .ok_or_else(|| AppError(Error::not_found(format!("Qualification {qualification_id}"))))?;
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "Qualification {qualification_id}"
+            )))
+        })?;
     let index = guard
         .v115_capabilities
         .iter()
         .position(|capability| capability.manifest.id.as_str() == manifest_id)
-        .ok_or_else(|| AppError(Error::not_found(format!("CapabilityManifest {manifest_id}"))))?;
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "CapabilityManifest {manifest_id}"
+            )))
+        })?;
     let admission = {
         let inner = &mut *guard;
         let capability = &mut inner.v115_capabilities[index];
@@ -589,13 +621,18 @@ async fn v115_capability_revoke_release(
         .v115_capabilities
         .iter()
         .position(|capability| capability.manifest.id.as_str() == manifest_id)
-        .ok_or_else(|| AppError(Error::not_found(format!("CapabilityManifest {manifest_id}"))))?;
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "CapabilityManifest {manifest_id}"
+            )))
+        })?;
     {
         let inner = &mut *guard;
         let capability = &mut inner.v115_capabilities[index];
-        inner
-            .v115_admission
-            .revoke_release(capability, &CapabilityDistributionReleaseId::new(release_id))?;
+        inner.v115_admission.revoke_release(
+            capability,
+            &CapabilityDistributionReleaseId::new(release_id),
+        )?;
     }
     guard.persist_all()?;
     Ok(Json(json!({
@@ -709,7 +746,10 @@ async fn v115_compile_openapi(State(state): State<AppState>, Json(body): Json<Va
     })))
 }
 
-async fn v115_compile_procedure(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+async fn v115_compile_procedure(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
     use morn_foundry::{ArtifactCompiler, ArtifactKind, ArtifactSource, ProcedureJsonCompiler};
 
     let name = body
@@ -745,7 +785,10 @@ async fn v115_compile_procedure(State(state): State<AppState>, Json(body): Json<
     })))
 }
 
-async fn v115_compile_repository(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+async fn v115_compile_repository(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
     use morn_foundry::{
         ArtifactCompiler, ArtifactKind, ArtifactSource, RepositoryManifestCompiler,
     };
