@@ -8,6 +8,7 @@ authors.workspace = true
 [dependencies]
 morn-kernel = { workspace = true }
 morn-work = { workspace = true }
+morn-world = { workspace = true }
 morn-runtime = { workspace = true }
 morn-profile = { workspace = true }
 morn-store = { workspace = true }
