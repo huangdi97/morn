@@ -70,10 +70,7 @@ impl WorkcellPlan {
         self.members
             .iter()
             .filter(|member| {
-                matches!(
-                    member.capability.kind,
-                    CapabilityKind::Llm | CapabilityKind::Model
-                )
+                matches!(member.capability.kind, CapabilityKind::Agent)
             })
             .count()
     }
@@ -356,10 +353,7 @@ impl CapabilityResolver {
             selected.len()
         )];
         if selected.iter().all(|member| {
-            !matches!(
-                member.capability.kind,
-                CapabilityKind::Llm | CapabilityKind::Model
-            )
+            !matches!(member.capability.kind, CapabilityKind::Agent)
         }) {
             rationale.push("zero-agent plan: no model/LLM executor required".to_string());
         }
@@ -434,7 +428,7 @@ mod tests {
             admitted(
                 "general-agent",
                 "dsh",
-                CapabilityKind::Llm,
+                CapabilityKind::Agent,
                 &["alarm.classify"],
                 50,
             ),
