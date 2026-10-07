@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-015 in `docs/adr/`
+3. ADR-002 through ADR-016 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -60,7 +60,7 @@ User-facing “blueprint” maps to an approved `SolutionPackage`; a runtime
 “instance” maps to canonical `WorkResource`. Work stores
 `source_solution_ref` for package provenance. Workcell remains a
 minimum-sufficient executor composition for a Work, not a second source of
-business truth. See ADR-015.
+business truth. See ADR-014.
 
 ## Execution guarantees
 
@@ -69,3 +69,11 @@ capability manifests and environment providers use a typed execution-guarantee
 vector; Factory read-only currently requires filesystem-write policy,
 network-egress policy and secret indirection in addition to its containment
 floor. See ADR-014.
+
+
+## Semantic constitution
+
+Implementations are replaceable; published semantic laws are non-bypassable
+within a protocol version. Work/Authority/Binding/external-effect truth/
+Outcome/Acceptance/history/profile semantics cannot be silently redefined by a
+plugin. See ADR-015.
