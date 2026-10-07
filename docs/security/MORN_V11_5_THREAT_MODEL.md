@@ -180,3 +180,16 @@ A security-relevant ambiguity must resolve to one of:
 It must never silently downgrade a requirement, fabricate evidence, bypass a
 profile gate, or reinterpret a harness/model statement as authoritative
 business truth.
+
+
+## Workload identity boundary
+
+Canonical Principal/Actor identity and runtime workload identity are separate.
+A workload identity is short-lived, bound to a Work/workload/site and may be
+represented by a SPIFFE-compatible URI. It contains no secret material.
+Credential values remain behind opaque handles and are resolved only at the
+execution/enforcement boundary.
+
+Remote/physical execution labels are not treated as stronger isolation than a
+microVM/full VM. A Factory isolation requirement must be satisfied by explicit
+provider guarantees rather than enum ordering.
