@@ -11,8 +11,8 @@ pub mod shadow;
 pub mod simulation;
 
 pub use admission::{
-    AdmissionService, QualificationRecord, QualificationRecordId, QualificationStatus,
-    SiteAdmission, SiteAdmissionId, SiteAdmissionStatus,
+    AdmissionService, QualificationEvidence, QualificationRecord, QualificationRecordId,
+    QualificationStatus, SiteAdmission, SiteAdmissionId, SiteAdmissionStatus,
 };
 pub use evaluation::{EvalStep, EvaluationDecision, EvaluationResult, EvaluationRunner};
 pub use replay::{ReplayReport, ReplayRunner, ReplayScenario};
