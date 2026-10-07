@@ -61,3 +61,35 @@ conformance and capability resolution evaluate explicit guarantees.
 
 Adding a new execution backend does not change Work, Authority, Binding,
 Attempt, Outcome or Acceptance semantics.
+
+
+## Requirement versus evidence
+
+Execution requirements and execution evidence are deliberately separate.
+
+A CapabilityManifest says what environment a capability **needs**. A Work or
+Domain Profile may impose a stronger floor. Resolution computes the effective
+requirement by merging those requirements; it does not reject a capability just
+because the capability itself did not redundantly declare every Profile
+guarantee.
+
+For example:
+
+```text
+capability requires: process + filesystem-read-policy
+Factory profile requires: container + network-egress-policy + secret-indirection
+
+effective environment requirement:
+container
++ filesystem-read-policy
++ network-egress-policy
++ secret-indirection
+```
+
+Only the selected ExecutionEnvironmentProvider can supply evidence that those
+effective requirements are actually satisfied. Capability declarations are not
+self-attestation.
+
+Incomparable topology requirements fail closed. A remote-only capability cannot
+silently satisfy a local container/microVM requirement, and vice versa, without
+an explicit provider-level mapping backed by evidence.
