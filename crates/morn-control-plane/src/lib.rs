@@ -136,14 +136,45 @@ impl WorkProgressController {
         }
 
         if let Some(binding) = inputs.binding {
-            if binding.work_id == work.id && binding.work_generation == work.generation {
-                work.record_active_binding(binding.id.clone());
-                let mut condition =
-                    WorkCondition::new("ProfileVersionPinned", ConditionStatus::True);
-                condition.reason = format!("binding {} pins {}", binding.id, binding.profile_ref);
-                condition.evidence_refs = vec![binding.id.to_string()];
-                work.set_condition(condition);
+            let binding_matches =
+                binding.work_id == work.id && binding.work_generation == work.generation;
+            let mut consistent = WorkCondition::new(
+                "ExecutionBindingConsistent",
+                if binding_matches {
+                    ConditionStatus::True
+                } else {
+                    ConditionStatus::False
+                },
+            );
+            consistent.reason = if binding_matches {
+                format!(
+                    "binding {} matches Work {} generation {}",
+                    binding.id, work.id, work.generation
+                )
+            } else {
+                format!(
+                    "binding {} targets Work {} generation {}, expected Work {} generation {}",
+                    binding.id,
+                    binding.work_id,
+                    binding.work_generation,
+                    work.id,
+                    work.generation
+                )
+            };
+            consistent.evidence_refs = vec![binding.id.to_string()];
+            work.set_condition(consistent);
+            if !binding_matches {
+                work.status.phase = WorkPhase::Blocked;
+                work.mark_observed();
+                return;
             }
+
+            work.record_active_binding(binding.id.clone());
+            let mut condition =
+                WorkCondition::new("ProfileVersionPinned", ConditionStatus::True);
+            condition.reason = format!("binding {} pins {}", binding.id, binding.profile_ref);
+            condition.evidence_refs = vec![binding.id.to_string()];
+            work.set_condition(condition);
         }
 
         if let Some(acceptance) = inputs.acceptance {
@@ -214,6 +245,34 @@ impl WorkProgressController {
         }
 
         if let Some(attempt) = inputs.attempt {
+            let Some(binding) = inputs.binding else {
+                let mut consistent =
+                    WorkCondition::new("ExecutionBindingConsistent", ConditionStatus::False);
+                consistent.reason = format!(
+                    "attempt {} cannot advance Work without its pinned ExecutionBinding",
+                    attempt.id
+                );
+                consistent.evidence_refs = vec![attempt.id.to_string()];
+                work.set_condition(consistent);
+                work.status.phase = WorkPhase::Blocked;
+                work.mark_observed();
+                return;
+            };
+            if attempt.binding_id != binding.id {
+                let mut consistent =
+                    WorkCondition::new("ExecutionBindingConsistent", ConditionStatus::False);
+                consistent.reason = format!(
+                    "attempt {} is pinned to binding {}, but controller supplied {}",
+                    attempt.id, attempt.binding_id, binding.id
+                );
+                consistent.evidence_refs =
+                    vec![attempt.id.to_string(), binding.id.to_string()];
+                work.set_condition(consistent);
+                work.status.phase = WorkPhase::Blocked;
+                work.mark_observed();
+                return;
+            }
+
             if attempt.state == AttemptState::Verified
                 && (attempt.external_ref.is_some() || !attempt.evidence_refs.is_empty())
             {
@@ -641,6 +700,51 @@ mod tests {
         );
         assert_eq!(work.status.phase, WorkPhase::Waiting);
         assert!(!work.condition_is_true("AcceptedOutcomeSemantics"));
+    }
+
+    #[test]
+    fn attempt_cannot_advance_work_under_the_wrong_binding() {
+        let work_id = WorkPackageId::generate_with("wp");
+        let spec = WorkSpec::new(work_id, "test binding consistency", "morn.lite@1.0.0");
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        let binding_a = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "1");
+        let binding_b = ExecutionBinding::for_work(&work, "cap:b", "provider:b", "1");
+        let mut attempt = ActionAttempt::new(binding_a.id.clone(), "key", "action");
+        attempt.transition(AttemptState::Authorized).unwrap();
+        attempt.transition(AttemptState::Dispatched).unwrap();
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                binding: Some(&binding_b),
+                attempt: Some(&attempt),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(work.status.phase, WorkPhase::Blocked);
+        assert!(!work.condition_is_true("ExecutionBindingConsistent"));
+    }
+
+    #[test]
+    fn attempt_without_binding_cannot_advance_work() {
+        let work_id = WorkPackageId::generate_with("wp");
+        let spec = WorkSpec::new(work_id, "test missing binding", "morn.lite@1.0.0");
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "1");
+        let mut attempt = ActionAttempt::new(binding.id, "key", "action");
+        attempt.transition(AttemptState::Authorized).unwrap();
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                attempt: Some(&attempt),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(work.status.phase, WorkPhase::Blocked);
+        assert!(!work.condition_is_true("ExecutionBindingConsistent"));
     }
 
     #[test]
