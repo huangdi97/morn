@@ -68,6 +68,10 @@ pub fn router(state: AppState) -> Router {
             post(v115_compile_repository),
         )
         .route("/api/v115/artifact/paper/compile", post(v115_compile_paper))
+        .route(
+            "/api/v115/solution/instantiate",
+            post(v115_instantiate_solution),
+        )
         .route("/api/workspaces", get(list_workspaces))
         .route("/api/workbench", get(workbench))
         .route("/api/studio", get(studio))
@@ -358,6 +362,81 @@ async fn v115_compile_paper(Json(body): Json<Value>) -> ApiResult {
         "candidate": candidate,
         "admission": "not-qualified-not-admitted",
         "next": ["independent-evaluation", "qualify", "release", "site-conformance", "admit"]
+    })))
+}
+
+async fn v115_instantiate_solution(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_control_plane::ControlPlaneStore;
+    use morn_foundry::{instantiate_approved_solution, SolutionInstantiationRequest};
+
+    let mut guard = state.lock();
+    let package = guard
+        .last_package
+        .clone()
+        .ok_or_else(|| AppError(Error::validation("compile an approved SolutionPackage first")))?;
+    let default_goal = guard
+        .last_problem
+        .as_ref()
+        .map(|problem| problem.objective.clone())
+        .unwrap_or_else(|| package.name.clone());
+
+    let goal = body
+        .get("goal")
+        .and_then(Value::as_str)
+        .unwrap_or(&default_goal)
+        .to_string();
+    let profile_ref = body
+        .get("profile_ref")
+        .and_then(Value::as_str)
+        .unwrap_or("morn.lite@1.0.0")
+        .to_string();
+
+    let mut request =
+        SolutionInstantiationRequest::new(guard.workspace.id.clone(), goal, profile_ref);
+    request.site_ref = body
+        .get("site_ref")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string);
+    request.acceptance_ref = body
+        .get("acceptance_ref")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string);
+    request.constraints = body
+        .get("constraints")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    request.required_conditions = body
+        .get("required_conditions")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let plan = instantiate_approved_solution(&package, request)?;
+    guard.store.save_work_resource(&plan.work)?;
+
+    Ok(Json(json!({
+        "plan": plan,
+        "state": "proposed",
+        "execution_started": false,
+        "note": "SolutionPackage was instantiated as canonical Work; capability resolution, qualification/site admission, authority, binding and execution remain explicit gates"
     })))
 }
 
