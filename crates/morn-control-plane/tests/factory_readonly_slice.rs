@@ -27,9 +27,9 @@ use morn_kernel::policy::{Policy, PolicyRule};
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
     enforce_authority, ActionAttempt, AttemptState, AuthorityProvider, AuthorityRequest,
-    BindingMigrationReason, ExecutionBinding, ExecutionEnvironmentProvider, ExecutionEnvironmentSpec,
-    FixtureEnvironmentProvider, IsolationClass, NativePolicyAuthority, OutcomeReconciler,
-    ReconciliationObservation,
+    BindingMigrationReason, ExecutionBinding, ExecutionEnvironmentProvider,
+    ExecutionEnvironmentSpec, FixtureEnvironmentProvider, IsolationClass, NativePolicyAuthority,
+    OutcomeReconciler, ReconciliationObservation,
 };
 use morn_store::MornStore;
 use morn_work::acceptance::AcceptanceSpec;
@@ -425,7 +425,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .save_source_of_truth_binding(&work, &source_binding)
         .unwrap();
     store.save_execution_binding(&work, &binding).unwrap();
-    store.save_binding_migration(&work, &migration_decision).unwrap();
+    store
+        .save_binding_migration(&work, &migration_decision)
+        .unwrap();
     store.save_action_attempt(&work, &attempt).unwrap();
     store.save_reconciliation(&work, &reconciliation).unwrap();
     store.save_observed_outcome(&work, &outcome).unwrap();
