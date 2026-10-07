@@ -30,6 +30,11 @@ pub struct ResolvedCapability {
     pub provider_ref: String,
     pub kind: CapabilityKind,
     pub estimated_cost_micros: Option<u64>,
+    /// Effective execution floor after merging Work/Profile and capability
+    /// requirements. This is a requirement for environment selection, not
+    /// evidence that the capability provider already satisfies it.
+    pub required_execution_class: IsolationLevel,
+    pub required_execution_guarantees: Vec<ExecutionGuarantee>,
     pub score: u32,
     pub rationale: Vec<String>,
 }
@@ -78,8 +83,36 @@ impl WorkcellPlan {
     }
 }
 
-fn isolation_satisfies(actual: IsolationLevel, required: IsolationLevel) -> bool {
-    actual.satisfies(required)
+fn merge_execution_class(
+    capability: IsolationLevel,
+    requested: Option<IsolationLevel>,
+) -> Option<IsolationLevel> {
+    let Some(requested) = requested else {
+        return Some(capability);
+    };
+    if capability.satisfies(requested) {
+        return Some(capability);
+    }
+    if requested.satisfies(capability) {
+        return Some(requested);
+    }
+    // Remote/physical versus local containment are intentionally incomparable
+    // until a concrete environment provider supplies richer attested semantics.
+    None
+}
+
+fn merge_execution_guarantees(
+    capability: &[ExecutionGuarantee],
+    requested: &[ExecutionGuarantee],
+) -> Vec<ExecutionGuarantee> {
+    let mut merged = capability.to_vec();
+    for guarantee in requested {
+        if !merged.contains(guarantee) {
+            merged.push(*guarantee);
+        }
+    }
+    merged.sort();
+    merged
 }
 
 fn effect_rank(effect: crate::effect::EffectClass) -> u8 {
@@ -147,11 +180,16 @@ impl CapabilityResolver {
             {
                 continue;
             }
-            if let Some(minimum) = request.minimum_isolation {
-                if !isolation_satisfies(manifest.execution.minimum_isolation, minimum) {
-                    continue;
-                }
-            }
+            let Some(required_execution_class) = merge_execution_class(
+                manifest.execution.minimum_isolation,
+                request.minimum_isolation,
+            ) else {
+                continue;
+            };
+            let required_execution_guarantees = merge_execution_guarantees(
+                &manifest.execution.required_guarantees,
+                &request.required_execution_guarantees,
+            );
             if !request.required_authority.iter().all(|needed| {
                 manifest
                     .authority
@@ -207,20 +245,6 @@ impl CapabilityResolver {
             {
                 continue;
             }
-            if !request
-                .required_execution_guarantees
-                .iter()
-                .all(|required| {
-                    manifest
-                        .execution
-                        .required_guarantees
-                        .iter()
-                        .any(|provided| provided == required)
-                })
-            {
-                continue;
-            }
-
             let mut rationale = vec!["semantic requirements satisfied".to_string()];
             let mut score = 50;
             if candidate.stage == CapabilityStage::Admitted {
@@ -236,6 +260,8 @@ impl CapabilityResolver {
                 provider_ref: manifest.provider_ref.clone(),
                 kind: manifest.kind,
                 estimated_cost_micros: manifest.economics.estimated_cost_micros,
+                required_execution_class,
+                required_execution_guarantees,
                 score,
                 rationale,
             });
@@ -496,6 +522,71 @@ mod tests {
             &candidates,
         );
         assert!(!unavailable.is_complete());
+    }
+
+    #[test]
+    fn profile_execution_requirements_are_merged_not_mistaken_for_capability_evidence() {
+        let mut record = admitted(
+            "reader",
+            "program-provider",
+            CapabilityKind::Program,
+            &["read"],
+            1,
+        );
+        record.manifest.execution.minimum_isolation = IsolationLevel::Process;
+        record.manifest.execution.required_guarantees =
+            vec![ExecutionGuarantee::FilesystemReadPolicy];
+
+        let resolved = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["read".to_string()],
+                minimum_isolation: Some(IsolationLevel::Container),
+                required_execution_guarantees: vec![
+                    ExecutionGuarantee::NetworkEgressPolicy,
+                    ExecutionGuarantee::SecretIndirection,
+                ],
+                site_ref: Some("plant-a".to_string()),
+                ..Default::default()
+            },
+            &[record],
+        );
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(
+            resolved[0].required_execution_class,
+            IsolationLevel::Container
+        );
+        assert!(resolved[0]
+            .required_execution_guarantees
+            .contains(&ExecutionGuarantee::FilesystemReadPolicy));
+        assert!(resolved[0]
+            .required_execution_guarantees
+            .contains(&ExecutionGuarantee::NetworkEgressPolicy));
+        assert!(resolved[0]
+            .required_execution_guarantees
+            .contains(&ExecutionGuarantee::SecretIndirection));
+    }
+
+    #[test]
+    fn incompatible_execution_topologies_fail_closed_during_resolution() {
+        let mut remote = admitted(
+            "remote-only",
+            "remote-provider",
+            CapabilityKind::Service,
+            &["execute"],
+            1,
+        );
+        remote.manifest.execution.minimum_isolation = IsolationLevel::Remote;
+
+        let blocked = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["execute".to_string()],
+                minimum_isolation: Some(IsolationLevel::Container),
+                site_ref: Some("plant-a".to_string()),
+                ..Default::default()
+            },
+            &[remote],
+        );
+        assert!(blocked.is_empty());
     }
 
     #[test]
