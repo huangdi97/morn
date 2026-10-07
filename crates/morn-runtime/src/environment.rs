@@ -169,15 +169,14 @@ impl ExecutionEnvironmentResolver {
 }
 
 fn containment_preference(class: IsolationClass) -> u8 {
-    use IsolationClass::*;
     match class {
-        NoIsolation => 0,
-        Process => 1,
-        Container => 2,
-        MicroVm => 3,
-        FullVm => 4,
-        Remote => 10,
-        Physical => 11,
+        IsolationClass::NoIsolation => 0,
+        IsolationClass::Process => 1,
+        IsolationClass::Container => 2,
+        IsolationClass::MicroVm => 3,
+        IsolationClass::FullVm => 4,
+        IsolationClass::Remote => 10,
+        IsolationClass::Physical => 11,
     }
 }
 
