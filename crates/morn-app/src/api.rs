@@ -154,6 +154,8 @@ async fn health() -> ApiResult {
 async fn v115_status() -> ApiResult {
     let protocol = morn_kernel::protocol::ProtocolSnapshot::v11_5();
     let profile = morn_profile::DomainProfile::factory_readonly_v1();
+    let provider_catalog = morn_runtime::reference_provider_catalog();
+    let providers = provider_catalog.list();
     let required_guarantees: Vec<String> = profile
         .requirements
         .iter()
@@ -175,6 +177,7 @@ async fn v115_status() -> ApiResult {
                 "business_truth": false
             }
         },
+        "provider_catalog": providers,
         "providers": {
             "harness": [
                 { "id": "morn-native", "status": "reference" },
@@ -1119,6 +1122,7 @@ async fn console(State(state): State<AppState>) -> ApiResult {
 async fn hub(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     let world = &guard.world;
+    let provider_catalog = morn_runtime::reference_provider_catalog();
     // Enabled domain packs advertised to the UI as an extension point (same
     // signal as /api/workbench, D-028): zero-domain builds advertise none.
     #[cfg(feature = "domain-biolab")]
@@ -1132,6 +1136,7 @@ async fn hub(State(state): State<AppState>) -> ApiResult {
         .collect();
     Ok(Json(json!({
         "domain_packs": domain_packs,
+        "provider_catalog": provider_catalog.list(),
         "actor_templates": [ { "id": "generic-actor@1.0", "name": "Generic Actor", "trust": "Verified" } ],
         "harness_templates": [
             { "id": "morn-native@1.0", "name": "Morn Native Harness", "trust": "Verified" },
