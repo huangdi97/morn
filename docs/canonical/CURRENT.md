@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-010 in `docs/adr/`
+3. ADR-002 through ADR-011 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -34,3 +34,12 @@ delivery-impact review.
 Local fixture/conformance/CI evidence proves engineering properties only.
 It does not imply real customer data, production write, real factory outcome or
 customer value validation.
+
+
+## Interoperability boundary
+
+MCP/OpenAPI/A2A are interoperability protocols, not replacements for Morn
+business semantics. MCP tools contribute capability interfaces; A2A Tasks and
+Artifacts contribute executor state/evidence. Neither protocol can grant
+Authority or make an external task completion equal Morn Outcome/Acceptance.
+See `ADR-011-mcp-a2a-interoperability-boundaries.md`.
