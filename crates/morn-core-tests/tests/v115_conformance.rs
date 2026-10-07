@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use morn_assurance::{AdmissionService, QualificationEvidence};
+use morn_assurance::{AdmissionService, QualificationEvidence, StrictQualificationRequest};
 use morn_capability::{
     CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityResolver, CapabilityStage,
     EffectClass, IsolationLevel, WorkcellRequest,
@@ -238,18 +238,20 @@ fn site_admission_requires_strict_nonexpired_qualification() {
     let qualification = service
         .qualify_with_evidence(
             &mut capability,
-            "release:1",
-            "decision:1",
-            vec!["eval:1".to_string()],
-            QualificationEvidence {
-                test_suite_refs: vec!["suite:1".to_string()],
-                environment_digest: Some("sha256:env".to_string()),
-                expected_properties: vec!["deterministic-output".to_string()],
-                evaluator_identity: Some("evaluator:1".to_string()),
-                ..Default::default()
+            StrictQualificationRequest {
+                candidate_ref: "release:1".to_string(),
+                decision_ref: "decision:1".to_string(),
+                evidence_refs: vec!["eval:1".to_string()],
+                qualification_evidence: QualificationEvidence {
+                    test_suite_refs: vec!["suite:1".to_string()],
+                    environment_digest: Some("sha256:env".to_string()),
+                    expected_properties: vec!["deterministic-output".to_string()],
+                    evaluator_identity: Some("evaluator:1".to_string()),
+                    ..Default::default()
+                },
+                context_of_use: vec!["factory-readonly".to_string()],
+                valid_until: None,
             },
-            vec!["factory-readonly".to_string()],
-            None,
         )
         .unwrap();
     service
