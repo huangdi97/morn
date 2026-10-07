@@ -75,6 +75,34 @@ pub fn instantiate_approved_solution(
         ));
     }
 
+    if let Some(policy) = package.policy_v115() {
+        if let Some(package_profile) = policy.profile_ref.as_deref() {
+            if package_profile != request.profile_ref {
+                return Err(Error::validation(format!(
+                    "SolutionPackage was reviewed for profile {package_profile}; requested profile {} requires explicit revalidation/migration",
+                    request.profile_ref
+                )));
+            }
+        }
+        if let Some(package_site) = policy.site_ref.as_deref() {
+            if request.site_ref.as_deref() != Some(package_site) {
+                return Err(Error::validation(format!(
+                    "SolutionPackage is site-scoped to {package_site}; cross-site instantiation requires explicit revalidation"
+                )));
+            }
+        }
+        if !policy.production_write_allowed
+            && request
+                .constraints
+                .iter()
+                .any(|constraint| constraint == "allow=ProductionWrite")
+        {
+            return Err(Error::validation(
+                "SolutionPackage forbids ProductionWrite; instantiation cannot silently widen effect authority",
+            ));
+        }
+    }
+
     let package_ref = solution_package_ref(package);
     let mut spec = WorkSpec::new(
         WorkPackageId::generate_with("work"),
@@ -169,6 +197,62 @@ mod tests {
             plan.work.status.phase,
             morn_work::control::WorkPhase::Proposed
         );
+    }
+
+    #[test]
+    fn v115_package_cannot_be_silently_reprofiled_or_cross_site_instantiated() {
+        let mut pkg = package(true);
+        pkg.manifest = json!({
+            "schema":"morn.solution-package/v11.5",
+            "profile_ref":"morn.factory.readonly@1.0.0",
+            "site_ref":"plant-a",
+            "acceptance_criteria":["delivery-impact-review"],
+            "required_capabilities":["capacity.optimize"],
+            "harness_policy":"provider-neutral",
+            "production_write_allowed":false
+        });
+
+        let wrong_profile = instantiate_approved_solution(
+            &pkg,
+            SolutionInstantiationRequest {
+                workspace_id: WorkspaceId::generate(),
+                goal: "review outage".to_string(),
+                profile_ref: "morn.enterprise@1.0.0".to_string(),
+                site_ref: Some("plant-a".to_string()),
+                constraints: vec![],
+                acceptance_ref: None,
+                required_conditions: vec![],
+            },
+        );
+        assert!(wrong_profile.is_err());
+
+        let wrong_site = instantiate_approved_solution(
+            &pkg,
+            SolutionInstantiationRequest {
+                workspace_id: WorkspaceId::generate(),
+                goal: "review outage".to_string(),
+                profile_ref: "morn.factory.readonly@1.0.0".to_string(),
+                site_ref: Some("plant-b".to_string()),
+                constraints: vec![],
+                acceptance_ref: None,
+                required_conditions: vec![],
+            },
+        );
+        assert!(wrong_site.is_err());
+
+        let widened = instantiate_approved_solution(
+            &pkg,
+            SolutionInstantiationRequest {
+                workspace_id: WorkspaceId::generate(),
+                goal: "review outage".to_string(),
+                profile_ref: "morn.factory.readonly@1.0.0".to_string(),
+                site_ref: Some("plant-a".to_string()),
+                constraints: vec!["allow=ProductionWrite".to_string()],
+                acceptance_ref: None,
+                required_conditions: vec![],
+            },
+        );
+        assert!(widened.is_err());
     }
 
     #[test]
