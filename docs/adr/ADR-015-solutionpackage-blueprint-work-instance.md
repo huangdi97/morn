@@ -74,3 +74,30 @@ while every execution remains independently governed and auditable.
 
 Product labels such as Digital Employee, Factory Copilot or Research Assistant
 become packaged experiences/profile compositions, not new kernel semantics.
+
+
+## Creator translation layer
+
+Creator is product UX, not a new canonical record. Its transient request asks
+for a name/goal, guarantee profile, explicit acceptance criteria, optional site,
+capability hints and an autonomy posture.
+
+Creator translates into the existing
+`ProblemSpec -> WorkGraph -> ProposedSolution` pipeline. It performs no
+canonical write and starts no execution. After review/approval, the existing
+`SolutionPackage` remains the reusable blueprint; instantiation creates
+canonical `WorkResource`.
+
+Supported product autonomy postures are:
+
+- Assist;
+- Governed;
+- AutonomousWithinPolicy.
+
+They change planning/risk posture only. They never bypass capability
+qualification/site admission, Authority, Profile, source-of-truth,
+ExecutionBinding or Acceptance gates.
+
+Creator requires explicit acceptance criteria before drafting. A Factory
+read-only Creator request also preserves the ProductionWrite prohibition and
+site/source-of-truth readiness requirements.
