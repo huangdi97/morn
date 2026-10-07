@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiGet, OpintRegistry, V115Status } from "../api";
+import { apiGet, OpintRegistry, V115ControlPlaneData, V115Status } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
 interface Trace {
@@ -44,6 +44,7 @@ export default function ConsolePage() {
   const [replacementRecords, setReplacementRecords] = useState<Array<{ work: string; decision: string }>>([]);
   const [opint, setOpint] = useState<OpintRegistry | null>(null);
   const [v115, setV115] = useState<V115Status | null>(null);
+  const [v115Control, setV115Control] = useState<V115ControlPlaneData | null>(null);
 
   useEffect(() => {
     apiGet<ConsoleData>("/console")
@@ -69,6 +70,9 @@ export default function ConsolePage() {
       .catch(() => undefined);
     apiGet<V115Status>("/v115/status")
       .then(setV115)
+      .catch(() => undefined);
+    apiGet<V115ControlPlaneData>("/v115/control-plane")
+      .then(setV115Control)
       .catch(() => undefined);
   }, []);
 
@@ -96,6 +100,18 @@ export default function ConsolePage() {
           <KeyValue k="Native" v={data.harness_health.native} />
           <KeyValue k="DeepSeek Harness" v={data.harness_health.dsh} />
         </Card>
+        {v115Control && (
+          <Card title="v11.5 Persisted Control Records">
+            <KeyValue k="Work" v={v115Control.work.length} />
+            <KeyValue k="Source-of-truth bindings" v={v115Control.source_of_truth_bindings.length} />
+            <KeyValue k="Execution bindings" v={v115Control.execution_bindings.length} />
+            <KeyValue k="Attempts" v={v115Control.attempts.length} />
+            <KeyValue k="Reconciliations" v={v115Control.reconciliations.length} />
+            <KeyValue k="Outcomes" v={v115Control.outcomes.length} />
+            <KeyValue k="Acceptance decisions" v={v115Control.acceptance_decisions.length} />
+            <KeyValue k="Value assessments" v={v115Control.value_assessments.length} />
+          </Card>
+        )}
         {v115 && (
           <Card title="v11.5 Control / Trust / Composition">
             <KeyValue k="Semantic slots" v={v115.architecture.semantic_slots.join(", ")} />
