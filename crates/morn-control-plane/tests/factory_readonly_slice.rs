@@ -8,12 +8,13 @@
 use std::collections::BTreeSet;
 
 use morn_assurance::{AdmissionService, QualificationEvidence, StrictQualificationRequest};
+use morn_capability::effect::EffectContract;
 use morn_capability::{
     CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityRequest, CapabilityResolver,
     CapabilityStage, EffectClass, IsolationLevel,
 };
 use morn_control_plane::{
-    begin_external_attempt, enforce_profile_action, evaluate_profile_action,
+    begin_external_attempt_with_effect, enforce_profile_action, evaluate_profile_action,
     issue_external_action_permit, ControlPlaneStore, ControllerInputs, ExternalActionMode,
     ReconciliationController, WorkController, WorkProgressController, WorkProgressInputs,
 };
@@ -28,7 +29,8 @@ use morn_kernel::policy::{Policy, PolicyRule};
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
     decide_bound, enforce_authority, ActionAttempt, AttemptState, AuthorityProvider,
-    AuthorityRequest, BindingMigrationReason, ExecutionBinding, ExecutionEnvironmentOffer,
+    AuthorityRequest, BindingMigrationReason, BindingMigrationRequest, ExecutionBinding,
+    ExecutionEnvironmentOffer,
     ExecutionEnvironmentProvider, ExecutionEnvironmentResolver, ExecutionEnvironmentSpec,
     FixtureEnvironmentProvider, NativePolicyAuthority, OutcomeReconciler,
     ReconciliationObservation,
@@ -313,16 +315,111 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .all_passed());
 
     // The active attempt pins the exact provider/runtime selection.
-    let mut binding = ExecutionBinding::for_work(
-        &work,
-        capability.manifest.id.to_string(),
-        resolved[0].provider_ref.clone(),
-        "fixture-v1",
-    );
+    let mut binding =
+        ExecutionBinding::for_resolved_capability(&work, &resolved[0], "fixture-v1");
     binding.provider_digest = Some("sha256:dsh-fixture".to_string());
     binding.runtime_ref = Some(environment.runtime_ref.clone());
     binding.authority_decision_ref = Some(authority_decision.id.to_string());
-    work.status.active_binding = Some(binding.id.clone());
+    work.record_active_binding(binding.id.clone());
+
+    // A separate connector capability owns the write-like sandbox action.
+    // The read-only investigator binding cannot be reused to smuggle an E2
+    // side effect through an E0 capability.
+    let mut cmms_manifest = CapabilityManifest::new(
+        CapabilityId::generate_with("cap"),
+        "cmms-sandbox-create-order",
+        "connector://cmms-fixture",
+        CapabilityKind::Api,
+        EffectClass::E2Compensatable,
+    );
+    cmms_manifest.provides = vec!["cmms.sandbox.create-order".to_string()];
+    cmms_manifest.authority.allow = vec!["cmms.sandbox.write".to_string()];
+    cmms_manifest.compensation_ref = Some("cmms.sandbox.cancel-order".to_string());
+    cmms_manifest.idempotency_key_required = true;
+    cmms_manifest.execution.minimum_isolation = IsolationLevel::Container;
+    cmms_manifest.execution.required_guarantees =
+        profile.required_execution_guarantees.clone();
+    cmms_manifest.provenance.source_ref = "openapi://fixture/cmms".to_string();
+    cmms_manifest.provenance.source_digest = Some("sha256:cmms-fixture".to_string());
+    cmms_manifest.validate_governance().unwrap();
+    let mut cmms_capability = CapabilityRecord::new(cmms_manifest);
+    admission
+        .observe(
+            &mut cmms_capability,
+            vec!["evaluation-observation:cmms-fixture".to_string()],
+            "morn-conformance-suite",
+        )
+        .unwrap();
+    let cmms_qualification = admission
+        .qualify_with_evidence(
+            &mut cmms_capability,
+            StrictQualificationRequest {
+                candidate_ref: "release:cmms-sandbox-create-order@1".to_string(),
+                decision_ref: "certification-decision:cmms-fixture".to_string(),
+                evidence_refs: vec!["evaluation:timeout-after-commit".to_string()],
+                qualification_evidence: QualificationEvidence {
+                    test_suite_refs: vec!["suite:cmms-idempotency-reconcile".to_string()],
+                    environment_digest: Some("sha256:fixture-environment".to_string()),
+                    input_scope: vec!["synthetic:CMMS".to_string()],
+                    expected_properties: vec![
+                        "explicit-compensation".to_string(),
+                        "idempotency-key".to_string(),
+                        "no-blind-retry".to_string(),
+                    ],
+                    known_failure_modes: vec!["timeout-after-commit".to_string()],
+                    cost_evidence_ref: Some("fixture://metrics/cmms-cost".to_string()),
+                    latency_evidence_ref: Some("fixture://metrics/cmms-latency".to_string()),
+                    evaluator_identity: Some("morn-conformance-suite".to_string()),
+                },
+                context_of_use: vec!["factory-readonly-sandbox-write".to_string()],
+                valid_until: None,
+            },
+        )
+        .unwrap();
+    admission
+        .record_release(
+            &mut cmms_capability,
+            &cmms_qualification,
+            format!(
+                "oci://fixture/morn/cmms-sandbox-create-order@sha256:{}",
+                "b".repeat(64)
+            ),
+            format!("sha256:{}", "b".repeat(64)),
+            Some("sigstore://fixture/cmms".to_string()),
+            Some("slsa://fixture/cmms".to_string()),
+        )
+        .unwrap();
+    admission
+        .admit(
+            &mut cmms_capability,
+            &cmms_qualification,
+            "plant-a",
+            conformance.profile_ref.clone(),
+            &conformance,
+            "site-owner",
+        )
+        .unwrap();
+
+    let cmms_resolved = CapabilityResolver.resolve(
+        &CapabilityRequest {
+            required_provides: vec!["cmms.sandbox.create-order".to_string()],
+            allowed_kinds: vec![CapabilityKind::Api],
+            minimum_isolation: Some(IsolationLevel::Container),
+            required_authority: vec!["cmms.sandbox.write".to_string()],
+            maximum_effect: Some(EffectClass::E2Compensatable),
+            required_execution_guarantees: profile.required_execution_guarantees.clone(),
+            site_ref: Some("plant-a".to_string()),
+            profile_ref: Some(conformance.profile_ref.clone()),
+            ..Default::default()
+        },
+        &[cmms_capability.clone()],
+    );
+    assert_eq!(cmms_resolved.len(), 1);
+    let mut cmms_binding =
+        ExecutionBinding::for_resolved_capability(&work, &cmms_resolved[0], "fixture-v1");
+    cmms_binding.provider_digest = Some("sha256:cmms-fixture-provider".to_string());
+    cmms_binding.runtime_ref = Some(environment.runtime_ref.clone());
+    work.record_active_binding(cmms_binding.id.clone());
 
     // The external fixture write is allowed only as SandboxWrite: policy
     // authority and the active Factory profile must both issue a permit.
@@ -340,23 +437,24 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         &profile,
         ExternalActionMode::SandboxWrite,
         &sandbox_authority_decision,
-        &binding,
+        &cmms_binding,
     )
     .unwrap();
-    assert_eq!(sandbox_permit.binding_ref, binding.id.to_string());
+    assert_eq!(sandbox_permit.binding_ref, cmms_binding.id.to_string());
     assert!(issue_external_action_permit(
         &profile,
         ExternalActionMode::ProductionWrite,
         &sandbox_authority_decision,
-        &binding,
+        &cmms_binding,
     )
     .is_err());
 
     // Simulate the classic timeout-after-remote-commit ambiguity. The attempt
     // must originate from the governed permit boundary, not direct construction.
-    let mut attempt = begin_external_attempt(
+    let mut attempt = begin_external_attempt_with_effect(
         &sandbox_permit,
-        &binding,
+        &cmms_binding,
+        EffectContract::e2("cmms.sandbox.cancel-order"),
         format!("{}:maintenance-order", work.id),
         "cmms.sandbox.write",
     )
@@ -373,7 +471,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     WorkProgressController.reconcile(
         &mut work,
         &WorkProgressInputs {
-            binding: Some(&binding),
+            binding: Some(&cmms_binding),
             attempt: Some(&attempt),
             ..Default::default()
         },
@@ -506,6 +604,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .unwrap();
     store.save_execution_binding(&work, &binding).unwrap();
     store
+        .save_execution_binding(&work, &cmms_binding)
+        .unwrap();
+    store
         .save_binding_migration(&work, &migration_decision)
         .unwrap();
     store.save_action_attempt(&work, &attempt).unwrap();
@@ -521,6 +622,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .unwrap();
     assert_eq!(restored.status.phase, WorkPhase::Accepted);
     assert_eq!(restored.status.active_binding, Some(binding.id.clone()));
+    assert_eq!(restored.status.active_bindings.len(), 2);
+    assert!(restored.status.active_bindings.contains(&binding.id));
+    assert!(restored.status.active_bindings.contains(&cmms_binding.id));
 
     let restored_outcome: ObservedOutcome = store
         .load_record("observed_outcome_v115", outcome.id.as_str())
