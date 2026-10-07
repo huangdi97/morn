@@ -123,6 +123,10 @@ impl ProtocolSnapshot {
                     "An active Attempt keeps the exact ExecutionBinding it started with.",
                 ),
                 SemanticInvariant::required(
+                    "profile-effect-gate-before-dispatch",
+                    "The exact Domain Profile must permit the external effect mode before dispatch.",
+                ),
+                SemanticInvariant::required(
                     "authority-before-restricted-effect",
                     "Restricted external side effects require an explicit authority decision before dispatch.",
                 ),
