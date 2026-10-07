@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-017 in `docs/adr/`
+3. ADR-002 through ADR-018 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -86,3 +86,12 @@ plugin. See ADR-016.
 of truth. The concrete Workcell for a Work still resolves the minimum-sufficient
 mix of human, agent, rule, solver, program, service or device capabilities. See
 ADR-017.
+
+
+## Profile action intent
+
+Profile-level effect permission and IAM/Authority are independent gates.
+`morn.factory.readonly@1.0.0` structurally forbids ProductionWrite even when a
+principal would otherwise have enterprise write permission. Fixture/simulation
+writes are classified separately and cannot upgrade the production claim. See
+ADR-018.
