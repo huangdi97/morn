@@ -7,9 +7,10 @@
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::error::{Error, Result};
+use morn_kernel::ids::Id;
 use morn_kernel::time::Timestamp;
 use morn_profile::DomainProfile;
-use morn_runtime::AuthorityDecisionRecord;
+use morn_runtime::{BoundAuthorityDecision, ExecutionBinding};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "kebab-case")]
@@ -43,13 +44,27 @@ pub struct ProfileActionDecision {
     pub reason: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct ExternalActionPermitTag;
+pub type ExternalActionPermitId = Id<ExternalActionPermitTag>;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExternalActionPermit {
+    pub id: ExternalActionPermitId,
     pub profile_ref: String,
     pub mode: ExternalActionMode,
     pub authority_decision_ref: String,
+    pub principal: String,
+    pub acting_for: Option<String>,
+    pub action: String,
+    pub resource: String,
+    pub site_ref: Option<String>,
+    pub scope: Vec<String>,
+    pub parameter_envelope: std::collections::BTreeMap<String, String>,
     pub work_ref: String,
     pub binding_ref: String,
+    pub not_before: Option<Timestamp>,
+    pub expires_at: Option<Timestamp>,
     pub issued_at: Timestamp,
 }
 
@@ -89,34 +104,61 @@ pub fn evaluate_profile_action(
 pub fn issue_external_action_permit(
     profile: &DomainProfile,
     mode: ExternalActionMode,
-    authority: &AuthorityDecisionRecord,
-    work_ref: impl Into<String>,
-    binding_ref: impl Into<String>,
+    authority: &BoundAuthorityDecision,
+    binding: &ExecutionBinding,
 ) -> Result<ExternalActionPermit> {
-    if !authority.allowed {
+    if !authority.decision.allowed {
         return Err(Error::not_authorized(format!(
             "authority provider {} denied external action: {}",
-            authority.provider, authority.reason
+            authority.decision.provider, authority.decision.reason
         )));
+    }
+    if !authority.request.valid_now(Timestamp::now()) {
+        return Err(Error::not_authorized(
+            "authority request is revoked or outside its validity window",
+        ));
     }
 
     let profile_decision = evaluate_profile_action(profile, mode);
     enforce_profile_action(&profile_decision)?;
 
-    let work_ref = work_ref.into();
-    let binding_ref = binding_ref.into();
-    if work_ref.trim().is_empty() || binding_ref.trim().is_empty() {
+    if profile_decision.profile_ref != binding.profile_ref {
         return Err(Error::validation(
-            "external action permit requires Work and ExecutionBinding references",
+            "external action profile does not match pinned ExecutionBinding profile",
+        ));
+    }
+    if authority.request.work_ref.as_deref() != Some(binding.work_id.as_str()) {
+        return Err(Error::validation(
+            "authority request must be bound to the exact Work in ExecutionBinding",
+        ));
+    }
+    if authority.request.site_ref != binding.site_ref {
+        return Err(Error::validation(
+            "authority request site does not match pinned ExecutionBinding site",
+        ));
+    }
+    if authority.request.action.trim().is_empty() || authority.request.resource.trim().is_empty() {
+        return Err(Error::validation(
+            "external action permit requires an exact action and resource",
         ));
     }
 
     Ok(ExternalActionPermit {
+        id: ExternalActionPermitId::generate_with("permit"),
         profile_ref: profile_decision.profile_ref,
         mode,
-        authority_decision_ref: authority.id.to_string(),
-        work_ref,
-        binding_ref,
+        authority_decision_ref: authority.decision.id.to_string(),
+        principal: authority.request.principal.clone(),
+        acting_for: authority.request.acting_for.clone(),
+        action: authority.request.action.clone(),
+        resource: authority.request.resource.clone(),
+        site_ref: authority.request.site_ref.clone(),
+        scope: authority.request.scope.clone(),
+        parameter_envelope: authority.request.parameter_envelope.clone(),
+        work_ref: binding.work_id.to_string(),
+        binding_ref: binding.id.to_string(),
+        not_before: authority.request.not_before,
+        expires_at: authority.request.expires_at,
         issued_at: Timestamp::now(),
     })
 }
@@ -135,17 +177,27 @@ pub fn enforce_profile_action(decision: &ProfileActionDecision) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use morn_runtime::AuthorityDecisionId;
+    use morn_kernel::ids::{WorkPackageId, WorkspaceId};
+    use morn_kernel::policy::{Policy, PolicyRule};
+    use morn_runtime::{decide_bound, AuthorityRequest, NativePolicyAuthority};
+    use morn_work::control::{WorkResource, WorkSpec};
 
-    fn allowed_authority() -> AuthorityDecisionRecord {
-        AuthorityDecisionRecord {
-            id: AuthorityDecisionId::generate_with("authz"),
-            provider: "fixture-authority".to_string(),
-            allowed: true,
-            reason: "allowed".to_string(),
-            evidence_refs: vec!["policy://fixture".to_string()],
-            decided_at: Timestamp::now(),
-        }
+    fn bound_authority(
+        work: &WorkResource,
+        binding: &ExecutionBinding,
+        action: &str,
+        resource: &str,
+    ) -> BoundAuthorityDecision {
+        let policy = Policy::new(
+            work.workspace_id.clone(),
+            "fixture",
+            vec![PolicyRule::allow(action)],
+        );
+        let provider = NativePolicyAuthority::new(policy);
+        let mut request = AuthorityRequest::new("controller", action, resource);
+        request.work_ref = Some(work.id.to_string());
+        request.site_ref = binding.site_ref.clone();
+        decide_bound(&provider, &request).unwrap()
     }
 
     #[test]
@@ -172,16 +224,55 @@ mod tests {
     }
 
     #[test]
+    fn permit_rejects_authority_bound_to_other_site_or_work() {
+        let profile = DomainProfile::factory_readonly_v1();
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "fixture",
+            profile.canonical_ref(),
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let binding = ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+
+        let policy = Policy::new(
+            work.workspace_id.clone(),
+            "fixture",
+            vec![PolicyRule::allow("cmms.sandbox.write")],
+        );
+        let provider = NativePolicyAuthority::new(policy);
+        let mut wrong = AuthorityRequest::new("controller", "cmms.sandbox.write", "CMMS-fixture");
+        wrong.work_ref = Some("other-work".to_string());
+        wrong.site_ref = Some("plant-b".to_string());
+        let wrong = decide_bound(&provider, &wrong).unwrap();
+
+        assert!(issue_external_action_permit(
+            &profile,
+            ExternalActionMode::SandboxWrite,
+            &wrong,
+            &binding,
+        )
+        .is_err());
+    }
+
+    #[test]
     fn external_action_permit_requires_both_authority_and_profile() {
         let profile = DomainProfile::factory_readonly_v1();
-        let authority = allowed_authority();
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "fixture",
+            profile.canonical_ref(),
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let binding = ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        let authority = bound_authority(&work, &binding, "cmms.sandbox.write", "CMMS-fixture");
 
         assert!(issue_external_action_permit(
             &profile,
             ExternalActionMode::ProductionWrite,
             &authority,
-            "work-1",
-            "binding-1",
+            &binding,
         )
         .is_err());
 
@@ -189,12 +280,16 @@ mod tests {
             &profile,
             ExternalActionMode::SandboxWrite,
             &authority,
-            "work-1",
-            "binding-1",
+            &binding,
         )
         .unwrap();
-        assert_eq!(permit.work_ref, "work-1");
-        assert_eq!(permit.binding_ref, "binding-1");
-        assert_eq!(permit.authority_decision_ref, authority.id.to_string());
+        assert_eq!(permit.work_ref, work.id.to_string());
+        assert_eq!(permit.binding_ref, binding.id.to_string());
+        assert_eq!(
+            permit.authority_decision_ref,
+            authority.decision.id.to_string()
+        );
+        assert_eq!(permit.action, "cmms.sandbox.write");
+        assert_eq!(permit.resource, "CMMS-fixture");
     }
 }
