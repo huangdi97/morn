@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-011 in `docs/adr/`
+3. ADR-002 through ADR-013 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -43,3 +43,12 @@ business semantics. MCP tools contribute capability interfaces; A2A Tasks and
 Artifacts contribute executor state/evidence. Neither protocol can grant
 Authority or make an external task completion equal Morn Outcome/Acceptance.
 See `ADR-011-mcp-a2a-interoperability-boundaries.md`.
+
+
+## Execution trust clarification
+
+Execution topology and containment guarantees are not one scalar rank. Remote
+and physical executors do not automatically satisfy container/microVM/VM
+requirements. Runtime workload identity is separate from canonical business
+identity; the reference provider shape is SPIFFE-compatible, while secrets stay
+behind opaque credential handles. See ADR-012 and ADR-013.
