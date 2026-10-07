@@ -300,3 +300,66 @@ Describe goal / import artifact
 
 This preserves the simplicity of an “agent factory” experience while avoiding
 an Agent-first architecture.
+
+
+## 2026 control-plane convergence: ServiceNow / UiPath / Siemens
+
+The 2026 market makes one positioning mistake especially dangerous: Morn must
+not claim that "an AI/agent control plane" by itself is unique.
+
+ServiceNow AI Control Tower now explicitly discovers, observes, governs,
+secures and measures AI systems, agents, workflows and MCP servers across
+third-party environments. Its surrounding platform connects governance to
+workflow/action infrastructure and value measurement.
+
+UiPath similarly positions one governed orchestration plane across agents,
+robots, APIs and humans, with long-running cross-system work and inherited
+identity/audit/compliance controls.
+
+Siemens' industrial direction combines industrial agents with orchestration and
+a governed execution layer between AI and real machinery. Its public
+architecture emphasizes deterministic/auditable coordination, human authority
+and validation before commands reach industrial control.
+
+### Consequence for Morn
+
+Therefore Morn's differentiator cannot be:
+
+- "we have agents";
+- "we support MCP/A2A";
+- "we have a control tower";
+- "we can mix humans and agents";
+- "we have industrial AI orchestration";
+- "we govern models/tools".
+
+Those are increasingly table stakes.
+
+The sharper Morn thesis is **Work-first outcome control**:
+
+```text
+intent/situation
+ -> versioned Work
+ -> minimum-sufficient capability composition
+ -> explicit Authority
+ -> pinned ExecutionBinding
+ -> Attempt / external-effect truth
+ -> Receipt / Reconciliation
+ -> source-grounded Outcome
+ -> independent Acceptance
+ -> value evidence
+```
+
+This moves the center of gravity away from "inventory and govern AI assets" and
+away from "run agent workflows" toward preserving business meaning and
+consequence across replaceable executors.
+
+### Factory consequence
+
+For Factory, Morn should not market itself as a replacement MES, PLC layer or
+generic "industrial agent platform". The first wedge is a governed brownfield
+Work control layer above existing systems of record and below human operational
+accountability.
+
+Agents, solvers, deterministic programs and humans may participate, but the
+factory Work survives any executor replacement. Production-write profiles
+remain a separate future trust level, not an automatic next step.
