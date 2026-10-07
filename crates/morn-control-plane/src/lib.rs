@@ -154,11 +154,7 @@ impl WorkProgressController {
             } else {
                 format!(
                     "binding {} targets Work {} generation {}, expected Work {} generation {}",
-                    binding.id,
-                    binding.work_id,
-                    binding.work_generation,
-                    work.id,
-                    work.generation
+                    binding.id, binding.work_id, binding.work_generation, work.id, work.generation
                 )
             };
             consistent.evidence_refs = vec![binding.id.to_string()];
@@ -170,8 +166,7 @@ impl WorkProgressController {
             }
 
             work.record_active_binding(binding.id.clone());
-            let mut condition =
-                WorkCondition::new("ProfileVersionPinned", ConditionStatus::True);
+            let mut condition = WorkCondition::new("ProfileVersionPinned", ConditionStatus::True);
             condition.reason = format!("binding {} pins {}", binding.id, binding.profile_ref);
             condition.evidence_refs = vec![binding.id.to_string()];
             work.set_condition(condition);
@@ -179,11 +174,10 @@ impl WorkProgressController {
 
         if let Some(acceptance) = inputs.acceptance {
             if acceptance.work_package_id == work.id {
-                let spec_matches = work
-                    .spec
-                    .acceptance_ref
-                    .as_deref()
-                    .is_none_or(|expected| expected == acceptance.acceptance_spec_id.to_string());
+                let spec_matches =
+                    work.spec.acceptance_ref.as_deref().is_none_or(|expected| {
+                        expected == acceptance.acceptance_spec_id.to_string()
+                    });
                 let grounded_outcome = inputs.outcome.filter(|outcome| {
                     outcome.work_package_id == work.id
                         && outcome.is_source_grounded()
@@ -265,8 +259,7 @@ impl WorkProgressController {
                     "attempt {} is pinned to binding {}, but controller supplied {}",
                     attempt.id, attempt.binding_id, binding.id
                 );
-                consistent.evidence_refs =
-                    vec![attempt.id.to_string(), binding.id.to_string()];
+                consistent.evidence_refs = vec![attempt.id.to_string(), binding.id.to_string()];
                 work.set_condition(consistent);
                 work.status.phase = WorkPhase::Blocked;
                 work.mark_observed();
@@ -307,13 +300,12 @@ impl WorkProgressController {
             return;
         }
 
-        work.status.phase = if !work.status.active_bindings.is_empty()
-            || work.status.active_binding.is_some()
-        {
-            WorkPhase::Running
-        } else {
-            WorkPhase::Ready
-        };
+        work.status.phase =
+            if !work.status.active_bindings.is_empty() || work.status.active_binding.is_some() {
+                WorkPhase::Running
+            } else {
+                WorkPhase::Ready
+            };
         work.mark_observed();
     }
 }
@@ -689,7 +681,9 @@ mod tests {
         );
         unlinked
             .outcome_refs
-            .push(morn_kernel::ids::OutcomeRecordId::generate_with("different"));
+            .push(morn_kernel::ids::OutcomeRecordId::generate_with(
+                "different",
+            ));
         WorkProgressController.reconcile(
             &mut work,
             &WorkProgressInputs {
