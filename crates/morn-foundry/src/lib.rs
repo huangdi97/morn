@@ -26,8 +26,8 @@ pub use instantiate::{
 pub use manifest::ManifestService;
 pub use problem_spec::{Assumption, Constraint, ProblemSpec, ProblemSpecBuilder, SolutionRequest};
 pub use solution::{
-    ApprovedSolution, ProposedSolution, SolutionPackage, SolutionPackagePolicyV115, ValidationIssue,
-    ValidationReport,
+    ApprovedSolution, ProposedSolution, SolutionPackage, SolutionPackagePolicyV115,
+    ValidationIssue, ValidationReport,
 };
 pub use work_graph::{WorkEdge, WorkEdgeKind, WorkGraph, WorkGraphError, WorkNature, WorkNode};
 
