@@ -218,6 +218,8 @@ impl AdmissionService {
                 "only declared/observed/qualified capabilities can be qualified",
             ));
         }
+        let candidate_ref = candidate_ref.into();
+        let decision_ref = decision_ref.into();
         if candidate_ref.trim().is_empty() || decision_ref.trim().is_empty() {
             return Err(Error::validation(
                 "qualification requires explicit candidate/build and decision references",
@@ -280,8 +282,6 @@ impl AdmissionService {
                 "qualification validity has already expired",
             ));
         }
-        let candidate_ref = candidate_ref.into();
-        let decision_ref = decision_ref.into();
         if candidate_ref.trim().is_empty() || decision_ref.trim().is_empty() {
             return Err(Error::validation(
                 "qualification requires explicit candidate/build and decision references",
@@ -557,6 +557,16 @@ mod tests {
             CapabilityKind::Llm,
             EffectClass::E0LifecycleReversible,
         ))
+    }
+
+    fn observe_candidate(service: &mut AdmissionService, capability: &mut CapabilityRecord) {
+        service
+            .observe(
+                capability,
+                vec!["evaluation:observation".to_string()],
+                "evaluator:observation",
+            )
+            .unwrap();
     }
 
     fn record_fixture_release(
