@@ -12,7 +12,9 @@ use morn_kernel::ids::ExecutionReceiptId;
 
 use crate::context::RuntimeContext;
 use crate::event::{ExecutionEvent, ExecutionEventKind};
-use crate::provider::{HarnessOutput, HarnessProvider, HarnessSession, HarnessSnapshot, ProviderHandle};
+use crate::provider::{
+    HarnessOutput, HarnessProvider, HarnessSession, HarnessSnapshot, ProviderHandle,
+};
 use crate::receipt::ExecutionReceipt;
 use crate::scope::CapabilityScope;
 
@@ -76,7 +78,8 @@ impl HarnessProvider for PiHarnessProvider {
 
     fn unmount(&mut self, handle: &ProviderHandle) -> Result<()> {
         let before = self.scopes.len();
-        self.scopes.retain(|scope| scope.id.to_string() != handle.scope_id);
+        self.scopes
+            .retain(|scope| scope.id.to_string() != handle.scope_id);
         if self.scopes.len() == before {
             return Err(Error::not_found(format!(
                 "scope {} not mounted",
@@ -212,7 +215,11 @@ impl HarnessProvider for PiHarnessProvider {
             "pi fixture session completed",
         ));
         state.last_event = "completed".to_string();
-        let event_ids: Vec<String> = state.events.iter().map(|event| event.id.to_string()).collect();
+        let event_ids: Vec<String> = state
+            .events
+            .iter()
+            .map(|event| event.id.to_string())
+            .collect();
         Ok(ExecutionReceipt {
             id: ExecutionReceiptId::generate_with("rcpt"),
             workspace_id: state.ctx.workspace_id.clone(),
