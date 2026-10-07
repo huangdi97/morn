@@ -16,6 +16,19 @@ pub enum EffectClass {
 }
 
 impl EffectClass {
+    pub const fn rank(self) -> u8 {
+        match self {
+            EffectClass::E0LifecycleReversible => 0,
+            EffectClass::E1Transactional => 1,
+            EffectClass::E2Compensatable => 2,
+            EffectClass::E3Irreversible => 3,
+        }
+    }
+
+    pub const fn permits(self, requested: EffectClass) -> bool {
+        requested.rank() <= self.rank()
+    }
+
     pub fn code(&self) -> &'static str {
         match self {
             EffectClass::E0LifecycleReversible => "E0",
@@ -93,6 +106,13 @@ impl EffectContract {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn effect_ceiling_is_monotonic() {
+        assert!(EffectClass::E3Irreversible.permits(EffectClass::E2Compensatable));
+        assert!(EffectClass::E2Compensatable.permits(EffectClass::E1Transactional));
+        assert!(!EffectClass::E1Transactional.permits(EffectClass::E2Compensatable));
+    }
 
     #[test]
     fn e2_requires_compensation() {
