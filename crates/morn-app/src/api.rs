@@ -56,6 +56,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/status", get(v115_status))
         .route("/api/v115/control-plane", get(v115_control_plane))
         .route("/api/v115/solutions", get(v115_solutions))
+        .route("/api/v115/creator/draft", post(v115_creator_draft))
         .route(
             "/api/v115/artifact/openapi/compile",
             post(v115_compile_openapi),
@@ -226,6 +227,76 @@ async fn v115_solutions(State(state): State<AppState>) -> ApiResult {
     Ok(Json(json!({
         "solution_packages": packages,
         "note": "approved reusable blueprints persisted independently of runtime Work"
+    })))
+}
+
+async fn v115_creator_draft(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_foundry::{draft_creator_solution, CreatorAutonomy, CreatorRequest};
+
+    let guard = state.lock();
+    let autonomy = match body
+        .get("autonomy")
+        .and_then(Value::as_str)
+        .unwrap_or("governed")
+    {
+        "assist" => CreatorAutonomy::Assist,
+        "governed" => CreatorAutonomy::Governed,
+        "autonomous-within-policy" => CreatorAutonomy::AutonomousWithinPolicy,
+        other => {
+            return Err(AppError(Error::validation(format!(
+                "unsupported creator autonomy {other}"
+            ))))
+        }
+    };
+    let strings = |key: &str| -> Vec<String> {
+        body.get(key)
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+
+    let request = CreatorRequest {
+        workspace_id: guard.workspace.id.clone(),
+        name: body
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("untitled-solution")
+            .to_string(),
+        goal: body
+            .get("goal")
+            .and_then(Value::as_str)
+            .ok_or_else(|| AppError(Error::validation("creator goal is required")))?
+            .to_string(),
+        profile_ref: body
+            .get("profile_ref")
+            .and_then(Value::as_str)
+            .unwrap_or("morn.lite@1.0.0")
+            .to_string(),
+        site_ref: body
+            .get("site_ref")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        required_capabilities: strings("required_capabilities"),
+        constraints: strings("constraints"),
+        acceptance: strings("acceptance"),
+        autonomy,
+    };
+    drop(guard);
+
+    let draft = draft_creator_solution(request)?;
+    Ok(Json(json!({
+        "draft": draft,
+        "canonical_write": false,
+        "next": ["review", "approve", "compile-solution-package", "instantiate-work"]
     })))
 }
 
