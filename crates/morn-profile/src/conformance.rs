@@ -78,10 +78,7 @@ pub fn evaluate_profile(
         missing.push("Provenance".to_string());
     }
     if isolation_rank(&evidence.isolation) < isolation_rank(&profile.minimum_isolation) {
-        missing.push(format!(
-            "Isolation>={}",
-            profile.minimum_isolation
-        ));
+        missing.push(format!("Isolation>={}", profile.minimum_isolation));
     }
 
     missing.sort();
@@ -124,7 +121,10 @@ mod tests {
 
         let report = evaluate_profile(&profile, &evidence);
         assert!(!report.passed);
-        assert!(report.missing.iter().any(|item| item == "IndependentAcceptance"));
+        assert!(report
+            .missing
+            .iter()
+            .any(|item| item == "IndependentAcceptance"));
     }
 
     #[test]
