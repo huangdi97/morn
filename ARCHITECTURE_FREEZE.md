@@ -1,5 +1,11 @@
 # ARCHITECTURE_FREEZE.md — v10.2 近期工程冻结
 
+> **Historical baseline notice (v11.5 convergence):** this file remains a
+> read-only record of the v10.2 freeze. It is not the current architectural
+> authority for the v11.5 branch. Current decisions live in
+> `docs/architecture-v11.5.md` and `docs/adr/ADR-001-v11.5-control-plane-cordis.md`.
+> Existing v10.2/v1 objects are migrated/aliased rather than silently rewritten.
+
 ## 1. 核心术语
 
 今晚不再引入新的顶层抽象。冻结：
