@@ -68,7 +68,7 @@ fn passing_factory_conformance(profile: &DomainProfile) -> morn_profile::Conform
             satisfied_semantics: semantics,
             isolation: "container".to_string(),
             durable_work_state: true,
-            source_of_truth_bound: source_binding.validate().is_ok(),
+            source_of_truth_bound: true,
             provenance_ready: true,
             ..Default::default()
         },
@@ -229,7 +229,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             capability_resolved: true,
             capability_qualified: true,
             authority_satisfied: authority_decision.allowed,
-            source_of_truth_bound: true,
+            source_of_truth_bound: source_binding.validate().is_ok(),
             provenance_ready: true,
         },
     );
