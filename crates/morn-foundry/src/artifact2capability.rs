@@ -481,8 +481,9 @@ impl ArtifactCompiler for ReviewedPaperManifestCompiler {
         manifest.provenance.source_ref = source.source_ref.clone();
         manifest.provenance.source_digest = source.source_digest.clone();
 
-        let mut warnings =
-            vec!["paper-derived capability remains Declared until independent evaluation".to_string()];
+        let mut warnings = vec![
+            "paper-derived capability remains Declared until independent evaluation".to_string(),
+        ];
         if !executable {
             warnings.push(
                 "non-executable paper capability represents reviewed knowledge/evidence only"
