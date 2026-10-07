@@ -6,6 +6,7 @@ pub mod context;
 pub mod contract;
 pub mod event;
 pub mod intelligence;
+pub mod neutrality;
 pub mod pi;
 pub mod provider;
 pub mod receipt;
@@ -21,6 +22,7 @@ pub use intelligence::{
     run_intelligence_conformance, IntelligenceProvider, IntelligenceRequest, IntelligenceResult,
     RuleIntelligence, SolverIntelligence,
 };
+pub use neutrality::{run_harness_neutrality, HarnessNeutralityReport};
 pub use pi::{PiHarnessProvider, PiMode};
 pub use provider::{
     DeepSeekHarnessProvider, HarnessProvider, HarnessSession, MornNativeHarness, ProviderHandle,
