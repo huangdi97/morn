@@ -257,7 +257,7 @@ impl ControlPlaneStore for MornStore {
             "value_assessment_v115",
             assessment.id.as_str(),
             work.workspace_id.as_str(),
-            assessment.created_at.millis(),
+            assessment.assessed_at.millis(),
             assessment,
         )
     }
