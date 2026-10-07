@@ -1,17 +1,23 @@
 //! Morn execution runtime.
 //!
 //! The legacy ActionGateway/RuntimeProvider remain supported. v11.5 adds
-//! execution bindings, explicit attempt lifecycle and reconciliation so
-//! provider sessions can never become canonical business truth.
+//! execution bindings, explicit attempt lifecycle, reconciliation and a
+//! provider-neutral execution-environment contract so provider sessions and
+//! sandboxes can never become canonical business truth.
 
 pub mod attempt;
 pub mod binding;
+pub mod environment;
 pub mod gateway;
 pub mod reconciliation;
 pub mod runtime_provider;
 
 pub use attempt::{ActionAttempt, ActionAttemptId, AttemptState};
 pub use binding::ExecutionBinding;
+pub use environment::{
+    ExecutionEnvironmentHandle, ExecutionEnvironmentId, ExecutionEnvironmentProvider,
+    ExecutionEnvironmentSpec, FixtureEnvironmentProvider, IsolationClass,
+};
 pub use gateway::{
     ActionGateway, ActionPreview, AuthorizedAction, ExecutionOutcome, WorldCommitter,
 };
