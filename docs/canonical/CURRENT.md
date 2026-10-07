@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-018 in `docs/adr/`
+3. ADR-002 through ADR-019 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -95,3 +95,11 @@ Profile-level effect permission and IAM/Authority are independent gates.
 principal would otherwise have enterprise write permission. Fixture/simulation
 writes are classified separately and cannot upgrade the production claim. See
 ADR-018.
+
+
+## Durable event delivery
+
+CloudEvents defines the envelope, not exactly-once processing. The reference
+store now has a durable inbound-event claim/dedupe table and outbound-event
+outbox. Transport retries retain stable event identity; event delivery success
+still does not imply real-world action success. See ADR-019.
