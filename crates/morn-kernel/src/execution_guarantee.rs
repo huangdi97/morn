@@ -77,6 +77,23 @@ pub enum ExecutionGuarantee {
 }
 
 impl ExecutionGuarantee {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.to_ascii_lowercase().as_str() {
+            "filesystem-read-policy" => Some(Self::FilesystemReadPolicy),
+            "filesystem-write-policy" => Some(Self::FilesystemWritePolicy),
+            "network-egress-policy" => Some(Self::NetworkEgressPolicy),
+            "process-boundary" => Some(Self::ProcessBoundary),
+            "kernel-boundary" => Some(Self::KernelBoundary),
+            "resource-limits" => Some(Self::ResourceLimits),
+            "secret-indirection" => Some(Self::SecretIndirection),
+            "workload-identity" => Some(Self::WorkloadIdentity),
+            "stateful-execution" => Some(Self::StatefulExecution),
+            "checkpoint-resume" => Some(Self::CheckpointResume),
+            "runtime-attestation" => Some(Self::RuntimeAttestation),
+            _ => None,
+        }
+    }
+
     pub const fn key(self) -> &'static str {
         match self {
             Self::FilesystemReadPolicy => "filesystem-read-policy",
@@ -111,6 +128,10 @@ mod tests {
 
     #[test]
     fn serialized_keys_are_stable_and_provider_neutral() {
+        assert_eq!(
+            ExecutionGuarantee::parse("network-egress-policy"),
+            Some(ExecutionGuarantee::NetworkEgressPolicy)
+        );
         assert_eq!(
             serde_json::to_string(&ExecutionGuarantee::NetworkEgressPolicy).unwrap(),
             "\"network-egress-policy\""
