@@ -181,23 +181,24 @@ impl WorkResource {
     }
 
     pub fn record_active_binding(&mut self, binding_id: RuntimeBindingId) {
-        if self.active_binding.is_none() {
-            self.active_binding = Some(binding_id.clone());
+        if self.status.active_binding.is_none() {
+            self.status.active_binding = Some(binding_id.clone());
         }
         if !self
+            .status
             .active_bindings
             .iter()
             .any(|existing| existing == &binding_id)
         {
-            self.active_bindings.push(binding_id);
+            self.status.active_bindings.push(binding_id);
         }
         self.status.updated_at = Timestamp::now();
     }
 
     pub fn remove_active_binding(&mut self, binding_id: &RuntimeBindingId) {
-        self.active_bindings.retain(|existing| existing != binding_id);
-        if self.active_binding.as_ref() == Some(binding_id) {
-            self.active_binding = self.active_bindings.first().cloned();
+        self.status.active_bindings.retain(|existing| existing != binding_id);
+        if self.status.active_binding.as_ref() == Some(binding_id) {
+            self.status.active_binding = self.status.active_bindings.first().cloned();
         }
         self.status.updated_at = Timestamp::now();
     }
