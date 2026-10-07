@@ -243,7 +243,6 @@ impl ArtifactCompiler for ProcedureJsonCompiler {
     }
 }
 
-
 #[derive(Debug, Default)]
 pub struct RepositoryManifestCompiler;
 
@@ -263,8 +262,9 @@ impl ArtifactCompiler for RepositoryManifestCompiler {
             ));
         }
 
-        let doc: serde_json::Value = serde_json::from_str(&source.content)
-            .map_err(|error| Error::external(format!("invalid repository manifest JSON: {error}")))?;
+        let doc: serde_json::Value = serde_json::from_str(&source.content).map_err(|error| {
+            Error::external(format!("invalid repository manifest JSON: {error}"))
+        })?;
         let provides: Vec<String> = doc
             .get("provides")
             .and_then(serde_json::Value::as_array)
@@ -481,10 +481,8 @@ impl ArtifactCompiler for ReviewedPaperManifestCompiler {
         manifest.provenance.source_ref = source.source_ref.clone();
         manifest.provenance.source_digest = source.source_digest.clone();
 
-        let mut warnings = vec![
-            "paper-derived capability remains Declared until independent evaluation"
-                .to_string(),
-        ];
+        let mut warnings =
+            vec!["paper-derived capability remains Declared until independent evaluation".to_string()];
         if !executable {
             warnings.push(
                 "non-executable paper capability represents reviewed knowledge/evidence only"
