@@ -134,16 +134,7 @@ impl AdmissionService {
             qualification_version: Version::v1(),
             release_ref,
             decision_ref,
-            qualification_evidence: QualificationEvidence {
-                test_suite_refs: vec!["legacy-evidence-set".to_string()],
-                environment_digest: Some("legacy-unspecified-environment".to_string()),
-                input_scope: context_of_use.clone(),
-                expected_properties: vec!["legacy-certification-decision-satisfied".to_string()],
-                known_failure_modes: Vec::new(),
-                cost_evidence_ref: None,
-                latency_evidence_ref: None,
-                evaluator_identity: Some("legacy-certification-bridge".to_string()),
-            },
+            qualification_evidence: QualificationEvidence::default(),
             evidence_refs,
             context_of_use,
             status: QualificationStatus::Qualified,
@@ -405,20 +396,15 @@ mod tests {
                 vec!["factory-readonly".to_string()],
             )
             .unwrap();
-        qualification
+        assert!(!qualification
             .qualification_evidence
-            .test_suite_refs
-            .first()
-            .expect("legacy marker exists");
+            .is_strict_enough_for_site_admission());
         let profile = DomainProfile::factory_readonly_v1();
         let report = passing_conformance(&profile);
-        // Legacy adapter metadata is deliberately not considered real strict evidence.
-        let mut legacy = qualification.clone();
-        legacy.qualification_evidence = QualificationEvidence::default();
         assert!(service
             .admit(
                 &mut capability,
-                &legacy,
+                &qualification,
                 "plant-a",
                 report.profile_ref.clone(),
                 &report,
