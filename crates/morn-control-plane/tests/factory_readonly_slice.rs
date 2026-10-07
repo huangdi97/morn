@@ -7,7 +7,7 @@
 
 use std::collections::BTreeSet;
 
-use morn_assurance::{AdmissionService, QualificationEvidence};
+use morn_assurance::{AdmissionService, QualificationEvidence, StrictQualificationRequest};
 use morn_capability::{
     CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityRequest, CapabilityResolver,
     CapabilityStage, EffectClass, IsolationLevel,
@@ -138,24 +138,26 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     let qualification = admission
         .qualify_with_evidence(
             &mut capability,
-            "release:equipment-investigator@1",
-            "certification-decision:factory-fixture",
-            vec!["evaluation:factory-fixture".to_string()],
-            QualificationEvidence {
-                test_suite_refs: vec!["suite:factory-timeout-reconcile".to_string()],
-                environment_digest: Some("sha256:fixture-environment".to_string()),
-                input_scope: vec!["synthetic:CNC-17".to_string()],
-                expected_properties: vec![
-                    "no-blind-retry".to_string(),
-                    "binding-pinned".to_string(),
-                ],
-                known_failure_modes: vec!["timeout-after-commit".to_string()],
-                cost_evidence_ref: Some("fixture://metrics/cost".to_string()),
-                latency_evidence_ref: Some("fixture://metrics/latency".to_string()),
-                evaluator_identity: Some("morn-conformance-suite".to_string()),
+            StrictQualificationRequest {
+                candidate_ref: "release:equipment-investigator@1".to_string(),
+                decision_ref: "certification-decision:factory-fixture".to_string(),
+                evidence_refs: vec!["evaluation:factory-fixture".to_string()],
+                qualification_evidence: QualificationEvidence {
+                    test_suite_refs: vec!["suite:factory-timeout-reconcile".to_string()],
+                    environment_digest: Some("sha256:fixture-environment".to_string()),
+                    input_scope: vec!["synthetic:CNC-17".to_string()],
+                    expected_properties: vec![
+                        "no-blind-retry".to_string(),
+                        "binding-pinned".to_string(),
+                    ],
+                    known_failure_modes: vec!["timeout-after-commit".to_string()],
+                    cost_evidence_ref: Some("fixture://metrics/cost".to_string()),
+                    latency_evidence_ref: Some("fixture://metrics/latency".to_string()),
+                    evaluator_identity: Some("morn-conformance-suite".to_string()),
+                },
+                context_of_use: vec!["factory-readonly".to_string()],
+                valid_until: None,
             },
-            vec!["factory-readonly".to_string()],
-            None,
         )
         .unwrap();
     let release = admission
