@@ -15,7 +15,7 @@ pub use definition::{
 };
 pub use effect::{EffectClass, EffectContract};
 pub use manifest::{
-    AuthorityEnvelope, CapabilityEconomics, CapabilityInterface, CapabilityManifest,
+    AuthorityEnvelope, CapabilityAdmissionRef, CapabilityEconomics, CapabilityInterface, CapabilityManifest,
     CapabilityManifestId, CapabilityProvenance, CapabilityRecord, CapabilityStage,
     ExecutionRequirements, IsolationLevel,
 };
