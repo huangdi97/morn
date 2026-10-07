@@ -5,7 +5,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use morn_kernel::ids::{AcceptanceDecisionId, AcceptanceSpecId, OutcomeRecordId, PrincipalId, WorkPackageId};
+use morn_kernel::ids::{
+    AcceptanceDecisionId, AcceptanceSpecId, OutcomeRecordId, PrincipalId, WorkPackageId,
+};
 use morn_kernel::time::Timestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
