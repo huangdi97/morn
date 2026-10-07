@@ -77,6 +77,22 @@ impl WorkcellPlan {
     }
 }
 
+fn isolation_satisfies(actual: IsolationLevel, required: IsolationLevel) -> bool {
+    use IsolationLevel::*;
+    match required {
+        NoIsolation => true,
+        Process => matches!(actual, Process | Container | MicroVm | FullVm),
+        Container => matches!(actual, Container | MicroVm | FullVm),
+        MicroVm => matches!(actual, MicroVm | FullVm),
+        FullVm => matches!(actual, FullVm),
+        // Remote and Physical are topology/executor classes, not "more isolated"
+        // than a VM. They satisfy only an explicit same-class requirement until
+        // a provider supplies richer attested guarantees.
+        Remote => matches!(actual, Remote),
+        Physical => matches!(actual, Physical),
+    }
+}
+
 fn effect_rank(effect: crate::effect::EffectClass) -> u8 {
     use crate::effect::EffectClass::*;
     match effect {
@@ -132,7 +148,7 @@ impl CapabilityResolver {
                 continue;
             }
             if let Some(minimum) = request.minimum_isolation {
-                if manifest.execution.minimum_isolation < minimum {
+                if !isolation_satisfies(manifest.execution.minimum_isolation, minimum) {
                     continue;
                 }
             }
@@ -467,6 +483,40 @@ mod tests {
             &candidates,
         );
         assert!(!unavailable.is_complete());
+    }
+
+    #[test]
+    fn remote_is_not_treated_as_stronger_than_microvm() {
+        let mut remote = admitted(
+            "remote-service",
+            "remote-provider",
+            CapabilityKind::Service,
+            &["execute"],
+            10,
+        );
+        remote.manifest.execution.minimum_isolation = IsolationLevel::Remote;
+
+        let blocked = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["execute".to_string()],
+                minimum_isolation: Some(IsolationLevel::MicroVm),
+                site_ref: Some("plant-a".to_string()),
+                ..Default::default()
+            },
+            &[remote.clone()],
+        );
+        assert!(blocked.is_empty());
+
+        let explicit_remote = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["execute".to_string()],
+                minimum_isolation: Some(IsolationLevel::Remote),
+                site_ref: Some("plant-a".to_string()),
+                ..Default::default()
+            },
+            &[remote],
+        );
+        assert_eq!(explicit_remote.len(), 1);
     }
 
     #[test]
