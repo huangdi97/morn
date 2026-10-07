@@ -36,7 +36,7 @@ pub struct CreatorRequest {
     pub autonomy: CreatorAutonomy,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CreatorDraft {
     pub name: String,
     pub profile_ref: String,
@@ -54,7 +54,9 @@ pub struct CreatorDraft {
 
 pub fn draft_creator_solution(request: CreatorRequest) -> Result<CreatorDraft> {
     if request.name.trim().is_empty() || request.goal.trim().is_empty() {
-        return Err(Error::validation("creator requires non-empty name and goal"));
+        return Err(Error::validation(
+            "creator requires non-empty name and goal",
+        ));
     }
     if request.acceptance.is_empty() {
         return Err(Error::validation(
@@ -83,8 +85,11 @@ pub fn draft_creator_solution(request: CreatorRequest) -> Result<CreatorDraft> {
             .map(|criterion| format!("acceptance={criterion}")),
     );
 
-    let mut solution_request =
-        SolutionRequest::new(request.workspace_id.clone(), request.goal.clone(), "generic");
+    let mut solution_request = SolutionRequest::new(
+        request.workspace_id.clone(),
+        request.goal.clone(),
+        "generic",
+    );
     solution_request.constraints = constraints;
     solution_request.available_capabilities = request.required_capabilities.clone();
     solution_request.available_harnesses = vec!["morn-native".to_string()];
