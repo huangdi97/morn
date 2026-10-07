@@ -369,3 +369,24 @@ Not claimed complete without external evidence:
 9. Current projection may change; historical correction is explicit.
 10. External blockers stay external blockers and cannot be converted to PASS by
     fixtures or documentation.
+
+
+## Execution trust model refinement
+
+Recent sandbox/runtime systems reinforce that execution backends are
+heterogeneous rather than one security ladder. Morn therefore does not rank
+`Remote` or `Physical` above `microVM`/`FullVM`. Capability resolution
+and Profile conformance require an explicitly compatible execution class, and
+future network/kernel/attestation guarantees are independent properties.
+
+Runtime workload identity is also separated from business identity. Morn
+retains Principal/Actor accountability while a replaceable
+`WorkloadIdentityProvider` can issue short-lived SPIFFE-compatible identities
+for service-to-service execution. Credentials remain opaque, Work/site/action
+scoped handles resolved only at the enforcement boundary.
+
+AgentScope Runtime, DSec-like elastic sandbox infrastructure and other
+production agent runtimes are treated as possible execution/provider families,
+not as architectural parents. Their state persistence, interruption, sandbox,
+MCP/A2A and deployment services can be integrated behind Morn contracts without
+turning Agent state into Work truth.
