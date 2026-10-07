@@ -211,9 +211,16 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     let environment = environment_provider
         .provision(&ExecutionEnvironmentSpec {
             minimum_isolation: IsolationClass::Container,
+            required_guarantees: profile.required_execution_guarantees.clone(),
             ..Default::default()
         })
         .unwrap();
+    for required in &profile.required_execution_guarantees {
+        assert!(
+            environment.guarantees.contains(required),
+            "required Factory execution guarantees must be provided"
+        );
+    }
 
     let source_binding = SourceOfTruthBinding {
         id: SourceOfTruthBindingId::generate_with("sot"),
