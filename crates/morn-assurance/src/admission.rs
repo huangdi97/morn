@@ -24,6 +24,35 @@ pub type QualificationRecordId = Id<QualificationRecordTag>;
 pub struct SiteAdmissionTag;
 pub type SiteAdmissionId = Id<SiteAdmissionTag>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct CapabilityDistributionReleaseTag;
+pub type CapabilityDistributionReleaseId = Id<CapabilityDistributionReleaseTag>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum CapabilityDistributionReleaseStatus {
+    Released,
+    Revoked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CapabilityDistributionRelease {
+    pub id: CapabilityDistributionReleaseId,
+    pub manifest_id: CapabilityManifestId,
+    pub qualification_id: QualificationRecordId,
+    pub package_ref: String,
+    pub content_digest: String,
+    pub signature_ref: Option<String>,
+    pub provenance_ref: Option<String>,
+    pub status: CapabilityDistributionReleaseStatus,
+    pub created_at: Timestamp,
+}
+
+impl CapabilityDistributionRelease {
+    pub fn active(&self) -> bool {
+        self.status == CapabilityDistributionReleaseStatus::Released
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum QualificationStatus {
     Qualified,
@@ -92,6 +121,7 @@ pub struct SiteAdmission {
     pub id: SiteAdmissionId,
     pub manifest_id: CapabilityManifestId,
     pub qualification_id: QualificationRecordId,
+    pub release_id: CapabilityDistributionReleaseId,
     pub site_ref: String,
     pub profile_ref: String,
     pub conformance_ref: String,
@@ -103,6 +133,7 @@ pub struct SiteAdmission {
 #[derive(Debug, Default)]
 pub struct AdmissionService {
     pub qualifications: Vec<QualificationRecord>,
+    pub releases: Vec<CapabilityDistributionRelease>,
     pub admissions: Vec<SiteAdmission>,
 }
 
@@ -211,6 +242,63 @@ impl AdmissionService {
         Ok(record)
     }
 
+    pub fn record_release(
+        &mut self,
+        capability: &mut CapabilityRecord,
+        qualification: &QualificationRecord,
+        package_ref: impl Into<String>,
+        content_digest: impl Into<String>,
+        signature_ref: Option<String>,
+        provenance_ref: Option<String>,
+    ) -> Result<CapabilityDistributionRelease> {
+        if !qualification.is_active_at(Timestamp::now()) {
+            return Err(Error::invalid_state(
+                "cannot release from inactive qualification",
+            ));
+        }
+        if qualification.manifest_id != capability.manifest.id {
+            return Err(Error::validation(
+                "release qualification does not match capability manifest",
+            ));
+        }
+        let package_ref = package_ref.into();
+        let content_digest = content_digest.into();
+        if package_ref.trim().is_empty() {
+            return Err(Error::validation("release requires package reference"));
+        }
+        let digest = content_digest.strip_prefix("sha256:").ok_or_else(|| {
+            Error::validation("release content digest must use sha256:<64 hex>")
+        })?;
+        if digest.len() != 64 || !digest.chars().all(|ch| ch.is_ascii_hexdigit()) {
+            return Err(Error::validation(
+                "release content digest must use sha256:<64 hex>",
+            ));
+        }
+        if provenance_ref
+            .as_deref()
+            .is_none_or(|reference| reference.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "release requires build/provenance evidence reference",
+            ));
+        }
+
+        let release = CapabilityDistributionRelease {
+            id: CapabilityDistributionReleaseId::generate_with("release"),
+            manifest_id: capability.manifest.id.clone(),
+            qualification_id: qualification.id.clone(),
+            package_ref,
+            content_digest,
+            signature_ref,
+            provenance_ref,
+            status: CapabilityDistributionReleaseStatus::Released,
+            created_at: Timestamp::now(),
+        };
+        capability.release_refs.push(release.id.to_string());
+        self.releases.push(release.clone());
+        Ok(release)
+    }
+
     pub fn admit(
         &mut self,
         capability: &mut CapabilityRecord,
@@ -238,6 +326,20 @@ impl AdmissionService {
                 "qualification does not belong to capability manifest",
             ));
         }
+        let release = self
+            .releases
+            .iter()
+            .rev()
+            .find(|release| {
+                release.manifest_id == capability.manifest.id
+                    && release.qualification_id == qualification.id
+                    && release.active()
+            })
+            .ok_or_else(|| {
+                Error::invalid_state(
+                    "site admission requires an active content-addressed release after qualification",
+                )
+            })?;
         if capability.stage != CapabilityStage::Qualified
             && capability.stage != CapabilityStage::Admitted
         {
@@ -269,6 +371,7 @@ impl AdmissionService {
             id: SiteAdmissionId::generate_with("admission"),
             manifest_id: capability.manifest.id.clone(),
             qualification_id: qualification.id.clone(),
+            release_id: release.id.clone(),
             site_ref: site_ref.clone(),
             profile_ref,
             conformance_ref: format!("conformance:{}", qualification.id),
@@ -297,6 +400,50 @@ impl AdmissionService {
         Ok(admission)
     }
 
+    pub fn revoke_release(
+        &mut self,
+        capability: &mut CapabilityRecord,
+        release_id: &CapabilityDistributionReleaseId,
+    ) -> Result<()> {
+        let release = self
+            .releases
+            .iter_mut()
+            .find(|item| item.id == *release_id)
+            .ok_or_else(|| Error::not_found(format!("capability release {release_id}")))?;
+        release.status = CapabilityDistributionReleaseStatus::Revoked;
+        capability
+            .release_refs
+            .retain(|reference| reference != &release.id.to_string());
+
+        let affected: Vec<String> = self
+            .admissions
+            .iter_mut()
+            .filter(|admission| admission.release_id == release.id)
+            .map(|admission| {
+                admission.status = SiteAdmissionStatus::Suspended;
+                admission.id.to_string()
+            })
+            .collect();
+        capability.admission_refs.retain(|reference| {
+            !affected
+                .iter()
+                .any(|admission_id| admission_id == &reference.admission_ref)
+        });
+        capability.admitted_sites = capability
+            .admission_refs
+            .iter()
+            .map(|reference| reference.site_ref.clone())
+            .collect();
+        capability.admitted_sites.sort();
+        capability.admitted_sites.dedup();
+        capability.stage = if capability.admission_refs.is_empty() {
+            CapabilityStage::Suspended
+        } else {
+            CapabilityStage::Admitted
+        };
+        Ok(())
+    }
+
     pub fn suspend(
         &mut self,
         capability: &mut CapabilityRecord,
@@ -309,9 +456,20 @@ impl AdmissionService {
             .ok_or_else(|| Error::not_found(format!("site admission {admission_id}")))?;
         admission.status = SiteAdmissionStatus::Suspended;
         capability
-            .admitted_sites
-            .retain(|site| site != &admission.site_ref);
-        capability.stage = CapabilityStage::Suspended;
+            .admission_refs
+            .retain(|reference| reference.admission_ref != admission.id.to_string());
+        capability.admitted_sites = capability
+            .admission_refs
+            .iter()
+            .map(|reference| reference.site_ref.clone())
+            .collect();
+        capability.admitted_sites.sort();
+        capability.admitted_sites.dedup();
+        capability.stage = if capability.admission_refs.is_empty() {
+            CapabilityStage::Suspended
+        } else {
+            CapabilityStage::Admitted
+        };
         Ok(())
     }
 }
