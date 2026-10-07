@@ -13,9 +13,9 @@ use morn_capability::{
     CapabilityStage, EffectClass, IsolationLevel,
 };
 use morn_control_plane::{
-    enforce_profile_action, evaluate_profile_action, ControlPlaneStore, ControllerInputs,
-    ExternalActionMode, ReconciliationController, WorkController, WorkProgressController,
-    WorkProgressInputs,
+    begin_external_attempt, enforce_profile_action, evaluate_profile_action,
+    issue_external_action_permit, ControlPlaneStore, ControllerInputs, ExternalActionMode,
+    ReconciliationController, WorkController, WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
@@ -27,8 +27,8 @@ use morn_kernel::ids::{ActorInstanceId, CapabilityId, PrincipalId, WorkspaceId};
 use morn_kernel::policy::{Policy, PolicyRule};
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
-    enforce_authority, ActionAttempt, AttemptState, AuthorityProvider, AuthorityRequest,
-    BindingMigrationReason, ExecutionBinding, ExecutionEnvironmentOffer,
+    decide_bound, enforce_authority, ActionAttempt, AttemptState, AuthorityProvider,
+    AuthorityRequest, BindingMigrationReason, ExecutionBinding, ExecutionEnvironmentOffer,
     ExecutionEnvironmentProvider, ExecutionEnvironmentResolver, ExecutionEnvironmentSpec,
     FixtureEnvironmentProvider, NativePolicyAuthority, OutcomeReconciler,
     ReconciliationObservation,
@@ -276,6 +276,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         conformance.profile_ref.clone(),
     );
     work_spec.acceptance_ref = Some(acceptance_id.to_string());
+    work_spec.site_ref = Some("plant-a".to_string());
     work_spec.required_conditions = vec![
         "CapabilityResolved".to_string(),
         "CapabilityQualified".to_string(),
@@ -325,21 +326,21 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
 
     // The external fixture write is allowed only as SandboxWrite: policy
     // authority and the active Factory profile must both issue a permit.
-    let sandbox_authority_decision = authority
-        .decide(&AuthorityRequest {
-            principal: "factory-slice-controller".to_string(),
-            action: "cmms.sandbox.write".to_string(),
-            resource: "CMMS-fixture".to_string(),
-            work_ref: Some(work_package_id.to_string()),
-            context: BTreeMap::new(),
-        })
-        .unwrap();
+    let mut sandbox_authority_request = AuthorityRequest::new(
+        "factory-slice-controller",
+        "cmms.sandbox.write",
+        "CMMS-fixture",
+    );
+    sandbox_authority_request.work_ref = Some(work_package_id.to_string());
+    sandbox_authority_request.site_ref = Some("plant-a".to_string());
+    sandbox_authority_request.scope = vec!["maintenance-order:create".to_string()];
+    let sandbox_authority_decision =
+        decide_bound(&authority, &sandbox_authority_request).unwrap();
     let sandbox_permit = issue_external_action_permit(
         &profile,
         ExternalActionMode::SandboxWrite,
         &sandbox_authority_decision,
-        work.id.to_string(),
-        binding.id.to_string(),
+        &binding,
     )
     .unwrap();
     assert_eq!(sandbox_permit.binding_ref, binding.id.to_string());
@@ -347,18 +348,23 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         &profile,
         ExternalActionMode::ProductionWrite,
         &sandbox_authority_decision,
-        work.id.to_string(),
-        binding.id.to_string(),
+        &binding,
     )
     .is_err());
 
-    // Simulate the classic timeout-after-remote-commit ambiguity.
-    let mut attempt = ActionAttempt::new(
-        binding.id.clone(),
+    // Simulate the classic timeout-after-remote-commit ambiguity. The attempt
+    // must originate from the governed permit boundary, not direct construction.
+    let mut attempt = begin_external_attempt(
+        &sandbox_permit,
+        &binding,
         format!("{}:maintenance-order", work.id),
-        "create-maintenance-order-fixture",
+        "cmms.sandbox.write",
+    )
+    .unwrap();
+    assert_eq!(
+        attempt.external_action_permit_ref.as_deref(),
+        Some(sandbox_permit.id.as_str())
     );
-    attempt.transition(AttemptState::Authorized).unwrap();
     attempt.transition(AttemptState::Dispatched).unwrap();
     attempt
         .mark_outcome_unknown("client timeout after external commit")
