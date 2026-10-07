@@ -16,9 +16,7 @@ pub use artifact2capability::{
     OpenApiJsonCompiler, ProcedureJsonCompiler, RepositoryManifestCompiler,
     ReviewedPaperManifestCompiler,
 };
-pub use blueprint::{
-    BlueprintBundle, RoleBlueprint, WorkBlueprint, WorkcellTemplate,
-};
+pub use blueprint::{BlueprintBundle, RoleBlueprint, WorkBlueprint, WorkcellTemplate};
 pub use compiler::{CompilerDecisionSource, SolutionCompiler};
 pub use creator::{draft_creator_solution, CreatorAutonomy, CreatorDraft, CreatorRequest};
 pub use instantiate::{
