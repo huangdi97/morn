@@ -68,7 +68,10 @@ pub struct ExecutionEnvironmentHandle {
 
 pub trait ExecutionEnvironmentProvider: Send + Sync {
     fn provider_name(&self) -> &str;
-    fn maximum_isolation(&self) -> IsolationClass;
+    fn supported_isolation_classes(&self) -> Vec<IsolationClass>;
+    fn supports_isolation(&self, class: IsolationClass) -> bool {
+        self.supported_isolation_classes().contains(&class)
+    }
     fn provision(&mut self, spec: &ExecutionEnvironmentSpec) -> Result<ExecutionEnvironmentHandle>;
     fn release(&mut self, handle: &ExecutionEnvironmentHandle) -> Result<()>;
 }
@@ -83,16 +86,20 @@ impl ExecutionEnvironmentProvider for FixtureEnvironmentProvider {
         "fixture-environment"
     }
 
-    fn maximum_isolation(&self) -> IsolationClass {
-        IsolationClass::MicroVm
+    fn supported_isolation_classes(&self) -> Vec<IsolationClass> {
+        vec![
+            IsolationClass::Process,
+            IsolationClass::Container,
+            IsolationClass::MicroVm,
+        ]
     }
 
     fn provision(&mut self, spec: &ExecutionEnvironmentSpec) -> Result<ExecutionEnvironmentHandle> {
-        if spec.minimum_isolation > self.maximum_isolation() {
+        if !self.supports_isolation(spec.minimum_isolation) {
             return Err(Error::external(format!(
-                "requested isolation {:?} exceeds provider maximum {:?}",
+                "requested execution class {:?} is not supported by provider {}",
                 spec.minimum_isolation,
-                self.maximum_isolation()
+                self.provider_name()
             )));
         }
         let id = ExecutionEnvironmentId::generate_with("env");
@@ -121,6 +128,15 @@ impl ExecutionEnvironmentProvider for FixtureEnvironmentProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_and_physical_are_not_security_rank_shortcuts() {
+        let provider = FixtureEnvironmentProvider::default();
+        assert!(provider.supports_isolation(IsolationClass::Container));
+        assert!(provider.supports_isolation(IsolationClass::MicroVm));
+        assert!(!provider.supports_isolation(IsolationClass::Remote));
+        assert!(!provider.supports_isolation(IsolationClass::Physical));
+    }
 
     #[test]
     fn environment_provider_enforces_minimum_isolation() {
