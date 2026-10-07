@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { apiGet, apiPostJson, CompilerRun, OpenApiCompileOutcome } from "../api";
+import {
+  apiGet,
+  apiPostJson,
+  CompilerRun,
+  OpenApiCompileOutcome,
+  SolutionInstantiationOutcome,
+} from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, StatusPill } from "../components/ui";
 
 interface ManifestOutcome {
@@ -31,6 +37,9 @@ export default function Studio() {
     '{"reviewed":true,"executable":true,"provides":["method.execute"],"code_bindings":["repo://paper-code#run"],"evidence_refs":["doi://example#method"]}',
   );
   const [paperCandidate, setPaperCandidate] = useState<OpenApiCompileOutcome | null>(null);
+  const [profileRef, setProfileRef] = useState("morn.lite@1.0.0");
+  const [siteRef, setSiteRef] = useState("");
+  const [instantiated, setInstantiated] = useState<SolutionInstantiationOutcome | null>(null);
 
   const runCompiler = async () => {
     setError(null);
@@ -109,6 +118,20 @@ export default function Studio() {
     }
   };
 
+  const instantiateSolution = async () => {
+    setError(null);
+    try {
+      const result = await apiPostJson<SolutionInstantiationOutcome>("/v115/solution/instantiate", {
+        goal,
+        profile_ref: profileRef,
+        site_ref: siteRef || undefined,
+      });
+      setInstantiated(result);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   const approveAndCompile = async () => {
     setError(null);
     try {
@@ -117,6 +140,7 @@ export default function Studio() {
       const m = await apiGet<ManifestOutcome>("/compiler/manifest");
       setManifest(m);
       setApproved(true);
+      setInstantiated(null);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -306,9 +330,58 @@ export default function Studio() {
           </div>
 
           {manifest && (
-            <Card title="6. SolutionPackage Manifest">
-              <pre>{JSON.stringify(manifest.manifest ?? manifest.detail, null, 2)}</pre>
-            </Card>
+            <>
+              <Card title="6. SolutionPackage Manifest">
+                <pre>{JSON.stringify(manifest.manifest ?? manifest.detail, null, 2)}</pre>
+              </Card>
+              <Card title="7. Instantiate as Work">
+                <p>
+                  A reusable SolutionPackage is the blueprint. Instantiation creates canonical
+                  Work; it does not create a second “agent instance” source of truth.
+                </p>
+                <div className="builder-item">
+                  <label>Guarantee profile: </label>
+                  <select
+                    value={profileRef}
+                    onChange={(e) => setProfileRef(e.target.value)}
+                    style={{ padding: 6 }}
+                  >
+                    <option value="morn.lite@1.0.0">Morn Lite</option>
+                    <option value="morn.enterprise@1.0.0">Morn Enterprise</option>
+                    <option value="morn.factory.readonly@1.0.0">Morn Factory — read only</option>
+                    <option value="morn.research@1.0.0">Morn Research</option>
+                  </select>
+                </div>
+                <div className="builder-item">
+                  <label>Site (optional): </label>
+                  <input
+                    value={siteRef}
+                    onChange={(e) => setSiteRef(e.target.value)}
+                    placeholder="plant-a"
+                    style={{ width: "40%", padding: 6 }}
+                  />
+                </div>
+                <div className="page-actions">
+                  <button onClick={instantiateSolution}>Instantiate Work</button>
+                </div>
+                {instantiated && (
+                  <>
+                    <KeyValue k="Work" v={instantiated.plan.work.id} />
+                    <KeyValue k="Phase" v={instantiated.plan.work.status.phase} />
+                    <KeyValue k="Profile" v={instantiated.plan.work.spec.profile_ref} />
+                    <KeyValue k="Source solution" v={instantiated.plan.solution_package_ref} />
+                    <KeyValue
+                      k="Readiness gates"
+                      v={instantiated.plan.unresolved_gates.join(" → ")}
+                    />
+                    <KeyValue
+                      k="Execution started"
+                      v={instantiated.execution_started ? "yes" : "no — explicit gates remain"}
+                    />
+                  </>
+                )}
+              </Card>
+            </>
           )}
         </>
       )}
