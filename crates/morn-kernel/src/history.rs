@@ -111,11 +111,7 @@ impl HistoricalFactLog {
         Ok(())
     }
 
-    pub fn retract(
-        &mut self,
-        id: &HistoricalFactId,
-        reason: impl Into<String>,
-    ) -> Result<()> {
+    pub fn retract(&mut self, id: &HistoricalFactId, reason: impl Into<String>) -> Result<()> {
         let fact = self
             .facts
             .iter_mut()
@@ -126,11 +122,7 @@ impl HistoricalFactLog {
         Ok(())
     }
 
-    pub fn redact(
-        &mut self,
-        id: &HistoricalFactId,
-        reason: impl Into<String>,
-    ) -> Result<()> {
+    pub fn redact(&mut self, id: &HistoricalFactId, reason: impl Into<String>) -> Result<()> {
         let fact = self
             .facts
             .iter_mut()
