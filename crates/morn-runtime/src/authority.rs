@@ -92,6 +92,25 @@ pub trait AuthorityProvider: Send + Sync {
     fn decide(&self, request: &AuthorityRequest) -> Result<AuthorityDecisionRecord>;
 }
 
+/// Couples a policy decision with the exact request it evaluated. This is the
+/// object external-action permitting must consume so an allow decision for one
+/// action/resource cannot be replayed for another.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BoundAuthorityDecision {
+    pub request: AuthorityRequest,
+    pub decision: AuthorityDecisionRecord,
+}
+
+pub fn decide_bound(
+    provider: &dyn AuthorityProvider,
+    request: &AuthorityRequest,
+) -> Result<BoundAuthorityDecision> {
+    Ok(BoundAuthorityDecision {
+        request: request.clone(),
+        decision: provider.decide(request)?,
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct NativePolicyAuthority {
     pub policy: Policy,
@@ -177,6 +196,26 @@ mod tests {
         let decision = provider.decide(&request).unwrap();
         assert!(decision.allowed);
         enforce_authority(&decision).unwrap();
+    }
+
+    #[test]
+    fn bound_decision_preserves_exact_authority_request() {
+        let policy = Policy::new(
+            WorkspaceId::generate(),
+            "factory",
+            vec![PolicyRule::allow("cmms.write")],
+        );
+        let provider = NativePolicyAuthority::new(policy);
+        let mut request = AuthorityRequest::new("controller", "cmms.write", "CMMS-A");
+        request.work_ref = Some("work-1".to_string());
+        request.site_ref = Some("plant-a".to_string());
+        request.scope = vec!["maintenance-order:create".to_string()];
+        let bound = decide_bound(&provider, &request).unwrap();
+        assert!(bound.decision.allowed);
+        assert_eq!(bound.request.action, "cmms.write");
+        assert_eq!(bound.request.resource, "CMMS-A");
+        assert_eq!(bound.request.work_ref.as_deref(), Some("work-1"));
+        assert_eq!(bound.request.site_ref.as_deref(), Some("plant-a"));
     }
 
     #[test]
