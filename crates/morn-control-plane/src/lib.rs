@@ -10,8 +10,8 @@ use morn_integration::SourceOfTruthBinding;
 use morn_kernel::error::Result;
 use morn_profile::DomainProfile;
 use morn_runtime::{
-    reconcile_attempt, ActionAttempt, BindingMigrationDecision, ExecutionBinding, OutcomeReconciler,
-    ReconciliationRecord,
+    reconcile_attempt, ActionAttempt, BindingMigrationDecision, ExecutionBinding,
+    OutcomeReconciler, ReconciliationRecord,
 };
 use morn_store::MornStore;
 use morn_work::acceptance_decision::AcceptanceDecision;
@@ -101,7 +101,6 @@ impl WorkController {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WorkProgressInputs<'a> {
     pub binding: Option<&'a ExecutionBinding>,
@@ -129,7 +128,8 @@ impl WorkProgressController {
         if let Some(binding) = inputs.binding {
             if binding.work_id == work.id && binding.work_generation == work.generation {
                 work.status.active_binding = Some(binding.id.clone());
-                let mut condition = WorkCondition::new("ProfileVersionPinned", ConditionStatus::True);
+                let mut condition =
+                    WorkCondition::new("ProfileVersionPinned", ConditionStatus::True);
                 condition.reason = format!("binding {} pins {}", binding.id, binding.profile_ref);
                 condition.evidence_refs = vec![binding.id.to_string()];
                 work.set_condition(condition);
@@ -174,8 +174,7 @@ impl WorkProgressController {
 
         if let Some(outcome) = inputs.outcome {
             if outcome.work_package_id == work.id && outcome.is_source_grounded() {
-                let mut condition =
-                    WorkCondition::new("OutcomeObservation", ConditionStatus::True);
+                let mut condition = WorkCondition::new("OutcomeObservation", ConditionStatus::True);
                 condition.reason = format!("source-grounded outcome {}", outcome.id);
                 condition.evidence_refs = outcome.evidence_refs.clone();
                 work.set_condition(condition);
