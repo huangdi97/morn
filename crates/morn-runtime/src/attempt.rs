@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use morn_capability::effect::{EffectClass, EffectContract};
+
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{Id, RuntimeBindingId};
 use morn_kernel::time::Timestamp;
@@ -62,6 +64,7 @@ pub enum CancellationDisposition {
     CancelledBeforeDispatch,
     RequiresReconciliation,
     RequiresCompensation,
+    IrreversibleEffect,
     AlreadyTerminal,
 }
 
@@ -79,6 +82,8 @@ pub struct ActionAttempt {
     pub authority_decision_ref: Option<String>,
     #[serde(default)]
     pub external_action_permit_ref: Option<String>,
+    #[serde(default)]
+    pub effect_contract: Option<EffectContract>,
     pub state: AttemptState,
     pub external_ref: Option<String>,
     pub evidence_refs: Vec<String>,
@@ -103,6 +108,7 @@ impl ActionAttempt {
             site_ref: None,
             authority_decision_ref: None,
             external_action_permit_ref: None,
+            effect_contract: None,
             state: AttemptState::Proposed,
             external_ref: None,
             evidence_refs: Vec::new(),
@@ -110,6 +116,16 @@ impl ActionAttempt {
             created_at: now,
             updated_at: now,
         }
+    }
+
+    pub fn set_effect_contract(&mut self, effect: EffectContract) -> Result<()> {
+        if self.state != AttemptState::Proposed {
+            return Err(Error::invalid_state(
+                "effect contract must be pinned before authorization/dispatch",
+            ));
+        }
+        self.effect_contract = Some(effect);
+        Ok(())
     }
 
     pub fn transition(&mut self, next: AttemptState) -> Result<()> {
@@ -142,7 +158,16 @@ impl ActionAttempt {
             Dispatched | Acknowledged | OutcomeUnknown | Reconciling => {
                 Ok(CancellationDisposition::RequiresReconciliation)
             }
-            Committed | Observed => Ok(CancellationDisposition::RequiresCompensation),
+            Committed | Observed => {
+                let disposition = match self.effect_contract.as_ref().map(|effect| effect.class) {
+                    Some(EffectClass::E3Irreversible) => CancellationDisposition::IrreversibleEffect,
+                    Some(EffectClass::E2Compensatable) => {
+                        CancellationDisposition::RequiresCompensation
+                    }
+                    _ => CancellationDisposition::RequiresReconciliation,
+                };
+                Ok(disposition)
+            },
             Verified | Failed | Cancelled => Ok(CancellationDisposition::AlreadyTerminal),
         }
     }
@@ -186,6 +211,27 @@ mod tests {
             CancellationDisposition::RequiresCompensation
         );
         assert_eq!(dispatched.state, AttemptState::Committed);
+    }
+
+    #[test]
+    fn irreversible_effect_cannot_be_described_as_compensatable_cancel() {
+        let mut attempt = ActionAttempt::new(
+            RuntimeBindingId::generate_with("binding"),
+            "work-3:notify",
+            "notify",
+        );
+        attempt
+            .set_effect_contract(EffectContract::e3("external notification"))
+            .unwrap();
+        attempt.transition(AttemptState::Authorized).unwrap();
+        attempt.transition(AttemptState::Dispatched).unwrap();
+        attempt.transition(AttemptState::Acknowledged).unwrap();
+        attempt.transition(AttemptState::Committed).unwrap();
+        assert_eq!(
+            attempt.request_cancel().unwrap(),
+            CancellationDisposition::IrreversibleEffect
+        );
+        assert_eq!(attempt.state, AttemptState::Committed);
     }
 
     #[test]
