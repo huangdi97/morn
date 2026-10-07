@@ -55,6 +55,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/health", get(health))
         .route("/api/v115/status", get(v115_status))
         .route("/api/v115/control-plane", get(v115_control_plane))
+        .route("/api/v115/solutions", get(v115_solutions))
         .route(
             "/api/v115/artifact/openapi/compile",
             post(v115_compile_openapi),
@@ -217,6 +218,17 @@ async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
     })))
 }
 
+async fn v115_solutions(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    let packages = guard
+        .store
+        .load_records::<morn_foundry::SolutionPackage>("solution_package_v115")?;
+    Ok(Json(json!({
+        "solution_packages": packages,
+        "note": "approved reusable blueprints persisted independently of runtime Work"
+    })))
+}
+
 async fn v115_compile_openapi(Json(body): Json<Value>) -> ApiResult {
     use morn_foundry::{ArtifactCompiler, ArtifactKind, ArtifactSource, OpenApiJsonCompiler};
 
@@ -373,10 +385,26 @@ async fn v115_instantiate_solution(
     use morn_foundry::{instantiate_approved_solution, SolutionInstantiationRequest};
 
     let mut guard = state.lock();
-    let package = guard
-        .last_package
-        .clone()
-        .ok_or_else(|| AppError(Error::validation("compile an approved SolutionPackage first")))?;
+    let package = if let Some(package_id) = body
+        .get("solution_package_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+    {
+        guard
+            .store
+            .load_record::<morn_foundry::SolutionPackage>("solution_package_v115", package_id)?
+            .ok_or_else(|| {
+                AppError(Error::not_found(format!(
+                    "SolutionPackage {package_id}"
+                )))
+            })?
+    } else {
+        guard.last_package.clone().ok_or_else(|| {
+            AppError(Error::validation(
+                "compile an approved SolutionPackage first or provide solution_package_id",
+            ))
+        })?
+    };
     let default_goal = guard
         .last_problem
         .as_ref()
@@ -759,8 +787,19 @@ async fn compiler_compile(State(state): State<AppState>) -> ApiResult {
         .as_ref()
         .ok_or_else(|| AppError(morn_kernel::error::Error::validation("run compiler first")))?;
     let pkg = guard.compiler.compile(approved, proposed, problem)?;
+    guard.store.save_record_immutable(
+        "solution_package_v115",
+        pkg.id.as_str(),
+        guard.workspace.id.as_str(),
+        pkg.created_at.millis(),
+        &pkg,
+    )?;
     guard.last_package = Some(pkg.clone());
-    Ok(Json(json!({ "package": pkg, "manifest": pkg.manifest })))
+    Ok(Json(json!({
+        "package": pkg,
+        "manifest": pkg.manifest,
+        "persisted": true
+    })))
 }
 
 async fn compiler_manifest(State(state): State<AppState>) -> ApiResult {
