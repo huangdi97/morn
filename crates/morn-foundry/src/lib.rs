@@ -1,11 +1,16 @@
 //! Morn Foundry: ProblemSpec, WorkGraph and the Organization/Solution Compiler.
 
+pub mod artifact2capability;
 pub mod compiler;
 pub mod manifest;
 pub mod problem_spec;
 pub mod solution;
 pub mod work_graph;
 
+pub use artifact2capability::{
+    ArtifactCompiler, ArtifactKind, ArtifactSource, CandidateCapability, CompilationReport,
+    OpenApiJsonCompiler,
+};
 pub use compiler::{CompilerDecisionSource, SolutionCompiler};
 pub use manifest::ManifestService;
 pub use problem_spec::{Assumption, Constraint, ProblemSpec, ProblemSpecBuilder, SolutionRequest};
