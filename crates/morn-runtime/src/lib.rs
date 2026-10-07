@@ -18,8 +18,8 @@ pub mod workload_identity;
 
 pub use attempt::{ActionAttempt, ActionAttemptId, AttemptState};
 pub use authority::{
-    enforce_authority, AuthorityDecisionId, AuthorityDecisionRecord, AuthorityProvider,
-    AuthorityRequest, NativePolicyAuthority,
+    decide_bound, enforce_authority, AuthorityDecisionId, AuthorityDecisionRecord,
+    AuthorityProvider, AuthorityRequest, BoundAuthorityDecision, NativePolicyAuthority,
 };
 pub use binding::{
     BindingMigrationDecision, BindingMigrationDecisionId, BindingMigrationReason, ExecutionBinding,
