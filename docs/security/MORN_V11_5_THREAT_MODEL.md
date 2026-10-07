@@ -193,3 +193,12 @@ execution/enforcement boundary.
 Remote/physical execution labels are not treated as stronger isolation than a
 microVM/full VM. A Factory isolation requirement must be satisfied by explicit
 provider guarantees rather than enum ordering.
+
+
+## Profile action intent gate
+
+Identity/policy authorization cannot override a Domain Profile prohibition.
+External actions are classified as read/candidate/sandbox/shadow/production/
+physical intent. `morn.factory.readonly@1.0.0` rejects ProductionWrite before
+the connector path even if the enterprise IAM provider would allow the
+principal. PhysicalControl requires explicit profile opt-in.
