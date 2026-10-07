@@ -101,6 +101,86 @@ impl WorkController {
     }
 }
 
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct WorkProgressInputs<'a> {
+    pub binding: Option<&'a ExecutionBinding>,
+    pub attempt: Option<&'a ActionAttempt>,
+    pub outcome: Option<&'a ObservedOutcome>,
+    pub acceptance: Option<&'a AcceptanceDecision>,
+}
+
+/// Reconciles execution evidence into the Work phase without letting a harness
+/// session or workflow cursor become canonical business state.
+#[derive(Debug, Default)]
+pub struct WorkProgressController;
+
+impl WorkProgressController {
+    pub fn reconcile(&self, work: &mut WorkResource, inputs: &WorkProgressInputs<'_>) {
+        use morn_runtime::AttemptState;
+        use morn_work::acceptance_decision::AcceptanceDisposition;
+
+        if !work.required_conditions_satisfied() {
+            work.status.phase = WorkPhase::Blocked;
+            work.mark_observed();
+            return;
+        }
+
+        if let Some(binding) = inputs.binding {
+            if binding.work_id == work.id && binding.work_generation == work.generation {
+                work.status.active_binding = Some(binding.id.clone());
+            }
+        }
+
+        if let Some(acceptance) = inputs.acceptance {
+            if acceptance.work_package_id == work.id {
+                work.status.phase = match acceptance.disposition {
+                    AcceptanceDisposition::Accept if acceptance.is_final_acceptance() => {
+                        WorkPhase::Accepted
+                    }
+                    AcceptanceDisposition::Reject => WorkPhase::Rejected,
+                    AcceptanceDisposition::Conditional
+                    | AcceptanceDisposition::RequestMoreEvidence
+                    | AcceptanceDisposition::Accept => WorkPhase::Waiting,
+                };
+                work.mark_observed();
+                return;
+            }
+        }
+
+        if let Some(outcome) = inputs.outcome {
+            if outcome.work_package_id == work.id && outcome.is_source_grounded() {
+                work.status.phase = WorkPhase::Delivered;
+                work.mark_observed();
+                return;
+            }
+        }
+
+        if let Some(attempt) = inputs.attempt {
+            work.status.phase = match attempt.state {
+                AttemptState::OutcomeUnknown | AttemptState::Reconciling => WorkPhase::Reconciling,
+                AttemptState::Authorized
+                | AttemptState::Dispatched
+                | AttemptState::Acknowledged
+                | AttemptState::Committed => WorkPhase::Running,
+                AttemptState::Observed | AttemptState::Verified => WorkPhase::Waiting,
+                AttemptState::Failed => WorkPhase::Blocked,
+                AttemptState::Cancelled => WorkPhase::Cancelled,
+                AttemptState::Proposed => WorkPhase::Ready,
+            };
+            work.mark_observed();
+            return;
+        }
+
+        work.status.phase = if work.status.active_binding.is_some() {
+            WorkPhase::Running
+        } else {
+            WorkPhase::Ready
+        };
+        work.mark_observed();
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ReconciliationController;
 
@@ -282,6 +362,77 @@ mod tests {
                 evidence_refs: vec!["cmms://orders/MO-88273".into()],
             })
         }
+    }
+
+    #[test]
+    fn work_progress_distinguishes_unknown_outcome_delivery_and_acceptance() {
+        use morn_kernel::ids::{AcceptanceSpecId, PrincipalId};
+        use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+        use morn_world::{ObservedOutcome, OutcomeSourceKind};
+        use serde_json::json;
+
+        let work_id = WorkPackageId::generate_with("wp");
+        let mut spec = WorkSpec::new(
+            work_id.clone(),
+            "restore service",
+            "morn.factory.readonly@1.0.0",
+        );
+        spec.required_conditions = vec![];
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        let binding = ExecutionBinding::for_work(&work, "cap", "provider", "1");
+        let mut attempt = ActionAttempt::new(binding.id.clone(), "key", "action");
+        attempt.transition(AttemptState::Authorized).unwrap();
+        attempt.transition(AttemptState::Dispatched).unwrap();
+        attempt.mark_outcome_unknown("timeout").unwrap();
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                binding: Some(&binding),
+                attempt: Some(&attempt),
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Reconciling);
+
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work_id.clone(),
+            "service restored",
+            OutcomeSourceKind::ExternalSystem,
+            "system://source",
+            json!({"restored":true}),
+        );
+        outcome.evidence_refs.push("system://receipt".to_string());
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                binding: Some(&binding),
+                outcome: Some(&outcome),
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Delivered);
+
+        let mut acceptance = AcceptanceDecision::new(
+            work_id,
+            AcceptanceSpecId::generate_with("acc"),
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("owner"),
+            "owner",
+            "accepted",
+        );
+        acceptance.outcome_refs.push(outcome.id.clone());
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                binding: Some(&binding),
+                outcome: Some(&outcome),
+                acceptance: Some(&acceptance),
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Accepted);
     }
 
     #[test]
