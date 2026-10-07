@@ -230,10 +230,7 @@ async fn v115_solutions(State(state): State<AppState>) -> ApiResult {
     })))
 }
 
-async fn v115_creator_draft(
-    State(state): State<AppState>,
-    Json(body): Json<Value>,
-) -> ApiResult {
+async fn v115_creator_draft(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_foundry::{draft_creator_solution, CreatorAutonomy, CreatorRequest};
 
     let guard = state.lock();
