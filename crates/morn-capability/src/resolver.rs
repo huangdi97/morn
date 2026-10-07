@@ -69,9 +69,7 @@ impl WorkcellPlan {
     pub fn agent_count(&self) -> usize {
         self.members
             .iter()
-            .filter(|member| {
-                matches!(member.capability.kind, CapabilityKind::Agent)
-            })
+            .filter(|member| matches!(member.capability.kind, CapabilityKind::Agent))
             .count()
     }
 }
@@ -352,9 +350,10 @@ impl CapabilityResolver {
             "selected {} executor(s) using hard-filter + minimum-cover planning",
             selected.len()
         )];
-        if selected.iter().all(|member| {
-            !matches!(member.capability.kind, CapabilityKind::Agent)
-        }) {
+        if selected
+            .iter()
+            .all(|member| !matches!(member.capability.kind, CapabilityKind::Agent))
+        {
             rationale.push("zero-agent plan: no model/LLM executor required".to_string());
         }
         if !uncovered.is_empty() {
@@ -539,7 +538,8 @@ mod tests {
         record.manifest.economics.latency_p95_ms = Some(20);
         record.manifest.execution.runtime_kinds = vec!["rust".to_string()];
         record.manifest.execution.harness_compatibility = vec!["none".to_string()];
-        record.manifest.authority.maximum_effect = crate::effect::EffectClass::E0LifecycleReversible;
+        record.manifest.authority.maximum_effect =
+            crate::effect::EffectClass::E0LifecycleReversible;
 
         let ok = CapabilityResolver.resolve(
             &CapabilityRequest {
@@ -576,11 +576,13 @@ mod tests {
             &["investigate"],
             10,
         );
-        record.admission_refs.push(crate::manifest::CapabilityAdmissionRef {
-            admission_ref: "admission:1".to_string(),
-            site_ref: "plant-a".to_string(),
-            profile_ref: "morn.factory.readonly@1.0.0".to_string(),
-        });
+        record
+            .admission_refs
+            .push(crate::manifest::CapabilityAdmissionRef {
+                admission_ref: "admission:1".to_string(),
+                site_ref: "plant-a".to_string(),
+                profile_ref: "morn.factory.readonly@1.0.0".to_string(),
+            });
 
         let accepted = CapabilityResolver.resolve(
             &CapabilityRequest {
