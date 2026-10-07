@@ -49,8 +49,7 @@ impl CapabilityResolver {
                     continue;
                 }
             }
-            if !request.allowed_kinds.is_empty()
-                && !request.allowed_kinds.contains(&manifest.kind)
+            if !request.allowed_kinds.is_empty() && !request.allowed_kinds.contains(&manifest.kind)
             {
                 continue;
             }
