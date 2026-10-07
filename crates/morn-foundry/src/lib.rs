@@ -1,6 +1,7 @@
 //! Morn Foundry: ProblemSpec, WorkGraph and the Organization/Solution Compiler.
 
 pub mod artifact2capability;
+pub mod blueprint;
 pub mod compiler;
 pub mod creator;
 pub mod instantiate;
@@ -14,6 +15,9 @@ pub use artifact2capability::{
     ArtifactCompiler, ArtifactKind, ArtifactSource, CandidateCapability, CompilationReport,
     OpenApiJsonCompiler, ProcedureJsonCompiler, RepositoryManifestCompiler,
     ReviewedPaperManifestCompiler,
+};
+pub use blueprint::{
+    BlueprintBundle, RoleBlueprint, WorkBlueprint, WorkcellTemplate,
 };
 pub use compiler::{CompilerDecisionSource, SolutionCompiler};
 pub use creator::{draft_creator_solution, CreatorAutonomy, CreatorDraft, CreatorRequest};
