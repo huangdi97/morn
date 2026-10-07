@@ -126,13 +126,13 @@ fn historical_correction_is_explicit_and_queryable_as_known_then() {
         82
     );
 
-    let mutation = HistoryMutation::new(
-        HistoryMutationKind::Supersede,
+    let mut mutation = HistoryMutation::new(
         "fact:old",
-        Some("fact:new".to_string()),
+        HistoryMutationKind::Supersede,
         "explicit correction",
         "operator",
     );
+    mutation.replacement_ref = Some("fact:new".to_string());
     assert_eq!(mutation.kind, HistoryMutationKind::Supersede);
 }
 
