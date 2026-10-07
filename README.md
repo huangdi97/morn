@@ -132,6 +132,17 @@ documents into **Declared** capability candidates with source provenance. Studio
 currently exposes the OpenAPI flow; neither compiler pretends the generated
 candidate is qualified or production-ready.
 
+### Reusable blueprint and runtime instance
+
+Morn does not create separate canonical `Blueprint` or `Instance` objects.
+An approved `SolutionPackage` is the reusable blueprint. Instantiating it
+creates a normal `WorkResource`, preserving `source_solution_ref` while
+leaving profile, capability, authority and execution gates explicit.
+
+A Workcell is the minimum-sufficient executor mix for that Work; it may use
+zero, one or many agents alongside rules, programs, solvers, humans, services
+or devices.
+
 ## Work control and external effects
 
 A v11.5 Work resource has `spec`, `status`, `generation`,
@@ -191,6 +202,7 @@ Morn prefers existing standards/mechanisms instead of proprietary reinvention:
 | package distribution | OCI / ORAS |
 | signature/provenance | Sigstore / SLSA |
 | isolation | process / container / microVM / VM / remote / physical provider |
+| execution guarantees | typed provider-neutral guarantee vector (network, filesystem, secrets, boundaries, attestation, state) |
 | optional durable workflow | Temporal/Dapr-class provider |
 
 ## Factory first product slice
