@@ -138,6 +138,23 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             None,
         )
         .unwrap();
+    let release = admission
+        .record_release(
+            &mut capability,
+            &qualification,
+            format!(
+                "oci://fixture/morn/equipment-investigator@sha256:{}",
+                "a".repeat(64)
+            ),
+            format!("sha256:{}", "a".repeat(64)),
+            Some("sigstore://fixture/equipment-investigator".to_string()),
+            Some("slsa://fixture/equipment-investigator".to_string()),
+        )
+        .unwrap();
+    assert!(capability
+        .release_refs
+        .iter()
+        .any(|reference| reference == &release.id.to_string()));
     admission
         .admit(
             &mut capability,
