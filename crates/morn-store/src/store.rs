@@ -502,8 +502,7 @@ impl MornStore {
         expected_revision: u64,
         record: &T,
     ) -> Result<u64> {
-        let payload =
-            serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
+        let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
         let expected_i64 = i64::try_from(expected_revision)
             .map_err(|_| Error::validation("expected revision is too large"))?;
 
@@ -523,9 +522,7 @@ impl MornStore {
                     )
                     .map_err(|e| {
                         if e.to_string().contains("UNIQUE") {
-                            Error::conflict(format!(
-                                "record {kind}/{id} was created concurrently"
-                            ))
+                            Error::conflict(format!("record {kind}/{id} was created concurrently"))
                         } else {
                             Error::internal(e.to_string())
                         }
@@ -1766,7 +1763,6 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod v115_revision_tests {
     use super::*;
@@ -1803,7 +1799,6 @@ mod v115_revision_tests {
         );
     }
 }
-
 
 #[cfg(test)]
 mod v115_controller_lease_tests {
