@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use morn_kernel::error::{Error, Result};
 use morn_kernel::time::Timestamp;
-use morn_runtime::AuthorityDecisionRecord;
 use morn_profile::DomainProfile;
+use morn_runtime::AuthorityDecisionRecord;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "kebab-case")]
