@@ -15,4 +15,5 @@ morn-store = { workspace = true }
 morn-assurance = { workspace = true }
 morn-harness = { workspace = true }
 morn-capability = { workspace = true }
+morn-integration = { workspace = true }
 serde = { workspace = true }
