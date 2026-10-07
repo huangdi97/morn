@@ -54,6 +54,7 @@ pub fn router(state: AppState) -> Router {
     let app = Router::new()
         .route("/api/health", get(health))
         .route("/api/v115/status", get(v115_status))
+        .route("/api/v115/control-plane", get(v115_control_plane))
         .route(
             "/api/v115/artifact/openapi/compile",
             post(v115_compile_openapi),
@@ -183,6 +184,24 @@ async fn v115_status() -> ApiResult {
             "real_factory": "external-blocked until lawful site data/authority exists",
             "production_write": "not entered"
         }
+    })))
+}
+
+async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    let store = &guard.store;
+    let load = |kind: &str| -> Result<Vec<Value>, Error> { store.load_records::<Value>(kind) };
+
+    Ok(Json(json!({
+        "work": load("work_resource_v115")?,
+        "source_of_truth_bindings": load("source_of_truth_binding_v115")?,
+        "execution_bindings": load("execution_binding_v115")?,
+        "attempts": load("action_attempt_v115")?,
+        "reconciliations": load("reconciliation_v115")?,
+        "outcomes": load("observed_outcome_v115")?,
+        "acceptance_decisions": load("acceptance_decision_v115")?,
+        "value_assessments": load("value_assessment_v115")?,
+        "note": "canonical persisted v11.5 records; empty arrays mean no persisted v11.5 Work, not a synthetic success"
     })))
 }
 
