@@ -228,11 +228,11 @@ mod tests {
         resource.record_active_binding(a.clone());
         resource.record_active_binding(b.clone());
         resource.record_active_binding(a.clone());
-        assert_eq!(resource.active_bindings.len(), 2);
-        assert_eq!(resource.active_binding, Some(a.clone()));
+        assert_eq!(resource.status.active_bindings.len(), 2);
+        assert_eq!(resource.status.active_binding, Some(a.clone()));
         resource.remove_active_binding(&a);
-        assert_eq!(resource.active_binding, Some(b));
-        assert_eq!(resource.active_bindings.len(), 1);
+        assert_eq!(resource.status.active_binding, Some(b));
+        assert_eq!(resource.status.active_bindings.len(), 1);
     }
 
     #[test]
