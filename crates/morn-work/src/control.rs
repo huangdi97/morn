@@ -93,7 +93,12 @@ pub struct WorkControlStatus {
     pub observed_generation: u64,
     pub phase: WorkPhase,
     pub conditions: Vec<WorkCondition>,
+    /// Legacy/primary binding projection retained for compatibility.
     pub active_binding: Option<RuntimeBindingId>,
+    /// All currently relevant bindings for a Workcell-style Work. A real Work
+    /// may simultaneously bind an agent, solver, connector and human role.
+    #[serde(default)]
+    pub active_bindings: Vec<RuntimeBindingId>,
     pub last_event_seq: u64,
     pub updated_at: Timestamp,
 }
@@ -105,6 +110,7 @@ impl Default for WorkControlStatus {
             phase: WorkPhase::Proposed,
             conditions: Vec::new(),
             active_binding: None,
+            active_bindings: Vec::new(),
             last_event_seq: 0,
             updated_at: Timestamp::now(),
         }
@@ -174,6 +180,28 @@ impl WorkResource {
             .all(|required| self.condition_is_true(required))
     }
 
+    pub fn record_active_binding(&mut self, binding_id: RuntimeBindingId) {
+        if self.active_binding.is_none() {
+            self.active_binding = Some(binding_id.clone());
+        }
+        if !self
+            .active_bindings
+            .iter()
+            .any(|existing| existing == &binding_id)
+        {
+            self.active_bindings.push(binding_id);
+        }
+        self.status.updated_at = Timestamp::now();
+    }
+
+    pub fn remove_active_binding(&mut self, binding_id: &RuntimeBindingId) {
+        self.active_bindings.retain(|existing| existing != binding_id);
+        if self.active_binding.as_ref() == Some(binding_id) {
+            self.active_binding = self.active_bindings.first().cloned();
+        }
+        self.status.updated_at = Timestamp::now();
+    }
+
     pub fn mark_observed(&mut self) {
         self.status.observed_generation = self.generation;
         self.status.updated_at = Timestamp::now();
@@ -187,6 +215,24 @@ impl WorkResource {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn work_can_track_multiple_active_bindings_without_parallel_truth() {
+        let ws = WorkspaceId::generate();
+        let work_id = WorkPackageId::generate_with("wp");
+        let spec = WorkSpec::new(work_id, "goal", "morn.lite@1.0.0");
+        let mut resource = WorkResource::new(ws, spec);
+        let a = RuntimeBindingId::generate_with("binding");
+        let b = RuntimeBindingId::generate_with("binding");
+        resource.record_active_binding(a.clone());
+        resource.record_active_binding(b.clone());
+        resource.record_active_binding(a.clone());
+        assert_eq!(resource.active_bindings.len(), 2);
+        assert_eq!(resource.active_binding, Some(a.clone()));
+        resource.remove_active_binding(&a);
+        assert_eq!(resource.active_binding, Some(b));
+        assert_eq!(resource.active_bindings.len(), 1);
+    }
 
     #[test]
     fn new_resource_starts_unpersisted_and_revision_is_store_managed() {
