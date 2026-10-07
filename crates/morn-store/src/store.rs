@@ -23,7 +23,16 @@ pub struct OutboxEvent {
     pub dispatched_at: Option<i64>,
 }
 
-const SCHEMA_VERSION: i64 = 4;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ControllerLease {
+    pub lease_name: String,
+    pub holder: String,
+    pub fencing_token: u64,
+    pub expires_at: i64,
+    pub updated_at: i64,
+}
+
+const SCHEMA_VERSION: i64 = 5;
 
 impl MornStore {
     /// Open (creating if needed) a store at `path` and run migrations.
@@ -92,6 +101,14 @@ impl MornStore {
             );
             CREATE INDEX IF NOT EXISTS idx_outbox_pending
                 ON control_event_outbox(dispatched_at, created_at);
+
+            CREATE TABLE IF NOT EXISTS control_controller_leases (
+                lease_name TEXT NOT NULL PRIMARY KEY,
+                holder TEXT NOT NULL,
+                fencing_token INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
             "#,
         )
         .map_err(|e| Error::internal(e.to_string()))?;
@@ -240,6 +257,186 @@ impl MornStore {
             return Err(Error::not_found(format!("pending outbox event {event_id}")));
         }
         Ok(())
+    }
+
+    // ---- controller lease / fencing ----
+
+    /// Acquire or renew a controller lease. A takeover after expiry increments
+    /// the fencing token so stale controllers can be rejected by downstream
+    /// durable writes or external dispatch gates.
+    pub fn acquire_controller_lease(
+        &self,
+        lease_name: &str,
+        holder: &str,
+        now: i64,
+        ttl_ms: i64,
+    ) -> Result<Option<ControllerLease>> {
+        if lease_name.trim().is_empty() || holder.trim().is_empty() || ttl_ms <= 0 {
+            return Err(Error::validation(
+                "controller lease requires non-empty name/holder and positive ttl",
+            ));
+        }
+        let expires_at = now.saturating_add(ttl_ms);
+
+        let existing: Option<(String, i64, i64)> = self
+            .conn
+            .query_row(
+                "SELECT holder, fencing_token, expires_at
+                 FROM control_controller_leases
+                 WHERE lease_name = ?1",
+                [lease_name],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        match existing {
+            None => {
+                let inserted = self
+                    .conn
+                    .execute(
+                        "INSERT OR IGNORE INTO control_controller_leases
+                         (lease_name, holder, fencing_token, expires_at, updated_at)
+                         VALUES (?1, ?2, 1, ?3, ?4)",
+                        params![lease_name, holder, expires_at, now],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if inserted == 0 {
+                    return Ok(None);
+                }
+                Ok(Some(ControllerLease {
+                    lease_name: lease_name.to_string(),
+                    holder: holder.to_string(),
+                    fencing_token: 1,
+                    expires_at,
+                    updated_at: now,
+                }))
+            }
+            Some((current_holder, current_token, current_expiry)) => {
+                if current_holder == holder && current_expiry > now {
+                    let updated = self
+                        .conn
+                        .execute(
+                            "UPDATE control_controller_leases
+                             SET expires_at = ?3, updated_at = ?4
+                             WHERE lease_name = ?1
+                               AND holder = ?2
+                               AND fencing_token = ?5
+                               AND expires_at > ?4",
+                            params![lease_name, holder, expires_at, now, current_token],
+                        )
+                        .map_err(|e| Error::internal(e.to_string()))?;
+                    if updated == 0 {
+                        return Ok(None);
+                    }
+                    return Ok(Some(ControllerLease {
+                        lease_name: lease_name.to_string(),
+                        holder: holder.to_string(),
+                        fencing_token: u64::try_from(current_token)
+                            .map_err(|_| Error::internal("negative fencing token"))?,
+                        expires_at,
+                        updated_at: now,
+                    }));
+                }
+
+                if current_expiry > now {
+                    return Ok(None);
+                }
+
+                let next_token = current_token.saturating_add(1);
+                let updated = self
+                    .conn
+                    .execute(
+                        "UPDATE control_controller_leases
+                         SET holder = ?2,
+                             fencing_token = ?3,
+                             expires_at = ?4,
+                             updated_at = ?5
+                         WHERE lease_name = ?1
+                           AND fencing_token = ?6
+                           AND expires_at <= ?5",
+                        params![
+                            lease_name,
+                            holder,
+                            next_token,
+                            expires_at,
+                            now,
+                            current_token
+                        ],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if updated == 0 {
+                    return Ok(None);
+                }
+                Ok(Some(ControllerLease {
+                    lease_name: lease_name.to_string(),
+                    holder: holder.to_string(),
+                    fencing_token: u64::try_from(next_token)
+                        .map_err(|_| Error::internal("negative fencing token"))?,
+                    expires_at,
+                    updated_at: now,
+                }))
+            }
+        }
+    }
+
+    pub fn renew_controller_lease(
+        &self,
+        lease: &ControllerLease,
+        now: i64,
+        ttl_ms: i64,
+    ) -> Result<Option<ControllerLease>> {
+        if ttl_ms <= 0 {
+            return Err(Error::validation("controller lease ttl must be positive"));
+        }
+        let token = i64::try_from(lease.fencing_token)
+            .map_err(|_| Error::validation("fencing token is too large"))?;
+        let expires_at = now.saturating_add(ttl_ms);
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE control_controller_leases
+                 SET expires_at = ?4, updated_at = ?5
+                 WHERE lease_name = ?1
+                   AND holder = ?2
+                   AND fencing_token = ?3
+                   AND expires_at > ?5",
+                params![lease.lease_name, lease.holder, token, expires_at, now],
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        if updated == 0 {
+            return Ok(None);
+        }
+        Ok(Some(ControllerLease {
+            lease_name: lease.lease_name.clone(),
+            holder: lease.holder.clone(),
+            fencing_token: lease.fencing_token,
+            expires_at,
+            updated_at: now,
+        }))
+    }
+
+    pub fn controller_fence_is_current(
+        &self,
+        lease_name: &str,
+        fencing_token: u64,
+        now: i64,
+    ) -> Result<bool> {
+        let token = i64::try_from(fencing_token)
+            .map_err(|_| Error::validation("fencing token is too large"))?;
+        let active: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM control_controller_leases
+                 WHERE lease_name = ?1
+                   AND fencing_token = ?2
+                   AND expires_at > ?3",
+                params![lease_name, token, now],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Ok(active.is_some())
     }
 
     // ---- generic typed records ----
@@ -1604,5 +1801,54 @@ mod v115_revision_tests {
                 .unwrap(),
             Some(2)
         );
+    }
+}
+
+
+#[cfg(test)]
+mod v115_controller_lease_tests {
+    use super::*;
+
+    #[test]
+    fn expired_controller_takeover_increments_fence() {
+        let store = MornStore::open_in_memory().unwrap();
+        let first = store
+            .acquire_controller_lease("work-controller", "node-a", 1_000, 100)
+            .unwrap()
+            .unwrap();
+        assert_eq!(first.fencing_token, 1);
+        assert!(store
+            .acquire_controller_lease("work-controller", "node-b", 1_050, 100)
+            .unwrap()
+            .is_none());
+
+        let second = store
+            .acquire_controller_lease("work-controller", "node-b", 1_101, 100)
+            .unwrap()
+            .unwrap();
+        assert_eq!(second.fencing_token, 2);
+        assert!(!store
+            .controller_fence_is_current("work-controller", first.fencing_token, 1_102)
+            .unwrap());
+        assert!(store
+            .controller_fence_is_current("work-controller", second.fencing_token, 1_102)
+            .unwrap());
+    }
+
+    #[test]
+    fn stale_holder_cannot_renew_after_takeover() {
+        let store = MornStore::open_in_memory().unwrap();
+        let first = store
+            .acquire_controller_lease("reconcile", "node-a", 1_000, 50)
+            .unwrap()
+            .unwrap();
+        let _second = store
+            .acquire_controller_lease("reconcile", "node-b", 1_051, 50)
+            .unwrap()
+            .unwrap();
+        assert!(store
+            .renew_controller_lease(&first, 1_052, 50)
+            .unwrap()
+            .is_none());
     }
 }
