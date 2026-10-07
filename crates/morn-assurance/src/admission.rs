@@ -101,6 +101,16 @@ impl QualificationEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StrictQualificationRequest {
+    pub candidate_ref: String,
+    pub decision_ref: String,
+    pub evidence_refs: Vec<String>,
+    pub qualification_evidence: QualificationEvidence,
+    pub context_of_use: Vec<String>,
+    pub valid_until: Option<Timestamp>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QualificationRecord {
     pub id: QualificationRecordId,
     pub manifest_id: CapabilityManifestId,
@@ -208,8 +218,6 @@ impl AdmissionService {
                 "only declared/observed/qualified capabilities can be qualified",
             ));
         }
-        let candidate_ref = candidate_ref.into();
-        let decision_ref = decision_ref.into();
         if candidate_ref.trim().is_empty() || decision_ref.trim().is_empty() {
             return Err(Error::validation(
                 "qualification requires explicit candidate/build and decision references",
@@ -243,13 +251,16 @@ impl AdmissionService {
     pub fn qualify_with_evidence(
         &mut self,
         capability: &mut CapabilityRecord,
-        candidate_ref: impl Into<String>,
-        decision_ref: impl Into<String>,
-        evidence_refs: Vec<String>,
-        qualification_evidence: QualificationEvidence,
-        context_of_use: Vec<String>,
-        valid_until: Option<Timestamp>,
+        request: StrictQualificationRequest,
     ) -> Result<QualificationRecord> {
+        let StrictQualificationRequest {
+            candidate_ref,
+            decision_ref,
+            evidence_refs,
+            qualification_evidence,
+            context_of_use,
+            valid_until,
+        } = request;
         if !matches!(
             capability.stage,
             CapabilityStage::Observed | CapabilityStage::Qualified
@@ -598,18 +609,20 @@ mod tests {
         let mut service = AdmissionService::default();
         let result = service.qualify_with_evidence(
             &mut capability,
-            "candidate:1",
-            "decision:1",
-            vec!["eval:1".to_string()],
-            QualificationEvidence {
-                test_suite_refs: vec!["suite:factory".to_string()],
-                environment_digest: Some("sha256:env".to_string()),
-                expected_properties: vec!["safe-reconcile".to_string()],
-                evaluator_identity: Some("evaluator:independent".to_string()),
-                ..Default::default()
+            StrictQualificationRequest {
+                candidate_ref: "candidate:1".to_string(),
+                decision_ref: "decision:1".to_string(),
+                evidence_refs: vec!["eval:1".to_string()],
+                qualification_evidence: QualificationEvidence {
+                    test_suite_refs: vec!["suite:factory".to_string()],
+                    environment_digest: Some("sha256:env".to_string()),
+                    expected_properties: vec!["safe-reconcile".to_string()],
+                    evaluator_identity: Some("evaluator:independent".to_string()),
+                    ..Default::default()
+                },
+                context_of_use: vec!["factory-readonly".to_string()],
+                valid_until: None,
             },
-            vec!["factory-readonly".to_string()],
-            None,
         );
         assert!(result.is_err());
         assert_eq!(capability.stage, CapabilityStage::Declared);
@@ -620,22 +633,25 @@ mod tests {
         let mut capability = candidate();
         let mut service = AdmissionService::default();
         assert_eq!(capability.stage, CapabilityStage::Declared);
+        observe_candidate(&mut service, &mut capability);
 
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
-                "candidate:1",
-                "certification-decision:1",
-                vec!["eval:1".to_string()],
-                QualificationEvidence {
-                    test_suite_refs: vec!["suite:factory".to_string()],
-                    environment_digest: Some("sha256:env".to_string()),
-                    expected_properties: vec!["safe-reconcile".to_string()],
-                    evaluator_identity: Some("evaluator:independent".to_string()),
-                    ..Default::default()
+                StrictQualificationRequest {
+                    candidate_ref: "candidate:1".to_string(),
+                    decision_ref: "certification-decision:1".to_string(),
+                    evidence_refs: vec!["eval:1".to_string()],
+                    qualification_evidence: QualificationEvidence {
+                        test_suite_refs: vec!["suite:factory".to_string()],
+                        environment_digest: Some("sha256:env".to_string()),
+                        expected_properties: vec!["safe-reconcile".to_string()],
+                        evaluator_identity: Some("evaluator:independent".to_string()),
+                        ..Default::default()
+                    },
+                    context_of_use: vec!["factory-readonly".to_string()],
+                    valid_until: None,
                 },
-                vec!["factory-readonly".to_string()],
-                None,
             )
             .unwrap();
         assert_eq!(capability.stage, CapabilityStage::Qualified);
@@ -667,18 +683,20 @@ mod tests {
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
-                "candidate:1",
-                "decision:1",
-                vec!["eval:1".to_string()],
-                QualificationEvidence {
-                    test_suite_refs: vec!["suite:factory".to_string()],
-                    environment_digest: Some("sha256:env".to_string()),
-                    expected_properties: vec!["safe-reconcile".to_string()],
-                    evaluator_identity: Some("evaluator:independent".to_string()),
-                    ..Default::default()
+                StrictQualificationRequest {
+                    candidate_ref: "candidate:1".to_string(),
+                    decision_ref: "decision:1".to_string(),
+                    evidence_refs: vec!["eval:1".to_string()],
+                    qualification_evidence: QualificationEvidence {
+                        test_suite_refs: vec!["suite:factory".to_string()],
+                        environment_digest: Some("sha256:env".to_string()),
+                        expected_properties: vec!["safe-reconcile".to_string()],
+                        evaluator_identity: Some("evaluator:independent".to_string()),
+                        ..Default::default()
+                    },
+                    context_of_use: vec!["factory-readonly".to_string()],
+                    valid_until: None,
                 },
-                vec!["factory-readonly".to_string()],
-                None,
             )
             .unwrap();
         let _release = record_fixture_release(&mut service, &mut capability, &qualification);
@@ -709,18 +727,20 @@ mod tests {
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
-                "candidate:1",
-                "decision:1",
-                vec!["eval:1".to_string()],
-                QualificationEvidence {
-                    test_suite_refs: vec!["suite:factory".to_string()],
-                    environment_digest: Some("sha256:env".to_string()),
-                    expected_properties: vec!["safe-reconcile".to_string()],
-                    evaluator_identity: Some("evaluator:independent".to_string()),
-                    ..Default::default()
+                StrictQualificationRequest {
+                    candidate_ref: "candidate:1".to_string(),
+                    decision_ref: "decision:1".to_string(),
+                    evidence_refs: vec!["eval:1".to_string()],
+                    qualification_evidence: QualificationEvidence {
+                        test_suite_refs: vec!["suite:factory".to_string()],
+                        environment_digest: Some("sha256:env".to_string()),
+                        expected_properties: vec!["safe-reconcile".to_string()],
+                        evaluator_identity: Some("evaluator:independent".to_string()),
+                        ..Default::default()
+                    },
+                    context_of_use: vec!["factory-readonly".to_string()],
+                    valid_until: None,
                 },
-                vec!["factory-readonly".to_string()],
-                None,
             )
             .unwrap();
         let profile = DomainProfile::factory_readonly_v1();
@@ -745,18 +765,20 @@ mod tests {
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
-                "candidate:1",
-                "decision:1",
-                vec!["eval:1".to_string()],
-                QualificationEvidence {
-                    test_suite_refs: vec!["suite:factory".to_string()],
-                    environment_digest: Some("sha256:env".to_string()),
-                    expected_properties: vec!["safe-reconcile".to_string()],
-                    evaluator_identity: Some("evaluator:independent".to_string()),
-                    ..Default::default()
+                StrictQualificationRequest {
+                    candidate_ref: "candidate:1".to_string(),
+                    decision_ref: "decision:1".to_string(),
+                    evidence_refs: vec!["eval:1".to_string()],
+                    qualification_evidence: QualificationEvidence {
+                        test_suite_refs: vec!["suite:factory".to_string()],
+                        environment_digest: Some("sha256:env".to_string()),
+                        expected_properties: vec!["safe-reconcile".to_string()],
+                        evaluator_identity: Some("evaluator:independent".to_string()),
+                        ..Default::default()
+                    },
+                    context_of_use: vec!["factory-readonly".to_string()],
+                    valid_until: None,
                 },
-                vec!["factory-readonly".to_string()],
-                None,
             )
             .unwrap();
         let release = record_fixture_release(&mut service, &mut capability, &qualification);
@@ -825,6 +847,7 @@ mod tests {
     fn expired_qualification_blocks_site_admission() {
         let mut capability = candidate();
         let mut service = AdmissionService::default();
+        observe_candidate(&mut service, &mut capability);
         let evidence = QualificationEvidence {
             test_suite_refs: vec!["suite:factory".to_string()],
             environment_digest: Some("sha256:environment".to_string()),
@@ -835,12 +858,14 @@ mod tests {
         let qualification = service
             .qualify_with_evidence(
                 &mut capability,
-                "candidate:1",
-                "decision:1",
-                vec!["eval:1".to_string()],
-                evidence,
-                vec!["factory-readonly".to_string()],
-                None,
+                StrictQualificationRequest {
+                    candidate_ref: "candidate:1".to_string(),
+                    decision_ref: "decision:1".to_string(),
+                    evidence_refs: vec!["eval:1".to_string()],
+                    qualification_evidence: evidence,
+                    context_of_use: vec!["factory-readonly".to_string()],
+                    valid_until: None,
+                },
             )
             .unwrap();
         let mut expired = qualification.clone();
