@@ -363,3 +363,86 @@ accountability.
 Agents, solvers, deterministic programs and humans may participate, but the
 factory Work survives any executor replacement. Production-write profiles
 remain a separate future trust level, not an automatic next step.
+
+
+## 11. A2A v1.x and the new CLI
+
+Sources:
+
+- https://a2a-protocol.org/latest/
+- https://github.com/a2aproject/A2A/blob/main/docs/specification.md
+- https://a2a-protocol.org/latest/blog/2026/10/01/introducing-a2a-cli/
+
+Current public A2A documentation identifies the 1.x line as the stable released
+protocol. The project now also provides an official CLI that lets ordinary
+shell/CI/coding-harness processes discover an Agent Card, submit work and
+follow an A2A Task without themselves becoming agent frameworks.
+
+Morn consequence:
+
+A2A is increasingly suitable as a **remote executor boundary**, including for
+non-agent Morn controllers. That reduces the need for a Morn-specific remote
+agent RPC. It does not change the semantic boundary:
+
+```text
+A2A Task / Message / Artifact
+    = remote executor protocol state/evidence
+
+Morn Work / Binding / Outcome / Acceptance
+    = business control-plane truth
+```
+
+The concrete A2A protocol version is pinned in the provider/interface binding,
+not embedded into Morn Work identity.
+
+## 12. MCP 2026 authorization hardening
+
+Sources:
+
+- https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/basic/authorization/index.mdx
+- https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/basic/authorization/authorization-server-discovery.mdx
+
+The 2026 HTTP authorization specification requires protected-resource metadata
+and resource/audience-bound access-token use when authorization is enabled.
+Tokens must be intended for the concrete protected resource and must not be
+blindly passed through to another MCP server.
+
+Morn consequence:
+
+- MCP tool metadata remains capability-interface metadata, not Authority.
+- HTTP MCP credential requests carry an explicit resource/audience reference.
+- secret material remains behind CredentialProvider opaque handles;
+- the Action/Connector enforcement boundary resolves credentials after
+  Authority/Profile checks;
+- STDIO/local MCP remains a distinct trust shape and should obtain credentials
+  from its execution environment rather than copying them into prompts.
+
+This is why Morn keeps identity/credential/enforcement semantics outside the
+Harness even when the Harness has first-class MCP support.
+
+## 13. DSH/Cordis packaging volatility validates the isolation boundary
+
+Sources:
+
+- https://github.com/deepseek-ai/deepseek-harness/discussions/7603
+- https://github.com/deepseek-ai/deepseek-harness/discussions/7610
+- https://www.npmjs.com/package/@deepseek-ai/cordis
+
+September 2026 community reports document dependency-resolution conflicts
+between DSH release-candidate packages and different Cordis package versions.
+At the same time, `@deepseek-ai/cordis` continues to publish quickly.
+
+This is not evidence that Cordis is unsuitable. It is evidence that Morn should
+avoid making DSH's internal package tree its architectural ABI.
+
+Morn therefore keeps these decisions:
+
+1. the reference Cordis host pins an exact Cordis version;
+2. only the dedicated composition-runtime adapter imports Cordis;
+3. DSH runs out-of-process through a public provider boundary;
+4. an active ExecutionBinding records the provider/runtime version/digest;
+5. a DSH/Cordis upgrade creates a new future binding or explicit migration,
+   never a silent reinterpretation of an active Attempt.
+
+The reference host currently pins `@deepseek-ai/cordis@4.0.4`. This is an
+engineering pin, not a semantic claim that 4.0.4 is permanently canonical.
