@@ -17,6 +17,21 @@ use morn_kernel::version::Version;
 use morn_profile::ConformanceReport;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct CapabilityLifecycleEventTag;
+pub type CapabilityLifecycleEventId = Id<CapabilityLifecycleEventTag>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CapabilityLifecycleEvent {
+    pub id: CapabilityLifecycleEventId,
+    pub manifest_id: CapabilityManifestId,
+    pub entity_ref: String,
+    pub event_type: String,
+    pub reason: String,
+    pub actor_ref: String,
+    pub created_at: Timestamp,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct CapabilityObservationTag;
 pub type CapabilityObservationId = Id<CapabilityObservationTag>;
 
@@ -155,6 +170,7 @@ pub struct SiteAdmission {
 
 #[derive(Debug, Default)]
 pub struct AdmissionService {
+    pub events: Vec<CapabilityLifecycleEvent>,
     pub observations: Vec<CapabilityObservation>,
     pub qualifications: Vec<QualificationRecord>,
     pub releases: Vec<CapabilityDistributionRelease>,
@@ -162,6 +178,25 @@ pub struct AdmissionService {
 }
 
 impl AdmissionService {
+    fn record_event(
+        &mut self,
+        manifest_id: CapabilityManifestId,
+        entity_ref: impl Into<String>,
+        event_type: impl Into<String>,
+        reason: impl Into<String>,
+        actor_ref: impl Into<String>,
+    ) {
+        self.events.push(CapabilityLifecycleEvent {
+            id: CapabilityLifecycleEventId::generate_with("cap-event"),
+            manifest_id,
+            entity_ref: entity_ref.into(),
+            event_type: event_type.into(),
+            reason: reason.into(),
+            actor_ref: actor_ref.into(),
+            created_at: Timestamp::now(),
+        });
+    }
+
     pub fn observe(
         &mut self,
         capability: &mut CapabilityRecord,
@@ -197,6 +232,13 @@ impl AdmissionService {
         };
         capability.stage = CapabilityStage::Observed;
         self.observations.push(observation.clone());
+        self.record_event(
+            capability.manifest.id.clone(),
+            observation.id.to_string(),
+            "Observed",
+            "evaluation observation recorded",
+            observation.evaluator_identity.clone(),
+        );
         Ok(observation)
     }
 
@@ -247,6 +289,17 @@ impl AdmissionService {
         capability.stage = CapabilityStage::Qualified;
         capability.qualification_refs.push(record.id.to_string());
         self.qualifications.push(record.clone());
+        self.record_event(
+            capability.manifest.id.clone(),
+            record.id.to_string(),
+            "Qualified",
+            "qualification decision recorded",
+            record
+                .qualification_evidence
+                .evaluator_identity
+                .clone()
+                .unwrap_or_else(|| "legacy-qualification".to_string()),
+        );
         Ok(record)
     }
 
@@ -361,6 +414,17 @@ impl AdmissionService {
         };
         capability.release_refs.push(release.id.to_string());
         self.releases.push(release.clone());
+        self.record_event(
+            capability.manifest.id.clone(),
+            release.id.to_string(),
+            "Released",
+            "content-addressed capability release recorded",
+            qualification
+                .qualification_evidence
+                .evaluator_identity
+                .clone()
+                .unwrap_or_else(|| "release-service".to_string()),
+        );
         Ok(release)
     }
 
@@ -462,6 +526,13 @@ impl AdmissionService {
             profile_ref: admission.profile_ref.clone(),
         });
         self.admissions.push(admission.clone());
+        self.record_event(
+            capability.manifest.id.clone(),
+            admission.id.to_string(),
+            "SiteAdmitted",
+            format!("admitted to {} under {}", admission.site_ref, admission.profile_ref),
+            admission.approved_by.clone(),
+        );
         Ok(admission)
     }
 
@@ -506,6 +577,13 @@ impl AdmissionService {
         } else {
             CapabilityStage::Admitted
         };
+        self.record_event(
+            capability.manifest.id.clone(),
+            release_id.to_string(),
+            "ReleaseRevoked",
+            "release revoked; dependent site admissions suspended",
+            "system",
+        );
         Ok(())
     }
 
