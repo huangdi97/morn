@@ -63,6 +63,14 @@ pub fn router(state: AppState) -> Router {
             "/api/v115/artifact/procedure/compile",
             post(v115_compile_procedure),
         )
+        .route(
+            "/api/v115/artifact/repository/compile",
+            post(v115_compile_repository),
+        )
+        .route(
+            "/api/v115/artifact/paper/compile",
+            post(v115_compile_paper),
+        )
         .route("/api/workspaces", get(list_workspaces))
         .route("/api/workbench", get(workbench))
         .route("/api/studio", get(studio))
@@ -161,7 +169,7 @@ async fn v115_status() -> ApiResult {
         },
         "capability_supply_chain": {
             "stages": ["Declared", "Observed", "Qualified", "Admitted", "Suspended", "Retired"],
-            "artifact_compilers": ["OpenAPI2Capability", "SOP2ProcedureCapability"],
+            "artifact_compilers": ["OpenAPI2Capability", "SOP2ProcedureCapability", "Repo2Capability", "ReviewedPaper2Capability"],
             "qualification_is_not_admission": true
         },
         "profiles": [
@@ -272,6 +280,76 @@ async fn v115_compile_procedure(Json(body): Json<Value>) -> ApiResult {
         "candidate": candidate,
         "admission": "not-qualified-not-admitted",
         "next": ["evaluate", "qualify", "release", "site-conformance", "admit"]
+    })))
+}
+
+async fn v115_compile_repository(Json(body): Json<Value>) -> ApiResult {
+    use morn_foundry::{
+        ArtifactCompiler, ArtifactKind, ArtifactSource, RepositoryManifestCompiler,
+    };
+
+    let source = ArtifactSource {
+        kind: ArtifactKind::Repository,
+        name: body
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("repository-capability")
+            .to_string(),
+        source_ref: body
+            .get("source_ref")
+            .and_then(Value::as_str)
+            .unwrap_or("repo://inline-manifest")
+            .to_string(),
+        source_digest: body
+            .get("source_digest")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        content: body
+            .get("content")
+            .and_then(Value::as_str)
+            .ok_or_else(|| AppError(Error::validation("content must contain repository manifest JSON")))?
+            .to_string(),
+    };
+    let candidate = RepositoryManifestCompiler.compile(&source)?;
+    Ok(Json(json!({
+        "candidate": candidate,
+        "admission": "not-qualified-not-admitted",
+        "next": ["evaluate", "qualify", "release", "site-conformance", "admit"]
+    })))
+}
+
+async fn v115_compile_paper(Json(body): Json<Value>) -> ApiResult {
+    use morn_foundry::{
+        ArtifactCompiler, ArtifactKind, ArtifactSource, ReviewedPaperManifestCompiler,
+    };
+
+    let source = ArtifactSource {
+        kind: ArtifactKind::Paper,
+        name: body
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("paper-derived-capability")
+            .to_string(),
+        source_ref: body
+            .get("source_ref")
+            .and_then(Value::as_str)
+            .unwrap_or("paper://reviewed-manifest")
+            .to_string(),
+        source_digest: body
+            .get("source_digest")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        content: body
+            .get("content")
+            .and_then(Value::as_str)
+            .ok_or_else(|| AppError(Error::validation("content must contain reviewed paper manifest JSON")))?
+            .to_string(),
+    };
+    let candidate = ReviewedPaperManifestCompiler.compile(&source)?;
+    Ok(Json(json!({
+        "candidate": candidate,
+        "admission": "not-qualified-not-admitted",
+        "next": ["independent-evaluation", "qualify", "release", "site-conformance", "admit"]
     })))
 }
 
