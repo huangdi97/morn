@@ -11,6 +11,7 @@ use morn_capability::manifest::{CapabilityManifestId, CapabilityRecord, Capabili
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::Id;
 use morn_kernel::time::Timestamp;
+use morn_kernel::version::Version;
 use morn_profile::ConformanceReport;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -28,16 +29,47 @@ pub enum QualificationStatus {
     Suspended,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct QualificationEvidence {
+    pub test_suite_refs: Vec<String>,
+    pub environment_digest: Option<String>,
+    pub input_scope: Vec<String>,
+    pub expected_properties: Vec<String>,
+    pub known_failure_modes: Vec<String>,
+    pub cost_evidence_ref: Option<String>,
+    pub latency_evidence_ref: Option<String>,
+    pub evaluator_identity: Option<String>,
+}
+
+impl QualificationEvidence {
+    pub fn is_strict_enough_for_site_admission(&self) -> bool {
+        !self.test_suite_refs.is_empty()
+            && self.environment_digest.as_deref().is_some_and(|value| !value.trim().is_empty())
+            && !self.expected_properties.is_empty()
+            && self.evaluator_identity.as_deref().is_some_and(|value| !value.trim().is_empty())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QualificationRecord {
     pub id: QualificationRecordId,
     pub manifest_id: CapabilityManifestId,
+    pub qualification_version: Version,
     pub release_ref: String,
     pub decision_ref: String,
     pub evidence_refs: Vec<String>,
+    pub qualification_evidence: QualificationEvidence,
     pub context_of_use: Vec<String>,
     pub status: QualificationStatus,
+    pub valid_until: Option<Timestamp>,
     pub created_at: Timestamp,
+}
+
+impl QualificationRecord {
+    pub fn is_active_at(&self, now: Timestamp) -> bool {
+        self.status == QualificationStatus::Qualified
+            && self.valid_until.is_none_or(|end| now <= end)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -99,11 +131,77 @@ impl AdmissionService {
         let record = QualificationRecord {
             id: QualificationRecordId::generate_with("qual"),
             manifest_id: capability.manifest.id.clone(),
+            qualification_version: Version::v1(),
             release_ref,
             decision_ref,
+            qualification_evidence: QualificationEvidence {
+                test_suite_refs: vec!["legacy-evidence-set".to_string()],
+                environment_digest: Some("legacy-unspecified-environment".to_string()),
+                input_scope: context_of_use.clone(),
+                expected_properties: vec!["legacy-certification-decision-satisfied".to_string()],
+                known_failure_modes: Vec::new(),
+                cost_evidence_ref: None,
+                latency_evidence_ref: None,
+                evaluator_identity: Some("legacy-certification-bridge".to_string()),
+            },
             evidence_refs,
             context_of_use,
             status: QualificationStatus::Qualified,
+            valid_until: None,
+            created_at: Timestamp::now(),
+        };
+        capability.stage = CapabilityStage::Qualified;
+        capability.qualification_refs.push(record.id.to_string());
+        self.qualifications.push(record.clone());
+        Ok(record)
+    }
+
+
+    pub fn qualify_with_evidence(
+        &mut self,
+        capability: &mut CapabilityRecord,
+        release_ref: impl Into<String>,
+        decision_ref: impl Into<String>,
+        evidence_refs: Vec<String>,
+        qualification_evidence: QualificationEvidence,
+        context_of_use: Vec<String>,
+        valid_until: Option<Timestamp>,
+    ) -> Result<QualificationRecord> {
+        if !matches!(
+            capability.stage,
+            CapabilityStage::Declared | CapabilityStage::Observed | CapabilityStage::Qualified
+        ) {
+            return Err(Error::invalid_state(
+                "only declared/observed/qualified capabilities can be qualified",
+            ));
+        }
+        if evidence_refs.is_empty() || !qualification_evidence.is_strict_enough_for_site_admission() {
+            return Err(Error::validation(
+                "strict qualification requires evidence, tests, environment digest, expected properties and evaluator identity",
+            ));
+        }
+        if valid_until.is_some_and(|end| end < Timestamp::now()) {
+            return Err(Error::validation("qualification validity has already expired"));
+        }
+        let release_ref = release_ref.into();
+        let decision_ref = decision_ref.into();
+        if release_ref.trim().is_empty() || decision_ref.trim().is_empty() {
+            return Err(Error::validation(
+                "qualification requires explicit release and decision references",
+            ));
+        }
+
+        let record = QualificationRecord {
+            id: QualificationRecordId::generate_with("qual"),
+            manifest_id: capability.manifest.id.clone(),
+            qualification_version: Version::v1(),
+            release_ref,
+            decision_ref,
+            evidence_refs,
+            qualification_evidence,
+            context_of_use,
+            status: QualificationStatus::Qualified,
+            valid_until,
             created_at: Timestamp::now(),
         };
         capability.stage = CapabilityStage::Qualified;
@@ -121,8 +219,10 @@ impl AdmissionService {
         conformance: &ConformanceReport,
         approved_by: impl Into<String>,
     ) -> Result<SiteAdmission> {
-        if qualification.status != QualificationStatus::Qualified {
-            return Err(Error::invalid_state("qualification is not active"));
+        if !qualification.is_active_at(Timestamp::now()) {
+            return Err(Error::invalid_state(
+                "qualification is suspended, rejected or expired",
+            ));
         }
         if qualification.manifest_id != capability.manifest.id {
             return Err(Error::validation(
@@ -274,6 +374,44 @@ mod tests {
         assert_eq!(admission.status, SiteAdmissionStatus::Admitted);
         assert_eq!(capability.stage, CapabilityStage::Admitted);
         assert_eq!(capability.admitted_sites, vec!["plant-a".to_string()]);
+    }
+
+    #[test]
+    fn expired_qualification_blocks_site_admission() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        let evidence = QualificationEvidence {
+            test_suite_refs: vec!["suite:factory".to_string()],
+            environment_digest: Some("sha256:environment".to_string()),
+            expected_properties: vec!["no-blind-retry".to_string()],
+            evaluator_identity: Some("evaluator:independent".to_string()),
+            ..Default::default()
+        };
+        let qualification = service
+            .qualify_with_evidence(
+                &mut capability,
+                "release:1",
+                "decision:1",
+                vec!["eval:1".to_string()],
+                evidence,
+                vec!["factory-readonly".to_string()],
+                None,
+            )
+            .unwrap();
+        let mut expired = qualification.clone();
+        expired.valid_until = Some(Timestamp::from_millis(0));
+        let profile = DomainProfile::factory_readonly_v1();
+        let report = passing_conformance(&profile);
+        assert!(service
+            .admit(
+                &mut capability,
+                &expired,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .is_err());
     }
 
     #[test]
