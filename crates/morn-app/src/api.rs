@@ -165,6 +165,7 @@ async fn v115_status() -> ApiResult {
                 { "id": "pi", "status": "fixture-contract; real transport not configured" }
             ],
             "execution_environment": ["process", "container", "microvm", "full-vm", "remote", "physical"],
+            "workload_identity": "provider-neutral; SPIFFE-compatible reference shape; no secret material in identity record",
             "authority": "provider-neutral; native policy reference, OPA/Cedar/customer IAM compatible by contract"
         },
         "capability_supply_chain": {
@@ -534,7 +535,10 @@ async fn hub(State(state): State<AppState>) -> ApiResult {
             { "id": "cordis@4.0.4", "name": "Cordis Reference Composition Runtime", "trust": "Reference" }
         ],
         "capability_compilers": [
-            { "id": "openapi2capability@v11.5", "name": "OpenAPI → Capability Candidate", "trust": "LocalVerified" }
+            { "id": "openapi2capability@v11.5", "name": "OpenAPI → Capability Candidate", "trust": "LocalVerified" },
+            { "id": "sop2capability@v11.5", "name": "SOP / Procedure → Capability Candidate", "trust": "LocalVerified" },
+            { "id": "repo2capability@v11.5", "name": "Repository Manifest → Capability Candidate", "trust": "LocalVerified" },
+            { "id": "reviewed-paper2capability@v11.5", "name": "Reviewed Paper Manifest → Capability Candidate", "trust": "LocalVerified" }
         ],
         "work_package_templates": [ { "id": "generic-work@1.0", "name": "Generic Work Package", "trust": "Verified" } ],
         "workcell_blueprints": [ { "id": "generic-workcell@1.0", "name": "Generic Workcell", "trust": "Verified" } ],
