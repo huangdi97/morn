@@ -161,13 +161,12 @@ mod tests {
         );
         attempt.transition(AttemptState::Authorized).unwrap();
         attempt.transition(AttemptState::Dispatched).unwrap();
-        attempt.mark_outcome_unknown("timeout after commit").unwrap();
+        attempt
+            .mark_outcome_unknown("timeout after commit")
+            .unwrap();
 
-        let record = reconcile_attempt(
-            &mut attempt,
-            &StatefulCmmsReconciler { cmms: &cmms },
-        )
-        .unwrap();
+        let record =
+            reconcile_attempt(&mut attempt, &StatefulCmmsReconciler { cmms: &cmms }).unwrap();
         assert_eq!(record.after, AttemptState::Observed);
         assert_eq!(attempt.external_ref.as_deref(), Some("MO-88273"));
         assert_eq!(cmms.create_calls, 1, "reconciliation must not create again");
