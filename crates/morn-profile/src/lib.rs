@@ -155,9 +155,7 @@ impl DomainProfile {
             .map(GuaranteeRequirement::required)
             .collect(),
             minimum_isolation: "container".to_string(),
-            required_execution_guarantees: vec![
-                ExecutionGuarantee::SecretIndirection,
-            ],
+            required_execution_guarantees: vec![ExecutionGuarantee::SecretIndirection],
             source_of_truth_binding_required: false,
             durable_work_state_required: true,
             provenance_required: true,
