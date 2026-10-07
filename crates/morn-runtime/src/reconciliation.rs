@@ -82,7 +82,54 @@ pub fn reconcile_attempt(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+
     use morn_kernel::ids::RuntimeBindingId;
+
+    #[derive(Debug, Default)]
+    struct StatefulFakeCmms {
+        orders: HashMap<String, String>,
+        create_calls: u32,
+    }
+
+    impl StatefulFakeCmms {
+        fn create_then_timeout(&mut self, business_key: &str) -> Result<()> {
+            self.create_calls += 1;
+            self.orders
+                .entry(business_key.to_string())
+                .or_insert_with(|| "MO-88273".to_string());
+            Err(Error::external(
+                "client timed out after CMMS committed the maintenance order",
+            ))
+        }
+
+        fn query_by_business_key(&self, business_key: &str) -> Option<&str> {
+            self.orders.get(business_key).map(String::as_str)
+        }
+    }
+
+    struct StatefulCmmsReconciler<'a> {
+        cmms: &'a StatefulFakeCmms,
+    }
+
+    impl OutcomeReconciler for StatefulCmmsReconciler<'_> {
+        fn reconcile(&self, attempt: &ActionAttempt) -> Result<ReconciliationObservation> {
+            let external_ref = self
+                .cmms
+                .query_by_business_key(&attempt.business_key)
+                .map(str::to_string);
+            Ok(ReconciliationObservation {
+                business_key: attempt.business_key.clone(),
+                committed: Some(external_ref.is_some()),
+                observed: Some(external_ref.is_some()),
+                evidence_refs: external_ref
+                    .as_ref()
+                    .map(|reference| vec![format!("cmms://orders/{reference}")])
+                    .unwrap_or_default(),
+                external_ref,
+            })
+        }
+    }
 
     struct CommittedAfterTimeout;
 
@@ -96,6 +143,38 @@ mod tests {
                 evidence_refs: vec!["cmms:MO-88273".into()],
             })
         }
+    }
+
+    #[test]
+    fn authoritative_query_after_timeout_proves_exactly_one_external_create() {
+        let business_key = "work-1042:maintenance";
+        let mut cmms = StatefulFakeCmms::default();
+        let timeout = cmms.create_then_timeout(business_key);
+        assert!(timeout.is_err());
+        assert_eq!(cmms.create_calls, 1);
+        assert_eq!(cmms.query_by_business_key(business_key), Some("MO-88273"));
+
+        let mut attempt = ActionAttempt::new(
+            RuntimeBindingId::generate_with("binding"),
+            business_key,
+            "create-maintenance-order",
+        );
+        attempt.transition(AttemptState::Authorized).unwrap();
+        attempt.transition(AttemptState::Dispatched).unwrap();
+        attempt.mark_outcome_unknown("timeout after commit").unwrap();
+
+        let record = reconcile_attempt(
+            &mut attempt,
+            &StatefulCmmsReconciler { cmms: &cmms },
+        )
+        .unwrap();
+        assert_eq!(record.after, AttemptState::Observed);
+        assert_eq!(attempt.external_ref.as_deref(), Some("MO-88273"));
+        assert_eq!(cmms.create_calls, 1, "reconciliation must not create again");
+        assert!(
+            attempt.transition(AttemptState::Dispatched).is_err(),
+            "an observed ambiguous attempt cannot be silently redispatched"
+        );
     }
 
     #[test]
