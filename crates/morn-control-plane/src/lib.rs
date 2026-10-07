@@ -89,11 +89,16 @@ impl WorkController {
             );
         }
 
-        work.status.phase = if work.required_conditions_satisfied() {
-            WorkPhase::Ready
-        } else {
-            WorkPhase::Blocked
-        };
+        let profile_conditions_satisfied = profile
+            .pre_execution_work_conditions()
+            .iter()
+            .all(|required| work.condition_is_true(required));
+        work.status.phase =
+            if work.required_conditions_satisfied() && profile_conditions_satisfied {
+                WorkPhase::Ready
+            } else {
+                WorkPhase::Blocked
+            };
         work.mark_observed();
     }
 
@@ -694,6 +699,43 @@ mod tests {
         );
         assert_eq!(work.status.phase, WorkPhase::Waiting);
         assert!(!work.condition_is_true("AcceptedOutcomeSemantics"));
+    }
+
+    #[test]
+    fn profile_readiness_gates_cannot_be_omitted_from_work_spec() {
+        let profile = DomainProfile::factory_readonly_v1();
+        let work_id = WorkPackageId::generate_with("wp");
+        let spec = WorkSpec::new(work_id, "factory work", profile.canonical_ref());
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+
+        // WorkSpec requires only CapabilityResolved by default, but Factory
+        // semantics still require qualification, authority, source truth and
+        // provenance before Ready.
+        WorkController.reconcile(
+            &mut work,
+            &profile,
+            &ControllerInputs {
+                capability_resolved: true,
+                capability_qualified: false,
+                authority_satisfied: false,
+                source_of_truth_bound: false,
+                provenance_ready: false,
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Blocked);
+
+        WorkController.reconcile(
+            &mut work,
+            &profile,
+            &ControllerInputs {
+                capability_resolved: true,
+                capability_qualified: true,
+                authority_satisfied: true,
+                source_of_truth_bound: true,
+                provenance_ready: true,
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Ready);
     }
 
     #[test]
