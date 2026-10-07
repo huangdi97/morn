@@ -308,6 +308,17 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     assert_eq!(attempt.state, AttemptState::Observed);
     assert_eq!(attempt.external_ref.as_deref(), Some("MO-88273"));
     attempt.transition(AttemptState::Verified).unwrap();
+    WorkProgressController.reconcile(
+        &mut work,
+        &WorkProgressInputs {
+            binding: Some(&binding),
+            attempt: Some(&attempt),
+            ..Default::default()
+        },
+    );
+    assert!(work.condition_is_true("ProfileVersionPinned"));
+    assert!(work.condition_is_true("ReceiptAfterExternalAction"));
+    assert!(work.condition_is_true("ReconciliationOnUnknown"));
 
     // Provider migration never edits the binding used by the already-started attempt.
     let (migrated, migration_decision) = binding.rebind_for_work(
@@ -368,6 +379,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         },
     );
     assert_eq!(work.status.phase, WorkPhase::Delivered);
+    assert!(work.condition_is_true("OutcomeObservation"));
 
     let mut acceptance_decision = AcceptanceDecision::new(
         work_package_id.clone(),
@@ -392,6 +404,8 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         },
     );
     assert_eq!(work.status.phase, WorkPhase::Accepted);
+    assert!(work.condition_is_true("IndependentAcceptance"));
+    assert!(work.condition_is_true("AcceptedOutcomeSemantics"));
 
     let mut value = ValueAssessment::new(
         work_package_id.clone(),
