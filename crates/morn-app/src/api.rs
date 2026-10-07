@@ -58,6 +58,10 @@ pub fn router(state: AppState) -> Router {
             "/api/v115/artifact/openapi/compile",
             post(v115_compile_openapi),
         )
+        .route(
+            "/api/v115/artifact/procedure/compile",
+            post(v115_compile_procedure),
+        )
         .route("/api/workspaces", get(list_workspaces))
         .route("/api/workbench", get(workbench))
         .route("/api/studio", get(studio))
@@ -199,6 +203,41 @@ async fn v115_compile_openapi(Json(body): Json<Value>) -> ApiResult {
         content: content.to_string(),
     };
     let candidate = OpenApiJsonCompiler.compile(&source)?;
+    Ok(Json(json!({
+        "candidate": candidate,
+        "admission": "not-qualified-not-admitted",
+        "next": ["evaluate", "qualify", "release", "site-conformance", "admit"]
+    })))
+}
+
+async fn v115_compile_procedure(Json(body): Json<Value>) -> ApiResult {
+    use morn_foundry::{ArtifactCompiler, ArtifactKind, ArtifactSource, ProcedureJsonCompiler};
+
+    let name = body
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("procedure-capability");
+    let source_ref = body
+        .get("source_ref")
+        .and_then(Value::as_str)
+        .unwrap_or("inline://procedure");
+    let source_digest = body
+        .get("source_digest")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let content = body
+        .get("content")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("content must contain procedure JSON")))?;
+
+    let source = ArtifactSource {
+        kind: ArtifactKind::Procedure,
+        name: name.to_string(),
+        source_ref: source_ref.to_string(),
+        source_digest,
+        content: content.to_string(),
+    };
+    let candidate = ProcedureJsonCompiler.compile(&source)?;
     Ok(Json(json!({
         "candidate": candidate,
         "admission": "not-qualified-not-admitted",
