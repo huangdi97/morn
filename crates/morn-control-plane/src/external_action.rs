@@ -77,6 +77,19 @@ pub fn begin_external_attempt_with_effect(
         )));
     }
 
+    if matches!(
+        permit.mode,
+        crate::ExternalActionMode::SandboxWrite
+            | crate::ExternalActionMode::ShadowWrite
+            | crate::ExternalActionMode::ProductionWrite
+            | crate::ExternalActionMode::PhysicalControl
+    ) && effect.class == EffectClass::E0LifecycleReversible
+    {
+        return Err(Error::validation(
+            "write-like external action modes cannot be represented as E0 lifecycle effects",
+        ));
+    }
+
     let effect_ceiling = binding
         .effect_ceiling
         .unwrap_or(EffectClass::E0LifecycleReversible);
@@ -209,6 +222,43 @@ mod tests {
     }
 
     #[test]
+    fn legacy_e0_entrypoint_cannot_smuggle_a_write_mode() {
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "test",
+            "morn.factory.readonly@1.0.0",
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let binding = ExecutionBinding::for_work(&work, "capability:legacy", "provider:a", "1");
+        let permit = ExternalActionPermit {
+            id: crate::ExternalActionPermitId::generate_with("permit"),
+            profile_ref: binding.profile_ref.clone(),
+            mode: crate::ExternalActionMode::SandboxWrite,
+            authority_decision_ref: "authz:test".to_string(),
+            principal: "controller".to_string(),
+            acting_for: None,
+            action: "cmms.sandbox.write".to_string(),
+            resource: "cmms://fixture".to_string(),
+            site_ref: binding.site_ref.clone(),
+            scope: vec![],
+            parameter_envelope: BTreeMap::new(),
+            work_ref: work.id.to_string(),
+            binding_ref: binding.id.to_string(),
+            not_before: None,
+            expires_at: None,
+            issued_at: Timestamp::now(),
+        };
+        assert!(begin_external_attempt(
+            &permit,
+            &binding,
+            "business-key",
+            "cmms.sandbox.write",
+        )
+        .is_err());
+    }
+
+    #[test]
     fn permit_cannot_be_replayed_for_a_different_action() {
         let mut spec = WorkSpec::new(
             WorkPackageId::generate_with("work"),
@@ -255,12 +305,12 @@ mod tests {
         let permit = ExternalActionPermit {
             id: crate::ExternalActionPermitId::generate_with("permit"),
             profile_ref: binding.profile_ref.clone(),
-            mode: crate::ExternalActionMode::SandboxWrite,
+            mode: crate::ExternalActionMode::Read,
             authority_decision_ref: "authz:test".to_string(),
             principal: "controller".to_string(),
             acting_for: None,
-            action: "sandbox-write".to_string(),
-            resource: "cmms://fixture".to_string(),
+            action: "historian.read".to_string(),
+            resource: "historian://fixture".to_string(),
             site_ref: Some("plant-a".to_string()),
             scope: vec!["maintenance-order:create".to_string()],
             parameter_envelope: BTreeMap::new(),
@@ -271,9 +321,9 @@ mod tests {
             issued_at: Timestamp::now(),
         };
         let attempt =
-            begin_external_attempt(&permit, &binding, "business-key", "sandbox-write").unwrap();
+            begin_external_attempt(&permit, &binding, "business-key", "historian.read").unwrap();
         assert_eq!(attempt.state, AttemptState::Authorized);
-        assert_eq!(attempt.resource_ref.as_deref(), Some("cmms://fixture"));
+        assert_eq!(attempt.resource_ref.as_deref(), Some("historian://fixture"));
         assert_eq!(attempt.site_ref.as_deref(), Some("plant-a"));
         assert_eq!(
             attempt.external_action_permit_ref.as_deref(),
@@ -282,6 +332,6 @@ mod tests {
 
         let mut wrong = permit.clone();
         wrong.binding_ref = "binding:other".to_string();
-        assert!(begin_external_attempt(&wrong, &binding, "business-key", "sandbox-write").is_err());
+        assert!(begin_external_attempt(&wrong, &binding, "business-key", "historian.read").is_err());
     }
 }
