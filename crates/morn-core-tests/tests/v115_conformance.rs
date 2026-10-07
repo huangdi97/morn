@@ -262,3 +262,39 @@ fn attempt_id_type_is_distinct_from_binding_id_type() {
     let attempt = ActionAttempt::new(binding.clone(), "key", "action");
     assert_eq!(attempt.binding_id, binding);
 }
+
+#[test]
+fn external_agent_task_completion_is_not_business_acceptance() {
+    use morn_integration::{A2aTaskEvidence, A2aTaskState};
+
+    let external = A2aTaskEvidence {
+        agent_ref: "a2a://planner".to_string(),
+        task_id: "task-1".to_string(),
+        context_id: Some("context-1".to_string()),
+        state: A2aTaskState::Completed,
+        artifact_refs: vec!["artifact://plan".to_string()],
+        raw_status: None,
+    };
+
+    assert!(external.is_executor_terminal());
+    assert!(!external.proves_morn_acceptance());
+}
+
+#[test]
+fn mcp_tool_metadata_never_grants_authority_by_itself() {
+    use morn_integration::McpToolDescriptor;
+
+    let descriptor = McpToolDescriptor {
+        server_ref: "mcp://cmms".to_string(),
+        tool_name: "create_order".to_string(),
+        input_schema: json!({"type":"object"}),
+        output_schema: None,
+        annotations: json!({"destructiveHint": true}),
+    };
+    descriptor.validate().unwrap();
+
+    let serialized = serde_json::to_value(descriptor).unwrap();
+    assert!(serialized.get("authority").is_none());
+    assert!(serialized.get("credential").is_none());
+    assert!(serialized.get("token").is_none());
+}
