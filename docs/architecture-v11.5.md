@@ -471,7 +471,7 @@ truth model. Review/approval produces the existing SolutionPackage; only
 SolutionPackage instantiation creates canonical WorkResource. This keeps the
 product simple while preserving one business object model.
 
-See ADR-014, ADR-015 and ADR-016.
+See ADR-014, ADR-015, ADR-016 and ADR-020.
 
 
 ## Digital employee / role interface
@@ -558,3 +558,40 @@ ExecutionBinding / Attempt
 No reverse lookup from Cordis Context to canonical Work identity is permitted.
 If the composition provider changes, business identity survives and a new
 binding is required before future execution can use the replacement.
+
+
+## Provider fabric registry
+
+Provider identity is runtime/composition metadata, not business identity.
+The reference runtime therefore maintains a typed provider catalog with:
+
+- provider family;
+- exact version and optional content digest;
+- endpoint/protocol metadata;
+- declared feature set;
+- current health projection;
+- observation/evidence history.
+
+Only a healthy provider that satisfies the requested feature contract is
+selectable for a future binding. Provider health changes do not rewrite existing
+`ExecutionBinding` or `ActionAttempt`; they affect future resolution or
+trigger an explicit rebind/migration decision.
+
+The provider registry is intentionally separate from the Capability Registry:
+one provider may implement many capabilities, and one capability may be
+available through multiple providers. Cordis service presence is one local
+provider observation source, not the canonical provider/business database.
+
+## Accepted outcome closure
+
+Final acceptance is stricter than an `Accept` enum value. A Work reaches the
+Accepted phase only when:
+
+1. the AcceptanceDecision belongs to the Work;
+2. its AcceptanceSpec matches the Work's pinned acceptance reference when one
+   is declared;
+3. it explicitly references a source-grounded ObservedOutcome for that Work;
+4. that same outcome is present as control-plane evidence.
+
+An agent/task/session reporting success can therefore never close Work by
+manufacturing an unlinked outcome id.
