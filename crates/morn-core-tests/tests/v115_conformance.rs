@@ -12,7 +12,7 @@ use morn_kernel::ids::{CapabilityId, RuntimeBindingId, WorkPackageId, WorkspaceI
 use morn_kernel::protocol::{HistoryMutation, HistoryMutationKind, ProtocolSnapshot};
 use morn_kernel::time::Timestamp;
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
-use morn_runtime::{ActionAttempt, AttemptState, ExecutionBinding};
+use morn_runtime::{ActionAttempt, AttemptState, BindingMigrationReason, ExecutionBinding};
 use morn_work::{WorkResource, WorkSpec};
 use serde_json::json;
 
@@ -321,4 +321,60 @@ fn mcp_tool_metadata_never_grants_authority_by_itself() {
     assert!(serialized.get("authority").is_none());
     assert!(serialized.get("credential").is_none());
     assert!(serialized.get("token").is_none());
+}
+
+
+#[test]
+fn work_truth_survives_harness_provider_migration() {
+    let work_id = WorkPackageId::generate_with("work");
+    let work = WorkResource::new(
+        WorkspaceId::generate(),
+        WorkSpec::new(
+            work_id.clone(),
+            "investigate outage",
+            "morn.factory.readonly@1.0.0",
+        ),
+    );
+
+    let first = ExecutionBinding::for_work(
+        &work,
+        "capability:investigator@sha256:dsh",
+        "deepseek-harness",
+        "fixture-v1",
+    );
+    let mut first_attempt = ActionAttempt::new(
+        first.id.clone(),
+        format!("{}:investigate:1", work.id),
+        "investigate-outage",
+    );
+    first_attempt.transition(AttemptState::Authorized).unwrap();
+    first_attempt.transition(AttemptState::Dispatched).unwrap();
+    first_attempt
+        .mark_outcome_unknown("harness/provider lost during execution")
+        .unwrap();
+
+    let (second, decision) = first.rebind_for_work(
+        &work,
+        "capability:investigator@sha256:pi",
+        "pi",
+        "fixture-v1",
+        BindingMigrationReason::RuntimeRecovery,
+        "work-controller",
+        vec!["provider:deepseek-harness-unavailable".to_string()],
+    );
+    let second_attempt = ActionAttempt::new(
+        second.id.clone(),
+        format!("{}:investigate:2", work.id),
+        "investigate-outage",
+    );
+
+    assert_eq!(first.work_id, work.id);
+    assert_eq!(second.work_id, work.id);
+    assert_eq!(first.work_generation, second.work_generation);
+    assert_ne!(first.id, second.id);
+    assert_eq!(first_attempt.binding_id, first.id);
+    assert_eq!(second_attempt.binding_id, second.id);
+    assert_eq!(decision.from_binding, first.id);
+    assert_eq!(decision.to_binding, second.id);
+    assert_eq!(first_attempt.state, AttemptState::OutcomeUnknown);
 }
