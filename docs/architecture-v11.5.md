@@ -216,10 +216,13 @@ Planned/allowed compiler kinds include:
 - model -> model capability;
 - workflow -> workflow capability.
 
-The first concrete implementation is a conservative OpenAPI JSON compiler. It
-only discovers operations that actually exist in the source document, records
-source provenance, emits a `Declared` candidate and explicitly leaves
-qualification/admission unresolved.
+The implemented compiler family currently includes conservative OpenAPI JSON,
+structured SOP/procedure, explicit repository-manifest and reviewed
+paper-manifest compilers. They only consume declared/reviewed source facts,
+record provenance, emit `Declared` candidates and explicitly leave
+qualification/release/site-admission unresolved. Paper-derived executable
+candidates require a real code binding; free-form paper text alone is not
+promoted into an executable capability.
 
 ## Execution environments
 
@@ -337,12 +340,15 @@ Implemented locally on the v11.5 branch:
 - DSH fixture provider and Pi fixture provider;
 - DSH/Pi harness-neutrality contract benchmark;
 - provider-neutral AuthorityProvider reference adapter;
-- ExecutionEnvironmentProvider abstraction;
+- Work-scoped credential and SPIFFE-compatible workload-identity provider seams;
+- ExecutionEnvironmentProvider abstraction with explicit guarantee-vector enforcement;
 - profile conformance evaluator;
 - QualificationRecord + SiteAdmission bridge;
-- OpenAPI2Capability and structured SOP2ProcedureCapability candidate compilers;
+- OpenAPI2Capability, SOP2ProcedureCapability, Repo2Capability and
+  ReviewedPaper2Capability candidate compilers;
 - CloudEvents-compatible event envelope;
 - OCI/Sigstore/SLSA-oriented capability package descriptor;
+- approved SolutionPackage -> persisted Work instantiation;
 - Factory read-only vertical-slice integration test;
 - API/UI exposure in Workbench, Studio, Console and Hub.
 
@@ -404,3 +410,48 @@ kinds distinguish `Agent`, `Llm` and `Model`:
 A Workcell's agent count therefore counts only explicit `Agent` capabilities.
 A model + deterministic controller does not become an agent by naming
 convention, and a zero-agent Workcell remains a first-class valid plan.
+
+
+## Blueprint and instance semantics
+
+Morn does not add parallel `Blueprint` or `Instance` canonical records.
+An approved `SolutionPackage` is the reusable blueprint; instantiation creates
+a normal `WorkResource` with `source_solution_ref` pointing back to the exact
+package/version.
+
+```text
+Intent / Artifact
+ -> Studio
+ -> SolutionPackage
+ -> WorkResource
+ -> CapabilityResolver
+ -> Workcell
+ -> ExecutionBinding
+ -> Attempt
+ -> Outcome
+ -> Acceptance
+```
+
+Instantiation is deliberately non-executing. The Work starts `Proposed`.
+Profile-derived pre-execution gates are attached to Work readiness; binding,
+receipt, reconciliation, outcome and acceptance remain later control-plane
+conditions. This lets a user create simple reusable experiences without making
+Morn Agent-first.
+
+## Multidimensional execution guarantees
+
+The reference design now separates execution topology from security/operational
+guarantees. A typed `ExecutionGuarantee` vocabulary covers filesystem policy,
+network egress, process/kernel boundaries, resource limits, secret indirection,
+workload identity, stateful execution, checkpoint/resume and runtime
+attestation.
+
+Capability requests/manifests, Domain Profiles and
+`ExecutionEnvironmentProvider` use the same guarantee vocabulary. A provider
+that cannot prove a required guarantee is ineligible even if its topology label
+sounds stronger. The Factory read-only profile currently requires
+filesystem-write policy, network-egress policy and secret indirection.
+
+This is intentionally compatible with heterogeneous execution systems such as
+containers, microVMs, DSec-like elastic sandbox platforms and AgentScope-style
+runtime providers without hard-wiring any one of them into Morn semantics.
