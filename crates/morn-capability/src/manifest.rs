@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::ids::{CapabilityId, Id};
-use morn_kernel::ExecutionGuarantee;
+use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
 
@@ -17,16 +17,9 @@ use crate::registry::CapabilityKind;
 pub struct CapabilityManifestTag;
 pub type CapabilityManifestId = Id<CapabilityManifestTag>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
-pub enum IsolationLevel {
-    NoIsolation,
-    Process,
-    Container,
-    MicroVm,
-    FullVm,
-    Remote,
-    Physical,
-}
+/// Compatibility alias retained for the public capability API. The canonical
+/// execution topology vocabulary lives in morn-kernel.
+pub type IsolationLevel = ExecutionClass;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapabilityInterface {
