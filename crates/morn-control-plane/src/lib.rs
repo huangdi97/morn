@@ -13,6 +13,7 @@ pub use external_action::{begin_external_attempt, begin_external_attempt_with_ef
 
 pub use profile_guard::{
     enforce_profile_action, evaluate_profile_action, issue_external_action_permit,
+    issue_external_action_permit_for_work, resolve_external_action_finalizer,
     ExternalActionMode, ExternalActionPermit, ExternalActionPermitId, ProfileActionDecision,
 };
 
