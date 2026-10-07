@@ -30,11 +30,7 @@ impl TelemetryContext {
         self.attributes.insert(key.into(), value.into());
     }
 
-    pub fn with_work(
-        mut self,
-        work_id: impl Into<String>,
-        profile_id: impl Into<String>,
-    ) -> Self {
+    pub fn with_work(mut self, work_id: impl Into<String>, profile_id: impl Into<String>) -> Self {
         self.set(ATTR_WORK_ID, work_id);
         self.set(ATTR_PROFILE_ID, profile_id);
         self
@@ -47,8 +43,7 @@ mod tests {
 
     #[test]
     fn semantic_keys_are_namespaced_and_transport_neutral() {
-        let ctx = TelemetryContext::default()
-            .with_work("work-1", "morn.factory.readonly@1.0.0");
+        let ctx = TelemetryContext::default().with_work("work-1", "morn.factory.readonly@1.0.0");
         assert_eq!(ctx.attributes[ATTR_WORK_ID], "work-1");
         assert!(ctx.attributes.keys().all(|key| key.starts_with("morn.")));
     }
