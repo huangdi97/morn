@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { apiGet, apiPostJson, CompilerRun } from "../api";
+import { apiGet, apiPostJson, CompilerRun, OpenApiCompileOutcome } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, StatusPill } from "../components/ui";
 
 interface ManifestOutcome {
@@ -15,6 +15,10 @@ export default function Studio() {
   const [compiled, setCompiled] = useState<CompilerRun | null>(null);
   const [approved, setApproved] = useState(false);
   const [manifest, setManifest] = useState<ManifestOutcome | null>(null);
+  const [openApiText, setOpenApiText] = useState(
+    '{"openapi":"3.1.0","paths":{"/orders":{"get":{},"post":{}}}}',
+  );
+  const [artifactCandidate, setArtifactCandidate] = useState<OpenApiCompileOutcome | null>(null);
 
   const runCompiler = async () => {
     setError(null);
@@ -37,6 +41,20 @@ export default function Studio() {
     }
   };
 
+  const compileOpenApi = async () => {
+    setError(null);
+    try {
+      const result = await apiPostJson<OpenApiCompileOutcome>("/v115/artifact/openapi/compile", {
+        name: "studio-openapi-capability",
+        source_ref: "studio://inline-openapi",
+        content: openApiText,
+      });
+      setArtifactCandidate(result);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   const approveAndCompile = async () => {
     setError(null);
     try {
@@ -55,6 +73,32 @@ export default function Studio() {
       <header className="page-header">
         <h1>Studio — Solution Compiler</h1>
       </header>
+
+      <Card title="Artifact → Capability Candidate">
+        <p>
+          Compile an existing asset into a candidate capability. Compilation never means qualified
+          or site-admitted.
+        </p>
+        <textarea
+          style={{ width: "100%", minHeight: 110, padding: 8 }}
+          value={openApiText}
+          onChange={(e) => setOpenApiText(e.target.value)}
+        />
+        <div className="page-actions" style={{ marginTop: 8 }}>
+          <button onClick={compileOpenApi}>Compile OpenAPI</button>
+        </div>
+        {artifactCandidate && (
+          <>
+            <KeyValue k="Stage" v={artifactCandidate.candidate.record.stage} />
+            <KeyValue
+              k="Operations"
+              v={artifactCandidate.candidate.report.discovered_operations.join(", ")}
+            />
+            <KeyValue k="Admission" v={artifactCandidate.admission} />
+            <KeyValue k="Next gates" v={artifactCandidate.next.join(" → ")} />
+          </>
+        )}
+      </Card>
 
       <Card title="1. Describe Goal">
         <div className="builder-item">
