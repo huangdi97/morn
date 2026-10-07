@@ -103,3 +103,11 @@ CloudEvents defines the envelope, not exactly-once processing. The reference
 store now has a durable inbound-event claim/dedupe table and outbound-event
 outbox. Transport retries retain stable event identity; event delivery success
 still does not imply real-world action success. See ADR-019.
+
+
+## Composition identity boundary
+
+Composition ownership is not business identity. Cordis Context/Fiber selects
+software registration/lifecycle ownership only; Morn Work, Actor,
+ExecutionBinding and Attempt identities remain explicit typed references.
+Provider hot reload cannot infer or mutate business identity. See ADR-014.
