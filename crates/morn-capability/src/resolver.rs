@@ -12,6 +12,10 @@ pub struct CapabilityRequest {
     pub minimum_isolation: Option<IsolationLevel>,
     pub required_authority: Vec<String>,
     pub max_estimated_cost_micros: Option<u64>,
+    pub max_latency_p95_ms: Option<u64>,
+    pub maximum_effect: Option<crate::effect::EffectClass>,
+    pub required_runtime_kinds: Vec<String>,
+    pub required_harness_compatibility: Vec<String>,
     pub site_ref: Option<String>,
     pub unavailable_providers: Vec<String>,
 }
@@ -33,6 +37,10 @@ pub struct WorkcellRequest {
     pub minimum_isolation: Option<IsolationLevel>,
     pub required_authority: Vec<String>,
     pub max_total_cost_micros: Option<u64>,
+    pub max_latency_p95_ms: Option<u64>,
+    pub maximum_effect: Option<crate::effect::EffectClass>,
+    pub required_runtime_kinds: Vec<String>,
+    pub required_harness_compatibility: Vec<String>,
     pub site_ref: Option<String>,
     pub unavailable_providers: Vec<String>,
 }
@@ -66,6 +74,16 @@ impl WorkcellPlan {
                 )
             })
             .count()
+    }
+}
+
+fn effect_rank(effect: crate::effect::EffectClass) -> u8 {
+    use crate::effect::EffectClass::*;
+    match effect {
+        E0LifecycleReversible => 0,
+        E1Transactional => 1,
+        E2Compensatable => 2,
+        E3Irreversible => 3,
     }
 }
 
@@ -140,6 +158,39 @@ impl CapabilityResolver {
                     continue;
                 }
             }
+            if let Some(maximum) = request.max_latency_p95_ms {
+                match manifest.economics.latency_p95_ms {
+                    Some(latency) if latency <= maximum => {}
+                    _ => continue,
+                }
+            }
+            if let Some(maximum_effect) = request.maximum_effect {
+                if effect_rank(manifest.authority.maximum_effect) > effect_rank(maximum_effect) {
+                    continue;
+                }
+            }
+            if !request.required_runtime_kinds.iter().all(|required| {
+                manifest
+                    .execution
+                    .runtime_kinds
+                    .iter()
+                    .any(|runtime| runtime == required)
+            }) {
+                continue;
+            }
+            if !request
+                .required_harness_compatibility
+                .iter()
+                .all(|required| {
+                    manifest
+                        .execution
+                        .harness_compatibility
+                        .iter()
+                        .any(|harness| harness == required)
+                })
+            {
+                continue;
+            }
 
             let mut rationale = vec!["semantic requirements satisfied".to_string()];
             let mut score = 50;
@@ -190,6 +241,10 @@ impl CapabilityResolver {
             minimum_isolation: request.minimum_isolation,
             required_authority: request.required_authority.clone(),
             max_estimated_cost_micros: None,
+            max_latency_p95_ms: request.max_latency_p95_ms,
+            maximum_effect: request.maximum_effect,
+            required_runtime_kinds: request.required_runtime_kinds.clone(),
+            required_harness_compatibility: request.required_harness_compatibility.clone(),
             site_ref: request.site_ref.clone(),
             unavailable_providers: request.unavailable_providers.clone(),
         };
@@ -412,6 +467,46 @@ mod tests {
             &candidates,
         );
         assert!(!unavailable.is_complete());
+    }
+
+    #[test]
+    fn resolver_enforces_effect_latency_runtime_and_harness_constraints() {
+        let mut record = admitted(
+            "safe-program",
+            "program-provider",
+            CapabilityKind::Program,
+            &["observe"],
+            10,
+        );
+        record.manifest.economics.latency_p95_ms = Some(20);
+        record.manifest.execution.runtime_kinds = vec!["rust".to_string()];
+        record.manifest.execution.harness_compatibility = vec!["none".to_string()];
+        record.manifest.authority.maximum_effect = crate::effect::EffectClass::E0LifecycleReversible;
+
+        let ok = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["observe".to_string()],
+                max_latency_p95_ms: Some(50),
+                maximum_effect: Some(crate::effect::EffectClass::E0LifecycleReversible),
+                required_runtime_kinds: vec!["rust".to_string()],
+                required_harness_compatibility: vec!["none".to_string()],
+                site_ref: Some("plant-a".to_string()),
+                ..Default::default()
+            },
+            &[record.clone()],
+        );
+        assert_eq!(ok.len(), 1);
+
+        let blocked = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["observe".to_string()],
+                max_latency_p95_ms: Some(5),
+                site_ref: Some("plant-a".to_string()),
+                ..Default::default()
+            },
+            &[record],
+        );
+        assert!(blocked.is_empty());
     }
 
     #[test]
