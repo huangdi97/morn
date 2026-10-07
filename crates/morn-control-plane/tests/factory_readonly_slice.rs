@@ -29,7 +29,8 @@ use morn_runtime::{
     enforce_authority, ActionAttempt, AttemptState, AuthorityProvider, AuthorityRequest,
     BindingMigrationReason, ExecutionBinding, ExecutionEnvironmentOffer,
     ExecutionEnvironmentProvider, ExecutionEnvironmentResolver, ExecutionEnvironmentSpec,
-    FixtureEnvironmentProvider, NativePolicyAuthority, OutcomeReconciler, ReconciliationObservation,
+    FixtureEnvironmentProvider, NativePolicyAuthority, OutcomeReconciler,
+    ReconciliationObservation,
 };
 use morn_store::MornStore;
 use morn_work::acceptance::AcceptanceSpec;
