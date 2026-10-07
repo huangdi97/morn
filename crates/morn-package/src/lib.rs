@@ -2,12 +2,15 @@
 //! install/enable/disable/upgrade/uninstall/inspect/diff) and PluginManifest.
 //! Uninstall never deletes historical canonical records/provenance.
 
+pub mod supply_chain;
+
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::ids::Id;
 use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
 pub use morn_kernel::version::Version as PackVersion;
+pub use supply_chain::{ArtifactLayer, CapabilityArtifactDescriptor};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct PackIdTag;
