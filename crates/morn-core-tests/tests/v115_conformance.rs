@@ -323,7 +323,6 @@ fn mcp_tool_metadata_never_grants_authority_by_itself() {
     assert!(serialized.get("token").is_none());
 }
 
-
 #[test]
 fn work_truth_survives_harness_provider_migration() {
     let work_id = WorkPackageId::generate_with("work");
