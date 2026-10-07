@@ -145,7 +145,19 @@ impl WorkProgressController {
 
         if let Some(acceptance) = inputs.acceptance {
             if acceptance.work_package_id == work.id {
-                let final_acceptance = acceptance.is_final_acceptance();
+                let spec_matches = work
+                    .spec
+                    .acceptance_ref
+                    .as_deref()
+                    .is_none_or(|expected| expected == acceptance.acceptance_spec_id.to_string());
+                let grounded_outcome = inputs.outcome.filter(|outcome| {
+                    outcome.work_package_id == work.id
+                        && outcome.is_source_grounded()
+                        && acceptance.outcome_refs.iter().any(|id| id == &outcome.id)
+                });
+                let final_acceptance =
+                    acceptance.is_final_acceptance() && spec_matches && grounded_outcome.is_some();
+
                 let mut independent =
                     WorkCondition::new("IndependentAcceptance", ConditionStatus::True);
                 independent.reason = format!(
@@ -155,17 +167,24 @@ impl WorkProgressController {
                 independent.evidence_refs = vec![acceptance.id.to_string()];
                 work.set_condition(independent);
 
-                if final_acceptance {
-                    let mut semantics =
-                        WorkCondition::new("AcceptedOutcomeSemantics", ConditionStatus::True);
-                    semantics.reason = "accepted outcome references are explicit".to_string();
-                    semantics.evidence_refs = acceptance
-                        .outcome_refs
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect();
-                    work.set_condition(semantics);
-                }
+                let mut semantics = WorkCondition::new(
+                    "AcceptedOutcomeSemantics",
+                    if final_acceptance {
+                        ConditionStatus::True
+                    } else {
+                        ConditionStatus::False
+                    },
+                );
+                semantics.reason = if final_acceptance {
+                    "acceptance spec and source-grounded outcome reference match".to_string()
+                } else {
+                    "acceptance cannot close Work until its spec and a source-grounded outcome are explicitly linked"
+                        .to_string()
+                };
+                semantics.evidence_refs = grounded_outcome
+                    .map(|outcome| vec![outcome.id.to_string()])
+                    .unwrap_or_default();
+                work.set_condition(semantics);
 
                 work.status.phase = match acceptance.disposition {
                     AcceptanceDisposition::Accept if final_acceptance => WorkPhase::Accepted,
@@ -507,6 +526,73 @@ mod tests {
         assert_eq!(work.status.phase, WorkPhase::Accepted);
         assert!(work.condition_is_true("IndependentAcceptance"));
         assert!(work.condition_is_true("AcceptedOutcomeSemantics"));
+    }
+
+    #[test]
+    fn acceptance_cannot_close_on_unlinked_or_wrong_spec_outcome() {
+        use morn_kernel::ids::{AcceptanceSpecId, PrincipalId};
+        use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+        use morn_world::{ObservedOutcome, OutcomeSourceKind};
+        use serde_json::json;
+
+        let work_id = WorkPackageId::generate_with("wp");
+        let acceptance_spec_id = AcceptanceSpecId::generate_with("acc");
+        let mut spec = WorkSpec::new(work_id.clone(), "restore", "morn.enterprise@1.0.0");
+        spec.required_conditions = vec![];
+        spec.acceptance_ref = Some(acceptance_spec_id.to_string());
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work_id.clone(),
+            "restored",
+            OutcomeSourceKind::ExternalSystem,
+            "system://authoritative",
+            json!({"restored":true}),
+        );
+        outcome.evidence_refs.push("system://receipt".to_string());
+
+        let mut wrong_spec = AcceptanceDecision::new(
+            work_id.clone(),
+            AcceptanceSpecId::generate_with("other"),
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("owner"),
+            "owner",
+            "accepted",
+        );
+        wrong_spec.outcome_refs.push(outcome.id.clone());
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                outcome: Some(&outcome),
+                acceptance: Some(&wrong_spec),
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Waiting);
+        assert!(!work.condition_is_true("AcceptedOutcomeSemantics"));
+
+        let mut unlinked = AcceptanceDecision::new(
+            work_id,
+            acceptance_spec_id,
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("owner"),
+            "owner",
+            "accepted",
+        );
+        unlinked
+            .outcome_refs
+            .push(morn_kernel::ids::OutcomeRecordId::generate_with("different"));
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                outcome: Some(&outcome),
+                acceptance: Some(&unlinked),
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Waiting);
+        assert!(!work.condition_is_true("AcceptedOutcomeSemantics"));
     }
 
     #[test]
