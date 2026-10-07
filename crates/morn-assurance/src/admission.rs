@@ -145,7 +145,9 @@ impl AdmissionService {
 
         let site_ref = site_ref.into();
         if site_ref.trim().is_empty() {
-            return Err(Error::validation("site admission requires a site reference"));
+            return Err(Error::validation(
+                "site admission requires a site reference",
+            ));
         }
         let profile_ref = profile_ref.into();
         if profile_ref != conformance.profile_ref {
@@ -167,7 +169,11 @@ impl AdmissionService {
         };
 
         capability.stage = CapabilityStage::Admitted;
-        if !capability.admitted_sites.iter().any(|site| site == &site_ref) {
+        if !capability
+            .admitted_sites
+            .iter()
+            .any(|site| site == &site_ref)
+        {
             capability.admitted_sites.push(site_ref);
         }
         self.admissions.push(admission.clone());
