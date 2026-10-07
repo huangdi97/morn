@@ -129,15 +129,39 @@ impl WorkProgressController {
         if let Some(binding) = inputs.binding {
             if binding.work_id == work.id && binding.work_generation == work.generation {
                 work.status.active_binding = Some(binding.id.clone());
+                let mut condition = WorkCondition::new("ProfileVersionPinned", ConditionStatus::True);
+                condition.reason = format!("binding {} pins {}", binding.id, binding.profile_ref);
+                condition.evidence_refs = vec![binding.id.to_string()];
+                work.set_condition(condition);
             }
         }
 
         if let Some(acceptance) = inputs.acceptance {
             if acceptance.work_package_id == work.id {
+                let final_acceptance = acceptance.is_final_acceptance();
+                let mut independent =
+                    WorkCondition::new("IndependentAcceptance", ConditionStatus::True);
+                independent.reason = format!(
+                    "acceptance decision {} by role {}",
+                    acceptance.id, acceptance.acting_role
+                );
+                independent.evidence_refs = vec![acceptance.id.to_string()];
+                work.set_condition(independent);
+
+                if final_acceptance {
+                    let mut semantics =
+                        WorkCondition::new("AcceptedOutcomeSemantics", ConditionStatus::True);
+                    semantics.reason = "accepted outcome references are explicit".to_string();
+                    semantics.evidence_refs = acceptance
+                        .outcome_refs
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect();
+                    work.set_condition(semantics);
+                }
+
                 work.status.phase = match acceptance.disposition {
-                    AcceptanceDisposition::Accept if acceptance.is_final_acceptance() => {
-                        WorkPhase::Accepted
-                    }
+                    AcceptanceDisposition::Accept if final_acceptance => WorkPhase::Accepted,
                     AcceptanceDisposition::Reject => WorkPhase::Rejected,
                     AcceptanceDisposition::Conditional
                     | AcceptanceDisposition::RequestMoreEvidence
@@ -150,6 +174,11 @@ impl WorkProgressController {
 
         if let Some(outcome) = inputs.outcome {
             if outcome.work_package_id == work.id && outcome.is_source_grounded() {
+                let mut condition =
+                    WorkCondition::new("OutcomeObservation", ConditionStatus::True);
+                condition.reason = format!("source-grounded outcome {}", outcome.id);
+                condition.evidence_refs = outcome.evidence_refs.clone();
+                work.set_condition(condition);
                 work.status.phase = WorkPhase::Delivered;
                 work.mark_observed();
                 return;
@@ -157,6 +186,25 @@ impl WorkProgressController {
         }
 
         if let Some(attempt) = inputs.attempt {
+            if attempt.state == AttemptState::Verified
+                && (attempt.external_ref.is_some() || !attempt.evidence_refs.is_empty())
+            {
+                let mut receipt =
+                    WorkCondition::new("ReceiptAfterExternalAction", ConditionStatus::True);
+                receipt.reason = format!("verified attempt {}", attempt.id);
+                receipt.evidence_refs = attempt.evidence_refs.clone();
+                work.set_condition(receipt);
+
+                if attempt.last_error.is_some() {
+                    let mut reconciled =
+                        WorkCondition::new("ReconciliationOnUnknown", ConditionStatus::True);
+                    reconciled.reason =
+                        "previously ambiguous attempt reconciled before verification".to_string();
+                    reconciled.evidence_refs = attempt.evidence_refs.clone();
+                    work.set_condition(reconciled);
+                }
+            }
+
             work.status.phase = match attempt.state {
                 AttemptState::OutcomeUnknown | AttemptState::Reconciling => WorkPhase::Reconciling,
                 AttemptState::Authorized
@@ -394,6 +442,23 @@ mod tests {
             },
         );
         assert_eq!(work.status.phase, WorkPhase::Reconciling);
+        assert!(work.condition_is_true("ProfileVersionPinned"));
+
+        attempt.transition(AttemptState::Reconciling).unwrap();
+        attempt.evidence_refs.push("system://receipt".to_string());
+        attempt.external_ref = Some("external-1".to_string());
+        attempt.transition(AttemptState::Observed).unwrap();
+        attempt.transition(AttemptState::Verified).unwrap();
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                binding: Some(&binding),
+                attempt: Some(&attempt),
+                ..Default::default()
+            },
+        );
+        assert!(work.condition_is_true("ReceiptAfterExternalAction"));
+        assert!(work.condition_is_true("ReconciliationOnUnknown"));
 
         let mut outcome = ObservedOutcome::new(
             work.workspace_id.clone(),
@@ -413,6 +478,7 @@ mod tests {
             },
         );
         assert_eq!(work.status.phase, WorkPhase::Delivered);
+        assert!(work.condition_is_true("OutcomeObservation"));
 
         let mut acceptance = AcceptanceDecision::new(
             work_id,
@@ -433,6 +499,8 @@ mod tests {
             },
         );
         assert_eq!(work.status.phase, WorkPhase::Accepted);
+        assert!(work.condition_is_true("IndependentAcceptance"));
+        assert!(work.condition_is_true("AcceptedOutcomeSemantics"));
     }
 
     #[test]
