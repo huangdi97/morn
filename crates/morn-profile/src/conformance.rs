@@ -28,16 +28,39 @@ pub struct ConformanceReport {
     pub violations: Vec<String>,
 }
 
-fn isolation_rank(value: &str) -> u8 {
-    match value.to_ascii_lowercase().as_str() {
-        "none" | "noisolation" => 0,
-        "process" => 1,
-        "container" => 2,
-        "microvm" | "micro_vm" => 3,
-        "fullvm" | "full_vm" | "vm" => 4,
-        "remote" => 5,
-        "physical" => 6,
-        _ => 0,
+fn normalized_isolation(value: &str) -> &str {
+    match value {
+        "none" | "noisolation" => "none",
+        "process" => "process",
+        "container" => "container",
+        "microvm" | "micro_vm" => "microvm",
+        "fullvm" | "full_vm" | "vm" => "fullvm",
+        "remote" => "remote",
+        "physical" => "physical",
+        _ => "unknown",
+    }
+}
+
+fn isolation_satisfies(actual: &str, required: &str) -> bool {
+    let actual = actual.to_ascii_lowercase();
+    let required = required.to_ascii_lowercase();
+    match normalized_isolation(&required) {
+        "none" => true,
+        "process" => matches!(
+            normalized_isolation(&actual),
+            "process" | "container" | "microvm" | "fullvm"
+        ),
+        "container" => matches!(
+            normalized_isolation(&actual),
+            "container" | "microvm" | "fullvm"
+        ),
+        "microvm" => matches!(normalized_isolation(&actual), "microvm" | "fullvm"),
+        "fullvm" => normalized_isolation(&actual) == "fullvm",
+        // Remote and physical are executor/topology classes. They are not
+        // ordinal security levels above a VM.
+        "remote" => normalized_isolation(&actual) == "remote",
+        "physical" => normalized_isolation(&actual) == "physical",
+        _ => false,
     }
 }
 
@@ -77,8 +100,8 @@ pub fn evaluate_profile(
     if profile.provenance_required && !evidence.provenance_ready {
         missing.push("Provenance".to_string());
     }
-    if isolation_rank(&evidence.isolation) < isolation_rank(&profile.minimum_isolation) {
-        missing.push(format!("Isolation>={}", profile.minimum_isolation));
+    if !isolation_satisfies(&evidence.isolation, &profile.minimum_isolation) {
+        missing.push(format!("IsolationSatisfies({})", profile.minimum_isolation));
     }
 
     missing.sort();
@@ -125,6 +148,31 @@ mod tests {
             .missing
             .iter()
             .any(|item| item == "IndependentAcceptance"));
+    }
+
+    #[test]
+    fn remote_execution_does_not_satisfy_container_by_rank() {
+        let profile = DomainProfile::factory_readonly_v1();
+        let mut evidence = ConformanceEvidence {
+            isolation: "remote".to_string(),
+            durable_work_state: true,
+            source_of_truth_bound: true,
+            provenance_ready: true,
+            ..Default::default()
+        };
+        evidence.satisfied_semantics.extend(
+            profile
+                .requirements
+                .iter()
+                .filter(|requirement| requirement.level == RequirementLevel::Required)
+                .map(|requirement| requirement.semantic.clone()),
+        );
+        let report = evaluate_profile(&profile, &evidence);
+        assert!(!report.passed);
+        assert!(report
+            .missing
+            .iter()
+            .any(|item| item == "IsolationSatisfies(container)"));
     }
 
     #[test]
