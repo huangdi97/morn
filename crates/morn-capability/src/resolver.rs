@@ -270,10 +270,12 @@ impl CapabilityResolver {
             "selected {} executor(s) using hard-filter + minimum-cover planning",
             selected.len()
         )];
-        if selected
-            .iter()
-            .all(|member| !matches!(member.capability.kind, CapabilityKind::Llm | CapabilityKind::Model))
-        {
+        if selected.iter().all(|member| {
+            !matches!(
+                member.capability.kind,
+                CapabilityKind::Llm | CapabilityKind::Model
+            )
+        }) {
             rationale.push("zero-agent plan: no model/LLM executor required".to_string());
         }
         if !uncovered.is_empty() {
