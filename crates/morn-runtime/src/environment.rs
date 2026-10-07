@@ -26,24 +26,34 @@ pub enum IsolationClass {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecutionEnvironmentSpec {
     pub minimum_isolation: IsolationClass,
+    pub os: Option<String>,
+    pub runtime: Option<String>,
     pub cpu_millis: Option<u64>,
     pub memory_mb: Option<u64>,
+    pub gpu_count: Option<u32>,
     pub network_allowlist: Vec<String>,
     pub writable_paths: Vec<String>,
     pub secret_refs: Vec<String>,
     pub persistence_scope: String,
+    pub timeout_ms: Option<u64>,
+    pub side_effect_policy: String,
 }
 
 impl Default for ExecutionEnvironmentSpec {
     fn default() -> Self {
         Self {
             minimum_isolation: IsolationClass::Process,
+            os: None,
+            runtime: None,
             cpu_millis: None,
             memory_mb: None,
+            gpu_count: None,
             network_allowlist: Vec::new(),
             writable_paths: Vec::new(),
             secret_refs: Vec::new(),
             persistence_scope: "attempt".to_string(),
+            timeout_ms: None,
+            side_effect_policy: "profile-governed".to_string(),
         }
     }
 }
