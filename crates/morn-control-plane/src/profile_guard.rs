@@ -57,9 +57,7 @@ pub fn evaluate_profile_action(
 
     // Physical control is fail-closed unless a profile opts in explicitly with
     // a required semantic. The v11.5 profiles intentionally do not.
-    if mode == ExternalActionMode::PhysicalControl
-        && !profile.requires("PhysicalControl")
-    {
+    if mode == ExternalActionMode::PhysicalControl && !profile.requires("PhysicalControl") {
         return ProfileActionDecision {
             profile_ref: profile.canonical_ref(),
             mode,
