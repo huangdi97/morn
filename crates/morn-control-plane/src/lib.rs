@@ -6,13 +6,17 @@
 
 use serde::{Deserialize, Serialize};
 
+use morn_integration::SourceOfTruthBinding;
 use morn_kernel::error::Result;
 use morn_profile::DomainProfile;
 use morn_runtime::{
     reconcile_attempt, ActionAttempt, ExecutionBinding, OutcomeReconciler, ReconciliationRecord,
 };
 use morn_store::MornStore;
+use morn_work::acceptance_decision::AcceptanceDecision;
 use morn_work::control::{ConditionStatus, WorkCondition, WorkPhase, WorkResource};
+use morn_work::value::ValueAssessment;
+use morn_world::ObservedOutcome;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ControllerInputs {
@@ -119,6 +123,22 @@ pub trait ControlPlaneStore {
     fn save_action_attempt(&self, work: &WorkResource, attempt: &ActionAttempt) -> Result<()>;
     fn save_reconciliation(&self, work: &WorkResource, record: &ReconciliationRecord)
         -> Result<()>;
+    fn save_source_of_truth_binding(
+        &self,
+        work: &WorkResource,
+        binding: &SourceOfTruthBinding,
+    ) -> Result<()>;
+    fn save_observed_outcome(&self, work: &WorkResource, outcome: &ObservedOutcome) -> Result<()>;
+    fn save_acceptance_decision(
+        &self,
+        work: &WorkResource,
+        decision: &AcceptanceDecision,
+    ) -> Result<()>;
+    fn save_value_assessment(
+        &self,
+        work: &WorkResource,
+        assessment: &ValueAssessment,
+    ) -> Result<()>;
 }
 
 impl ControlPlaneStore for MornStore {
