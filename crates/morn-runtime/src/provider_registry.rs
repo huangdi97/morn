@@ -59,11 +59,7 @@ pub struct ProviderDescriptor {
 }
 
 impl ProviderDescriptor {
-    pub fn new(
-        id: impl Into<String>,
-        family: ProviderFamily,
-        version: impl Into<String>,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, family: ProviderFamily, version: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             family,
@@ -162,7 +158,9 @@ impl ProviderRegistry {
         let previous_status = descriptor.status;
         descriptor.status = status;
         descriptor.observed_at = Timestamp::now();
-        descriptor.evidence_refs.extend(evidence_refs.iter().cloned());
+        descriptor
+            .evidence_refs
+            .extend(evidence_refs.iter().cloned());
 
         let observation = ProviderObservation {
             provider_id: provider_id.to_string(),
@@ -212,9 +210,14 @@ pub fn reference_provider_catalog() -> ProviderRegistry {
         ProviderDescriptor::new("cordis-reference", ProviderFamily::Composition, "4.0.4");
     cordis.protocols.insert("cordis".to_string());
     cordis.features.extend(
-        ["context", "service-slot", "fiber-lifecycle", "dependency-injection"]
-            .into_iter()
-            .map(str::to_string),
+        [
+            "context",
+            "service-slot",
+            "fiber-lifecycle",
+            "dependency-injection",
+        ]
+        .into_iter()
+        .map(str::to_string),
     );
     cordis.status = ProviderStatus::Healthy;
     cordis
@@ -222,8 +225,7 @@ pub fn reference_provider_catalog() -> ProviderRegistry {
         .push("runtime/cordis-host/package.json".to_string());
     registry.register(cordis).expect("reference provider valid");
 
-    let mut native =
-        ProviderDescriptor::new("morn-native", ProviderFamily::Harness, "reference");
+    let mut native = ProviderDescriptor::new("morn-native", ProviderFamily::Harness, "reference");
     native.protocols.insert("morn-harness".to_string());
     native.features.extend(
         ["interrupt", "resume", "session-close", "durable-events"]
@@ -236,8 +238,7 @@ pub fn reference_provider_catalog() -> ProviderRegistry {
         .push("crates/morn-harness/src/provider.rs".to_string());
     registry.register(native).expect("reference provider valid");
 
-    let mut dsh =
-        ProviderDescriptor::new("deepseek-harness", ProviderFamily::Harness, "external");
+    let mut dsh = ProviderDescriptor::new("deepseek-harness", ProviderFamily::Harness, "external");
     dsh.protocols.insert("json-rpc-stdio".to_string());
     dsh.features.extend(
         ["multi-session", "durable-events"]
@@ -261,7 +262,9 @@ pub fn reference_provider_catalog() -> ProviderRegistry {
         ProviderFamily::ExecutionEnvironment,
         "reference",
     );
-    fixture_env.protocols.insert("morn-execution-environment".to_string());
+    fixture_env
+        .protocols
+        .insert("morn-execution-environment".to_string());
     fixture_env.features.extend(
         ["process", "container", "microvm"]
             .into_iter()
