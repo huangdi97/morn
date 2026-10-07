@@ -113,7 +113,11 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     manifest.provides = vec!["equipment.anomaly.investigate".to_string()];
     manifest.authority.allow = vec!["historian.read".to_string()];
     manifest.execution.minimum_isolation = IsolationLevel::Container;
-    manifest.execution.required_guarantees = profile.required_execution_guarantees.clone();
+    // Capability declares only its intrinsic execution needs. Profile
+    // requirements are merged later by the resolver; declarations are not
+    // environment evidence.
+    manifest.execution.required_guarantees =
+        vec![morn_kernel::ExecutionGuarantee::FilesystemReadPolicy];
     manifest.provenance.source_ref = "repo://factory/equipment-investigator".to_string();
     manifest.provenance.source_digest = Some("sha256:capability-fixture".to_string());
     let mut capability = CapabilityRecord::new(manifest);
@@ -222,12 +226,12 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     let mut environment_provider = FixtureEnvironmentProvider::default();
     let environment = environment_provider
         .provision(&ExecutionEnvironmentSpec {
-            minimum_isolation: IsolationClass::Container,
-            required_guarantees: profile.required_execution_guarantees.clone(),
+            minimum_isolation: resolved[0].required_execution_class,
+            required_guarantees: resolved[0].required_execution_guarantees.clone(),
             ..Default::default()
         })
         .unwrap();
-    for required in &profile.required_execution_guarantees {
+    for required in &resolved[0].required_execution_guarantees {
         assert!(
             environment.guarantees.contains(required),
             "required Factory execution guarantees must be provided"
