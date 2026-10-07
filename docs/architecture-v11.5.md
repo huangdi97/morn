@@ -529,3 +529,32 @@ This is deliberately separate from `ActionAttempt` effect idempotency. An
 event being delivered exactly once does not prove an ERP/MES/CMMS action
 happened exactly once; external-effect ambiguity still uses business keys,
 Receipt and Reconciliation.
+
+
+## Composition identity is explicit
+
+Cordis Context/Fiber scope and Morn business identity are deliberately
+orthogonal. A composition context owns plugin registrations and cleanup; it does
+not select the Work, Principal, Actor, Authority or ExecutionBinding for an
+operation.
+
+This mirrors the direction in recent DeepSeek Harness architecture, where
+runtime Agent identity is passed explicitly rather than inferred from a Cordis
+Context. Morn applies the same principle to a broader Work-first system.
+
+Therefore:
+
+```text
+Cordis Context/Fiber
+    -> software ownership / lifecycle
+
+Morn RuntimeContext
+    -> workspace + actor + work + policy/provenance scope
+
+ExecutionBinding / Attempt
+    -> exact capability/provider/runtime/authority identity
+```
+
+No reverse lookup from Cordis Context to canonical Work identity is permitted.
+If the composition provider changes, business identity survives and a new
+binding is required before future execution can use the replacement.
