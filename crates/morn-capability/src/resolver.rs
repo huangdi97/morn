@@ -219,13 +219,17 @@ impl CapabilityResolver {
             {
                 continue;
             }
-            if !request.required_execution_guarantees.iter().all(|required| {
-                manifest
-                    .execution
-                    .required_guarantees
-                    .iter()
-                    .any(|provided| provided == required)
-            }) {
+            if !request
+                .required_execution_guarantees
+                .iter()
+                .all(|required| {
+                    manifest
+                        .execution
+                        .required_guarantees
+                        .iter()
+                        .any(|provided| provided == required)
+                })
+            {
                 continue;
             }
 
@@ -571,9 +575,7 @@ mod tests {
         let blocked = CapabilityResolver.resolve(
             &CapabilityRequest {
                 required_provides: vec!["observe".to_string()],
-                required_execution_guarantees: vec![
-                    ExecutionGuarantee::RuntimeAttestation,
-                ],
+                required_execution_guarantees: vec![ExecutionGuarantee::RuntimeAttestation],
                 site_ref: Some("plant-a".to_string()),
                 ..Default::default()
             },
