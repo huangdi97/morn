@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-037 in `docs/adr/`
+3. ADR-002 through ADR-038 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -253,3 +253,11 @@ Strict Work readiness is evidence-derived. `CapabilityResolved`,
 `ConditionEvidence`; API callers cannot assert them as naked booleans. Typed
 producers derive positive evidence from resolver/admission/authority/source-of-
 truth/provenance records. See ADR-037.
+
+
+## Terminal Work generations
+
+Accepted/Rejected/Cancelled are terminal for the current Work generation.
+Late/reordered evidence can be retained but cannot silently regress business
+state. Reopening requires an explicit desired-state change/new generation. See
+ADR-038.
