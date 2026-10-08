@@ -717,7 +717,7 @@ impl MornStore {
         };
 
         tx.execute(
-            "INSERT OR IGNORE INTO control_event_outbox
+            "INSERT INTO control_event_outbox
              (event_id, workspace_id, event_type, payload, created_at, dispatched_at)
              VALUES (?1, ?2, ?3, ?4, ?5, NULL)",
             params![
@@ -728,7 +728,13 @@ impl MornStore {
                 created_at
             ],
         )
-        .map_err(|e| Error::internal(e.to_string()))?;
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                Error::conflict(format!("durable event {} already committed", enriched.id))
+            } else {
+                Error::internal(e.to_string())
+            }
+        })?;
 
         tx.commit().map_err(|e| Error::internal(e.to_string()))?;
         Ok(next_revision)
@@ -865,7 +871,7 @@ impl MornStore {
         };
 
         tx.execute(
-            "INSERT OR IGNORE INTO control_event_outbox
+            "INSERT INTO control_event_outbox
              (event_id, workspace_id, event_type, payload, created_at, dispatched_at)
              VALUES (?1, ?2, ?3, ?4, ?5, NULL)",
             params![
@@ -876,7 +882,13 @@ impl MornStore {
                 created_at
             ],
         )
-        .map_err(|e| Error::internal(e.to_string()))?;
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                Error::conflict(format!("durable event {} already committed", enriched.id))
+            } else {
+                Error::internal(e.to_string())
+            }
+        })?;
 
         tx.commit().map_err(|e| Error::internal(e.to_string()))?;
         Ok(next_revision)
@@ -2198,6 +2210,126 @@ mod v115_revision_tests {
                 },
             )
             .is_err());
+        assert_eq!(store.pending_outbox_events(10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn duplicate_event_id_cannot_advance_projection_without_a_new_outbox_event() {
+        use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let event = EventEnvelope::new(
+            "evt-reused",
+            "morn://control-plane",
+            "io.morn.work.changed.v1",
+            json!({"work":"work-1"}),
+        );
+        let semantics = EventSemanticDescriptor {
+            class: EventSemanticClass::DomainFact,
+            subject_ref: Some("work://work-1".to_string()),
+            source_of_truth_ref: None,
+            schema_ref: Some("morn://schemas/work-changed/v1".to_string()),
+        };
+
+        assert_eq!(
+            store
+                .save_record_cas_with_durable_event(DurableProjectionCommit {
+                    kind: "work_resource_v115",
+                    id: "work-1",
+                    workspace_id: "ws-1",
+                    created_at: 10,
+                    expected_revision: 0,
+                    record: &json!({"phase":"ready"}),
+                    envelope: &event,
+                    semantics: &semantics,
+                })
+                .unwrap(),
+            1
+        );
+        let duplicate = store.save_record_cas_with_durable_event(DurableProjectionCommit {
+            kind: "work_resource_v115",
+            id: "work-1",
+            workspace_id: "ws-1",
+            created_at: 11,
+            expected_revision: 1,
+            record: &json!({"phase":"blocked"}),
+            envelope: &event,
+            semantics: &semantics,
+        });
+        assert!(duplicate.is_err());
+        assert_eq!(store.record_revision("work_resource_v115", "work-1").unwrap(), Some(1));
+        assert_eq!(
+            store
+                .load_record::<serde_json::Value>("work_resource_v115", "work-1")
+                .unwrap(),
+            Some(json!({"phase":"ready"}))
+        );
+        assert_eq!(store.pending_outbox_events(10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn duplicate_event_id_rolls_back_fenced_cas_in_the_same_transaction() {
+        use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let lease = store
+            .acquire_controller_lease("work-controller", "node-a", 1_000, 500)
+            .unwrap()
+            .unwrap();
+        let event = EventEnvelope::new(
+            "evt-fenced-reused",
+            "morn://controller/node-a",
+            "io.morn.work.reconciled.v1",
+            json!({"work":"work-1"}),
+        );
+        let semantics = EventSemanticDescriptor {
+            class: EventSemanticClass::DomainFact,
+            subject_ref: Some("work://work-1".to_string()),
+            source_of_truth_ref: None,
+            schema_ref: Some("morn://schemas/work-reconciled/v1".to_string()),
+        };
+        assert_eq!(
+            store
+                .save_record_cas_with_durable_event_fenced(
+                    DurableProjectionCommit {
+                        kind: "work_resource_v115",
+                        id: "work-1",
+                        workspace_id: "ws-1",
+                        created_at: 1_001,
+                        expected_revision: 0,
+                        record: &json!({"phase":"ready"}),
+                        envelope: &event,
+                        semantics: &semantics,
+                    },
+                    ControllerFence {
+                        lease_name: "work-controller",
+                        fencing_token: lease.fencing_token,
+                        fence_at: 1_001,
+                    },
+                )
+                .unwrap(),
+            1
+        );
+
+        let duplicate = store.save_record_cas_with_durable_event_fenced(
+            DurableProjectionCommit {
+                kind: "work_resource_v115",
+                id: "work-1",
+                workspace_id: "ws-1",
+                created_at: 1_002,
+                expected_revision: 1,
+                record: &json!({"phase":"blocked"}),
+                envelope: &event,
+                semantics: &semantics,
+            },
+            ControllerFence {
+                lease_name: "work-controller",
+                fencing_token: lease.fencing_token,
+                fence_at: 1_002,
+            },
+        );
+        assert!(duplicate.is_err());
+        assert_eq!(store.record_revision("work_resource_v115", "work-1").unwrap(), Some(1));
         assert_eq!(store.pending_outbox_events(10).unwrap().len(), 1);
     }
 
