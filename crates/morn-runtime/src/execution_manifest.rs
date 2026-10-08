@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::error::{Error, Result};
-use morn_kernel::protocol::MORN_PROTOCOL_V11_5;
+use morn_kernel::protocol::{ProtocolSnapshot, MORN_PROTOCOL_V11_5};
 use morn_kernel::time::Timestamp;
 use morn_work::control::WorkResource;
 
@@ -34,6 +34,7 @@ impl CompositionRuntimeRef {
 pub struct ExecutionManifest {
     pub schema: String,
     pub protocol_version: String,
+    pub protocol_invariants: Vec<String>,
     pub work_ref: String,
     pub work_generation: u64,
     pub profile_ref: String,
@@ -86,6 +87,7 @@ impl ExecutionManifest {
                 MORN_PROTOCOL_V11_5.minor,
                 MORN_PROTOCOL_V11_5.patch
             ),
+            protocol_invariants: ProtocolSnapshot::v11_5().invariant_ids(),
             work_ref: work.id.to_string(),
             work_generation: work.generation,
             profile_ref: work.spec.profile_ref.clone(),
@@ -104,7 +106,9 @@ impl ExecutionManifest {
     }
 
     pub fn validates_against(&self, work: &WorkResource, binding: &ExecutionBinding) -> bool {
-        self.work_ref == work.id.to_string()
+        self.protocol_version == MORN_PROTOCOL_V11_5.to_string()
+            && self.protocol_invariants == ProtocolSnapshot::v11_5().invariant_ids()
+            && self.work_ref == work.id.to_string()
             && self.work_generation == work.generation
             && self.profile_ref == work.spec.profile_ref
             && self.site_ref == work.spec.site_ref
@@ -146,6 +150,9 @@ mod tests {
         .unwrap();
 
         assert_eq!(manifest.protocol_version, "11.5.0");
+        assert!(manifest
+            .protocol_invariants
+            .contains(&"work-truth-independent-of-executor".to_string()));
         assert_eq!(manifest.profile_ref, "morn.factory.readonly@1.0.0");
         assert_eq!(manifest.provider_ref, "deepseek-harness");
         assert_eq!(manifest.composition_runtime.id, "cordis-reference");
