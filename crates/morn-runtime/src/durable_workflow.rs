@@ -162,7 +162,6 @@ pub trait DurableWorkflowProvider: Send + Sync {
     fn cancel(&mut self, binding: &DurableWorkflowBinding, reason: &str) -> Result<()>;
 }
 
-
 #[derive(Debug, Default)]
 pub struct LegacyMornDurableWorkflowProvider {
     runtime: morn_work::durable::DurableRuntime,
