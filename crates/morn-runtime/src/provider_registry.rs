@@ -284,10 +284,15 @@ pub fn reference_provider_catalog() -> ProviderRegistry {
     registry.register(dsh).expect("reference provider valid");
 
     let mut pi = ProviderDescriptor::new("pi", ProviderFamily::Harness, "external");
-    pi.protocols.insert("provider-adapter".to_string());
+    pi.protocols.insert("jsonl-rpc-stdio".to_string());
+    pi.features.extend(
+        ["prompt", "get-state", "abort", "agent-settled"]
+            .into_iter()
+            .map(str::to_string),
+    );
     pi.status = ProviderStatus::Unavailable;
     pi.evidence_refs
-        .push("crates/morn-harness/src/pi.rs".to_string());
+        .push("crates/morn-harness/src/pi_rpc.rs".to_string());
     registry.register(pi).expect("reference provider valid");
 
     let mut fixture_env = ProviderDescriptor::new(
