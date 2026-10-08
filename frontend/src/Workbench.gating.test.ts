@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import type { V115ControlPlaneData } from "./api";
-import { biolabEnabled, CanonicalWorkOverview } from "./pages/Workbench";
+import { biolabEnabled, CanonicalWorkOverview, workEvidenceTrace } from "./pages/Workbench";
 
 describe("domain-gated UI extension point", () => {
   it("zero-domain: no BioLab UI is rendered", () => {
@@ -77,5 +77,48 @@ describe("canonical Work remains a separate product surface", () => {
     expect(render({ ...base, work: [] }, null)).toContain(
       "No canonical Work has been persisted yet.",
     );
+  });
+
+  it("correlates Work receipts and acceptance by binding, outcome and generation", () => {
+    const state: V115ControlPlaneData = {
+      ...base,
+      execution_bindings: [
+        { id: "binding-1", work_id: "work:canonical-1" },
+        { id: "binding-other", work_id: "work:foreign" },
+      ],
+      attempts: [
+        { id: "attempt-1", binding_id: "binding-1", action: "cmms.create", state: "OutcomeUnknown", business_key: "work:canonical-1:create" },
+        { id: "attempt-other", binding_id: "binding-other", action: "cmms.foreign", state: "Verified" },
+      ],
+      reconciliations: [
+        { id: "reconcile-1", attempt_id: "attempt-1" },
+        { id: "reconcile-other", attempt_id: "attempt-other" },
+      ],
+      outcomes: [
+        { id: "outcome-1", work_package_id: "work:canonical-1", objective: "Validated review", source_ref: "cmms://plant-a", evidence_refs: ["receipt-1"] },
+        { id: "outcome-other", work_package_id: "work:foreign", objective: "Foreign review" },
+      ],
+      acceptance_decisions: [
+        { id: "decision-1", work_package_id: "work:canonical-1", disposition: "Conditional", outcome_refs: ["outcome-1"], acting_role: "reviewer" },
+        { id: "decision-spoof", work_package_id: "work:canonical-1", disposition: "Accept", outcome_refs: ["outcome-other"] },
+      ],
+      condition_evidence: [
+        { id: "witness-1", work_ref: "work:canonical-1", work_generation: 1, condition_type: "SourceOfTruthBound", satisfied: true, producer_ref: "cmms://plant-a" },
+        { id: "witness-old", work_ref: "work:canonical-1", work_generation: 0, condition_type: "SourceOfTruthBound", satisfied: true },
+      ],
+    };
+    const trace = workEvidenceTrace(state, "work:canonical-1", 1);
+    expect(trace.bindings).toHaveLength(1);
+    expect(trace.attempts).toHaveLength(1);
+    expect(trace.reconciliations).toHaveLength(1);
+    expect(trace.outcomes).toHaveLength(1);
+    expect(trace.acceptances).toHaveLength(1);
+    expect(trace.evidence).toHaveLength(1);
+    const html = render(state, null);
+    expect(html).toContain("Validated review");
+    expect(html).toContain("OutcomeUnknown");
+    expect(html).toContain("Conditional");
+    expect(html).not.toContain("Foreign review");
+    expect(html).not.toContain("cmms.foreign");
   });
 });

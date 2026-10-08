@@ -30,6 +30,125 @@ export function biolabEnabled(domainPacks: string[]): boolean {
 }
 
 
+function textField(record: Record<string, unknown>, field: string): string | null {
+  return typeof record[field] === "string" ? (record[field] as string) : null;
+}
+
+function fieldRefs(record: Record<string, unknown>, field: string): string[] {
+  const refs = record[field];
+  return Array.isArray(refs) ? refs.filter((value): value is string => typeof value === "string") : [];
+}
+
+/** Correlate only persisted records explicitly linked to the same Work.
+ *  A provider result, unlinked receipt or fixture must never count as accepted outcome. */
+export function workEvidenceTrace(control: V115ControlPlaneData, workId: string, generation: number) {
+  const bindings = control.execution_bindings.filter((row) => textField(row, "work_id") === workId);
+  const bindingIds = new Set(bindings.map((row) => textField(row, "id")).filter((id): id is string => !!id));
+  const attempts = control.attempts.filter((row) => {
+    const id = textField(row, "binding_id");
+    return id !== null && bindingIds.has(id);
+  });
+  const attemptIds = new Set(attempts.map((row) => textField(row, "id")).filter((id): id is string => !!id));
+  const reconciliations = control.reconciliations.filter((row) => {
+    const id = textField(row, "attempt_id");
+    return id !== null && attemptIds.has(id);
+  });
+  const outcomes = control.outcomes.filter((row) => textField(row, "work_package_id") === workId);
+  const outcomeIds = new Set(outcomes.map((row) => textField(row, "id")).filter((id): id is string => !!id));
+  const acceptances = control.acceptance_decisions.filter(
+    (row) => textField(row, "work_package_id") === workId &&
+      fieldRefs(row, "outcome_refs").some((id) => outcomeIds.has(id)),
+  );
+  const evidence = control.condition_evidence.filter((row) =>
+    textField(row, "work_ref") === workId && row.work_generation === generation,
+  );
+  return { bindings, attempts, reconciliations, outcomes, acceptances, evidence };
+}
+
+function WorkEvidenceTrace({
+  control,
+  workId,
+  generation,
+}: {
+  control: V115ControlPlaneData;
+  workId: string;
+  generation: number;
+}) {
+  const trace = workEvidenceTrace(control, workId, generation);
+  const summary = `${trace.bindings.length} bindings · ${trace.attempts.length} attempts · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions`;
+  return (
+    <details className="work-truth-trace">
+      <summary>Execution, reality &amp; independent acceptance — {summary}</summary>
+      <div className="work-truth-trace-grid">
+        <section>
+          <strong>Execution &amp; side-effect truth</strong>
+          {trace.attempts.length === 0 ? (
+            <p>No recorded external action attempts; no side effect may be inferred.</p>
+          ) : (
+            <ul>
+              {trace.attempts.map((attempt, index) => (
+                <li key={textField(attempt, "id") ?? index}>
+                  <b>{textField(attempt, "action") ?? "Unknown action"}</b> — {textField(attempt, "state") ?? "Unclassified"}
+                  <small>Business key: {textField(attempt, "business_key") ?? "Missing"}</small>
+                  <small>External reference: {textField(attempt, "external_ref") ?? "Not observed"}</small>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p>Reconciliations: {trace.reconciliations.length}. Unknown external effects are not automatically retried.</p>
+        </section>
+        <section>
+          <strong>Source-grounded outcomes</strong>
+          {trace.outcomes.length === 0 ? (
+            <p>No authoritative outcome observation for this Work.</p>
+          ) : (
+            <ul>
+              {trace.outcomes.map((outcome, index) => (
+                <li key={textField(outcome, "id") ?? index}>
+                  {textField(outcome, "objective") ?? "Observed outcome"}
+                  <small>Source: {textField(outcome, "source_ref") ?? "Not bound"}</small>
+                  <small>Witness references: {fieldRefs(outcome, "evidence_refs").length}</small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section>
+          <strong>Independent acceptance</strong>
+          {trace.acceptances.length === 0 ? (
+            <p>No linked independent acceptance decision; executor completion does not establish acceptance.</p>
+          ) : (
+            <ul>
+              {trace.acceptances.map((decision, index) => (
+                <li key={textField(decision, "id") ?? index}>
+                  <b>{textField(decision, "disposition") ?? "Undecided"}</b>
+                  <small>Role: {textField(decision, "acting_role") ?? "Unspecified"}</small>
+                  <small>Reason: {textField(decision, "reason") ?? "No reason provided"}</small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section>
+          <strong>Generation-scoped readiness witnesses</strong>
+          {trace.evidence.length === 0 ? (
+            <p>No generation-scoped witnesses stored for this Work.</p>
+          ) : (
+            <ul>
+              {trace.evidence.map((entry, index) => (
+                <li key={textField(entry, "id") ?? index}>
+                  {textField(entry, "condition_type") ?? "Condition"} — {entry.satisfied === true ? "witnessed" : "not satisfied"}
+                  <small>Producer: {textField(entry, "producer_ref") ?? "Unknown"}</small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </details>
+  );
+}
+
 /** The canonical Work surface is independent of legacy/demo diagnostic health. */
 export function CanonicalWorkOverview({
   control,
@@ -95,6 +214,7 @@ export function CanonicalWorkOverview({
                     </ul>
                   )}
                 </div>
+                <WorkEvidenceTrace control={control} workId={work.id} generation={work.generation} />
               </article>
             ))}
           </div>

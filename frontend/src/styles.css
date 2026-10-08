@@ -205,6 +205,35 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .work-focus-conditions ul { list-style: none; padding: 0; margin: 10px 0 0; }
 .work-focus-conditions li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px 0; border-top: 1px solid #2d3a50; overflow-wrap: anywhere; }
 .work-focus-conditions small { grid-column: 1 / -1; color: #9baec7; }
+.work-truth-trace {
+  margin-top: 15px;
+  padding: 0 11px;
+  border: 1px solid #34465c;
+  background: #142136;
+  border-radius: 9px;
+  font-size: 12px;
+}
+.work-truth-trace > summary {
+  cursor: pointer;
+  padding: 12px 4px;
+  font-weight: 650;
+  color: #b8d0f2;
+  overflow-wrap: anywhere;
+}
+.work-truth-trace-grid {
+  border-top: 1px solid #34465c;
+  padding: 12px 0 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 14px;
+}
+.work-truth-trace-grid section { min-width: 0; }
+.work-truth-trace-grid strong { color: #d8e7ff; }
+.work-truth-trace-grid p { color: #9bacbf; line-height: 1.5; }
+.work-truth-trace-grid ul { padding: 0; list-style: none; margin: 8px 0; }
+.work-truth-trace-grid li { border-top: 1px solid #34465c; padding: 8px 0; overflow-wrap: anywhere; }
+.work-truth-trace-grid small { display: block; margin-top: 5px; color: #9bacbf; }
+
 @media (max-width: 760px) {
   .work-focus { padding: 16px 13px; margin-bottom: 16px; }
   .work-focus-intro { flex-direction: column; gap: 14px; }
