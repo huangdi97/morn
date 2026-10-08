@@ -211,6 +211,39 @@ impl MornStore {
         Ok(inserted == 1)
     }
 
+    /// Durable semantic event helper. Runtime/plugin notifications should use
+    /// their own ephemeral channels and must not be confused with canonical
+    /// business/control facts merely because they share a CloudEvents envelope.
+    pub fn enqueue_durable_semantic_event(
+        &self,
+        workspace_id: &str,
+        envelope: &morn_kernel::EventEnvelope,
+        semantics: &morn_kernel::EventSemanticDescriptor,
+        created_at: i64,
+    ) -> Result<bool> {
+        semantics
+            .validate()
+            .map_err(Error::validation)?;
+        if !semantics.class.durable_required() {
+            return Err(Error::validation(
+                "runtime/projection event is not eligible for the durable semantic outbox",
+            ));
+        }
+        let enriched = envelope
+            .clone()
+            .with_semantics(semantics)
+            .map_err(Error::validation)?;
+        let payload =
+            serde_json::to_string(&enriched).map_err(|e| Error::internal(e.to_string()))?;
+        self.enqueue_outbox_event(
+            &enriched.id,
+            workspace_id,
+            &enriched.event_type,
+            &payload,
+            created_at,
+        )
+    }
+
     pub fn pending_outbox_events(&self, limit: usize) -> Result<Vec<OutboxEvent>> {
         let limit =
             i64::try_from(limit).map_err(|_| Error::validation("outbox limit is too large"))?;
