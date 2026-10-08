@@ -229,7 +229,11 @@ impl PiRpcClient {
         let id = self.next_request_id(command);
         let mut record = match fields {
             Value::Object(object) => Value::Object(object),
-            _ => return Err(Error::validation("Pi RPC command fields must be a JSON object")),
+            _ => {
+                return Err(Error::validation(
+                    "Pi RPC command fields must be a JSON object",
+                ))
+            }
         };
         let object = record
             .as_object_mut()
@@ -248,7 +252,9 @@ impl PiRpcClient {
                     }
                     return Err(Error::external(format!(
                         "Pi RPC {command} failed: {}",
-                        response.error.unwrap_or_else(|| "unknown error".to_string())
+                        response
+                            .error
+                            .unwrap_or_else(|| "unknown error".to_string())
                     )));
                 }
             } else {
@@ -320,7 +326,10 @@ fn parse_response(value: &Value) -> Result<PiRpcResponse> {
         command: command.to_string(),
         success,
         data: value.get("data").cloned(),
-        error: value.get("error").and_then(Value::as_str).map(str::to_string),
+        error: value
+            .get("error")
+            .and_then(Value::as_str)
+            .map(str::to_string),
     })
 }
 
@@ -337,11 +346,7 @@ fn parse_event(value: Value) -> PiRpcEvent {
 }
 
 fn prompt_disposition(response: &PiRpcResponse) -> Option<&str> {
-    response
-        .data
-        .as_ref()?
-        .get("disposition")?
-        .as_str()
+    response.data.as_ref()?.get("disposition")?.as_str()
 }
 
 #[cfg(test)]
@@ -352,10 +357,7 @@ mod tests {
     fn default_process_boundary_matches_current_pi_rpc_mode() {
         let config = PiRpcConfig::default();
         assert_eq!(config.command, "pi");
-        assert_eq!(
-            config.command_line(),
-            vec!["--mode", "rpc", "--no-session"]
-        );
+        assert_eq!(config.command_line(), vec!["--mode", "rpc", "--no-session"]);
     }
 
     #[test]
