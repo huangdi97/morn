@@ -757,7 +757,9 @@ impl ControlPlaneStore for MornStore {
         decision: &AcceptanceDecision,
     ) -> Result<()> {
         if decision.work_package_id != work.id {
-            return Err(Error::validation("acceptance decision belongs to another Work"));
+            return Err(Error::validation(
+                "acceptance decision belongs to another Work",
+            ));
         }
         for outcome_id in &decision.outcome_refs {
             let outcome: ObservedOutcome = self
@@ -784,7 +786,9 @@ impl ControlPlaneStore for MornStore {
         assessment: &ValueAssessment,
     ) -> Result<()> {
         if assessment.work_package_id != work.id {
-            return Err(Error::validation("value assessment belongs to another Work"));
+            return Err(Error::validation(
+                "value assessment belongs to another Work",
+            ));
         }
         let outcome: ObservedOutcome = self
             .load_record("observed_outcome_v115", assessment.outcome_ref.as_str())?
@@ -1394,7 +1398,9 @@ mod control_plane_persistence_scope_tests {
             "cmms://plant-a/orders/123",
             json!({"reviewed": true}),
         );
-        outcome.evidence_refs.push("cmms://plant-a/orders/123/receipt".to_string());
+        outcome
+            .evidence_refs
+            .push("cmms://plant-a/orders/123/receipt".to_string());
         assert!(store.save_observed_outcome(&other, &outcome).is_err());
         store.save_observed_outcome(&work, &outcome).unwrap();
 
@@ -1419,7 +1425,9 @@ mod control_plane_persistence_scope_tests {
             "incorrect cross-work outcome",
         );
         foreign_decision.outcome_refs.push(outcome.id.clone());
-        assert!(ControlPlaneStore::save_acceptance_decision(&store, &other, &foreign_decision).is_err());
+        assert!(
+            ControlPlaneStore::save_acceptance_decision(&store, &other, &foreign_decision).is_err()
+        );
 
         let assessment = ValueAssessment::new(
             work.id.clone(),

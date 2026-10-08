@@ -30,6 +30,79 @@ export function biolabEnabled(domainPacks: string[]): boolean {
 }
 
 
+/** The canonical Work surface is independent of legacy/demo diagnostic health. */
+export function CanonicalWorkOverview({
+  control,
+  error,
+}: {
+  control: V115ControlPlaneData | null;
+  error: string | null;
+}) {
+  return (
+      <section className="work-focus" aria-label="Canonical Work overview">
+        <div className="work-focus-intro">
+          <div>
+            <span className="work-focus-eyebrow">MORN v11.5 · CANONICAL WORK</span>
+            <h2>Work is the unit of coordination</h2>
+            <p>
+              Follow the goal, actual observations, required conditions, pinned execution and
+              independent acceptance. Provider sessions and demo runs are not Work truth.
+            </p>
+          </div>
+          <Link className="action-link" to="/studio">Draft Work in Studio →</Link>
+        </div>
+        {error ? (
+          <p role="alert" className="work-focus-alert">
+            Canonical Work data is unavailable: {error}. The legacy cards below do
+            not establish current Work state.
+          </p>
+        ) : !control ? (
+          <p className="work-focus-empty" role="status">Loading persisted Work state…</p>
+        ) : control.work.length === 0 ? (
+          <div className="work-focus-empty">
+            <strong>No canonical Work has been persisted yet.</strong>
+            <p>
+              Start with a goal and acceptance criteria in Studio. Compilation does not grant
+              execution authority, and a completed harness run does not establish accepted outcome.
+            </p>
+          </div>
+        ) : (
+          <div className="work-focus-grid">
+            {control.work.map((work) => (
+              <article className="work-focus-item" key={work.id}>
+                <div className="work-focus-item-header">
+                  <h3>{work.spec.goal}</h3>
+                  <StatusPill value={work.status.phase} />
+                </div>
+                <dl>
+                  <div><dt>Observed generation</dt><dd>{work.status.observed_generation}/{work.generation}</dd></div>
+                  <div><dt>Profile</dt><dd>{work.spec.profile_ref}</dd></div>
+                  <div><dt>Execution binding</dt><dd>{work.status.active_binding ?? "Not bound"}</dd></div>
+                </dl>
+                <div className="work-focus-conditions">
+                  <strong>Readiness &amp; evidence</strong>
+                  {work.status.conditions.length === 0 ? (
+                    <p>Conditions not yet observed — do not infer readiness.</p>
+                  ) : (
+                    <ul>
+                      {work.status.conditions.map((condition, index) => (
+                        <li key={`${condition.condition_type}-${index}`}>
+                          <span>{condition.condition_type}</span>
+                          <StatusPill value={condition.status} />
+                          <small>{condition.reason}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+  );
+}
+
 export default function Workbench() {
   const [data, setData] = useState<WorkbenchData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +122,7 @@ export default function Workbench() {
   const [v115, setV115] = useState<V115Status | null>(null);
   const [v115Control, setV115Control] = useState<V115ControlPlaneData | null>(null);
   const [v115ControlError, setV115ControlError] = useState<string | null>(null);
+  const [v115ControlLoading, setV115ControlLoading] = useState(true);
   const [uiExtensions, setUiExtensions] = useState<UiExtensionRegistry | null>(null);
 
   const load = useCallback(() => {
@@ -63,9 +137,11 @@ export default function Workbench() {
       .catch(() => undefined);
     setV115Control(null);
     setV115ControlError(null);
+    setV115ControlLoading(true);
     apiGet<V115ControlPlaneData>("/v115/control-plane")
       .then(setV115Control)
-      .catch((e: Error) => setV115ControlError(e.message));
+      .catch((e: Error) => setV115ControlError(e.message))
+      .finally(() => setV115ControlLoading(false));
     apiGet<UiExtensionRegistry>("/v115/ui/extensions")
       .then(setUiExtensions)
       .catch(() => undefined);
@@ -98,9 +174,24 @@ export default function Workbench() {
     }
   };
 
-  if (loading) return <Loading />;
-  if (error) return <ErrorBox message={error} />;
-  if (!data) return <EmptyState label="No workbench data" />;
+  if (loading && v115ControlLoading) return <Loading />;
+  if (loading || error || !data) {
+    return (
+      <div className="page">
+        <header className="page-header">
+          <h1>Workbench</h1>
+        </header>
+        <CanonicalWorkOverview control={v115Control} error={v115ControlError} />
+        <p role="status" className="work-focus-empty">
+          {error
+            ? `Legacy diagnostic data is unavailable: ${error}. Canonical Work remains authoritative.`
+            : loading
+              ? "Loading legacy diagnostics; canonical Work remains available independently."
+              : "No legacy diagnostic data is available. Canonical Work remains authoritative."}
+        </p>
+      </div>
+    );
+  }
   const biolab = biolabEnabled(data.domain_packs);
 
   const startDurable = async () => {
@@ -246,67 +337,7 @@ export default function Workbench() {
         </div>
       </header>
 
-      <section className="work-focus" aria-label="Canonical Work overview">
-        <div className="work-focus-intro">
-          <div>
-            <span className="work-focus-eyebrow">MORN v11.5 · CANONICAL WORK</span>
-            <h2>Work is the unit of coordination</h2>
-            <p>
-              Follow the goal, actual observations, required conditions, pinned execution and
-              independent acceptance. Provider sessions and demo runs are not Work truth.
-            </p>
-          </div>
-          <Link className="action-link" to="/studio">Draft Work in Studio →</Link>
-        </div>
-        {v115ControlError ? (
-          <p role="alert" className="work-focus-alert">
-            Canonical Work data is unavailable: {v115ControlError}. The legacy cards below do
-            not establish current Work state.
-          </p>
-        ) : !v115Control ? (
-          <p className="work-focus-empty" role="status">Loading persisted Work state…</p>
-        ) : v115Control.work.length === 0 ? (
-          <div className="work-focus-empty">
-            <strong>No canonical Work has been persisted yet.</strong>
-            <p>
-              Start with a goal and acceptance criteria in Studio. Compilation does not grant
-              execution authority, and a completed harness run does not establish accepted outcome.
-            </p>
-          </div>
-        ) : (
-          <div className="work-focus-grid">
-            {v115Control.work.map((work) => (
-              <article className="work-focus-item" key={work.id}>
-                <div className="work-focus-item-header">
-                  <h3>{work.spec.goal}</h3>
-                  <StatusPill value={work.status.phase} />
-                </div>
-                <dl>
-                  <div><dt>Observed generation</dt><dd>{work.status.observed_generation}/{work.generation}</dd></div>
-                  <div><dt>Profile</dt><dd>{work.spec.profile_ref}</dd></div>
-                  <div><dt>Execution binding</dt><dd>{work.status.active_binding ?? "Not bound"}</dd></div>
-                </dl>
-                <div className="work-focus-conditions">
-                  <strong>Readiness &amp; evidence</strong>
-                  {work.status.conditions.length === 0 ? (
-                    <p>Conditions not yet observed — do not infer readiness.</p>
-                  ) : (
-                    <ul>
-                      {work.status.conditions.map((condition, index) => (
-                        <li key={`${condition.condition_type}-${index}`}>
-                          <span>{condition.condition_type}</span>
-                          <StatusPill value={condition.status} />
-                          <small>{condition.reason}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      <CanonicalWorkOverview control={v115Control} error={v115ControlError} />
 
       <div className="grid">
         <Card title="Mission">
