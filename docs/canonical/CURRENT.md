@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-029 in `docs/adr/`
+3. ADR-002 through ADR-031 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -188,3 +188,19 @@ Pi is integrated through its public `pi --mode rpc --no-session` JSONL process
 protocol. Prompt acceptance and `agent_settled` remain executor-runtime facts,
 not Work Outcome or Acceptance. The Rust transport client is implemented;
 real-binary/model/credential smoke remains external. See ADR-029.
+
+
+## Evidence class semantics
+
+Evidence maturity is machine-readable and categorical. Design/spec, fixture,
+CI/conformance, real runtime, real site and production-write evidence are
+separate claim classes. No class implicitly proves another; every maturity or
+value statement must cite the class it actually has. External blockers remain
+visible states rather than mockable gates. See ADR-030.
+
+## Durable workflow boundary
+
+Legacy Morn DurableRuntime/WorkflowRun and future Temporal/Dapr-class engines
+are execution providers, not alternate Work truth. A durable run attaches
+through a pinned DurableWorkflowBinding; completion is executor evidence only
+and cannot create Outcome/Acceptance by itself. See ADR-031.
