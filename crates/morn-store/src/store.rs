@@ -32,6 +32,26 @@ pub struct ControllerLease {
     pub updated_at: i64,
 }
 
+/// A single atomic CAS projection update and its semantically durable event.
+/// Grouping these values keeps the persistence transaction boundary explicit.
+pub struct DurableProjectionCommit<'a, T: serde::Serialize> {
+    pub kind: &'a str,
+    pub id: &'a str,
+    pub workspace_id: &'a str,
+    pub created_at: i64,
+    pub expected_revision: u64,
+    pub record: &'a T,
+    pub envelope: &'a morn_kernel::EventEnvelope,
+    pub semantics: &'a morn_kernel::EventSemanticDescriptor,
+}
+
+/// Lease fence checked in the same transaction as a durable projection commit.
+pub struct ControllerFence<'a> {
+    pub lease_name: &'a str,
+    pub fencing_token: u64,
+    pub fence_at: i64,
+}
+
 const SCHEMA_VERSION: i64 = 5;
 
 impl MornStore {
@@ -600,15 +620,18 @@ impl MornStore {
     /// facts.
     pub fn save_record_cas_with_durable_event<T: serde::Serialize>(
         &self,
-        kind: &str,
-        id: &str,
-        workspace_id: &str,
-        created_at: i64,
-        expected_revision: u64,
-        record: &T,
-        envelope: &morn_kernel::EventEnvelope,
-        semantics: &morn_kernel::EventSemanticDescriptor,
+        commit: DurableProjectionCommit<'_, T>,
     ) -> Result<u64> {
+        let DurableProjectionCommit {
+            kind,
+            id,
+            workspace_id,
+            created_at,
+            expected_revision,
+            record,
+            envelope,
+            semantics,
+        } = commit;
         semantics.validate().map_err(Error::validation)?;
         if !semantics.class.durable_required() {
             return Err(Error::validation(
@@ -717,18 +740,24 @@ impl MornStore {
     /// preflight fence check races with another holder.
     pub fn save_record_cas_with_durable_event_fenced<T: serde::Serialize>(
         &self,
-        kind: &str,
-        id: &str,
-        workspace_id: &str,
-        created_at: i64,
-        expected_revision: u64,
-        record: &T,
-        envelope: &morn_kernel::EventEnvelope,
-        semantics: &morn_kernel::EventSemanticDescriptor,
-        lease_name: &str,
-        fencing_token: u64,
-        fence_at: i64,
+        commit: DurableProjectionCommit<'_, T>,
+        fence: ControllerFence<'_>,
     ) -> Result<u64> {
+        let DurableProjectionCommit {
+            kind,
+            id,
+            workspace_id,
+            created_at,
+            expected_revision,
+            record,
+            envelope,
+            semantics,
+        } = commit;
+        let ControllerFence {
+            lease_name,
+            fencing_token,
+            fence_at,
+        } = fence;
         semantics.validate().map_err(Error::validation)?;
         if !semantics.class.durable_required() {
             return Err(Error::validation(
@@ -2086,17 +2115,21 @@ mod v115_revision_tests {
 
         assert!(store
             .save_record_cas_with_durable_event_fenced(
-                "work_resource_v115",
-                "work-1",
-                "ws-1",
-                1_051,
-                0,
-                &json!({"phase":"ready"}),
-                &event,
-                &semantics,
-                "work-controller",
-                lease.fencing_token,
-                1_051,
+                DurableProjectionCommit {
+                    kind: "work_resource_v115",
+                    id: "work-1",
+                    workspace_id: "ws-1",
+                    created_at: 1_051,
+                    expected_revision: 0,
+                    record: &json!({"phase":"ready"}),
+                    envelope: &event,
+                    semantics: &semantics,
+                },
+                ControllerFence {
+                    lease_name: "work-controller",
+                    fencing_token: lease.fencing_token,
+                    fence_at: 1_051,
+                },
             )
             .is_err());
         assert!(store
@@ -2126,14 +2159,16 @@ mod v115_revision_tests {
 
         let revision = store
             .save_record_cas_with_durable_event(
-                "work_resource_v115",
-                "work-1",
-                "ws-1",
-                10,
-                0,
-                &json!({"phase":"ready"}),
-                &event,
-                &semantics,
+                DurableProjectionCommit {
+                    kind: "work_resource_v115",
+                    id: "work-1",
+                    workspace_id: "ws-1",
+                    created_at: 10,
+                    expected_revision: 0,
+                    record: &json!({"phase":"ready"}),
+                    envelope: &event,
+                    semantics: &semantics,
+                },
             )
             .unwrap();
         assert_eq!(revision, 1);
@@ -2151,14 +2186,16 @@ mod v115_revision_tests {
         );
         assert!(store
             .save_record_cas_with_durable_event(
-                "work_resource_v115",
-                "work-1",
-                "ws-1",
-                11,
-                0,
-                &json!({"phase":"blocked"}),
-                &stale_event,
-                &semantics,
+                DurableProjectionCommit {
+                    kind: "work_resource_v115",
+                    id: "work-1",
+                    workspace_id: "ws-1",
+                    created_at: 11,
+                    expected_revision: 0,
+                    record: &json!({"phase":"blocked"}),
+                    envelope: &stale_event,
+                    semantics: &semantics,
+                },
             )
             .is_err());
         assert_eq!(store.pending_outbox_events(10).unwrap().len(), 1);
@@ -2184,14 +2221,16 @@ mod v115_revision_tests {
 
         assert!(store
             .save_record_cas_with_durable_event(
-                "runtime_projection",
-                "dsh",
-                "ws-1",
-                1,
-                0,
-                &json!({"status":"healthy"}),
-                &event,
-                &semantics,
+                DurableProjectionCommit {
+                    kind: "runtime_projection",
+                    id: "dsh",
+                    workspace_id: "ws-1",
+                    created_at: 1,
+                    expected_revision: 0,
+                    record: &json!({"status":"healthy"}),
+                    envelope: &event,
+                    semantics: &semantics,
+                },
             )
             .is_err());
         assert!(store.pending_outbox_events(10).unwrap().is_empty());

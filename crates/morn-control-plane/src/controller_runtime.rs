@@ -12,7 +12,7 @@ use morn_kernel::error::{Error, Result};
 use morn_kernel::time::Timestamp;
 use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
 use morn_profile::DomainProfile;
-use morn_store::MornStore;
+use morn_store::store::{ControllerFence, DurableProjectionCommit, MornStore};
 use morn_work::control::{WorkPhase, WorkResource};
 
 use crate::{derive_controller_inputs, ConditionEvidence, ControllerInputs, WorkController};
@@ -151,17 +151,21 @@ impl DurableWorkControllerRuntime {
         let mut persisted = work.clone();
         persisted.resource_version = previous_revision.saturating_add(1);
         let next_revision = store.save_record_cas_with_durable_event_fenced(
-            "work_resource_v115",
-            work.id.as_str(),
-            work.workspace_id.as_str(),
-            work.created_at.millis(),
-            previous_revision,
-            &persisted,
-            &envelope,
-            &semantics,
-            &self.lease_name,
-            lease.fencing_token,
-            now.millis(),
+            DurableProjectionCommit {
+                kind: "work_resource_v115",
+                id: work.id.as_str(),
+                workspace_id: work.workspace_id.as_str(),
+                created_at: work.created_at.millis(),
+                expected_revision: previous_revision,
+                record: &persisted,
+                envelope: &envelope,
+                semantics: &semantics,
+            },
+            ControllerFence {
+                lease_name: &self.lease_name,
+                fencing_token: lease.fencing_token,
+                fence_at: now.millis(),
+            },
         )?;
 
         Ok(ControllerTickResult {
