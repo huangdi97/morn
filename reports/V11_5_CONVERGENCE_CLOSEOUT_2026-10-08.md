@@ -73,6 +73,7 @@ Morn remains Work-first, not Agent-first:
 | Profile registry/evolution | ProfileRegistry + compatibility/migration plan | implemented |
 | Artifact2Capability | OpenAPI/SOP/Repo/reviewed-paper compilers | implemented |
 | capability packaging | OCI-oriented descriptor + Sigstore/SLSA refs | implemented contract; real registry external |
+| package compatibility axes | protocol/profile/composition compatibility separated from legacy core_compat ABI | implemented |
 | CloudEvents-style integration envelope | kernel event envelope | implemented |
 | event semantic roles | runtime signal vs durable control/fact/observation taxonomy | implemented |
 | provider-health freshness gate | ProviderRegistry health lease + ProviderGate | implemented |
@@ -292,7 +293,8 @@ The convergence branch also freezes the following late-stage clarifications:
 - ADR-031: durable workflow engines are execution providers, not Work truth;
 - ADR-032: Cordis is the reference composition runtime behind a small Morn contract;
 - ADR-033: engineering/deployment evidence and value-validation evidence are orthogonal;
-- ADR-034: domain UI composition is declarative/safe-by-default before arbitrary client plugins.
+- ADR-034: domain UI composition is declarative/safe-by-default before arbitrary client plugins;
+- ADR-035: package compatibility separates semantic protocol, profile and composition/runtime axes.
 
 These additions close the remaining places where runtime/plugin/UI state could
 otherwise become a second business truth or inflate maturity claims.
