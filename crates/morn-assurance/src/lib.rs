@@ -3,7 +3,7 @@
 pub mod admission;
 pub mod certification;
 pub mod evaluation;
-pub mod value_claim;
+
 pub mod evidence_class;
 pub mod managed_work;
 pub mod replacement;
@@ -23,8 +23,7 @@ pub use evidence_class::{
     reference_evidence_ledger, EvidenceClaim, EvidenceClaimId, EvidenceClaimState, EvidenceClass,
     EvidenceLedger,
 };
-pub use evaluation::{EvalStep, EvaluationDecision, EvaluationResult, EvaluationRunner};
-pub use value_claim::{validate_customer_value_claim, CustomerValueClaimValidation};
+
 pub use replay::{ReplayReport, ReplayRunner, ReplayScenario};
 pub use shadow::{ShadowComparison, ShadowRun, ShadowRunner};
 pub use simulation::{FaultInjection, FaultKind, SimulationScenario};
