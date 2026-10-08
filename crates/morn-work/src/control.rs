@@ -180,10 +180,16 @@ impl WorkResource {
     }
 
     /// Replacing desired state creates a new generation. Existing execution
-    /// bindings stay pinned to the generation they were created against.
+    /// bindings/conditions remain durable historical records elsewhere, but
+    /// cannot stay active in the current projection because they were proven
+    /// against the previous desired generation.
     pub fn replace_spec(&mut self, spec: WorkSpec) {
         self.spec = spec;
         self.generation += 1;
+        self.status.phase = WorkPhase::Proposed;
+        self.status.conditions.clear();
+        self.status.active_binding = None;
+        self.status.active_bindings.clear();
         self.status.updated_at = Timestamp::now();
     }
 
@@ -385,6 +391,32 @@ mod tests {
         assert_eq!(resource.resource_version, 0);
         resource.mark_persisted_revision(1);
         assert_eq!(resource.resource_version, 1);
+    }
+
+    #[test]
+    fn spec_replacement_invalidates_stale_conditions_and_active_bindings() {
+        let ws = WorkspaceId::generate();
+        let work_id = WorkPackageId::generate_with("wp");
+        let mut spec = WorkSpec::new(work_id, "goal", "morn.lite@1.0.0");
+        spec.required_conditions = vec!["CapabilityResolved".to_string()];
+        let mut resource = WorkResource::new(ws, spec.clone());
+        resource.set_condition(WorkCondition::new(
+            "CapabilityResolved",
+            ConditionStatus::True,
+        ));
+        resource.record_active_binding(RuntimeBindingId::generate_with("binding"));
+        resource.status.phase = WorkPhase::Running;
+        resource.mark_observed();
+
+        spec.goal = "changed goal".to_string();
+        resource.replace_spec(spec);
+
+        assert_eq!(resource.generation, 2);
+        assert_eq!(resource.status.observed_generation, 1);
+        assert_eq!(resource.status.phase, WorkPhase::Proposed);
+        assert!(resource.status.conditions.is_empty());
+        assert!(resource.status.active_binding.is_none());
+        assert!(resource.status.active_bindings.is_empty());
     }
 
     #[test]
