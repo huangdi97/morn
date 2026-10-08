@@ -74,6 +74,9 @@ Morn remains Work-first, not Agent-first:
 | CloudEvents-style integration envelope | kernel event envelope | implemented |
 | event semantic roles | runtime signal vs durable control/fact/observation taxonomy | implemented |
 | provider-health freshness gate | ProviderRegistry health lease + ProviderGate | implemented |
+| strict capability runtime eligibility | active qualification/release/site admission + live provider gate | implemented |
+| Pi JSONL RPC boundary | Rust subprocess client for prompt/get_state/abort/agent_settled | implemented; real binary/model smoke external |
+| atomic state + semantic outbox | CAS projection + durable event in one transaction | implemented |
 | MCP 2026 resource-bound auth contract | opaque credential/resource binding | implemented |
 | telemetry boundary | OTel-oriented semantic design | contract/design; backend deployment external |
 | Creator | natural-language/simple draft -> existing Solution pipeline | implemented |
