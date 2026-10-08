@@ -73,6 +73,20 @@ export interface V115Status {
     production_write: boolean;
     first_wedge: string;
   };
+  evidence_policy: {
+    classes: string[];
+    lower_class_never_auto_promotes: boolean;
+    claims: Array<{
+      id: string;
+      subject: string;
+      class: string;
+      state: string;
+      evidence_refs: string[];
+      issuer: string;
+      reason: string;
+      observed_at: number | string | Record<string, unknown>;
+    }>;
+  };
   claims: {
     local_engineering: string;
     real_dsh: string;
