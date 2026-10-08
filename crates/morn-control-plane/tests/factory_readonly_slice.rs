@@ -21,8 +21,8 @@ use morn_control_plane::{
     capability_resolution_evidence, enforce_profile_action, evaluate_profile_action,
     issue_external_action_permit_for_work, provenance_condition_evidence,
     resolve_external_action_finalizer, source_of_truth_condition_evidence,
-    CapabilityEligibilityGate, ControlPlaneStore, DurableWorkControllerRuntime,
-    ExternalActionMode, ReconciliationController, WorkProgressController, WorkProgressInputs,
+    CapabilityEligibilityGate, ControlPlaneStore, DurableWorkControllerRuntime, ExternalActionMode,
+    ReconciliationController, WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
