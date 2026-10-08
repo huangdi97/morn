@@ -231,10 +231,7 @@ async fn v115_status() -> ApiResult {
     })))
 }
 
-async fn v115_work_reconcile(
-    State(state): State<AppState>,
-    Json(body): Json<Value>,
-) -> ApiResult {
+async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_control_plane::{ControllerInputs, DurableWorkControllerRuntime};
     use morn_kernel::time::Timestamp;
 
@@ -248,12 +245,13 @@ async fn v115_work_reconcile(
         .store
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
-    let profile = morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
-        AppError(Error::validation(format!(
-            "unsupported Work profile {}",
-            work.spec.profile_ref
-        )))
-    })?;
+    let profile =
+        morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+            AppError(Error::validation(format!(
+                "unsupported Work profile {}",
+                work.spec.profile_ref
+            )))
+        })?;
     let inputs = ControllerInputs {
         capability_resolved: body
             .get("capability_resolved")
@@ -281,7 +279,8 @@ async fn v115_work_reconcile(
         .and_then(Value::as_str)
         .unwrap_or("morn-app-api");
     let runtime = DurableWorkControllerRuntime::new(holder);
-    let tick = runtime.reconcile_once(&guard.store, work_id, &profile, &inputs, Timestamp::now())?;
+    let tick =
+        runtime.reconcile_once(&guard.store, work_id, &profile, &inputs, Timestamp::now())?;
     let current = guard
         .store
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
