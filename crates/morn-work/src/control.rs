@@ -62,6 +62,15 @@ pub enum WorkPhase {
     Cancelled,
 }
 
+impl WorkPhase {
+    /// Terminal for the current Work generation. A new generation created by an
+    /// explicit spec/profile/protocol change may run again, but late/reordered
+    /// evidence cannot silently reopen a terminal generation.
+    pub const fn is_terminal(self) -> bool {
+        matches!(self, Self::Accepted | Self::Rejected | Self::Cancelled)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum AutonomyPosture {
@@ -499,4 +508,14 @@ mod tests {
         assert_eq!(resource.generation, 2);
         assert_eq!(resource.status.observed_generation, 1);
     }
+
+    #[test]
+    fn terminal_phase_is_generation_scoped() {
+        assert!(WorkPhase::Accepted.is_terminal());
+        assert!(WorkPhase::Rejected.is_terminal());
+        assert!(WorkPhase::Cancelled.is_terminal());
+        assert!(!WorkPhase::Delivered.is_terminal());
+        assert!(!WorkPhase::Reconciling.is_terminal());
+    }
+
 }
