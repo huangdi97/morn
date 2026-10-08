@@ -338,7 +338,10 @@ impl WorkProgressController {
             if workflow.is_executor_terminal() {
                 work.status.phase = WorkPhase::Waiting;
                 work.mark_observed();
-                if inputs.outcome.is_none() && inputs.acceptance.is_none() && inputs.attempt.is_none() {
+                if inputs.outcome.is_none()
+                    && inputs.acceptance.is_none()
+                    && inputs.attempt.is_none()
+                {
                     return;
                 }
             }
@@ -748,7 +751,7 @@ mod tests {
 
     #[test]
     fn completed_durable_workflow_does_not_accept_work() {
-        use morn_kernel::ids::{WorkflowDefinitionId, WorkPackageId, WorkspaceId};
+        use morn_kernel::ids::{WorkPackageId, WorkflowDefinitionId, WorkspaceId};
         use morn_kernel::version::Version;
         use morn_runtime::{DurableWorkflowBinding, DurableWorkflowEvidence};
         use morn_work::workflow::{RunStatus, WorkflowRun};
@@ -773,8 +776,7 @@ mod tests {
             run.id.to_string(),
         )
         .unwrap();
-        let evidence =
-            DurableWorkflowEvidence::from_legacy_run(&workflow_binding, &run).unwrap();
+        let evidence = DurableWorkflowEvidence::from_legacy_run(&workflow_binding, &run).unwrap();
 
         WorkProgressController.reconcile(
             &mut work,
