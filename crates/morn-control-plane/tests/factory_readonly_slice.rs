@@ -7,7 +7,10 @@
 
 use std::collections::BTreeSet;
 
-use morn_assurance::{AdmissionService, QualificationEvidence, StrictQualificationRequest};
+use morn_assurance::{
+    AdmissionService, ProfileConformanceAttestation, QualificationEvidence,
+    StrictQualificationRequest,
+};
 use morn_capability::effect::EffectContract;
 use morn_capability::{
     CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityRequest, CapabilityResolver,
@@ -61,7 +64,12 @@ impl OutcomeReconciler for CmmsCommittedAfterTimeout {
     }
 }
 
-fn passing_factory_conformance(profile: &DomainProfile) -> morn_profile::ConformanceReport {
+fn passing_factory_conformance(
+    profile: &DomainProfile,
+) -> (
+    morn_profile::ConformanceReport,
+    ProfileConformanceAttestation,
+) {
     let mut semantics = BTreeSet::new();
     semantics.extend(
         profile
@@ -70,22 +78,34 @@ fn passing_factory_conformance(profile: &DomainProfile) -> morn_profile::Conform
             .filter(|item| item.level == RequirementLevel::Required)
             .map(|item| item.semantic.clone()),
     );
-    evaluate_profile(
+    let evidence = ConformanceEvidence {
+        satisfied_semantics: semantics,
+        isolation: "container".to_string(),
+        execution_guarantees: profile
+            .required_execution_guarantees
+            .iter()
+            .copied()
+            .collect(),
+        durable_work_state: true,
+        source_of_truth_bound: true,
+        provenance_ready: true,
+        ..Default::default()
+    };
+    let report = evaluate_profile(profile, &evidence);
+    let attestation = ProfileConformanceAttestation::evaluate(
         profile,
-        &ConformanceEvidence {
-            satisfied_semantics: semantics,
-            isolation: "container".to_string(),
-            execution_guarantees: profile
-                .required_execution_guarantees
-                .iter()
-                .copied()
-                .collect(),
-            durable_work_state: true,
-            source_of_truth_bound: true,
-            provenance_ready: true,
-            ..Default::default()
-        },
+        "plant-a",
+        &evidence,
+        vec![
+            "fixture://controller-store".to_string(),
+            "fixture://source-of-truth/cmms".to_string(),
+            "fixture://execution-environment/container".to_string(),
+        ],
+        "morn-conformance-suite",
+        None,
     )
+    .unwrap();
+    (report, attestation)
 }
 
 #[test]
@@ -131,8 +151,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     assert_eq!(capability.stage, CapabilityStage::Declared);
 
     // Qualification and site admission are separate gates.
-    let conformance = passing_factory_conformance(&profile);
+    let (conformance, conformance_attestation) = passing_factory_conformance(&profile);
     assert!(conformance.passed);
+    assert!(conformance_attestation.report.passed);
     let mut admission = AdmissionService::default();
     admission
         .observe(
@@ -185,12 +206,10 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .iter()
         .any(|reference| reference == &release.id.to_string()));
     admission
-        .admit(
+        .admit_with_attestation(
             &mut capability,
             &qualification,
-            "plant-a",
-            conformance.profile_ref.clone(),
-            &conformance,
+            &conformance_attestation,
             "site-owner",
         )
         .unwrap();
@@ -332,6 +351,15 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     ];
 
     let store = MornStore::open_in_memory().unwrap();
+    store
+        .save_record_immutable(
+            "profile_conformance_attestation_v115",
+            conformance_attestation.id.as_str(),
+            work.workspace_id.as_str(),
+            conformance_attestation.evaluated_at.millis(),
+            &conformance_attestation,
+        )
+        .unwrap();
     store.save_work_resource_cas(&mut work).unwrap();
     for evidence in &readiness {
         store.save_condition_evidence(&work, evidence).unwrap();
@@ -443,12 +471,10 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         )
         .unwrap();
     admission
-        .admit(
+        .admit_with_attestation(
             &mut cmms_capability,
             &cmms_qualification,
-            "plant-a",
-            conformance.profile_ref.clone(),
-            &conformance,
+            &conformance_attestation,
             "site-owner",
         )
         .unwrap();
