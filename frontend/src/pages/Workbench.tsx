@@ -174,8 +174,8 @@ export default function Workbench() {
     }
   };
 
-  if (loading && v115ControlLoading) return <Loading />;
-  if (loading || error || !data) {
+  if (loading && v115ControlLoading && !data) return <Loading />;
+  if (error || !data) {
     return (
       <div className="page">
         <header className="page-header">
