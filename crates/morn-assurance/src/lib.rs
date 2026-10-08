@@ -6,6 +6,7 @@ pub mod evaluation;
 
 pub mod evidence_class;
 pub mod managed_work;
+pub mod profile_conformance;
 pub mod replacement;
 pub mod replay;
 pub mod rollback;
