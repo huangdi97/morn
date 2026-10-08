@@ -637,6 +637,11 @@ impl AdmissionService {
             .iter_mut()
             .find(|item| item.id == *release_id)
             .ok_or_else(|| Error::not_found(format!("capability release {release_id}")))?;
+        if release.manifest_id != capability.manifest.id {
+            return Err(Error::validation(
+                "release does not belong to supplied capability manifest",
+            ));
+        }
         release.status = CapabilityDistributionReleaseStatus::Revoked;
         capability
             .release_refs
@@ -688,6 +693,11 @@ impl AdmissionService {
             .iter_mut()
             .find(|item| item.id == *admission_id)
             .ok_or_else(|| Error::not_found(format!("site admission {admission_id}")))?;
+        if admission.manifest_id != capability.manifest.id {
+            return Err(Error::validation(
+                "admission does not belong to supplied capability manifest",
+            ));
+        }
         admission.status = SiteAdmissionStatus::Suspended;
         capability
             .admission_refs
@@ -1049,6 +1059,68 @@ mod tests {
         assert!(capability.admission_refs.is_empty());
         assert!(capability.admitted_sites.is_empty());
         assert_eq!(capability.stage, CapabilityStage::Suspended);
+    }
+
+    #[test]
+    fn cross_manifest_revocation_or_suspension_cannot_mutate_other_capability() {
+        let mut original = candidate();
+        let mut unrelated = candidate();
+        let mut service = AdmissionService::default();
+        observe_candidate(&mut service, &mut original);
+
+        let qualification = service
+            .qualify_with_evidence(
+                &mut original,
+                StrictQualificationRequest {
+                    candidate_ref: "candidate:owner".to_string(),
+                    decision_ref: "decision:owner".to_string(),
+                    evidence_refs: vec!["eval:owner".to_string()],
+                    qualification_evidence: QualificationEvidence {
+                        test_suite_refs: vec!["suite:factory".to_string()],
+                        environment_digest: Some("sha256:env".to_string()),
+                        expected_properties: vec!["safe-reconcile".to_string()],
+                        evaluator_identity: Some("evaluator:independent".to_string()),
+                        ..Default::default()
+                    },
+                    context_of_use: vec!["factory-readonly".to_string()],
+                    valid_until: None,
+                },
+            )
+            .unwrap();
+        let release = record_fixture_release(&mut service, &mut original, &qualification);
+        let profile = DomainProfile::factory_readonly_v1();
+        let report = passing_conformance(&profile);
+        let admission = service
+            .admit(
+                &mut original,
+                &qualification,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .unwrap();
+
+        assert!(service.revoke_release(&mut unrelated, &release.id).is_err());
+        assert!(service.suspend(&mut unrelated, &admission.id).is_err());
+        assert!(service
+            .releases
+            .iter()
+            .find(|record| record.id == release.id)
+            .unwrap()
+            .active());
+        assert_eq!(
+            service
+                .admissions
+                .iter()
+                .find(|record| record.id == admission.id)
+                .unwrap()
+                .status,
+            SiteAdmissionStatus::Admitted
+        );
+        assert_eq!(original.stage, CapabilityStage::Admitted);
+        assert_eq!(unrelated.stage, CapabilityStage::Declared);
+        assert!(unrelated.admission_refs.is_empty());
     }
 
     #[test]
