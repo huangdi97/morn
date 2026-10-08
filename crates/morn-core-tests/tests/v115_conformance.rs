@@ -13,7 +13,8 @@ use morn_kernel::protocol::{HistoryMutation, HistoryMutationKind, ProtocolSnapsh
 use morn_kernel::time::Timestamp;
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
-    ActionAttempt, AttemptState, BindingMigrationReason, BindingMigrationRequest, ExecutionBinding,
+    ActionAttempt, AttemptState, BindingMigrationReason, BindingMigrationRequest,
+    CompositionRuntimeRef, ExecutionBinding, ExecutionManifest,
 };
 use morn_work::{WorkResource, WorkSpec};
 use serde_json::json;
@@ -380,4 +381,31 @@ fn work_truth_survives_harness_provider_migration() {
     assert_eq!(decision.from_binding, first.id);
     assert_eq!(decision.to_binding, second.id);
     assert_eq!(first_attempt.state, AttemptState::OutcomeUnknown);
+}
+
+
+#[test]
+fn execution_manifest_pins_interpretation_without_becoming_work_truth() {
+    let mut spec = WorkSpec::new(
+        WorkPackageId::generate_with("work"),
+        "review outage",
+        "morn.factory.readonly@1.0.0",
+    );
+    spec.site_ref = Some("plant-a".to_string());
+    let work = WorkResource::new(WorkspaceId::generate(), spec);
+    let mut binding =
+        ExecutionBinding::for_work(&work, "cmanifest:investigator", "deepseek-harness", "fixture-v1");
+    binding.provider_digest = Some(format!("sha256:{}", "a".repeat(64)));
+
+    let manifest = ExecutionManifest::from_binding(
+        &work,
+        &binding,
+        CompositionRuntimeRef::new("cordis-reference", "4.0.4"),
+    )
+    .unwrap();
+
+    assert!(manifest.validates_against(&work, &binding));
+    assert_eq!(manifest.work_ref, work.id.to_string());
+    assert_eq!(manifest.profile_ref, work.spec.profile_ref);
+    assert_ne!(manifest.execution_binding_ref, manifest.work_ref);
 }
