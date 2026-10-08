@@ -29,12 +29,12 @@ pub use credentials::{
     CredentialHandle, CredentialHandleId, CredentialProvider, CredentialRequest,
     FixtureCredentialProvider,
 };
-pub use execution_manifest::{CompositionRuntimeRef, ExecutionManifest};
 pub use environment::{
     ExecutionEnvironmentHandle, ExecutionEnvironmentId, ExecutionEnvironmentOffer,
     ExecutionEnvironmentProvider, ExecutionEnvironmentResolver, ExecutionEnvironmentSelection,
     ExecutionEnvironmentSpec, FixtureEnvironmentProvider, IsolationClass,
 };
+pub use execution_manifest::{CompositionRuntimeRef, ExecutionManifest};
 pub use gateway::{
     ActionGateway, ActionPreview, AuthorizedAction, ExecutionOutcome, WorldCommitter,
 };
