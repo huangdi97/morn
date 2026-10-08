@@ -67,10 +67,7 @@ fn approved_local_origin(value: &HeaderValue) -> bool {
 /// they come from an explicit Morn/Tauri development origin. Requests without
 /// Origin (CLI/native provider traffic) remain allowed.
 async fn local_origin_guard(req: Request, next: Next) -> Response {
-    let mutating = !matches!(
-        *req.method(),
-        Method::GET | Method::HEAD | Method::OPTIONS
-    );
+    let mutating = !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
     if mutating {
         if let Some(origin) = req.headers().get(header::ORIGIN) {
             if !approved_local_origin(origin) {
