@@ -299,6 +299,7 @@ tests.
 ## Docs
 
 - [v11.5 architecture](docs/architecture-v11.5.md)
+- [Language-neutral v11.5 protocol](spec/v11.5/README.md)
 - [Architecture baseline](docs/architecture.md)
 - [Developer guide](docs/developer-guide.md)
 - [Deployment](docs/deployment.md)
