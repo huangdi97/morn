@@ -23,6 +23,16 @@ pub enum EventSemanticClass {
 }
 
 impl EventSemanticClass {
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::RuntimeSignal => "runtime-signal",
+            Self::ControlIntent => "control-intent",
+            Self::DomainFact => "domain-fact",
+            Self::ExternalObservation => "external-observation",
+            Self::ProjectionNotification => "projection-notification",
+        }
+    }
+
     pub const fn durable_required(self) -> bool {
         matches!(
             self,
