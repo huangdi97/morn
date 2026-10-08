@@ -20,9 +20,9 @@ use morn_control_plane::{
     begin_external_attempt_with_effect, capability_qualification_evidence,
     capability_resolution_evidence, issue_external_action_permit,
     issue_external_action_permit_for_work, provenance_condition_evidence,
-    source_of_truth_condition_evidence,
-    CapabilityEligibilityGate, ControlPlaneStore, DurableWorkControllerRuntime, ExternalActionMode,
-    ReconciliationController, WorkProgressController, WorkProgressInputs,
+    source_of_truth_condition_evidence, CapabilityEligibilityGate, ControlPlaneStore,
+    DurableWorkControllerRuntime, ExternalActionMode, ReconciliationController,
+    WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
