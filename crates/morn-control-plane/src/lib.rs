@@ -94,14 +94,6 @@ impl WorkController {
                 "qualification/admission",
             );
         }
-        if profile.requires("AuthorityBeforeSideEffect") {
-            Self::condition(
-                work,
-                "AuthoritySatisfied",
-                inputs.authority_satisfied,
-                "authority provider",
-            );
-        }
         if profile.requires("SourceOfTruthBinding") {
             Self::condition(
                 work,
