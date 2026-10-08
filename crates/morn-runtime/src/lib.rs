@@ -8,6 +8,7 @@
 pub mod attempt;
 pub mod authority;
 pub mod binding;
+pub mod composition;
 pub mod credentials;
 pub mod durable_workflow;
 pub mod environment;
@@ -25,6 +26,10 @@ pub use authority::{
 };
 pub use binding::{
     BindingMigrationDecision, BindingMigrationDecisionId, BindingMigrationReason, ExecutionBinding,
+};
+pub use composition::{
+    run_composition_contract, CompositionProviderRef, CompositionRuntimeProvider,
+    CompositionRuntimeSnapshot, CompositionSlotBinding, FixtureCompositionRuntime,
 };
 pub use credentials::{
     CredentialHandle, CredentialHandleId, CredentialProvider, CredentialRequest,
