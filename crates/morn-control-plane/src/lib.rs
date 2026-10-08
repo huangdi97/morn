@@ -18,8 +18,8 @@ pub use profile_guard::{
 };
 
 use morn_integration::SourceOfTruthBinding;
-use morn_kernel::error::Result;
-use morn_profile::DomainProfile;
+use morn_kernel::error::{Error, Result};
+use morn_profile::{plan_profile_migration, DomainProfile, ProfileCompatibility, ProfileMigrationPlan};
 use morn_runtime::{
     reconcile_attempt, ActionAttempt, BindingMigrationDecision, ExecutionBinding,
     ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
@@ -114,6 +114,54 @@ impl WorkController {
         );
         condition.reason = reason.to_string();
         work.set_condition(condition);
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ProfileMigrationController;
+
+impl ProfileMigrationController {
+    /// Explicitly migrate the desired Work profile. Existing Attempts/Bindings
+    /// remain historical and pinned to their old generation; the current Work
+    /// projection is reset and must satisfy the new profile gates again.
+    pub fn migrate(
+        &self,
+        work: &mut WorkResource,
+        from: &DomainProfile,
+        to: &DomainProfile,
+    ) -> Result<ProfileMigrationPlan> {
+        if work.spec.profile_ref != from.canonical_ref() {
+            return Err(Error::conflict(format!(
+                "Work profile {} does not match migration base {}",
+                work.spec.profile_ref,
+                from.canonical_ref()
+            )));
+        }
+
+        let plan = plan_profile_migration(from, to);
+        if plan.compatibility == ProfileCompatibility::Incompatible {
+            return Err(Error::conflict(format!(
+                "profile migration {} -> {} is incompatible: {:?}",
+                plan.from_ref, plan.to_ref, plan.reasons
+            )));
+        }
+
+        if plan.from_ref == plan.to_ref {
+            return Ok(plan);
+        }
+
+        let old_profile_conditions = from.pre_execution_work_conditions();
+        let mut spec = work.spec.clone();
+        spec.profile_ref = to.canonical_ref();
+        spec.required_conditions
+            .retain(|condition| !old_profile_conditions.contains(condition));
+        spec.required_conditions
+            .extend(to.pre_execution_work_conditions());
+        spec.required_conditions.sort();
+        spec.required_conditions.dedup();
+
+        work.replace_spec(spec);
+        Ok(plan)
     }
 }
 
@@ -863,5 +911,70 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(loaded.status.phase, WorkPhase::Ready);
+    }
+}
+
+#[cfg(test)]
+mod v115_profile_migration_tests {
+    use super::*;
+    use morn_kernel::ids::{RuntimeBindingId, WorkPackageId, WorkspaceId};
+    use morn_kernel::version::Version;
+    use morn_work::control::{ConditionStatus, WorkCondition, WorkSpec};
+
+    #[test]
+    fn profile_migration_resets_current_projection_and_rebinds_guarantees() {
+        let base = DomainProfile::factory_readonly_v1();
+        let mut next = base.clone();
+        next.version = Version::new(1, 1, 0);
+        next.requirements
+            .push(morn_profile::GuaranteeRequirement::required("RuntimeAttestation"));
+
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "review outage",
+            base.canonical_ref(),
+        );
+        spec.required_conditions = base.pre_execution_work_conditions();
+        spec.required_conditions.push("CustomerConstraint".to_string());
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        work.set_condition(WorkCondition::new(
+            "CapabilityResolved",
+            ConditionStatus::True,
+        ));
+        work.record_active_binding(RuntimeBindingId::generate_with("binding"));
+        work.status.phase = WorkPhase::Running;
+        work.mark_observed();
+
+        let plan = ProfileMigrationController
+            .migrate(&mut work, &base, &next)
+            .unwrap();
+
+        assert_eq!(
+            plan.compatibility,
+            morn_profile::ProfileCompatibility::RequiresReevaluation
+        );
+        assert_eq!(work.generation, 2);
+        assert_eq!(work.spec.profile_ref, next.canonical_ref());
+        assert!(work.spec.required_conditions.contains(&"CustomerConstraint".to_string()));
+        assert!(work.status.conditions.is_empty());
+        assert!(work.status.active_bindings.is_empty());
+        assert_eq!(work.status.phase, WorkPhase::Proposed);
+    }
+
+    #[test]
+    fn incompatible_cross_profile_migration_is_rejected() {
+        let base = DomainProfile::factory_readonly_v1();
+        let target = DomainProfile::enterprise_v1();
+        let spec = morn_work::control::WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "review outage",
+            base.canonical_ref(),
+        );
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        assert!(ProfileMigrationController
+            .migrate(&mut work, &base, &target)
+            .is_err());
+        assert_eq!(work.spec.profile_ref, base.canonical_ref());
+        assert_eq!(work.generation, 1);
     }
 }
