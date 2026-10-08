@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-034 in `docs/adr/`
+3. ADR-002 through ADR-035 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -226,3 +226,12 @@ Domain UI composition is declarative and safe-by-default. Domain packs may
 contribute typed Workbench/Studio/Console/Hub slots, but v11.5 rejects arbitrary
 remote JavaScript and keeps authorization/business truth on backend semantic
 contracts. See ADR-034.
+
+
+## Package compatibility axes
+
+Legacy `core_compat: 1.x` is preserved only as a v1 packaging-ABI migration
+field. v11.5 package/plugin manifests declare semantic `protocol_compat`,
+optional `profile_compat` and `composition_runtime_compat` separately.
+Compatibility with Cordis or a Rust SDK never silently implies Morn semantic
+compatibility. See ADR-035.
