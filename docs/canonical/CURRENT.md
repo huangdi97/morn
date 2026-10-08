@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-023 in `docs/adr/`
+3. ADR-002 through ADR-024 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -138,3 +138,13 @@ A concrete governed execution binding may emit a persisted
 site, source SolutionPackage, capability, provider version/digest, composition
 runtime and Authority reference. It is provenance for replay and migration, not
 a second business-truth record. See ADR-023.
+
+
+## Protocol and Profile evolution
+
+Morn does not freeze one implementation forever. Instead, published protocol and
+Profile releases have explicit compatibility semantics. Same-version semantic
+mutation is incompatible; patch changes cannot alter guarantee meaning; minor
+changes require reevaluation; major/cross-Profile changes are incompatible by
+default. Running bindings stay pinned and new versions require explicit migration.
+See ADR-024.
