@@ -727,7 +727,10 @@ impl ControlPlaneStore for MornStore {
             ));
         }
         let execution: ExecutionBinding = self
-            .load_record("execution_binding_v115", binding.execution_binding_id.as_str())?
+            .load_record(
+                "execution_binding_v115",
+                binding.execution_binding_id.as_str(),
+            )?
             .ok_or_else(|| Error::not_found("durable workflow execution binding"))?;
         if !execution.matches_work_generation(work) {
             return Err(Error::validation(
