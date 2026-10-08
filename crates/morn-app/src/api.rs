@@ -341,6 +341,9 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
         .store
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+    }
     let profile =
         morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
             AppError(Error::validation(format!(
@@ -383,7 +386,9 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
 async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     let store = &guard.store;
-    let load = |kind: &str| -> Result<Vec<Value>, Error> { store.load_records::<Value>(kind) };
+    let load = |kind: &str| -> Result<Vec<Value>, Error> {
+        store.load_records_in_workspace::<Value>(kind, guard.workspace.id.as_str())
+    };
 
     Ok(Json(json!({
         "work": load("work_resource_v115")?,
@@ -2439,4 +2444,74 @@ fn predictor_id(
         .find(|p| p.spec.target == target)
         .map(|p| p.spec.id.clone())
         .unwrap_or_else(morn_kernel::ids::PredictorSpecId::generate)
+}
+
+#[cfg(test)]
+mod workspace_boundary_tests {
+    use super::*;
+    use morn_kernel::ids::{WorkPackageId, WorkspaceId};
+    use morn_work::control::{WorkResource, WorkSpec};
+
+    #[tokio::test]
+    async fn v115_work_projection_only_returns_current_workspace_records() {
+        let state = AppState::new(":memory:").unwrap();
+        {
+            let guard = state.lock();
+            guard
+                .store
+                .save_record("work_resource_v115", "visible", guard.workspace.id.as_str(), 1, &json!({"id":"visible"}))
+                .unwrap();
+            guard
+                .store
+                .save_record("work_resource_v115", "foreign", "foreign-workspace", 2, &json!({"id":"foreign"}))
+                .unwrap();
+        }
+
+        let Json(body) = v115_control_plane(State(state)).await.unwrap();
+        let works = body["work"].as_array().unwrap();
+        assert_eq!(works.len(), 1);
+        assert_eq!(works[0]["id"], "visible");
+    }
+
+    #[tokio::test]
+    async fn reconcile_cannot_mutate_work_from_another_workspace() {
+        let state = AppState::new(":memory:").unwrap();
+        let work = {
+            let guard = state.lock();
+            let mut work = WorkResource::new(
+                WorkspaceId::generate(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "foreign workspace goal",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            work.resource_version = 1;
+            guard
+                .store
+                .save_record_cas(
+                    "work_resource_v115",
+                    work.id.as_str(),
+                    work.workspace_id.as_str(),
+                    work.created_at.millis(),
+                    0,
+                    &work,
+                )
+                .unwrap();
+            work
+        };
+
+        let result = v115_work_reconcile(
+            State(state.clone()),
+            Json(json!({"work_id":work.id.to_string()})),
+        )
+        .await;
+        assert_eq!(result.unwrap_err().into_response().status(), StatusCode::NOT_FOUND);
+        let guard = state.lock();
+        assert_eq!(
+            guard.store.record_revision("work_resource_v115", work.id.as_str()).unwrap(),
+            Some(1)
+        );
+        assert!(guard.store.pending_outbox_events(10).unwrap().is_empty());
+    }
 }
