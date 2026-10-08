@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-022 in `docs/adr/`
+3. ADR-002 through ADR-023 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -129,3 +129,12 @@ durable and monotonic; finalizers keep the Work in `Terminating` until
 outstanding control obligations are resolved. Finalization does not erase
 Attempts, Receipts, Outcomes or other history and does not pretend irreversible
 effects were rolled back. See ADR-022.
+
+
+## Execution interpretation provenance
+
+A concrete governed execution binding may emit a persisted
+`ExecutionManifest` that pins protocol version, Work generation, Profile,
+site, source SolutionPackage, capability, provider version/digest, composition
+runtime and Authority reference. It is provenance for replay and migration, not
+a second business-truth record. See ADR-023.
