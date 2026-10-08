@@ -162,6 +162,7 @@ async fn v115_status() -> ApiResult {
         .map(|item| json!({ "id": item.id, "version": item.version }))
         .collect();
     let provider_catalog = morn_runtime::reference_provider_catalog();
+    let evidence_ledger = morn_assurance::reference_evidence_ledger();
     let providers = provider_catalog.list();
     let required_guarantees: Vec<String> = profile
         .requirements
@@ -220,6 +221,11 @@ async fn v115_status() -> ApiResult {
             "required_guarantees": required_guarantees,
             "production_write": false,
             "first_wedge": "outage/insert-order -> capacity -> delivery-impact review"
+        },
+        "evidence_policy": {
+            "classes": ["design-spec", "local-fixture", "ci-conformance", "real-runtime", "real-site", "production-write"],
+            "lower_class_never_auto_promotes": true,
+            "claims": evidence_ledger.claims()
         },
         "claims": {
             "local_engineering": "reference implementation + fixture/conformance tests",
