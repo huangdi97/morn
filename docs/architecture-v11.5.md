@@ -959,3 +959,23 @@ offer a typed cross-language ABI. It is deliberately optional: Cordis remains
 the reference node-local composition runtime, while WIT defines one possible
 capability interface/host boundary. Remote APIs, agent peers, humans, solvers
 and physical executors keep their native provider protocols.
+
+
+## External protocol task boundary
+
+Modern interoperability protocols increasingly provide their own durable task
+objects. Morn reuses them without collapsing the control model:
+
+```text
+Morn Work
+  -> ExecutionBinding
+      -> A2A Task / MCP Task / WorkflowRun / HarnessSession
+  -> external Receipt
+  -> ObservedOutcome
+  -> AcceptanceDecision
+```
+
+A2A 1.0 Task/Artifact state and MCP 2026-07-28 Tasks-extension state are
+provider/runtime evidence. A completed external Task never means the Work is
+accepted. Provider task TTL, cancellation or deletion also cannot erase the
+durable Morn Work/history.
