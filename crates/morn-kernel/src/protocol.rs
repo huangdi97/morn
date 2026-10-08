@@ -86,6 +86,23 @@ impl SemanticInvariant {
 }
 
 /// Versioned semantic snapshot used by conformance and runtime manifests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum ProtocolCompatibility {
+    Compatible,
+    RequiresReevaluation,
+    Incompatible,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProtocolMigrationPlan {
+    pub from_version: Version,
+    pub to_version: Version,
+    pub compatibility: ProtocolCompatibility,
+    pub reasons: Vec<String>,
+    pub requires_profile_reevaluation: bool,
+    pub requires_new_execution_bindings: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProtocolSnapshot {
     pub protocol_version: Version,
@@ -171,6 +188,71 @@ impl ProtocolSnapshot {
             .iter()
             .any(|invariant| invariant.id == invariant_id)
     }
+
+    pub fn invariant_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.invariants.iter().map(|item| item.id.clone()).collect();
+        ids.sort();
+        ids
+    }
+}
+
+fn same_protocol_semantics(base: &ProtocolSnapshot, candidate: &ProtocolSnapshot) -> bool {
+    base.semantic_slots == candidate.semantic_slots && base.invariants == candidate.invariants
+}
+
+pub fn compare_protocols(
+    base: &ProtocolSnapshot,
+    candidate: &ProtocolSnapshot,
+) -> ProtocolCompatibility {
+    if base.protocol_version == candidate.protocol_version {
+        return if same_protocol_semantics(base, candidate) {
+            ProtocolCompatibility::Compatible
+        } else {
+            ProtocolCompatibility::Incompatible
+        };
+    }
+    if base.protocol_version.major != candidate.protocol_version.major {
+        return ProtocolCompatibility::Incompatible;
+    }
+    if base.protocol_version.minor == candidate.protocol_version.minor {
+        return if same_protocol_semantics(base, candidate) {
+            ProtocolCompatibility::Compatible
+        } else {
+            ProtocolCompatibility::Incompatible
+        };
+    }
+    ProtocolCompatibility::RequiresReevaluation
+}
+
+pub fn plan_protocol_migration(
+    base: &ProtocolSnapshot,
+    candidate: &ProtocolSnapshot,
+) -> ProtocolMigrationPlan {
+    let compatibility = compare_protocols(base, candidate);
+    let mut reasons = Vec::new();
+    if base.protocol_version.major != candidate.protocol_version.major {
+        reasons.push("protocol major version changed".to_string());
+    }
+    if base.semantic_slots != candidate.semantic_slots {
+        reasons.push("semantic slots changed".to_string());
+    }
+    if base.invariants != candidate.invariants {
+        reasons.push("semantic invariants changed".to_string());
+    }
+    if reasons.is_empty() && base.protocol_version != candidate.protocol_version {
+        reasons.push("protocol version changed with equivalent semantic contract".to_string());
+    }
+    ProtocolMigrationPlan {
+        from_version: base.protocol_version,
+        to_version: candidate.protocol_version,
+        compatibility,
+        reasons,
+        requires_profile_reevaluation: matches!(
+            compatibility,
+            ProtocolCompatibility::RequiresReevaluation | ProtocolCompatibility::Incompatible
+        ),
+        requires_new_execution_bindings: base.protocol_version != candidate.protocol_version,
+    }
 }
 
 #[cfg(test)]
@@ -191,6 +273,46 @@ mod tests {
             .invariants
             .iter()
             .all(|invariant| !invariant.summary.trim().is_empty()));
+    }
+
+    #[test]
+    fn same_version_semantic_mutation_is_incompatible() {
+        let base = ProtocolSnapshot::v11_5();
+        let mut changed = base.clone();
+        changed.semantic_slots.push("Settlement".to_string());
+        assert_eq!(
+            compare_protocols(&base, &changed),
+            ProtocolCompatibility::Incompatible
+        );
+    }
+
+    #[test]
+    fn minor_protocol_change_requires_reevaluation() {
+        let base = ProtocolSnapshot::v11_5();
+        let mut next = base.clone();
+        next.protocol_version = Version::new(11, 6, 0);
+        next.invariants.push(SemanticInvariant::required(
+            "new-invariant",
+            "new semantic law",
+        ));
+        let plan = plan_protocol_migration(&base, &next);
+        assert_eq!(
+            plan.compatibility,
+            ProtocolCompatibility::RequiresReevaluation
+        );
+        assert!(plan.requires_profile_reevaluation);
+        assert!(plan.requires_new_execution_bindings);
+    }
+
+    #[test]
+    fn patch_without_semantic_change_is_compatible() {
+        let base = ProtocolSnapshot::v11_5();
+        let mut patch = base.clone();
+        patch.protocol_version = Version::new(11, 5, 1);
+        assert_eq!(
+            compare_protocols(&base, &patch),
+            ProtocolCompatibility::Compatible
+        );
     }
 
     #[test]
