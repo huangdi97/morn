@@ -359,6 +359,17 @@ impl AdmissionService {
         capability.stage = CapabilityStage::Qualified;
         capability.qualification_refs.push(record.id.to_string());
         self.qualifications.push(record.clone());
+        self.record_event(
+            capability.manifest.id.clone(),
+            record.id.to_string(),
+            "Qualified",
+            "strict qualification decision recorded with evidence",
+            record
+                .qualification_evidence
+                .evaluator_identity
+                .clone()
+                .unwrap_or_default(),
+        );
         Ok(record)
     }
 
