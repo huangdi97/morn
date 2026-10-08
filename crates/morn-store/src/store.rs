@@ -1924,6 +1924,97 @@ mod v115_revision_tests {
     use serde_json::json;
 
     #[test]
+    fn atomic_projection_and_outbox_commit_share_one_transaction() {
+        use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let event = EventEnvelope::new(
+            "evt-work-1-v1",
+            "morn://control-plane",
+            "io.morn.work.changed.v1",
+            json!({"work":"work-1","phase":"ready"}),
+        );
+        let semantics = EventSemanticDescriptor {
+            class: EventSemanticClass::DomainFact,
+            subject_ref: Some("work://work-1".to_string()),
+            source_of_truth_ref: None,
+            schema_ref: Some("morn://schemas/work-changed/v1".to_string()),
+        };
+
+        let revision = store
+            .save_record_cas_with_durable_event(
+                "work_resource_v115",
+                "work-1",
+                "ws-1",
+                10,
+                0,
+                &json!({"phase":"ready"}),
+                &event,
+                &semantics,
+            )
+            .unwrap();
+        assert_eq!(revision, 1);
+        let pending = store.pending_outbox_events(10).unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].event_id, "evt-work-1-v1");
+
+        // A stale CAS fails before commit; its second event must not leak into
+        // the outbox as a delivery intent for state that never became current.
+        let stale_event = EventEnvelope::new(
+            "evt-work-1-stale",
+            "morn://control-plane",
+            "io.morn.work.changed.v1",
+            json!({"work":"work-1","phase":"blocked"}),
+        );
+        assert!(store
+            .save_record_cas_with_durable_event(
+                "work_resource_v115",
+                "work-1",
+                "ws-1",
+                11,
+                0,
+                &json!({"phase":"blocked"}),
+                &stale_event,
+                &semantics,
+            )
+            .is_err());
+        assert_eq!(store.pending_outbox_events(10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn runtime_signal_cannot_enter_durable_semantic_outbox() {
+        use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let event = EventEnvelope::new(
+            "evt-runtime-1",
+            "morn://runtime/cordis",
+            "io.morn.runtime.provider.v1",
+            json!({"status":"reloaded"}),
+        );
+        let semantics = EventSemanticDescriptor {
+            class: EventSemanticClass::RuntimeSignal,
+            subject_ref: Some("provider://dsh".to_string()),
+            source_of_truth_ref: None,
+            schema_ref: None,
+        };
+
+        assert!(store
+            .save_record_cas_with_durable_event(
+                "runtime_projection",
+                "dsh",
+                "ws-1",
+                1,
+                0,
+                &json!({"status":"healthy"}),
+                &event,
+                &semantics,
+            )
+            .is_err());
+        assert!(store.pending_outbox_events(10).unwrap().is_empty());
+    }
+
+    #[test]
     fn compare_and_swap_rejects_stale_control_plane_write() {
         let store = MornStore::open_in_memory().unwrap();
         let first = json!({"state":"proposed"});
