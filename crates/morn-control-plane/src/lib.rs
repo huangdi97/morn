@@ -19,6 +19,9 @@ pub use profile_guard::{
 
 use morn_integration::SourceOfTruthBinding;
 use morn_kernel::error::{Error, Result};
+use morn_kernel::protocol::{
+    plan_protocol_migration, ProtocolCompatibility, ProtocolMigrationPlan, ProtocolSnapshot,
+};
 use morn_profile::{plan_profile_migration, DomainProfile, ProfileCompatibility, ProfileMigrationPlan};
 use morn_runtime::{
     reconcile_attempt, ActionAttempt, BindingMigrationDecision, ExecutionBinding,
@@ -114,6 +117,51 @@ impl WorkController {
         );
         condition.reason = reason.to_string();
         work.set_condition(condition);
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ProtocolMigrationController;
+
+impl ProtocolMigrationController {
+    /// Migrate the protocol interpretation of future execution for this Work.
+    /// Minor protocol changes require the caller to prove the Work/Profile was
+    /// reevaluated. Existing Attempts remain pinned to their historical
+    /// ExecutionManifest/Binding.
+    pub fn migrate(
+        &self,
+        work: &mut WorkResource,
+        base: &ProtocolSnapshot,
+        candidate: &ProtocolSnapshot,
+        profile_reevaluated: bool,
+    ) -> Result<ProtocolMigrationPlan> {
+        if work.spec.protocol_version != base.protocol_version {
+            return Err(Error::conflict(format!(
+                "Work protocol {} does not match migration base {}",
+                work.spec.protocol_version, base.protocol_version
+            )));
+        }
+
+        let plan = plan_protocol_migration(base, candidate);
+        if plan.compatibility == ProtocolCompatibility::Incompatible {
+            return Err(Error::conflict(format!(
+                "protocol migration {} -> {} is incompatible: {:?}",
+                plan.from_version, plan.to_version, plan.reasons
+            )));
+        }
+        if plan.requires_profile_reevaluation && !profile_reevaluated {
+            return Err(Error::invalid_state(
+                "protocol migration requires explicit Work/Profile reevaluation",
+            ));
+        }
+        if plan.from_version == plan.to_version {
+            return Ok(plan);
+        }
+
+        let mut spec = work.spec.clone();
+        spec.protocol_version = candidate.protocol_version;
+        work.replace_spec(spec);
+        Ok(plan)
     }
 }
 
@@ -975,6 +1023,66 @@ mod v115_profile_migration_tests {
             .migrate(&mut work, &base, &target)
             .is_err());
         assert_eq!(work.spec.profile_ref, base.canonical_ref());
+        assert_eq!(work.generation, 1);
+    }
+}
+
+#[cfg(test)]
+mod v115_protocol_migration_tests {
+    use super::*;
+    use morn_kernel::ids::{WorkPackageId, WorkspaceId};
+    use morn_kernel::protocol::SemanticInvariant;
+    use morn_kernel::version::Version;
+    use morn_work::control::WorkSpec;
+
+    #[test]
+    fn protocol_minor_migration_requires_profile_reevaluation() {
+        let base = ProtocolSnapshot::v11_5();
+        let mut next = base.clone();
+        next.protocol_version = Version::new(11, 6, 0);
+        next.invariants.push(SemanticInvariant::required(
+            "new-law",
+            "new Work semantic law",
+        ));
+
+        let spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "review",
+            "morn.factory.readonly@1.0.0",
+        );
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+
+        assert!(ProtocolMigrationController
+            .migrate(&mut work, &base, &next, false)
+            .is_err());
+        assert_eq!(work.generation, 1);
+
+        let plan = ProtocolMigrationController
+            .migrate(&mut work, &base, &next, true)
+            .unwrap();
+        assert_eq!(
+            plan.compatibility,
+            ProtocolCompatibility::RequiresReevaluation
+        );
+        assert_eq!(work.spec.protocol_version, Version::new(11, 6, 0));
+        assert_eq!(work.generation, 2);
+        assert_eq!(work.status.phase, WorkPhase::Proposed);
+    }
+
+    #[test]
+    fn same_version_semantic_mutation_cannot_reinterpret_work() {
+        let base = ProtocolSnapshot::v11_5();
+        let mut mutated = base.clone();
+        mutated.semantic_slots.push("Settlement".to_string());
+        let spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "review",
+            "morn.lite@1.0.0",
+        );
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        assert!(ProtocolMigrationController
+            .migrate(&mut work, &base, &mutated, true)
+            .is_err());
         assert_eq!(work.generation, 1);
     }
 }
