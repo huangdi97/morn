@@ -738,3 +738,104 @@ becomes Morn Outcome or Acceptance.
 Morn intentionally binds to the CLI/wire contract rather than an in-process
 TypeScript package name so Pi packaging/repository changes do not redefine the
 Morn protocol.
+
+
+## Evidence classes and value evidence are orthogonal
+
+Morn now treats deployment/engineering evidence and business-value evaluation as
+two independent axes.
+
+```text
+EvidenceClass
+  DesignSpec | LocalFixture | CiConformance | RealRuntime | RealSite | ProductionWrite
+
+ValueEvidenceClass
+  Fixture | Simulation | Shadow | ObservedOperational | CustomerValidated
+```
+
+Neither enum is an inheritance ladder. A RealSite claim does not imply
+ProductionWrite; CI evidence does not imply RealRuntime. A customer-value claim
+requires the customer-validated value class, independent Acceptance, explicit
+value evidence and an explicit RealSite evidence claim. This still permits a
+read-only customer pilot to prove value without production write authority.
+
+The reference runtime exposes these claims and external blockers in the Console
+so fixture/CI success cannot silently become a customer or production claim.
+
+## Durable workflow engines are providers
+
+The pre-v11.5 `DurableRuntime/WorkflowRun` remains useful for waits, signals,
+retry, checkpoint and recovery, but it is not a second Work truth model.
+Temporal/Dapr-class engines would have the same boundary.
+
+```text
+WorkResource (canonical)
+  -> ExecutionBinding
+     -> DurableWorkflowBinding
+        -> workflow run/cursor (provider state)
+        -> DurableWorkflowEvidence
+  -> source-grounded Outcome
+  -> independent Acceptance
+```
+
+A completed workflow can move a Work to a waiting/evidence-ready state, but it
+cannot mark the Work accepted. The repository includes an adapter that consumes
+the legacy Morn DurableRuntime through this provider boundary.
+
+## Cordis reference runtime contract
+
+Morn directly reuses Cordis for the reference node-local composition host, while
+also defining a deliberately small `CompositionRuntimeProvider` contract.
+That contract covers service-slot mount/replace/unmount/snapshot only. It has no
+Work, Authority, ExecutionBinding, Outcome or Acceptance fields.
+
+This captures the current DeepSeek Harness lesson precisely: Cordis makes
+services/plugins replaceable through Context, service dependencies, Fiber
+lifecycle and reversible effects, while authoritative host/business state can
+remain outside the plugin tree. Cordis is therefore the default implementation
+rather than the semantic definition of Morn.
+
+## Declarative UI composition
+
+Recent DeepSeek Harness client architecture also demonstrates a second,
+browser-side Cordis tree with typed host communication and UI slots. Morn adopts
+the **slot** idea but not unrestricted client code loading in v11.5.
+
+Domain packs contribute typed `UiExtensionSpec` declarations:
+
+```text
+surface: Workbench | Studio | Console | Hub
+slot
+title
+safe renderer
+optional in-app data endpoint
+in-app actions
+optional required profile
+priority
+```
+
+Remote arbitrary JavaScript is rejected. An action declaration is presentation
+metadata only; backend Profile/Authority/credential enforcement remains the
+actual trust boundary. The reference Workbench renders these declarations
+generically. A future trusted client-plugin runtime may sit behind the same slot
+contract if real product pressure justifies the larger supply-chain boundary.
+
+## External runtime research boundary
+
+The reference landscape continues to support provider reuse rather than Morn
+reinvention:
+
+- DeepSeek Harness: pluginized model/tool/session/agent-loop services on Cordis;
+- AgentScope Runtime: production agent-as-service, sandbox, persistence,
+  interruption and observability — a Provider/Execution-plane reference rather
+  than a new Morn core;
+- Paper2Agent: reviewed Paper2Skill/Paper2MCP generation, with executable MCP
+  tools required to bind to existing repository code — reflected in
+  Artifact2Capability and qualification separation;
+- DSec: heterogeneous FnCall/container/microVM/full-VM sandbox backends and
+  stateful rollout lifecycle — reflected in ExecutionEnvironmentProvider and
+  multidimensional execution guarantees.
+
+These projects strengthen the v11.5 boundary rather than collapse it: mature
+agent/sandbox runtimes should become replaceable executors, while Morn focuses
+on durable Work, binding, authority, reconciliation, outcome and acceptance.
