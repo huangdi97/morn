@@ -36,8 +36,8 @@ use morn_profile::{
     plan_profile_migration, DomainProfile, ProfileCompatibility, ProfileMigrationPlan,
 };
 use morn_runtime::{
-    reconcile_attempt, ActionAttempt, BindingMigrationDecision, ExecutionBinding,
-    ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
+    reconcile_attempt, ActionAttempt, BindingMigrationDecision, DurableWorkflowEvidence,
+    ExecutionBinding, ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
 };
 use morn_store::MornStore;
 use morn_work::acceptance_decision::AcceptanceDecision;
@@ -228,6 +228,7 @@ impl ProfileMigrationController {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct WorkProgressInputs<'a> {
     pub binding: Option<&'a ExecutionBinding>,
+    pub workflow: Option<&'a DurableWorkflowEvidence>,
     pub attempt: Option<&'a ActionAttempt>,
     pub outcome: Option<&'a ObservedOutcome>,
     pub acceptance: Option<&'a AcceptanceDecision>,
@@ -284,6 +285,62 @@ impl WorkProgressController {
             condition.reason = format!("binding {} pins {}", binding.id, binding.profile_ref);
             condition.evidence_refs = vec![binding.id.to_string()];
             work.set_condition(condition);
+        }
+
+        if let Some(workflow) = inputs.workflow {
+            let Some(binding) = inputs.binding else {
+                let mut condition =
+                    WorkCondition::new("WorkflowRuntimeObserved", ConditionStatus::False);
+                condition.reason = format!(
+                    "workflow run {} cannot advance Work without its pinned ExecutionBinding",
+                    workflow.workflow_run_ref
+                );
+                condition.evidence_refs = workflow.evidence_refs.clone();
+                work.set_condition(condition);
+                work.status.phase = WorkPhase::Blocked;
+                work.mark_observed();
+                return;
+            };
+
+            let binding_matches = workflow.execution_binding_id == binding.id;
+            let mut condition = WorkCondition::new(
+                "WorkflowRuntimeObserved",
+                if binding_matches {
+                    ConditionStatus::True
+                } else {
+                    ConditionStatus::False
+                },
+            );
+            condition.reason = if binding_matches {
+                format!(
+                    "workflow provider {} observed run {} under binding {}",
+                    workflow.provider_ref, workflow.workflow_run_ref, binding.id
+                )
+            } else {
+                format!(
+                    "workflow run {} is tied to binding {}, but controller supplied {}",
+                    workflow.workflow_run_ref, workflow.execution_binding_id, binding.id
+                )
+            };
+            condition.evidence_refs = workflow.evidence_refs.clone();
+            work.set_condition(condition);
+
+            if !binding_matches {
+                work.status.phase = WorkPhase::Blocked;
+                work.mark_observed();
+                return;
+            }
+
+            // Even a completed durable workflow is executor evidence only.
+            // Without source-grounded Outcome + independent Acceptance, Work
+            // remains Running/Waiting rather than becoming Accepted.
+            if workflow.is_executor_terminal() {
+                work.status.phase = WorkPhase::Waiting;
+                work.mark_observed();
+                if inputs.outcome.is_none() && inputs.acceptance.is_none() && inputs.attempt.is_none() {
+                    return;
+                }
+            }
         }
 
         if let Some(acceptance) = inputs.acceptance {
@@ -667,6 +724,51 @@ mod tests {
             .unwrap();
         assert_eq!(restored.resource_version, 2);
         assert_eq!(restored.status.phase, WorkPhase::Ready);
+    }
+
+    #[test]
+    fn completed_durable_workflow_does_not_accept_work() {
+        use morn_kernel::ids::{WorkflowDefinitionId, WorkPackageId, WorkspaceId};
+        use morn_kernel::version::Version;
+        use morn_runtime::{DurableWorkflowBinding, DurableWorkflowEvidence};
+        use morn_work::workflow::{RunStatus, WorkflowRun};
+
+        let work_id = WorkPackageId::generate_with("wp");
+        let mut work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(work_id, "workflow-backed review", "morn.lite@1.0.0"),
+        );
+        work.spec.required_conditions.clear();
+        let binding = ExecutionBinding::for_work(&work, "cap", "workflow-provider", "1");
+        let mut run = WorkflowRun::new(
+            WorkflowDefinitionId::generate_with("wf"),
+            Version::v1(),
+            work.workspace_id.clone(),
+        );
+        run.status = RunStatus::Completed;
+        let workflow_binding = DurableWorkflowBinding::new(
+            &work,
+            &binding,
+            "legacy-durable-runtime",
+            run.id.to_string(),
+        )
+        .unwrap();
+        let evidence =
+            DurableWorkflowEvidence::from_legacy_run(&workflow_binding, &run).unwrap();
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                binding: Some(&binding),
+                workflow: Some(&evidence),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(work.status.phase, WorkPhase::Waiting);
+        assert!(work.condition_is_true("WorkflowRuntimeObserved"));
+        assert!(!work.condition_is_true("IndependentAcceptance"));
+        assert!(!evidence.proves_morn_acceptance());
     }
 
     #[test]
