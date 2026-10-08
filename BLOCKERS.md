@@ -123,16 +123,19 @@ source code and an official npm launcher:
 Current truth:
 - **OFFICIAL_INSTALL_DISTRIBUTION = AVAILABLE** (the August missing-package
   premise is no longer valid).
-- **MORN_DSH_REAL_TRANSPORT = NOT_IMPLEMENTED**:
-  `crates/morn-harness/src/provider.rs` still returns fail-closed
-  `Error::External` in `DshMode::Real`.
+- **MORN_DSH_REAL_SDK_ADAPTER = IMPLEMENTED_CODE_PENDING_EXACT_HEAD_CI**:
+  `crates/morn-harness/src/provider.rs` now accepts an explicit isolated
+  `DshSdkConfig`, initializes the official SDK JSON-RPC wire, owns a
+  receipt-to-idle turn, and records executor evidence without promoting it to
+  Work truth. A protocol fixture test exercises the wire without credentials.
+  The unconfigured `DshMode::Real` path still fails closed.
 - **AUTHENTICATED_REAL_DSH_SESSION = NOT_VERIFIED**: official credentials and
   a sandboxed external runtime have not been supplied or exercised.
 - **MORN_WORK_OUTCOME_ACCEPTANCE = NOT_PROVEN_BY_DSH**: no harness status
   can independently assert a customer's real observed/accepted outcome.
 
-B-001 now means **runtime adapter + live provider evidence blocked**, not
-"no official package exists." The adapter path and permission controls are
+B-001 now means **authenticated official-runtime smoke / live provider evidence blocked**,
+not "no official package exists" and not "the Morn-side SDK adapter is absent." The adapter path and permission controls are
 specified in
 `docs/research/V11_5_DSH_ACP_INTEGRATION_CONVERGENCE_2026-10-08.md`.
 Never treat a successful `dsh web` launch as completion of the Morn

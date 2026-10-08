@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use morn_kernel::error::{Error, Result};
 
 use crate::context::RuntimeContext;
+use crate::dsh_sdk::{DshSdkConfig, DshSdkStdioClient};
 use crate::event::{ExecutionEvent, ExecutionEventKind};
 use crate::receipt::ExecutionReceipt;
 use crate::scope::CapabilityScope;
@@ -323,6 +324,8 @@ pub struct DeepSeekHarnessProvider {
     mode: DshMode,
     sessions: HashMap<String, SessionState>,
     scopes: Vec<CapabilityScope>,
+    real_config: Option<DshSdkConfig>,
+    real_client: Option<DshSdkStdioClient>,
 }
 
 impl DeepSeekHarnessProvider {
@@ -332,17 +335,58 @@ impl DeepSeekHarnessProvider {
             mode,
             sessions: HashMap::new(),
             scopes: Vec::new(),
+            real_config: None,
+            real_client: None,
         }
+    }
+
+    pub fn with_real_sdk(config: DshSdkConfig) -> Self {
+        let mut provider = Self::new(DshMode::Real);
+        provider.real_config = Some(config);
+        provider
     }
 
     pub fn mode(&self) -> DshMode {
         self.mode
     }
 
+    pub fn shutdown_real_runtime(&mut self) -> Result<()> {
+        if self.mode != DshMode::Real {
+            return Err(Error::invalid_state(
+                "only a real DSH provider owns an SDK runtime",
+            ));
+        }
+        if let Some(mut client) = self.real_client.take() {
+            client.shutdown()?;
+        }
+        for state in self.sessions.values_mut() {
+            if state.status != "terminated" {
+                state.status = "runtime-closed".to_string();
+                state.last_event = "runtime_closed".to_string();
+            }
+        }
+        Ok(())
+    }
+
+    fn ensure_real_client(&mut self) -> Result<&mut DshSdkStdioClient> {
+        if self.real_client.is_none() {
+            let config = self
+                .real_config
+                .clone()
+                .ok_or_else(|| self.real_unavailable())?;
+            let mut client = DshSdkStdioClient::spawn(&config)?;
+            client.initialize(&config)?;
+            self.real_client = Some(client);
+        }
+        self.real_client
+            .as_mut()
+            .ok_or_else(|| Error::internal("DSH SDK client missing after initialization"))
+    }
+
     fn real_unavailable(&self) -> Error {
         Error::external(
-            "DeepSeek Harness real SDK transport is not configured in this Morn build; \
-             official DSH exists externally, but only the Morn-side fixture contract is wired",
+            "DeepSeek Harness real SDK transport is not configured; construct \
+             DeepSeekHarnessProvider::with_real_sdk with an explicit isolated runtime config",
         )
     }
 }
@@ -404,7 +448,31 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     status: "running".to_string(),
                 })
             }
-            DshMode::Real => Err(self.real_unavailable()),
+            DshMode::Real => {
+                self.ensure_real_client()?;
+                let session_id = format!("morn-dsh-{}", uuid::Uuid::new_v4());
+                let event = ExecutionEvent::new(
+                    ctx.workspace_id.clone(),
+                    session_id.clone(),
+                    ExecutionEventKind::SessionStarted,
+                    "DSH SDK runtime initialized; session reserved for lazy materialization",
+                );
+                self.sessions.insert(
+                    session_id.clone(),
+                    SessionState {
+                        ctx: ctx.clone(),
+                        status: "ready".to_string(),
+                        step: 0,
+                        events: vec![event],
+                        last_event: "sdk_runtime_initialized".to_string(),
+                    },
+                );
+                Ok(HarnessSession {
+                    id: session_id,
+                    provider: self.name.clone(),
+                    status: "ready".to_string(),
+                })
+            }
         }
     }
 
@@ -431,7 +499,41 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     proposal_ref: None,
                 })
             }
-            DshMode::Real => Err(self.real_unavailable()),
+            DshMode::Real => {
+                let workspace_id = self
+                    .sessions
+                    .get(session_id)
+                    .ok_or_else(|| Error::not_found(format!("session {session_id}")))?
+                    .ctx
+                    .workspace_id
+                    .clone();
+                let run = self.ensure_real_client()?.run_text_prompt(session_id, input)?;
+                let state = self
+                    .sessions
+                    .get_mut(session_id)
+                    .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                state.step += 1;
+                state.status = "idle".to_string();
+                state.events.push(ExecutionEvent::new(
+                    workspace_id,
+                    session_id.to_string(),
+                    ExecutionEventKind::ModelResponse,
+                    format!(
+                        "DSH SDK turn completed; message={} finish={}",
+                        run.message_id,
+                        run.finish_reason.as_deref().unwrap_or("unknown")
+                    ),
+                ));
+                state.last_event = format!(
+                    "dsh_turn:{}",
+                    run.finish_reason.as_deref().unwrap_or("unknown")
+                );
+                Ok(HarnessOutput {
+                    session_id: session_id.to_string(),
+                    text: run.final_response,
+                    proposal_ref: None,
+                })
+            }
         }
     }
 
@@ -456,6 +558,14 @@ impl HarnessProvider for DeepSeekHarnessProvider {
     }
 
     fn interrupt(&mut self, session_id: &str) -> Result<()> {
+        if self.mode == DshMode::Real {
+            if !self.sessions.contains_key(session_id) {
+                return Err(Error::not_found(format!("session {session_id}")));
+            }
+            return Err(Error::invalid_state(
+                "current DSH SDK wire has no mid-turn cancel; close the owned runtime instead",
+            ));
+        }
         let state = self
             .sessions
             .get_mut(session_id)
@@ -473,6 +583,14 @@ impl HarnessProvider for DeepSeekHarnessProvider {
     }
 
     fn resume(&mut self, session_id: &str) -> Result<()> {
+        if self.mode == DshMode::Real {
+            if !self.sessions.contains_key(session_id) {
+                return Err(Error::not_found(format!("session {session_id}")));
+            }
+            return Err(Error::invalid_state(
+                "current DSH SDK wire has no per-session resume; use ACP for persisted session resume",
+            ));
+        }
         let state = self
             .sessions
             .get_mut(session_id)
@@ -495,6 +613,14 @@ impl HarnessProvider for DeepSeekHarnessProvider {
     }
 
     fn terminate(&mut self, session_id: &str) -> Result<ExecutionReceipt> {
+        if self.mode == DshMode::Real {
+            if !self.sessions.contains_key(session_id) {
+                return Err(Error::not_found(format!("session {session_id}")));
+            }
+            return Err(Error::invalid_state(
+                "current DSH SDK wire has no per-session close; call shutdown_real_runtime for the owned process",
+            ));
+        }
         let state = self
             .sessions
             .get_mut(session_id)

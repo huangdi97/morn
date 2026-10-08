@@ -59,6 +59,15 @@ pub struct DshNotification {
     pub params: Value,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DshSdkRunResult {
+    pub session_id: String,
+    pub message_id: String,
+    pub final_response: String,
+    pub finish_reason: Option<String>,
+    pub notifications: Vec<DshNotification>,
+}
+
 pub struct DshSdkStdioClient {
     child: Child,
     stdin: ChildStdin,
@@ -79,9 +88,18 @@ impl std::fmt::Debug for DshSdkStdioClient {
 
 impl DshSdkStdioClient {
     pub fn spawn(config: &DshSdkConfig) -> Result<Self> {
+        if config.cwd.trim().is_empty()
+            || config.provider.trim().is_empty()
+            || config.model.trim().is_empty()
+        {
+            return Err(Error::validation(
+                "DSH SDK requires non-empty cwd, provider and model",
+            ));
+        }
         let mut command = Command::new(&config.command);
         command
             .args(&config.args)
+            .current_dir(&config.cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
@@ -123,7 +141,18 @@ impl DshSdkStdioClient {
         if let Some(max_tokens) = config.max_tokens {
             object.insert("maxTokens".to_string(), json!(max_tokens));
         }
-        self.request(DSH_METHOD_INITIALIZE, Some(params))
+        let result = self.request(DSH_METHOD_INITIALIZE, Some(params))?;
+        let name = result
+            .get("serverInfo")
+            .and_then(|info| info.get("name"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| Error::external("DSH initialize result missing serverInfo.name"))?;
+        if name != "deepseek-harness-sdk-runtime" {
+            return Err(Error::external(format!(
+                "unexpected DSH SDK server identity {name:?}"
+            )));
+        }
+        Ok(result)
     }
 
     pub fn enqueue_text_prompt(&mut self, session_id: &str, text: &str) -> Result<String> {
@@ -139,6 +168,78 @@ impl DshSdkStdioClient {
             .and_then(Value::as_str)
             .map(str::to_string)
             .ok_or_else(|| Error::external("DSH session/prompt result missing messageId"))
+    }
+
+    /// Own one SDK activity interval: durable inbox receipt -> root-session idle.
+    /// A successful run is executor evidence only; callers must not treat this
+    /// text as a Morn ObservedOutcome or AcceptanceDecision.
+    pub fn run_text_prompt(
+        &mut self,
+        session_id: &str,
+        text: &str,
+    ) -> Result<DshSdkRunResult> {
+        if session_id.trim().is_empty() || text.trim().is_empty() {
+            return Err(Error::validation(
+                "DSH SDK run requires non-empty session id and prompt text",
+            ));
+        }
+        let start = self.notifications.len();
+        let message_id = self.enqueue_text_prompt(session_id, text)?;
+        let mut received = false;
+        let mut final_response = String::new();
+        let mut finish_reason = None;
+        let mut cursor = start;
+
+        loop {
+            while cursor < self.notifications.len() {
+                let notification = self.notifications[cursor].clone();
+                cursor += 1;
+                if !received && inbox_receipt_matches(&notification, session_id, &message_id) {
+                    received = true;
+                }
+                if received {
+                    if notification.method == DSH_NOTIFICATION_SESSION_EVENT {
+                        if let Some(text) =
+                            assistant_text_from_session_event(&notification.params, session_id)
+                        {
+                            final_response = text;
+                        }
+                        if let Some(reason) =
+                            finish_reason_from_session_event(&notification.params, session_id)?
+                        {
+                            finish_reason = Some(reason);
+                        }
+                    }
+                    if session_idle_matches(&notification, session_id) {
+                        return Ok(DshSdkRunResult {
+                            session_id: session_id.to_string(),
+                            message_id,
+                            final_response,
+                            finish_reason,
+                            notifications: self.notifications[start..cursor].to_vec(),
+                        });
+                    }
+                }
+            }
+
+            let incoming = self.read_frame()?;
+            if incoming.get("id").is_none() {
+                if let Some(method) = incoming.get("method").and_then(Value::as_str) {
+                    self.notifications.push(DshNotification {
+                        method: method.to_string(),
+                        params: incoming.get("params").cloned().unwrap_or(Value::Null),
+                    });
+                    continue;
+                }
+            }
+            // The SDK currently sends no server->client requests. Fail closed
+            // rather than silently ignoring a future permission/request surface.
+            if incoming.get("id").is_some() && incoming.get("method").is_some() {
+                return Err(Error::external(
+                    "DSH SDK sent an unsupported server-to-client request",
+                ));
+            }
+        }
     }
 
     pub fn shutdown(&mut self) -> Result<()> {
@@ -217,6 +318,53 @@ impl Drop for DshSdkStdioClient {
     }
 }
 
+fn inbox_receipt_matches(
+    notification: &DshNotification,
+    session_id: &str,
+    message_id: &str,
+) -> bool {
+    if notification.method != DSH_NOTIFICATION_SESSION_EVENT
+        || notification.params.get("sessionId").and_then(Value::as_str) != Some(session_id)
+    {
+        return false;
+    }
+    let inserted = notification
+        .params
+        .get("event")
+        .filter(|event| event.get("type").and_then(Value::as_str) == Some("agent/inbox/spliced"))
+        .and_then(|event| event.get("data"))
+        .and_then(|data| data.get("inserted"))
+        .and_then(Value::as_array);
+    inserted.is_some_and(|messages| {
+        messages
+            .iter()
+            .any(|message| message.get("id").and_then(Value::as_str) == Some(message_id))
+    })
+}
+
+fn session_idle_matches(notification: &DshNotification, session_id: &str) -> bool {
+    notification.method == DSH_NOTIFICATION_SESSION_STATUS
+        && notification.params.get("sessionId").and_then(Value::as_str) == Some(session_id)
+        && notification.params.get("status").and_then(Value::as_str) == Some("idle")
+}
+
+fn finish_reason_from_session_event(params: &Value, session_id: &str) -> Result<Option<String>> {
+    if params.get("sessionId").and_then(Value::as_str) != Some(session_id) {
+        return Ok(None);
+    }
+    let event = match params.get("event") {
+        Some(event) if event.get("type").and_then(Value::as_str) == Some("turn/end") => event,
+        _ => return Ok(None),
+    };
+    let reason = event
+        .get("data")
+        .and_then(|data| data.get("reason"))
+        .and_then(|reason| reason.get("kind"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| Error::external("DSH turn/end is missing data.reason.kind"))?;
+    Ok(Some(reason.to_string()))
+}
+
 /// Extract concatenated text from an upstream `assistant/message` session event.
 pub fn assistant_text_from_session_event(params: &Value, session_id: &str) -> Option<String> {
     if params.get("sessionId").and_then(Value::as_str) != Some(session_id) {
@@ -255,6 +403,183 @@ mod tests {
             DSH_NOTIFICATION_SUBAGENT_FINISHED,
         ];
         assert_eq!(notifications.len(), 4);
+    }
+
+    #[test]
+    fn identifies_owned_inbox_receipt_idle_and_finish_reason() {
+        let receipt = DshNotification {
+            method: DSH_NOTIFICATION_SESSION_EVENT.to_string(),
+            params: json!({
+                "sessionId":"session-1",
+                "event":{
+                    "type":"agent/inbox/spliced",
+                    "data":{"inserted":[{"id":"message-1"}]}
+                }
+            }),
+        };
+        assert!(inbox_receipt_matches(&receipt, "session-1", "message-1"));
+        assert!(!inbox_receipt_matches(&receipt, "session-2", "message-1"));
+
+        let idle = DshNotification {
+            method: DSH_NOTIFICATION_SESSION_STATUS.to_string(),
+            params: json!({"sessionId":"session-1","status":"idle"}),
+        };
+        assert!(session_idle_matches(&idle, "session-1"));
+
+        let end = json!({
+            "sessionId":"session-1",
+            "event":{"type":"turn/end","data":{"reason":{"kind":"completed"}}}
+        });
+        assert_eq!(
+            finish_reason_from_session_event(&end, "session-1").unwrap().as_deref(),
+            Some("completed")
+        );
+    }
+
+    #[test]
+    fn real_sdk_transport_completes_one_owned_turn_against_wire_fixture() {
+        let executable = std::env::current_exe().unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        let config = DshSdkConfig {
+            command: executable.to_string_lossy().to_string(),
+            args: vec![
+                "--exact".to_string(),
+                "dsh_sdk::tests::fake_sdk_runtime".to_string(),
+                "--ignored".to_string(),
+                "--nocapture".to_string(),
+            ],
+            cwd: cwd.to_string_lossy().to_string(),
+            provider: "fixture-provider".to_string(),
+            model: "fixture-model".to_string(),
+            reasoning_effort: None,
+            max_tokens: Some(64),
+        };
+        let mut client = DshSdkStdioClient::spawn(&config).unwrap();
+        let initialized = client.initialize(&config).unwrap();
+        assert_eq!(
+            initialized["serverInfo"]["name"],
+            "deepseek-harness-sdk-runtime"
+        );
+
+        let run = client.run_text_prompt("session-1", "hello").unwrap();
+        assert_eq!(run.message_id, "message-1");
+        assert_eq!(run.final_response, "hello from fake sdk");
+        assert_eq!(run.finish_reason.as_deref(), Some("completed"));
+        assert!(run.notifications.iter().any(|notification| {
+            notification.method == DSH_NOTIFICATION_SESSION_STATUS
+                && session_idle_matches(notification, "session-1")
+        }));
+        client.shutdown().unwrap();
+    }
+
+    /// A tiny protocol peer used only by the parent test above. It is ignored
+    /// in normal test discovery and launched as a child test process.
+    #[test]
+    #[ignore]
+    fn fake_sdk_runtime() {
+        let stdin = std::io::stdin();
+        let mut stdout = std::io::stdout().lock();
+        for line in stdin.lock().lines() {
+            let line = line.unwrap();
+            let request: Value = match serde_json::from_str(&line) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            let Some(method) = request.get("method").and_then(Value::as_str) else {
+                continue;
+            };
+            let id = request.get("id").cloned().unwrap_or(Value::Null);
+            let write = |stdout: &mut std::io::StdoutLock<'_>, value: Value| {
+                serde_json::to_writer(&mut *stdout, &value).unwrap();
+                stdout.write_all(b"\n").unwrap();
+                stdout.flush().unwrap();
+            };
+            match method {
+                DSH_METHOD_INITIALIZE => write(
+                    &mut stdout,
+                    json!({
+                        "jsonrpc":"2.0",
+                        "id":id,
+                        "result":{
+                            "serverInfo":{
+                                "name":"deepseek-harness-sdk-runtime",
+                                "version":"0.0.1"
+                            }
+                        }
+                    }),
+                ),
+                DSH_METHOD_SESSION_PROMPT => {
+                    write(
+                        &mut stdout,
+                        json!({"jsonrpc":"2.0","id":id,"result":{"messageId":"message-1"}}),
+                    );
+                    write(
+                        &mut stdout,
+                        json!({
+                            "jsonrpc":"2.0",
+                            "method":"session.event",
+                            "params":{
+                                "sessionId":"session-1",
+                                "event":{
+                                    "type":"agent/inbox/spliced",
+                                    "data":{"inserted":[{"id":"message-1"}]}
+                                }
+                            }
+                        }),
+                    );
+                    write(
+                        &mut stdout,
+                        json!({
+                            "jsonrpc":"2.0",
+                            "method":"session.event",
+                            "params":{
+                                "sessionId":"session-1",
+                                "event":{
+                                    "type":"assistant/message",
+                                    "data":{"message":{"content":[
+                                        {"type":"text","text":"hello from fake sdk"}
+                                    ]}}
+                                }
+                            }
+                        }),
+                    );
+                    write(
+                        &mut stdout,
+                        json!({
+                            "jsonrpc":"2.0",
+                            "method":"session.event",
+                            "params":{
+                                "sessionId":"session-1",
+                                "event":{
+                                    "type":"turn/end",
+                                    "data":{"reason":{"kind":"completed"}}
+                                }
+                            }
+                        }),
+                    );
+                    write(
+                        &mut stdout,
+                        json!({
+                            "jsonrpc":"2.0",
+                            "method":"session.status",
+                            "params":{"sessionId":"session-1","status":"idle"}
+                        }),
+                    );
+                }
+                DSH_METHOD_SHUTDOWN => {
+                    write(&mut stdout, json!({"jsonrpc":"2.0","id":id,"result":{}}));
+                    break;
+                }
+                _ => write(
+                    &mut stdout,
+                    json!({
+                        "jsonrpc":"2.0",
+                        "id":id,
+                        "error":{"code":-32601,"message":"method not found"}
+                    }),
+                ),
+            }
+        }
     }
 
     #[test]
