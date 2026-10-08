@@ -669,3 +669,16 @@ ExecutionBindings; active Attempts remain pinned to the old binding. Site
 admission is repeated when the Profile guarantee contract changes. Execution
 manifests record protocol version plus invariant ids so historical execution can
 be interpreted under the contract that actually governed it.
+
+
+## Profile registry and extension
+
+Domain Profiles are published guarantee assets. The reference runtime ships
+Lite, Enterprise, Factory-readonly and Research Profiles, but they are not a
+closed enum. `ProfileRegistry` can hold explicit multiple versions of a
+Profile family and rejects same-reference overwrite.
+
+This lets Factory or future domain Profiles evolve independently of provider
+implementations while preserving exact Work/SiteAdmission interpretation.
+Studio profile selection is driven by the backend versioned catalog rather than
+assuming one permanent UI list.
