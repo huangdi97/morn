@@ -41,6 +41,7 @@ Morn remains Work-first, not Agent-first:
 | language-neutral protocol artifacts | `spec/v11.5/` + wire-spec conformance tests | implemented |
 | standards-oriented registry projection boundary | ADR-042; xRegistry/A2A/OASF adapters, no second truth | design frozen |
 | optional typed local component ABI | ADR-043; WIT/Wasm provider option, not core | design frozen |
+| external protocol task boundary | ADR-044; MCP/A2A durable Tasks remain executor state | implemented contract |
 | explicit protocol migration | protocol compatibility + `ProtocolMigrationController` | implemented |
 | non-destructive history | `morn-kernel/src/history.rs` | implemented |
 | desired/observed Work | `morn-work/src/control.rs` | implemented |
