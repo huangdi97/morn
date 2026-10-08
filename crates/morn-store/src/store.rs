@@ -714,6 +714,149 @@ impl MornStore {
         Ok(next_revision)
     }
 
+    /// Fenced variant used by controller runtimes. The controller lease is
+    /// checked inside the same SQLite transaction as the CAS projection and
+    /// outbox insert, so an expired/taken-over controller cannot commit after a
+    /// preflight fence check races with another holder.
+    pub fn save_record_cas_with_durable_event_fenced<T: serde::Serialize>(
+        &self,
+        kind: &str,
+        id: &str,
+        workspace_id: &str,
+        created_at: i64,
+        expected_revision: u64,
+        record: &T,
+        envelope: &morn_kernel::EventEnvelope,
+        semantics: &morn_kernel::EventSemanticDescriptor,
+        lease_name: &str,
+        fencing_token: u64,
+        fence_at: i64,
+    ) -> Result<u64> {
+        semantics.validate().map_err(Error::validation)?;
+        if !semantics.class.durable_required() {
+            return Err(Error::validation(
+                "runtime/projection event cannot be committed through the durable semantic outbox",
+            ));
+        }
+        if lease_name.trim().is_empty() {
+            return Err(Error::validation("controller lease name is required"));
+        }
+
+        let token = i64::try_from(fencing_token)
+            .map_err(|_| Error::validation("fencing token is too large"))?;
+        let enriched = envelope
+            .clone()
+            .with_semantics(semantics)
+            .map_err(Error::validation)?;
+        let event_payload =
+            serde_json::to_string(&enriched).map_err(|e| Error::internal(e.to_string()))?;
+        let record_payload =
+            serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
+        let expected_i64 = i64::try_from(expected_revision)
+            .map_err(|_| Error::validation("expected revision is too large"))?;
+
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        let fence_current: Option<i64> = tx
+            .query_row(
+                "SELECT 1 FROM control_controller_leases
+                 WHERE lease_name = ?1
+                   AND fencing_token = ?2
+                   AND expires_at > ?3",
+                params![lease_name, token, fence_at],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+        if fence_current.is_none() {
+            return Err(Error::conflict(format!(
+                "controller fence {lease_name}#{fencing_token} is no longer current"
+            )));
+        }
+
+        let current: Option<i64> = tx
+            .query_row(
+                "SELECT revision FROM morn_records WHERE kind = ?1 AND id = ?2",
+                params![kind, id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        let next_revision = match current {
+            None => {
+                if expected_revision != 0 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} does not exist at expected revision {expected_revision}"
+                    )));
+                }
+                tx.execute(
+                    "INSERT INTO morn_records
+                     (kind, id, workspace_id, payload, created_at, immutable, revision)
+                     VALUES (?1, ?2, ?3, ?4, ?5, 0, 1)",
+                    params![kind, id, workspace_id, record_payload, created_at],
+                )
+                .map_err(|e| {
+                    if e.to_string().contains("UNIQUE") {
+                        Error::conflict(format!("record {kind}/{id} was created concurrently"))
+                    } else {
+                        Error::internal(e.to_string())
+                    }
+                })?;
+                1
+            }
+            Some(actual_i64) => {
+                let actual = u64::try_from(actual_i64)
+                    .map_err(|_| Error::internal("record revision must be non-negative"))?;
+                if actual != expected_revision {
+                    return Err(Error::conflict(format!(
+                        "stale record {kind}/{id}: expected revision {expected_revision}, actual {actual}"
+                    )));
+                }
+                let updated = tx
+                    .execute(
+                        "UPDATE morn_records
+                         SET payload = ?3,
+                             workspace_id = ?4,
+                             revision = revision + 1
+                         WHERE kind = ?1
+                           AND id = ?2
+                           AND immutable = 0
+                           AND revision = ?5",
+                        params![kind, id, record_payload, workspace_id, expected_i64],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if updated != 1 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} changed concurrently or is immutable"
+                    )));
+                }
+                actual + 1
+            }
+        };
+
+        tx.execute(
+            "INSERT OR IGNORE INTO control_event_outbox
+             (event_id, workspace_id, event_type, payload, created_at, dispatched_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, NULL)",
+            params![
+                enriched.id,
+                workspace_id,
+                enriched.event_type,
+                event_payload,
+                created_at
+            ],
+        )
+        .map_err(|e| Error::internal(e.to_string()))?;
+
+        tx.commit()
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Ok(next_revision)
+    }
+
     /// Save an immutable record (receipts, release history, decisions).
     /// Re-saving the same (kind, id) is rejected instead of silently overwritten.
     pub fn save_record_immutable<T: serde::Serialize>(
@@ -1922,6 +2065,50 @@ mod tests {
 mod v115_revision_tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn expired_controller_fence_cannot_commit_state_or_event() {
+        use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let lease = store
+            .acquire_controller_lease("work-controller", "node-a", 1_000, 50)
+            .unwrap()
+            .unwrap();
+        let event = EventEnvelope::new(
+            "evt-fenced-stale",
+            "morn://controller/node-a",
+            "io.morn.work.reconciled.v1",
+            json!({"work":"work-1"}),
+        );
+        let semantics = EventSemanticDescriptor {
+            class: EventSemanticClass::DomainFact,
+            subject_ref: Some("work://work-1".to_string()),
+            source_of_truth_ref: None,
+            schema_ref: Some("morn://schemas/work-reconciled/v1".to_string()),
+        };
+
+        assert!(store
+            .save_record_cas_with_durable_event_fenced(
+                "work_resource_v115",
+                "work-1",
+                "ws-1",
+                1_051,
+                0,
+                &json!({"phase":"ready"}),
+                &event,
+                &semantics,
+                "work-controller",
+                lease.fencing_token,
+                1_051,
+            )
+            .is_err());
+        assert!(store
+            .load_record::<serde_json::Value>("work_resource_v115", "work-1")
+            .unwrap()
+            .is_none());
+        assert!(store.pending_outbox_events(10).unwrap().is_empty());
+    }
 
     #[test]
     fn atomic_projection_and_outbox_commit_share_one_transaction() {
