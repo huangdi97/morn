@@ -74,6 +74,16 @@ impl HarnessProviderFeatures {
             multi_session: true,
         }
     }
+
+    pub const fn pi_rpc_current() -> Self {
+        Self {
+            interrupt: true,
+            resume: false,
+            session_close: false,
+            durable_events: false,
+            multi_session: false,
+        }
+    }
 }
 
 /// The Morn harness provider seam. Runtime/harness can only produce events,
@@ -507,7 +517,9 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     .ctx
                     .workspace_id
                     .clone();
-                let run = self.ensure_real_client()?.run_text_prompt(session_id, input)?;
+                let run = self
+                    .ensure_real_client()?
+                    .run_text_prompt(session_id, input)?;
                 let state = self
                     .sessions
                     .get_mut(session_id)

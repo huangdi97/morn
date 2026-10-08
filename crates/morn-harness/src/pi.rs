@@ -12,8 +12,10 @@ use morn_kernel::ids::ExecutionReceiptId;
 
 use crate::context::RuntimeContext;
 use crate::event::{ExecutionEvent, ExecutionEventKind};
+use crate::pi_rpc::{PiRpcClient, PiRpcConfig};
 use crate::provider::{
-    HarnessOutput, HarnessProvider, HarnessSession, HarnessSnapshot, ProviderHandle,
+    HarnessOutput, HarnessProvider, HarnessProviderFeatures, HarnessSession, HarnessSnapshot,
+    ProviderHandle,
 };
 use crate::receipt::ExecutionReceipt;
 use crate::scope::CapabilityScope;
@@ -39,6 +41,9 @@ pub struct PiHarnessProvider {
     mode: PiMode,
     sessions: HashMap<String, PiSessionState>,
     scopes: Vec<CapabilityScope>,
+    real_config: Option<PiRpcConfig>,
+    real_client: Option<PiRpcClient>,
+    active_session: Option<String>,
 }
 
 impl PiHarnessProvider {
@@ -48,16 +53,59 @@ impl PiHarnessProvider {
             mode,
             sessions: HashMap::new(),
             scopes: Vec::new(),
+            real_config: None,
+            real_client: None,
+            active_session: None,
         }
+    }
+
+    pub fn with_real_rpc(config: PiRpcConfig) -> Self {
+        let mut provider = Self::new(PiMode::Real);
+        provider.real_config = Some(config);
+        provider
     }
 
     pub fn mode(&self) -> PiMode {
         self.mode
     }
 
+    pub fn shutdown_real_runtime(&mut self) -> Result<()> {
+        if self.mode != PiMode::Real {
+            return Err(Error::invalid_state(
+                "only a real Pi provider owns an RPC runtime",
+            ));
+        }
+        if let Some(mut client) = self.real_client.take() {
+            client.shutdown()?;
+        }
+        for state in self.sessions.values_mut() {
+            if state.status != "terminated" {
+                state.status = "runtime-closed".to_string();
+                state.last_event = "runtime_closed".to_string();
+            }
+        }
+        self.active_session = None;
+        Ok(())
+    }
+
+    fn ensure_real_client(&mut self) -> Result<&mut PiRpcClient> {
+        if self.real_client.is_none() {
+            let config = self
+                .real_config
+                .clone()
+                .ok_or_else(|| self.real_unavailable())?;
+            let mut client = PiRpcClient::spawn(&config)?;
+            client.get_state()?;
+            self.real_client = Some(client);
+        }
+        self.real_client
+            .as_mut()
+            .ok_or_else(|| Error::internal("Pi RPC client missing after startup"))
+    }
+
     fn real_unavailable(&self) -> Error {
         Error::external(
-            "Pi real transport is not configured in this reference runtime;              use fixture mode for contract tests or provide an external Pi transport adapter",
+            "Pi real RPC transport is not configured; construct PiHarnessProvider::with_real_rpc with an explicit runtime config",
         )
     }
 }
@@ -65,6 +113,13 @@ impl PiHarnessProvider {
 impl HarnessProvider for PiHarnessProvider {
     fn provider_name(&self) -> &str {
         &self.name
+    }
+
+    fn features(&self) -> HarnessProviderFeatures {
+        match self.mode {
+            PiMode::Fixture => HarnessProviderFeatures::full_reference(),
+            PiMode::Real => HarnessProviderFeatures::pi_rpc_current(),
+        }
     }
 
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
@@ -115,7 +170,43 @@ impl HarnessProvider for PiHarnessProvider {
                     status: "running".to_string(),
                 })
             }
-            PiMode::Real => Err(self.real_unavailable()),
+            PiMode::Real => {
+                if let Some(active) = self.active_session.as_ref() {
+                    if self
+                        .sessions
+                        .get(active)
+                        .is_some_and(|state| state.status != "runtime-closed")
+                    {
+                        return Err(Error::conflict(format!(
+                            "Pi RPC provider already owns active session {active}"
+                        )));
+                    }
+                }
+                self.ensure_real_client()?;
+                let session_id = format!("morn-pi-{}", uuid::Uuid::new_v4());
+                let event = ExecutionEvent::new(
+                    ctx.workspace_id.clone(),
+                    session_id.clone(),
+                    ExecutionEventKind::SessionStarted,
+                    "Pi RPC runtime ready; one ephemeral provider session reserved",
+                );
+                self.sessions.insert(
+                    session_id.clone(),
+                    PiSessionState {
+                        ctx: ctx.clone(),
+                        status: "ready".to_string(),
+                        step: 0,
+                        events: vec![event],
+                        last_event: "rpc_runtime_ready".to_string(),
+                    },
+                );
+                self.active_session = Some(session_id.clone());
+                Ok(HarnessSession {
+                    id: session_id,
+                    provider: self.name.clone(),
+                    status: "ready".to_string(),
+                })
+            }
         }
     }
 
@@ -141,7 +232,41 @@ impl HarnessProvider for PiHarnessProvider {
                     proposal_ref: None,
                 })
             }
-            PiMode::Real => Err(self.real_unavailable()),
+            PiMode::Real => {
+                if self.active_session.as_deref() != Some(session_id) {
+                    return Err(Error::invalid_state(
+                        "Pi RPC prompt must target the provider's active ephemeral session",
+                    ));
+                }
+                let run = self.ensure_real_client()?.prompt_and_wait(input)?;
+                let text = self
+                    .ensure_real_client()?
+                    .get_last_assistant_text()?
+                    .unwrap_or_default();
+                let state = self
+                    .sessions
+                    .get_mut(session_id)
+                    .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                state.step += 1;
+                state.status = "idle".to_string();
+                state.events.push(ExecutionEvent::new(
+                    state.ctx.workspace_id.clone(),
+                    session_id.to_string(),
+                    ExecutionEventKind::ModelResponse,
+                    format!(
+                        "Pi RPC prompt settled; request={} disposition={} events={}",
+                        run.request_id,
+                        run.disposition,
+                        run.events.len()
+                    ),
+                ));
+                state.last_event = "pi_agent_settled".to_string();
+                Ok(HarnessOutput {
+                    session_id: session_id.to_string(),
+                    text,
+                    proposal_ref: None,
+                })
+            }
         }
     }
 
@@ -166,6 +291,25 @@ impl HarnessProvider for PiHarnessProvider {
     }
 
     fn interrupt(&mut self, session_id: &str) -> Result<()> {
+        if self.mode == PiMode::Real {
+            if self.active_session.as_deref() != Some(session_id) {
+                return Err(Error::not_found(format!("session {session_id}")));
+            }
+            self.ensure_real_client()?.abort()?;
+            let state = self
+                .sessions
+                .get_mut(session_id)
+                .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+            state.status = "idle".to_string();
+            state.events.push(ExecutionEvent::new(
+                state.ctx.workspace_id.clone(),
+                session_id.to_string(),
+                ExecutionEventKind::Interrupted,
+                "Pi RPC abort completed and agent returned idle",
+            ));
+            state.last_event = "aborted".to_string();
+            return Ok(());
+        }
         let state = self
             .sessions
             .get_mut(session_id)
@@ -182,6 +326,14 @@ impl HarnessProvider for PiHarnessProvider {
     }
 
     fn resume(&mut self, session_id: &str) -> Result<()> {
+        if self.mode == PiMode::Real {
+            if !self.sessions.contains_key(session_id) {
+                return Err(Error::not_found(format!("session {session_id}")));
+            }
+            return Err(Error::invalid_state(
+                "Pi RPC --no-session does not support cross-process session resume",
+            ));
+        }
         let state = self
             .sessions
             .get_mut(session_id)
@@ -203,6 +355,14 @@ impl HarnessProvider for PiHarnessProvider {
     }
 
     fn terminate(&mut self, session_id: &str) -> Result<ExecutionReceipt> {
+        if self.mode == PiMode::Real {
+            if !self.sessions.contains_key(session_id) {
+                return Err(Error::not_found(format!("session {session_id}")));
+            }
+            return Err(Error::invalid_state(
+                "Pi RPC has process-level shutdown rather than per-session close; call shutdown_real_runtime",
+            ));
+        }
         let state = self
             .sessions
             .get_mut(session_id)
@@ -244,6 +404,17 @@ mod tests {
     use super::*;
     use crate::contract::run_provider_contract;
     use morn_kernel::ids::{ActorInstanceId, WorkPackageId, WorkspaceId};
+
+    #[test]
+    fn pi_real_features_match_rpc_no_session_contract() {
+        let provider = PiHarnessProvider::new(PiMode::Real);
+        let features = provider.features();
+        assert!(features.interrupt);
+        assert!(!features.resume);
+        assert!(!features.session_close);
+        assert!(!features.durable_events);
+        assert!(!features.multi_session);
+    }
 
     #[test]
     fn pi_fixture_passes_shared_harness_contract() {

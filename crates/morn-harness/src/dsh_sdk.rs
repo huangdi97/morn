@@ -173,11 +173,7 @@ impl DshSdkStdioClient {
     /// Own one SDK activity interval: durable inbox receipt -> root-session idle.
     /// A successful run is executor evidence only; callers must not treat this
     /// text as a Morn ObservedOutcome or AcceptanceDecision.
-    pub fn run_text_prompt(
-        &mut self,
-        session_id: &str,
-        text: &str,
-    ) -> Result<DshSdkRunResult> {
+    pub fn run_text_prompt(&mut self, session_id: &str, text: &str) -> Result<DshSdkRunResult> {
         if session_id.trim().is_empty() || text.trim().is_empty() {
             return Err(Error::validation(
                 "DSH SDK run requires non-empty session id and prompt text",
@@ -431,7 +427,9 @@ mod tests {
             "event":{"type":"turn/end","data":{"reason":{"kind":"completed"}}}
         });
         assert_eq!(
-            finish_reason_from_session_event(&end, "session-1").unwrap().as_deref(),
+            finish_reason_from_session_event(&end, "session-1")
+                .unwrap()
+                .as_deref(),
             Some("completed")
         );
     }

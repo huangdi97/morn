@@ -11,6 +11,7 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -96,7 +97,7 @@ impl PiPromptRun {
 
 pub struct PiRpcClient {
     child: Child,
-    stdin: ChildStdin,
+    stdin: Option<ChildStdin>,
     stdout: BufReader<ChildStdout>,
     next_id: u64,
     pub buffered_events: Vec<PiRpcEvent>,
@@ -140,7 +141,7 @@ impl PiRpcClient {
 
         Ok(Self {
             child,
-            stdin,
+            stdin: Some(stdin),
             stdout: BufReader::new(stdout),
             next_id: 1,
             buffered_events: Vec::new(),
@@ -150,6 +151,55 @@ impl PiRpcClient {
     pub fn get_state(&mut self) -> Result<Value> {
         let response = self.command(PI_COMMAND_GET_STATE, Value::Object(Default::default()))?;
         Ok(response.data.unwrap_or(Value::Null))
+    }
+
+    pub fn get_last_assistant_text(&mut self) -> Result<Option<String>> {
+        let response = self.command(
+            "get_last_assistant_text",
+            Value::Object(Default::default()),
+        )?;
+        match response
+            .data
+            .as_ref()
+            .and_then(|data| data.get("text"))
+        {
+            Some(Value::String(text)) => Ok(Some(text.clone())),
+            Some(Value::Null) | None => Ok(None),
+            Some(_) => Err(Error::external(
+                "Pi get_last_assistant_text returned non-string text",
+            )),
+        }
+    }
+
+    /// Close stdin to request Pi's documented orderly shutdown. If the child
+    /// does not exit promptly, reap it rather than leaving an orphan process.
+    pub fn shutdown(&mut self) -> Result<()> {
+        self.stdin.take();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => return Ok(()),
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Ok(None) => {
+                    self.child
+                        .kill()
+                        .map_err(|error| Error::external(format!("kill stalled Pi RPC: {error}")))?;
+                    self.child
+                        .wait()
+                        .map_err(|error| Error::external(format!("reap stalled Pi RPC: {error}")))?;
+                    return Err(Error::external(
+                        "Pi RPC did not exit after stdin close and was forcefully reaped",
+                    ));
+                }
+                Err(error) => {
+                    return Err(Error::external(format!(
+                        "inspect Pi RPC shutdown state: {error}"
+                    )))
+                }
+            }
+        }
     }
 
     /// Send a prompt and wait until Pi reports `agent_settled`. A successful
@@ -270,11 +320,15 @@ impl PiRpcClient {
     }
 
     fn write_record(&mut self, record: Value) -> Result<()> {
-        serde_json::to_writer(&mut self.stdin, &record)
+        let stdin = self
+            .stdin
+            .as_mut()
+            .ok_or_else(|| Error::external("Pi RPC stdin is closed"))?;
+        serde_json::to_writer(&mut *stdin, &record)
             .map_err(|error| Error::external(format!("encode Pi RPC JSON: {error}")))?;
-        self.stdin
+        stdin
             .write_all(b"\n")
-            .and_then(|_| self.stdin.flush())
+            .and_then(|_| stdin.flush())
             .map_err(|error| Error::external(format!("write Pi RPC JSONL: {error}")))
     }
 
@@ -300,10 +354,10 @@ impl PiRpcClient {
 
 impl Drop for PiRpcClient {
     fn drop(&mut self) {
-        // Closing stdin is Pi's orderly shutdown signal, but ChildStdin cannot
-        // be moved out of Drop. If the child is still running, terminate it as
-        // a best-effort cleanup; Work truth lives outside this process.
-        let _ = self.child.kill();
+        self.stdin.take();
+        if self.child.try_wait().ok().flatten().is_none() {
+            let _ = self.child.kill();
+        }
         let _ = self.child.wait();
     }
 }
@@ -358,6 +412,113 @@ mod tests {
         let config = PiRpcConfig::default();
         assert_eq!(config.command, "pi");
         assert_eq!(config.command_line(), vec!["--mode", "rpc", "--no-session"]);
+    }
+
+    #[test]
+    fn real_rpc_transport_completes_prompt_against_wire_fixture() {
+        let executable = std::env::current_exe().unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        let config = PiRpcConfig {
+            command: executable.to_string_lossy().to_string(),
+            args: vec![
+                "--exact".to_string(),
+                "pi_rpc::tests::fake_pi_rpc_runtime".to_string(),
+                "--ignored".to_string(),
+                "--nocapture".to_string(),
+            ],
+            cwd: Some(cwd.to_string_lossy().to_string()),
+            provider: None,
+            model: None,
+        };
+        let mut client = PiRpcClient::spawn(&config).unwrap();
+        let state = client.get_state().unwrap();
+        assert_eq!(state["agent"]["status"], "idle");
+
+        let run = client.prompt_and_wait("hello").unwrap();
+        assert!(run.settled());
+        assert_eq!(run.disposition, "started");
+        assert_eq!(
+            client.get_last_assistant_text().unwrap().as_deref(),
+            Some("hello from fake pi")
+        );
+        client.abort().unwrap();
+        client.shutdown().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn fake_pi_rpc_runtime() {
+        let stdin = std::io::stdin();
+        let mut stdout = std::io::stdout().lock();
+        for line in stdin.lock().lines() {
+            let line = line.unwrap();
+            let request: Value = match serde_json::from_str(&line) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            let command = request.get("type").and_then(Value::as_str).unwrap_or("");
+            let id = request.get("id").cloned();
+            let write = |stdout: &mut std::io::StdoutLock<'_>, value: Value| {
+                serde_json::to_writer(&mut *stdout, &value).unwrap();
+                stdout.write_all(b"\n").unwrap();
+                stdout.flush().unwrap();
+            };
+            let response = |command: &str, data: Value| {
+                let mut value = json!({
+                    "type":"response",
+                    "command":command,
+                    "success":true,
+                    "data":data
+                });
+                if let Some(id) = id.clone() {
+                    value.as_object_mut().unwrap().insert("id".to_string(), id);
+                }
+                value
+            };
+            match command {
+                "get_state" => write(
+                    &mut stdout,
+                    response("get_state", json!({"agent":{"status":"idle"}})),
+                ),
+                "prompt" => {
+                    write(
+                        &mut stdout,
+                        response("prompt", json!({"disposition":"started"})),
+                    );
+                    write(&mut stdout, json!({"type":"agent_settled"}));
+                }
+                "get_last_assistant_text" => write(
+                    &mut stdout,
+                    response(
+                        "get_last_assistant_text",
+                        json!({"text":"hello from fake pi"}),
+                    ),
+                ),
+                "abort" => write(&mut stdout, response("abort", Value::Null)),
+                _ => write(
+                    &mut stdout,
+                    json!({
+                        "type":"response",
+                        "command":command,
+                        "success":false,
+                        "error":"unsupported fake command"
+                    }),
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn last_assistant_text_parser_requires_string_or_null() {
+        let ok = parse_response(&json!({
+            "id":"morn-get_last_assistant_text-1",
+            "type":"response",
+            "command":"get_last_assistant_text",
+            "success":true,
+            "data":{"text":"answer"}
+        }))
+        .unwrap();
+        assert_eq!(ok.data.unwrap()["text"], "answer");
     }
 
     #[test]
