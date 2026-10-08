@@ -78,15 +78,16 @@ impl ExecutionManifest {
                 "execution manifest requires exact composition runtime identity",
             ));
         }
+        if work.spec.protocol_version != MORN_PROTOCOL_V11_5 {
+            return Err(Error::invalid_state(format!(
+                "reference runtime currently emits only Morn protocol {}; Work pins {}",
+                MORN_PROTOCOL_V11_5, work.spec.protocol_version
+            )));
+        }
 
         Ok(Self {
             schema: "morn.execution-manifest/v11.5".to_string(),
-            protocol_version: format!(
-                "{}.{}.{}",
-                MORN_PROTOCOL_V11_5.major,
-                MORN_PROTOCOL_V11_5.minor,
-                MORN_PROTOCOL_V11_5.patch
-            ),
+            protocol_version: work.spec.protocol_version.to_string(),
             protocol_invariants: ProtocolSnapshot::v11_5().invariant_ids(),
             work_ref: work.id.to_string(),
             work_generation: work.generation,
@@ -106,7 +107,7 @@ impl ExecutionManifest {
     }
 
     pub fn validates_against(&self, work: &WorkResource, binding: &ExecutionBinding) -> bool {
-        self.protocol_version == MORN_PROTOCOL_V11_5.to_string()
+        self.protocol_version == work.spec.protocol_version.to_string()
             && self.protocol_invariants == ProtocolSnapshot::v11_5().invariant_ids()
             && self.work_ref == work.id.to_string()
             && self.work_generation == work.generation
@@ -157,6 +158,24 @@ mod tests {
         assert_eq!(manifest.provider_ref, "deepseek-harness");
         assert_eq!(manifest.composition_runtime.id, "cordis-reference");
         assert!(manifest.validates_against(&work, &binding));
+    }
+
+    #[test]
+    fn unsupported_protocol_requires_runtime_migration() {
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "investigate",
+            "morn.lite@1.0.0",
+        );
+        spec.protocol_version = morn_kernel::version::Version::new(11, 6, 0);
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let binding = ExecutionBinding::for_work(&work, "cmanifest:1", "pi", "1");
+        assert!(ExecutionManifest::from_binding(
+            &work,
+            &binding,
+            CompositionRuntimeRef::new("cordis-reference", "4.0.4"),
+        )
+        .is_err());
     }
 
     #[test]
