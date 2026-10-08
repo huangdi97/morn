@@ -55,6 +55,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/health", get(health))
         .route("/api/v115/status", get(v115_status))
         .route("/api/v115/control-plane", get(v115_control_plane))
+        .route("/api/v115/work/reconcile", post(v115_work_reconcile))
         .route("/api/v115/solutions", get(v115_solutions))
         .route("/api/v115/capabilities", get(v115_capabilities))
         .route(
@@ -227,6 +228,69 @@ async fn v115_status() -> ApiResult {
             "real_factory": "external-blocked until lawful site data/authority exists",
             "production_write": "not entered"
         }
+    })))
+}
+
+async fn v115_work_reconcile(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_control_plane::{ControllerInputs, DurableWorkControllerRuntime};
+    use morn_kernel::time::Timestamp;
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+
+    let guard = state.lock();
+    let work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    let profile = morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+        AppError(Error::validation(format!(
+            "unsupported Work profile {}",
+            work.spec.profile_ref
+        )))
+    })?;
+    let inputs = ControllerInputs {
+        capability_resolved: body
+            .get("capability_resolved")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        capability_qualified: body
+            .get("capability_qualified")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        authority_satisfied: body
+            .get("authority_satisfied")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        source_of_truth_bound: body
+            .get("source_of_truth_bound")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        provenance_ready: body
+            .get("provenance_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    };
+    let holder = body
+        .get("controller_holder")
+        .and_then(Value::as_str)
+        .unwrap_or("morn-app-api");
+    let runtime = DurableWorkControllerRuntime::new(holder);
+    let tick = runtime.reconcile_once(&guard.store, work_id, &profile, &inputs, Timestamp::now())?;
+    let current = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+
+    Ok(Json(json!({
+        "tick": tick,
+        "work": current,
+        "note": "controller tick used lease/fencing + CAS + atomic durable semantic outbox"
     })))
 }
 
