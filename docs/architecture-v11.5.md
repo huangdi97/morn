@@ -868,3 +868,13 @@ active qualification/release/site+Profile admission, valid bound Authority,
 validated source-of-truth bindings and execution provenance. This closes the
 otherwise dangerous path where an API client could post
 `authority_satisfied=true` and bypass the actual semantic records.
+
+
+## Terminal-state and event reorder semantics
+
+Asynchronous runtime/external events may arrive late or out of order. Morn does
+not let a late executor event silently move an Accepted, Rejected or Cancelled
+Work back into a non-terminal phase. These phases are terminal for the current
+Work generation. An explicit spec/Profile/protocol change may create a new
+generation, after which readiness is evaluated again from evidence scoped to
+that generation. This preserves both corrigibility and non-destructive history.
