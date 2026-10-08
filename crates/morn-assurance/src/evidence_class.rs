@@ -264,16 +264,10 @@ mod tests {
     #[test]
     fn reference_ledger_never_upgrades_external_blockers() {
         let ledger = reference_evidence_ledger();
-        assert!(ledger.satisfies(
-            "factory-readonly-wedge",
-            EvidenceClass::LocalFixture
-        ));
+        assert!(ledger.satisfies("factory-readonly-wedge", EvidenceClass::LocalFixture));
         assert!(!ledger.satisfies("deepseek-harness", EvidenceClass::RealRuntime));
         assert!(!ledger.satisfies("factory-customer", EvidenceClass::RealSite));
-        assert!(!ledger.satisfies(
-            "factory-production-write",
-            EvidenceClass::ProductionWrite
-        ));
+        assert!(!ledger.satisfies("factory-production-write", EvidenceClass::ProductionWrite));
     }
 
     #[test]
