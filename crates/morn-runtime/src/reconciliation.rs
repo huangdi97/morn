@@ -52,6 +52,25 @@ pub fn reconcile_attempt(
     }
 
     let observation = provider.reconcile(attempt)?;
+    // An external lookup must answer for this exact business/idempotency key.
+    // A receipt for another action is never evidence that our effect occurred.
+    if observation.business_key != attempt.business_key {
+        return Err(Error::validation(
+            "reconciliation result business key does not match the attempted effect",
+        ));
+    }
+    if observation.committed == Some(true)
+        && observation.observed == Some(true)
+        && (observation
+            .external_ref
+            .as_deref()
+            .is_none_or(|reference| reference.trim().is_empty())
+            || observation.evidence_refs.is_empty())
+    {
+        return Err(Error::validation(
+            "observed external commit requires a non-empty external reference and evidence",
+        ));
+    }
     attempt
         .evidence_refs
         .extend(observation.evidence_refs.clone());
@@ -174,6 +193,53 @@ mod tests {
             attempt.transition(AttemptState::Dispatched).is_err(),
             "an observed ambiguous attempt cannot be silently redispatched"
         );
+    }
+
+    struct WrongBusinessKey;
+    impl OutcomeReconciler for WrongBusinessKey {
+        fn reconcile(&self, _attempt: &ActionAttempt) -> Result<ReconciliationObservation> {
+            Ok(ReconciliationObservation {
+                business_key: "another-work:order".to_string(),
+                committed: Some(true),
+                observed: Some(true),
+                external_ref: Some("MO-OTHER".to_string()),
+                evidence_refs: vec!["cmms://other-receipt".to_string()],
+            })
+        }
+    }
+
+    struct UnsubstantiatedCommit;
+    impl OutcomeReconciler for UnsubstantiatedCommit {
+        fn reconcile(&self, attempt: &ActionAttempt) -> Result<ReconciliationObservation> {
+            Ok(ReconciliationObservation {
+                business_key: attempt.business_key.clone(),
+                committed: Some(true),
+                observed: Some(true),
+                external_ref: None,
+                evidence_refs: vec![],
+            })
+        }
+    }
+
+    #[test]
+    fn foreign_or_unsubstantiated_receipt_never_proves_our_effect() {
+        let mut attempt = ActionAttempt::new(
+            RuntimeBindingId::generate_with("binding"),
+            "work-1042:maintenance",
+            "create-maintenance-order",
+        );
+        attempt.transition(AttemptState::Authorized).unwrap();
+        attempt.transition(AttemptState::Dispatched).unwrap();
+        attempt.mark_outcome_unknown("timeout").unwrap();
+
+        assert!(reconcile_attempt(&mut attempt, &WrongBusinessKey).is_err());
+        assert_eq!(attempt.state, AttemptState::Reconciling);
+        assert!(attempt.evidence_refs.is_empty());
+        assert!(attempt.external_ref.is_none());
+        assert!(reconcile_attempt(&mut attempt, &UnsubstantiatedCommit).is_err());
+        assert_eq!(attempt.state, AttemptState::Reconciling);
+        assert!(attempt.evidence_refs.is_empty());
+        assert!(attempt.external_ref.is_none());
     }
 
     #[test]

@@ -365,8 +365,11 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         store.save_condition_evidence(&work, evidence).unwrap();
     }
     let controller = DurableWorkControllerRuntime::new("factory-slice-controller");
+    // The readiness records were observed after the initial admission clock.
+    // Reconcile only at/after evidence observation, never before it.
+    let reconcile_at = morn_kernel::time::Timestamp::now();
     let tick = controller
-        .reconcile_from_evidence(&store, work.id.as_str(), &profile, now)
+        .reconcile_from_evidence(&store, work.id.as_str(), &profile, reconcile_at)
         .unwrap();
     assert_eq!(tick.next_phase, WorkPhase::Ready);
     work = store
