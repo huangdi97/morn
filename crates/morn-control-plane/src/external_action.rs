@@ -249,13 +249,10 @@ mod tests {
             expires_at: None,
             issued_at: Timestamp::now(),
         };
-        assert!(begin_external_attempt(
-            &permit,
-            &binding,
-            "business-key",
-            "cmms.sandbox.write",
-        )
-        .is_err());
+        assert!(
+            begin_external_attempt(&permit, &binding, "business-key", "cmms.sandbox.write",)
+                .is_err()
+        );
     }
 
     #[test]
@@ -332,6 +329,8 @@ mod tests {
 
         let mut wrong = permit.clone();
         wrong.binding_ref = "binding:other".to_string();
-        assert!(begin_external_attempt(&wrong, &binding, "business-key", "historian.read").is_err());
+        assert!(
+            begin_external_attempt(&wrong, &binding, "business-key", "historian.read").is_err()
+        );
     }
 }
