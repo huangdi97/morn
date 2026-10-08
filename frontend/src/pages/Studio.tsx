@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   apiGet,
   apiPostJson,
@@ -6,6 +6,7 @@ import {
   CreatorDraftOutcome,
   OpenApiCompileOutcome,
   SolutionInstantiationOutcome,
+  V115Status,
 } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, StatusPill } from "../components/ui";
 
@@ -43,8 +44,29 @@ export default function Studio() {
   );
   const [paperCandidate, setPaperCandidate] = useState<OpenApiCompileOutcome | null>(null);
   const [profileRef, setProfileRef] = useState("morn.lite@1.0.0");
+  const [profileOptions, setProfileOptions] = useState<string[]>([
+    "morn.lite@1.0.0",
+    "morn.enterprise@1.0.0",
+    "morn.factory.readonly@1.0.0",
+    "morn.research@1.0.0",
+  ]);
   const [siteRef, setSiteRef] = useState("");
   const [instantiated, setInstantiated] = useState<SolutionInstantiationOutcome | null>(null);
+
+  useEffect(() => {
+    apiGet<V115Status>("/v115/status")
+      .then((status) => {
+        const refs = status.profiles.map(
+          (profile) =>
+            `${profile.id}@${profile.version.major}.${profile.version.minor}.${profile.version.patch}`,
+        );
+        if (refs.length) {
+          setProfileOptions(refs);
+          if (!refs.includes(profileRef)) setProfileRef(refs[0]);
+        }
+      })
+      .catch(() => undefined);
+  }, [profileRef]);
 
   const runCreatorDraft = async () => {
     setError(null);
@@ -209,10 +231,11 @@ export default function Studio() {
             onChange={(e) => setProfileRef(e.target.value)}
             style={{ padding: 6 }}
           >
-            <option value="morn.lite@1.0.0">Morn Lite</option>
-            <option value="morn.enterprise@1.0.0">Morn Enterprise</option>
-            <option value="morn.factory.readonly@1.0.0">Morn Factory — read only</option>
-            <option value="morn.research@1.0.0">Morn Research</option>
+            {profileOptions.map((profile) => (
+              <option key={profile} value={profile}>
+                {profile}
+              </option>
+            ))}
           </select>
         </div>
         <div className="builder-item">
@@ -464,10 +487,11 @@ export default function Studio() {
                     onChange={(e) => setProfileRef(e.target.value)}
                     style={{ padding: 6 }}
                   >
-                    <option value="morn.lite@1.0.0">Morn Lite</option>
-                    <option value="morn.enterprise@1.0.0">Morn Enterprise</option>
-                    <option value="morn.factory.readonly@1.0.0">Morn Factory — read only</option>
-                    <option value="morn.research@1.0.0">Morn Research</option>
+                    {profileOptions.map((profile) => (
+                      <option key={profile} value={profile}>
+                        {profile}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="builder-item">
