@@ -13,6 +13,7 @@ morn-capability = { workspace = true }
 morn-harness = { workspace = true }
 morn-runtime = { workspace = true }
 morn-control-plane = { workspace = true }
+morn-domain-sdk = { workspace = true }
 morn-actor = { workspace = true }
 morn-organization = { workspace = true }
 morn-work = { workspace = true }
