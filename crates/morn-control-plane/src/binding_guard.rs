@@ -130,8 +130,10 @@ impl BindingOperationalGate {
         // effect forever. The reconciler itself may use a separate eligible
         // source-of-truth provider.
         let allow_reconciliation = capability_matches;
-        let allow_new_effect =
-            capability_matches && admission_active && provider_selectable && provider_identity_matches;
+        let allow_new_effect = capability_matches
+            && admission_active
+            && provider_selectable
+            && provider_identity_matches;
 
         BindingValidityDecision {
             id: BindingValidityDecisionId::generate_with("binding-validity"),
@@ -174,8 +176,12 @@ mod tests {
             CapabilityKind::Program,
             EffectClass::E0LifecycleReversible,
         ));
-        let binding =
-            ExecutionBinding::for_work(&work, capability.manifest.id.to_string(), "provider-a", "1");
+        let binding = ExecutionBinding::for_work(
+            &work,
+            capability.manifest.id.to_string(),
+            "provider-a",
+            "1",
+        );
         (work, capability, binding)
     }
 
@@ -184,8 +190,7 @@ mod tests {
         let (_work, capability, binding) = fixture();
         let admissions = AdmissionService::default();
         let mut providers = ProviderRegistry::default();
-        let mut provider =
-            ProviderDescriptor::new("provider-a", ProviderFamily::Runtime, "1");
+        let mut provider = ProviderDescriptor::new("provider-a", ProviderFamily::Runtime, "1");
         provider.status = ProviderStatus::Healthy;
         providers.register(provider).unwrap();
 
@@ -207,8 +212,7 @@ mod tests {
         let (_work, capability, binding) = fixture();
         let admissions = AdmissionService::default();
         let mut providers = ProviderRegistry::default();
-        let mut provider =
-            ProviderDescriptor::new("provider-a", ProviderFamily::Runtime, "2");
+        let mut provider = ProviderDescriptor::new("provider-a", ProviderFamily::Runtime, "2");
         provider.status = ProviderStatus::Healthy;
         providers.register(provider).unwrap();
 
