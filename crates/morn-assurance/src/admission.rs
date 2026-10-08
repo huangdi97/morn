@@ -16,6 +16,8 @@ use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
 use morn_profile::ConformanceReport;
 
+use crate::profile_conformance::ProfileConformanceAttestation;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct CapabilityLifecycleEventTag;
 pub type CapabilityLifecycleEventId = Id<CapabilityLifecycleEventTag>;
@@ -426,6 +428,39 @@ impl AdmissionService {
                 .unwrap_or_else(|| "release-service".to_string()),
         );
         Ok(release)
+    }
+
+    pub fn admit_with_attestation(
+        &mut self,
+        capability: &mut CapabilityRecord,
+        qualification: &QualificationRecord,
+        attestation: &ProfileConformanceAttestation,
+        approved_by: impl Into<String>,
+    ) -> Result<SiteAdmission> {
+        let now = Timestamp::now();
+        if !attestation.passing_for(&attestation.site_ref, &attestation.profile_ref, now) {
+            return Err(Error::validation(
+                "site admission requires a currently valid passing Profile conformance attestation",
+            ));
+        }
+
+        let approved_by = approved_by.into();
+        let mut admission = self.admit(
+            capability,
+            qualification,
+            attestation.site_ref.clone(),
+            attestation.profile_ref.clone(),
+            &attestation.report,
+            approved_by,
+        )?;
+        admission.conformance_ref = attestation.id.to_string();
+        let stored = self
+            .admissions
+            .iter_mut()
+            .find(|item| item.id == admission.id)
+            .ok_or_else(|| Error::internal("new SiteAdmission was not recorded"))?;
+        stored.conformance_ref = attestation.id.to_string();
+        Ok(admission)
     }
 
     pub fn admit(
