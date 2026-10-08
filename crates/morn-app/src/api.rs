@@ -340,6 +340,7 @@ async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
     Ok(Json(json!({
         "work": load("work_resource_v115")?,
         "condition_evidence": load("condition_evidence_v115")?,
+        "profile_conformance_attestations": load("profile_conformance_attestation_v115")?,
         "source_of_truth_bindings": load("source_of_truth_binding_v115")?,
         "execution_bindings": load("execution_binding_v115")?,
         "execution_manifests": load("execution_manifest_v115")?,
