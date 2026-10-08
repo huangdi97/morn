@@ -52,7 +52,7 @@ pub struct ControllerFence<'a> {
     pub fence_at: i64,
 }
 
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 impl MornStore {
     /// Open (creating if needed) a store at `path` and run migrations.
@@ -106,9 +106,10 @@ impl MornStore {
             CREATE INDEX IF NOT EXISTS idx_ledger_workspace ON ledger_entries(workspace_id);
 
             CREATE TABLE IF NOT EXISTS control_event_inbox (
-                event_id TEXT NOT NULL PRIMARY KEY,
+                event_id TEXT NOT NULL,
                 source TEXT NOT NULL,
-                recorded_at INTEGER NOT NULL
+                recorded_at INTEGER NOT NULL,
+                PRIMARY KEY (source, event_id)
             );
 
             CREATE TABLE IF NOT EXISTS control_event_outbox (
@@ -148,22 +149,46 @@ impl MornStore {
                 .map_err(|e| Error::internal(e.to_string()))?;
             }
             Some(v) if v < SCHEMA_VERSION => {
-                // Older stores are upgraded idempotently. SQLite may report a
-                // duplicate-column error when a previous migration already
-                // installed one of these columns; that is safe to ignore here.
-                let _ = conn.execute(
+                // Keep schema and inbox-identity upgrades atomic. A crash
+                // during table reconstruction must not lose claimed events.
+                let tx = conn
+                    .unchecked_transaction()
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                // Legacy v1/v2 records may lack these columns; existing
+                // columns produce a harmless duplicate-column error.
+                let _ = tx.execute(
                     "ALTER TABLE morn_records ADD COLUMN immutable INTEGER NOT NULL DEFAULT 0",
                     [],
                 );
-                let _ = conn.execute(
+                let _ = tx.execute(
                     "ALTER TABLE morn_records ADD COLUMN revision INTEGER NOT NULL DEFAULT 1",
                     [],
                 );
-                conn.execute(
+                if v < 6 {
+                    // CloudEvents identifies a distinct delivery by (source,
+                    // id), not by id alone. Preserve all previously claimed
+                    // rows while changing the inbox primary key.
+                    tx.execute_batch(
+                        "CREATE TABLE control_event_inbox_v6 (
+                            event_id TEXT NOT NULL,
+                            source TEXT NOT NULL,
+                            recorded_at INTEGER NOT NULL,
+                            PRIMARY KEY (source, event_id)
+                        );
+                        INSERT INTO control_event_inbox_v6 (event_id, source, recorded_at)
+                            SELECT event_id, source, recorded_at FROM control_event_inbox;
+                        DROP TABLE control_event_inbox;
+                        ALTER TABLE control_event_inbox_v6 RENAME TO control_event_inbox;",
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                }
+                tx.execute(
                     "UPDATE schema_version SET version = ?1 WHERE version = ?2",
                     params![SCHEMA_VERSION, v],
                 )
                 .map_err(|e| Error::internal(e.to_string()))?;
+                tx.commit()
+                    .map_err(|e| Error::internal(e.to_string()))?;
             }
             _ => {}
         }
@@ -180,8 +205,9 @@ impl MornStore {
 
     // ---- durable controller inbox/outbox ----
 
-    /// Atomically claim an inbound event id. Returns true only to the first
-    /// observer; duplicate/redelivered events are safe to ignore.
+    /// Atomically claim a CloudEvents (source, id) pair. Returns true only
+    /// once per producer-scoped event; redeliveries are safely ignored without
+    /// discarding distinct events from a different source with the same id.
     pub fn claim_inbound_event(
         &self,
         event_id: &str,
@@ -1774,6 +1800,44 @@ mod tests {
     }
 
     #[test]
+    fn v5_inbox_upgrade_preserves_claims_and_separates_event_sources() {
+        let path = temp_db("v5_inbox");
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE schema_version (version INTEGER NOT NULL);
+                 INSERT INTO schema_version (version) VALUES (5);
+                 CREATE TABLE control_event_inbox (
+                     event_id TEXT NOT NULL PRIMARY KEY,
+                     source TEXT NOT NULL,
+                     recorded_at INTEGER NOT NULL
+                 );
+                 INSERT INTO control_event_inbox (event_id, source, recorded_at)
+                     VALUES ('shared-id', 'cmms://plant-a', 10);",
+            )
+            .unwrap();
+        }
+        {
+            let store = MornStore::open(&path).unwrap();
+            assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+            assert!(!store
+                .claim_inbound_event("shared-id", "cmms://plant-a", 11)
+                .unwrap());
+            assert!(store
+                .claim_inbound_event("shared-id", "mes://plant-a", 12)
+                .unwrap());
+        }
+        let restarted = MornStore::open(&path).unwrap();
+        assert_eq!(restarted.schema_version().unwrap(), SCHEMA_VERSION);
+        assert!(!restarted
+            .claim_inbound_event("shared-id", "cmms://plant-a", 13)
+            .unwrap());
+        assert!(!restarted
+            .claim_inbound_event("shared-id", "mes://plant-a", 14)
+            .unwrap());
+    }
+
+    #[test]
     fn immutable_records_reject_overwrite() {
         let store = MornStore::open_in_memory().unwrap();
         store
@@ -2066,6 +2130,12 @@ mod tests {
             .unwrap());
         assert!(!store
             .claim_inbound_event("evt-in-1", "cmms://plant-a", 11)
+            .unwrap());
+        assert!(store
+            .claim_inbound_event("evt-in-1", "mes://plant-a", 12)
+            .unwrap());
+        assert!(!store
+            .claim_inbound_event("evt-in-1", "mes://plant-a", 13)
             .unwrap());
 
         assert!(store
