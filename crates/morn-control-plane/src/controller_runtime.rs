@@ -86,6 +86,14 @@ impl DurableWorkControllerRuntime {
             .load_record("work_resource_v115", work_id)?
             .ok_or_else(|| Error::not_found(format!("WorkResource {work_id}")))?;
 
+        if work.spec.profile_ref != profile.canonical_ref() {
+            return Err(Error::conflict(format!(
+                "Work profile {} does not match controller profile {}",
+                work.spec.profile_ref,
+                profile.canonical_ref()
+            )));
+        }
+
         let previous_phase = work.status.phase;
         let previous_revision = work.resource_version;
         WorkController.reconcile(&mut work, profile, inputs);
@@ -124,7 +132,7 @@ impl DurableWorkControllerRuntime {
 
         let mut persisted = work.clone();
         persisted.resource_version = previous_revision.saturating_add(1);
-        let next_revision = store.save_record_cas_with_durable_event(
+        let next_revision = store.save_record_cas_with_durable_event_fenced(
             "work_resource_v115",
             work.id.as_str(),
             work.workspace_id.as_str(),
@@ -133,6 +141,9 @@ impl DurableWorkControllerRuntime {
             &persisted,
             &envelope,
             &semantics,
+            &self.lease_name,
+            lease.fencing_token,
+            now.millis(),
         )?;
 
         Ok(ControllerTickResult {
@@ -205,6 +216,41 @@ mod tests {
             .unwrap();
         assert_eq!(persisted.resource_version, 2);
         assert_eq!(persisted.status.observed_generation, persisted.generation);
+    }
+
+    #[test]
+    fn controller_refuses_profile_confusion() {
+        let store = MornStore::open_in_memory().unwrap();
+        let lite = DomainProfile::lite_v1();
+        let enterprise = DomainProfile::enterprise_v1();
+        let spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "summarize evidence",
+            lite.canonical_ref(),
+        );
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        work.resource_version = 1;
+        store
+            .save_record_cas(
+                "work_resource_v115",
+                work.id.as_str(),
+                work.workspace_id.as_str(),
+                work.created_at.millis(),
+                0,
+                &work,
+            )
+            .unwrap();
+
+        let runtime = DurableWorkControllerRuntime::new("node-profile");
+        assert!(runtime
+            .reconcile_once(
+                &store,
+                work.id.as_str(),
+                &enterprise,
+                &ControllerInputs::default(),
+                Timestamp::from_millis(1_000),
+            )
+            .is_err());
     }
 
     #[test]
