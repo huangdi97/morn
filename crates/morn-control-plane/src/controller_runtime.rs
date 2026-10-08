@@ -15,7 +15,7 @@ use morn_profile::DomainProfile;
 use morn_store::MornStore;
 use morn_work::control::{WorkPhase, WorkResource};
 
-use crate::{ControllerInputs, WorkController};
+use crate::{derive_controller_inputs, ConditionEvidence, ControllerInputs, WorkController};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ControllerTickResult {
@@ -42,6 +42,26 @@ impl DurableWorkControllerRuntime {
             lease_name: "morn-v115-work-controller".to_string(),
             lease_ttl_ms: 30_000,
         }
+    }
+
+    /// Strict v11.5 path: readiness is derived from durable,
+    /// generation-scoped evidence instead of caller supplied booleans.
+    pub fn reconcile_from_evidence(
+        &self,
+        store: &MornStore,
+        work_id: &str,
+        profile: &DomainProfile,
+        now: Timestamp,
+    ) -> Result<ControllerTickResult> {
+        let work: WorkResource = store
+            .load_record("work_resource_v115", work_id)?
+            .ok_or_else(|| Error::not_found(format!("WorkResource {work_id}")))?;
+        let evidence: Vec<ConditionEvidence> = store.load_records_in_workspace(
+            "condition_evidence_v115",
+            work.workspace_id.as_str(),
+        )?;
+        let inputs = derive_controller_inputs(&work, &evidence, now);
+        self.reconcile_once(store, work_id, profile, &inputs, now)
     }
 
     pub fn reconcile_once(
@@ -216,6 +236,61 @@ mod tests {
             .unwrap();
         assert_eq!(persisted.resource_version, 2);
         assert_eq!(persisted.status.observed_generation, persisted.generation);
+    }
+
+    #[test]
+    fn durable_evidence_path_ignores_stale_generation_witnesses() {
+        use crate::ControlPlaneStore;
+
+        let store = MornStore::open_in_memory().unwrap();
+        let profile = DomainProfile::lite_v1();
+        let spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "summarize evidence",
+            profile.canonical_ref(),
+        );
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let evidence = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            true,
+            "resolver://fixture",
+            vec!["capability://fixture".to_string()],
+        )
+        .unwrap();
+        store.save_condition_evidence(&work, &evidence).unwrap();
+
+        let runtime = DurableWorkControllerRuntime::new("node-evidence");
+        let ready = runtime
+            .reconcile_from_evidence(
+                &store,
+                work.id.as_str(),
+                &profile,
+                Timestamp::from_millis(evidence.observed_at.millis() + 1),
+            )
+            .unwrap();
+        assert_eq!(ready.next_phase, WorkPhase::Ready);
+
+        let mut current: WorkResource = store
+            .load_record("work_resource_v115", work.id.as_str())
+            .unwrap()
+            .unwrap();
+        let mut changed = current.spec.clone();
+        changed.goal = "changed scope".to_string();
+        current.replace_spec(changed);
+        store.save_work_resource_cas(&mut current).unwrap();
+
+        let blocked = runtime
+            .reconcile_from_evidence(
+                &store,
+                current.id.as_str(),
+                &profile,
+                Timestamp::from_millis(evidence.observed_at.millis() + 2),
+            )
+            .unwrap();
+        assert_eq!(blocked.next_phase, WorkPhase::Blocked);
     }
 
     #[test]
