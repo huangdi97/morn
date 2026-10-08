@@ -136,6 +136,10 @@ impl ProtocolSnapshot {
                     "Harness/session/workflow runtime state cannot replace canonical Work truth.",
                 ),
                 SemanticInvariant::required(
+                    "workflow-runtime-not-work-truth",
+                    "Durable workflow completion is executor evidence and cannot directly create Outcome or Acceptance.",
+                ),
+                SemanticInvariant::required(
                     "active-binding-pinned",
                     "An active Attempt keeps the exact ExecutionBinding it started with.",
                 ),
@@ -174,6 +178,10 @@ impl ProtocolSnapshot {
                 SemanticInvariant::required(
                     "profile-guarantees-not-provider-names",
                     "Domain Profiles constrain guarantees and semantics rather than naming specific vendors.",
+                ),
+                SemanticInvariant::required(
+                    "evidence-class-explicit",
+                    "Evidence classes are explicit categories; fixture/CI/runtime/site/write claims never auto-promote one another.",
                 ),
             ],
         }
