@@ -200,6 +200,21 @@ fn same_protocol_semantics(base: &ProtocolSnapshot, candidate: &ProtocolSnapshot
     base.semantic_slots == candidate.semantic_slots && base.invariants == candidate.invariants
 }
 
+fn candidate_preserves_base_semantics(
+    base: &ProtocolSnapshot,
+    candidate: &ProtocolSnapshot,
+) -> bool {
+    let preserves_slots = base
+        .semantic_slots
+        .iter()
+        .all(|slot| candidate.semantic_slots.contains(slot));
+    let preserves_invariant_ids = base
+        .invariants
+        .iter()
+        .all(|invariant| candidate.requires_invariant(&invariant.id));
+    preserves_slots && preserves_invariant_ids
+}
+
 pub fn compare_protocols(
     base: &ProtocolSnapshot,
     candidate: &ProtocolSnapshot,
@@ -215,6 +230,9 @@ pub fn compare_protocols(
         };
     }
     if base.protocol_version.major != candidate.protocol_version.major {
+        return ProtocolCompatibility::Incompatible;
+    }
+    if !candidate_preserves_base_semantics(base, candidate) {
         return ProtocolCompatibility::Incompatible;
     }
     if base.protocol_version.minor == candidate.protocol_version.minor {
@@ -285,6 +303,19 @@ mod tests {
         changed.semantic_slots.push("Settlement".to_string());
         assert_eq!(
             compare_protocols(&base, &changed),
+            ProtocolCompatibility::Incompatible
+        );
+    }
+
+    #[test]
+    fn minor_protocol_cannot_drop_existing_semantic_law() {
+        let base = ProtocolSnapshot::v11_5();
+        let mut next = base.clone();
+        next.protocol_version = Version::new(11, 6, 0);
+        next.semantic_slots
+            .retain(|slot| slot != "Acceptance");
+        assert_eq!(
+            compare_protocols(&base, &next),
             ProtocolCompatibility::Incompatible
         );
     }
