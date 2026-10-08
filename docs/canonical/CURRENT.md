@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-024 in `docs/adr/`
+3. ADR-002 through ADR-025 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -148,3 +148,12 @@ mutation is incompatible; patch changes cannot alter guarantee meaning; minor
 changes require reevaluation; major/cross-Profile changes are incompatible by
 default. Running bindings stay pinned and new versions require explicit migration.
 See ADR-024.
+
+
+## Profiles as published assets
+
+Lite/Enterprise/Factory/Research are reference Profiles, not an immutable enum
+of all possible Morn deployments. DomainProfile releases are versioned
+guarantee assets registered by canonical reference; the same published
+id/version cannot be silently overwritten. Work and SiteAdmission pin the exact
+Profile reference. See ADR-025.
