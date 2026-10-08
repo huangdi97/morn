@@ -9,6 +9,7 @@ pub mod attempt;
 pub mod authority;
 pub mod binding;
 pub mod credentials;
+pub mod durable_workflow;
 pub mod environment;
 pub mod execution_manifest;
 pub mod gateway;
@@ -28,6 +29,10 @@ pub use binding::{
 pub use credentials::{
     CredentialHandle, CredentialHandleId, CredentialProvider, CredentialRequest,
     FixtureCredentialProvider,
+};
+pub use durable_workflow::{
+    DurableWorkflowBinding, DurableWorkflowBindingId, DurableWorkflowEvidence,
+    DurableWorkflowProvider, DurableWorkflowState,
 };
 pub use environment::{
     ExecutionEnvironmentHandle, ExecutionEnvironmentId, ExecutionEnvironmentOffer,
