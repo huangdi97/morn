@@ -49,10 +49,7 @@ impl EventEnvelope {
         }
     }
 
-    pub fn with_semantics(
-        mut self,
-        descriptor: &EventSemanticDescriptor,
-    ) -> Result<Self, String> {
+    pub fn with_semantics(mut self, descriptor: &EventSemanticDescriptor) -> Result<Self, String> {
         descriptor.validate()?;
         self.extensions.insert(
             "morneventclass".to_string(),
@@ -63,10 +60,8 @@ impl EventEnvelope {
                 .insert("mornsubjectref".to_string(), subject_ref.clone());
         }
         if let Some(source_of_truth_ref) = &descriptor.source_of_truth_ref {
-            self.extensions.insert(
-                "mornsourcetruth".to_string(),
-                source_of_truth_ref.clone(),
-            );
+            self.extensions
+                .insert("mornsourcetruth".to_string(), source_of_truth_ref.clone());
         }
         if let Some(schema_ref) = &descriptor.schema_ref {
             self.dataschema = Some(schema_ref.clone());
