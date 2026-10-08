@@ -47,9 +47,9 @@ use morn_profile::{
     plan_profile_migration, DomainProfile, ProfileCompatibility, ProfileMigrationPlan,
 };
 use morn_runtime::{
-    reconcile_attempt, ActionAttempt, AttemptState, BindingMigrationDecision, DurableWorkflowBinding,
-    DurableWorkflowEvidence, ExecutionBinding, ExecutionManifest, OutcomeReconciler,
-    ReconciliationRecord,
+    reconcile_attempt, ActionAttempt, AttemptState, BindingMigrationDecision,
+    DurableWorkflowBinding, DurableWorkflowEvidence, ExecutionBinding, ExecutionManifest,
+    OutcomeReconciler, ReconciliationRecord,
 };
 use morn_store::MornStore;
 use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
@@ -621,25 +621,54 @@ fn persisted_attempt_state_reachable(from: AttemptState, target: AttemptState) -
 
 impl ControlPlaneStore for MornStore {
     fn save_work_resource(&self, work: &WorkResource) -> Result<()> {
-        if self
-            .load_record::<WorkResource>("work_resource_v115", work.id.as_str())?
-            .is_some()
-        {
-            require_canonical_work_workspace(self, work)?;
-        }
-        self.save_record(
-            "work_resource_v115",
-            work.id.as_str(),
-            work.workspace_id.as_str(),
-            work.created_at.millis(),
-            work,
-        )
+        // Legacy callers must not bypass optimistic concurrency or the
+        // generation/terminal-phase invariants through last-writer-wins.
+        self.save_work_resource_cas(&mut work.clone())?;
+        Ok(())
     }
 
     fn save_work_resource_cas(&self, work: &mut WorkResource) -> Result<u64> {
         let expected = work.resource_version;
-        if expected > 0 {
-            require_canonical_work_workspace(self, work)?;
+        if work.generation == 0
+            || work.spec.work_package_id != work.id
+            || work.status.observed_generation > work.generation
+        {
+            return Err(Error::validation(
+                "invalid canonical Work identity or generation",
+            ));
+        }
+        if let Some(persisted) =
+            self.load_record::<WorkResource>("work_resource_v115", work.id.as_str())?
+        {
+            if persisted.workspace_id != work.workspace_id || persisted.created_at != work.created_at
+            {
+                return Err(Error::validation(
+                    "canonical Work owner and creation are immutable",
+                ));
+            }
+            if work.generation < persisted.generation
+                || work.generation > persisted.generation.saturating_add(1)
+                || (work.generation == persisted.generation && work.spec != persisted.spec)
+            {
+                return Err(Error::validation(
+                    "desired Work spec must change through an explicit next generation",
+                ));
+            }
+            if work.generation == persisted.generation
+                && persisted.status.phase.is_terminal()
+                && work.status.phase != persisted.status.phase
+            {
+                return Err(Error::validation(
+                    "terminal Work phase cannot be reopened within the same generation",
+                ));
+            }
+            if persisted.termination_requested_at.is_some()
+                && persisted.termination_requested_at != work.termination_requested_at
+            {
+                return Err(Error::validation(
+                    "Work termination request cannot be erased or rewritten",
+                ));
+            }
         }
         let mut next = work.clone();
         next.resource_version = expected.saturating_add(1);
@@ -791,12 +820,14 @@ impl ControlPlaneStore for MornStore {
                 "action attempt must have a business key and binding owned by this Work",
             ));
         }
-        if matches!(attempt.state, AttemptState::Observed | AttemptState::Verified)
-            && (attempt
-                .external_ref
-                .as_deref()
-                .is_none_or(|reference| reference.trim().is_empty())
-                || attempt.evidence_refs.is_empty())
+        if matches!(
+            attempt.state,
+            AttemptState::Observed | AttemptState::Verified
+        ) && (attempt
+            .external_ref
+            .as_deref()
+            .is_none_or(|reference| reference.trim().is_empty())
+            || attempt.evidence_refs.is_empty())
         {
             return Err(Error::validation(
                 "observed external attempt requires an external reference and evidence",
@@ -806,7 +837,9 @@ impl ControlPlaneStore for MornStore {
         // Capture the revision before inspecting the snapshot. Re-reading it
         // after validation could let a competing writer advance the row and
         // accidentally supply our stale projection with that newer revision.
-        let expected = self.record_revision(kind, attempt.id.as_str())?.unwrap_or(0);
+        let expected = self
+            .record_revision(kind, attempt.id.as_str())?
+            .unwrap_or(0);
         let previous: Option<ActionAttempt> = self.load_record(kind, attempt.id.as_str())?;
         if let Some(previous) = &previous {
             if previous.binding_id != attempt.binding_id
@@ -817,7 +850,8 @@ impl ControlPlaneStore for MornStore {
                     && (previous.resource_ref != attempt.resource_ref
                         || previous.site_ref != attempt.site_ref
                         || previous.authority_decision_ref != attempt.authority_decision_ref
-                        || previous.external_action_permit_ref != attempt.external_action_permit_ref
+                        || previous.external_action_permit_ref
+                            != attempt.external_action_permit_ref
                         || previous.effect_contract != attempt.effect_contract))
             {
                 return Err(Error::validation(
@@ -1655,6 +1689,32 @@ mod control_plane_persistence_scope_tests {
         record.observation.business_key = attempt.business_key.clone();
         assert!(store.save_reconciliation(&other, &record).is_err());
         store.save_reconciliation(&work, &record).unwrap();
+    }
+
+    #[test]
+    fn same_generation_spec_and_terminal_state_cannot_be_reinterpreted() {
+        let store = MornStore::open_in_memory().unwrap();
+        let mut canonical = fixture_work();
+        store.save_work_resource_cas(&mut canonical).unwrap();
+
+        let mut tampered = canonical.clone();
+        tampered.spec.goal = "different instructions".to_string();
+        assert!(store.save_work_resource_cas(&mut tampered).is_err());
+        assert!(store.save_work_resource(&tampered).is_err());
+
+        canonical.status.phase = WorkPhase::Accepted;
+        store.save_work_resource_cas(&mut canonical).unwrap();
+        let mut rollback = canonical.clone();
+        rollback.status.phase = WorkPhase::Ready;
+        assert!(store.save_work_resource_cas(&mut rollback).is_err());
+
+        canonical.replace_spec({
+            let mut next = canonical.spec.clone();
+            next.goal = "explicit new requested objective".to_string();
+            next
+        });
+        store.save_work_resource_cas(&mut canonical).unwrap();
+        assert_eq!(canonical.generation, 2);
     }
 
     #[test]
