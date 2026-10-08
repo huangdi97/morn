@@ -889,3 +889,49 @@ meets the Profile guarantee floor. The attestation records exact site/Profile,
 computed report, evidence refs, evaluator identity and validity. The product/API
 admission path will not accept caller-supplied conformance booleans or semantic
 lists as a substitute. Fixture attestations remain fixture evidence.
+
+
+## Language-neutral protocol surface
+
+The Rust crates are the reference implementation, not the protocol definition.
+The repository publishes a language-neutral protocol surface under
+`spec/v11.5/`:
+
+- versioned protocol manifest;
+- JSON Schema 2020-12 structural contracts;
+- canonical examples for Work, Capability, Authority, ExecutionBinding,
+  Attempt, external Receipt, Reconciliation, ObservedOutcome, Acceptance,
+  ExecutionManifest, Profile and integration events;
+- Rust conformance tests that deserialize the canonical examples.
+
+This prevents a future Rust/Cordis/DSH implementation detail from silently
+becoming a Morn semantic law. A third-party runtime may implement Morn without
+importing Rust crates if it satisfies the published contract and behavioral
+conformance rules.
+
+Structural schema is deliberately not treated as sufficient conformance. The
+following remain behavioral/cross-record obligations:
+
+```text
+Authority before restricted effect
+Attempt pinned to exact ExecutionBinding
+OUTCOME_UNKNOWN -> reconciliation before retry
+external Receipt != harness ExecutionReceipt
+Receipt != ObservedOutcome
+ObservedOutcome != Acceptance
+qualification != release != site admission
+historical correction != silent overwrite
+```
+
+### Receipt taxonomy
+
+Morn uses the word “receipt” only with an explicit scope:
+
+- `ExecutionReceipt`: harness/runtime evidence that an executor session ran;
+- `ConnectorReceipt`: external-system acknowledgement/result for a governed
+  connector action;
+- `ReconciliationRecord`: source-of-truth observation resolving an ambiguous
+  Attempt.
+
+A harness receipt can never satisfy a Profile requirement for external-action
+truth by itself.
