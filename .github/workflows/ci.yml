@@ -177,3 +177,16 @@ jobs:
         shell: pwsh
         working-directory: .
         run: cargo build -p morn-desktop
+      - name: Build Windows reference backend
+        shell: pwsh
+        working-directory: .
+        run: cargo build -p morn-app --bin server --all-features
+      - name: Publish unsigned Windows reference bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: morn-windows-reference-${{ github.sha }}
+          path: |
+            target/debug/morn-desktop.exe
+            target/debug/server.exe
+          if-no-files-found: error
+          retention-days: 14

@@ -263,6 +263,19 @@ powershell -ExecutionPolicy Bypass -File scripts/run_all.ps1
 Environment variables: `MORN_DB` (SQLite path, default `morn.db`) and
 `MORN_PORT` (default `8090`).
 
+### Windows reference desktop build
+
+The Desktop GitHub Actions job builds both the Tauri shell and the Windows
+backend and publishes an unsigned `morn-windows-reference-<SHA>` artifact
+containing `morn-desktop.exe` and `server.exe`. This is for engineering
+acceptance, **not** an authenticated production release or signed installer.
+
+Extract both executables, run `server.exe` first (it binds only to
+`127.0.0.1:8090`), then launch `morn-desktop.exe`. The backend uses
+`morn.db` in its working directory unless `MORN_DB` is set.
+Keep the backend local; no production credentials or industrial writes should
+be exposed through this reference package.
+
 The v11.5 metadata endpoint is:
 
 ```text
