@@ -539,6 +539,59 @@ impl AdmissionService {
         Ok(admission)
     }
 
+    /// Re-evaluate a concrete site/profile admission at selection time.
+    ///
+    /// CapabilityRecord carries projection refs for efficient discovery, but a
+    /// strict runtime must still prove that the exact admission, qualification
+    /// and release are active *now*. This prevents an expired qualification or
+    /// revoked release from remaining selectable because a cached projection
+    /// still says "Admitted".
+    pub fn site_profile_admission_active_at(
+        &self,
+        capability: &CapabilityRecord,
+        site_ref: &str,
+        profile_ref: &str,
+        now: Timestamp,
+    ) -> bool {
+        capability.admission_refs.iter().any(|reference| {
+            if reference.site_ref != site_ref || reference.profile_ref != profile_ref {
+                return false;
+            }
+            let Some(admission) = self
+                .admissions
+                .iter()
+                .find(|item| item.id.to_string() == reference.admission_ref)
+            else {
+                return false;
+            };
+            if admission.status != SiteAdmissionStatus::Admitted
+                || admission.manifest_id != capability.manifest.id
+                || admission.site_ref != site_ref
+                || admission.profile_ref != profile_ref
+            {
+                return false;
+            }
+            let Some(qualification) = self
+                .qualifications
+                .iter()
+                .find(|item| item.id == admission.qualification_id)
+            else {
+                return false;
+            };
+            if !qualification.is_active_at(now)
+                || qualification.manifest_id != capability.manifest.id
+            {
+                return false;
+            }
+            self.releases.iter().any(|release| {
+                release.id == admission.release_id
+                    && release.manifest_id == capability.manifest.id
+                    && release.qualification_id == qualification.id
+                    && release.active()
+            })
+        })
+    }
+
     pub fn revoke_release(
         &mut self,
         capability: &mut CapabilityRecord,
@@ -771,6 +824,59 @@ mod tests {
         assert_eq!(admission.status, SiteAdmissionStatus::Admitted);
         assert_eq!(capability.stage, CapabilityStage::Admitted);
         assert_eq!(capability.admitted_sites, vec!["plant-a".to_string()]);
+    }
+
+    #[test]
+    fn expired_qualification_invalidates_existing_admission_at_selection_time() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        observe_candidate(&mut service, &mut capability);
+        let base = Timestamp::now();
+        let qualification = service
+            .qualify_with_evidence(
+                &mut capability,
+                StrictQualificationRequest {
+                    candidate_ref: "candidate:expiring".to_string(),
+                    decision_ref: "decision:expiring".to_string(),
+                    evidence_refs: vec!["eval:expiring".to_string()],
+                    qualification_evidence: QualificationEvidence {
+                        test_suite_refs: vec!["suite:factory".to_string()],
+                        environment_digest: Some("sha256:env".to_string()),
+                        expected_properties: vec!["safe-reconcile".to_string()],
+                        evaluator_identity: Some("evaluator:independent".to_string()),
+                        ..Default::default()
+                    },
+                    context_of_use: vec!["factory-readonly".to_string()],
+                    valid_until: Some(Timestamp::from_millis(base.millis() + 60_000)),
+                },
+            )
+            .unwrap();
+        let _release = record_fixture_release(&mut service, &mut capability, &qualification);
+        let profile = DomainProfile::factory_readonly_v1();
+        let report = passing_conformance(&profile);
+        service
+            .admit(
+                &mut capability,
+                &qualification,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .unwrap();
+
+        assert!(service.site_profile_admission_active_at(
+            &capability,
+            "plant-a",
+            &report.profile_ref,
+            base,
+        ));
+        assert!(!service.site_profile_admission_active_at(
+            &capability,
+            "plant-a",
+            &report.profile_ref,
+            Timestamp::from_millis(base.millis() + 60_001),
+        ));
     }
 
     #[test]
