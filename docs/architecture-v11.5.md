@@ -878,3 +878,14 @@ Work back into a non-terminal phase. These phases are terminal for the current
 Work generation. An explicit spec/Profile/protocol change may create a new
 generation, after which readiness is evaluated again from evidence scoped to
 that generation. This preserves both corrigibility and non-destructive history.
+
+
+## Site/Profile conformance evidence
+
+A SiteAdmission is downstream of two different proof chains: capability
+qualification proves the capability under a context of use, while a persisted
+`ProfileConformanceAttestation` proves that a concrete site/deployment context
+meets the Profile guarantee floor. The attestation records exact site/Profile,
+computed report, evidence refs, evaluator identity and validity. The product/API
+admission path will not accept caller-supplied conformance booleans or semantic
+lists as a substitute. Fixture attestations remain fixture evidence.
