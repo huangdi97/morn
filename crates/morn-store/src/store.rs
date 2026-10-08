@@ -221,9 +221,7 @@ impl MornStore {
         semantics: &morn_kernel::EventSemanticDescriptor,
         created_at: i64,
     ) -> Result<bool> {
-        semantics
-            .validate()
-            .map_err(Error::validation)?;
+        semantics.validate().map_err(Error::validation)?;
         if !semantics.class.durable_required() {
             return Err(Error::validation(
                 "runtime/projection event is not eligible for the durable semantic outbox",
@@ -709,8 +707,7 @@ impl MornStore {
         )
         .map_err(|e| Error::internal(e.to_string()))?;
 
-        tx.commit()
-            .map_err(|e| Error::internal(e.to_string()))?;
+        tx.commit().map_err(|e| Error::internal(e.to_string()))?;
         Ok(next_revision)
     }
 
@@ -852,8 +849,7 @@ impl MornStore {
         )
         .map_err(|e| Error::internal(e.to_string()))?;
 
-        tx.commit()
-            .map_err(|e| Error::internal(e.to_string()))?;
+        tx.commit().map_err(|e| Error::internal(e.to_string()))?;
         Ok(next_revision)
     }
 
