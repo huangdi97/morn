@@ -620,6 +620,14 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         binding: &ExecutionBinding,
     ) -> Result<()> {
+        if !binding.matches_work_generation(work)
+            || binding.profile_ref != work.spec.profile_ref
+            || binding.site_ref != work.spec.site_ref
+        {
+            return Err(Error::validation(
+                "execution binding must match the exact Work, generation, profile and site",
+            ));
+        }
         self.save_record_immutable(
             "execution_binding_v115",
             binding.id.as_str(),
@@ -634,6 +642,14 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         manifest: &ExecutionManifest,
     ) -> Result<()> {
+        let binding: ExecutionBinding = self
+            .load_record("execution_binding_v115", &manifest.execution_binding_ref)?
+            .ok_or_else(|| Error::not_found("execution binding for manifest"))?;
+        if !binding.matches_work_generation(work) || !manifest.validates_against(work, &binding) {
+            return Err(Error::validation(
+                "execution manifest must match its persisted binding and exact Work generation",
+            ));
+        }
         self.save_record_immutable(
             "execution_manifest_v115",
             &manifest.execution_binding_ref,
@@ -648,6 +664,11 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         decision: &BindingMigrationDecision,
     ) -> Result<()> {
+        if decision.work_id != work.id {
+            return Err(Error::validation(
+                "binding migration decision belongs to another Work",
+            ));
+        }
         self.save_record_immutable(
             "binding_migration_v115",
             decision.id.as_str(),
@@ -700,6 +721,12 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         binding: &SourceOfTruthBinding,
     ) -> Result<()> {
+        binding.validate()?;
+        if binding.site_ref != work.spec.site_ref {
+            return Err(Error::validation(
+                "source-of-truth binding site must match the Work site",
+            ));
+        }
         self.save_record_immutable(
             "source_of_truth_binding_v115",
             binding.id.as_str(),
@@ -710,6 +737,11 @@ impl ControlPlaneStore for MornStore {
     }
 
     fn save_observed_outcome(&self, work: &WorkResource, outcome: &ObservedOutcome) -> Result<()> {
+        if outcome.work_package_id != work.id || outcome.workspace_id != work.workspace_id {
+            return Err(Error::validation(
+                "observed outcome must belong to the exact Work and workspace",
+            ));
+        }
         self.save_record_immutable(
             "observed_outcome_v115",
             outcome.id.as_str(),
@@ -724,6 +756,19 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         decision: &AcceptanceDecision,
     ) -> Result<()> {
+        if decision.work_package_id != work.id {
+            return Err(Error::validation("acceptance decision belongs to another Work"));
+        }
+        for outcome_id in &decision.outcome_refs {
+            let outcome: ObservedOutcome = self
+                .load_record("observed_outcome_v115", outcome_id.as_str())?
+                .ok_or_else(|| Error::not_found("referenced observed outcome"))?;
+            if outcome.work_package_id != work.id || outcome.workspace_id != work.workspace_id {
+                return Err(Error::validation(
+                    "acceptance must reference outcomes from the same Work and workspace",
+                ));
+            }
+        }
         self.save_record_immutable(
             "acceptance_decision_v115",
             decision.id.as_str(),
@@ -738,6 +783,17 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         assessment: &ValueAssessment,
     ) -> Result<()> {
+        if assessment.work_package_id != work.id {
+            return Err(Error::validation("value assessment belongs to another Work"));
+        }
+        let outcome: ObservedOutcome = self
+            .load_record("observed_outcome_v115", assessment.outcome_ref.as_str())?
+            .ok_or_else(|| Error::not_found("value assessment outcome"))?;
+        if outcome.work_package_id != work.id || outcome.workspace_id != work.workspace_id {
+            return Err(Error::validation(
+                "value assessment must reference an outcome from the same Work and workspace",
+            ));
+        }
         self.save_record_immutable(
             "value_assessment_v115",
             assessment.id.as_str(),
@@ -1269,6 +1325,109 @@ mod v115_protocol_migration_tests {
             .migrate(&mut work, &base, &mutated, true)
             .is_err());
         assert_eq!(work.generation, 1);
+    }
+}
+
+#[cfg(test)]
+mod control_plane_persistence_scope_tests {
+    use super::*;
+    use morn_kernel::ids::{AcceptanceSpecId, PrincipalId, WorkPackageId, WorkspaceId};
+    use morn_runtime::CompositionRuntimeRef;
+    use morn_work::acceptance_decision::AcceptanceDisposition;
+    use morn_work::control::WorkSpec;
+    use morn_work::value::ValueEvidenceClass;
+    use morn_world::OutcomeSourceKind;
+    use serde_json::json;
+
+    fn fixture_work() -> WorkResource {
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "review external maintenance order",
+            "morn.factory.readonly@1.0.0",
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        WorkResource::new(WorkspaceId::generate(), spec)
+    }
+
+    #[test]
+    fn persisted_binding_and_manifest_cannot_cross_work_generation_or_profile() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        let other = fixture_work();
+        store.save_work_resource(&work).unwrap();
+        store.save_work_resource(&other).unwrap();
+
+        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        assert!(store.save_execution_binding(&other, &binding).is_err());
+        let mut wrong_profile = binding.clone();
+        wrong_profile.profile_ref = "morn.lite@1.0.0".to_string();
+        assert!(store.save_execution_binding(&work, &wrong_profile).is_err());
+        let mut wrong_site = binding.clone();
+        wrong_site.site_ref = Some("plant-b".to_string());
+        assert!(store.save_execution_binding(&work, &wrong_site).is_err());
+
+        let manifest = ExecutionManifest::from_binding(
+            &work,
+            &binding,
+            CompositionRuntimeRef::new("cordis-reference", "4.0.4"),
+        )
+        .unwrap();
+        assert!(store.save_execution_manifest(&work, &manifest).is_err());
+        store.save_execution_binding(&work, &binding).unwrap();
+        assert!(store.save_execution_manifest(&other, &manifest).is_err());
+        store.save_execution_manifest(&work, &manifest).unwrap();
+    }
+
+    #[test]
+    fn acceptance_and_value_cannot_borrow_outcomes_from_other_workspaces() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        let other = fixture_work();
+        store.save_work_resource(&work).unwrap();
+        store.save_work_resource(&other).unwrap();
+
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "maintenance review complete",
+            OutcomeSourceKind::ExternalSystem,
+            "cmms://plant-a/orders/123",
+            json!({"reviewed": true}),
+        );
+        outcome.evidence_refs.push("cmms://plant-a/orders/123/receipt".to_string());
+        assert!(store.save_observed_outcome(&other, &outcome).is_err());
+        store.save_observed_outcome(&work, &outcome).unwrap();
+
+        let mut decision = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("acceptance"),
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("principal"),
+            "independent-reviewer",
+            "verified",
+        );
+        decision.outcome_refs.push(outcome.id.clone());
+        assert!(store.save_acceptance_decision(&other, &decision).is_err());
+        store.save_acceptance_decision(&work, &decision).unwrap();
+
+        let mut foreign_decision = AcceptanceDecision::new(
+            other.id.clone(),
+            AcceptanceSpecId::generate_with("acceptance"),
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("principal"),
+            "independent-reviewer",
+            "incorrect cross-work outcome",
+        );
+        foreign_decision.outcome_refs.push(outcome.id.clone());
+        assert!(store.save_acceptance_decision(&other, &foreign_decision).is_err());
+
+        let assessment = ValueAssessment::new(
+            work.id.clone(),
+            outcome.id.clone(),
+            ValueEvidenceClass::Fixture,
+        );
+        assert!(store.save_value_assessment(&other, &assessment).is_err());
+        store.save_value_assessment(&work, &assessment).unwrap();
     }
 }
 
