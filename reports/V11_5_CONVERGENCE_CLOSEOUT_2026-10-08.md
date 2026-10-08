@@ -39,6 +39,8 @@ Morn remains Work-first, not Agent-first:
 | --- | --- | --- |
 | versioned semantic constitution | `morn-kernel/src/protocol.rs` | implemented |
 | language-neutral protocol artifacts | `spec/v11.5/` + wire-spec conformance tests | implemented |
+| standards-oriented registry projection boundary | ADR-042; xRegistry/A2A/OASF adapters, no second truth | design frozen |
+| optional typed local component ABI | ADR-043; WIT/Wasm provider option, not core | design frozen |
 | explicit protocol migration | protocol compatibility + `ProtocolMigrationController` | implemented |
 | non-destructive history | `morn-kernel/src/history.rs` | implemented |
 | desired/observed Work | `morn-work/src/control.rs` | implemented |
