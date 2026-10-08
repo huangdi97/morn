@@ -26,7 +26,9 @@ pub fn validate_customer_value_claim(
 ) -> Result<CustomerValueClaimValidation> {
     let subject = claim_subject.into();
     if subject.trim().is_empty() {
-        return Err(Error::validation("customer-value claim subject is required"));
+        return Err(Error::validation(
+            "customer-value claim subject is required",
+        ));
     }
 
     let mut reasons = Vec::new();
@@ -37,7 +39,8 @@ pub fn validate_customer_value_claim(
         reasons.push("customer-value claim requires independent AcceptanceDecision".to_string());
     }
     if assessment.evidence_refs.is_empty() {
-        reasons.push("customer-value claim requires explicit value evidence references".to_string());
+        reasons
+            .push("customer-value claim requires explicit value evidence references".to_string());
     }
     if !ledger.satisfies(&subject, EvidenceClass::RealSite) {
         reasons.push("customer-value claim requires explicit RealSite evidence class".to_string());
