@@ -20,6 +20,11 @@ pub struct PluginIdTag;
 pub type PackId = Id<PackIdTag>;
 pub type PluginId = Id<PluginIdTag>;
 
+fn default_protocol_compat() -> String {
+    "11.5.x".to_string()
+}
+
+
 /// Pack lifecycle state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum PackStatus {
@@ -42,7 +47,15 @@ pub struct PackManifest {
     pub kind: String, // domain-pack | evaluation-pack | simulation-pack | capability-pack | connector-pack
     pub version: Version,
     pub sdk_version: String,
+    /// Legacy packaging-ABI compatibility retained for v1 migration. This is
+    /// not the v11.5 semantic protocol and must not be treated as an immutable Core.
     pub core_compat: String,
+    #[serde(default = "default_protocol_compat")]
+    pub protocol_compat: String,
+    #[serde(default)]
+    pub profile_compat: Vec<String>,
+    #[serde(default)]
+    pub composition_runtime_compat: Vec<String>,
     pub dependencies: Vec<String>,
     pub permissions: Vec<String>,
     pub entrypoints: Vec<String>,
@@ -61,6 +74,9 @@ impl PackManifest {
             version,
             sdk_version: "1.0.0".to_string(),
             core_compat: "1.x".to_string(),
+            protocol_compat: default_protocol_compat(),
+            profile_compat: Vec::new(),
+            composition_runtime_compat: Vec::new(),
             dependencies: Vec::new(),
             permissions: Vec::new(),
             entrypoints: Vec::new(),
@@ -77,7 +93,10 @@ impl PackManifest {
             return Err("sdk_version required".to_string());
         }
         if !self.core_compat.starts_with("1.") {
-            return Err("core_compat must target Core 1.x".to_string());
+            return Err("legacy core_compat must target packaging ABI 1.x".to_string());
+        }
+        if self.protocol_compat.trim().is_empty() {
+            return Err("protocol_compat required".to_string());
         }
         Ok(())
     }
@@ -90,8 +109,15 @@ pub struct PluginManifest {
     pub name: String,
     pub plugin_type: String, // capability-provider | harness-provider | runtime-provider | connector-provider | domain-pack | evaluation-pack | simulation-pack | ui-extension | cli-extension
     pub version: Version,
+    /// Legacy packaging-ABI compatibility; not the semantic Morn protocol.
     pub core_compat: String,
     pub sdk_compat: String,
+    #[serde(default = "default_protocol_compat")]
+    pub protocol_compat: String,
+    #[serde(default)]
+    pub profile_compat: Vec<String>,
+    #[serde(default)]
+    pub composition_runtime_compat: Vec<String>,
     pub dependencies: Vec<String>,
     pub permissions: Vec<String>,
     pub entrypoints: Vec<String>,
@@ -120,7 +146,13 @@ impl PluginManifest {
             return Err(format!("unknown plugin_type {:?}", self.plugin_type));
         }
         if !self.core_compat.starts_with("1.") {
-            return Err("core_compat must target Core 1.x".to_string());
+            return Err("legacy core_compat must target packaging ABI 1.x".to_string());
+        }
+        if self.sdk_compat.trim().is_empty() {
+            return Err("sdk_compat required".to_string());
+        }
+        if self.protocol_compat.trim().is_empty() {
+            return Err("protocol_compat required".to_string());
         }
         Ok(())
     }
@@ -133,6 +165,9 @@ impl PluginManifest {
             version: Version::v1(),
             core_compat: "1.x".to_string(),
             sdk_compat: "1.x".to_string(),
+            protocol_compat: default_protocol_compat(),
+            profile_compat: Vec::new(),
+            composition_runtime_compat: Vec::new(),
             dependencies: Vec::new(),
             permissions: Vec::new(),
             entrypoints: Vec::new(),
@@ -311,6 +346,24 @@ mod tests {
         p.plugin_type = "connector-provider".to_string();
         p.name = "../escape".to_string();
         assert!(p.validate().is_err());
+    }
+
+    #[test]
+    fn package_compatibility_separates_protocol_profile_and_runtime() {
+        let mut manifest = pack();
+        manifest.profile_compat = vec!["morn.factory.readonly@1.x".to_string()];
+        manifest.composition_runtime_compat = vec!["cordis@4.x".to_string()];
+        assert_eq!(manifest.protocol_compat, "11.5.x");
+        assert!(manifest.validate().is_ok());
+
+        let mut plugin = PluginManifest::new("dsh-provider", "harness-provider");
+        plugin.profile_compat = vec!["morn.enterprise@1.x".to_string()];
+        plugin.composition_runtime_compat = vec!["cordis@4.x".to_string()];
+        assert_eq!(plugin.protocol_compat, "11.5.x");
+        assert!(plugin.validate().is_ok());
+
+        manifest.protocol_compat.clear();
+        assert!(manifest.validate().is_err());
     }
 
     #[test]
