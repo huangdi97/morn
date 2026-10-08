@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use morn_kernel::ids::{RuntimeBindingId, WorkPackageId, WorkspaceId};
 use morn_kernel::protocol::MORN_PROTOCOL_V11_5;
-use morn_kernel::version::Version;
 use morn_kernel::time::Timestamp;
+use morn_kernel::version::Version;
 
 fn default_protocol_version() -> Version {
     MORN_PROTOCOL_V11_5
