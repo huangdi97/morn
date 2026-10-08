@@ -19,7 +19,8 @@ pub use admission::{
     SiteAdmissionStatus, StrictQualificationRequest,
 };
 pub use evidence_class::{
-    EvidenceClaim, EvidenceClaimId, EvidenceClaimState, EvidenceClass, EvidenceLedger,
+    reference_evidence_ledger, EvidenceClaim, EvidenceClaimId, EvidenceClaimState, EvidenceClass,
+    EvidenceLedger,
 };
 pub use evaluation::{EvalStep, EvaluationDecision, EvaluationResult, EvaluationRunner};
 pub use replay::{ReplayReport, ReplayRunner, ReplayScenario};
