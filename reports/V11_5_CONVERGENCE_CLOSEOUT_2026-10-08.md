@@ -51,6 +51,7 @@ Morn remains Work-first, not Agent-first:
 | DSH provider boundary | fixture + SDK/wire seam | local contract implemented; real runtime external |
 | Pi provider boundary | fixture provider + shared contract | local contract implemented; real transport external |
 | provider registry | `morn-runtime/src/provider_registry.rs` | implemented |
+| active binding validity gate | re-check admission/release/provider before new effect; reconciliation remains possible | implemented |
 | durable workflow provider boundary | DurableWorkflowBinding/Evidence + legacy DurableRuntime adapter | implemented |
 | explicit execution environment | class + guarantee-vector provider/resolver | implemented |
 | workload identity | SPIFFE-compatible provider seam | implemented; real identity infra external |
@@ -294,7 +295,8 @@ The convergence branch also freezes the following late-stage clarifications:
 - ADR-032: Cordis is the reference composition runtime behind a small Morn contract;
 - ADR-033: engineering/deployment evidence and value-validation evidence are orthogonal;
 - ADR-034: domain UI composition is declarative/safe-by-default before arbitrary client plugins;
-- ADR-035: package compatibility separates semantic protocol, profile and composition/runtime axes.
+- ADR-035: package compatibility separates semantic protocol, profile and composition/runtime axes;
+- ADR-036: revocation blocks future effects without stranding consequence reconciliation.
 
 These additions close the remaining places where runtime/plugin/UI state could
 otherwise become a second business truth or inflate maturity claims.
