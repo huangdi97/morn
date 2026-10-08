@@ -5,7 +5,6 @@
 
 use serde::{Deserialize, Serialize};
 
-
 use crate::DomainProfile;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -35,10 +34,7 @@ fn same_guarantee_contract(left: &DomainProfile, right: &DomainProfile) -> bool 
         && left.provenance_required == right.provenance_required
 }
 
-pub fn compare_profiles(
-    base: &DomainProfile,
-    candidate: &DomainProfile,
-) -> ProfileCompatibility {
+pub fn compare_profiles(base: &DomainProfile, candidate: &DomainProfile) -> ProfileCompatibility {
     if base.id != candidate.id {
         return ProfileCompatibility::Incompatible;
     }
