@@ -17,6 +17,7 @@ import {
   OpintPredictOutcome,
   V115Status,
   V115ControlPlaneData,
+  UiExtensionRegistry,
 } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
@@ -46,6 +47,7 @@ export default function Workbench() {
   const [opintPrediction, setOpintPrediction] = useState<OpintPredictOutcome | null>(null);
   const [v115, setV115] = useState<V115Status | null>(null);
   const [v115Control, setV115Control] = useState<V115ControlPlaneData | null>(null);
+  const [uiExtensions, setUiExtensions] = useState<UiExtensionRegistry | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -60,9 +62,27 @@ export default function Workbench() {
     apiGet<V115ControlPlaneData>("/v115/control-plane")
       .then(setV115Control)
       .catch(() => undefined);
+    apiGet<UiExtensionRegistry>("/v115/ui/extensions")
+      .then(setUiExtensions)
+      .catch(() => undefined);
   }, []);
 
   useEffect(load, [load]);
+
+  const runUiExtensionAction = async (method: "GET" | "POST", endpoint: string) => {
+    setError(null);
+    try {
+      const path = endpoint.startsWith("/api/") ? endpoint.slice(4) : endpoint;
+      if (method === "POST") {
+        await apiPost(path);
+      } else {
+        await apiGet(path);
+      }
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   const runE2e = async () => {
     setError(null);
@@ -218,7 +238,7 @@ export default function Workbench() {
       <header className="page-header">
         <h1>Workbench</h1>
         <div className="page-actions">
-          {biolab && <button onClick={runE2e}>Run BioLab E2E</button>}
+          {biolab && !uiExtensions && <button onClick={runE2e}>Run BioLab E2E</button>}
         </div>
       </header>
 
@@ -298,6 +318,32 @@ export default function Workbench() {
           <KeyValue k="DeepSeek Harness" v={`${data.harness.dsh.provider} (${data.harness.dsh.status})`} />
           <KeyValue k="Evolution candidates" v={data.evolution_candidates} />
         </Card>
+
+        {uiExtensions?.extensions
+          .filter((extension) => extension.surface === "workbench")
+          .map((extension) => (
+            <Card key={extension.id} title={`Extension · ${extension.title}`}>
+              <KeyValue k="Domain" v={extension.domain} />
+              <KeyValue k="Slot" v={extension.slot} />
+              <KeyValue k="Renderer" v={extension.renderer} />
+              <KeyValue
+                k="Safety model"
+                v={uiExtensions.arbitrary_remote_js ? "remote JS enabled" : "declarative / no arbitrary remote JS"}
+              />
+              {extension.actions.length > 0 && (
+                <div className="page-actions" style={{ marginTop: 8 }}>
+                  {extension.actions.map((action) => (
+                    <button
+                      key={action.id}
+                      onClick={() => runUiExtensionAction(action.method, action.endpoint)}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Card>
+          ))}
 
         {v115Control && (
           <Card title="v11.5 Durable Work Truth">
