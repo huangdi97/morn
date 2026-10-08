@@ -8,8 +8,13 @@ use serde::{Deserialize, Serialize};
 
 pub mod external_action;
 pub mod profile_guard;
+pub mod provider_gate;
 
 pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
+
+pub use provider_gate::{
+    ProviderGate, ProviderGateBlock, ProviderGatePolicy, ProviderGateReport,
+};
 
 pub use profile_guard::{
     enforce_profile_action, evaluate_profile_action, issue_external_action_permit,
