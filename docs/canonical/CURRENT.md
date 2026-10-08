@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-035 in `docs/adr/`
+3. ADR-002 through ADR-036 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -235,3 +235,11 @@ field. v11.5 package/plugin manifests declare semantic `protocol_compat`,
 optional `profile_compat` and `composition_runtime_compat` separately.
 Compatibility with Cordis or a Rust SDK never silently implies Morn semantic
 compatibility. See ADR-035.
+
+
+## Revocation and reconciliation
+
+A stale/revoked capability admission, release or provider blocks **new**
+external effects under the old ExecutionBinding and requires an explicit
+rebind. It does not erase the old Attempt and does not prevent reconciliation
+of a side effect that may already have happened. See ADR-036.
