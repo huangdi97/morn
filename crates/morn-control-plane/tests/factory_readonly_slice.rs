@@ -18,9 +18,9 @@ use morn_capability::{
 };
 use morn_control_plane::{
     begin_external_attempt_with_effect, capability_qualification_evidence,
-    capability_resolution_evidence, enforce_profile_action, evaluate_profile_action,
+    capability_resolution_evidence, issue_external_action_permit,
     issue_external_action_permit_for_work, provenance_condition_evidence,
-    resolve_external_action_finalizer, source_of_truth_condition_evidence,
+    source_of_truth_condition_evidence,
     CapabilityEligibilityGate, ControlPlaneStore, DurableWorkControllerRuntime, ExternalActionMode,
     ReconciliationController, WorkProgressController, WorkProgressInputs,
 };
@@ -376,13 +376,11 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     assert_eq!(work.status.phase, WorkPhase::Ready);
 
     // DSH and Pi both satisfy the same Morn harness boundary.
-    let ctx = RuntimeContext {
-        workspace_id: workspace.clone(),
-        work_package_id: work_package_id.clone(),
-        actor_id: ActorInstanceId::generate_with("actor"),
-        correlation_id: "factory-wedge".to_string(),
-        trace_id: "trace-factory-wedge".to_string(),
-    };
+    let ctx = RuntimeContext::new(
+        workspace.clone(),
+        ActorInstanceId::generate_with("actor"),
+        work_package_id.clone(),
+    );
     let mut dsh = DeepSeekHarnessProvider::new(DshMode::Fixture);
     let mut pi = PiHarnessProvider::new(PiMode::Fixture);
     assert!(run_harness_neutrality(&mut dsh, &mut pi, &ctx)
@@ -710,9 +708,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     store.save_action_attempt(&work, &attempt).unwrap();
     store.save_reconciliation(&work, &reconciliation).unwrap();
     store.save_observed_outcome(&work, &outcome).unwrap();
-    store
-        .save_acceptance_decision(&work, &acceptance_decision)
-        .unwrap();
+    ControlPlaneStore::save_acceptance_decision(&store, &work, &acceptance_decision).unwrap();
     store.save_value_assessment(&work, &value).unwrap();
     let restored: WorkResource = store
         .load_record("work_resource_v115", work.id.as_str())

@@ -337,7 +337,7 @@ mod tests {
         let spec = WorkSpec::new(
             WorkPackageId::generate_with("work"),
             "summarize evidence",
-            profile.reference(),
+            profile.canonical_ref(),
         );
         let mut work = WorkResource::new(WorkspaceId::generate(), spec);
         work.resource_version = 1;
