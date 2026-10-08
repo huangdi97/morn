@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-039 in `docs/adr/`
+3. ADR-002 through ADR-040 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -270,3 +270,11 @@ attestation at the product/API boundary. Raw booleans, semantic lists or
 isolation labels supplied by the admission caller are not conformance evidence.
 The attestation binds exact site/Profile, evaluator, evidence references and
 validity. See ADR-039.
+
+
+## Local browser origin boundary
+
+The reference server remains loopback-only, but loopback is not treated as a
+browser trust boundary. Mutating requests with unapproved Origin headers are
+rejected and permissive CORS is disabled. This is a local-reference CSRF guard,
+not a substitute for enterprise authentication/TLS. See ADR-040.
