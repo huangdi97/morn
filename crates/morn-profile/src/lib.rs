@@ -165,9 +165,6 @@ impl DomainProfile {
         if self.requires("CapabilityQualification") {
             conditions.push("CapabilityQualified".to_string());
         }
-        if self.requires("AuthorityBeforeSideEffect") {
-            conditions.push("AuthoritySatisfied".to_string());
-        }
         if self.requires("SourceOfTruthBinding") {
             conditions.push("SourceOfTruthBound".to_string());
         }
@@ -345,12 +342,22 @@ mod tests {
         assert!(conditions.contains(&"CapabilityResolved".to_string()));
         assert!(conditions.contains(&"CapabilityQualified".to_string()));
         assert!(conditions.contains(&"SourceOfTruthBound".to_string()));
+        assert!(!conditions.contains(&"AuthoritySatisfied".to_string()));
         assert!(!conditions.contains(&"ReceiptAfterExternalAction".to_string()));
         assert!(!conditions.contains(&"IndependentAcceptance".to_string()));
         assert_eq!(
             DomainProfile::from_ref(&profile.canonical_ref()),
             Some(profile)
         );
+    }
+
+    #[test]
+    fn authority_is_action_scoped_not_a_generic_work_readiness_boolean() {
+        let profile = DomainProfile::factory_readonly_v1();
+        assert!(profile.requires("AuthorityBeforeSideEffect"));
+        assert!(!profile
+            .pre_execution_work_conditions()
+            .contains(&"AuthoritySatisfied".to_string()));
     }
 
     #[test]
