@@ -406,11 +406,7 @@ mod tests {
         assert_eq!(fresh.len(), 1);
 
         let stale_at = Timestamp::from_millis(observation.observed_at.millis() + 1_001);
-        let stale = registry.eligible_at(
-            ProviderFamily::Harness,
-            &BTreeSet::new(),
-            stale_at,
-        );
+        let stale = registry.eligible_at(ProviderFamily::Harness, &BTreeSet::new(), stale_at);
         assert!(stale.is_empty());
     }
 
