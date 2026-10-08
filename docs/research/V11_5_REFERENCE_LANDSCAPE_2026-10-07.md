@@ -481,3 +481,31 @@ Architecture consequence: Morn may use Pi as a real out-of-process provider
 without making Pi session state canonical Work state. The reference Rust client
 is in `crates/morn-harness/src/pi_rpc.rs`. Actual binary/model/credential smoke
 remains environment-dependent.
+
+
+## 2026-10-08 protocol/runtime freshness update
+
+The convergence decisions were rechecked against current public upstream
+surfaces.
+
+- **A2A**: the repository now identifies 1.0.0 as the latest released
+  specification. Protocol compatibility is expressed as Major.Minor (for
+  example `1.0`), while Agent Cards remain discovery/executor metadata.
+- **MCP**: the current stable revision is `2026-07-28`. The core is now
+  stateless/per-request and long-running operations live in the official
+  `io.modelcontextprotocol/tasks` extension. This strengthens Morn's decision
+  not to make MCP session/task state canonical Work truth.
+- **DeepSeek Harness**: current public releases remain pre-release/developer
+  preview, with active runtime plugin unloading/profile evolution. This
+  reinforces the out-of-process/version-pinned provider boundary rather than
+  embedding DSH internals into Morn semantics.
+- **xRegistry**: v1.0-rc4 is the final release candidate before v1.0, so Morn
+  keeps it as a future Hub metadata projection rather than a hard runtime
+  dependency.
+- **MCP Registry**: the official registry is active and growing, validating the
+  need for discovery projections while leaving qualification/site admission in
+  Morn.
+
+No upstream development above changes the Morn Work/Capability/Outcome semantic
+constitution; it changes adapter versions and strengthens the separation between
+discovery/execution state and governed Work truth.
