@@ -200,12 +200,12 @@ async fn health() -> ApiResult {
 }
 
 async fn v115_ui_extensions() -> ApiResult {
-    use morn_domain_sdk::{UiActionSpec, UiExtensionSpec, UiRenderer, UiSurface};
-
-    let mut extensions: Vec<UiExtensionSpec> = Vec::new();
+    use morn_domain_sdk::UiExtensionSpec;
+    #[cfg(feature = "domain-biolab")]
+    use morn_domain_sdk::{UiActionSpec, UiRenderer, UiSurface};
 
     #[cfg(feature = "domain-biolab")]
-    extensions.push(UiExtensionSpec {
+    let mut extensions: Vec<UiExtensionSpec> = vec![UiExtensionSpec {
         id: "biolab-reference-summary".to_string(),
         domain: "biolab-reference".to_string(),
         surface: UiSurface::Workbench,
@@ -222,7 +222,9 @@ async fn v115_ui_extensions() -> ApiResult {
         }],
         required_profile: None,
         priority: 100,
-    });
+    }];
+    #[cfg(not(feature = "domain-biolab"))]
+    let mut extensions: Vec<UiExtensionSpec> = Vec::new();
 
     for extension in &extensions {
         extension
