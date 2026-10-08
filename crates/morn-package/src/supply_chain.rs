@@ -43,7 +43,17 @@ impl CapabilityArtifactDescriptor {
             return Err("oci_ref must use oci:// scheme".to_string());
         }
         if !valid_digest(&self.content_digest) {
-            return Err("content_digest must be sha256:<hex>".to_string());
+            return Err("content_digest must be sha256:<64 hex>".to_string());
+        }
+        let embedded_digest = self
+            .oci_ref
+            .rsplit_once('@')
+            .map(|(_, digest)| digest)
+            .ok_or_else(|| "oci_ref must be pinned to a content digest".to_string())?;
+        if !valid_digest(embedded_digest)
+            || !embedded_digest.eq_ignore_ascii_case(&self.content_digest)
+        {
+            return Err("OCI reference digest must match content_digest".to_string());
         }
         if self.manifest_ref.trim().is_empty() {
             return Err("manifest_ref required".to_string());
@@ -106,12 +116,36 @@ mod tests {
     }
 
     #[test]
+    fn package_rejects_digest_mismatch_or_mutable_tag() {
+        let mut descriptor = CapabilityArtifactDescriptor {
+            name: "cap".to_string(),
+            version: Version::v1(),
+            manifest_ref: "cap:1".to_string(),
+            oci_ref: format!("oci://registry.example/cap@{}", digest('a')),
+            content_digest: digest('b'),
+            media_type: "application/vnd.morn.capability.v1+json".to_string(),
+            layers: vec![],
+            sbom_ref: None,
+            slsa_provenance_ref: None,
+            signature_ref: None,
+        };
+        assert!(descriptor.validate(false, false).is_err());
+
+        descriptor.oci_ref = "oci://registry.example/cap:latest".to_string();
+        descriptor.content_digest = digest('a');
+        assert!(descriptor.validate(false, false).is_err());
+
+        descriptor.oci_ref = format!("oci://registry.example/cap@{}", digest('a'));
+        assert!(descriptor.validate(false, false).is_ok());
+    }
+
+    #[test]
     fn unsigned_package_can_be_rejected_by_strict_profile() {
         let descriptor = CapabilityArtifactDescriptor {
             name: "cap".to_string(),
             version: Version::v1(),
             manifest_ref: "cap:1".to_string(),
-            oci_ref: "oci://registry.example/cap".to_string(),
+            oci_ref: format!("oci://registry.example/cap@{}", digest('c')),
             content_digest: digest('c'),
             media_type: "application/vnd.morn.capability.v1+json".to_string(),
             layers: vec![],
