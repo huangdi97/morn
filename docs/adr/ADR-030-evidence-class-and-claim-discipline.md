@@ -30,7 +30,7 @@ v11.5 non-claim discipline.
    - RealRuntime;
    - RealSite;
    - ProductionWrite.
-3. Lower-class evidence never auto-promotes a higher-class claim.
+3. Evidence classes are categorical, not a scalar maturity ladder. One class never implicitly proves another.
 4. A blocker is visible evidence about missing conditions, but is not proof of
    the blocked class.
 5. Production-write claims require explicit production-write evidence; real
@@ -42,9 +42,21 @@ v11.5 non-claim discipline.
 
 ## Consequences
 
-- A passing DSH/Pi fixture + CI contract can prove local Harness neutrality but
+- A passing DSH/Pi fixture + CI contract can prove those explicit engineering evidence classes but
   cannot be reported as real DSH/Pi runtime evidence.
 - A simulated Factory wedge can prove reconciliation/control-plane invariants
   but cannot become customer/site evidence.
 - BLOCKED_EXTERNAL remains a first-class state rather than being converted to
   PASS by mocks.
+
+## Categorical semantics
+
+The class names are ordered only for deterministic display/serialization. They
+do not define inheritance. In particular:
+
+- CIConformance does not imply LocalFixture unless both claims exist;
+- RealRuntime does not imply RealSite;
+- RealSite does not imply ProductionWrite;
+- ProductionWrite evidence does not retroactively prove design/CI claims.
+
+A report that needs several classes must require every class explicitly.
