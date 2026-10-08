@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::event_semantics::EventSemanticDescriptor;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EventEnvelope {
     pub specversion: String,
@@ -47,6 +49,31 @@ impl EventEnvelope {
         }
     }
 
+    pub fn with_semantics(
+        mut self,
+        descriptor: &EventSemanticDescriptor,
+    ) -> Result<Self, String> {
+        descriptor.validate()?;
+        self.extensions.insert(
+            "morneventclass".to_string(),
+            descriptor.class.key().to_string(),
+        );
+        if let Some(subject_ref) = &descriptor.subject_ref {
+            self.extensions
+                .insert("mornsubjectref".to_string(), subject_ref.clone());
+        }
+        if let Some(source_of_truth_ref) = &descriptor.source_of_truth_ref {
+            self.extensions.insert(
+                "mornsourcetruth".to_string(),
+                source_of_truth_ref.clone(),
+            );
+        }
+        if let Some(schema_ref) = &descriptor.schema_ref {
+            self.dataschema = Some(schema_ref.clone());
+        }
+        Ok(self)
+    }
+
     pub fn with_morn_context(
         mut self,
         work_id: Option<&str>,
@@ -74,6 +101,28 @@ impl EventEnvelope {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn semantic_extensions_distinguish_runtime_signal_from_external_fact() {
+        let external = EventEnvelope::new(
+            "evt-2",
+            "morn://plant-a/cmms",
+            "io.morn.action.receipt.v1",
+            json!({"external_ref":"MO-88273"}),
+        )
+        .with_semantics(&EventSemanticDescriptor {
+            class: crate::event_semantics::EventSemanticClass::ExternalObservation,
+            subject_ref: Some("work://1042".to_string()),
+            source_of_truth_ref: Some("cmms://plant-a".to_string()),
+            schema_ref: Some("morn://schemas/action-receipt/v1".to_string()),
+        })
+        .unwrap();
+
+        let value = serde_json::to_value(external).unwrap();
+        assert_eq!(value["morneventclass"], "external-observation");
+        assert_eq!(value["mornsourcetruth"], "cmms://plant-a");
+        assert_eq!(value["dataschema"], "morn://schemas/action-receipt/v1");
+    }
 
     #[test]
     fn envelope_uses_cloudevents_core_attribute_names() {
