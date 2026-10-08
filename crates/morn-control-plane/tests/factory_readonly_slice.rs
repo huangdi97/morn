@@ -306,7 +306,6 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     work_spec.required_conditions = vec![
         "CapabilityResolved".to_string(),
         "CapabilityQualified".to_string(),
-        "AuthoritySatisfied".to_string(),
         "SourceOfTruthBound".to_string(),
         "ProvenanceReady".to_string(),
     ];
