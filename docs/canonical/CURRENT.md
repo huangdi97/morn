@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-036 in `docs/adr/`
+3. ADR-002 through ADR-037 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -243,3 +243,13 @@ A stale/revoked capability admission, release or provider blocks **new**
 external effects under the old ExecutionBinding and requires an explicit
 rebind. It does not erase the old Attempt and does not prevent reconciliation
 of a side effect that may already have happened. See ADR-036.
+
+
+## Work readiness evidence
+
+Strict Work readiness is evidence-derived. `CapabilityResolved`,
+`CapabilityQualified`, `AuthoritySatisfied`, `SourceOfTruthBound` and
+`ProvenanceReady` are projected from durable, generation-scoped
+`ConditionEvidence`; API callers cannot assert them as naked booleans. Typed
+producers derive positive evidence from resolver/admission/authority/source-of-
+truth/provenance records. See ADR-037.
