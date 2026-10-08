@@ -46,10 +46,11 @@ Morn remains Work-first, not Agent-first:
 | optimistic concurrency/fencing | control-plane/store CAS + leases | implemented |
 | Work termination/finalizers | Work finalizers + external-action resolution | implemented |
 | Work truth independent of harness | protocol invariant + conformance tests | implemented |
-| node-local composition | exact-pinned Cordis host | implemented |
+| node-local composition | exact-pinned Cordis host + `CompositionRuntimeProvider` contract | implemented |
 | DSH provider boundary | fixture + SDK/wire seam | local contract implemented; real runtime external |
 | Pi provider boundary | fixture provider + shared contract | local contract implemented; real transport external |
 | provider registry | `morn-runtime/src/provider_registry.rs` | implemented |
+| durable workflow provider boundary | DurableWorkflowBinding/Evidence + legacy DurableRuntime adapter | implemented |
 | explicit execution environment | class + guarantee-vector provider/resolver | implemented |
 | workload identity | SPIFFE-compatible provider seam | implemented; real identity infra external |
 | opaque credentials | scoped credential handles | implemented; real secret backend external |
@@ -79,6 +80,8 @@ Morn remains Work-first, not Agent-first:
 | atomic state + semantic outbox | CAS projection + durable event in one transaction | implemented |
 | MCP 2026 resource-bound auth contract | opaque credential/resource binding | implemented |
 | telemetry boundary | OTel-oriented semantic design | contract/design; backend deployment external |
+| evidence-class claim ledger | categorical EvidenceClass + external blockers | implemented |
+| customer value claim gate | CustomerValidated + Acceptance + explicit RealSite evidence | implemented |
 | Creator | natural-language/simple draft -> existing Solution pipeline | implemented |
 | SolutionPackage -> Work | explicit instantiation | implemented |
 | Digital Employee | Role projection, not canonical agent truth | implemented |
@@ -212,7 +215,24 @@ The branch deliberately distinguishes:
 - **real customer/site evidence**;
 - **production write evidence**.
 
-A lower class never upgrades itself into a higher class.
+Evidence classes are categorical rather than a scalar ladder. No evidence class implicitly proves another class.
+
+## 7.1 Value-evidence axes
+
+Engineering/deployment evidence and value-validation evidence are orthogonal.
+`EvidenceClass` records where/how a claim was proven; `ValueEvidenceClass`
+records whether a ValueAssessment is fixture/simulation/shadow/operational/
+customer-validated. A customer-value claim requires independent Acceptance,
+explicit value evidence and an explicit RealSite evidence claim. ProductionWrite
+is not required for a legitimate read-only customer value pilot.
+
+## 7.2 Durable workflow boundary
+
+Legacy `morn-work::DurableRuntime` and future Temporal/Dapr-class engines are
+execution providers. Their workflow-run completion is runtime evidence only and
+cannot directly create a Morn Outcome or Acceptance. A workflow run is tied to
+the exact Work generation and ExecutionBinding through
+`DurableWorkflowBinding`.
 
 ## 8. External blockers / non-claims
 
