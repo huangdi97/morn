@@ -12,6 +12,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -110,7 +111,7 @@ type PiWireItem = std::result::Result<Value, String>;
 pub struct PiRpcClient {
     child: Child,
     stdin: Option<ChildStdin>,
-    incoming: Receiver<PiWireItem>,
+    incoming: Mutex<Receiver<PiWireItem>>,
     reader: Option<JoinHandle<()>>,
     next_id: u64,
     request_timeout: Duration,
@@ -184,9 +185,8 @@ impl PiRpcClient {
                                 }
                             }
                             Err(error) if strict_jsonl => {
-                                let _ = sender.send(Err(format!(
-                                    "invalid Pi RPC JSONL record: {error}"
-                                )));
+                                let _ = sender
+                                    .send(Err(format!("invalid Pi RPC JSONL record: {error}")));
                                 break;
                             }
                             Err(_) => {}
@@ -203,7 +203,7 @@ impl PiRpcClient {
         Ok(Self {
             child,
             stdin: Some(stdin),
-            incoming,
+            incoming: Mutex::new(incoming),
             reader: Some(reader),
             next_id: 1,
             request_timeout: Duration::from_millis(config.request_timeout_ms),
@@ -397,7 +397,11 @@ impl PiRpcClient {
         if remaining.is_zero() {
             return Err(Error::external(format!("Pi RPC {operation} timed out")));
         }
-        match self.incoming.recv_timeout(remaining) {
+        let incoming = self
+            .incoming
+            .lock()
+            .map_err(|_| Error::internal("provider wire receiver lock poisoned"))?;
+        match incoming.recv_timeout(remaining) {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(message)) => Err(Error::external(message)),
             Err(RecvTimeoutError::Timeout) => {

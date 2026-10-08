@@ -539,7 +539,9 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     state.last_event = format!("dsh_prompt:{}", state.step);
                 }
 
-                let run = self.ensure_real_client()?.run_text_prompt(session_id, input);
+                let run = self
+                    .ensure_real_client()?
+                    .run_text_prompt(session_id, input);
                 let state = self
                     .sessions
                     .get_mut(session_id)

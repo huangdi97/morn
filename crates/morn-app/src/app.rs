@@ -86,9 +86,7 @@ fn configured_dsh_harness() -> morn_kernel::Result<DeepSeekHarnessProvider> {
         Ok(mode) if mode.eq_ignore_ascii_case("fixture") => {
             Ok(DeepSeekHarnessProvider::new(DshMode::Fixture))
         }
-        Ok(mode) if mode.eq_ignore_ascii_case("real") => {
-            DeepSeekHarnessProvider::from_real_env()
-        }
+        Ok(mode) if mode.eq_ignore_ascii_case("real") => DeepSeekHarnessProvider::from_real_env(),
         Ok(mode) => Err(morn_kernel::error::Error::validation(format!(
             "unsupported MORN_DSH_MODE {mode:?}; expected fixture or real"
         ))),

@@ -11,6 +11,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -95,7 +96,9 @@ impl DshSdkConfig {
             ));
         }
         if self.max_tokens == Some(0) {
-            return Err(Error::validation("DSH max_tokens must be positive when set"));
+            return Err(Error::validation(
+                "DSH max_tokens must be positive when set",
+            ));
         }
         Ok(())
     }
@@ -126,9 +129,9 @@ impl DshSdkConfig {
             );
         }
         if let Ok(timeout) = std::env::var("MORN_DSH_REQUEST_TIMEOUT_MS") {
-            config.request_timeout_ms = timeout.parse().map_err(|_| {
-                Error::validation("MORN_DSH_REQUEST_TIMEOUT_MS must be an integer")
-            })?;
+            config.request_timeout_ms = timeout
+                .parse()
+                .map_err(|_| Error::validation("MORN_DSH_REQUEST_TIMEOUT_MS must be an integer"))?;
         }
         if let Ok(timeout) = std::env::var("MORN_DSH_TURN_TIMEOUT_MS") {
             config.turn_timeout_ms = timeout
@@ -160,7 +163,7 @@ type DshWireItem = std::result::Result<Value, String>;
 pub struct DshSdkStdioClient {
     child: Child,
     stdin: ChildStdin,
-    incoming: Receiver<DshWireItem>,
+    incoming: Mutex<Receiver<DshWireItem>>,
     reader: Option<JoinHandle<()>>,
     next_id: u64,
     request_timeout: Duration,
@@ -245,7 +248,7 @@ impl DshSdkStdioClient {
         Ok(Self {
             child,
             stdin,
-            incoming,
+            incoming: Mutex::new(incoming),
             reader: Some(reader),
             next_id: 1,
             request_timeout: Duration::from_millis(config.request_timeout_ms),
@@ -420,7 +423,11 @@ impl DshSdkStdioClient {
         if remaining.is_zero() {
             return Err(Error::external(format!("DSH {operation} timed out")));
         }
-        match self.incoming.recv_timeout(remaining) {
+        let incoming = self
+            .incoming
+            .lock()
+            .map_err(|_| Error::internal("provider wire receiver lock poisoned"))?;
+        match incoming.recv_timeout(remaining) {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(message)) => Err(Error::external(message)),
             Err(RecvTimeoutError::Timeout) => {
