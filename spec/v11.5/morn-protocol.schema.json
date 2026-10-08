@@ -1104,6 +1104,533 @@
       "additionalProperties": {
         "type": "string"
       }
+    },
+    "AuthorityRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "principal",
+        "acting_for",
+        "action",
+        "resource",
+        "work_ref",
+        "site_ref",
+        "scope",
+        "parameter_envelope",
+        "not_before",
+        "expires_at",
+        "budget_micros",
+        "preconditions",
+        "approval_refs",
+        "delegation_depth",
+        "revoked",
+        "context"
+      ],
+      "properties": {
+        "principal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acting_for": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource": {
+          "type": "string",
+          "minLength": 1
+        },
+        "work_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "site_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parameter_envelope": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "not_before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "budget_micros": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "approval_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "delegation_depth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revoked": {
+          "type": "boolean"
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "AuthorityDecisionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "provider",
+        "allowed",
+        "reason",
+        "evidence_refs",
+        "decided_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "allowed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "decided_at": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "BoundAuthorityDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request",
+        "decision"
+      ],
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/AuthorityRequest"
+        },
+        "decision": {
+          "$ref": "#/$defs/AuthorityDecisionRecord"
+        }
+      }
+    },
+    "ConnectorReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "external_ref",
+        "action",
+        "external_id",
+        "ok",
+        "error",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+        "external_ref": {
+          "$ref": "#/$defs/Id"
+        },
+        "action": {
+          "type": "string"
+        },
+        "external_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "ReconciliationObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "business_key",
+        "committed",
+        "observed",
+        "external_ref",
+        "evidence_refs"
+      ],
+      "properties": {
+        "business_key": {
+          "type": "string"
+        },
+        "committed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "observed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "external_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ReconciliationRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "attempt_id",
+        "before",
+        "after",
+        "observation",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+        "attempt_id": {
+          "$ref": "#/$defs/Id"
+        },
+        "before": {
+          "$ref": "#/$defs/AttemptState"
+        },
+        "after": {
+          "$ref": "#/$defs/AttemptState"
+        },
+        "observation": {
+          "$ref": "#/$defs/ReconciliationObservation"
+        },
+        "created_at": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "OutcomeSourceKind": {
+      "enum": [
+        "ExternalSystem",
+        "Sensor",
+        "HumanObservation",
+        "ValidatedComputation"
+      ]
+    },
+    "ObservedOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "workspace_id",
+        "work_package_id",
+        "objective",
+        "source_kind",
+        "source_ref",
+        "observed_facts",
+        "evidence_refs",
+        "observed_at",
+        "recorded_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+        "workspace_id": {
+          "$ref": "#/$defs/Id"
+        },
+        "work_package_id": {
+          "$ref": "#/$defs/Id"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/OutcomeSourceKind"
+        },
+        "source_ref": {
+          "type": "string"
+        },
+        "observed_facts": {},
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "observed_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "AcceptanceDisposition": {
+      "enum": [
+        "Accept",
+        "Reject",
+        "Conditional",
+        "RequestMoreEvidence"
+      ]
+    },
+    "AcceptanceDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "work_package_id",
+        "acceptance_spec_id",
+        "disposition",
+        "outcome_refs",
+        "evidence_refs",
+        "decided_by",
+        "acting_role",
+        "reason",
+        "conditions",
+        "decided_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Id"
+        },
+        "work_package_id": {
+          "$ref": "#/$defs/Id"
+        },
+        "acceptance_spec_id": {
+          "$ref": "#/$defs/Id"
+        },
+        "disposition": {
+          "$ref": "#/$defs/AcceptanceDisposition"
+        },
+        "outcome_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Id"
+          }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "decided_by": {
+          "$ref": "#/$defs/Id"
+        },
+        "acting_role": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "decided_at": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "CompositionRuntimeRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "digest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ExecutionManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "protocol_version",
+        "protocol_invariants",
+        "work_ref",
+        "work_generation",
+        "profile_ref",
+        "site_ref",
+        "source_solution_ref",
+        "execution_binding_ref",
+        "capability_manifest_ref",
+        "provider_ref",
+        "provider_version",
+        "provider_digest",
+        "composition_runtime",
+        "runtime_ref",
+        "authority_decision_ref",
+        "created_at"
+      ],
+      "properties": {
+        "schema": {
+          "const": "morn.execution-manifest/v11.5"
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "protocol_invariants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "work_ref": {
+          "type": "string"
+        },
+        "work_generation": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "profile_ref": {
+          "type": "string"
+        },
+        "site_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_solution_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "execution_binding_ref": {
+          "type": "string"
+        },
+        "capability_manifest_ref": {
+          "type": "string"
+        },
+        "provider_ref": {
+          "type": "string"
+        },
+        "provider_version": {
+          "type": "string"
+        },
+        "provider_digest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "composition_runtime": {
+          "$ref": "#/$defs/CompositionRuntimeRef"
+        },
+        "runtime_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "authority_decision_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
     }
   }
 }
