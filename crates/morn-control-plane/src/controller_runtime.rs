@@ -160,7 +160,7 @@ mod tests {
         let spec = WorkSpec::new(
             WorkPackageId::generate_with("work"),
             "summarize evidence",
-            profile.reference(),
+            profile.canonical_ref(),
         );
         let work = WorkResource::new(WorkspaceId::generate(), spec);
         let id = work.id.to_string();
