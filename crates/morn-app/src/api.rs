@@ -154,6 +154,12 @@ async fn health() -> ApiResult {
 async fn v115_status() -> ApiResult {
     let protocol = morn_kernel::protocol::ProtocolSnapshot::v11_5();
     let profile = morn_profile::DomainProfile::factory_readonly_v1();
+    let profile_registry = morn_profile::reference_profile_registry();
+    let profiles: Vec<Value> = profile_registry
+        .list()
+        .into_iter()
+        .map(|item| json!({ "id": item.id, "version": item.version }))
+        .collect();
     let provider_catalog = morn_runtime::reference_provider_catalog();
     let providers = provider_catalog.list();
     let required_guarantees: Vec<String> = profile
@@ -198,12 +204,7 @@ async fn v115_status() -> ApiResult {
             "artifact_compilers": ["OpenAPI2Capability", "SOP2ProcedureCapability", "Repo2Capability", "ReviewedPaper2Capability"],
             "qualification_is_not_admission": true
         },
-        "profiles": [
-            { "id": morn_profile::DomainProfile::lite_v1().id, "version": morn_profile::DomainProfile::lite_v1().version },
-            { "id": morn_profile::DomainProfile::enterprise_v1().id, "version": morn_profile::DomainProfile::enterprise_v1().version },
-            { "id": profile.id.clone(), "version": profile.version },
-            { "id": morn_profile::DomainProfile::research_v1().id, "version": morn_profile::DomainProfile::research_v1().version }
-        ],
+        "profiles": profiles,
         "factory_profile": {
             "id": profile.id,
             "version": profile.version,
