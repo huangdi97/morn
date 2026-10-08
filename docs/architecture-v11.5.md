@@ -839,3 +839,17 @@ reinvention:
 These projects strengthen the v11.5 boundary rather than collapse it: mature
 agent/sandbox runtimes should become replaceable executors, while Morn focuses
 on durable Work, binding, authority, reconciliation, outcome and acceptance.
+
+
+## Revocation is prospective, reconciliation is historical consequence accounting
+
+Pinned bindings do not mean a revoked capability can continue creating new
+effects forever. Before a new governed external effect, strict execution
+re-checks the binding against the current site/Profile admission, active
+qualification/release, provider health and exact provider version/digest.
+
+The inverse rule is equally important: revocation cannot make an already
+ambiguous consequence disappear. An Attempt that was dispatched before
+revocation may still require source-of-truth reconciliation. The control plane
+therefore permits consequence accounting while denying new effects. Any future
+execution uses an explicit replacement binding.
