@@ -11,13 +11,15 @@ use morn_assurance::{AdmissionService, QualificationEvidence, StrictQualificatio
 use morn_capability::effect::EffectContract;
 use morn_capability::{
     CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityRequest, CapabilityResolver,
-    CapabilityStage, EffectClass, IsolationLevel,
+    CapabilityStage, EffectClass, IsolationLevel, WorkcellMember, WorkcellPlan,
 };
 use morn_control_plane::{
-    begin_external_attempt_with_effect, enforce_profile_action, evaluate_profile_action,
-    issue_external_action_permit_for_work, resolve_external_action_finalizer,
-    CapabilityEligibilityGate, ControlPlaneStore, ControllerInputs, ExternalActionMode,
-    ReconciliationController, WorkController, WorkProgressController, WorkProgressInputs,
+    begin_external_attempt_with_effect, capability_qualification_evidence,
+    capability_resolution_evidence, enforce_profile_action, evaluate_profile_action,
+    issue_external_action_permit_for_work, provenance_condition_evidence,
+    resolve_external_action_finalizer, source_of_truth_condition_evidence,
+    CapabilityEligibilityGate, ControlPlaneStore, DurableWorkControllerRuntime,
+    ExternalActionMode, ReconciliationController, WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
@@ -310,17 +312,39 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         "ProvenanceReady".to_string(),
     ];
     let mut work = WorkResource::new(workspace.clone(), work_spec);
-    WorkController.reconcile(
-        &mut work,
-        &profile,
-        &ControllerInputs {
-            capability_resolved: true,
-            capability_qualified: true,
-            authority_satisfied: authority_decision.allowed,
-            source_of_truth_bound: source_binding.validate().is_ok(),
-            provenance_ready: true,
-        },
-    );
+
+    // Readiness is derived from durable, generation-scoped evidence. The
+    // integration slice deliberately does not assert raw boolean gates.
+    let workcell_plan = WorkcellPlan {
+        members: vec![WorkcellMember {
+            capability: resolved[0].clone(),
+            covers: vec!["equipment.anomaly.investigate".to_string()],
+        }],
+        uncovered: vec![],
+        total_estimated_cost_micros: resolved[0].estimated_cost_micros.unwrap_or(0),
+        rationale: vec!["single capability closes investigation requirement".to_string()],
+    };
+    let readiness = vec![
+        capability_resolution_evidence(&work, &workcell_plan).unwrap(),
+        capability_qualification_evidence(&work, &capability, &admission, now).unwrap(),
+        source_of_truth_condition_evidence(&work, &source_binding).unwrap(),
+        provenance_condition_evidence(&work, &[capability.clone()]).unwrap(),
+    ];
+
+    let store = MornStore::open_in_memory().unwrap();
+    store.save_work_resource_cas(&mut work).unwrap();
+    for evidence in &readiness {
+        store.save_condition_evidence(&work, evidence).unwrap();
+    }
+    let controller = DurableWorkControllerRuntime::new("factory-slice-controller");
+    let tick = controller
+        .reconcile_from_evidence(&store, work.id.as_str(), &profile, now)
+        .unwrap();
+    assert_eq!(tick.next_phase, WorkPhase::Ready);
+    work = store
+        .load_record("work_resource_v115", work.id.as_str())
+        .unwrap()
+        .unwrap();
     assert_eq!(work.status.phase, WorkPhase::Ready);
 
     // DSH and Pi both satisfy the same Morn harness boundary.
@@ -645,7 +669,6 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     assert!(!value.is_customer_value_claim());
 
     // Durable control-plane state survives serialization independently of harness sessions.
-    let store = MornStore::open_in_memory().unwrap();
     store.save_work_resource_cas(&mut work).unwrap();
     store
         .save_source_of_truth_binding(&work, &source_binding)
