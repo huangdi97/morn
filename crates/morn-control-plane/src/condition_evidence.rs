@@ -66,6 +66,7 @@ impl ConditionEvidence {
     pub fn active_for(&self, work: &WorkResource, now: Timestamp) -> bool {
         self.work_ref == work.id.to_string()
             && self.work_generation == work.generation
+            && self.observed_at <= now
             && self.valid_until.is_none_or(|until| now <= until)
     }
 }
@@ -79,7 +80,14 @@ fn condition_value(
     evidence
         .iter()
         .filter(|item| item.condition_type == condition_type && item.active_for(work, now))
-        .max_by_key(|item| item.observed_at.millis())
+        // An equally recent denial (or unsubstantiated positive) wins ties.
+        // SQLite row order must never decide whether a Work becomes Ready.
+        .max_by_key(|item| {
+            (
+                item.observed_at.millis(),
+                !(item.satisfied && !item.evidence_refs.is_empty()),
+            )
+        })
         .is_some_and(|item| item.satisfied && !item.evidence_refs.is_empty())
 }
 
@@ -156,6 +164,66 @@ mod tests {
         let inputs =
             derive_controller_inputs(&work, &[positive, revoked], Timestamp::from_millis(30));
         assert!(!inputs.capability_resolved);
+    }
+
+    #[test]
+    fn future_dated_evidence_cannot_make_work_ready_early() {
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "review",
+                "morn.lite@1.0.0",
+            ),
+        );
+        let mut positive = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            true,
+            "resolver://fixture",
+            vec!["capability://fixture".to_string()],
+        )
+        .unwrap();
+        positive.observed_at = Timestamp::from_millis(200);
+        let input_before = derive_controller_inputs(
+            &work,
+            &[positive.clone()],
+            Timestamp::from_millis(199),
+        );
+        assert!(!input_before.capability_resolved);
+
+        let input_at_observation =
+            derive_controller_inputs(&work, &[positive], Timestamp::from_millis(200));
+        assert!(input_at_observation.capability_resolved);
+    }
+
+    #[test]
+    fn equal_timestamp_denial_overrides_positive_regardless_of_row_order() {
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "review",
+                "morn.lite@1.0.0",
+            ),
+        );
+        let mut positive = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            true,
+            "resolver://fixture",
+            vec!["capability://fixture".to_string()],
+        )
+        .unwrap();
+        positive.observed_at = Timestamp::from_millis(100);
+        let mut denial =
+            ConditionEvidence::new(&work, "CapabilityResolved", false, "resolver://fixture", vec![])
+                .unwrap();
+        denial.observed_at = Timestamp::from_millis(100);
+        let now = Timestamp::from_millis(101);
+        assert!(!derive_controller_inputs(&work, &[positive.clone(), denial.clone()], now)
+            .capability_resolved);
+        assert!(!derive_controller_inputs(&work, &[denial, positive], now).capability_resolved);
     }
 
     #[test]
