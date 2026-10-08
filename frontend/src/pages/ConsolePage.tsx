@@ -113,15 +113,32 @@ export default function ConsolePage() {
           </Card>
         )}
         {v115 && (
-          <Card title="v11.5 Control / Trust / Composition">
-            <KeyValue k="Semantic slots" v={v115.architecture.semantic_slots.join(", ")} />
-            <KeyValue k="Authority" v={v115.providers.authority} />
-            <KeyValue k="Execution environments" v={v115.providers.execution_environment.join(", ")} />
-            <KeyValue k="Factory guarantees" v={v115.factory_profile.required_guarantees.length} />
-            <KeyValue k="Real DSH" v={v115.claims.real_dsh} />
-            <KeyValue k="Real Pi" v={v115.claims.real_pi} />
-            <KeyValue k="Real factory" v={v115.claims.real_factory} />
-          </Card>
+          <>
+            <Card title="v11.5 Control / Trust / Composition">
+              <KeyValue k="Semantic slots" v={v115.architecture.semantic_slots.join(", ")} />
+              <KeyValue k="Authority" v={v115.providers.authority} />
+              <KeyValue k="Execution environments" v={v115.providers.execution_environment.join(", ")} />
+              <KeyValue k="Factory guarantees" v={v115.factory_profile.required_guarantees.length} />
+              <KeyValue k="Real DSH" v={v115.claims.real_dsh} />
+              <KeyValue k="Real Pi" v={v115.claims.real_pi} />
+              <KeyValue k="Real factory" v={v115.claims.real_factory} />
+            </Card>
+            <Card title="Evidence Class / Non-Claim Discipline">
+              <KeyValue k="Evidence classes" v={v115.evidence_policy.classes.join(" → ")} />
+              <KeyValue
+                k="Auto-promotion"
+                v={v115.evidence_policy.lower_class_never_auto_promotes ? "forbidden" : "allowed"}
+              />
+              {v115.evidence_policy.claims.map((claim) => (
+                <div key={claim.id} className="kv">
+                  <span className="kv-key">{claim.subject}</span>
+                  <span className="kv-value">
+                    {claim.class} / {claim.state} — {claim.reason}
+                  </span>
+                </div>
+              ))}
+            </Card>
+          </>
         )}
         <Card title="Outcomes / Metrics">
           {data.outcomes.length === 0 ? (
