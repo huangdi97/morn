@@ -3,6 +3,7 @@
 //! A profile is not a plugin list. It declares guarantees that a composition
 //! must satisfy; providers are free to vary as long as conformance stays true.
 
+pub mod compatibility;
 pub mod conformance;
 
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use morn_kernel::version::Version;
 use morn_kernel::ExecutionGuarantee;
 
+pub use compatibility::{compare_profiles, plan_profile_migration, ProfileCompatibility, ProfileMigrationPlan};
 pub use conformance::{evaluate_profile, ConformanceEvidence, ConformanceReport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
