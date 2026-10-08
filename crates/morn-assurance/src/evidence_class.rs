@@ -168,9 +168,106 @@ impl EvidenceLedger {
     }
 }
 
+/// Repository/reference claims only. These entries deliberately stop at the
+/// evidence actually available without external runtime/site credentials.
+pub fn reference_evidence_ledger() -> EvidenceLedger {
+    let mut ledger = EvidenceLedger::default();
+    ledger
+        .append(
+            EvidenceClaim::proven(
+                "morn-v11.5-architecture",
+                EvidenceClass::DesignSpec,
+                vec!["docs/architecture-v11.5.md".to_string()],
+                "morn-reference-runtime",
+                "versioned architecture and ADR baseline exists",
+            )
+            .expect("static design claim valid"),
+        )
+        .expect("static design claim append");
+
+    ledger
+        .append(
+            EvidenceClaim::proven(
+                "factory-readonly-wedge",
+                EvidenceClass::LocalFixture,
+                vec![
+                    "crates/morn-control-plane/tests/factory_readonly_slice.rs".to_string(),
+                ],
+                "morn-reference-runtime",
+                "deterministic Factory read-only control-plane slice exists",
+            )
+            .expect("static fixture claim valid"),
+        )
+        .expect("static fixture claim append");
+
+    for (subject, reason) in [
+        (
+            "deepseek-harness",
+            "real DSH process/model/configuration is external to deterministic contract tests",
+        ),
+        (
+            "pi-harness",
+            "real Pi binary/model transport is external to deterministic contract tests",
+        ),
+    ] {
+        ledger
+            .append(
+                EvidenceClaim::blocked_external(
+                    subject,
+                    EvidenceClass::RealRuntime,
+                    "morn-reference-runtime",
+                    reason,
+                )
+                .expect("static blocker valid"),
+            )
+            .expect("static blocker append");
+    }
+
+    ledger
+        .append(
+            EvidenceClaim::blocked_external(
+                "factory-customer",
+                EvidenceClass::RealSite,
+                "morn-reference-runtime",
+                "lawful customer/site data, system access and authority are not present",
+            )
+            .expect("static site blocker valid"),
+        )
+        .expect("static site blocker append");
+
+    ledger
+        .append(
+            EvidenceClaim::blocked_external(
+                "factory-production-write",
+                EvidenceClass::ProductionWrite,
+                "morn-reference-runtime",
+                "production write and physical control are explicitly not entered",
+            )
+            .expect("static write blocker valid"),
+        )
+        .expect("static write blocker append");
+
+    ledger
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reference_ledger_never_upgrades_external_blockers() {
+        let ledger = reference_evidence_ledger();
+        assert!(ledger.satisfies(
+            "factory-readonly-wedge",
+            EvidenceClass::LocalFixture
+        ));
+        assert!(!ledger.satisfies("deepseek-harness", EvidenceClass::RealRuntime));
+        assert!(!ledger.satisfies("factory-customer", EvidenceClass::RealSite));
+        assert!(!ledger.satisfies(
+            "factory-production-write",
+            EvidenceClass::ProductionWrite
+        ));
+    }
 
     #[test]
     fn fixture_and_ci_evidence_cannot_claim_real_runtime() {
