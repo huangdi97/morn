@@ -10,6 +10,7 @@ pub mod authority;
 pub mod binding;
 pub mod credentials;
 pub mod environment;
+pub mod execution_manifest;
 pub mod gateway;
 pub mod provider_registry;
 pub mod reconciliation;
@@ -28,6 +29,7 @@ pub use credentials::{
     CredentialHandle, CredentialHandleId, CredentialProvider, CredentialRequest,
     FixtureCredentialProvider,
 };
+pub use execution_manifest::{CompositionRuntimeRef, ExecutionManifest};
 pub use environment::{
     ExecutionEnvironmentHandle, ExecutionEnvironmentId, ExecutionEnvironmentOffer,
     ExecutionEnvironmentProvider, ExecutionEnvironmentResolver, ExecutionEnvironmentSelection,
