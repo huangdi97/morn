@@ -41,6 +41,7 @@ Morn remains Work-first, not Agent-first:
 | explicit protocol migration | protocol compatibility + `ProtocolMigrationController` | implemented |
 | non-destructive history | `morn-kernel/src/history.rs` | implemented |
 | desired/observed Work | `morn-work/src/control.rs` | implemented |
+| readiness Conditions derived from durable evidence | `condition_evidence.rs` + typed readiness producers + hardened reconcile API | implemented |
 | generation invalidates stale projection | `WorkResource::replace_spec` | implemented |
 | durable control plane | `morn-control-plane`, `morn-store` | implemented |
 | optimistic concurrency/fencing | control-plane/store CAS + leases | implemented |
@@ -300,3 +301,15 @@ The convergence branch also freezes the following late-stage clarifications:
 
 These additions close the remaining places where runtime/plugin/UI state could
 otherwise become a second business truth or inflate maturity claims.
+
+
+## 12. Evidence-derived readiness closure
+
+- ADR-037: strict Work readiness Conditions are derived from durable,
+  generation-scoped evidence rather than caller-provided booleans.
+- The reconcile API rejects direct readiness assertions.
+- Typed evidence producers link readiness to Workcell resolution, active
+  qualification/release/site admission, bound Authority, source-of-truth and
+  execution provenance.
+- This is local engineering evidence only; it does not convert missing real
+  customer/site/runtime evidence into PASS.
