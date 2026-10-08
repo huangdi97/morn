@@ -5,7 +5,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use morn_kernel::version::Version;
 
 use crate::DomainProfile;
 
@@ -127,6 +126,7 @@ pub fn plan_profile_migration(
 mod tests {
     use super::*;
     use crate::GuaranteeRequirement;
+    use morn_kernel::version::Version;
     use morn_kernel::ExecutionGuarantee;
 
     #[test]
