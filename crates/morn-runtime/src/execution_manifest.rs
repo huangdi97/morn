@@ -107,12 +107,22 @@ impl ExecutionManifest {
     }
 
     pub fn validates_against(&self, work: &WorkResource, binding: &ExecutionBinding) -> bool {
-        self.protocol_version == work.spec.protocol_version.to_string()
+        self.schema == "morn.execution-manifest/v11.5"
+            && work.spec.protocol_version == MORN_PROTOCOL_V11_5
+            && binding.matches_work_generation(work)
+            && binding.profile_ref == work.spec.profile_ref
+            && binding.site_ref == work.spec.site_ref
+            && self.protocol_version == work.spec.protocol_version.to_string()
             && self.protocol_invariants == ProtocolSnapshot::v11_5().invariant_ids()
             && self.work_ref == work.id.to_string()
             && self.work_generation == work.generation
             && self.profile_ref == work.spec.profile_ref
             && self.site_ref == work.spec.site_ref
+            && self.source_solution_ref == work.spec.source_solution_ref
+            && self.runtime_ref == binding.runtime_ref
+            && self.authority_decision_ref == binding.authority_decision_ref
+            && !self.composition_runtime.id.trim().is_empty()
+            && !self.composition_runtime.version.trim().is_empty()
             && self.execution_binding_ref == binding.id.to_string()
             && self.capability_manifest_ref == binding.capability_manifest_ref
             && self.provider_ref == binding.provider_ref
@@ -158,6 +168,57 @@ mod tests {
         assert_eq!(manifest.provider_ref, "deepseek-harness");
         assert_eq!(manifest.composition_runtime.id, "cordis-reference");
         assert!(manifest.validates_against(&work, &binding));
+    }
+
+    #[test]
+    fn tampering_with_pinned_solution_runtime_or_authority_invalidates_manifest() {
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "verify maintained asset",
+            "morn.factory.readonly@1.0.0",
+        );
+        spec.source_solution_ref = Some("solution://factory@1.0.0".to_string());
+        spec.site_ref = Some("plant-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let mut binding = ExecutionBinding::for_work(
+            &work,
+            "manifest:sha256:abc",
+            "provider-a",
+            "1.0.0",
+        );
+        binding.runtime_ref = Some("runtime://session-a".to_string());
+        binding.authority_decision_ref = Some("authority://permit-a".to_string());
+        let manifest = ExecutionManifest::from_binding(
+            &work,
+            &binding,
+            CompositionRuntimeRef::new("cordis-reference", "4.0.4"),
+        )
+        .unwrap();
+        assert!(manifest.validates_against(&work, &binding));
+
+        let mut forged = manifest.clone();
+        forged.source_solution_ref = Some("solution://other".to_string());
+        assert!(!forged.validates_against(&work, &binding));
+
+        let mut forged = manifest.clone();
+        forged.runtime_ref = Some("runtime://unrelated-session".to_string());
+        assert!(!forged.validates_against(&work, &binding));
+
+        let mut forged = manifest.clone();
+        forged.authority_decision_ref = Some("authority://other".to_string());
+        assert!(!forged.validates_against(&work, &binding));
+
+        let mut forged = manifest.clone();
+        forged.composition_runtime.version.clear();
+        assert!(!forged.validates_against(&work, &binding));
+
+        let mut forged = manifest.clone();
+        forged.schema = "morn.execution-manifest/v0".to_string();
+        assert!(!forged.validates_against(&work, &binding));
+
+        let mut wrong_binding = binding.clone();
+        wrong_binding.profile_ref = "morn.lite@1.0.0".to_string();
+        assert!(!manifest.validates_against(&work, &wrong_binding));
     }
 
     #[test]

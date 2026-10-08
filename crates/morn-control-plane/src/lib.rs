@@ -52,9 +52,9 @@ use morn_runtime::{
     ReconciliationRecord,
 };
 use morn_store::MornStore;
-use morn_work::acceptance_decision::AcceptanceDecision;
+use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
 use morn_work::control::{ConditionStatus, WorkCondition, WorkPhase, WorkResource};
-use morn_work::value::ValueAssessment;
+use morn_work::value::{ValueAssessment, ValueEvidenceClass};
 use morn_world::ObservedOutcome;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -839,6 +839,17 @@ impl ControlPlaneStore for MornStore {
                 "acceptance decision belongs to another Work",
             ));
         }
+        let is_accept = decision.disposition == AcceptanceDisposition::Accept;
+        if is_accept
+            && (!decision.is_final_acceptance()
+                || decision.evidence_refs.is_empty()
+                || decision.acting_role.trim().is_empty()
+                || decision.reason.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "final acceptance requires linked outcomes, independent reviewer, rationale and evidence",
+            ));
+        }
         for outcome_id in &decision.outcome_refs {
             let outcome: ObservedOutcome = self
                 .load_record("observed_outcome_v115", outcome_id.as_str())?
@@ -846,6 +857,11 @@ impl ControlPlaneStore for MornStore {
             if outcome.work_package_id != work.id || outcome.workspace_id != work.workspace_id {
                 return Err(Error::validation(
                     "acceptance must reference outcomes from the same Work and workspace",
+                ));
+            }
+            if is_accept && !outcome.is_source_grounded() {
+                return Err(Error::validation(
+                    "final acceptance cannot cite an ungrounded observed outcome",
                 ));
             }
         }
@@ -876,6 +892,28 @@ impl ControlPlaneStore for MornStore {
             return Err(Error::validation(
                 "value assessment must reference an outcome from the same Work and workspace",
             ));
+        }
+        if assessment.evidence_class == ValueEvidenceClass::CustomerValidated {
+            if !outcome.is_source_grounded() || !assessment.is_customer_value_claim() {
+                return Err(Error::validation(
+                    "customer-validated value requires a grounded outcome, acceptance and evidence",
+                ));
+            }
+            let acceptance_id = assessment
+                .acceptance_ref
+                .as_ref()
+                .ok_or_else(|| Error::validation("customer value requires acceptance reference"))?;
+            let acceptance: AcceptanceDecision = self
+                .load_record("acceptance_decision_v115", acceptance_id.as_str())?
+                .ok_or_else(|| Error::not_found("customer value acceptance decision"))?;
+            if acceptance.work_package_id != work.id
+                || !acceptance.is_final_acceptance()
+                || !acceptance.outcome_refs.contains(&assessment.outcome_ref)
+            {
+                return Err(Error::validation(
+                    "customer-validated value requires final acceptance of that exact outcome",
+                ));
+            }
         }
         self.save_record_immutable(
             "value_assessment_v115",
@@ -1530,6 +1568,56 @@ mod control_plane_persistence_scope_tests {
     }
 
     #[test]
+    fn acceptance_and_customer_value_cannot_claim_unwitnessed_or_unaccepted_outcomes() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "delivery-impact review",
+            OutcomeSourceKind::ExternalSystem,
+            "cmms://plant-a/status",
+            json!({"delivered": true}),
+        );
+        store.save_observed_outcome(&work, &outcome).unwrap();
+
+        let mut decision = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("accept"),
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("principal"),
+            "independent-reviewer",
+            "independent review of source facts",
+        );
+        decision.outcome_refs.push(outcome.id.clone());
+        decision.evidence_refs.push("review://ticket-a".to_string());
+        assert!(ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).is_err());
+
+        let mut fake_value = ValueAssessment::new(
+            work.id.clone(),
+            outcome.id.clone(),
+            ValueEvidenceClass::CustomerValidated,
+        );
+        fake_value.acceptance_ref = Some(decision.id.clone());
+        fake_value.evidence_refs.push("fixture://not-customer".to_string());
+        assert!(store.save_value_assessment(&work, &fake_value).is_err());
+
+        outcome.id = morn_kernel::ids::OutcomeRecordId::generate_with("out");
+        outcome.evidence_refs.push("cmms://plant-a/status/receipt".to_string());
+        store.save_observed_outcome(&work, &outcome).unwrap();
+        decision.outcome_refs = vec![outcome.id.clone()];
+        decision.evidence_refs.clear();
+        assert!(ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).is_err());
+        decision.evidence_refs.push("review://ticket-a".to_string());
+        ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
+
+        fake_value.outcome_ref = outcome.id.clone();
+        store.save_value_assessment(&work, &fake_value).unwrap();
+        assert!(fake_value.is_customer_value_claim());
+    }
+
+    #[test]
     fn acceptance_and_value_cannot_borrow_outcomes_from_other_workspaces() {
         let store = MornStore::open_in_memory().unwrap();
         let work = fixture_work();
@@ -1560,6 +1648,7 @@ mod control_plane_persistence_scope_tests {
             "verified",
         );
         decision.outcome_refs.push(outcome.id.clone());
+        decision.evidence_refs.push("review://independent-witness".to_string());
         assert!(ControlPlaneStore::save_acceptance_decision(&store, &other, &decision).is_err());
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
 
