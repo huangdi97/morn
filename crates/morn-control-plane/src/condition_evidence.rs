@@ -185,11 +185,8 @@ mod tests {
         )
         .unwrap();
         positive.observed_at = Timestamp::from_millis(200);
-        let input_before = derive_controller_inputs(
-            &work,
-            &[positive.clone()],
-            Timestamp::from_millis(199),
-        );
+        let input_before =
+            derive_controller_inputs(&work, &[positive.clone()], Timestamp::from_millis(199));
         assert!(!input_before.capability_resolved);
 
         let input_at_observation =
@@ -216,13 +213,20 @@ mod tests {
         )
         .unwrap();
         positive.observed_at = Timestamp::from_millis(100);
-        let mut denial =
-            ConditionEvidence::new(&work, "CapabilityResolved", false, "resolver://fixture", vec![])
-                .unwrap();
+        let mut denial = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            false,
+            "resolver://fixture",
+            vec![],
+        )
+        .unwrap();
         denial.observed_at = Timestamp::from_millis(100);
         let now = Timestamp::from_millis(101);
-        assert!(!derive_controller_inputs(&work, &[positive.clone(), denial.clone()], now)
-            .capability_resolved);
+        assert!(
+            !derive_controller_inputs(&work, &[positive.clone(), denial.clone()], now)
+                .capability_resolved
+        );
         assert!(!derive_controller_inputs(&work, &[denial, positive], now).capability_resolved);
     }
 
