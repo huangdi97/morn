@@ -72,6 +72,9 @@ Morn remains Work-first, not Agent-first:
 | Artifact2Capability | OpenAPI/SOP/Repo/reviewed-paper compilers | implemented |
 | capability packaging | OCI-oriented descriptor + Sigstore/SLSA refs | implemented contract; real registry external |
 | CloudEvents-style integration envelope | kernel event envelope | implemented |
+| event semantic roles | runtime signal vs durable control/fact/observation taxonomy | implemented |
+| provider-health freshness gate | ProviderRegistry health lease + ProviderGate | implemented |
+| MCP 2026 resource-bound auth contract | opaque credential/resource binding | implemented |
 | telemetry boundary | OTel-oriented semantic design | contract/design; backend deployment external |
 | Creator | natural-language/simple draft -> existing Solution pipeline | implemented |
 | SolutionPackage -> Work | explicit instantiation | implemented |
