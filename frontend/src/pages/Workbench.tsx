@@ -349,6 +349,7 @@ export default function Workbench() {
           <Card title="v11.5 Durable Work Truth">
             <KeyValue k="Work resources" v={v115Control.work.length} />
             <KeyValue k="Condition evidence" v={v115Control.condition_evidence.length} />
+            <KeyValue k="Profile conformance attestations" v={v115Control.profile_conformance_attestations.length} />
             <KeyValue k="Bindings" v={v115Control.execution_bindings.length} />
             <KeyValue k="Execution manifests" v={v115Control.execution_manifests.length} />
             <KeyValue k="Binding migrations" v={v115Control.binding_migrations.length} />
