@@ -154,15 +154,9 @@ impl PiRpcClient {
     }
 
     pub fn get_last_assistant_text(&mut self) -> Result<Option<String>> {
-        let response = self.command(
-            "get_last_assistant_text",
-            Value::Object(Default::default()),
-        )?;
-        match response
-            .data
-            .as_ref()
-            .and_then(|data| data.get("text"))
-        {
+        let response =
+            self.command("get_last_assistant_text", Value::Object(Default::default()))?;
+        match response.data.as_ref().and_then(|data| data.get("text")) {
             Some(Value::String(text)) => Ok(Some(text.clone())),
             Some(Value::Null) | None => Ok(None),
             Some(_) => Err(Error::external(
@@ -183,12 +177,12 @@ impl PiRpcClient {
                     std::thread::sleep(Duration::from_millis(20));
                 }
                 Ok(None) => {
-                    self.child
-                        .kill()
-                        .map_err(|error| Error::external(format!("kill stalled Pi RPC: {error}")))?;
-                    self.child
-                        .wait()
-                        .map_err(|error| Error::external(format!("reap stalled Pi RPC: {error}")))?;
+                    self.child.kill().map_err(|error| {
+                        Error::external(format!("kill stalled Pi RPC: {error}"))
+                    })?;
+                    self.child.wait().map_err(|error| {
+                        Error::external(format!("reap stalled Pi RPC: {error}"))
+                    })?;
                     return Err(Error::external(
                         "Pi RPC did not exit after stdin close and was forcefully reaped",
                     ));
