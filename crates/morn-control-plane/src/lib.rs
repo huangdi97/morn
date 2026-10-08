@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod binding_guard;
 pub mod capability_gate;
+pub mod condition_evidence;
 pub mod controller_runtime;
 pub mod external_action;
 pub mod profile_guard;
@@ -18,6 +19,9 @@ pub use binding_guard::{
 };
 pub use capability_gate::{
     CapabilityEligibilityBlock, CapabilityEligibilityGate, CapabilityEligibilityReport,
+};
+pub use condition_evidence::{
+    derive_controller_inputs, ConditionEvidence, ConditionEvidenceId,
 };
 pub use controller_runtime::{ControllerTickResult, DurableWorkControllerRuntime};
 pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
@@ -512,6 +516,11 @@ pub trait ControlPlaneStore {
     fn save_work_resource_cas(&self, work: &mut WorkResource) -> Result<u64>;
     fn save_execution_binding(&self, work: &WorkResource, binding: &ExecutionBinding)
         -> Result<()>;
+    fn save_condition_evidence(
+        &self,
+        work: &WorkResource,
+        evidence: &ConditionEvidence,
+    ) -> Result<()>;
     fn save_execution_manifest(
         &self,
         work: &WorkResource,
@@ -573,6 +582,27 @@ impl ControlPlaneStore for MornStore {
         )?;
         work.mark_persisted_revision(revision);
         Ok(revision)
+    }
+
+    fn save_condition_evidence(
+        &self,
+        work: &WorkResource,
+        evidence: &ConditionEvidence,
+    ) -> Result<()> {
+        if evidence.work_ref != work.id.to_string()
+            || evidence.work_generation != work.generation
+        {
+            return Err(Error::validation(
+                "condition evidence must match the exact Work generation",
+            ));
+        }
+        self.save_record_immutable(
+            "condition_evidence_v115",
+            evidence.id.as_str(),
+            work.workspace_id.as_str(),
+            evidence.observed_at.millis(),
+            evidence,
+        )
     }
 
     fn save_execution_binding(
