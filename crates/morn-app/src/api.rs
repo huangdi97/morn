@@ -224,7 +224,8 @@ async fn v115_status() -> ApiResult {
         },
         "evidence_policy": {
             "classes": ["design-spec", "local-fixture", "ci-conformance", "real-runtime", "real-site", "production-write"],
-            "lower_class_never_auto_promotes": true,
+            "classes_are_categorical": true,
+            "no_implicit_promotion": true,
             "claims": evidence_ledger.claims()
         },
         "claims": {
@@ -310,6 +311,7 @@ async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
         "execution_bindings": load("execution_binding_v115")?,
         "execution_manifests": load("execution_manifest_v115")?,
         "binding_migrations": load("binding_migration_v115")?,
+        "durable_workflow_bindings": load("durable_workflow_binding_v115")?,
         "attempts": load("action_attempt_v115")?,
         "reconciliations": load("reconciliation_v115")?,
         "outcomes": load("observed_outcome_v115")?,
