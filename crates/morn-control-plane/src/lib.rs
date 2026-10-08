@@ -626,6 +626,14 @@ impl ControlPlaneStore for MornStore {
         evidence: &ConditionEvidence,
     ) -> Result<()> {
         require_canonical_work_workspace(self, work)?;
+        if evidence.condition_type.trim().is_empty()
+            || evidence.producer_ref.trim().is_empty()
+            || (evidence.satisfied && evidence.evidence_refs.is_empty())
+        {
+            return Err(Error::validation(
+                "stored readiness evidence requires a condition, producer and positive witness",
+            ));
+        }
         if evidence.work_ref != work.id.to_string() || evidence.work_generation != work.generation {
             return Err(Error::validation(
                 "condition evidence must match the exact Work generation",
@@ -649,6 +657,7 @@ impl ControlPlaneStore for MornStore {
         if !binding.matches_work_generation(work)
             || binding.profile_ref != work.spec.profile_ref
             || binding.site_ref != work.spec.site_ref
+            || binding.autonomy_posture != work.spec.autonomy_posture
         {
             return Err(Error::validation(
                 "execution binding must match the exact Work, generation, profile and site",
@@ -712,6 +721,19 @@ impl ControlPlaneStore for MornStore {
         binding: &DurableWorkflowBinding,
     ) -> Result<()> {
         require_canonical_work_workspace(self, work)?;
+        if binding.work_id != work.id || binding.work_generation != work.generation {
+            return Err(Error::validation(
+                "durable workflow binding must match the Work generation",
+            ));
+        }
+        let execution: ExecutionBinding = self
+            .load_record("execution_binding_v115", binding.execution_binding_id.as_str())?
+            .ok_or_else(|| Error::not_found("durable workflow execution binding"))?;
+        if !execution.matches_work_generation(work) {
+            return Err(Error::validation(
+                "durable workflow references another Work execution binding",
+            ));
+        }
         self.save_record_immutable(
             "durable_workflow_binding_v115",
             binding.id.as_str(),
@@ -723,6 +745,14 @@ impl ControlPlaneStore for MornStore {
 
     fn save_action_attempt(&self, work: &WorkResource, attempt: &ActionAttempt) -> Result<()> {
         require_canonical_work_workspace(self, work)?;
+        let binding: ExecutionBinding = self
+            .load_record("execution_binding_v115", attempt.binding_id.as_str())?
+            .ok_or_else(|| Error::not_found("action attempt execution binding"))?;
+        if binding.work_id != work.id || attempt.business_key.trim().is_empty() {
+            return Err(Error::validation(
+                "action attempt must have a business key and binding owned by this Work",
+            ));
+        }
         self.save_record(
             "action_attempt_v115",
             attempt.id.as_str(),
@@ -738,6 +768,17 @@ impl ControlPlaneStore for MornStore {
         record: &ReconciliationRecord,
     ) -> Result<()> {
         require_canonical_work_workspace(self, work)?;
+        let attempt: ActionAttempt = self
+            .load_record("action_attempt_v115", record.attempt_id.as_str())?
+            .ok_or_else(|| Error::not_found("reconciliation action attempt"))?;
+        let binding: ExecutionBinding = self
+            .load_record("execution_binding_v115", attempt.binding_id.as_str())?
+            .ok_or_else(|| Error::not_found("reconciliation execution binding"))?;
+        if binding.work_id != work.id || record.observation.business_key != attempt.business_key {
+            return Err(Error::validation(
+                "reconciliation must match an attempt and business key owned by this Work",
+            ));
+        }
         self.save_record_immutable(
             "reconciliation_v115",
             record.id.as_str(),
@@ -1446,6 +1487,43 @@ mod control_plane_persistence_scope_tests {
         store.save_execution_binding(&work, &binding).unwrap();
         assert!(store.save_execution_manifest(&other, &manifest).is_err());
         store.save_execution_manifest(&work, &manifest).unwrap();
+    }
+
+    #[test]
+    fn action_attempt_and_reconciliation_require_their_exact_work_binding() {
+        use morn_runtime::{
+            ActionAttempt, AttemptState, ReconciliationObservation, ReconciliationRecord,
+            ReconciliationRecordId,
+        };
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        let other = fixture_work();
+        store.save_work_resource(&work).unwrap();
+        store.save_work_resource(&other).unwrap();
+        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        store.save_execution_binding(&work, &binding).unwrap();
+        let attempt = ActionAttempt::new(binding.id.clone(), "work-a:create", "create");
+        assert!(store.save_action_attempt(&other, &attempt).is_err());
+        store.save_action_attempt(&work, &attempt).unwrap();
+
+        let mut record = ReconciliationRecord {
+            id: ReconciliationRecordId::generate_with("reconcile"),
+            attempt_id: attempt.id.clone(),
+            before: AttemptState::OutcomeUnknown,
+            after: AttemptState::Reconciling,
+            observation: ReconciliationObservation {
+                business_key: "some-other-work:create".to_string(),
+                committed: None,
+                observed: None,
+                external_ref: None,
+                evidence_refs: vec![],
+            },
+            created_at: morn_kernel::time::Timestamp::now(),
+        };
+        assert!(store.save_reconciliation(&work, &record).is_err());
+        record.observation.business_key = attempt.business_key.clone();
+        assert!(store.save_reconciliation(&other, &record).is_err());
+        store.save_reconciliation(&work, &record).unwrap();
     }
 
     #[test]
