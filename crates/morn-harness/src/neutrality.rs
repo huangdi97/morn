@@ -57,13 +57,11 @@ mod tests {
 
     #[test]
     fn dsh_and_pi_fixture_paths_are_harness_neutral_at_morn_boundary() {
-        let ctx = RuntimeContext {
-            workspace_id: WorkspaceId::generate(),
-            work_package_id: WorkPackageId::generate_with("work"),
-            actor_id: ActorInstanceId::generate_with("actor"),
-            correlation_id: "neutrality".to_string(),
-            trace_id: "trace-neutrality".to_string(),
-        };
+        let ctx = RuntimeContext::new(
+            WorkspaceId::generate(),
+            ActorInstanceId::generate_with("actor"),
+            WorkPackageId::generate_with("work"),
+        );
         let mut dsh = DeepSeekHarnessProvider::new(DshMode::Fixture);
         let mut pi = PiHarnessProvider::new(PiMode::Fixture);
 

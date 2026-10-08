@@ -247,13 +247,11 @@ mod tests {
 
     #[test]
     fn pi_fixture_passes_shared_harness_contract() {
-        let ctx = RuntimeContext {
-            workspace_id: WorkspaceId::generate(),
-            work_package_id: WorkPackageId::generate_with("work"),
-            actor_id: ActorInstanceId::generate_with("actor"),
-            correlation_id: "pi-contract".to_string(),
-            trace_id: "trace-pi-contract".to_string(),
-        };
+        let ctx = RuntimeContext::new(
+            WorkspaceId::generate(),
+            ActorInstanceId::generate_with("actor"),
+            WorkPackageId::generate_with("work"),
+        );
         let mut provider = PiHarnessProvider::new(PiMode::Fixture);
         let report = run_provider_contract(&mut provider, &ctx).unwrap();
         assert!(report.all_passed(), "{:?}", report.checks);
