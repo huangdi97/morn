@@ -30,7 +30,7 @@ jobs:
           npm --version
           npm ci
           npm install --save-dev vitest@4.1.11
-          npm install react-router-dom@6.30.6
+          npm install react-router-dom@7.18.4
           npm audit fix
           npm run typecheck
           npm run lint
