@@ -19,6 +19,7 @@ pub use binding_guard::{
 pub use capability_gate::{
     CapabilityEligibilityBlock, CapabilityEligibilityGate, CapabilityEligibilityReport,
 };
+pub use controller_runtime::{ControllerTickResult, DurableWorkControllerRuntime};
 pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
 
 pub use provider_gate::{ProviderGate, ProviderGateBlock, ProviderGatePolicy, ProviderGateReport};
