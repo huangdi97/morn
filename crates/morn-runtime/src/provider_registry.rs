@@ -124,6 +124,8 @@ pub struct ProviderObservation {
     pub provider_id: String,
     pub previous_status: ProviderStatus,
     pub current_status: ProviderStatus,
+    #[serde(default)]
+    pub health_valid_until: Option<Timestamp>,
     pub reason: String,
     pub evidence_refs: Vec<String>,
     pub observed_at: Timestamp,
@@ -190,6 +192,7 @@ impl ProviderRegistry {
             provider_id: provider_id.to_string(),
             previous_status,
             current_status: status,
+            health_valid_until: descriptor.health_valid_until,
             reason: reason.into(),
             evidence_refs,
             observed_at: descriptor.observed_at,
@@ -353,6 +356,29 @@ mod tests {
         let eligible = registry.eligible(ProviderFamily::Harness, &required);
         assert_eq!(eligible.len(), 1);
         assert_eq!(eligible[0].id, "dsh");
+    }
+
+    #[test]
+    fn observation_records_health_lease_expiry() {
+        let mut registry = ProviderRegistry::default();
+        let mut provider = ProviderDescriptor::new("leased", ProviderFamily::Harness, "1");
+        provider.status = ProviderStatus::Registered;
+        registry.register(provider).unwrap();
+
+        let observation = registry
+            .observe_status_with_ttl(
+                "leased",
+                ProviderStatus::Healthy,
+                "probe passed",
+                vec!["probe://leased".to_string()],
+                Some(5_000),
+            )
+            .unwrap();
+        assert!(observation.health_valid_until.is_some());
+        assert_eq!(
+            observation.health_valid_until,
+            registry.get("leased").unwrap().health_valid_until
+        );
     }
 
     #[test]
