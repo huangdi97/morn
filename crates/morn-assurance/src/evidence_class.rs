@@ -135,9 +135,7 @@ impl EvidenceLedger {
     pub fn proven_for(&self, subject: &str) -> Vec<&EvidenceClaim> {
         self.claims
             .iter()
-            .filter(|claim| {
-                claim.subject == subject && claim.state == EvidenceClaimState::Proven
-            })
+            .filter(|claim| claim.subject == subject && claim.state == EvidenceClaimState::Proven)
             .collect()
     }
 
@@ -201,9 +199,7 @@ pub fn reference_evidence_ledger() -> EvidenceLedger {
             EvidenceClaim::proven(
                 "factory-readonly-wedge",
                 EvidenceClass::LocalFixture,
-                vec![
-                    "crates/morn-control-plane/tests/factory_readonly_slice.rs".to_string(),
-                ],
+                vec!["crates/morn-control-plane/tests/factory_readonly_slice.rs".to_string()],
                 "morn-reference-runtime",
                 "deterministic Factory read-only control-plane slice exists",
             )
@@ -353,7 +349,10 @@ mod tests {
             .unwrap();
 
         assert!(!ledger.satisfies("factory-customer", EvidenceClass::RealSite));
-        assert_eq!(ledger.claims()[0].state, EvidenceClaimState::BlockedExternal);
+        assert_eq!(
+            ledger.claims()[0].state,
+            EvidenceClaimState::BlockedExternal
+        );
     }
 
     #[test]
