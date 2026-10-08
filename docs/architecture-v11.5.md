@@ -710,3 +710,31 @@ selection; it does not mutate the binding of an already-started Attempt.
 
 For HTTP MCP, credentials are resource/audience-bound opaque handles. Morn does
 not store/pass raw bearer tokens through Work, Capability or agent state.
+
+
+## Atomic control transition delivery
+
+The reference SQLite store now provides an atomic CAS + durable semantic outbox
+primitive. When a controller transition and semantic event belong to the same
+logical state change, both are written in one transaction. Transport dispatch
+happens after commit with stable event identity. Runtime-only signals are
+rejected from this path.
+
+## Pi public RPC provider boundary
+
+The reference runtime now contains a Rust client for Pi's current public
+subprocess protocol:
+
+```text
+pi --mode rpc --no-session
+stdin/stdout = strict LF-delimited JSON
+```
+
+The boundary implements correlated commands, `get_state`, prompt acceptance,
+abort and collection through `agent_settled`. Pi's prompt response is only
+acceptance/queue status; `agent_settled` is only executor-idle status. Neither
+becomes Morn Outcome or Acceptance.
+
+Morn intentionally binds to the CLI/wire contract rather than an in-process
+TypeScript package name so Pi packaging/repository changes do not redefine the
+Morn protocol.
