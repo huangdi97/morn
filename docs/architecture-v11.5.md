@@ -853,3 +853,18 @@ ambiguous consequence disappear. An Attempt that was dispatched before
 revocation may still require source-of-truth reconciliation. The control plane
 therefore permits consequence accounting while denying new effects. Any future
 execution uses an explicit replacement binding.
+
+
+## Evidence-derived readiness conditions
+
+Work Conditions are controller projections, not client claims. The durable
+control plane persists generation-scoped `ConditionEvidence` and derives
+readiness from it. Positive evidence must identify a producer and concrete
+semantic evidence references. A Work spec change advances generation and makes
+old readiness witnesses ineligible for the new generation.
+
+Typed producers currently bind readiness to complete Workcell resolution,
+active qualification/release/site+Profile admission, valid bound Authority,
+validated source-of-truth bindings and execution provenance. This closes the
+otherwise dangerous path where an API client could post
+`authority_satisfied=true` and bypass the actual semantic records.
