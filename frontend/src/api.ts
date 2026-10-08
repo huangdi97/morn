@@ -76,6 +76,7 @@ export interface V115Status {
   claims: {
     local_engineering: string;
     real_dsh: string;
+    real_pi: string;
     real_factory: string;
     production_write: string;
   };
