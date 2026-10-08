@@ -18,7 +18,7 @@ pub use capability_gate::{
 };
 pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
 
-pub use controller_runtime::{ControllerTickResult, DurableWorkControllerRuntime};
+
 pub use provider_gate::{ProviderGate, ProviderGateBlock, ProviderGatePolicy, ProviderGateReport};
 
 pub use profile_guard::{
