@@ -935,3 +935,27 @@ Morn uses the word “receipt” only with an explicit scope:
 
 A harness receipt can never satisfy a Profile requirement for external-action
 truth by itself.
+
+
+## Discovery and component projections
+
+The Hub is a view over canonical Morn assets, not an independent marketplace
+truth. Registry/discovery protocols are projected at the edge:
+
+```text
+Morn Capability / Release / Profile / Admission
+                │
+                ├─ xRegistry projection (generic metadata catalog)
+                ├─ A2A Agent Card projection (Agent-kind subset)
+                └─ OASF metadata projection (Agent skill/domain taxonomy)
+```
+
+Declared registry metadata remains `Declared` evidence. It does not become
+`Qualified` or `Admitted` without Morn evaluation and site/Profile
+conformance.
+
+For small portable local providers, a future WIT/Wasm Component provider may
+offer a typed cross-language ABI. It is deliberately optional: Cordis remains
+the reference node-local composition runtime, while WIT defines one possible
+capability interface/host boundary. Remote APIs, agent peers, humans, solvers
+and physical executors keep their native provider protocols.
