@@ -16,7 +16,8 @@ use morn_kernel::version::Version;
 
 pub use interoperability::{
     A2aAgentCardRef, A2aTaskEvidence, A2aTaskState, ExternalEndpoint, InteropBinding,
-    InteropProtocol, McpHttpAuthorizationBinding, McpToolDescriptor,
+    InteropProtocol, McpHttpAuthorizationBinding, McpTaskEvidence, McpTaskState,
+    McpToolDescriptor,
 };
 pub use source_truth::{
     ConflictPolicy, SourceOfTruthBinding, SourceOfTruthBindingId, TruthAuthorityKind,
