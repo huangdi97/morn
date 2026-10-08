@@ -1,0 +1,47 @@
+name: v11.5 dependency refresh (one-shot)
+
+on:
+  push:
+    branches:
+      - feat/v11.5-control-plane-convergence
+    paths:
+      - .github/workflows/v115-dependency-refresh.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/v11.5-control-plane-convergence
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Refresh vulnerable frontend dependencies
+        working-directory: frontend
+        run: |
+          npm install --save-dev vitest@4.1.11
+          npm install react-router-dom@6.30.6
+          npm audit fix
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run build
+          npm audit --audit-level=high
+      - name: Commit generated lockfile only after verification
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package.json frontend/package-lock.json
+          if git diff --cached --quiet; then
+            echo "Dependency files already current"
+            exit 0
+          fi
+          git commit -m "security: refresh frontend dependencies after 2026 advisories"
+          git push origin HEAD:feat/v11.5-control-plane-convergence
