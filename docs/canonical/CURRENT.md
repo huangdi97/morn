@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-031 in `docs/adr/`
+3. ADR-002 through ADR-034 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -204,3 +204,25 @@ Legacy Morn DurableRuntime/WorkflowRun and future Temporal/Dapr-class engines
 are execution providers, not alternate Work truth. A durable run attaches
 through a pinned DurableWorkflowBinding; completion is executor evidence only
 and cannot create Outcome/Acceptance by itself. See ADR-031.
+
+
+## Composition runtime contract
+
+Cordis remains the reference node-local composition host, but Morn now exposes a
+small CompositionRuntimeProvider contract for service-slot lifecycle. The
+contract contains no Work/Authority/Outcome truth, so a future composition
+runtime can be substituted without redefining the Morn protocol. See ADR-032.
+
+## Value evidence axes
+
+Engineering/deployment EvidenceClass and Work ValueEvidenceClass are orthogonal.
+Customer value requires a customer-validated ValueAssessment, independent
+Acceptance, explicit value evidence and explicit RealSite evidence. A real
+read-only pilot can validate value without ProductionWrite. See ADR-033.
+
+## UI extension slots
+
+Domain UI composition is declarative and safe-by-default. Domain packs may
+contribute typed Workbench/Studio/Console/Hub slots, but v11.5 rejects arbitrary
+remote JavaScript and keeps authorization/business truth on backend semantic
+contracts. See ADR-034.
