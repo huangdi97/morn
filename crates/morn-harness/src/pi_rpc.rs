@@ -288,7 +288,7 @@ impl PiRpcClient {
             if bytes == 0 {
                 return Err(Error::external("Pi RPC runtime closed stdout"));
             }
-            let trimmed = line.trim_end_matches(|ch| ch == '\r' || ch == '\n');
+            let trimmed = line.trim_end_matches(['\r', '\n']);
             if trimmed.is_empty() {
                 continue;
             }
