@@ -323,6 +323,158 @@ export default function Studio() {
         )}
       </Card>
 
+      <p className="studio-workflow-hint">
+        1 · Describe a goal and acceptance criteria → 2 · Validate and approve a solution →
+        3 · Instantiate canonical Work. Artifact imports are optional and create candidates only.
+      </p>
+
+      <Card title="1. Describe Goal">
+        <div className="builder-item">
+          <label>Goal: </label>
+          <input
+            style={{ width: "70%", padding: 6 }}
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+          />
+        </div>
+        <div className="builder-item">
+          <label>Capabilities (comma separated, * = all): </label>
+          <input
+            style={{ width: "40%", padding: 6 }}
+            value={capabilities}
+            onChange={(e) => setCapabilities(e.target.value)}
+          />
+        </div>
+        <div className="page-actions">
+          <button onClick={runCompiler} disabled={loading}>
+            {loading ? "Compiling…" : "Run Compiler"}
+          </button>
+        </div>
+      </Card>
+
+      {error && <ErrorBox message={error} />}
+
+      {compiled && (
+        <>
+          <div className="grid">
+            <Card title="2. ProblemSpec">
+              <KeyValue k="Objective" v={compiled.problem.objective} />
+              <KeyValue k="Domain" v={compiled.problem.domain} />
+              <KeyValue k="Assumptions" v={compiled.problem.assumptions.length} />
+            </Card>
+            <Card title="3. WorkGraph">
+              {compiled.work_graph.nodes.length === 0 ? (
+                <EmptyState label="No nodes" />
+              ) : (
+                <ul>
+                  {compiled.work_graph.nodes.map((n) => (
+                    <li key={n.id}>
+                      {n.name} — <StatusPill value={n.nature} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+            <Card title="4. WorkPackages & Capability">
+              <KeyValue k="Work packages" v={compiled.proposed.work_packages.length} />
+              {compiled.proposed.capability_gaps.length === 0 ? (
+                <EmptyState label="No capability gaps" />
+              ) : (
+                <ul>
+                  {compiled.proposed.capability_gaps.map((g) => (
+                    <li key={g.requirement}>{g.detail}</li>
+                  ))}
+                </ul>
+              )}
+              <KeyValue k="Risk summary" v={compiled.proposed.risk_summary} />
+            </Card>
+            <Card title="5. Validation">
+              <KeyValue k="Passed" v={compiled.validation.passed ? "yes" : "no"} />
+              <ul>
+                {compiled.validation.issues.map((i, idx) => (
+                  <li key={idx}>
+                    {i.severity}: {i.message}
+                  </li>
+                ))}
+              </ul>
+              {compiled.validation.passed && (
+                <div className="page-actions" style={{ marginTop: 8 }}>
+                  <button onClick={approveAndCompile} disabled={approved}>
+                    {approved ? "Approved ✓" : "Approve & Compile"}
+                  </button>
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {manifest && (
+            <>
+              <Card title="6. SolutionPackage Manifest">
+                <pre>{JSON.stringify(manifest.manifest ?? manifest.detail, null, 2)}</pre>
+              </Card>
+
+            </>
+          )}
+        </>
+      )}
+      <Card title="Approved Solution → Canonical Work">
+        <p>
+          Instantiate an approved persisted SolutionPackage as canonical Work. This records
+          a desired goal; no capability, authority, executor, or accepted outcome is implied.
+        </p>
+        {solutionListError && <p role="alert">Cannot read saved solutions: {solutionListError}</p>}
+        <div className="builder-item">
+          <label htmlFor="approved-solution-package">Approved solution package: </label>
+          <select
+            id="approved-solution-package"
+            value={selectedSolutionId}
+            onChange={(event) => setSelectedSolutionId(event.target.value)}
+          >
+            <option value="">Use current compiled package</option>
+            {solutionPackages.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} @ {item.version.major}.{item.version.minor}.{item.version.patch} · {item.id}
+              </option>
+            ))}
+          </select>
+        </div>
+        {solutionPackages.length === 0 && !manifest && (
+          <p>No approved package yet. Complete the compiler approval flow below first.</p>
+        )}
+        <div className="builder-item">
+          <label htmlFor="work-profile">Guarantee profile: </label>
+          <select id="work-profile" value={profileRef} onChange={(e) => setProfileRef(e.target.value)}>
+            {profileOptions.map((profile) => (
+              <option key={profile} value={profile}>{profile}</option>
+            ))}
+          </select>
+        </div>
+        <div className="builder-item">
+          <label htmlFor="work-site">Site (optional): </label>
+          <input id="work-site" value={siteRef} onChange={(e) => setSiteRef(e.target.value)} placeholder="plant-a" />
+        </div>
+        <div className="page-actions">
+          <button onClick={instantiateSolution} disabled={!selectedSolutionId && !manifest}>Instantiate Work</button>
+        </div>
+        {instantiated && (
+          <div role="status">
+            <KeyValue k="Work" v={instantiated.plan.work.id} />
+            <KeyValue k="Phase" v={<StatusPill value={instantiated.plan.work.status.phase} />} />
+            <KeyValue k="Profile" v={instantiated.plan.work.spec.profile_ref} />
+            <KeyValue k="Source solution" v={instantiated.plan.solution_package_ref} />
+            <KeyValue k="Readiness gates" v={instantiated.plan.unresolved_gates.join(" → ")} />
+            <KeyValue k="Execution started" v={instantiated.execution_started ? "yes" : "no — explicit gates remain"} />
+            <Link className="action-link" to="/workbench">Review Work in Workbench →</Link>
+          </div>
+        )}
+      </Card>
+
+      <details className="studio-capability-details">
+        <summary>Advanced · Import assets as candidate capabilities</summary>
+        <p className="studio-capability-warning">
+          OpenAPI, procedures, repositories and reviewed papers create <strong>candidate</strong>
+          capabilities. Qualification, release, site admission and execution authority are separate gates.
+        </p>
       <Card title="Artifact → Capability Candidate">
         <p>
           Compile an existing asset into a candidate capability. Compilation never means qualified
@@ -421,147 +573,8 @@ export default function Studio() {
         )}
       </Card>
 
-      <Card title="Approved Solution → Canonical Work">
-        <p>
-          Instantiate an approved persisted SolutionPackage as canonical Work. This records
-          a desired goal; no capability, authority, executor, or accepted outcome is implied.
-        </p>
-        {solutionListError && <p role="alert">Cannot read saved solutions: {solutionListError}</p>}
-        <div className="builder-item">
-          <label htmlFor="approved-solution-package">Approved solution package: </label>
-          <select
-            id="approved-solution-package"
-            value={selectedSolutionId}
-            onChange={(event) => setSelectedSolutionId(event.target.value)}
-          >
-            <option value="">Use current compiled package</option>
-            {solutionPackages.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} @ {item.version.major}.{item.version.minor}.{item.version.patch} · {item.id}
-              </option>
-            ))}
-          </select>
-        </div>
-        {solutionPackages.length === 0 && !manifest && (
-          <p>No approved package yet. Complete the compiler approval flow below first.</p>
-        )}
-        <div className="builder-item">
-          <label htmlFor="work-profile">Guarantee profile: </label>
-          <select id="work-profile" value={profileRef} onChange={(e) => setProfileRef(e.target.value)}>
-            {profileOptions.map((profile) => (
-              <option key={profile} value={profile}>{profile}</option>
-            ))}
-          </select>
-        </div>
-        <div className="builder-item">
-          <label htmlFor="work-site">Site (optional): </label>
-          <input id="work-site" value={siteRef} onChange={(e) => setSiteRef(e.target.value)} placeholder="plant-a" />
-        </div>
-        <div className="page-actions">
-          <button onClick={instantiateSolution} disabled={!selectedSolutionId && !manifest}>Instantiate Work</button>
-        </div>
-        {instantiated && (
-          <div role="status">
-            <KeyValue k="Work" v={instantiated.plan.work.id} />
-            <KeyValue k="Phase" v={<StatusPill value={instantiated.plan.work.status.phase} />} />
-            <KeyValue k="Profile" v={instantiated.plan.work.spec.profile_ref} />
-            <KeyValue k="Source solution" v={instantiated.plan.solution_package_ref} />
-            <KeyValue k="Readiness gates" v={instantiated.plan.unresolved_gates.join(" → ")} />
-            <KeyValue k="Execution started" v={instantiated.execution_started ? "yes" : "no — explicit gates remain"} />
-            <Link className="action-link" to="/workbench">Review Work in Workbench →</Link>
-          </div>
-        )}
-      </Card>
+      </details>
 
-      <Card title="1. Describe Goal">
-        <div className="builder-item">
-          <label>Goal: </label>
-          <input
-            style={{ width: "70%", padding: 6 }}
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-          />
-        </div>
-        <div className="builder-item">
-          <label>Capabilities (comma separated, * = all): </label>
-          <input
-            style={{ width: "40%", padding: 6 }}
-            value={capabilities}
-            onChange={(e) => setCapabilities(e.target.value)}
-          />
-        </div>
-        <div className="page-actions">
-          <button onClick={runCompiler} disabled={loading}>
-            {loading ? "Compiling…" : "Run Compiler"}
-          </button>
-        </div>
-      </Card>
-
-      {error && <ErrorBox message={error} />}
-
-      {compiled && (
-        <>
-          <div className="grid">
-            <Card title="2. ProblemSpec">
-              <KeyValue k="Objective" v={compiled.problem.objective} />
-              <KeyValue k="Domain" v={compiled.problem.domain} />
-              <KeyValue k="Assumptions" v={compiled.problem.assumptions.length} />
-            </Card>
-            <Card title="3. WorkGraph">
-              {compiled.work_graph.nodes.length === 0 ? (
-                <EmptyState label="No nodes" />
-              ) : (
-                <ul>
-                  {compiled.work_graph.nodes.map((n) => (
-                    <li key={n.id}>
-                      {n.name} — <StatusPill value={n.nature} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-            <Card title="4. WorkPackages & Capability">
-              <KeyValue k="Work packages" v={compiled.proposed.work_packages.length} />
-              {compiled.proposed.capability_gaps.length === 0 ? (
-                <EmptyState label="No capability gaps" />
-              ) : (
-                <ul>
-                  {compiled.proposed.capability_gaps.map((g) => (
-                    <li key={g.requirement}>{g.detail}</li>
-                  ))}
-                </ul>
-              )}
-              <KeyValue k="Risk summary" v={compiled.proposed.risk_summary} />
-            </Card>
-            <Card title="5. Validation">
-              <KeyValue k="Passed" v={compiled.validation.passed ? "yes" : "no"} />
-              <ul>
-                {compiled.validation.issues.map((i, idx) => (
-                  <li key={idx}>
-                    {i.severity}: {i.message}
-                  </li>
-                ))}
-              </ul>
-              {compiled.validation.passed && (
-                <div className="page-actions" style={{ marginTop: 8 }}>
-                  <button onClick={approveAndCompile} disabled={approved}>
-                    {approved ? "Approved ✓" : "Approve & Compile"}
-                  </button>
-                </div>
-              )}
-            </Card>
-          </div>
-
-          {manifest && (
-            <>
-              <Card title="6. SolutionPackage Manifest">
-                <pre>{JSON.stringify(manifest.manifest ?? manifest.detail, null, 2)}</pre>
-              </Card>
-
-            </>
-          )}
-        </>
-      )}
     </div>
   );
 }

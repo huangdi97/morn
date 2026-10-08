@@ -289,3 +289,40 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .hub-supply-chain { padding: 15px 12px; }
   .hub-supply-head h2 { font-size: 20px; }
 }
+
+/* Studio follows the Work lifecycle; raw asset importers are advanced tools. */
+.studio-workflow-hint {
+  margin: 2px 0 18px;
+  color: #a9bbd5;
+  line-height: 1.65;
+  font-size: 13px;
+}
+.studio-capability-details {
+  margin: 18px 0 24px;
+  min-width: 0;
+  padding: 0 16px;
+  border: 1px solid #374760;
+  border-radius: 14px;
+  background: #131d2c;
+}
+.studio-capability-details > summary {
+  cursor: pointer;
+  padding: 17px 4px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #b9c9e5;
+}
+.studio-capability-details > summary:hover { color: #ffffff; }
+.studio-capability-details[open] > summary { border-bottom: 1px solid #36475d; }
+.studio-capability-details > .card { margin: 12px 0 16px; }
+.studio-capability-warning {
+  margin: 12px 0 16px;
+  font-size: 12px;
+  color: #adbdd6;
+  line-height: 1.65;
+}
+@media (max-width: 760px) {
+  .studio-capability-details { padding: 0 12px; }
+  .studio-capability-details > summary { font-size: 13px; }
+}
+

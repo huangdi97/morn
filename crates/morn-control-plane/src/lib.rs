@@ -640,7 +640,8 @@ impl ControlPlaneStore for MornStore {
         if let Some(persisted) =
             self.load_record::<WorkResource>("work_resource_v115", work.id.as_str())?
         {
-            if persisted.workspace_id != work.workspace_id || persisted.created_at != work.created_at
+            if persisted.workspace_id != work.workspace_id
+                || persisted.created_at != work.created_at
             {
                 return Err(Error::validation(
                     "canonical Work owner and creation are immutable",

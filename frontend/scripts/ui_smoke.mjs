@@ -48,6 +48,21 @@ try {
     if (route === "/hub" && !(await page.getByRole("heading", { name: "v11.5 Capability Supply Chain" }).isVisible())) {
       errors.push("hub: governed capability supply-chain section is not visible");
     }
+    if (route === "/studio") {
+      const advanced = page.locator("details.studio-capability-details");
+      if (!(await advanced.count())) {
+        errors.push("studio: governed advanced capability importer is missing");
+      } else {
+        if (await advanced.evaluate((node) => node.open)) {
+          errors.push("studio: advanced raw asset imports must be collapsed by default");
+        }
+        await advanced.locator("summary").click();
+        if (!(await page.getByRole("button", { name: "Compile OpenAPI" }).isVisible())) {
+          errors.push("studio: expanded artifact candidate compiler is unavailable");
+        }
+        await advanced.locator("summary").click();
+      }
+    }
     if (route === "/workbench" && !(await page.getByRole("heading", { name: "Work is the unit of coordination" }).isVisible())) {
       errors.push("workbench: canonical Work-first overview is not visible");
     }
