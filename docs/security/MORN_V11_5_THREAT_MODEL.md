@@ -216,3 +216,15 @@ Positive evidence requires concrete references and typed producers validate the
 resolver, site admission, bound Authority, source-of-truth and provenance
 records before emitting it. Old-generation evidence cannot satisfy a changed
 Work spec.
+
+
+## Self-certified site conformance
+
+Threat: an admission caller posts `durable_work_state=true`,
+`provenance_ready=true`, a list of satisfied semantics and an isolation label,
+then self-admits a capability into a strict site/Profile.
+
+Control: the v11.5 admission API requires a persisted
+`ProfileConformanceAttestation` with evaluator identity, evidence references,
+exact site/Profile and optional expiry. Raw conformance fields on the admission
+request are rejected. Fixture attestations never count as real-site evidence.
