@@ -15,7 +15,6 @@ pub struct DomainPackTag;
 pub type DomainDefinitionId = Id<DomainDefinitionTag>;
 pub type DomainPackId = Id<DomainPackTag>;
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "kebab-case")]
 pub enum UiSurface {
