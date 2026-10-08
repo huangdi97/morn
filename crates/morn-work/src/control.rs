@@ -517,5 +517,4 @@ mod tests {
         assert!(!WorkPhase::Delivered.is_terminal());
         assert!(!WorkPhase::Reconciling.is_terminal());
     }
-
 }
