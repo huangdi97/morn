@@ -31,9 +31,9 @@ are not arbitrary user assertions. Morn must preserve the same separation.
 6. Strict condition producers are typed:
    - CapabilityResolved <- complete WorkcellPlan/resolver result;
    - CapabilityQualified <- active qualification/release/site+Profile admission;
-   - AuthoritySatisfied <- currently valid BoundAuthorityDecision for the Work/site;
+   - action Authority <- currently valid BoundAuthorityDecision for the exact Work/site/action/resource, enforced when an action permit is issued rather than as a generic readiness bit;
    - SourceOfTruthBound <- validated SourceOfTruthBinding for the Work site;
-   - ProvenanceReady <- ExecutionManifest validating against Work + binding.
+   - ProvenanceReady <- selected capability/source provenance available before execution. The later ExecutionManifest separately pins binding/runtime provenance after a binding exists.
 7. The generic `/api/v115/work/reconcile` endpoint rejects readiness boolean
    fields and reconciles from persisted ConditionEvidence.
 8. ConditionEvidence is an immutable observation record. Current Work
