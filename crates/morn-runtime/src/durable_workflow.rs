@@ -319,12 +319,6 @@ mod tests {
         new_spec.goal = "changed".to_string();
         work.replace_spec(new_spec);
 
-        assert!(DurableWorkflowBinding::new(
-            &work,
-            &old,
-            "workflow-provider",
-            "run-1"
-        )
-        .is_err());
+        assert!(DurableWorkflowBinding::new(&work, &old, "workflow-provider", "run-1").is_err());
     }
 }
