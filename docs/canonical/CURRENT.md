@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-025 in `docs/adr/`
+3. ADR-002 through ADR-027 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -157,3 +157,19 @@ of all possible Morn deployments. DomainProfile releases are versioned
 guarantee assets registered by canonical reference; the same published
 id/version cannot be silently overwritten. Work and SiteAdmission pin the exact
 Profile reference. See ADR-025.
+
+
+## Event semantic roles
+
+CloudEvents is the transport envelope; it is not the durability/business-truth
+model. Morn distinguishes runtime signals, durable control intents, domain
+facts, external observations and projection notifications. Cordis/harness
+lifecycle events remain runtime evidence unless explicitly promoted through a
+Morn semantic record. See ADR-026.
+
+## Provider health lease
+
+A provider's health is runtime evidence with freshness, not a permanent
+property. Strict Enterprise/Factory resolution gates candidates against a live
+ProviderRegistry projection and rejects stale/unregistered providers. Active
+ExecutionBindings remain pinned through provider loss/recovery. See ADR-027.
