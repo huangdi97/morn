@@ -162,12 +162,121 @@ pub trait DurableWorkflowProvider: Send + Sync {
     fn cancel(&mut self, binding: &DurableWorkflowBinding, reason: &str) -> Result<()>;
 }
 
+
+#[derive(Debug, Default)]
+pub struct LegacyMornDurableWorkflowProvider {
+    runtime: morn_work::durable::DurableRuntime,
+}
+
+impl LegacyMornDurableWorkflowProvider {
+    pub fn new(runtime: morn_work::durable::DurableRuntime) -> Self {
+        Self { runtime }
+    }
+
+    pub fn runtime(&self) -> &morn_work::durable::DurableRuntime {
+        &self.runtime
+    }
+
+    pub fn runtime_mut(&mut self) -> &mut morn_work::durable::DurableRuntime {
+        &mut self.runtime
+    }
+
+    fn run_for(&self, binding: &DurableWorkflowBinding) -> Result<&WorkflowRun> {
+        let run_id = morn_kernel::ids::WorkflowRunId::new(binding.workflow_run_ref.clone());
+        self.runtime
+            .run(&run_id)
+            .ok_or_else(|| Error::not_found(format!("workflow run {}", binding.workflow_run_ref)))
+    }
+}
+
+impl DurableWorkflowProvider for LegacyMornDurableWorkflowProvider {
+    fn provider_name(&self) -> &str {
+        "morn-legacy-durable-runtime"
+    }
+
+    fn inspect(&self, binding: &DurableWorkflowBinding) -> Result<DurableWorkflowEvidence> {
+        DurableWorkflowEvidence::from_legacy_run(binding, self.run_for(binding)?)
+    }
+
+    fn signal(
+        &mut self,
+        binding: &DurableWorkflowBinding,
+        signal_type: &str,
+        payload_ref: &str,
+    ) -> Result<()> {
+        use morn_work::durable::{Signal, SignalKind};
+
+        let kind = match signal_type {
+            "human-approval" => SignalKind::HumanApproval,
+            "external-event" => SignalKind::ExternalEvent,
+            "manual-resume" => SignalKind::ManualResume,
+            "data-arrived" => SignalKind::DataArrived,
+            "reviewer-response" => SignalKind::ReviewerResponse,
+            "cancel" => SignalKind::Cancel,
+            other => {
+                return Err(Error::validation(format!(
+                    "unsupported legacy durable signal {other}"
+                )))
+            }
+        };
+        let run_id = morn_kernel::ids::WorkflowRunId::new(binding.workflow_run_ref.clone());
+        let signal = Signal::new(
+            run_id,
+            kind,
+            payload_ref,
+            "morn-workflow-provider",
+            "runtime-provider-boundary",
+        );
+        self.runtime.deliver_signal(signal)
+    }
+
+    fn cancel(&mut self, binding: &DurableWorkflowBinding, reason: &str) -> Result<()> {
+        self.signal(binding, "cancel", reason)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use morn_kernel::ids::{WorkflowDefinitionId, WorkspaceId};
     use morn_kernel::version::Version;
     use morn_work::control::WorkSpec;
+
+    #[test]
+    fn legacy_durable_runtime_is_consumed_through_provider_boundary() {
+        use morn_work::workflow::{WorkflowDefinition, WorkflowStep, WorkflowStepKind};
+
+        let workspace = WorkspaceId::generate();
+        let definition = WorkflowDefinition::new(workspace.clone(), "legacy-provider")
+            .add_step(WorkflowStep::new("review", WorkflowStepKind::ManualWait));
+        let definition_id = definition.id.clone();
+        let mut runtime = morn_work::durable::DurableRuntime::new();
+        runtime.register_workflow(definition);
+        let run = runtime.start_run(&definition_id, None).unwrap();
+
+        let work = WorkResource::new(
+            workspace,
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "review",
+                "morn.lite@1.0.0",
+            ),
+        );
+        let execution = ExecutionBinding::for_work(&work, "cap", "legacy-workflow", "1");
+        let binding = DurableWorkflowBinding::new(
+            &work,
+            &execution,
+            "morn-legacy-durable-runtime",
+            run.id.to_string(),
+        )
+        .unwrap();
+
+        let provider = LegacyMornDurableWorkflowProvider::new(runtime);
+        let evidence = provider.inspect(&binding).unwrap();
+        assert_eq!(evidence.execution_binding_id, execution.id);
+        assert_eq!(evidence.state, DurableWorkflowState::Running);
+        assert!(!evidence.proves_morn_acceptance());
+    }
 
     #[test]
     fn completed_workflow_run_is_not_accepted_work() {
