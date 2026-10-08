@@ -1,9 +1,12 @@
 name: CI
 
 on:
+  # Active feature heads are verified through their PR. Avoid duplicate
+  # push+pull_request builds for the same SHA (and mutual cancellations).
   push:
-    branches: [main, morn-v1, "**"]
+    branches: [main, morn-v1]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}

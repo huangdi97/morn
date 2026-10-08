@@ -125,10 +125,8 @@ impl DurableWorkControllerRuntime {
         // under the controller lease. A concurrent Work mutation after reload
         // is still rejected by the fenced CAS at commit time.
         let derived_inputs = if provided_inputs.is_none() {
-            let evidence: Vec<ConditionEvidence> = store.load_records_in_workspace(
-                "condition_evidence_v115",
-                work.workspace_id.as_str(),
-            )?;
+            let evidence: Vec<ConditionEvidence> = store
+                .load_records_in_workspace("condition_evidence_v115", work.workspace_id.as_str())?;
             Some(derive_controller_inputs(&work, &evidence, now))
         } else {
             None
