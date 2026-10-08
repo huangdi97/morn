@@ -22,7 +22,7 @@ use morn_kernel::error::Result;
 use morn_profile::DomainProfile;
 use morn_runtime::{
     reconcile_attempt, ActionAttempt, BindingMigrationDecision, ExecutionBinding,
-    OutcomeReconciler, ReconciliationRecord,
+    ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
 };
 use morn_store::MornStore;
 use morn_work::acceptance_decision::AcceptanceDecision;
@@ -340,6 +340,11 @@ pub trait ControlPlaneStore {
     fn save_work_resource_cas(&self, work: &mut WorkResource) -> Result<u64>;
     fn save_execution_binding(&self, work: &WorkResource, binding: &ExecutionBinding)
         -> Result<()>;
+    fn save_execution_manifest(
+        &self,
+        work: &WorkResource,
+        manifest: &ExecutionManifest,
+    ) -> Result<()>;
     fn save_binding_migration(
         &self,
         work: &WorkResource,
@@ -404,6 +409,20 @@ impl ControlPlaneStore for MornStore {
             work.workspace_id.as_str(),
             binding.created_at.millis(),
             binding,
+        )
+    }
+
+    fn save_execution_manifest(
+        &self,
+        work: &WorkResource,
+        manifest: &ExecutionManifest,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "execution_manifest_v115",
+            &manifest.execution_binding_ref,
+            work.workspace_id.as_str(),
+            manifest.created_at.millis(),
+            manifest,
         )
     }
 
