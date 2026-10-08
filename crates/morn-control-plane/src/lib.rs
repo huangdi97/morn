@@ -1307,4 +1307,3 @@ mod terminal_phase_tests {
         assert_eq!(work.status.phase, WorkPhase::Ready);
     }
 }
-
