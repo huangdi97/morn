@@ -340,10 +340,8 @@ impl AppInner {
         self.certification.decisions = store.load_certification_decisions()?;
         self.certification.capabilities = store.load_certified_capabilities()?;
         self.certification.releases = store.load_capability_releases()?;
-        self.v115_capabilities = store.load_records_in_workspace(
-            "capability_record_v115",
-            self.workspace.id.as_str(),
-        )?;
+        self.v115_capabilities = store
+            .load_records_in_workspace("capability_record_v115", self.workspace.id.as_str())?;
         let manifest_ids: std::collections::HashSet<String> = self
             .v115_capabilities
             .iter()

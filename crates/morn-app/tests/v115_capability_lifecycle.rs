@@ -210,7 +210,7 @@ fn capability_lifecycle_survives_restart_and_revocation_keeps_history() {
 #[test]
 fn v115_capability_hydration_keeps_tenant_manifest_and_historical_event_isolation() {
     use morn_assurance::{CapabilityLifecycleEvent, CapabilityLifecycleEventId};
-    use morn_capability::{CapabilityManifest, CapabilityRecord, CapabilityKind, EffectClass};
+    use morn_capability::{CapabilityKind, CapabilityManifest, CapabilityRecord, EffectClass};
     use morn_kernel::ids::CapabilityId;
     use morn_kernel::time::Timestamp;
 

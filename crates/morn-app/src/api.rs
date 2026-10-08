@@ -342,7 +342,9 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
     if work.workspace_id != guard.workspace.id {
-        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
     }
     let profile =
         morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
@@ -2459,11 +2461,23 @@ mod workspace_boundary_tests {
             let guard = state.lock();
             guard
                 .store
-                .save_record("work_resource_v115", "visible", guard.workspace.id.as_str(), 1, &json!({"id":"visible"}))
+                .save_record(
+                    "work_resource_v115",
+                    "visible",
+                    guard.workspace.id.as_str(),
+                    1,
+                    &json!({"id":"visible"}),
+                )
                 .unwrap();
             guard
                 .store
-                .save_record("work_resource_v115", "foreign", "foreign-workspace", 2, &json!({"id":"foreign"}))
+                .save_record(
+                    "work_resource_v115",
+                    "foreign",
+                    "foreign-workspace",
+                    2,
+                    &json!({"id":"foreign"}),
+                )
                 .unwrap();
         }
 
@@ -2506,10 +2520,16 @@ mod workspace_boundary_tests {
             Json(json!({"work_id":work.id.to_string()})),
         )
         .await;
-        assert_eq!(result.unwrap_err().into_response().status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            result.unwrap_err().into_response().status(),
+            StatusCode::NOT_FOUND
+        );
         let guard = state.lock();
         assert_eq!(
-            guard.store.record_revision("work_resource_v115", work.id.as_str()).unwrap(),
+            guard
+                .store
+                .record_revision("work_resource_v115", work.id.as_str())
+                .unwrap(),
             Some(1)
         );
         assert!(guard.store.pending_outbox_events(10).unwrap().is_empty());
