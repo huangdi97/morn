@@ -193,7 +193,13 @@ async fn v115_status() -> ApiResult {
                     "wire_methods": ["initialize", "session/prompt", "shutdown"],
                     "cancel_method": false
                 },
-                { "id": "pi", "status": "fixture-contract; real transport not configured" }
+                {
+                    "id": "pi",
+                    "status": "fixture contract + real JSONL RPC subprocess client; external Pi binary/model credentials required",
+                    "wire_mode": "pi --mode rpc --no-session",
+                    "commands": ["prompt", "get_state", "abort"],
+                    "settled_event": "agent_settled"
+                }
             ],
             "execution_environment": ["process", "container", "microvm", "full-vm", "remote", "physical"],
             "workload_identity": "provider-neutral; SPIFFE-compatible reference shape; no secret material in identity record",
@@ -217,6 +223,7 @@ async fn v115_status() -> ApiResult {
         "claims": {
             "local_engineering": "reference implementation + fixture/conformance tests",
             "real_dsh": "wire adapter implemented; runtime/model/credential smoke remains external-blocked",
+            "real_pi": "JSONL RPC adapter implemented; installed Pi binary/model/credential smoke remains external-blocked",
             "real_factory": "external-blocked until lawful site data/authority exists",
             "production_write": "not entered"
         }
