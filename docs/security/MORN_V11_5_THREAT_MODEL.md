@@ -202,3 +202,17 @@ External actions are classified as read/candidate/sandbox/shadow/production/
 physical intent. `morn.factory.readonly@1.0.0` rejects ProductionWrite before
 the connector path even if the enterprise IAM provider would allow the
 principal. PhysicalControl requires explicit profile opt-in.
+
+
+## Caller-forged readiness
+
+Threat: a client/controller caller supplies booleans such as
+`capability_qualified=true` or `authority_satisfied=true` and advances strict
+Work without the underlying records.
+
+Control: the generic v11.5 reconcile API rejects readiness boolean fields.
+Readiness is derived from immutable, generation-scoped `ConditionEvidence`.
+Positive evidence requires concrete references and typed producers validate the
+resolver, site admission, bound Authority, source-of-truth and provenance
+records before emitting it. Old-generation evidence cannot satisfy a changed
+Work spec.
