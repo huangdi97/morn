@@ -77,14 +77,8 @@ mod tests {
         registry.register(v11.clone()).unwrap();
 
         assert_eq!(registry.family("morn.factory.readonly").len(), 2);
-        assert_eq!(
-            registry.get("morn.factory.readonly@1.0.0"),
-            Some(&v1)
-        );
-        assert_eq!(
-            registry.get("morn.factory.readonly@1.1.0"),
-            Some(&v11)
-        );
+        assert_eq!(registry.get("morn.factory.readonly@1.0.0"), Some(&v1));
+        assert_eq!(registry.get("morn.factory.readonly@1.1.0"), Some(&v11));
     }
 
     #[test]
