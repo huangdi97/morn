@@ -21,9 +21,7 @@ pub use binding_guard::{
 pub use capability_gate::{
     CapabilityEligibilityBlock, CapabilityEligibilityGate, CapabilityEligibilityReport,
 };
-pub use condition_evidence::{
-    derive_controller_inputs, ConditionEvidence, ConditionEvidenceId,
-};
+pub use condition_evidence::{derive_controller_inputs, ConditionEvidence, ConditionEvidenceId};
 pub use controller_runtime::{ControllerTickResult, DurableWorkControllerRuntime};
 pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
 
@@ -594,9 +592,7 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         evidence: &ConditionEvidence,
     ) -> Result<()> {
-        if evidence.work_ref != work.id.to_string()
-            || evidence.work_generation != work.generation
-        {
+        if evidence.work_ref != work.id.to_string() || evidence.work_generation != work.generation {
             return Err(Error::validation(
                 "condition evidence must match the exact Work generation",
             ));
