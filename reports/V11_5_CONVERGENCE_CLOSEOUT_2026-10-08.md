@@ -43,6 +43,7 @@ Morn remains Work-first, not Agent-first:
 | desired/observed Work | `morn-work/src/control.rs` | implemented |
 | readiness Conditions derived from durable evidence | `condition_evidence.rs` + typed readiness producers + hardened reconcile API | implemented |
 | generation invalidates stale projection | `WorkResource::replace_spec` | implemented |
+| terminal Work generation monotonicity | WorkPhase terminal semantics + controller guards + ADR-038 | implemented |
 | durable control plane | `morn-control-plane`, `morn-store` | implemented |
 | optimistic concurrency/fencing | control-plane/store CAS + leases | implemented |
 | Work termination/finalizers | Work finalizers + external-action resolution | implemented |
