@@ -32,6 +32,8 @@ try {
       await page.screenshot({ path: join(screenshotsDir, `${surface}-desktop.png`), fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: join(screenshotsDir, `${surface}-mobile.png`), fullPage: true });
+      const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      if (documentWidth > 390) errors.push(`route ${route}: mobile horizontal overflow ${documentWidth}px > 390px`);
       await page.setViewportSize({ width: 1280, height: 800 });
     }
     const bodyText = await page.locator("body").innerText();

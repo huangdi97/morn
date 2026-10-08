@@ -25,7 +25,8 @@ pub use authority::{
     AuthorityProvider, AuthorityRequest, BoundAuthorityDecision, NativePolicyAuthority,
 };
 pub use binding::{
-    BindingMigrationDecision, BindingMigrationDecisionId, BindingMigrationReason, ExecutionBinding,
+    BindingMigrationDecision, BindingMigrationDecisionId, BindingMigrationReason,
+    BindingMigrationRequest, ExecutionBinding,
 };
 pub use composition::{
     run_composition_contract, CompositionProviderRef, CompositionRuntimeProvider,
