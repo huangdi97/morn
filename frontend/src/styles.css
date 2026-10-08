@@ -211,6 +211,36 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .work-focus h2 { font-size: 21px; }
   .action-link { width: 100%; }
 }
+/* Keep fixture/legacy execution tools available without making them the Workbench. */
+.workbench-reference {
+  margin: 20px 0 24px;
+  min-width: 0;
+  border: 1px solid #374760;
+  border-radius: 14px;
+  padding: 0 16px;
+  background: #131d2c;
+}
+.workbench-reference > summary {
+  cursor: pointer;
+  padding: 17px 4px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #b9c9e5;
+}
+.workbench-reference > summary:hover { color: #fff; }
+.workbench-reference[open] > summary { border-bottom: 1px solid #36475d; }
+.workbench-reference-note {
+  margin: 12px 0 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #9dabc3;
+}
+.workbench-reference > .grid { margin-bottom: 12px; }
+.workbench-reference > .card { margin-bottom: 12px; }
+@media (max-width: 760px) {
+  .workbench-reference { padding: 0 12px; margin-top: 16px; }
+  .workbench-reference > summary { font-size: 13px; }
+}
 /* v11.5 Hub reads canonical supply-chain facts, never inferred admission. */
 .hub-supply-chain {
   min-width: 0;

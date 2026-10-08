@@ -17,6 +17,13 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errors = [];
 
+async function expandReferenceDiagnostics() {
+  const details = page.locator("details.workbench-reference");
+  if (await details.count()) {
+    await details.locator("summary").click();
+  }
+}
+
 page.on("console", (msg) => {
   if (msg.type() === "error") errors.push(`console.error: ${msg.text()}`);
 });
@@ -44,6 +51,9 @@ try {
     if (route === "/workbench" && !(await page.getByRole("heading", { name: "Work is the unit of coordination" }).isVisible())) {
       errors.push("workbench: canonical Work-first overview is not visible");
     }
+    if (route === "/workbench" && await page.locator("details.workbench-reference").evaluate((node) => node.open)) {
+      errors.push("workbench: legacy diagnostics should be collapsed by default");
+    }
     if (errors.length > 0) {
       console.error(`FAILED ${route}:`, errors.join(" | "));
       process.exitCode = 1;
@@ -56,6 +66,7 @@ try {
     // BioLab E2E via the real backend through the UI button.
     errors.length = 0;
     await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
+    await expandReferenceDiagnostics();
     await page.getByRole("button", { name: /Run BioLab E2E/i }).click();
     await page.waitForTimeout(2500);
     if (screenshotsDir) {
@@ -83,6 +94,7 @@ try {
     for (const btn of buttons) {
       errors.length = 0;
       await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
+      await expandReferenceDiagnostics();
       const opts = btn.exact ? { name: btn.name, exact: true } : { name: btn.name };
       await page.getByRole("button", opts).click();
       await page.waitForTimeout(3000);
@@ -106,6 +118,7 @@ try {
     for (const btn of g3buttons) {
       errors.length = 0;
       await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
+      await expandReferenceDiagnostics();
       await page.getByRole("button", { name: btn.name }).click();
       await page.waitForTimeout(2500);
       const t = (await page.locator("body").innerText()).toLowerCase();

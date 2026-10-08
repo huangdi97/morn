@@ -339,7 +339,13 @@ export default function Workbench() {
 
       <CanonicalWorkOverview control={v115Control} error={v115ControlError} />
 
-      <div className="grid">
+      <details className="workbench-reference" data-testid="reference-tools">
+        <summary>Reference runs &amp; engineering diagnostics</summary>
+        <p className="workbench-reference-note">
+          These are optional legacy/fixture execution tools. Their status, model output and
+          demos are not a substitute for canonical Work, observed outcomes or independent acceptance.
+        </p>
+        <div className="grid">
         <Card title="Mission">
           <KeyValue k="Name" v={data.mission.name} />
           <KeyValue k="Kind" v={data.mission.kind} />
@@ -612,6 +618,7 @@ export default function Workbench() {
           </ol>
         </Card>
       )}
+      </details>
     </div>
   );
 }
