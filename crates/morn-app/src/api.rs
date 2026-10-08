@@ -280,7 +280,7 @@ async fn v115_status() -> ApiResult {
 }
 
 async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
-    use morn_control_plane::{ControllerInputs, DurableWorkControllerRuntime};
+    use morn_control_plane::DurableWorkControllerRuntime;
     use morn_kernel::time::Timestamp;
 
     let work_id = body
@@ -300,35 +300,26 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
                 work.spec.profile_ref
             )))
         })?;
-    let inputs = ControllerInputs {
-        capability_resolved: body
-            .get("capability_resolved")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-        capability_qualified: body
-            .get("capability_qualified")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-        authority_satisfied: body
-            .get("authority_satisfied")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-        source_of_truth_bound: body
-            .get("source_of_truth_bound")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-        provenance_ready: body
-            .get("provenance_ready")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-    };
     let holder = body
         .get("controller_holder")
         .and_then(Value::as_str)
         .unwrap_or("morn-app-api");
     let runtime = DurableWorkControllerRuntime::new(holder);
+    for forbidden in [
+        "capability_resolved",
+        "capability_qualified",
+        "authority_satisfied",
+        "source_of_truth_bound",
+        "provenance_ready",
+    ] {
+        if body.get(forbidden).is_some() {
+            return Err(AppError(Error::validation(format!(
+                "{forbidden} is derived from durable condition evidence and cannot be asserted by the reconcile caller"
+            ))));
+        }
+    }
     let tick =
-        runtime.reconcile_once(&guard.store, work_id, &profile, &inputs, Timestamp::now())?;
+        runtime.reconcile_from_evidence(&guard.store, work_id, &profile, Timestamp::now())?;
     let current = guard
         .store
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
@@ -337,7 +328,7 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
     Ok(Json(json!({
         "tick": tick,
         "work": current,
-        "note": "controller tick used lease/fencing + CAS + atomic durable semantic outbox"
+        "note": "controller tick derived readiness from durable generation-scoped evidence, then used lease/fencing + CAS + atomic durable semantic outbox"
     })))
 }
 
@@ -348,6 +339,7 @@ async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
 
     Ok(Json(json!({
         "work": load("work_resource_v115")?,
+        "condition_evidence": load("condition_evidence_v115")?,
         "source_of_truth_bindings": load("source_of_truth_binding_v115")?,
         "execution_bindings": load("execution_binding_v115")?,
         "execution_manifests": load("execution_manifest_v115")?,
