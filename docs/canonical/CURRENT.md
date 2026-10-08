@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-041 in `docs/adr/`
+3. ADR-002 through ADR-043 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -295,3 +295,15 @@ Receipt semantics are also explicit: a Harness `ExecutionReceipt` is executor
 evidence, while a governed external-system `ConnectorReceipt` is an external
 action receipt. Neither record alone is an ObservedOutcome or an
 AcceptanceDecision.
+
+
+## Registry and local ABI projections
+
+Hub/discovery standards are adapters, not a second semantic truth. xRegistry is
+the preferred future generic metadata-registry projection; A2A Agent Cards and
+OASF metadata apply only to the Agent-shaped subset of Morn Capability and do
+not imply qualification, authority or site admission.
+
+For portable local providers, WIT/Wasm Component Model is an optional future
+ABI. It does not replace Cordis, the Morn Protocol, or the durable Work control
+plane. See ADR-042 and ADR-043.
