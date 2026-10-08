@@ -45,7 +45,9 @@ impl DurableWorkControllerRuntime {
     }
 
     /// Strict v11.5 path: readiness is derived from durable,
-    /// generation-scoped evidence instead of caller supplied booleans.
+    /// generation-scoped evidence. Do not derive before obtaining the controller
+    /// lease and reloading Work: a concurrent spec generation could otherwise
+    /// receive Conditions that were valid for the previous generation.
     pub fn reconcile_from_evidence(
         &self,
         store: &MornStore,
@@ -53,21 +55,28 @@ impl DurableWorkControllerRuntime {
         profile: &DomainProfile,
         now: Timestamp,
     ) -> Result<ControllerTickResult> {
-        let work: WorkResource = store
-            .load_record("work_resource_v115", work_id)?
-            .ok_or_else(|| Error::not_found(format!("WorkResource {work_id}")))?;
-        let evidence: Vec<ConditionEvidence> = store
-            .load_records_in_workspace("condition_evidence_v115", work.workspace_id.as_str())?;
-        let inputs = derive_controller_inputs(&work, &evidence, now);
-        self.reconcile_once(store, work_id, profile, &inputs, now)
+        self.reconcile_internal(store, work_id, profile, None, now)
     }
 
+    /// Reference/fixture entry point for explicit controller inputs. Production
+    /// API routes use reconcile_from_evidence, not caller-provided readiness.
     pub fn reconcile_once(
         &self,
         store: &MornStore,
         work_id: &str,
         profile: &DomainProfile,
         inputs: &ControllerInputs,
+        now: Timestamp,
+    ) -> Result<ControllerTickResult> {
+        self.reconcile_internal(store, work_id, profile, Some(inputs), now)
+    }
+
+    fn reconcile_internal(
+        &self,
+        store: &MornStore,
+        work_id: &str,
+        profile: &DomainProfile,
+        provided_inputs: Option<&ControllerInputs>,
         now: Timestamp,
     ) -> Result<ControllerTickResult> {
         if self.holder.trim().is_empty() || self.lease_ttl_ms <= 0 {
@@ -111,6 +120,22 @@ impl DurableWorkControllerRuntime {
                 profile.canonical_ref()
             )));
         }
+
+        // The evidence and Work snapshot are now from the same generation
+        // under the controller lease. A concurrent Work mutation after reload
+        // is still rejected by the fenced CAS at commit time.
+        let derived_inputs = if provided_inputs.is_none() {
+            let evidence: Vec<ConditionEvidence> = store.load_records_in_workspace(
+                "condition_evidence_v115",
+                work.workspace_id.as_str(),
+            )?;
+            Some(derive_controller_inputs(&work, &evidence, now))
+        } else {
+            None
+        };
+        let inputs = provided_inputs
+            .or(derived_inputs.as_ref())
+            .ok_or_else(|| Error::internal("controller inputs are missing"))?;
 
         let previous_phase = work.status.phase;
         let previous_revision = work.resource_version;
