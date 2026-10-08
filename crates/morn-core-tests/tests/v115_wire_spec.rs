@@ -6,7 +6,7 @@ use morn_runtime::{
     ActionAttempt, BoundAuthorityDecision, ExecutionBinding, ExecutionManifest,
     ReconciliationRecord,
 };
-use morn_work::{AcceptanceDecision, control::WorkResource};
+use morn_work::{control::WorkResource, AcceptanceDecision};
 use morn_world::ObservedOutcome;
 use serde_json::Value;
 
@@ -18,16 +18,12 @@ const BINDING: &str = include_str!("../../../spec/v11.5/examples/execution-bindi
 const ATTEMPT: &str = include_str!("../../../spec/v11.5/examples/action-attempt.json");
 const PROFILE: &str = include_str!("../../../spec/v11.5/examples/factory-profile.json");
 const EVENT: &str = include_str!("../../../spec/v11.5/examples/event-envelope.json");
-const AUTHORITY: &str =
-    include_str!("../../../spec/v11.5/examples/authority-decision.json");
-const RECEIPT: &str =
-    include_str!("../../../spec/v11.5/examples/connector-receipt.json");
+const AUTHORITY: &str = include_str!("../../../spec/v11.5/examples/authority-decision.json");
+const RECEIPT: &str = include_str!("../../../spec/v11.5/examples/connector-receipt.json");
 const RECONCILIATION: &str =
     include_str!("../../../spec/v11.5/examples/reconciliation-record.json");
-const OUTCOME: &str =
-    include_str!("../../../spec/v11.5/examples/observed-outcome.json");
-const ACCEPTANCE: &str =
-    include_str!("../../../spec/v11.5/examples/acceptance-decision.json");
+const OUTCOME: &str = include_str!("../../../spec/v11.5/examples/observed-outcome.json");
+const ACCEPTANCE: &str = include_str!("../../../spec/v11.5/examples/acceptance-decision.json");
 const EXECUTION_MANIFEST: &str =
     include_str!("../../../spec/v11.5/examples/execution-manifest.json");
 
@@ -115,10 +111,7 @@ fn canonical_wire_examples_deserialize_into_reference_implementation() {
     assert_eq!(receipt.external_id.as_deref(), Some("MO-88273"));
 
     let reconciliation: ReconciliationRecord = serde_json::from_str(RECONCILIATION).unwrap();
-    assert_eq!(
-        reconciliation.after,
-        morn_runtime::AttemptState::Observed
-    );
+    assert_eq!(reconciliation.after, morn_runtime::AttemptState::Observed);
     assert_eq!(
         reconciliation.observation.external_ref.as_deref(),
         Some("MO-88273")
@@ -160,10 +153,7 @@ fn executor_receipt_external_receipt_outcome_and_acceptance_are_distinct() {
     use morn_harness::ExecutionReceipt;
     use morn_kernel::ids::WorkspaceId;
 
-    let executor_receipt = ExecutionReceipt::new(
-        WorkspaceId::generate(),
-        "dsh-session-1",
-    );
+    let executor_receipt = ExecutionReceipt::new(WorkspaceId::generate(), "dsh-session-1");
     let external_receipt: ConnectorReceipt = serde_json::from_str(RECEIPT).unwrap();
     let outcome: ObservedOutcome = serde_json::from_str(OUTCOME).unwrap();
     let acceptance: AcceptanceDecision = serde_json::from_str(ACCEPTANCE).unwrap();
@@ -174,7 +164,10 @@ fn executor_receipt_external_receipt_outcome_and_acceptance_are_distinct() {
     assert!(acceptance.is_final_acceptance());
 
     // Distinct records deliberately use different identities and evidence roles.
-    assert_ne!(executor_receipt.id.to_string(), external_receipt.id.to_string());
+    assert_ne!(
+        executor_receipt.id.to_string(),
+        external_receipt.id.to_string()
+    );
     assert_ne!(external_receipt.id.to_string(), outcome.id.to_string());
     assert_ne!(outcome.id.to_string(), acceptance.id.to_string());
 }
