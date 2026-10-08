@@ -34,6 +34,7 @@ export interface V115ControlPlaneData {
   }>;
   source_of_truth_bindings: Array<Record<string, unknown>>;
   execution_bindings: Array<Record<string, unknown>>;
+  execution_manifests: Array<Record<string, unknown>>;
   binding_migrations: Array<Record<string, unknown>>;
   attempts: Array<Record<string, unknown>>;
   reconciliations: Array<Record<string, unknown>>;
