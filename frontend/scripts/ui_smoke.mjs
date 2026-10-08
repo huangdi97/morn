@@ -130,6 +130,21 @@ try {
         await page.screenshot({ path: join(screenshotsDir, "studio-compiled-after.png"), fullPage: true });
       }
       if (!t.includes("solutionpackage manifest")) errors.push("studio manifest missing");
+      await page.getByRole("button", { name: "Instantiate Work", exact: true }).click();
+      await page.getByText("Execution started", { exact: true }).waitFor();
+      t = (await page.locator("body").innerText()).toLowerCase();
+      if (!t.includes("no — explicit gates remain")) {
+        errors.push("Studio: Work instantiation skipped execution readiness gates");
+      }
+      await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
+      await page.waitForTimeout(500);
+      const focusText = await page.locator(".work-focus").innerText();
+      if (!focusText.includes("Deliver a reviewed report") || !focusText.includes("Proposed")) {
+        errors.push("Workbench: Studio-instantiated Work is not shown as canonical state");
+      }
+      if (screenshotsDir) {
+        await page.screenshot({ path: join(screenshotsDir, "workbench-after-studio-instantiation.png"), fullPage: true });
+      }
       if (errors.length > 0) {
         console.error("FAILED studio compiler:", errors.join(" | "));
         process.exitCode = 1;

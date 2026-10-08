@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   apiGet,
   apiPostJson,
@@ -13,6 +14,12 @@ import { Card, EmptyState, ErrorBox, KeyValue, StatusPill } from "../components/
 interface ManifestOutcome {
   manifest: Record<string, unknown> | null;
   detail?: string;
+}
+interface StoredSolutionPackage {
+  id: string;
+  name: string;
+  approved_solution_id: string | null;
+  version: { major: number; minor: number; patch: number };
 }
 
 export default function Studio() {
@@ -52,6 +59,27 @@ export default function Studio() {
   ]);
   const [siteRef, setSiteRef] = useState("");
   const [instantiated, setInstantiated] = useState<SolutionInstantiationOutcome | null>(null);
+  const [solutionPackages, setSolutionPackages] = useState<StoredSolutionPackage[]>([]);
+  const [selectedSolutionId, setSelectedSolutionId] = useState("");
+  const [solutionListError, setSolutionListError] = useState<string | null>(null);
+
+  const refreshSolutionPackages = async (preferredId?: string) => {
+    try {
+      const response = await apiGet<{ solution_packages: StoredSolutionPackage[] }>("/v115/solutions");
+      const approved = response.solution_packages.filter((item) => item.approved_solution_id);
+      setSolutionPackages(approved);
+      setSelectedSolutionId((previous) =>
+        preferredId ?? (approved.some((item) => item.id === previous) ? previous : approved[0]?.id ?? ""),
+      );
+      setSolutionListError(null);
+    } catch (e) {
+      setSolutionListError((e as Error).message);
+    }
+  };
+
+  useEffect(() => {
+    void refreshSolutionPackages();
+  }, []);
 
   useEffect(() => {
     apiGet<V115Status>("/v115/status")
@@ -173,6 +201,7 @@ export default function Studio() {
     setError(null);
     try {
       const result = await apiPostJson<SolutionInstantiationOutcome>("/v115/solution/instantiate", {
+        solution_package_id: selectedSolutionId || undefined,
         goal,
         profile_ref: profileRef,
         site_ref: siteRef || undefined,
@@ -187,11 +216,12 @@ export default function Studio() {
     setError(null);
     try {
       await apiPostJson("/compiler/approve", { approver: "pi" });
-      await apiPostJson("/compiler/compile", {});
+      const created = await apiPostJson<{ package: { id: string } }>("/compiler/compile", {});
       const m = await apiGet<ManifestOutcome>("/compiler/manifest");
       setManifest(m);
       setApproved(true);
       setInstantiated(null);
+      await refreshSolutionPackages(created.package.id);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -391,6 +421,58 @@ export default function Studio() {
         )}
       </Card>
 
+      <Card title="Approved Solution → Canonical Work">
+        <p>
+          Instantiate an approved persisted SolutionPackage as canonical Work. This records
+          a desired goal; no capability, authority, executor, or accepted outcome is implied.
+        </p>
+        {solutionListError && <p role="alert">Cannot read saved solutions: {solutionListError}</p>}
+        <div className="builder-item">
+          <label htmlFor="approved-solution-package">Approved solution package: </label>
+          <select
+            id="approved-solution-package"
+            value={selectedSolutionId}
+            onChange={(event) => setSelectedSolutionId(event.target.value)}
+          >
+            <option value="">Use current compiled package</option>
+            {solutionPackages.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} @ {item.version.major}.{item.version.minor}.{item.version.patch} · {item.id}
+              </option>
+            ))}
+          </select>
+        </div>
+        {solutionPackages.length === 0 && !manifest && (
+          <p>No approved package yet. Complete the compiler approval flow below first.</p>
+        )}
+        <div className="builder-item">
+          <label htmlFor="work-profile">Guarantee profile: </label>
+          <select id="work-profile" value={profileRef} onChange={(e) => setProfileRef(e.target.value)}>
+            {profileOptions.map((profile) => (
+              <option key={profile} value={profile}>{profile}</option>
+            ))}
+          </select>
+        </div>
+        <div className="builder-item">
+          <label htmlFor="work-site">Site (optional): </label>
+          <input id="work-site" value={siteRef} onChange={(e) => setSiteRef(e.target.value)} placeholder="plant-a" />
+        </div>
+        <div className="page-actions">
+          <button onClick={instantiateSolution} disabled={!selectedSolutionId && !manifest}>Instantiate Work</button>
+        </div>
+        {instantiated && (
+          <div role="status">
+            <KeyValue k="Work" v={instantiated.plan.work.id} />
+            <KeyValue k="Phase" v={<StatusPill value={instantiated.plan.work.status.phase} />} />
+            <KeyValue k="Profile" v={instantiated.plan.work.spec.profile_ref} />
+            <KeyValue k="Source solution" v={instantiated.plan.solution_package_ref} />
+            <KeyValue k="Readiness gates" v={instantiated.plan.unresolved_gates.join(" → ")} />
+            <KeyValue k="Execution started" v={instantiated.execution_started ? "yes" : "no — explicit gates remain"} />
+            <Link className="action-link" to="/workbench">Review Work in Workbench →</Link>
+          </div>
+        )}
+      </Card>
+
       <Card title="1. Describe Goal">
         <div className="builder-item">
           <label>Goal: </label>
@@ -475,54 +557,7 @@ export default function Studio() {
               <Card title="6. SolutionPackage Manifest">
                 <pre>{JSON.stringify(manifest.manifest ?? manifest.detail, null, 2)}</pre>
               </Card>
-              <Card title="7. Instantiate as Work">
-                <p>
-                  A reusable SolutionPackage is the blueprint. Instantiation creates canonical
-                  Work; it does not create a second “agent instance” source of truth.
-                </p>
-                <div className="builder-item">
-                  <label>Guarantee profile: </label>
-                  <select
-                    value={profileRef}
-                    onChange={(e) => setProfileRef(e.target.value)}
-                    style={{ padding: 6 }}
-                  >
-                    {profileOptions.map((profile) => (
-                      <option key={profile} value={profile}>
-                        {profile}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="builder-item">
-                  <label>Site (optional): </label>
-                  <input
-                    value={siteRef}
-                    onChange={(e) => setSiteRef(e.target.value)}
-                    placeholder="plant-a"
-                    style={{ width: "40%", padding: 6 }}
-                  />
-                </div>
-                <div className="page-actions">
-                  <button onClick={instantiateSolution}>Instantiate Work</button>
-                </div>
-                {instantiated && (
-                  <>
-                    <KeyValue k="Work" v={instantiated.plan.work.id} />
-                    <KeyValue k="Phase" v={instantiated.plan.work.status.phase} />
-                    <KeyValue k="Profile" v={instantiated.plan.work.spec.profile_ref} />
-                    <KeyValue k="Source solution" v={instantiated.plan.solution_package_ref} />
-                    <KeyValue
-                      k="Readiness gates"
-                      v={instantiated.plan.unresolved_gates.join(" → ")}
-                    />
-                    <KeyValue
-                      k="Execution started"
-                      v={instantiated.execution_started ? "yes" : "no — explicit gates remain"}
-                    />
-                  </>
-                )}
-              </Card>
+
             </>
           )}
         </>

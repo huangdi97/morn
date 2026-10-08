@@ -407,7 +407,10 @@ async fn v115_solutions(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     let packages = guard
         .store
-        .load_records::<morn_foundry::SolutionPackage>("solution_package_v115")?;
+        .load_records_in_workspace::<morn_foundry::SolutionPackage>(
+            "solution_package_v115",
+            guard.workspace.id.as_str(),
+        )?;
     Ok(Json(json!({
         "solution_packages": packages,
         "note": "approved reusable blueprints persisted independently of runtime Work"
