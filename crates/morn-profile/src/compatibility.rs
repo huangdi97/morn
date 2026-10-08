@@ -34,26 +34,26 @@ fn same_guarantee_contract(left: &DomainProfile, right: &DomainProfile) -> bool 
         && left.provenance_required == right.provenance_required
 }
 
-fn candidate_preserves_base_guarantees(
-    base: &DomainProfile,
-    candidate: &DomainProfile,
-) -> bool {
+fn candidate_preserves_base_guarantees(base: &DomainProfile, candidate: &DomainProfile) -> bool {
     use crate::RequirementLevel;
     use morn_kernel::ExecutionClass;
 
-    let preserves_semantics = base.requirements.iter().all(|requirement| match requirement.level {
-        RequirementLevel::Required => candidate.requires(&requirement.semantic),
-        RequirementLevel::Forbidden => candidate.forbids(&requirement.semantic),
-        RequirementLevel::Optional => true,
-    });
+    let preserves_semantics = base
+        .requirements
+        .iter()
+        .all(|requirement| match requirement.level {
+            RequirementLevel::Required => candidate.requires(&requirement.semantic),
+            RequirementLevel::Forbidden => candidate.forbids(&requirement.semantic),
+            RequirementLevel::Optional => true,
+        });
     let preserves_execution_guarantees = base
         .required_execution_guarantees
         .iter()
         .all(|guarantee| candidate.required_execution_guarantees.contains(guarantee));
-    let preserves_explicit_flags =
-        (!base.source_of_truth_binding_required || candidate.source_of_truth_binding_required)
-            && (!base.durable_work_state_required || candidate.durable_work_state_required)
-            && (!base.provenance_required || candidate.provenance_required);
+    let preserves_explicit_flags = (!base.source_of_truth_binding_required
+        || candidate.source_of_truth_binding_required)
+        && (!base.durable_work_state_required || candidate.durable_work_state_required)
+        && (!base.provenance_required || candidate.provenance_required);
     let preserves_execution_class = match (
         ExecutionClass::parse(&base.minimum_isolation),
         ExecutionClass::parse(&candidate.minimum_isolation),
