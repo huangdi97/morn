@@ -38,6 +38,9 @@ try {
     }
     const bodyText = await page.locator("body").innerText();
     if (!bodyText.includes("Morn")) errors.push(`route ${route}: missing Morn shell`);
+    if (route === "/workbench" && !(await page.getByRole("heading", { name: "Work is the unit of coordination" }).isVisible())) {
+      errors.push("workbench: canonical Work-first overview is not visible");
+    }
     if (errors.length > 0) {
       console.error(`FAILED ${route}:`, errors.join(" | "));
       process.exitCode = 1;
