@@ -206,3 +206,78 @@ fn capability_lifecycle_survives_restart_and_revocation_keeps_history() {
 
     let _ = std::fs::remove_file(db);
 }
+
+#[test]
+fn v115_capability_hydration_keeps_tenant_manifest_and_historical_event_isolation() {
+    use morn_assurance::{CapabilityLifecycleEvent, CapabilityLifecycleEventId};
+    use morn_capability::{CapabilityManifest, CapabilityRecord, CapabilityKind, EffectClass};
+    use morn_kernel::ids::CapabilityId;
+    use morn_kernel::time::Timestamp;
+
+    let db = temp_db("workspace_isolation");
+    let own_manifest_id;
+    {
+        let state = AppState::new(&db).unwrap();
+        let guard = state.lock();
+
+        let make_capability = |name: &str| {
+            let mut manifest = CapabilityManifest::new(
+                CapabilityId::generate_with("cap"),
+                name,
+                "fixture-provider",
+                CapabilityKind::Program,
+                EffectClass::E0LifecycleReversible,
+            );
+            manifest.provenance.source_ref = format!("repo://{name}");
+            CapabilityRecord::new(manifest)
+        };
+        let own = make_capability("owned");
+        let foreign = make_capability("foreign");
+        own_manifest_id = own.manifest.id.clone();
+
+        for (cap, workspace_id) in [
+            (&own, guard.workspace.id.as_str()),
+            (&foreign, "other-workspace"),
+        ] {
+            guard
+                .store
+                .save_record(
+                    "capability_record_v115",
+                    cap.manifest.id.as_str(),
+                    workspace_id,
+                    cap.manifest.declared_at.millis(),
+                    cap,
+                )
+                .unwrap();
+
+            let event = CapabilityLifecycleEvent {
+                id: CapabilityLifecycleEventId::generate_with("event"),
+                manifest_id: cap.manifest.id.clone(),
+                entity_ref: cap.manifest.id.to_string(),
+                event_type: "Observed".to_string(),
+                reason: "fixture".to_string(),
+                actor_ref: "test".to_string(),
+                created_at: Timestamp::now(),
+            };
+            guard
+                .store
+                .save_record_immutable(
+                    "capability_lifecycle_event_v115",
+                    event.id.as_str(),
+                    "",
+                    event.created_at.millis(),
+                    &event,
+                )
+                .unwrap();
+        }
+    }
+
+    let restarted = AppState::new(&db).unwrap();
+    let guard = restarted.lock();
+    assert_eq!(guard.v115_capabilities.len(), 1);
+    assert_eq!(guard.v115_capabilities[0].manifest.id, own_manifest_id);
+    assert_eq!(guard.v115_admission.events.len(), 1);
+    assert_eq!(guard.v115_admission.events[0].manifest_id, own_manifest_id);
+    drop(guard);
+    let _ = std::fs::remove_file(db);
+}

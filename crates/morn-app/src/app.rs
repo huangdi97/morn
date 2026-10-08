@@ -340,13 +340,52 @@ impl AppInner {
         self.certification.decisions = store.load_certification_decisions()?;
         self.certification.capabilities = store.load_certified_capabilities()?;
         self.certification.releases = store.load_capability_releases()?;
-        self.v115_capabilities = store.load_records("capability_record_v115")?;
-        self.v115_admission.observations = store.load_records("capability_observation_v115")?;
-        self.v115_admission.qualifications = store.load_records("qualification_record_v115")?;
-        self.v115_admission.releases =
-            store.load_records("capability_distribution_release_v115")?;
-        self.v115_admission.admissions = store.load_records("site_admission_v115")?;
-        self.v115_admission.events = store.load_records("capability_lifecycle_event_v115")?;
+        self.v115_capabilities = store.load_records_in_workspace(
+            "capability_record_v115",
+            self.workspace.id.as_str(),
+        )?;
+        let manifest_ids: std::collections::HashSet<String> = self
+            .v115_capabilities
+            .iter()
+            .map(|cap| cap.manifest.id.to_string())
+            .collect();
+        // Historical v11.5 observations, qualification and lifecycle events
+        // were stored as immutable rows with an empty workspace field. Restore
+        // them by their owning capability manifest, never by a global read
+        // directly into the active tenant's runtime state.
+        self.v115_admission.observations = store
+            .load_records::<morn_assurance::CapabilityObservation>("capability_observation_v115")?
+            .into_iter()
+            .filter(|item| manifest_ids.contains(item.manifest_id.as_str()))
+            .collect();
+        self.v115_admission.qualifications = store
+            .load_records::<morn_assurance::QualificationRecord>("qualification_record_v115")?
+            .into_iter()
+            .filter(|item| manifest_ids.contains(item.manifest_id.as_str()))
+            .collect();
+        self.v115_admission.releases = store
+            .load_records_in_workspace::<morn_assurance::CapabilityDistributionRelease>(
+                "capability_distribution_release_v115",
+                self.workspace.id.as_str(),
+            )?
+            .into_iter()
+            .filter(|item| manifest_ids.contains(item.manifest_id.as_str()))
+            .collect();
+        self.v115_admission.admissions = store
+            .load_records_in_workspace::<morn_assurance::SiteAdmission>(
+                "site_admission_v115",
+                self.workspace.id.as_str(),
+            )?
+            .into_iter()
+            .filter(|item| manifest_ids.contains(item.manifest_id.as_str()))
+            .collect();
+        self.v115_admission.events = store
+            .load_records::<morn_assurance::CapabilityLifecycleEvent>(
+                "capability_lifecycle_event_v115",
+            )?
+            .into_iter()
+            .filter(|item| manifest_ids.contains(item.manifest_id.as_str()))
+            .collect();
         self.managed.runs = store.load_managed_runs(&self.workspace.id)?;
         self.managed.receipts = store.load_delivery_receipts()?;
         self.managed.acceptances = store.load_acceptance_decisions()?;
