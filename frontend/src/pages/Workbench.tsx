@@ -303,6 +303,7 @@ export default function Workbench() {
           <Card title="v11.5 Durable Work Truth">
             <KeyValue k="Work resources" v={v115Control.work.length} />
             <KeyValue k="Bindings" v={v115Control.execution_bindings.length} />
+            <KeyValue k="Execution manifests" v={v115Control.execution_manifests.length} />
             <KeyValue k="Binding migrations" v={v115Control.binding_migrations.length} />
             <KeyValue k="Attempts" v={v115Control.attempts.length} />
             <KeyValue k="Reconciliations" v={v115Control.reconciliations.length} />
