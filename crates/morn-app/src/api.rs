@@ -1125,6 +1125,10 @@ async fn workbench(State(state): State<AppState>) -> ApiResult {
     let world = &guard.world;
     let work = &guard.work;
     let durable = &guard.durable;
+    let dsh_status = match guard.dsh_harness.mode() {
+        morn_harness::provider::DshMode::Fixture => "fixture-mode",
+        morn_harness::provider::DshMode::Real => "real-sdk-mode",
+    };
     #[cfg(feature = "domain-biolab")]
     let e2e = guard.e2e_result.as_ref();
     #[cfg(feature = "domain-biolab")]
@@ -1172,7 +1176,11 @@ async fn workbench(State(state): State<AppState>) -> ApiResult {
         "outcomes": outcomes,
         "harness": {
             "native": { "provider": guard.native_harness.provider_name(), "status": "mounted" },
-            "dsh": { "provider": guard.dsh_harness.provider_name(), "status": "fixture-mode" }
+            "dsh": {
+                "provider": guard.dsh_harness.provider_name(),
+                "status": dsh_status,
+                "features": guard.dsh_harness.features()
+            }
         },
         "evolution_candidates": guard.evolution.candidates().len(),
         "domain_packs": domain_packs,
@@ -1255,7 +1263,14 @@ async fn console(State(state): State<AppState>) -> ApiResult {
         "work": guard.work.work_packages().len(),
         "harness_health": {
             "native": guard.native_harness.provider_name(),
-            "dsh": guard.dsh_harness.provider_name()
+            "dsh": {
+                "provider": guard.dsh_harness.provider_name(),
+                "mode": match guard.dsh_harness.mode() {
+                    morn_harness::provider::DshMode::Fixture => "fixture",
+                    morn_harness::provider::DshMode::Real => "real-sdk",
+                },
+                "features": guard.dsh_harness.features()
+            }
         },
         "approvals_satisfied": approvals,
         "attention": guard.durable.open_attention().len(),

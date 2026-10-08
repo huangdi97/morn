@@ -80,6 +80,24 @@ pub struct AppInner {
     pub e2e_result: Option<E2eResult>,
 }
 
+fn configured_dsh_harness() -> morn_kernel::Result<DeepSeekHarnessProvider> {
+    match std::env::var("MORN_DSH_MODE") {
+        Err(std::env::VarError::NotPresent) => Ok(DeepSeekHarnessProvider::new(DshMode::Fixture)),
+        Ok(mode) if mode.eq_ignore_ascii_case("fixture") => {
+            Ok(DeepSeekHarnessProvider::new(DshMode::Fixture))
+        }
+        Ok(mode) if mode.eq_ignore_ascii_case("real") => {
+            DeepSeekHarnessProvider::from_real_env()
+        }
+        Ok(mode) => Err(morn_kernel::error::Error::validation(format!(
+            "unsupported MORN_DSH_MODE {mode:?}; expected fixture or real"
+        ))),
+        Err(error) => Err(morn_kernel::error::Error::validation(format!(
+            "cannot read MORN_DSH_MODE: {error}"
+        ))),
+    }
+}
+
 /// Thread-safe shared state for HTTP handlers.
 #[derive(Clone)]
 pub struct AppState(pub Arc<Mutex<AppInner>>);
@@ -115,7 +133,7 @@ impl AppState {
             #[cfg(feature = "domain-biolab")]
             biolab,
             native_harness: MornNativeHarness::new(),
-            dsh_harness: DeepSeekHarnessProvider::new(DshMode::Fixture),
+            dsh_harness: configured_dsh_harness()?,
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
             durable_v2: DurableRuntime::new(),

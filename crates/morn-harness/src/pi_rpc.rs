@@ -10,7 +10,9 @@
 //! provider extensions without entering the Morn semantic constitution.
 
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -30,6 +32,11 @@ pub struct PiRpcConfig {
     pub cwd: Option<String>,
     pub provider: Option<String>,
     pub model: Option<String>,
+    pub request_timeout_ms: u64,
+    pub prompt_timeout_ms: u64,
+    /// True for production. Test fixtures may disable strictness only to skip
+    /// libtest's own stdout preamble before the fake JSONL peer starts.
+    pub strict_jsonl: bool,
 }
 
 impl Default for PiRpcConfig {
@@ -44,6 +51,9 @@ impl Default for PiRpcConfig {
             cwd: None,
             provider: None,
             model: None,
+            request_timeout_ms: 30_000,
+            prompt_timeout_ms: 60_000,
+            strict_jsonl: true,
         }
     }
 }
@@ -95,11 +105,16 @@ impl PiPromptRun {
     }
 }
 
+type PiWireItem = std::result::Result<Value, String>;
+
 pub struct PiRpcClient {
     child: Child,
     stdin: Option<ChildStdin>,
-    stdout: BufReader<ChildStdout>,
+    incoming: Receiver<PiWireItem>,
+    reader: Option<JoinHandle<()>>,
     next_id: u64,
+    request_timeout: Duration,
+    prompt_timeout: Duration,
     pub buffered_events: Vec<PiRpcEvent>,
 }
 
@@ -115,12 +130,20 @@ impl std::fmt::Debug for PiRpcClient {
 
 impl PiRpcClient {
     pub fn spawn(config: &PiRpcConfig) -> Result<Self> {
+        if config.command.trim().is_empty()
+            || config.request_timeout_ms == 0
+            || config.prompt_timeout_ms == 0
+        {
+            return Err(Error::validation(
+                "Pi RPC requires command and positive request/prompt timeouts",
+            ));
+        }
         let mut command = Command::new(&config.command);
         command
             .args(config.command_line())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit());
+            .stderr(Stdio::null());
         if let Some(cwd) = &config.cwd {
             command.current_dir(cwd);
         }
@@ -138,12 +161,53 @@ impl PiRpcClient {
             .stdout
             .take()
             .ok_or_else(|| Error::external("Pi RPC runtime has no stdout"))?;
+        let strict_jsonl = config.strict_jsonl;
+        let (sender, incoming) = mpsc::sync_channel::<PiWireItem>(1024);
+        let reader = thread::spawn(move || {
+            let mut stdout = BufReader::new(stdout);
+            loop {
+                let mut line = String::new();
+                match stdout.read_line(&mut line) {
+                    Ok(0) => {
+                        let _ = sender.send(Err("Pi RPC runtime closed stdout".to_string()));
+                        break;
+                    }
+                    Ok(_) => {
+                        let trimmed = line.trim_end_matches(['\r', '\n']);
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+                        match serde_json::from_str::<Value>(trimmed) {
+                            Ok(value) => {
+                                if sender.send(Ok(value)).is_err() {
+                                    break;
+                                }
+                            }
+                            Err(error) if strict_jsonl => {
+                                let _ = sender.send(Err(format!(
+                                    "invalid Pi RPC JSONL record: {error}"
+                                )));
+                                break;
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                    Err(error) => {
+                        let _ = sender.send(Err(format!("read Pi RPC JSONL: {error}")));
+                        break;
+                    }
+                }
+            }
+        });
 
         Ok(Self {
             child,
             stdin: Some(stdin),
-            stdout: BufReader::new(stdout),
+            incoming,
+            reader: Some(reader),
             next_id: 1,
+            request_timeout: Duration::from_millis(config.request_timeout_ms),
+            prompt_timeout: Duration::from_millis(config.prompt_timeout_ms),
             buffered_events: Vec::new(),
         })
     }
@@ -210,9 +274,10 @@ impl PiRpcClient {
         let mut response: Option<PiRpcResponse> = None;
         let mut events = Vec::new();
         let mut settled = false;
+        let deadline = Instant::now() + self.prompt_timeout;
 
         loop {
-            let record = self.read_record()?;
+            let record = self.read_record_until(deadline, "prompt settlement")?;
             if is_response(&record) {
                 let parsed = parse_response(&record)?;
                 if parsed.id.as_deref() == Some(id.as_str()) {
@@ -285,9 +350,10 @@ impl PiRpcClient {
         object.insert("id".to_string(), Value::String(id.clone()));
         object.insert("type".to_string(), Value::String(command.to_string()));
         self.write_record(record)?;
+        let deadline = Instant::now() + self.request_timeout;
 
         loop {
-            let incoming = self.read_record()?;
+            let incoming = self.read_record_until(deadline, command)?;
             if is_response(&incoming) {
                 let response = parse_response(&incoming)?;
                 if response.id.as_deref() == Some(id.as_str()) {
@@ -326,22 +392,20 @@ impl PiRpcClient {
             .map_err(|error| Error::external(format!("write Pi RPC JSONL: {error}")))
     }
 
-    fn read_record(&mut self) -> Result<Value> {
-        loop {
-            let mut line = String::new();
-            let bytes = self
-                .stdout
-                .read_line(&mut line)
-                .map_err(|error| Error::external(format!("read Pi RPC JSONL: {error}")))?;
-            if bytes == 0 {
-                return Err(Error::external("Pi RPC runtime closed stdout"));
+    fn read_record_until(&mut self, deadline: Instant, operation: &str) -> Result<Value> {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(Error::external(format!("Pi RPC {operation} timed out")));
+        }
+        match self.incoming.recv_timeout(remaining) {
+            Ok(Ok(value)) => Ok(value),
+            Ok(Err(message)) => Err(Error::external(message)),
+            Err(RecvTimeoutError::Timeout) => {
+                Err(Error::external(format!("Pi RPC {operation} timed out")))
             }
-            let trimmed = line.trim_end_matches(['\r', '\n']);
-            if trimmed.is_empty() {
-                continue;
+            Err(RecvTimeoutError::Disconnected) => {
+                Err(Error::external("Pi RPC stdout reader disconnected"))
             }
-            return serde_json::from_str(trimmed)
-                .map_err(|error| Error::external(format!("invalid Pi RPC JSONL record: {error}")));
         }
     }
 }
@@ -353,6 +417,9 @@ impl Drop for PiRpcClient {
             let _ = self.child.kill();
         }
         let _ = self.child.wait();
+        if let Some(reader) = self.reader.take() {
+            let _ = reader.join();
+        }
     }
 }
 
@@ -424,6 +491,9 @@ mod tests {
             cwd: Some(cwd.to_string_lossy().to_string()),
             provider: None,
             model: None,
+            request_timeout_ms: 10_000,
+            prompt_timeout_ms: 10_000,
+            strict_jsonl: false,
         };
         let mut client = PiRpcClient::spawn(&config).unwrap();
         let state = client.get_state().unwrap();

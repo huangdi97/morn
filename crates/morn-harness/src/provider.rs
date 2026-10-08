@@ -313,18 +313,17 @@ impl HarnessProvider for MornNativeHarness {
 // ---------------------------------------------------------------------------
 // DeepSeekHarnessProvider: provider boundary for the DeepSeek Harness.
 //
-// Honest status: DeepSeek now publishes the official DSH runtime and a public
-// out-of-process SDK/JSON-RPC boundary. This Rust reference provider has not yet
-// wired that external transport, so Fixture mode proves only the Morn-side
-// contract. Real mode fails closed instead of pretending that a live DSH
-// session exists.
+// DeepSeek publishes an official DSH runtime and SDK/JSON-RPC boundary.
+// Real mode drives that exact stdio protocol when explicitly configured.
+// Unsupported SDK lifecycle operations remain fail-closed, and all Harness
+// output remains executor evidence rather than canonical Work truth.
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DshMode {
     /// Deterministic fixture behavior for contract tests (Morn-side invariants).
     Fixture,
-    /// Real provider operations; currently unavailable in this environment.
+    /// Official DSH SDK subprocess transport; explicit isolated config required.
     Real,
 }
 
@@ -356,6 +355,11 @@ impl DeepSeekHarnessProvider {
         provider
     }
 
+    pub fn from_real_env() -> Result<Self> {
+        let config = DshSdkConfig::from_env()?;
+        Ok(Self::with_real_sdk(config))
+    }
+
     pub fn mode(&self) -> DshMode {
         self.mode
     }
@@ -384,6 +388,7 @@ impl DeepSeekHarnessProvider {
                 .real_config
                 .clone()
                 .ok_or_else(|| self.real_unavailable())?;
+            config.validate_for_real()?;
             let mut client = DshSdkStdioClient::spawn(&config)?;
             client.initialize(&config)?;
             self.real_client = Some(client);
@@ -395,8 +400,7 @@ impl DeepSeekHarnessProvider {
 
     fn real_unavailable(&self) -> Error {
         Error::external(
-            "DeepSeek Harness real SDK transport is not configured; construct \
-             DeepSeekHarnessProvider::with_real_sdk with an explicit isolated runtime config",
+            "DeepSeek Harness real SDK transport is not configured; use explicit DshSdkConfig or MORN_DSH_* deployment variables",
         )
     }
 }
@@ -510,41 +514,71 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                 })
             }
             DshMode::Real => {
-                let workspace_id = self
-                    .sessions
-                    .get(session_id)
-                    .ok_or_else(|| Error::not_found(format!("session {session_id}")))?
-                    .ctx
-                    .workspace_id
-                    .clone();
-                let run = self
-                    .ensure_real_client()?
-                    .run_text_prompt(session_id, input)?;
+                if input.trim().is_empty() {
+                    return Err(Error::validation("DSH prompt must be non-empty"));
+                }
+                {
+                    let state = self
+                        .sessions
+                        .get_mut(session_id)
+                        .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                    if !matches!(state.status.as_str(), "ready" | "idle") {
+                        return Err(Error::invalid_state(format!(
+                            "DSH session {session_id} cannot accept a new prompt from state {}",
+                            state.status
+                        )));
+                    }
+                    state.step += 1;
+                    state.status = "running".to_string();
+                    state.events.push(ExecutionEvent::new(
+                        state.ctx.workspace_id.clone(),
+                        session_id.to_string(),
+                        ExecutionEventKind::ModelRequest,
+                        format!("DSH SDK prompt admitted for step {}", state.step),
+                    ));
+                    state.last_event = format!("dsh_prompt:{}", state.step);
+                }
+
+                let run = self.ensure_real_client()?.run_text_prompt(session_id, input);
                 let state = self
                     .sessions
                     .get_mut(session_id)
                     .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
-                state.step += 1;
-                state.status = "idle".to_string();
-                state.events.push(ExecutionEvent::new(
-                    workspace_id,
-                    session_id.to_string(),
-                    ExecutionEventKind::ModelResponse,
-                    format!(
-                        "DSH SDK turn completed; message={} finish={}",
-                        run.message_id,
-                        run.finish_reason.as_deref().unwrap_or("unknown")
-                    ),
-                ));
-                state.last_event = format!(
-                    "dsh_turn:{}",
-                    run.finish_reason.as_deref().unwrap_or("unknown")
-                );
-                Ok(HarnessOutput {
-                    session_id: session_id.to_string(),
-                    text: run.final_response,
-                    proposal_ref: None,
-                })
+                match run {
+                    Ok(run) => {
+                        state.status = "idle".to_string();
+                        state.events.push(ExecutionEvent::new(
+                            state.ctx.workspace_id.clone(),
+                            session_id.to_string(),
+                            ExecutionEventKind::ModelResponse,
+                            format!(
+                                "DSH SDK turn completed; message={} finish={}",
+                                run.message_id,
+                                run.finish_reason.as_deref().unwrap_or("unknown")
+                            ),
+                        ));
+                        state.last_event = format!(
+                            "dsh_turn:{}",
+                            run.finish_reason.as_deref().unwrap_or("unknown")
+                        );
+                        Ok(HarnessOutput {
+                            session_id: session_id.to_string(),
+                            text: run.final_response,
+                            proposal_ref: None,
+                        })
+                    }
+                    Err(error) => {
+                        state.status = "outcome-unknown".to_string();
+                        state.events.push(ExecutionEvent::new(
+                            state.ctx.workspace_id.clone(),
+                            session_id.to_string(),
+                            ExecutionEventKind::Failed,
+                            "DSH SDK turn lost definitive settlement; blind retry is forbidden",
+                        ));
+                        state.last_event = "dsh_turn_outcome_unknown".to_string();
+                        Err(error)
+                    }
+                }
             }
         }
     }

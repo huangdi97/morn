@@ -8,7 +8,11 @@
 //! so Morn must not fabricate those semantics.
 
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::path::Path;
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -33,6 +37,11 @@ pub struct DshSdkConfig {
     pub model: String,
     pub reasoning_effort: Option<String>,
     pub max_tokens: Option<u64>,
+    /// Isolated Harness home. Live deployments require this explicitly;
+    /// protocol fixtures may leave it unset.
+    pub dsh_home: Option<String>,
+    pub request_timeout_ms: u64,
+    pub turn_timeout_ms: u64,
 }
 
 impl DshSdkConfig {
@@ -49,7 +58,85 @@ impl DshSdkConfig {
             model: model.into(),
             reasoning_effort: None,
             max_tokens: None,
+            dsh_home: None,
+            request_timeout_ms: 30_000,
+            turn_timeout_ms: 300_000,
         }
+    }
+
+    pub fn with_dsh_home(mut self, path: impl Into<String>) -> Self {
+        self.dsh_home = Some(path.into());
+        self
+    }
+
+    pub fn validate_for_real(&self) -> Result<()> {
+        if self.command.trim().is_empty()
+            || self.cwd.trim().is_empty()
+            || self.provider.trim().is_empty()
+            || self.model.trim().is_empty()
+        {
+            return Err(Error::validation(
+                "real DSH SDK requires command, workspace, provider and model",
+            ));
+        }
+        let home = self
+            .dsh_home
+            .as_deref()
+            .filter(|home| !home.trim().is_empty())
+            .ok_or_else(|| Error::validation("real DSH SDK requires isolated DSH_HOME"))?;
+        if !Path::new(&self.cwd).is_absolute() || !Path::new(home).is_absolute() {
+            return Err(Error::validation(
+                "real DSH SDK workspace and DSH_HOME must be absolute paths",
+            ));
+        }
+        if self.request_timeout_ms == 0 || self.turn_timeout_ms == 0 {
+            return Err(Error::validation(
+                "DSH request and turn timeout must be positive",
+            ));
+        }
+        if self.max_tokens == Some(0) {
+            return Err(Error::validation("DSH max_tokens must be positive when set"));
+        }
+        Ok(())
+    }
+
+    pub fn from_env() -> Result<Self> {
+        let cwd = std::env::var("MORN_DSH_WORKSPACE")
+            .map_err(|_| Error::validation("MORN_DSH_WORKSPACE is required for real DSH"))?;
+        let home = std::env::var("MORN_DSH_HOME")
+            .map_err(|_| Error::validation("MORN_DSH_HOME is required for real DSH"))?;
+        let provider =
+            std::env::var("MORN_DSH_PROVIDER").unwrap_or_else(|_| "deepseek-official".to_string());
+        let model =
+            std::env::var("MORN_DSH_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".to_string());
+        let mut config = Self::profile_sdk(cwd, provider, model).with_dsh_home(home);
+        if let Ok(command) = std::env::var("MORN_DSH_COMMAND") {
+            config.command = command;
+        }
+        if let Ok(reasoning) = std::env::var("MORN_DSH_REASONING_EFFORT") {
+            if !reasoning.trim().is_empty() {
+                config.reasoning_effort = Some(reasoning);
+            }
+        }
+        if let Ok(max_tokens) = std::env::var("MORN_DSH_MAX_TOKENS") {
+            config.max_tokens = Some(
+                max_tokens
+                    .parse()
+                    .map_err(|_| Error::validation("MORN_DSH_MAX_TOKENS must be an integer"))?,
+            );
+        }
+        if let Ok(timeout) = std::env::var("MORN_DSH_REQUEST_TIMEOUT_MS") {
+            config.request_timeout_ms = timeout.parse().map_err(|_| {
+                Error::validation("MORN_DSH_REQUEST_TIMEOUT_MS must be an integer")
+            })?;
+        }
+        if let Ok(timeout) = std::env::var("MORN_DSH_TURN_TIMEOUT_MS") {
+            config.turn_timeout_ms = timeout
+                .parse()
+                .map_err(|_| Error::validation("MORN_DSH_TURN_TIMEOUT_MS must be an integer"))?;
+        }
+        config.validate_for_real()?;
+        Ok(config)
     }
 }
 
@@ -68,11 +155,16 @@ pub struct DshSdkRunResult {
     pub notifications: Vec<DshNotification>,
 }
 
+type DshWireItem = std::result::Result<Value, String>;
+
 pub struct DshSdkStdioClient {
     child: Child,
     stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
+    incoming: Receiver<DshWireItem>,
+    reader: Option<JoinHandle<()>>,
     next_id: u64,
+    request_timeout: Duration,
+    turn_timeout: Duration,
     pub notifications: Vec<DshNotification>,
 }
 
@@ -91,9 +183,11 @@ impl DshSdkStdioClient {
         if config.cwd.trim().is_empty()
             || config.provider.trim().is_empty()
             || config.model.trim().is_empty()
+            || config.request_timeout_ms == 0
+            || config.turn_timeout_ms == 0
         {
             return Err(Error::validation(
-                "DSH SDK requires non-empty cwd, provider and model",
+                "DSH SDK requires cwd/provider/model and positive timeouts",
             ));
         }
         let mut command = Command::new(&config.command);
@@ -102,7 +196,10 @@ impl DshSdkStdioClient {
             .current_dir(&config.cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit());
+            .stderr(Stdio::null());
+        if let Some(home) = &config.dsh_home {
+            command.env("DSH_HOME", home);
+        }
         let mut child = command.spawn().map_err(|error| {
             Error::external(format!(
                 "failed to start DSH SDK runtime {:?}: {error}",
@@ -117,11 +214,42 @@ impl DshSdkStdioClient {
             .stdout
             .take()
             .ok_or_else(|| Error::external("DSH SDK runtime has no stdout"))?;
+        let (sender, incoming) = mpsc::sync_channel::<DshWireItem>(1024);
+        let reader = thread::spawn(move || {
+            let mut stdout = BufReader::new(stdout);
+            loop {
+                let mut line = String::new();
+                match stdout.read_line(&mut line) {
+                    Ok(0) => {
+                        let _ = sender.send(Err("DSH SDK runtime closed stdout".to_string()));
+                        break;
+                    }
+                    Ok(_) => {
+                        let trimmed = line.trim();
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+                        if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+                            if sender.send(Ok(value)).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        let _ = sender.send(Err(format!("read DSH JSON-RPC: {error}")));
+                        break;
+                    }
+                }
+            }
+        });
         Ok(Self {
             child,
             stdin,
-            stdout: BufReader::new(stdout),
+            incoming,
+            reader: Some(reader),
             next_id: 1,
+            request_timeout: Duration::from_millis(config.request_timeout_ms),
+            turn_timeout: Duration::from_millis(config.turn_timeout_ms),
             notifications: Vec::new(),
         })
     }
@@ -181,6 +309,7 @@ impl DshSdkStdioClient {
         }
         let start = self.notifications.len();
         let message_id = self.enqueue_text_prompt(session_id, text)?;
+        let deadline = Instant::now() + self.turn_timeout;
         let mut received = false;
         let mut final_response = String::new();
         let mut finish_reason = None;
@@ -218,7 +347,7 @@ impl DshSdkStdioClient {
                 }
             }
 
-            let incoming = self.read_frame()?;
+            let incoming = self.read_frame_until(deadline, "prompt activity")?;
             if incoming.get("id").is_none() {
                 if let Some(method) = incoming.get("method").and_then(Value::as_str) {
                     self.notifications.push(DshNotification {
@@ -264,8 +393,9 @@ impl DshSdkStdioClient {
             .and_then(|_| self.stdin.flush())
             .map_err(|error| Error::external(format!("write DSH JSON-RPC: {error}")))?;
 
+        let deadline = Instant::now() + self.request_timeout;
         loop {
-            let incoming = self.read_frame()?;
+            let incoming = self.read_frame_until(deadline, method)?;
             if incoming.get("id").and_then(Value::as_u64) == Some(id) {
                 if let Some(error) = incoming.get("error") {
                     return Err(Error::external(format!(
@@ -285,24 +415,20 @@ impl DshSdkStdioClient {
         }
     }
 
-    fn read_frame(&mut self) -> Result<Value> {
-        loop {
-            let mut line = String::new();
-            let bytes = self
-                .stdout
-                .read_line(&mut line)
-                .map_err(|error| Error::external(format!("read DSH JSON-RPC: {error}")))?;
-            if bytes == 0 {
-                return Err(Error::external("DSH SDK runtime closed stdout"));
+    fn read_frame_until(&mut self, deadline: Instant, operation: &str) -> Result<Value> {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(Error::external(format!("DSH {operation} timed out")));
+        }
+        match self.incoming.recv_timeout(remaining) {
+            Ok(Ok(value)) => Ok(value),
+            Ok(Err(message)) => Err(Error::external(message)),
+            Err(RecvTimeoutError::Timeout) => {
+                Err(Error::external(format!("DSH {operation} timed out")))
             }
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
+            Err(RecvTimeoutError::Disconnected) => {
+                Err(Error::external("DSH SDK stdout reader disconnected"))
             }
-            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-                return Ok(value);
-            }
-            // Upstream protocol specifies malformed lines are ignored.
         }
     }
 }
@@ -311,6 +437,9 @@ impl Drop for DshSdkStdioClient {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        if let Some(reader) = self.reader.take() {
+            let _ = reader.join();
+        }
     }
 }
 
@@ -435,6 +564,19 @@ mod tests {
     }
 
     #[test]
+    fn live_config_requires_isolated_absolute_home() {
+        let cwd = std::env::current_dir().unwrap();
+        let config = DshSdkConfig::profile_sdk(
+            cwd.to_string_lossy(),
+            "deepseek-official",
+            "deepseek-v4-flash",
+        );
+        assert!(config.validate_for_real().is_err());
+        let configured = config.with_dsh_home(cwd.join(".dsh-test").to_string_lossy());
+        assert!(configured.validate_for_real().is_ok());
+    }
+
+    #[test]
     fn real_sdk_transport_completes_one_owned_turn_against_wire_fixture() {
         let executable = std::env::current_exe().unwrap();
         let cwd = std::env::current_dir().unwrap();
@@ -451,6 +593,9 @@ mod tests {
             model: "fixture-model".to_string(),
             reasoning_effort: None,
             max_tokens: Some(64),
+            dsh_home: None,
+            request_timeout_ms: 10_000,
+            turn_timeout_ms: 10_000,
         };
         let mut client = DshSdkStdioClient::spawn(&config).unwrap();
         let initialized = client.initialize(&config).unwrap();

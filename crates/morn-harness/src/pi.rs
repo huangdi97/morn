@@ -233,39 +233,82 @@ impl HarnessProvider for PiHarnessProvider {
                 })
             }
             PiMode::Real => {
+                if input.trim().is_empty() {
+                    return Err(Error::validation("Pi RPC prompt must be non-empty"));
+                }
                 if self.active_session.as_deref() != Some(session_id) {
                     return Err(Error::invalid_state(
                         "Pi RPC prompt must target the provider's active ephemeral session",
                     ));
                 }
-                let run = self.ensure_real_client()?.prompt_and_wait(input)?;
-                let text = self
-                    .ensure_real_client()?
-                    .get_last_assistant_text()?
-                    .unwrap_or_default();
-                let state = self
-                    .sessions
-                    .get_mut(session_id)
-                    .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
-                state.step += 1;
-                state.status = "idle".to_string();
-                state.events.push(ExecutionEvent::new(
-                    state.ctx.workspace_id.clone(),
-                    session_id.to_string(),
-                    ExecutionEventKind::ModelResponse,
-                    format!(
-                        "Pi RPC prompt settled; request={} disposition={} events={}",
-                        run.request_id,
-                        run.disposition,
-                        run.events.len()
-                    ),
-                ));
-                state.last_event = "pi_agent_settled".to_string();
-                Ok(HarnessOutput {
-                    session_id: session_id.to_string(),
-                    text,
-                    proposal_ref: None,
-                })
+                {
+                    let state = self
+                        .sessions
+                        .get_mut(session_id)
+                        .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                    if !matches!(state.status.as_str(), "ready" | "idle") {
+                        return Err(Error::invalid_state(format!(
+                            "Pi session {session_id} cannot accept a new prompt from state {}",
+                            state.status
+                        )));
+                    }
+                    state.step += 1;
+                    state.status = "running".to_string();
+                    state.events.push(ExecutionEvent::new(
+                        state.ctx.workspace_id.clone(),
+                        session_id.to_string(),
+                        ExecutionEventKind::ModelRequest,
+                        format!("Pi RPC prompt admitted for step {}", state.step),
+                    ));
+                    state.last_event = format!("pi_prompt:{}", state.step);
+                }
+
+                let run = self.ensure_real_client()?.prompt_and_wait(input);
+                match run {
+                    Ok(run) => {
+                        let text = self
+                            .ensure_real_client()?
+                            .get_last_assistant_text()?
+                            .unwrap_or_default();
+                        let state = self
+                            .sessions
+                            .get_mut(session_id)
+                            .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                        state.status = "idle".to_string();
+                        state.events.push(ExecutionEvent::new(
+                            state.ctx.workspace_id.clone(),
+                            session_id.to_string(),
+                            ExecutionEventKind::ModelResponse,
+                            format!(
+                                "Pi RPC prompt settled; request={} disposition={} events={}",
+                                run.request_id,
+                                run.disposition,
+                                run.events.len()
+                            ),
+                        ));
+                        state.last_event = "pi_agent_settled".to_string();
+                        Ok(HarnessOutput {
+                            session_id: session_id.to_string(),
+                            text,
+                            proposal_ref: None,
+                        })
+                    }
+                    Err(error) => {
+                        let state = self
+                            .sessions
+                            .get_mut(session_id)
+                            .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                        state.status = "outcome-unknown".to_string();
+                        state.events.push(ExecutionEvent::new(
+                            state.ctx.workspace_id.clone(),
+                            session_id.to_string(),
+                            ExecutionEventKind::Failed,
+                            "Pi RPC turn lost definitive settlement; blind retry is forbidden",
+                        ));
+                        state.last_event = "pi_turn_outcome_unknown".to_string();
+                        Err(error)
+                    }
+                }
             }
         }
     }
@@ -300,14 +343,27 @@ impl HarnessProvider for PiHarnessProvider {
                 .sessions
                 .get_mut(session_id)
                 .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
-            state.status = "idle".to_string();
+            let ambiguous = state.status == "outcome-unknown";
+            state.status = if ambiguous {
+                "outcome-unknown".to_string()
+            } else {
+                "idle".to_string()
+            };
             state.events.push(ExecutionEvent::new(
                 state.ctx.workspace_id.clone(),
                 session_id.to_string(),
                 ExecutionEventKind::Interrupted,
-                "Pi RPC abort completed and agent returned idle",
+                if ambiguous {
+                    "Pi RPC abort stopped executor activity; prior external effect remains outcome-unknown"
+                } else {
+                    "Pi RPC abort completed and agent returned idle"
+                },
             ));
-            state.last_event = "aborted".to_string();
+            state.last_event = if ambiguous {
+                "aborted_requires_reconciliation".to_string()
+            } else {
+                "aborted".to_string()
+            };
             return Ok(());
         }
         let state = self
