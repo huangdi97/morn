@@ -12,15 +12,14 @@ pub mod external_action;
 pub mod profile_guard;
 pub mod provider_gate;
 
-pub use controller_runtime::{ControllerTickResult, DurableWorkControllerRuntime};
+
 pub use capability_gate::{
     CapabilityEligibilityBlock, CapabilityEligibilityGate, CapabilityEligibilityReport,
 };
 pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
 
-pub use provider_gate::{
-    ProviderGate, ProviderGateBlock, ProviderGatePolicy, ProviderGateReport,
-};
+pub use controller_runtime::{ControllerTickResult, DurableWorkControllerRuntime};
+pub use provider_gate::{ProviderGate, ProviderGateBlock, ProviderGatePolicy, ProviderGateReport};
 
 pub use profile_guard::{
     enforce_profile_action, evaluate_profile_action, issue_external_action_permit,
