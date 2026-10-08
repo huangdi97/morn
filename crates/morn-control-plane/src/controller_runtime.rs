@@ -56,10 +56,8 @@ impl DurableWorkControllerRuntime {
         let work: WorkResource = store
             .load_record("work_resource_v115", work_id)?
             .ok_or_else(|| Error::not_found(format!("WorkResource {work_id}")))?;
-        let evidence: Vec<ConditionEvidence> = store.load_records_in_workspace(
-            "condition_evidence_v115",
-            work.workspace_id.as_str(),
-        )?;
+        let evidence: Vec<ConditionEvidence> = store
+            .load_records_in_workspace("condition_evidence_v115", work.workspace_id.as_str())?;
         let inputs = derive_controller_inputs(&work, &evidence, now);
         self.reconcile_once(store, work_id, profile, &inputs, now)
     }
