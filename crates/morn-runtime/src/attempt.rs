@@ -198,6 +198,9 @@ mod tests {
             "work-2:create-order",
             "create-order",
         );
+        dispatched
+            .set_effect_contract(EffectContract::e2("cancel-order"))
+            .unwrap();
         dispatched.transition(AttemptState::Authorized).unwrap();
         dispatched.transition(AttemptState::Dispatched).unwrap();
         assert_eq!(
@@ -213,6 +216,24 @@ mod tests {
             CancellationDisposition::RequiresCompensation
         );
         assert_eq!(dispatched.state, AttemptState::Committed);
+    }
+
+    #[test]
+    fn committed_effect_without_pinned_compensation_requires_reconciliation() {
+        let mut attempt = ActionAttempt::new(
+            RuntimeBindingId::generate_with("binding"),
+            "work-4:create-order",
+            "create-order",
+        );
+        attempt.transition(AttemptState::Authorized).unwrap();
+        attempt.transition(AttemptState::Dispatched).unwrap();
+        attempt.transition(AttemptState::Acknowledged).unwrap();
+        attempt.transition(AttemptState::Committed).unwrap();
+        assert_eq!(
+            attempt.request_cancel().unwrap(),
+            CancellationDisposition::RequiresReconciliation
+        );
+        assert_eq!(attempt.state, AttemptState::Committed);
     }
 
     #[test]
