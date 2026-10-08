@@ -54,12 +54,7 @@ pub fn capability_qualification_evidence(
         .site_ref
         .as_deref()
         .ok_or_else(|| Error::validation("qualified governed Work requires site_ref"))?;
-    if !admissions.site_profile_admission_active_at(
-        capability,
-        site,
-        &work.spec.profile_ref,
-        now,
-    ) {
+    if !admissions.site_profile_admission_active_at(capability, site, &work.spec.profile_ref, now) {
         return Err(Error::invalid_state(
             "capability lacks active qualification/release/site/profile admission",
         ));
