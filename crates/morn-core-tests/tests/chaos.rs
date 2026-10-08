@@ -125,7 +125,7 @@ fn checkpoint_mismatch_blocks_resume_with_attention() {
 fn migration_failure_does_not_corrupt() {
     // A migration that fails leaves the schema version unchanged (no partial apply).
     let store = morn_store::MornStore::open_in_memory().unwrap();
-    assert_eq!(store.schema_version().unwrap(), 5);
+    assert_eq!(store.schema_version().unwrap(), 6);
     // Simulated failed downgrade is rejected before any change.
     let plan = crate_plan();
     assert!(plan.is_err());

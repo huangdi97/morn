@@ -126,7 +126,7 @@ fn goal3_services_survive_restart() {
     let state = AppState::new(&db).unwrap();
     let guard = state.lock();
 
-    assert_eq!(guard.store.schema_version().unwrap(), 5);
+    assert_eq!(guard.store.schema_version().unwrap(), 6);
     assert_eq!(guard.certification.capabilities.len(), 1);
     assert_eq!(guard.certification.capabilities[0].id.to_string(), cap_id);
     assert_eq!(guard.managed.runs.len(), 1);

@@ -86,10 +86,10 @@ fn downgrade_requires_restore_plan() {
 fn fresh_and_upgrade_migration_are_idempotent() {
     let path = temp_db("mig");
     let store = MornStore::open(&path).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 5);
+    assert_eq!(store.schema_version().unwrap(), 6);
     // reopening is idempotent
     let store2 = MornStore::open(&path).unwrap();
-    assert_eq!(store2.schema_version().unwrap(), 5);
+    assert_eq!(store2.schema_version().unwrap(), 6);
 }
 
 // ---- M17: Security ----
