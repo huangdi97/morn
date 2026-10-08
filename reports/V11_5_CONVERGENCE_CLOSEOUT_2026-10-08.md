@@ -47,6 +47,7 @@ Morn remains Work-first, not Agent-first:
 | Work termination/finalizers | Work finalizers + external-action resolution | implemented |
 | Work truth independent of harness | protocol invariant + conformance tests | implemented |
 | node-local composition | exact-pinned Cordis host + `CompositionRuntimeProvider` contract | implemented |
+| composition runtime abstraction | service-slot lifecycle contract above Cordis; no business truth | implemented |
 | DSH provider boundary | fixture + SDK/wire seam | local contract implemented; real runtime external |
 | Pi provider boundary | fixture provider + shared contract | local contract implemented; real transport external |
 | provider registry | `morn-runtime/src/provider_registry.rs` | implemented |
@@ -82,6 +83,7 @@ Morn remains Work-first, not Agent-first:
 | telemetry boundary | OTel-oriented semantic design | contract/design; backend deployment external |
 | evidence-class claim ledger | categorical EvidenceClass + external blockers | implemented |
 | customer value claim gate | CustomerValidated + Acceptance + explicit RealSite evidence | implemented |
+| value evidence axes | deployment/engineering EvidenceClass kept orthogonal to ValueEvidenceClass | implemented |
 | Creator | natural-language/simple draft -> existing Solution pipeline | implemented |
 | SolutionPackage -> Work | explicit instantiation | implemented |
 | Digital Employee | Role projection, not canonical agent truth | implemented |
@@ -89,6 +91,7 @@ Morn remains Work-first, not Agent-first:
 | Studio | goal-first + Artifact2Capability surface | implemented |
 | Console | control/trust/provider/conformance surface | implemented |
 | Hub | capability/provider/runtime/compiler registry surface | implemented |
+| safe domain UI composition | typed declarative Workbench/Studio/Console/Hub slots; no arbitrary remote JS | implemented |
 | Factory read-only wedge | CNC-17/reference integration slice | implemented fixture |
 | timeout-after-commit no-blind-retry | Factory/reconciliation tests | implemented |
 | provider swap continuity | DSH/Pi neutrality + binding migration tests | implemented fixture |
@@ -279,3 +282,17 @@ remain visible as `BLOCKED_EXTERNAL` rather than being satisfied by mocks.
 
 The branch is not authorized to claim production maturity merely because the
 architecture and local conformance implementation are complete.
+
+
+## 11. Final v11.5 boundary additions
+
+The convergence branch also freezes the following late-stage clarifications:
+
+- ADR-030: evidence classes are explicit categorical claims; no implicit promotion;
+- ADR-031: durable workflow engines are execution providers, not Work truth;
+- ADR-032: Cordis is the reference composition runtime behind a small Morn contract;
+- ADR-033: engineering/deployment evidence and value-validation evidence are orthogonal;
+- ADR-034: domain UI composition is declarative/safe-by-default before arbitrary client plugins.
+
+These additions close the remaining places where runtime/plugin/UI state could
+otherwise become a second business truth or inflate maturity claims.
