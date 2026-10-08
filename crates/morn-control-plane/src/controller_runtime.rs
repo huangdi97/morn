@@ -9,9 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use morn_kernel::error::{Error, Result};
-use morn_kernel::{
-    EventEnvelope, EventSemanticClass, EventSemanticDescriptor,
-};
+use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
 use morn_kernel::time::Timestamp;
 use morn_profile::DomainProfile;
 use morn_store::MornStore;
@@ -79,7 +77,9 @@ impl DurableWorkControllerRuntime {
             lease.fencing_token,
             now.millis(),
         )? {
-            return Err(Error::conflict("controller fencing token is no longer current"));
+            return Err(Error::conflict(
+                "controller fencing token is no longer current",
+            ));
         }
 
         let mut work: WorkResource = store
