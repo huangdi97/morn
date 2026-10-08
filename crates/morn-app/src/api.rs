@@ -999,7 +999,7 @@ async fn v115_instantiate_solution(
     use morn_control_plane::ControlPlaneStore;
     use morn_foundry::{instantiate_approved_solution, SolutionInstantiationRequest};
 
-    let mut guard = state.lock();
+    let guard = state.lock();
     let package = if let Some(package_id) = body
         .get("solution_package_id")
         .and_then(Value::as_str)
