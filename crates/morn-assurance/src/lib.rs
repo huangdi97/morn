@@ -3,6 +3,7 @@
 pub mod admission;
 pub mod certification;
 pub mod evaluation;
+pub mod evidence_class;
 pub mod managed_work;
 pub mod replacement;
 pub mod replay;
@@ -16,6 +17,9 @@ pub use admission::{
     CapabilityObservation, CapabilityObservationId, QualificationEvidence, QualificationRecord,
     QualificationRecordId, QualificationStatus, SiteAdmission, SiteAdmissionId,
     SiteAdmissionStatus, StrictQualificationRequest,
+};
+pub use evidence_class::{
+    EvidenceClaim, EvidenceClaimId, EvidenceClaimState, EvidenceClass, EvidenceLedger,
 };
 pub use evaluation::{EvalStep, EvaluationDecision, EvaluationResult, EvaluationRunner};
 pub use replay::{ReplayReport, ReplayRunner, ReplayScenario};
