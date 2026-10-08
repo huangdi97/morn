@@ -87,6 +87,15 @@ impl WorkController {
             inputs.capability_resolved,
             "capability resolver",
         );
+        // Authorization readiness is evidence-derived, distinct from a final
+        // per-action Authority decision. Only Works that explicitly require this
+        // Condition gate on it; no side effect may bypass Authority enforcement.
+        Self::condition(
+            work,
+            "AuthoritySatisfied",
+            inputs.authority_satisfied,
+            "authority evidence",
+        );
         if profile.requires("CapabilityQualification") {
             Self::condition(
                 work,
