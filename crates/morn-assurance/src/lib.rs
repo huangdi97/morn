@@ -29,6 +29,4 @@ pub use replay::{ReplayReport, ReplayRunner, ReplayScenario};
 pub use shadow::{ShadowComparison, ShadowRun, ShadowRunner};
 pub use simulation::{FaultInjection, FaultKind, SimulationScenario};
 
-pub use profile_conformance::{
-    ProfileConformanceAttestation, ProfileConformanceAttestationId,
-};
+pub use profile_conformance::{ProfileConformanceAttestation, ProfileConformanceAttestationId};
