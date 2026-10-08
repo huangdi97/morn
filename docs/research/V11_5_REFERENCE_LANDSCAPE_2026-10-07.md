@@ -59,6 +59,14 @@ happened in the external world, and was the outcome accepted?”
 A Cordis plugin reload is therefore an E0 software lifecycle event. It cannot
 serve as business rollback for an E2/E3 external effect.
 
+Fresh implementation signal (2026-10-08): a current DSH discussion reports an
+internal peer-dependency mismatch where one DSH package expects Cordis 4.0.2
+while the HMR plugin expects ~4.0.4. This is not treated as a Morn bug, but it is
+additional evidence for keeping Morn's exact-pinned Cordis host and DSH process
+boundary separate instead of forcing both systems into one shared dependency
+tree. Source:
+https://github.com/deepseek-ai/deepseek-harness/discussions/7610
+
 ## 2. DeepSeek Harness as a harness provider
 
 Source:
