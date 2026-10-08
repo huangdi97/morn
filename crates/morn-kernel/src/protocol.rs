@@ -312,8 +312,7 @@ mod tests {
         let base = ProtocolSnapshot::v11_5();
         let mut next = base.clone();
         next.protocol_version = Version::new(11, 6, 0);
-        next.semantic_slots
-            .retain(|slot| slot != "Acceptance");
+        next.semantic_slots.retain(|slot| slot != "Acceptance");
         assert_eq!(
             compare_protocols(&base, &next),
             ProtocolCompatibility::Incompatible
