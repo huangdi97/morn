@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-027 in `docs/adr/`
+3. ADR-002 through ADR-029 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -173,3 +173,18 @@ A provider's health is runtime evidence with freshness, not a permanent
 property. Strict Enterprise/Factory resolution gates candidates against a live
 ProviderRegistry projection and rejects stale/unregistered providers. Active
 ExecutionBindings remain pinned through provider loss/recovery. See ADR-027.
+
+
+## Atomic state/event commit
+
+Durable control/domain event delivery is coupled transactionally to its state
+transition through CAS + outbox. A stale or failed state write cannot leak a
+semantic event, and a committed state transition does not leave a crash window
+before its durable delivery intent. See ADR-028.
+
+## Pi RPC reference boundary
+
+Pi is integrated through its public `pi --mode rpc --no-session` JSONL process
+protocol. Prompt acceptance and `agent_settled` remain executor-runtime facts,
+not Work Outcome or Acceptance. The Rust transport client is implemented;
+real-binary/model/credential smoke remains external. See ADR-029.
