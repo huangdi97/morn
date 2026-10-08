@@ -13,6 +13,7 @@ pub mod controller_runtime;
 pub mod external_action;
 pub mod profile_guard;
 pub mod provider_gate;
+pub mod readiness;
 
 pub use binding_guard::{
     BindingOperationalGate, BindingValidityDecision, BindingValidityDecisionId,
@@ -27,6 +28,11 @@ pub use controller_runtime::{ControllerTickResult, DurableWorkControllerRuntime}
 pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
 
 pub use provider_gate::{ProviderGate, ProviderGateBlock, ProviderGatePolicy, ProviderGateReport};
+pub use readiness::{
+    authority_condition_evidence, capability_qualification_evidence,
+    capability_resolution_evidence, provenance_condition_evidence,
+    source_of_truth_condition_evidence,
+};
 
 pub use profile_guard::{
     enforce_profile_action, evaluate_profile_action, issue_external_action_permit,
