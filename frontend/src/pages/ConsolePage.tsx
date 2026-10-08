@@ -119,6 +119,7 @@ export default function ConsolePage() {
             <KeyValue k="Execution environments" v={v115.providers.execution_environment.join(", ")} />
             <KeyValue k="Factory guarantees" v={v115.factory_profile.required_guarantees.length} />
             <KeyValue k="Real DSH" v={v115.claims.real_dsh} />
+            <KeyValue k="Real Pi" v={v115.claims.real_pi} />
             <KeyValue k="Real factory" v={v115.claims.real_factory} />
           </Card>
         )}
