@@ -38,6 +38,7 @@ Morn remains Work-first, not Agent-first:
 | Design obligation | Implementation evidence | Local state |
 | --- | --- | --- |
 | versioned semantic constitution | `morn-kernel/src/protocol.rs` | implemented |
+| language-neutral protocol artifacts | `spec/v11.5/` + wire-spec conformance tests | implemented |
 | explicit protocol migration | protocol compatibility + `ProtocolMigrationController` | implemented |
 | non-destructive history | `morn-kernel/src/history.rs` | implemented |
 | desired/observed Work | `morn-work/src/control.rs` | implemented |
@@ -324,3 +325,34 @@ otherwise become a second business truth or inflate maturity claims.
   semantic booleans/lists.
 - Factory fixture tests bind admission to a persisted fixture attestation; this
   remains local fixture evidence and does not upgrade real-site claims.
+
+
+## 14. Language-neutral protocol closure
+
+ADR-041 closes the remaining implementation-language coupling in the v11.5
+design. The branch publishes JSON Schema 2020-12 contracts plus canonical
+fixtures for all principal semantic slots and tests those fixtures against the
+Rust reference implementation.
+
+This does **not** mean schema-valid JSON is automatically Morn-conformant.
+Behavioral invariants still require the control-plane/conformance tests,
+including pinned bindings, action-scoped authority, reconciliation and
+independent acceptance.
+
+The protocol publication also freezes the receipt distinction:
+
+```text
+Harness ExecutionReceipt
+    = executor/runtime evidence
+
+ConnectorReceipt / source-system observation
+    = external action evidence
+
+ObservedOutcome
+    = source-grounded business observation
+
+AcceptanceDecision
+    = independent business acceptance
+```
+
+None may be silently promoted into the next layer.
