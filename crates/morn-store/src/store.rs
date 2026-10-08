@@ -2059,7 +2059,7 @@ mod tests {
     #[test]
     fn inbox_deduplicates_and_outbox_retries_keep_event_identity() {
         let store = MornStore::open_in_memory().unwrap();
-        assert_eq!(store.schema_version().unwrap(), 3);
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
 
         assert!(store
             .claim_inbound_event("evt-in-1", "cmms://plant-a", 10)
