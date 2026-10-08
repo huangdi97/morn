@@ -6,7 +6,13 @@
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::ids::{RuntimeBindingId, WorkPackageId, WorkspaceId};
+use morn_kernel::protocol::MORN_PROTOCOL_V11_5;
+use morn_kernel::version::Version;
 use morn_kernel::time::Timestamp;
+
+fn default_protocol_version() -> Version {
+    MORN_PROTOCOL_V11_5
+}
 
 fn default_persisted_resource_version() -> u64 {
     1
@@ -78,6 +84,8 @@ impl AutonomyPosture {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkSpec {
     pub work_package_id: WorkPackageId,
+    #[serde(default = "default_protocol_version")]
+    pub protocol_version: Version,
     pub goal: String,
     pub constraints: Vec<String>,
     pub required_conditions: Vec<String>,
@@ -99,6 +107,7 @@ impl WorkSpec {
     ) -> Self {
         Self {
             work_package_id,
+            protocol_version: MORN_PROTOCOL_V11_5,
             goal: goal.into(),
             constraints: Vec::new(),
             required_conditions: Vec::new(),
@@ -335,6 +344,16 @@ impl WorkResource {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_work_pins_current_protocol_version() {
+        let spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "goal",
+            "morn.lite@1.0.0",
+        );
+        assert_eq!(spec.protocol_version, MORN_PROTOCOL_V11_5);
+    }
 
     #[test]
     fn assist_posture_is_a_real_effect_ceiling() {
