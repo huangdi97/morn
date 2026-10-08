@@ -1600,11 +1600,15 @@ mod control_plane_persistence_scope_tests {
             ValueEvidenceClass::CustomerValidated,
         );
         fake_value.acceptance_ref = Some(decision.id.clone());
-        fake_value.evidence_refs.push("fixture://not-customer".to_string());
+        fake_value
+            .evidence_refs
+            .push("fixture://not-customer".to_string());
         assert!(store.save_value_assessment(&work, &fake_value).is_err());
 
         outcome.id = morn_kernel::ids::OutcomeRecordId::generate_with("out");
-        outcome.evidence_refs.push("cmms://plant-a/status/receipt".to_string());
+        outcome
+            .evidence_refs
+            .push("cmms://plant-a/status/receipt".to_string());
         store.save_observed_outcome(&work, &outcome).unwrap();
         decision.outcome_refs = vec![outcome.id.clone()];
         decision.evidence_refs.clear();
@@ -1648,7 +1652,9 @@ mod control_plane_persistence_scope_tests {
             "verified",
         );
         decision.outcome_refs.push(outcome.id.clone());
-        decision.evidence_refs.push("review://independent-witness".to_string());
+        decision
+            .evidence_refs
+            .push("review://independent-witness".to_string());
         assert!(ControlPlaneStore::save_acceptance_decision(&store, &other, &decision).is_err());
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
 

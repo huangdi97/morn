@@ -180,12 +180,8 @@ mod tests {
         spec.source_solution_ref = Some("solution://factory@1.0.0".to_string());
         spec.site_ref = Some("plant-a".to_string());
         let work = WorkResource::new(WorkspaceId::generate(), spec);
-        let mut binding = ExecutionBinding::for_work(
-            &work,
-            "manifest:sha256:abc",
-            "provider-a",
-            "1.0.0",
-        );
+        let mut binding =
+            ExecutionBinding::for_work(&work, "manifest:sha256:abc", "provider-a", "1.0.0");
         binding.runtime_ref = Some("runtime://session-a".to_string());
         binding.authority_decision_ref = Some("authority://permit-a".to_string());
         let manifest = ExecutionManifest::from_binding(
