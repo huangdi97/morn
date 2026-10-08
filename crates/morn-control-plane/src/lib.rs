@@ -22,7 +22,9 @@ use morn_kernel::error::{Error, Result};
 use morn_kernel::protocol::{
     plan_protocol_migration, ProtocolCompatibility, ProtocolMigrationPlan, ProtocolSnapshot,
 };
-use morn_profile::{plan_profile_migration, DomainProfile, ProfileCompatibility, ProfileMigrationPlan};
+use morn_profile::{
+    plan_profile_migration, DomainProfile, ProfileCompatibility, ProfileMigrationPlan,
+};
 use morn_runtime::{
     reconcile_attempt, ActionAttempt, BindingMigrationDecision, ExecutionBinding,
     ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
@@ -975,7 +977,9 @@ mod v115_profile_migration_tests {
         let mut next = base.clone();
         next.version = Version::new(1, 1, 0);
         next.requirements
-            .push(morn_profile::GuaranteeRequirement::required("RuntimeAttestation"));
+            .push(morn_profile::GuaranteeRequirement::required(
+                "RuntimeAttestation",
+            ));
 
         let mut spec = WorkSpec::new(
             WorkPackageId::generate_with("work"),
@@ -983,7 +987,8 @@ mod v115_profile_migration_tests {
             base.canonical_ref(),
         );
         spec.required_conditions = base.pre_execution_work_conditions();
-        spec.required_conditions.push("CustomerConstraint".to_string());
+        spec.required_conditions
+            .push("CustomerConstraint".to_string());
         let mut work = WorkResource::new(WorkspaceId::generate(), spec);
         work.set_condition(WorkCondition::new(
             "CapabilityResolved",
@@ -1003,7 +1008,10 @@ mod v115_profile_migration_tests {
         );
         assert_eq!(work.generation, 2);
         assert_eq!(work.spec.profile_ref, next.canonical_ref());
-        assert!(work.spec.required_conditions.contains(&"CustomerConstraint".to_string()));
+        assert!(work
+            .spec
+            .required_conditions
+            .contains(&"CustomerConstraint".to_string()));
         assert!(work.status.conditions.is_empty());
         assert!(work.status.active_bindings.is_empty());
         assert_eq!(work.status.phase, WorkPhase::Proposed);
