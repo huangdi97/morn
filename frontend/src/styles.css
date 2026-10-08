@@ -326,3 +326,13 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .studio-capability-details > summary { font-size: 13px; }
 }
 
+
+.studio-compiler-goal {
+  margin: 10px 0 15px;
+  padding: 10px 12px;
+  border-left: 3px solid #4d89ff;
+  background: #182439;
+  color: #d2e0f4;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

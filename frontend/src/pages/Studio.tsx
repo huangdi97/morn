@@ -233,7 +233,7 @@ export default function Studio() {
         <h1>Studio — Solution Compiler</h1>
       </header>
 
-      <Card title="Creator — simple composition">
+      <Card title="1 · Describe goal and acceptance">
         <p>
           Start from a goal, guarantee profile and explicit acceptance. Creator only drafts an
           existing Solution pipeline; it does not create a parallel Agent/Blueprint truth model.
@@ -328,15 +328,10 @@ export default function Studio() {
         3 · Instantiate canonical Work. Artifact imports are optional and create candidates only.
       </p>
 
-      <Card title="1. Describe Goal">
-        <div className="builder-item">
-          <label>Goal: </label>
-          <input
-            style={{ width: "70%", padding: 6 }}
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-          />
-        </div>
+      <Card title="2 · Validate and compile solution">
+        <p className="studio-compiler-goal">
+          <strong>Desired goal:</strong> {goal.trim() || "Set a goal in step 1."}
+        </p>
         <div className="builder-item">
           <label>Capabilities (comma separated, * = all): </label>
           <input
@@ -417,7 +412,7 @@ export default function Studio() {
           )}
         </>
       )}
-      <Card title="Approved Solution → Canonical Work">
+      <Card title="3 · Instantiate canonical Work">
         <p>
           Instantiate an approved persisted SolutionPackage as canonical Work. This records
           a desired goal; no capability, authority, executor, or accepted outcome is implied.
@@ -439,7 +434,7 @@ export default function Studio() {
           </select>
         </div>
         {solutionPackages.length === 0 && !manifest && (
-          <p>No approved package yet. Complete the compiler approval flow below first.</p>
+          <p>No approved package yet. Compile and approve a SolutionPackage in step 2 above.</p>
         )}
         <div className="builder-item">
           <label htmlFor="work-profile">Guarantee profile: </label>

@@ -49,6 +49,10 @@ try {
       errors.push("hub: governed capability supply-chain section is not visible");
     }
     if (route === "/studio") {
+      const compilerGoal = page.locator(".studio-compiler-goal");
+      if (!(await compilerGoal.count()) || !(await compilerGoal.innerText()).includes("Deliver a reviewed report")) {
+        errors.push("studio: compiler must reuse the goal defined in the primary creator step");
+      }
       const advanced = page.locator("details.studio-capability-details");
       if (!(await advanced.count())) {
         errors.push("studio: governed advanced capability importer is missing");
