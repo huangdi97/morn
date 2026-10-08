@@ -398,9 +398,9 @@ impl AdmissionService {
             let embedded = package_ref
                 .rsplit_once('@')
                 .map(|(_, digest)| digest)
-                .ok_or_else(|| Error::validation(
-                    "OCI release reference must be pinned to a content digest",
-                ))?;
+                .ok_or_else(|| {
+                    Error::validation("OCI release reference must be pinned to a content digest")
+                })?;
             if !embedded.eq_ignore_ascii_case(&content_digest) {
                 return Err(Error::validation(
                     "OCI release reference digest does not match content digest",
