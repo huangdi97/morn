@@ -69,6 +69,41 @@ impl McpHttpAuthorizationBinding {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum McpTaskState {
+    Working,
+    InputRequired,
+    Completed,
+    Cancelled,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct McpTaskEvidence {
+    pub server_ref: String,
+    pub task_id: String,
+    pub state: McpTaskState,
+    pub status_message: Option<String>,
+    pub result: Option<Value>,
+    pub error: Option<Value>,
+}
+
+impl McpTaskEvidence {
+    /// MCP Tasks are durable executor state for an augmented MCP request. Even
+    /// a completed Task remains provider/runtime evidence until Morn observes
+    /// a domain Outcome and evaluates Acceptance independently.
+    pub fn is_executor_terminal(&self) -> bool {
+        matches!(
+            self.state,
+            McpTaskState::Completed | McpTaskState::Cancelled | McpTaskState::Failed
+        )
+    }
+
+    pub fn proves_morn_acceptance(&self) -> bool {
+        false
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpToolDescriptor {
     pub server_ref: String,
@@ -94,8 +129,29 @@ impl McpToolDescriptor {
 pub struct A2aAgentCardRef {
     pub agent_ref: String,
     pub card_url: String,
+    /// A2A protocol compatibility is negotiated at Major.Minor granularity
+    /// (for example "1.0"). Patch release numbers are not protocol versions.
     pub protocol_version: String,
     pub skills: Vec<String>,
+}
+
+impl A2aAgentCardRef {
+    pub fn validate(&self) -> Result<()> {
+        if self.agent_ref.trim().is_empty() || self.card_url.trim().is_empty() {
+            return Err(Error::validation("A2A Agent Card identity/url is required"));
+        }
+        let parts: Vec<&str> = self.protocol_version.split('.').collect();
+        if parts.len() != 2
+            || parts
+                .iter()
+                .any(|part| part.is_empty() || !part.chars().all(|ch| ch.is_ascii_digit()))
+        {
+            return Err(Error::validation(
+                "A2A protocol version must use Major.Minor form such as 1.0",
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -185,6 +241,20 @@ mod tests {
     }
 
     #[test]
+    fn mcp_task_completion_does_not_equal_morn_outcome_or_acceptance() {
+        let task = McpTaskEvidence {
+            server_ref: "https://mcp.example.com".to_string(),
+            task_id: "task-1".to_string(),
+            state: McpTaskState::Completed,
+            status_message: Some("tool computation complete".to_string()),
+            result: Some(json!({"resultType":"complete","value":42})),
+            error: None,
+        };
+        assert!(task.is_executor_terminal());
+        assert!(!task.proves_morn_acceptance());
+    }
+
+    #[test]
     fn mcp_tool_descriptor_is_interface_metadata_not_authority() {
         let tool = McpToolDescriptor {
             server_ref: "mcp://cmms".to_string(),
@@ -198,6 +268,21 @@ mod tests {
         let encoded = serde_json::to_value(tool).unwrap();
         assert!(encoded.get("authority").is_none());
         assert!(encoded.get("token").is_none());
+    }
+
+    #[test]
+    fn a2a_protocol_version_uses_major_minor_negotiation() {
+        let card = A2aAgentCardRef {
+            agent_ref: "a2a://planner".to_string(),
+            card_url: "https://agent.example/.well-known/agent-card.json".to_string(),
+            protocol_version: "1.0".to_string(),
+            skills: vec!["plan".to_string()],
+        };
+        card.validate().unwrap();
+
+        let mut invalid = card;
+        invalid.protocol_version = "1.0.0".to_string();
+        assert!(invalid.validate().is_err());
     }
 
     #[test]
@@ -222,7 +307,7 @@ mod tests {
             endpoint: ExternalEndpoint {
                 protocol: InteropProtocol::A2a,
                 endpoint_ref: "https://agent.example/a2a".to_string(),
-                protocol_version: Some("0.3.0".to_string()),
+                protocol_version: Some("1.0".to_string()),
                 identity_ref: Some("workload://agent-example".to_string()),
             },
             capability_ref: "capability://planner".to_string(),
