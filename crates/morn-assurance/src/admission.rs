@@ -394,6 +394,19 @@ impl AdmissionService {
                 "release content digest must use sha256:<64 hex>",
             ));
         }
+        if package_ref.starts_with("oci://") {
+            let embedded = package_ref
+                .rsplit_once('@')
+                .map(|(_, digest)| digest)
+                .ok_or_else(|| Error::validation(
+                    "OCI release reference must be pinned to a content digest",
+                ))?;
+            if !embedded.eq_ignore_ascii_case(&content_digest) {
+                return Err(Error::validation(
+                    "OCI release reference digest does not match content digest",
+                ));
+            }
+        }
         if provenance_ref
             .as_deref()
             .is_none_or(|reference| reference.trim().is_empty())
@@ -1030,6 +1043,17 @@ mod tests {
                 },
             )
             .unwrap();
+        assert!(service
+            .record_release(
+                &mut capability,
+                &qualification,
+                format!("oci://fixture/wrong@sha256:{}", "b".repeat(64)),
+                format!("sha256:{}", "a".repeat(64)),
+                Some("sigstore://fixture/signature".to_string()),
+                Some("slsa://fixture/provenance".to_string()),
+            )
+            .is_err());
+        assert!(capability.release_refs.is_empty());
         let release = record_fixture_release(&mut service, &mut capability, &qualification);
         let profile = DomainProfile::factory_readonly_v1();
         let report = passing_conformance(&profile);
