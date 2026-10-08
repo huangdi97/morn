@@ -314,3 +314,13 @@ otherwise become a second business truth or inflate maturity claims.
   execution provenance.
 - This is local engineering evidence only; it does not convert missing real
   customer/site/runtime evidence into PASS.
+
+
+## 13. Site conformance evidence closure
+
+- ADR-039 requires persisted site/Profile conformance attestations for the
+  product admission path.
+- Admission callers can no longer self-certify Profile guarantees by posting raw
+  semantic booleans/lists.
+- Factory fixture tests bind admission to a persisted fixture attestation; this
+  remains local fixture evidence and does not upgrade real-site claims.
