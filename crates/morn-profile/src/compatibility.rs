@@ -34,6 +34,40 @@ fn same_guarantee_contract(left: &DomainProfile, right: &DomainProfile) -> bool 
         && left.provenance_required == right.provenance_required
 }
 
+fn candidate_preserves_base_guarantees(
+    base: &DomainProfile,
+    candidate: &DomainProfile,
+) -> bool {
+    use crate::RequirementLevel;
+    use morn_kernel::ExecutionClass;
+
+    let preserves_semantics = base.requirements.iter().all(|requirement| match requirement.level {
+        RequirementLevel::Required => candidate.requires(&requirement.semantic),
+        RequirementLevel::Forbidden => candidate.forbids(&requirement.semantic),
+        RequirementLevel::Optional => true,
+    });
+    let preserves_execution_guarantees = base
+        .required_execution_guarantees
+        .iter()
+        .all(|guarantee| candidate.required_execution_guarantees.contains(guarantee));
+    let preserves_explicit_flags =
+        (!base.source_of_truth_binding_required || candidate.source_of_truth_binding_required)
+            && (!base.durable_work_state_required || candidate.durable_work_state_required)
+            && (!base.provenance_required || candidate.provenance_required);
+    let preserves_execution_class = match (
+        ExecutionClass::parse(&base.minimum_isolation),
+        ExecutionClass::parse(&candidate.minimum_isolation),
+    ) {
+        (Some(required), Some(actual)) => actual.satisfies(required),
+        _ => false,
+    };
+
+    preserves_semantics
+        && preserves_execution_guarantees
+        && preserves_explicit_flags
+        && preserves_execution_class
+}
+
 pub fn compare_profiles(base: &DomainProfile, candidate: &DomainProfile) -> ProfileCompatibility {
     if base.id != candidate.id {
         return ProfileCompatibility::Incompatible;
@@ -52,6 +86,9 @@ pub fn compare_profiles(base: &DomainProfile, candidate: &DomainProfile) -> Prof
     }
 
     if base.version.major != candidate.version.major {
+        return ProfileCompatibility::Incompatible;
+    }
+    if !candidate_preserves_base_guarantees(base, candidate) {
         return ProfileCompatibility::Incompatible;
     }
 
@@ -165,6 +202,28 @@ mod tests {
             .push(ExecutionGuarantee::RuntimeAttestation);
         assert_eq!(
             compare_profiles(&base, &patch),
+            ProfileCompatibility::Incompatible
+        );
+    }
+
+    #[test]
+    fn minor_profile_cannot_weaken_existing_guarantees() {
+        let base = DomainProfile::factory_readonly_v1();
+        let mut weakened = base.clone();
+        weakened.version = Version::new(1, 1, 0);
+        weakened
+            .requirements
+            .retain(|item| item.semantic != "ProductionWrite");
+        assert_eq!(
+            compare_profiles(&base, &weakened),
+            ProfileCompatibility::Incompatible
+        );
+
+        let mut weaker_isolation = base.clone();
+        weaker_isolation.version = Version::new(1, 1, 0);
+        weaker_isolation.minimum_isolation = "process".to_string();
+        assert_eq!(
+            compare_profiles(&base, &weaker_isolation),
             ProfileCompatibility::Incompatible
         );
     }
