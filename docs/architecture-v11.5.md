@@ -682,3 +682,31 @@ This lets Factory or future domain Profiles evolve independently of provider
 implementations while preserving exact Work/SiteAdmission interpretation.
 Studio profile selection is driven by the backend versioned catalog rather than
 assuming one permanent UI list.
+
+
+## Runtime event semantics and provider liveness
+
+Cordis and harness runtimes may expose high-volume plugin/session/tool/model
+events. These do not share one truth level with Morn's durable Work history.
+Morn classifies event meaning explicitly:
+
+```text
+RuntimeSignal            -> ephemeral runtime/telemetry evidence
+ControlIntent            -> durable desired-state/control request
+DomainFact               -> durable Morn semantic fact
+ExternalObservation      -> durable source-grounded fact/receipt
+ProjectionNotification   -> derived best-effort UI/projection signal
+```
+
+CloudEvents remains the envelope. The durable outbox is reserved for semantic
+event classes that require durability; a runtime signal cannot become business
+truth merely because it is persisted or delivered.
+
+Provider selection is similarly temporal. ProviderRegistry health can have a
+validity deadline. Strict Work compositions apply a ProviderGate before
+CapabilityResolver, so an admitted capability backed by an unavailable or stale
+provider is not selectable for a new binding. Provider loss affects future
+selection; it does not mutate the binding of an already-started Attempt.
+
+For HTTP MCP, credentials are resource/audience-bound opaque handles. Morn does
+not store/pass raw bearer tokens through Work, Capability or agent state.
