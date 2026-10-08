@@ -604,10 +604,6 @@ async fn v115_capability_admit(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> ApiResult {
-    use morn_kernel::ExecutionGuarantee;
-    use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile};
-    use std::collections::BTreeSet;
-
     let manifest_id = body
         .get("manifest_id")
         .and_then(Value::as_str)
@@ -616,63 +612,33 @@ async fn v115_capability_admit(
         .get("qualification_id")
         .and_then(Value::as_str)
         .ok_or_else(|| AppError(Error::validation("qualification_id is required")))?;
-    let site_ref = body
-        .get("site_ref")
+    let conformance_attestation_id = body
+        .get("conformance_attestation_id")
         .and_then(Value::as_str)
-        .ok_or_else(|| AppError(Error::validation("site_ref is required")))?;
-    let profile_ref = body
-        .get("profile_ref")
-        .and_then(Value::as_str)
-        .ok_or_else(|| AppError(Error::validation("profile_ref is required")))?;
+        .ok_or_else(|| {
+            AppError(Error::validation(
+                "conformance_attestation_id is required; raw conformance booleans are not accepted",
+            ))
+        })?;
     let approved_by = body
         .get("approved_by")
         .and_then(Value::as_str)
         .ok_or_else(|| AppError(Error::validation("approved_by is required")))?;
 
-    let profile = DomainProfile::from_ref(profile_ref)
-        .ok_or_else(|| AppError(Error::validation(format!("unknown Profile {profile_ref}"))))?;
-    let mut execution_guarantees = BTreeSet::new();
-    for raw in json_strings(&body, "execution_guarantees") {
-        let parsed = ExecutionGuarantee::parse(&raw).ok_or_else(|| {
-            AppError(Error::validation(format!(
-                "unknown execution guarantee {raw}"
-            )))
-        })?;
-        execution_guarantees.insert(parsed);
-    }
-    let evidence = ConformanceEvidence {
-        satisfied_semantics: json_strings(&body, "satisfied_semantics")
-            .into_iter()
-            .collect(),
-        forbidden_semantics_present: json_strings(&body, "forbidden_semantics_present")
-            .into_iter()
-            .collect(),
-        isolation: body
-            .get("isolation")
-            .and_then(Value::as_str)
-            .unwrap_or("no-isolation")
-            .to_string(),
-        execution_guarantees,
-        durable_work_state: body
-            .get("durable_work_state")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-        source_of_truth_bound: body
-            .get("source_of_truth_bound")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-        provenance_ready: body
-            .get("provenance_ready")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-    };
-    let conformance = evaluate_profile(&profile, &evidence);
-    if !conformance.passed {
-        return Ok(Json(json!({
-            "admitted": false,
-            "conformance": conformance,
-            "note": "profile conformance failed closed; no SiteAdmission created"
-        })));
+    for forbidden in [
+        "satisfied_semantics",
+        "forbidden_semantics_present",
+        "execution_guarantees",
+        "isolation",
+        "durable_work_state",
+        "source_of_truth_bound",
+        "provenance_ready",
+    ] {
+        if body.get(forbidden).is_some() {
+            return Err(AppError(Error::validation(format!(
+                "{forbidden} must come from a persisted ProfileConformanceAttestation, not the admission caller"
+            ))));
+        }
     }
 
     let mut guard = state.lock();
@@ -687,6 +653,17 @@ async fn v115_capability_admit(
                 "Qualification {qualification_id}"
             )))
         })?;
+    let attestation = guard
+        .store
+        .load_record::<morn_assurance::ProfileConformanceAttestation>(
+            "profile_conformance_attestation_v115",
+            conformance_attestation_id,
+        )?
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "ProfileConformanceAttestation {conformance_attestation_id}"
+            )))
+        })?;
     let index = guard
         .v115_capabilities
         .iter()
@@ -696,15 +673,14 @@ async fn v115_capability_admit(
                 "CapabilityManifest {manifest_id}"
             )))
         })?;
+
     let admission = {
         let inner = &mut *guard;
         let capability = &mut inner.v115_capabilities[index];
-        inner.v115_admission.admit(
+        inner.v115_admission.admit_with_attestation(
             capability,
             &qualification,
-            site_ref,
-            profile_ref,
-            &conformance,
+            &attestation,
             approved_by,
         )?
     };
@@ -712,7 +688,7 @@ async fn v115_capability_admit(
     Ok(Json(json!({
         "admitted": true,
         "admission": admission,
-        "conformance": conformance,
+        "conformance_attestation": attestation,
         "stage": guard.v115_capabilities[index].stage
     })))
 }
