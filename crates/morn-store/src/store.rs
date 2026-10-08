@@ -2170,18 +2170,16 @@ mod v115_revision_tests {
         };
 
         let revision = store
-            .save_record_cas_with_durable_event(
-                DurableProjectionCommit {
-                    kind: "work_resource_v115",
-                    id: "work-1",
-                    workspace_id: "ws-1",
-                    created_at: 10,
-                    expected_revision: 0,
-                    record: &json!({"phase":"ready"}),
-                    envelope: &event,
-                    semantics: &semantics,
-                },
-            )
+            .save_record_cas_with_durable_event(DurableProjectionCommit {
+                kind: "work_resource_v115",
+                id: "work-1",
+                workspace_id: "ws-1",
+                created_at: 10,
+                expected_revision: 0,
+                record: &json!({"phase":"ready"}),
+                envelope: &event,
+                semantics: &semantics,
+            })
             .unwrap();
         assert_eq!(revision, 1);
         let pending = store.pending_outbox_events(10).unwrap();
@@ -2197,18 +2195,16 @@ mod v115_revision_tests {
             json!({"work":"work-1","phase":"blocked"}),
         );
         assert!(store
-            .save_record_cas_with_durable_event(
-                DurableProjectionCommit {
-                    kind: "work_resource_v115",
-                    id: "work-1",
-                    workspace_id: "ws-1",
-                    created_at: 11,
-                    expected_revision: 0,
-                    record: &json!({"phase":"blocked"}),
-                    envelope: &stale_event,
-                    semantics: &semantics,
-                },
-            )
+            .save_record_cas_with_durable_event(DurableProjectionCommit {
+                kind: "work_resource_v115",
+                id: "work-1",
+                workspace_id: "ws-1",
+                created_at: 11,
+                expected_revision: 0,
+                record: &json!({"phase":"blocked"}),
+                envelope: &stale_event,
+                semantics: &semantics,
+            })
             .is_err());
         assert_eq!(store.pending_outbox_events(10).unwrap().len(), 1);
     }
@@ -2257,7 +2253,12 @@ mod v115_revision_tests {
             semantics: &semantics,
         });
         assert!(duplicate.is_err());
-        assert_eq!(store.record_revision("work_resource_v115", "work-1").unwrap(), Some(1));
+        assert_eq!(
+            store
+                .record_revision("work_resource_v115", "work-1")
+                .unwrap(),
+            Some(1)
+        );
         assert_eq!(
             store
                 .load_record::<serde_json::Value>("work_resource_v115", "work-1")
@@ -2329,7 +2330,12 @@ mod v115_revision_tests {
             },
         );
         assert!(duplicate.is_err());
-        assert_eq!(store.record_revision("work_resource_v115", "work-1").unwrap(), Some(1));
+        assert_eq!(
+            store
+                .record_revision("work_resource_v115", "work-1")
+                .unwrap(),
+            Some(1)
+        );
         assert_eq!(store.pending_outbox_events(10).unwrap().len(), 1);
     }
 
@@ -2352,18 +2358,16 @@ mod v115_revision_tests {
         };
 
         assert!(store
-            .save_record_cas_with_durable_event(
-                DurableProjectionCommit {
-                    kind: "runtime_projection",
-                    id: "dsh",
-                    workspace_id: "ws-1",
-                    created_at: 1,
-                    expected_revision: 0,
-                    record: &json!({"status":"healthy"}),
-                    envelope: &event,
-                    semantics: &semantics,
-                },
-            )
+            .save_record_cas_with_durable_event(DurableProjectionCommit {
+                kind: "runtime_projection",
+                id: "dsh",
+                workspace_id: "ws-1",
+                created_at: 1,
+                expected_revision: 0,
+                record: &json!({"status":"healthy"}),
+                envelope: &event,
+                semantics: &semantics,
+            })
             .is_err());
         assert!(store.pending_outbox_events(10).unwrap().is_empty());
     }
