@@ -1,0 +1,50 @@
+{
+  "protocol": "morn",
+  "version": "11.5.0",
+  "schemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "semanticSlots": [
+    "Work",
+    "Capability",
+    "Authority",
+    "ExecutionBinding",
+    "Attempt",
+    "Receipt",
+    "Reconciliation",
+    "Outcome",
+    "Acceptance",
+    "Provenance",
+    "Profile"
+  ],
+  "schemas": {
+    "bundle": "./morn-protocol.schema.json",
+    "workResource": "./morn-protocol.schema.json#/$defs/WorkResource",
+    "capabilityRecord": "./morn-protocol.schema.json#/$defs/CapabilityRecord",
+    "executionBinding": "./morn-protocol.schema.json#/$defs/ExecutionBinding",
+    "actionAttempt": "./morn-protocol.schema.json#/$defs/ActionAttempt",
+    "domainProfile": "./morn-protocol.schema.json#/$defs/DomainProfile",
+    "eventEnvelope": "./morn-protocol.schema.json#/$defs/EventEnvelope"
+  },
+  "examples": {
+    "workResource": "./examples/work-resource.json",
+    "capabilityRecord": "./examples/capability-record.json",
+    "executionBinding": "./examples/execution-binding.json",
+    "actionAttempt": "./examples/action-attempt.json",
+    "domainProfile": "./examples/factory-profile.json",
+    "eventEnvelope": "./examples/event-envelope.json"
+  },
+  "invariants": [
+    "work-truth-independent-of-executor",
+    "workflow-runtime-not-work-truth",
+    "active-binding-pinned",
+    "profile-effect-gate-before-dispatch",
+    "authority-before-restricted-effect",
+    "proposal-execution-receipt-outcome-acceptance-distinct",
+    "unknown-requires-reconciliation",
+    "compiler-not-qualification",
+    "qualification-not-admission",
+    "profile-version-pinned",
+    "history-no-silent-rewrite",
+    "profile-guarantees-not-provider-names",
+    "evidence-class-explicit"
+  ]
+}
