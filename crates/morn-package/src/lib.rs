@@ -24,7 +24,6 @@ fn default_protocol_compat() -> String {
     "11.5.x".to_string()
 }
 
-
 /// Pack lifecycle state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum PackStatus {
