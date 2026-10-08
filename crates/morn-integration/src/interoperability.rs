@@ -35,6 +35,40 @@ impl ExternalEndpoint {
     }
 }
 
+/// HTTP MCP authorization binding. The concrete bearer token never appears in
+/// this structure: Morn carries an opaque CredentialProvider handle and the
+/// RFC-8707 target resource/audience that the credential must be issued for.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpHttpAuthorizationBinding {
+    pub server_resource_uri: String,
+    pub credential_handle_ref: String,
+    pub scopes: Vec<String>,
+    pub audience_bound: bool,
+}
+
+impl McpHttpAuthorizationBinding {
+    pub fn validate(&self) -> Result<()> {
+        if !(self.server_resource_uri.starts_with("https://")
+            || self.server_resource_uri.starts_with("http://"))
+        {
+            return Err(Error::validation(
+                "HTTP MCP authorization requires an explicit http(s) resource URI",
+            ));
+        }
+        if self.credential_handle_ref.trim().is_empty() {
+            return Err(Error::validation(
+                "MCP authorization requires an opaque credential handle",
+            ));
+        }
+        if !self.audience_bound {
+            return Err(Error::validation(
+                "MCP credential must be bound to the target resource/audience",
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpToolDescriptor {
     pub server_ref: String,
@@ -130,6 +164,25 @@ impl InteropBinding {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn mcp_http_authorization_requires_resource_bound_opaque_credential() {
+        let binding = McpHttpAuthorizationBinding {
+            server_resource_uri: "https://mcp.example.com".to_string(),
+            credential_handle_ref: "credential://work-1042/mcp-example".to_string(),
+            scopes: vec!["tools.call".to_string()],
+            audience_bound: true,
+        };
+        binding.validate().unwrap();
+
+        let encoded = serde_json::to_value(&binding).unwrap();
+        assert!(encoded.get("access_token").is_none());
+        assert!(encoded.get("bearer").is_none());
+
+        let mut unsafe_binding = binding.clone();
+        unsafe_binding.audience_bound = false;
+        assert!(unsafe_binding.validate().is_err());
+    }
 
     #[test]
     fn mcp_tool_descriptor_is_interface_metadata_not_authority() {
