@@ -5,6 +5,7 @@
 
 pub mod compatibility;
 pub mod conformance;
+pub mod registry;
 
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +14,7 @@ use morn_kernel::ExecutionGuarantee;
 
 pub use compatibility::{compare_profiles, plan_profile_migration, ProfileCompatibility, ProfileMigrationPlan};
 pub use conformance::{evaluate_profile, ConformanceEvidence, ConformanceReport};
+pub use registry::{reference_profile_registry, ProfileRegistry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum RequirementLevel {
@@ -68,6 +70,71 @@ pub struct DomainProfile {
 }
 
 impl DomainProfile {
+    pub fn validate(&self) -> morn_kernel::error::Result<()> {
+        use std::collections::BTreeMap;
+        use morn_kernel::error::Error;
+        use morn_kernel::ExecutionClass;
+
+        if self.id.trim().is_empty() || self.id.contains('@') {
+            return Err(Error::validation(
+                "DomainProfile id must be non-empty and must not contain @",
+            ));
+        }
+        if ExecutionClass::parse(&self.minimum_isolation).is_none() {
+            return Err(Error::validation(format!(
+                "unknown minimum isolation class {}",
+                self.minimum_isolation
+            )));
+        }
+
+        let mut semantics = BTreeMap::new();
+        for requirement in &self.requirements {
+            if requirement.semantic.trim().is_empty() {
+                return Err(Error::validation(
+                    "Profile requirement semantic must be non-empty",
+                ));
+            }
+            if let Some(existing) = semantics.insert(
+                requirement.semantic.clone(),
+                requirement.level,
+            ) {
+                if existing != requirement.level {
+                    return Err(Error::validation(format!(
+                        "Profile semantic {} has conflicting requirement levels",
+                        requirement.semantic
+                    )));
+                }
+                return Err(Error::validation(format!(
+                    "Profile semantic {} is duplicated",
+                    requirement.semantic
+                )));
+            }
+        }
+
+        let mut execution_guarantees = self.required_execution_guarantees.clone();
+        execution_guarantees.sort();
+        execution_guarantees.dedup();
+        if execution_guarantees.len() != self.required_execution_guarantees.len() {
+            return Err(Error::validation(
+                "Profile execution guarantee vector contains duplicates",
+            ));
+        }
+
+        for (semantic, flag) in [
+            ("DurableWorkState", self.durable_work_state_required),
+            ("SourceOfTruthBinding", self.source_of_truth_binding_required),
+            ("Provenance", self.provenance_required),
+        ] {
+            if self.requires(semantic) != flag {
+                return Err(Error::validation(format!(
+                    "Profile {semantic} semantic and explicit requirement flag disagree"
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn canonical_ref(&self) -> String {
         format!(
             "{}@{}.{}.{}",
@@ -237,6 +304,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn profile_validation_rejects_conflicting_or_inconsistent_contract() {
+        let mut profile = DomainProfile::factory_readonly_v1();
+        assert!(profile.validate().is_ok());
+
+        profile.requirements.push(GuaranteeRequirement::optional("Provenance"));
+        assert!(profile.validate().is_err());
+
+        let mut inconsistent = DomainProfile::enterprise_v1();
+        inconsistent.provenance_required = false;
+        assert!(inconsistent.validate().is_err());
+    }
+
+    #[test]
     fn profile_family_is_machine_readable() {
         let profiles = [
             DomainProfile::lite_v1(),
@@ -249,6 +329,7 @@ mod tests {
             .iter()
             .all(|profile| profile.version == Version::new(1, 0, 0)));
         assert!(DomainProfile::factory_readonly_v1().forbids("ProductionWrite"));
+        assert!(profiles.iter().all(|profile| profile.validate().is_ok()));
     }
 
     #[test]
