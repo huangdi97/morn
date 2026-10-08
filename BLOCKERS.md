@@ -105,3 +105,35 @@ pilot，需合法真实 dataset）保持 Active。Goal 3 全部本地可完成�
 无新增 blocker。B-001（真实 DeepSeek Harness smoke）与 G4-B-002（真实 BioLab 数据 pilot）保持 Active；
 二者均不阻塞 Goal 5 任何本地可完成项（Provider/Connector/Node/Distributed 全部以 fixture/conformance 证明）。
 `CORE COMPLETE = YES`（唯一非本地项即上述两个 external blocker，与 Core 本体无关）。
+
+
+## B-001 2026-10-08 revalidation — official DSH is installable
+
+The earlier August record above is preserved as **historical evidence** and must not
+be repeated as a current claim. The official DeepSeek Harness now has public
+source code and an official npm launcher:
+
+- https://github.com/deepseek-ai/deepseek-harness
+- https://www.deepseek.com/harness/en/
+- `npx @deepseek-ai/dsh web` (interactive Web UI, not Morn's provider API).
+- The official `@deepseek-ai/dsh-acp` supports automation over ACP/JSON-RPC
+  stdio, with `pnpm dsh --profile acp` from a built source checkout:
+  https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/acp/acp/README.md
+
+Current truth:
+- **OFFICIAL_INSTALL_DISTRIBUTION = AVAILABLE** (the August missing-package
+  premise is no longer valid).
+- **MORN_DSH_REAL_TRANSPORT = NOT_IMPLEMENTED**:
+  `crates/morn-harness/src/provider.rs` still returns fail-closed
+  `Error::External` in `DshMode::Real`.
+- **AUTHENTICATED_REAL_DSH_SESSION = NOT_VERIFIED**: official credentials and
+  a sandboxed external runtime have not been supplied or exercised.
+- **MORN_WORK_OUTCOME_ACCEPTANCE = NOT_PROVEN_BY_DSH**: no harness status
+  can independently assert a customer's real observed/accepted outcome.
+
+B-001 now means **runtime adapter + live provider evidence blocked**, not
+"no official package exists." The adapter path and permission controls are
+specified in
+`docs/research/V11_5_DSH_ACP_INTEGRATION_CONVERGENCE_2026-10-08.md`.
+Never treat a successful `dsh web` launch as completion of the Morn
+HarnessProvider contract or as production authorization.

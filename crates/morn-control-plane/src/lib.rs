@@ -569,8 +569,29 @@ pub trait ControlPlaneStore {
     ) -> Result<()>;
 }
 
+/// The Work's persisted workspace is authoritative. A caller must not clone a
+/// Work ID, change its workspace and attach unrelated execution or acceptance
+/// evidence to a different tenant's projection.
+fn require_canonical_work_workspace(store: &MornStore, work: &WorkResource) -> Result<()> {
+    let canonical: WorkResource = store
+        .load_record("work_resource_v115", work.id.as_str())?
+        .ok_or_else(|| Error::not_found("canonical Work resource"))?;
+    if canonical.workspace_id != work.workspace_id {
+        return Err(Error::validation(
+            "Work workspace differs from the canonical persisted owner",
+        ));
+    }
+    Ok(())
+}
+
 impl ControlPlaneStore for MornStore {
     fn save_work_resource(&self, work: &WorkResource) -> Result<()> {
+        if self
+            .load_record::<WorkResource>("work_resource_v115", work.id.as_str())?
+            .is_some()
+        {
+            require_canonical_work_workspace(self, work)?;
+        }
         self.save_record(
             "work_resource_v115",
             work.id.as_str(),
@@ -582,6 +603,9 @@ impl ControlPlaneStore for MornStore {
 
     fn save_work_resource_cas(&self, work: &mut WorkResource) -> Result<u64> {
         let expected = work.resource_version;
+        if expected > 0 {
+            require_canonical_work_workspace(self, work)?;
+        }
         let mut next = work.clone();
         next.resource_version = expected.saturating_add(1);
         let revision = self.save_record_cas(
@@ -601,6 +625,7 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         evidence: &ConditionEvidence,
     ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         if evidence.work_ref != work.id.to_string() || evidence.work_generation != work.generation {
             return Err(Error::validation(
                 "condition evidence must match the exact Work generation",
@@ -620,6 +645,7 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         binding: &ExecutionBinding,
     ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         if !binding.matches_work_generation(work)
             || binding.profile_ref != work.spec.profile_ref
             || binding.site_ref != work.spec.site_ref
@@ -642,6 +668,7 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         manifest: &ExecutionManifest,
     ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         let binding: ExecutionBinding = self
             .load_record("execution_binding_v115", &manifest.execution_binding_ref)?
             .ok_or_else(|| Error::not_found("execution binding for manifest"))?;
@@ -664,6 +691,7 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         decision: &BindingMigrationDecision,
     ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         if decision.work_id != work.id {
             return Err(Error::validation(
                 "binding migration decision belongs to another Work",
@@ -683,6 +711,7 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         binding: &DurableWorkflowBinding,
     ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         self.save_record_immutable(
             "durable_workflow_binding_v115",
             binding.id.as_str(),
@@ -693,6 +722,7 @@ impl ControlPlaneStore for MornStore {
     }
 
     fn save_action_attempt(&self, work: &WorkResource, attempt: &ActionAttempt) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         self.save_record(
             "action_attempt_v115",
             attempt.id.as_str(),
@@ -707,6 +737,7 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         record: &ReconciliationRecord,
     ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         self.save_record_immutable(
             "reconciliation_v115",
             record.id.as_str(),
@@ -721,6 +752,7 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         binding: &SourceOfTruthBinding,
     ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         binding.validate()?;
         if binding.site_ref != work.spec.site_ref {
             return Err(Error::validation(
@@ -737,6 +769,7 @@ impl ControlPlaneStore for MornStore {
     }
 
     fn save_observed_outcome(&self, work: &WorkResource, outcome: &ObservedOutcome) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         if outcome.work_package_id != work.id || outcome.workspace_id != work.workspace_id {
             return Err(Error::validation(
                 "observed outcome must belong to the exact Work and workspace",
@@ -756,6 +789,7 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         decision: &AcceptanceDecision,
     ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         if decision.work_package_id != work.id {
             return Err(Error::validation(
                 "acceptance decision belongs to another Work",
@@ -785,6 +819,7 @@ impl ControlPlaneStore for MornStore {
         work: &WorkResource,
         assessment: &ValueAssessment,
     ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
         if assessment.work_package_id != work.id {
             return Err(Error::validation(
                 "value assessment belongs to another Work",
@@ -1351,6 +1386,37 @@ mod control_plane_persistence_scope_tests {
         );
         spec.site_ref = Some("plant-a".to_string());
         WorkResource::new(WorkspaceId::generate(), spec)
+    }
+
+    #[test]
+    fn spoofed_workspace_cannot_retag_work_or_attach_foreign_evidence() {
+        let store = MornStore::open_in_memory().unwrap();
+        let mut canonical = fixture_work();
+        store.save_work_resource_cas(&mut canonical).unwrap();
+
+        let mut spoofed = canonical.clone();
+        spoofed.workspace_id = WorkspaceId::generate();
+        assert!(store.save_work_resource_cas(&mut spoofed).is_err());
+        assert!(store.save_work_resource(&spoofed).is_err());
+
+        let binding = ExecutionBinding::for_work(&spoofed, "cap:a", "provider:a", "v1");
+        assert!(store.save_execution_binding(&spoofed, &binding).is_err());
+
+        let outcome = ObservedOutcome::new(
+            spoofed.workspace_id.clone(),
+            spoofed.id.clone(),
+            "forged outcome",
+            OutcomeSourceKind::ExternalSystem,
+            "fixture://forged",
+            json!({"forged": true}),
+        );
+        assert!(store.save_observed_outcome(&spoofed, &outcome).is_err());
+
+        let persisted: WorkResource = store
+            .load_record("work_resource_v115", canonical.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.workspace_id, canonical.workspace_id);
     }
 
     #[test]
