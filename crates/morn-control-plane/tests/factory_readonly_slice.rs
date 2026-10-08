@@ -603,6 +603,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .save_source_of_truth_binding(&work, &source_binding)
         .unwrap();
     store.save_execution_binding(&work, &binding).unwrap();
+    store
+        .save_execution_manifest(&work, &execution_manifest)
+        .unwrap();
     store.save_execution_binding(&work, &cmms_binding).unwrap();
     store
         .save_binding_migration(&work, &migration_decision)
