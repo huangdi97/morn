@@ -106,5 +106,5 @@ fn deepseek_harness_real_mode_reports_external_blocker() {
         "real DSH is not available in this environment"
     );
     let msg = format!("{}", err.unwrap_err());
-    assert!(msg.contains("not installed"), "unexpected error: {msg}");
+    assert!(msg.contains("not configured"), "unexpected error: {msg}");
 }
