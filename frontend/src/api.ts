@@ -20,6 +20,30 @@ export async function apiPost<T = unknown>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface UiExtensionRegistry {
+  extensions: Array<{
+    id: string;
+    domain: string;
+    surface: string;
+    slot: string;
+    title: string;
+    renderer: string;
+    data_endpoint: string | null;
+    actions: Array<{
+      id: string;
+      label: string;
+      method: "GET" | "POST";
+      endpoint: string;
+      authority_semantic: string | null;
+    }>;
+    required_profile: string | null;
+    priority: number;
+  }>;
+  execution_model: string;
+  arbitrary_remote_js: boolean;
+  business_truth: boolean;
+}
+
 export interface V115ControlPlaneData {
   work: Array<{
     id: string;
