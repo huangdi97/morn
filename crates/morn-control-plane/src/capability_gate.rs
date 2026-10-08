@@ -53,12 +53,7 @@ impl CapabilityEligibilityGate {
         let mut blocked = Vec::new();
 
         for candidate in candidates {
-            if admissions.site_profile_admission_active_at(
-                candidate,
-                site_ref,
-                profile_ref,
-                now,
-            ) {
+            if admissions.site_profile_admission_active_at(candidate, site_ref, profile_ref, now) {
                 admission_passed.push(candidate.clone());
             } else {
                 blocked.push(CapabilityEligibilityBlock {
@@ -96,9 +91,7 @@ impl CapabilityEligibilityGate {
 mod tests {
     use super::*;
     use morn_assurance::{QualificationEvidence, StrictQualificationRequest};
-    use morn_capability::{
-        CapabilityKind, CapabilityManifest, CapabilityRecord, EffectClass,
-    };
+    use morn_capability::{CapabilityKind, CapabilityManifest, CapabilityRecord, EffectClass};
     use morn_kernel::ids::CapabilityId;
     use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
     use morn_runtime::{ProviderDescriptor, ProviderFamily, ProviderStatus};
@@ -131,9 +124,7 @@ mod tests {
         )
     }
 
-    fn admitted_fixture(
-        provider_ref: &str,
-    ) -> (CapabilityRecord, AdmissionService, String) {
+    fn admitted_fixture(provider_ref: &str) -> (CapabilityRecord, AdmissionService, String) {
         let mut capability = CapabilityRecord::new(CapabilityManifest::new(
             CapabilityId::generate_with("cap"),
             "fixture",
@@ -200,8 +191,7 @@ mod tests {
     fn admitted_capability_still_blocks_when_provider_is_unavailable() {
         let (capability, admissions, profile_ref) = admitted_fixture("runtime-a");
         let mut providers = ProviderRegistry::default();
-        let mut provider =
-            ProviderDescriptor::new("runtime-a", ProviderFamily::Runtime, "1");
+        let mut provider = ProviderDescriptor::new("runtime-a", ProviderFamily::Runtime, "1");
         provider.status = ProviderStatus::Unavailable;
         providers.register(provider).unwrap();
 
@@ -224,8 +214,7 @@ mod tests {
         capability.admitted_sites.clear();
 
         let mut providers = ProviderRegistry::default();
-        let mut provider =
-            ProviderDescriptor::new("runtime-a", ProviderFamily::Runtime, "1");
+        let mut provider = ProviderDescriptor::new("runtime-a", ProviderFamily::Runtime, "1");
         provider.status = ProviderStatus::Healthy;
         providers.register(provider).unwrap();
 
