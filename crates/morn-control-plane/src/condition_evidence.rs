@@ -148,14 +148,9 @@ mod tests {
         )
         .unwrap();
         positive.observed_at = Timestamp::from_millis(10);
-        let mut revoked = ConditionEvidence::new(
-            &work,
-            "CapabilityResolved",
-            false,
-            "resolver://a",
-            vec![],
-        )
-        .unwrap();
+        let mut revoked =
+            ConditionEvidence::new(&work, "CapabilityResolved", false, "resolver://a", vec![])
+                .unwrap();
         revoked.observed_at = Timestamp::from_millis(20);
 
         let inputs =
@@ -173,13 +168,9 @@ mod tests {
                 "morn.lite@1.0.0",
             ),
         );
-        assert!(ConditionEvidence::new(
-            &work,
-            "CapabilityResolved",
-            true,
-            "resolver://a",
-            vec![],
-        )
-        .is_err());
+        assert!(
+            ConditionEvidence::new(&work, "CapabilityResolved", true, "resolver://a", vec![],)
+                .is_err()
+        );
     }
 }
