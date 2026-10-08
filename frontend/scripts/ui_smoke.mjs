@@ -51,7 +51,7 @@ try {
 
     // Goal 2 v0.2 interactions: durable run, replay/shadow/eval, loops.
     const buttons = [
-      { name: /Start Durable Run/i, check: (t) => t.includes("durable work runtime") && t.includes("running") },
+      { name: /Start Durable Run/i, check: (t) => t.includes("durable workflow provider") && t.includes("running") },
       { name: /Run Replay \(drift\)/i, check: (t) => t.includes("replay reproduced") && t.includes("no") },
       { name: "Shadow Compare", exact: true, check: (t) => t.includes("shadow readiness") },
       { name: /Evaluate \(approval missing\)/i, check: (t) => t.includes("evaluation decision") },
