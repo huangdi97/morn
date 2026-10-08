@@ -1,14 +1,15 @@
 //! HTTP API (axum): the shared backend for Workbench / Studio / Console / Hub.
 
 use axum::{
-    extract::State,
-    http::StatusCode,
+    extract::{Request, State},
+    http::{header, HeaderValue, Method, StatusCode},
+    middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
 use serde_json::{json, Value};
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use morn_assurance::evaluation::EvalStep;
 use morn_assurance::simulation::{FaultInjection, FaultKind};
@@ -48,6 +49,43 @@ impl IntoResponse for AppError {
 }
 
 type ApiResult = Result<Json<Value>, AppError>;
+
+fn approved_local_origin(value: &HeaderValue) -> bool {
+    matches!(
+        value.to_str().ok(),
+        Some(
+            "http://127.0.0.1:5173"
+                | "http://localhost:5173"
+                | "tauri://localhost"
+                | "http://tauri.localhost"
+        )
+    )
+}
+
+/// The reference server is localhost-only, but browsers can still issue
+/// cross-origin POSTs to localhost. Reject browser-originated mutations unless
+/// they come from an explicit Morn/Tauri development origin. Requests without
+/// Origin (CLI/native provider traffic) remain allowed.
+async fn local_origin_guard(req: Request, next: Next) -> Response {
+    let mutating = !matches!(
+        *req.method(),
+        Method::GET | Method::HEAD | Method::OPTIONS
+    );
+    if mutating {
+        if let Some(origin) = req.headers().get(header::ORIGIN) {
+            if !approved_local_origin(origin) {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({
+                        "error": "cross-origin mutation rejected by local control-plane origin guard"
+                    })),
+                )
+                    .into_response();
+            }
+        }
+    }
+    next.run(req).await
+}
 
 /// Build the API router shared by all product surfaces.
 pub fn router(state: AppState) -> Router {
@@ -146,7 +184,18 @@ pub fn router(state: AppState) -> Router {
         .route("/api/biolab/loop-a", post(biolab_loop_a))
         .route("/api/biolab/loop-c", post(biolab_loop_c))
         .route("/api/biolab/assets", get(biolab_assets));
-    app.with_state(state).layer(CorsLayer::permissive())
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::list([
+            HeaderValue::from_static("http://127.0.0.1:5173"),
+            HeaderValue::from_static("http://localhost:5173"),
+            HeaderValue::from_static("tauri://localhost"),
+            HeaderValue::from_static("http://tauri.localhost"),
+        ]))
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([header::CONTENT_TYPE]);
+    app.with_state(state)
+        .layer(middleware::from_fn(local_origin_guard))
+        .layer(cors)
 }
 
 async fn health() -> ApiResult {
