@@ -636,3 +636,17 @@ historical business state.
 This borrows the finalizer pattern used by mature reconciliation control planes
 while preserving Morn-specific semantics: finalization means consequence
 accounting is complete, not that every real-world effect was undone.
+
+
+## Execution interpretation manifest
+
+Provider-neutral composition still needs reproducible interpretation. A v11.5
+`ExecutionManifest` is therefore derived from a pinned ExecutionBinding and
+records the protocol version, Work generation, Profile/site, source
+SolutionPackage, capability manifest, provider version/digest, composition
+runtime and Authority decision reference.
+
+The manifest is durable provenance only. It does not own Work phase, external
+action truth, Outcome or Acceptance. If a Work generation/profile/site changes,
+the old binding cannot mint a current manifest; explicit rebind/migration is
+required.
