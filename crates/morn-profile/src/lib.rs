@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 use morn_kernel::version::Version;
 use morn_kernel::ExecutionGuarantee;
 
-pub use compatibility::{compare_profiles, plan_profile_migration, ProfileCompatibility, ProfileMigrationPlan};
+pub use compatibility::{
+    compare_profiles, plan_profile_migration, ProfileCompatibility, ProfileMigrationPlan,
+};
 pub use conformance::{evaluate_profile, ConformanceEvidence, ConformanceReport};
 pub use registry::{reference_profile_registry, ProfileRegistry};
 
@@ -71,9 +73,9 @@ pub struct DomainProfile {
 
 impl DomainProfile {
     pub fn validate(&self) -> morn_kernel::error::Result<()> {
-        use std::collections::BTreeMap;
         use morn_kernel::error::Error;
         use morn_kernel::ExecutionClass;
+        use std::collections::BTreeMap;
 
         if self.id.trim().is_empty() || self.id.contains('@') {
             return Err(Error::validation(
@@ -94,10 +96,9 @@ impl DomainProfile {
                     "Profile requirement semantic must be non-empty",
                 ));
             }
-            if let Some(existing) = semantics.insert(
-                requirement.semantic.clone(),
-                requirement.level,
-            ) {
+            if let Some(existing) =
+                semantics.insert(requirement.semantic.clone(), requirement.level)
+            {
                 if existing != requirement.level {
                     return Err(Error::validation(format!(
                         "Profile semantic {} has conflicting requirement levels",
@@ -122,7 +123,10 @@ impl DomainProfile {
 
         for (semantic, flag) in [
             ("DurableWorkState", self.durable_work_state_required),
-            ("SourceOfTruthBinding", self.source_of_truth_binding_required),
+            (
+                "SourceOfTruthBinding",
+                self.source_of_truth_binding_required,
+            ),
             ("Provenance", self.provenance_required),
         ] {
             if self.requires(semantic) != flag {
@@ -308,7 +312,9 @@ mod tests {
         let mut profile = DomainProfile::factory_readonly_v1();
         assert!(profile.validate().is_ok());
 
-        profile.requirements.push(GuaranteeRequirement::optional("Provenance"));
+        profile
+            .requirements
+            .push(GuaranteeRequirement::optional("Provenance"));
         assert!(profile.validate().is_err());
 
         let mut inconsistent = DomainProfile::enterprise_v1();
