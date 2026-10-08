@@ -201,8 +201,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     let mut dsh_fixture =
         ProviderDescriptor::new("dsh-fixture", ProviderFamily::Harness, "fixture-v1");
     dsh_fixture.status = ProviderStatus::Healthy;
-    dsh_fixture.health_valid_until =
-        Some(morn_kernel::time::Timestamp::from_millis(now.millis() + 60_000));
+    dsh_fixture.health_valid_until = Some(morn_kernel::time::Timestamp::from_millis(
+        now.millis() + 60_000,
+    ));
     providers.register(dsh_fixture).unwrap();
 
     let gate = CapabilityEligibilityGate.strict(
@@ -432,8 +433,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     let mut cmms_provider =
         ProviderDescriptor::new("cmms-fixture", ProviderFamily::Connector, "fixture-v1");
     cmms_provider.status = ProviderStatus::Healthy;
-    cmms_provider.health_valid_until =
-        Some(morn_kernel::time::Timestamp::from_millis(now.millis() + 60_000));
+    cmms_provider.health_valid_until = Some(morn_kernel::time::Timestamp::from_millis(
+        now.millis() + 60_000,
+    ));
     providers.register(cmms_provider).unwrap();
     let cmms_gate = CapabilityEligibilityGate.strict(
         &[cmms_capability.clone()],
