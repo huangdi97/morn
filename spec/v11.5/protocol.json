@@ -22,7 +22,13 @@
     "executionBinding": "./morn-protocol.schema.json#/$defs/ExecutionBinding",
     "actionAttempt": "./morn-protocol.schema.json#/$defs/ActionAttempt",
     "domainProfile": "./morn-protocol.schema.json#/$defs/DomainProfile",
-    "eventEnvelope": "./morn-protocol.schema.json#/$defs/EventEnvelope"
+    "eventEnvelope": "./morn-protocol.schema.json#/$defs/EventEnvelope",
+    "authorityDecision": "./morn-protocol.schema.json#/$defs/BoundAuthorityDecision",
+    "receipt": "./morn-protocol.schema.json#/$defs/ConnectorReceipt",
+    "reconciliation": "./morn-protocol.schema.json#/$defs/ReconciliationRecord",
+    "observedOutcome": "./morn-protocol.schema.json#/$defs/ObservedOutcome",
+    "acceptanceDecision": "./morn-protocol.schema.json#/$defs/AcceptanceDecision",
+    "executionManifest": "./morn-protocol.schema.json#/$defs/ExecutionManifest"
   },
   "examples": {
     "workResource": "./examples/work-resource.json",
@@ -30,7 +36,13 @@
     "executionBinding": "./examples/execution-binding.json",
     "actionAttempt": "./examples/action-attempt.json",
     "domainProfile": "./examples/factory-profile.json",
-    "eventEnvelope": "./examples/event-envelope.json"
+    "eventEnvelope": "./examples/event-envelope.json",
+    "authorityDecision": "./examples/authority-decision.json",
+    "receipt": "./examples/connector-receipt.json",
+    "reconciliation": "./examples/reconciliation-record.json",
+    "observedOutcome": "./examples/observed-outcome.json",
+    "acceptanceDecision": "./examples/acceptance-decision.json",
+    "executionManifest": "./examples/execution-manifest.json"
   },
   "invariants": [
     "work-truth-independent-of-executor",
