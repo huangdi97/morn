@@ -383,7 +383,6 @@ fn work_truth_survives_harness_provider_migration() {
     assert_eq!(first_attempt.state, AttemptState::OutcomeUnknown);
 }
 
-
 #[test]
 fn execution_manifest_pins_interpretation_without_becoming_work_truth() {
     let mut spec = WorkSpec::new(
@@ -393,8 +392,12 @@ fn execution_manifest_pins_interpretation_without_becoming_work_truth() {
     );
     spec.site_ref = Some("plant-a".to_string());
     let work = WorkResource::new(WorkspaceId::generate(), spec);
-    let mut binding =
-        ExecutionBinding::for_work(&work, "cmanifest:investigator", "deepseek-harness", "fixture-v1");
+    let mut binding = ExecutionBinding::for_work(
+        &work,
+        "cmanifest:investigator",
+        "deepseek-harness",
+        "fixture-v1",
+    );
     binding.provider_digest = Some(format!("sha256:{}", "a".repeat(64)));
 
     let manifest = ExecutionManifest::from_binding(
