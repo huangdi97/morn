@@ -36,6 +36,7 @@ export interface V115ControlPlaneData {
   execution_bindings: Array<Record<string, unknown>>;
   execution_manifests: Array<Record<string, unknown>>;
   binding_migrations: Array<Record<string, unknown>>;
+  durable_workflow_bindings: Array<Record<string, unknown>>;
   attempts: Array<Record<string, unknown>>;
   reconciliations: Array<Record<string, unknown>>;
   outcomes: Array<Record<string, unknown>>;
@@ -75,7 +76,8 @@ export interface V115Status {
   };
   evidence_policy: {
     classes: string[];
-    lower_class_never_auto_promotes: boolean;
+    classes_are_categorical: boolean;
+    no_implicit_promotion: boolean;
     claims: Array<{
       id: string;
       subject: string;
