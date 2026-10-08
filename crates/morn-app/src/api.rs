@@ -231,6 +231,7 @@ async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
         "work": load("work_resource_v115")?,
         "source_of_truth_bindings": load("source_of_truth_binding_v115")?,
         "execution_bindings": load("execution_binding_v115")?,
+        "execution_manifests": load("execution_manifest_v115")?,
         "binding_migrations": load("binding_migration_v115")?,
         "attempts": load("action_attempt_v115")?,
         "reconciliations": load("reconciliation_v115")?,
