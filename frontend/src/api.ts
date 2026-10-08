@@ -1,6 +1,19 @@
 // API client for the Morn shared backend.
 
-const BASE = "/api";
+/** Vite proxies /api in the browser; packaged Tauri assets have no Vite proxy. */
+export function apiBaseForOrigin(locationHref: string): string {
+  try {
+    const origin = new URL(locationHref);
+    if (origin.protocol === "tauri:" || origin.hostname === "tauri.localhost") {
+      return "http://127.0.0.1:8090/api";
+    }
+  } catch {
+    return "/api";
+  }
+  return "/api";
+}
+
+const BASE = apiBaseForOrigin(typeof window === "undefined" ? "" : window.location.href);
 
 export async function apiGet<T = unknown>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);

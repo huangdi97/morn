@@ -132,6 +132,16 @@ documents into **Declared** capability candidates with source provenance. Studio
 currently exposes the OpenAPI flow; neither compiler pretends the generated
 candidate is qualified or production-ready.
 
+### Desktop API routing (reference only)
+
+The Tauri desktop shell loads prebuilt frontend assets, so Vite's `/api`
+development proxy is **not** present in the packaged webview. Its API client
+therefore resolves `/api` to `http://127.0.0.1:8090/api` under Tauri
+origins. The server must currently be started separately with
+`cargo run -p morn-app --bin server --all-features` before using the desktop
+shell. This is a development/reference configuration, **not** a self-contained
+signed installer or an authenticated production deployment.
+
 ### Reusable blueprint and runtime instance
 
 Morn does not create separate canonical `Blueprint` or `Instance` objects.
