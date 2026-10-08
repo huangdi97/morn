@@ -20,7 +20,7 @@ import {
   V115ControlPlaneData,
   UiExtensionRegistry,
 } from "../api";
-import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
+import { Card, EmptyState, KeyValue, Loading, StatusPill } from "../components/ui";
 
 /** Domain-gated UI extension point: BioLab reference UI is only rendered when
  *  the backend advertises the biolab-reference domain pack (zero-domain builds
@@ -53,8 +53,8 @@ export function CanonicalWorkOverview({
         </div>
         {error ? (
           <p role="alert" className="work-focus-alert">
-            Canonical Work data is unavailable: {error}. The legacy cards below do
-            not establish current Work state.
+            Canonical Work data is unavailable: {error}. Legacy diagnostics cannot
+            establish canonical Work truth.
           </p>
         ) : !control ? (
           <p className="work-focus-empty" role="status">Loading persisted Work state…</p>
