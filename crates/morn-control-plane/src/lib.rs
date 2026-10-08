@@ -6,10 +6,14 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod capability_gate;
 pub mod external_action;
 pub mod profile_guard;
 pub mod provider_gate;
 
+pub use capability_gate::{
+    CapabilityEligibilityBlock, CapabilityEligibilityGate, CapabilityEligibilityReport,
+};
 pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
 
 pub use provider_gate::{
