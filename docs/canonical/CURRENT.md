@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-040 in `docs/adr/`
+3. ADR-002 through ADR-041 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -278,3 +278,20 @@ The reference server remains loopback-only, but loopback is not treated as a
 browser trust boundary. Mutating requests with unapproved Origin headers are
 rejected and permissive CORS is disabled. This is a local-reference CSRF guard,
 not a substitute for enterprise authentication/TLS. See ADR-040.
+
+
+## Language-neutral protocol publication
+
+Morn v11.5 is no longer defined only by Rust types. The branch publishes
+`spec/v11.5/protocol.json`, a JSON Schema 2020-12 bundle and canonical fixture
+documents for the principal cross-runtime semantic records. CI deserializes
+those fixtures through the Rust reference types.
+
+The schema validates structure; the Protocol/ADRs/conformance tests define
+cross-record behavior. Cordis, DSH and Pi types are intentionally absent from
+the Morn semantic wire contract. See ADR-041.
+
+Receipt semantics are also explicit: a Harness `ExecutionReceipt` is executor
+evidence, while a governed external-system `ConnectorReceipt` is an external
+action receipt. Neither record alone is an ObservedOutcome or an
+AcceptanceDecision.
