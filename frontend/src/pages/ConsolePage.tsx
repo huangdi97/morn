@@ -11,11 +11,23 @@ interface Trace {
   payload_hash: string | null;
 }
 
+interface HarnessHealth {
+  provider: string;
+  mode: string;
+  features: {
+    interrupt: boolean;
+    resume: boolean;
+    session_close: boolean;
+    durable_events: boolean;
+    multi_session: boolean;
+  };
+}
+
 interface ConsoleData {
   identity: { workspace: string; owner: string };
   world_state: number;
   work: number;
-  harness_health: { native: string; dsh: string };
+  harness_health: { native: string; dsh: HarnessHealth };
   approvals_satisfied: string[];
   attention: number;
   policy: string;
@@ -98,7 +110,20 @@ export default function ConsolePage() {
         </Card>
         <Card title="Harness / Runtime Health">
           <KeyValue k="Native" v={data.harness_health.native} />
-          <KeyValue k="DeepSeek Harness" v={data.harness_health.dsh} />
+          <KeyValue k="DeepSeek Harness" v={data.harness_health.dsh.provider} />
+          <KeyValue k="DSH mode" v={data.harness_health.dsh.mode} />
+          <KeyValue
+            k="DSH lifecycle"
+            v={[
+              data.harness_health.dsh.features.interrupt && "interrupt",
+              data.harness_health.dsh.features.resume && "resume",
+              data.harness_health.dsh.features.session_close && "session-close",
+              data.harness_health.dsh.features.durable_events && "durable-events",
+              data.harness_health.dsh.features.multi_session && "multi-session",
+            ]
+              .filter(Boolean)
+              .join(", ") || "no optional lifecycle features"}
+          />
         </Card>
         {v115Control && (
           <Card title="v11.5 Persisted Control Records">
