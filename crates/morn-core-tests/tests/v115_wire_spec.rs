@@ -1,8 +1,13 @@
 use morn_capability::CapabilityRecord;
+use morn_integration::ConnectorReceipt;
 use morn_kernel::EventEnvelope;
 use morn_profile::DomainProfile;
-use morn_runtime::{ActionAttempt, ExecutionBinding};
-use morn_work::control::WorkResource;
+use morn_runtime::{
+    ActionAttempt, BoundAuthorityDecision, ExecutionBinding, ExecutionManifest,
+    ReconciliationRecord,
+};
+use morn_work::{AcceptanceDecision, control::WorkResource};
+use morn_world::ObservedOutcome;
 use serde_json::Value;
 
 const PROTOCOL: &str = include_str!("../../../spec/v11.5/protocol.json");
@@ -13,6 +18,18 @@ const BINDING: &str = include_str!("../../../spec/v11.5/examples/execution-bindi
 const ATTEMPT: &str = include_str!("../../../spec/v11.5/examples/action-attempt.json");
 const PROFILE: &str = include_str!("../../../spec/v11.5/examples/factory-profile.json");
 const EVENT: &str = include_str!("../../../spec/v11.5/examples/event-envelope.json");
+const AUTHORITY: &str =
+    include_str!("../../../spec/v11.5/examples/authority-decision.json");
+const RECEIPT: &str =
+    include_str!("../../../spec/v11.5/examples/connector-receipt.json");
+const RECONCILIATION: &str =
+    include_str!("../../../spec/v11.5/examples/reconciliation-record.json");
+const OUTCOME: &str =
+    include_str!("../../../spec/v11.5/examples/observed-outcome.json");
+const ACCEPTANCE: &str =
+    include_str!("../../../spec/v11.5/examples/acceptance-decision.json");
+const EXECUTION_MANIFEST: &str =
+    include_str!("../../../spec/v11.5/examples/execution-manifest.json");
 
 #[test]
 fn published_protocol_manifest_names_all_v115_semantic_slots() {
@@ -52,8 +69,14 @@ fn schema_bundle_is_parseable_and_covers_cross_runtime_resources() {
     for required in [
         "WorkResource",
         "CapabilityRecord",
+        "BoundAuthorityDecision",
         "ExecutionBinding",
         "ActionAttempt",
+        "ConnectorReceipt",
+        "ReconciliationRecord",
+        "ObservedOutcome",
+        "AcceptanceDecision",
+        "ExecutionManifest",
         "DomainProfile",
         "EventEnvelope",
     ] {
@@ -83,6 +106,37 @@ fn canonical_wire_examples_deserialize_into_reference_implementation() {
     profile.validate().unwrap();
     assert!(profile.forbids("ProductionWrite"));
 
+    let authority: BoundAuthorityDecision = serde_json::from_str(AUTHORITY).unwrap();
+    assert!(authority.decision.allowed);
+    assert_eq!(authority.request.work_ref.as_deref(), Some("work-1042"));
+
+    let receipt: ConnectorReceipt = serde_json::from_str(RECEIPT).unwrap();
+    assert!(receipt.ok);
+    assert_eq!(receipt.external_id.as_deref(), Some("MO-88273"));
+
+    let reconciliation: ReconciliationRecord = serde_json::from_str(RECONCILIATION).unwrap();
+    assert_eq!(
+        reconciliation.after,
+        morn_runtime::AttemptState::Observed
+    );
+    assert_eq!(
+        reconciliation.observation.external_ref.as_deref(),
+        Some("MO-88273")
+    );
+
+    let outcome: ObservedOutcome = serde_json::from_str(OUTCOME).unwrap();
+    assert!(outcome.is_source_grounded());
+    assert_eq!(outcome.work_package_id, work.id);
+
+    let acceptance: AcceptanceDecision = serde_json::from_str(ACCEPTANCE).unwrap();
+    assert!(acceptance.is_final_acceptance());
+    assert_eq!(acceptance.work_package_id, work.id);
+
+    let manifest: ExecutionManifest = serde_json::from_str(EXECUTION_MANIFEST).unwrap();
+    assert_eq!(manifest.protocol_version, "11.5.0");
+    assert_eq!(manifest.work_ref, work.id.to_string());
+    assert_eq!(manifest.execution_binding_ref, binding.id.to_string());
+
     let event: EventEnvelope = serde_json::from_str(EVENT).unwrap();
     assert_eq!(event.specversion, "1.0");
     assert_eq!(event.event_type, "io.morn.action.receipt.v1");
@@ -99,4 +153,28 @@ fn published_examples_do_not_smuggle_executor_success_into_acceptance() {
 
     assert_ne!(work.status.phase, morn_work::control::WorkPhase::Accepted);
     assert!(event.data.get("accepted").is_none());
+}
+
+#[test]
+fn executor_receipt_external_receipt_outcome_and_acceptance_are_distinct() {
+    use morn_harness::ExecutionReceipt;
+    use morn_kernel::ids::WorkspaceId;
+
+    let executor_receipt = ExecutionReceipt::new(
+        WorkspaceId::generate(),
+        "dsh-session-1",
+    );
+    let external_receipt: ConnectorReceipt = serde_json::from_str(RECEIPT).unwrap();
+    let outcome: ObservedOutcome = serde_json::from_str(OUTCOME).unwrap();
+    let acceptance: AcceptanceDecision = serde_json::from_str(ACCEPTANCE).unwrap();
+
+    assert_eq!(executor_receipt.outcome, "running");
+    assert_eq!(external_receipt.external_id.as_deref(), Some("MO-88273"));
+    assert!(outcome.is_source_grounded());
+    assert!(acceptance.is_final_acceptance());
+
+    // Distinct records deliberately use different identities and evidence roles.
+    assert_ne!(executor_receipt.id.to_string(), external_receipt.id.to_string());
+    assert_ne!(external_receipt.id.to_string(), outcome.id.to_string());
+    assert_ne!(outcome.id.to_string(), acceptance.id.to_string());
 }
