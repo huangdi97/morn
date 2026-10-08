@@ -58,6 +58,7 @@ export interface V115Status {
     execution_environment: string[];
     authority: string;
   };
+  profiles: Array<{ id: string; version: { major: number; minor: number; patch: number } }>;
   capability_supply_chain: {
     stages: string[];
     artifact_compilers: string[];
