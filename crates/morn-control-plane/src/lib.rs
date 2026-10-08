@@ -6,12 +6,16 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod binding_guard;
 pub mod capability_gate;
 pub mod controller_runtime;
 pub mod external_action;
 pub mod profile_guard;
 pub mod provider_gate;
 
+pub use binding_guard::{
+    BindingOperationalGate, BindingValidityDecision, BindingValidityDecisionId,
+};
 pub use capability_gate::{
     CapabilityEligibilityBlock, CapabilityEligibilityGate, CapabilityEligibilityReport,
 };
