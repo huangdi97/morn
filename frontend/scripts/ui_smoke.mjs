@@ -38,6 +38,9 @@ try {
     }
     const bodyText = await page.locator("body").innerText();
     if (!bodyText.includes("Morn")) errors.push(`route ${route}: missing Morn shell`);
+    if (route === "/hub" && !(await page.getByRole("heading", { name: "v11.5 Capability Supply Chain" }).isVisible())) {
+      errors.push("hub: governed capability supply-chain section is not visible");
+    }
     if (route === "/workbench" && !(await page.getByRole("heading", { name: "Work is the unit of coordination" }).isVisible())) {
       errors.push("workbench: canonical Work-first overview is not visible");
     }

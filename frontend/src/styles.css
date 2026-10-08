@@ -211,3 +211,22 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .work-focus h2 { font-size: 21px; }
   .action-link { width: 100%; }
 }
+/* v11.5 Hub reads canonical supply-chain facts, never inferred admission. */
+.hub-supply-chain {
+  min-width: 0;
+  margin-bottom: 22px;
+  padding: 21px;
+  border: 1px solid #374760;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #172338, #131a27);
+}
+.hub-supply-head h2 { margin: 7px 0 5px; font-size: 22px; }
+.hub-supply-head p { margin: 0 0 13px; color: #b5c3d9; font-size: 13px; line-height: 1.5; }
+.hub-supply-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 12px; }
+.hub-capability { min-width: 0; background: #111a28; border: 1px solid #36445b; border-radius: 11px; padding: 14px; overflow-wrap: anywhere; }
+.hub-capability-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.hub-capability h3 { margin: 0 0 12px; font-size: 15px; line-height: 1.35; }
+@media (max-width: 760px) {
+  .hub-supply-chain { padding: 15px 12px; }
+  .hub-supply-head h2 { font-size: 20px; }
+}
