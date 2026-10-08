@@ -418,6 +418,7 @@ mod tests {
                 "--exact".to_string(),
                 "pi_rpc::tests::fake_pi_rpc_runtime".to_string(),
                 "--ignored".to_string(),
+                "--quiet".to_string(),
                 "--nocapture".to_string(),
             ],
             cwd: Some(cwd.to_string_lossy().to_string()),
