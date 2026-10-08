@@ -54,6 +54,7 @@ pub fn router(state: AppState) -> Router {
     let app = Router::new()
         .route("/api/health", get(health))
         .route("/api/v115/status", get(v115_status))
+        .route("/api/v115/ui/extensions", get(v115_ui_extensions))
         .route("/api/v115/control-plane", get(v115_control_plane))
         .route("/api/v115/work/reconcile", post(v115_work_reconcile))
         .route("/api/v115/solutions", get(v115_solutions))
@@ -150,6 +151,46 @@ pub fn router(state: AppState) -> Router {
 
 async fn health() -> ApiResult {
     Ok(Json(json!({ "status": "ok", "service": "morn-app" })))
+}
+
+async fn v115_ui_extensions() -> ApiResult {
+    use morn_domain_sdk::{UiActionSpec, UiExtensionSpec, UiRenderer, UiSurface};
+
+    let mut extensions: Vec<UiExtensionSpec> = Vec::new();
+
+    #[cfg(feature = "domain-biolab")]
+    extensions.push(UiExtensionSpec {
+        id: "biolab-reference-summary".to_string(),
+        domain: "biolab-reference".to_string(),
+        surface: UiSurface::Workbench,
+        slot: "domain-summary".to_string(),
+        title: "BioLab Reference".to_string(),
+        renderer: UiRenderer::Status,
+        data_endpoint: None,
+        actions: vec![UiActionSpec {
+            id: "run-biolab-e2e".to_string(),
+            label: "Run BioLab E2E".to_string(),
+            method: "POST".to_string(),
+            endpoint: "/api/biolab/run".to_string(),
+            authority_semantic: Some("ReferenceFixtureAction".to_string()),
+        }],
+        required_profile: None,
+        priority: 100,
+    });
+
+    for extension in &extensions {
+        extension
+            .validate()
+            .map_err(|error| AppError(Error::validation(error)))?;
+    }
+    extensions.sort_by_key(|extension| extension.priority);
+
+    Ok(Json(json!({
+        "extensions": extensions,
+        "execution_model": "declarative-slot",
+        "arbitrary_remote_js": false,
+        "business_truth": false
+    })))
 }
 
 async fn v115_status() -> ApiResult {
