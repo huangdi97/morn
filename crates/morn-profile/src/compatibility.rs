@@ -42,6 +42,9 @@ pub fn compare_profiles(
     if base.id != candidate.id {
         return ProfileCompatibility::Incompatible;
     }
+    if candidate.version < base.version {
+        return ProfileCompatibility::Incompatible;
+    }
 
     // Same published version with different content is a silent mutation.
     if base.version == candidate.version {
@@ -186,6 +189,17 @@ mod tests {
         assert!(plan.requires_new_work_generation);
         assert!(plan.requires_new_execution_bindings);
         assert!(plan.requires_site_readmission);
+    }
+
+    #[test]
+    fn downgrade_is_incompatible_by_default() {
+        let mut base = DomainProfile::factory_readonly_v1();
+        base.version = Version::new(1, 1, 0);
+        let older = DomainProfile::factory_readonly_v1();
+        assert_eq!(
+            compare_profiles(&base, &older),
+            ProfileCompatibility::Incompatible
+        );
     }
 
     #[test]
