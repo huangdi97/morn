@@ -141,30 +141,41 @@ impl EvidenceLedger {
             .collect()
     }
 
-    pub fn highest_proven_class(&self, subject: &str) -> Option<EvidenceClass> {
+    /// Evidence classes are categorical, not a trust ladder. CI evidence does
+    /// not semantically include local-fixture evidence, and real-site evidence
+    /// does not silently include a production-write claim.
+    pub fn satisfies(&self, subject: &str, required: EvidenceClass) -> bool {
+        self.proven_for(subject)
+            .into_iter()
+            .any(|claim| claim.class == required)
+    }
+
+    pub fn proven_classes(&self, subject: &str) -> std::collections::BTreeSet<EvidenceClass> {
         self.proven_for(subject)
             .into_iter()
             .map(|claim| claim.class)
-            .max()
+            .collect()
     }
 
-    pub fn satisfies(&self, subject: &str, required: EvidenceClass) -> bool {
-        self.highest_proven_class(subject)
-            .is_some_and(|observed| observed >= required)
-    }
-
-    /// This deliberately does not synthesize a higher-class claim from lower
-    /// evidence. A caller must append an explicit claim with evidence from the
-    /// required class.
+    /// This deliberately does not synthesize one evidence class from another.
+    /// A caller must append an explicit claim with evidence from each required
+    /// class.
     pub fn require(&self, subject: &str, required: EvidenceClass) -> Result<()> {
         if self.satisfies(subject, required) {
             Ok(())
         } else {
             Err(Error::invalid_state(format!(
-                "subject {subject} lacks required evidence class {}; lower-class evidence cannot auto-promote the claim",
+                "subject {subject} lacks explicit evidence class {}; evidence classes do not auto-promote one another",
                 required.key()
             )))
         }
+    }
+
+    pub fn require_all(&self, subject: &str, required: &[EvidenceClass]) -> Result<()> {
+        for class in required {
+            self.require(subject, *class)?;
+        }
+        Ok(())
     }
 }
 
@@ -270,6 +281,27 @@ mod tests {
     }
 
     #[test]
+    fn evidence_classes_are_categories_not_an_ordinal_ladder() {
+        let mut ledger = EvidenceLedger::default();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "subject",
+                    EvidenceClass::RealSite,
+                    vec!["site://read-only".to_string()],
+                    "site-evaluator",
+                    "real site observation",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        assert!(ledger.satisfies("subject", EvidenceClass::RealSite));
+        assert!(!ledger.satisfies("subject", EvidenceClass::CiConformance));
+        assert!(!ledger.satisfies("subject", EvidenceClass::ProductionWrite));
+    }
+
+    #[test]
     fn fixture_and_ci_evidence_cannot_claim_real_runtime() {
         let mut ledger = EvidenceLedger::default();
         ledger
@@ -298,6 +330,7 @@ mod tests {
             .unwrap();
 
         assert!(ledger.satisfies("deepseek-harness", EvidenceClass::CiConformance));
+        assert!(ledger.satisfies("deepseek-harness", EvidenceClass::LocalFixture));
         assert!(!ledger.satisfies("deepseek-harness", EvidenceClass::RealRuntime));
         assert!(ledger
             .require("deepseek-harness", EvidenceClass::RealRuntime)
