@@ -104,13 +104,9 @@ pub fn begin_external_attempt_with_effect(
             .compensation_action
             .as_deref()
             .ok_or_else(|| Error::validation("E2 external action requires compensation action"))?;
-        if binding
-            .compensation_ref
-            .as_deref()
-            .is_some_and(|expected| expected != requested_compensation)
-        {
+        if binding.compensation_ref.as_deref() != Some(requested_compensation) {
             return Err(Error::validation(
-                "attempt compensation action does not match pinned binding",
+                "E2 attempt requires an exact compensation action pinned in the binding",
             ));
         }
     }
@@ -211,6 +207,57 @@ mod tests {
             "cmms.create-order",
         )
         .is_err());
+        assert!(begin_external_attempt_with_effect(
+            &permit,
+            &binding,
+            EffectContract::e2("cmms.cancel-order"),
+            "business-key",
+            "cmms.create-order",
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn e2_attempt_rejects_unpinned_compensation_even_under_e3_ceiling() {
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "test",
+            "morn.factory.readonly@1.0.0",
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let mut binding = ExecutionBinding::for_work(&work, "capability:write", "provider:a", "1");
+        // A permissive effect ceiling is not evidence that a compensating
+        // operation was qualified/pinned when the binding was created.
+        binding.effect_ceiling = Some(EffectClass::E3Irreversible);
+        let permit = ExternalActionPermit {
+            id: crate::ExternalActionPermitId::generate_with("permit"),
+            profile_ref: binding.profile_ref.clone(),
+            mode: crate::ExternalActionMode::SandboxWrite,
+            authority_decision_ref: "authz:test".to_string(),
+            principal: "controller".to_string(),
+            acting_for: None,
+            action: "cmms.create-order".to_string(),
+            resource: "cmms://fixture".to_string(),
+            site_ref: binding.site_ref.clone(),
+            scope: vec![],
+            parameter_envelope: BTreeMap::new(),
+            work_ref: work.id.to_string(),
+            binding_ref: binding.id.to_string(),
+            not_before: None,
+            expires_at: None,
+            issued_at: Timestamp::now(),
+        };
+        assert!(begin_external_attempt_with_effect(
+            &permit,
+            &binding,
+            EffectContract::e2("cmms.cancel-order"),
+            "business-key",
+            "cmms.create-order",
+        )
+        .is_err());
+
+        binding.compensation_ref = Some("cmms.cancel-order".to_string());
         assert!(begin_external_attempt_with_effect(
             &permit,
             &binding,
