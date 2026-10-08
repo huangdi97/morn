@@ -381,7 +381,9 @@ mod tests {
             "cmms.sandbox.write",
         )
         .unwrap();
-        attempt.transition(morn_runtime::AttemptState::Dispatched).unwrap();
+        attempt
+            .transition(morn_runtime::AttemptState::Dispatched)
+            .unwrap();
         attempt
             .mark_outcome_unknown("timeout after commit")
             .unwrap();
@@ -390,9 +392,15 @@ mod tests {
         assert!(resolve_external_action_finalizer(&mut work, &permit, &attempt).is_err());
         assert!(!work.can_finalize_termination());
 
-        attempt.transition(morn_runtime::AttemptState::Reconciling).unwrap();
-        attempt.transition(morn_runtime::AttemptState::Observed).unwrap();
-        attempt.transition(morn_runtime::AttemptState::Verified).unwrap();
+        attempt
+            .transition(morn_runtime::AttemptState::Reconciling)
+            .unwrap();
+        attempt
+            .transition(morn_runtime::AttemptState::Observed)
+            .unwrap();
+        attempt
+            .transition(morn_runtime::AttemptState::Verified)
+            .unwrap();
         assert!(resolve_external_action_finalizer(&mut work, &permit, &attempt).unwrap());
         assert!(work.can_finalize_termination());
         work.finalize_termination().unwrap();
