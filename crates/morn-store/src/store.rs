@@ -187,8 +187,7 @@ impl MornStore {
                     params![SCHEMA_VERSION, v],
                 )
                 .map_err(|e| Error::internal(e.to_string()))?;
-                tx.commit()
-                    .map_err(|e| Error::internal(e.to_string()))?;
+                tx.commit().map_err(|e| Error::internal(e.to_string()))?;
             }
             _ => {}
         }
