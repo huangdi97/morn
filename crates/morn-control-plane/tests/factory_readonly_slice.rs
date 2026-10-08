@@ -16,8 +16,8 @@ use morn_capability::{
 use morn_control_plane::{
     begin_external_attempt_with_effect, enforce_profile_action, evaluate_profile_action,
     issue_external_action_permit_for_work, resolve_external_action_finalizer, ControlPlaneStore,
-    ControllerInputs, ExternalActionMode,
-    ReconciliationController, WorkController, WorkProgressController, WorkProgressInputs,
+    ControllerInputs, ExternalActionMode, ReconciliationController, WorkController,
+    WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
