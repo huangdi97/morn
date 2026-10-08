@@ -204,6 +204,9 @@ pub fn compare_protocols(
     base: &ProtocolSnapshot,
     candidate: &ProtocolSnapshot,
 ) -> ProtocolCompatibility {
+    if candidate.protocol_version < base.protocol_version {
+        return ProtocolCompatibility::Incompatible;
+    }
     if base.protocol_version == candidate.protocol_version {
         return if same_protocol_semantics(base, candidate) {
             ProtocolCompatibility::Compatible
@@ -302,6 +305,17 @@ mod tests {
         );
         assert!(plan.requires_profile_reevaluation);
         assert!(plan.requires_new_execution_bindings);
+    }
+
+    #[test]
+    fn protocol_downgrade_is_incompatible_by_default() {
+        let mut base = ProtocolSnapshot::v11_5();
+        base.protocol_version = Version::new(11, 6, 0);
+        let older = ProtocolSnapshot::v11_5();
+        assert_eq!(
+            compare_protocols(&base, &older),
+            ProtocolCompatibility::Incompatible
+        );
     }
 
     #[test]
