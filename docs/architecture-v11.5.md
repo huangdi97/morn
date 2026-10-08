@@ -650,3 +650,22 @@ The manifest is durable provenance only. It does not own Work phase, external
 action truth, Outcome or Acceptance. If a Work generation/profile/site changes,
 the old binding cannot mint a current manifest; explicit rebind/migration is
 required.
+
+
+## Protocol / Profile migration semantics
+
+The architecture intentionally has no forever-immutable implementation.
+Stability comes from explicit published contract identity and migration.
+
+The reference compatibility rules are:
+
+- same version + changed semantic content = incompatible silent mutation;
+- semantic-equivalent patch = compatible;
+- minor semantic/guarantee change = requires reevaluation;
+- major or cross-Profile change = incompatible by default.
+
+A Profile version change creates a new Work desired-state generation and new
+ExecutionBindings; active Attempts remain pinned to the old binding. Site
+admission is repeated when the Profile guarantee contract changes. Execution
+manifests record protocol version plus invariant ids so historical execution can
+be interpreted under the contract that actually governed it.
