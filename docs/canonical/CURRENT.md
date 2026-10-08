@@ -6,7 +6,7 @@ The authoritative architecture entry points for this branch are:
 
 1. `docs/architecture-v11.5.md`
 2. `docs/adr/ADR-001-v11.5-control-plane-cordis.md`
-3. ADR-002 through ADR-043 in `docs/adr/`
+3. ADR-002 through ADR-044 in `docs/adr/`
 4. `docs/security/MORN_V11_5_THREAT_MODEL.md`
 
 Historical v10.x/v11.3 documents and v1 GA evidence remain readable evidence
@@ -307,3 +307,12 @@ not imply qualification, authority or site admission.
 For portable local providers, WIT/Wasm Component Model is an optional future
 ABI. It does not replace Cordis, the Morn Protocol, or the durable Work control
 plane. See ADR-042 and ADR-043.
+
+
+## External durable task boundary
+
+A2A Tasks and the MCP `io.modelcontextprotocol/tasks` extension are durable
+executor/runtime objects, not Morn Work. External task completion is evidence;
+ObservedOutcome and Acceptance remain independent. Current A2A adapters use
+Major.Minor protocol negotiation (for example `1.0`), and MCP revision details
+remain provider bindings rather than semantic Work fields. See ADR-044.
