@@ -37,7 +37,7 @@ pub use credentials::{
 };
 pub use durable_workflow::{
     DurableWorkflowBinding, DurableWorkflowBindingId, DurableWorkflowEvidence,
-    DurableWorkflowProvider, DurableWorkflowState,
+    DurableWorkflowProvider, DurableWorkflowState, LegacyMornDurableWorkflowProvider,
 };
 pub use environment::{
     ExecutionEnvironmentHandle, ExecutionEnvironmentId, ExecutionEnvironmentOffer,
