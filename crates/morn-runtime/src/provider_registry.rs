@@ -56,6 +56,8 @@ pub struct ProviderDescriptor {
     pub status: ProviderStatus,
     pub evidence_refs: Vec<String>,
     pub observed_at: Timestamp,
+    #[serde(default)]
+    pub health_valid_until: Option<Timestamp>,
 }
 
 impl ProviderDescriptor {
@@ -71,6 +73,7 @@ impl ProviderDescriptor {
             status: ProviderStatus::Registered,
             evidence_refs: Vec::new(),
             observed_at: Timestamp::now(),
+            health_valid_until: None,
         }
     }
 
@@ -98,6 +101,13 @@ impl ProviderDescriptor {
 
     pub fn supports(&self, required_features: &BTreeSet<String>) -> bool {
         required_features.is_subset(&self.features)
+    }
+
+    pub fn selectable_at(&self, now: Timestamp) -> bool {
+        self.status.selectable()
+            && self
+                .health_valid_until
+                .is_none_or(|valid_until| now <= valid_until)
     }
 
     /// Exact runtime identity used when creating an ExecutionBinding.
@@ -151,6 +161,17 @@ impl ProviderRegistry {
         reason: impl Into<String>,
         evidence_refs: Vec<String>,
     ) -> Result<ProviderObservation> {
+        self.observe_status_with_ttl(provider_id, status, reason, evidence_refs, None)
+    }
+
+    pub fn observe_status_with_ttl(
+        &mut self,
+        provider_id: &str,
+        status: ProviderStatus,
+        reason: impl Into<String>,
+        evidence_refs: Vec<String>,
+        ttl_ms: Option<i64>,
+    ) -> Result<ProviderObservation> {
         let descriptor = self
             .descriptors
             .get_mut(provider_id)
@@ -158,6 +179,9 @@ impl ProviderRegistry {
         let previous_status = descriptor.status;
         descriptor.status = status;
         descriptor.observed_at = Timestamp::now();
+        descriptor.health_valid_until = ttl_ms
+            .filter(|ttl| *ttl > 0)
+            .map(|ttl| Timestamp::from_millis(descriptor.observed_at.millis().saturating_add(ttl)));
         descriptor
             .evidence_refs
             .extend(evidence_refs.iter().cloned());
@@ -191,10 +215,19 @@ impl ProviderRegistry {
         family: ProviderFamily,
         required_features: &BTreeSet<String>,
     ) -> Vec<&ProviderDescriptor> {
+        self.eligible_at(family, required_features, Timestamp::now())
+    }
+
+    pub fn eligible_at(
+        &self,
+        family: ProviderFamily,
+        required_features: &BTreeSet<String>,
+        now: Timestamp,
+    ) -> Vec<&ProviderDescriptor> {
         self.descriptors
             .values()
             .filter(|provider| provider.family == family)
-            .filter(|provider| provider.status.selectable())
+            .filter(|provider| provider.selectable_at(now))
             .filter(|provider| provider.supports(required_features))
             .collect()
     }
@@ -315,6 +348,39 @@ mod tests {
         let eligible = registry.eligible(ProviderFamily::Harness, &required);
         assert_eq!(eligible.len(), 1);
         assert_eq!(eligible[0].id, "dsh");
+    }
+
+    #[test]
+    fn stale_health_observation_is_not_selectable() {
+        let mut registry = ProviderRegistry::default();
+        let mut provider = ProviderDescriptor::new("dynamic", ProviderFamily::Harness, "1");
+        provider.status = ProviderStatus::Healthy;
+        registry.register(provider).unwrap();
+
+        let observation = registry
+            .observe_status_with_ttl(
+                "dynamic",
+                ProviderStatus::Healthy,
+                "probe passed",
+                vec!["probe://dynamic/1".to_string()],
+                Some(1_000),
+            )
+            .unwrap();
+
+        let fresh = registry.eligible_at(
+            ProviderFamily::Harness,
+            &BTreeSet::new(),
+            observation.observed_at,
+        );
+        assert_eq!(fresh.len(), 1);
+
+        let stale_at = Timestamp::from_millis(observation.observed_at.millis() + 1_001);
+        let stale = registry.eligible_at(
+            ProviderFamily::Harness,
+            &BTreeSet::new(),
+            stale_at,
+        );
+        assert!(stale.is_empty());
     }
 
     #[test]
