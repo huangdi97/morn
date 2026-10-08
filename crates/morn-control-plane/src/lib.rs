@@ -47,7 +47,7 @@ use morn_profile::{
     plan_profile_migration, DomainProfile, ProfileCompatibility, ProfileMigrationPlan,
 };
 use morn_runtime::{
-    reconcile_attempt, ActionAttempt, BindingMigrationDecision, DurableWorkflowBinding,
+    reconcile_attempt, ActionAttempt, AttemptState, BindingMigrationDecision, DurableWorkflowBinding,
     DurableWorkflowEvidence, ExecutionBinding, ExecutionManifest, OutcomeReconciler,
     ReconciliationRecord,
 };
@@ -584,6 +584,41 @@ fn require_canonical_work_workspace(store: &MornStore, work: &WorkResource) -> R
     Ok(())
 }
 
+/// A persisted action snapshot may skip intermediate in-memory transitions,
+/// but must never regress to an earlier, redispatchable state.
+fn persisted_attempt_state_reachable(from: AttemptState, target: AttemptState) -> bool {
+    let states = [
+        AttemptState::Proposed,
+        AttemptState::Authorized,
+        AttemptState::Dispatched,
+        AttemptState::Acknowledged,
+        AttemptState::Committed,
+        AttemptState::OutcomeUnknown,
+        AttemptState::Reconciling,
+        AttemptState::Observed,
+        AttemptState::Verified,
+        AttemptState::Failed,
+        AttemptState::Cancelled,
+    ];
+    let mut pending = vec![from];
+    let mut visited = Vec::new();
+    while let Some(state) = pending.pop() {
+        if state == target {
+            return true;
+        }
+        if visited.contains(&state) {
+            continue;
+        }
+        visited.push(state);
+        for candidate in states {
+            if state.can_transition_to(candidate) {
+                pending.push(candidate);
+            }
+        }
+    }
+    false
+}
+
 impl ControlPlaneStore for MornStore {
     fn save_work_resource(&self, work: &WorkResource) -> Result<()> {
         if self
@@ -756,13 +791,66 @@ impl ControlPlaneStore for MornStore {
                 "action attempt must have a business key and binding owned by this Work",
             ));
         }
-        self.save_record(
-            "action_attempt_v115",
+        if matches!(attempt.state, AttemptState::Observed | AttemptState::Verified)
+            && (attempt
+                .external_ref
+                .as_deref()
+                .is_none_or(|reference| reference.trim().is_empty())
+                || attempt.evidence_refs.is_empty())
+        {
+            return Err(Error::validation(
+                "observed external attempt requires an external reference and evidence",
+            ));
+        }
+        let kind = "action_attempt_v115";
+        let previous: Option<ActionAttempt> = self.load_record(kind, attempt.id.as_str())?;
+        if let Some(previous) = &previous {
+            if previous.binding_id != attempt.binding_id
+                || previous.business_key != attempt.business_key
+                || previous.action != attempt.action
+                || previous.created_at != attempt.created_at
+                || (previous.state != AttemptState::Proposed
+                    && (previous.resource_ref != attempt.resource_ref
+                        || previous.site_ref != attempt.site_ref
+                        || previous.authority_decision_ref != attempt.authority_decision_ref
+                        || previous.external_action_permit_ref != attempt.external_action_permit_ref
+                        || previous.effect_contract != attempt.effect_contract))
+            {
+                return Err(Error::validation(
+                    "persisted attempt identity and authorized effect are immutable",
+                ));
+            }
+            if !persisted_attempt_state_reachable(previous.state, attempt.state)
+                || attempt.updated_at < previous.updated_at
+                || previous
+                    .external_ref
+                    .as_ref()
+                    .is_some_and(|reference| attempt.external_ref.as_ref() != Some(reference))
+                || !previous
+                    .evidence_refs
+                    .iter()
+                    .all(|reference| attempt.evidence_refs.contains(reference))
+            {
+                return Err(Error::conflict(
+                    "action attempt state or external evidence regressed",
+                ));
+            }
+            if previous == attempt {
+                return Ok(());
+            }
+        }
+        // CAS protects against a competing controller snapshot committing
+        // between the read/validation above and this durable projection write.
+        let expected = self.record_revision(kind, attempt.id.as_str())?.unwrap_or(0);
+        self.save_record_cas(
+            kind,
             attempt.id.as_str(),
             work.workspace_id.as_str(),
             attempt.created_at.millis(),
+            expected,
             attempt,
-        )
+        )?;
+        Ok(())
     }
 
     fn save_reconciliation(
@@ -1565,6 +1653,49 @@ mod control_plane_persistence_scope_tests {
         record.observation.business_key = attempt.business_key.clone();
         assert!(store.save_reconciliation(&other, &record).is_err());
         store.save_reconciliation(&work, &record).unwrap();
+    }
+
+    #[test]
+    fn persisted_attempt_cannot_rewind_unknown_effect_or_relabel_business_key() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        store.save_execution_binding(&work, &binding).unwrap();
+
+        let mut attempt = ActionAttempt::new(binding.id.clone(), "work:create", "create");
+        store.save_action_attempt(&work, &attempt).unwrap();
+        let stale = attempt.clone();
+        attempt.transition(AttemptState::Authorized).unwrap();
+        attempt.transition(AttemptState::Dispatched).unwrap();
+        store.save_action_attempt(&work, &attempt).unwrap();
+        attempt.mark_outcome_unknown("timeout").unwrap();
+        store.save_action_attempt(&work, &attempt).unwrap();
+        assert!(store.save_action_attempt(&work, &stale).is_err());
+
+        let mut forged = attempt.clone();
+        forged.state = AttemptState::Dispatched;
+        assert!(store.save_action_attempt(&work, &forged).is_err());
+        forged = attempt.clone();
+        forged.business_key = "other:create".to_string();
+        assert!(store.save_action_attempt(&work, &forged).is_err());
+
+        attempt.transition(AttemptState::Reconciling).unwrap();
+        attempt.external_ref = Some("cmms://order-1".to_string());
+        attempt
+            .evidence_refs
+            .push("cmms://order-1/receipt".to_string());
+        attempt.transition(AttemptState::Observed).unwrap();
+        store.save_action_attempt(&work, &attempt).unwrap();
+        let mut forged = attempt.clone();
+        forged.evidence_refs.clear();
+        assert!(store.save_action_attempt(&work, &forged).is_err());
+        let stored: ActionAttempt = store
+            .load_record("action_attempt_v115", attempt.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.state, AttemptState::Observed);
+        assert_eq!(stored.business_key, "work:create");
     }
 
     #[test]
