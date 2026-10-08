@@ -26,6 +26,7 @@ jobs:
       - name: Refresh vulnerable frontend dependencies
         working-directory: frontend
         run: |
+          npm ci
           npm install --save-dev vitest@4.1.11
           npm install react-router-dom@6.30.6
           npm audit fix
