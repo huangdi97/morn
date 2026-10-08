@@ -393,7 +393,7 @@ export default function Workbench() {
         )}
       </div>
 
-      <Card title="Durable Work Runtime (v0.2)">
+      <Card title="Durable Workflow Provider (legacy-compatible execution state)">
         <div className="page-actions" style={{ marginBottom: 8 }}>
           <button onClick={startDurable}>Start Durable Run</button>
           <button onClick={signalRun} disabled={!durableRun}>
