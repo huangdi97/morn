@@ -465,3 +465,19 @@ Morn therefore keeps these decisions:
 
 The reference host currently pins `@deepseek-ai/cordis@4.0.4`. This is an
 engineering pin, not a semantic claim that 4.0.4 is permanently canonical.
+
+
+## 2026-10-08 Pi RPC verification
+
+Current Pi documentation was rechecked before implementing the transport seam.
+The maintained public RPC mode is `pi --mode rpc --no-session`, with strict
+JSONL framing over stdin/stdout. Commands support correlation ids; relevant
+boundary operations include `prompt`, `get_state` and `abort`.
+A successful prompt response describes only accepted/queued/handled disposition.
+`agent_end` can be followed by retry/compaction/follow-up activity;
+`agent_settled` is the stronger session-level idle signal.
+
+Architecture consequence: Morn may use Pi as a real out-of-process provider
+without making Pi session state canonical Work state. The reference Rust client
+is in `crates/morn-harness/src/pi_rpc.rs`. Actual binary/model/credential smoke
+remains environment-dependent.
