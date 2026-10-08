@@ -45,6 +45,7 @@ export interface UiExtensionRegistry {
 }
 
 export interface V115ControlPlaneData {
+  condition_evidence: Array<Record<string, unknown>>;
   work: Array<{
     id: string;
     generation: number;
