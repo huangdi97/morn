@@ -4,6 +4,8 @@ Status: research/design input. This document records external product/runtime
 facts and Morn design consequences. It is not customer evidence and does not
 upgrade any production claim.
 
+Research refresh: 2026-10-08.
+
 ## Executive conclusion
 
 The current market is converging on highly composable agent runtimes:
@@ -11,8 +13,10 @@ The current market is converging on highly composable agent runtimes:
 - DeepSeek Harness makes its agent stack plugin-composable on Cordis.
 - Pi/PI-Desktop separates a lightweight agent engine from a privileged host,
   persistent workspace and permission layer.
-- AgentScope Runtime turns agent applications into production services with
-  sandbox, persistence, recovery and scalable deployment.
+- AgentScope 2.0 now absorbs the former AgentScope Runtime capabilities
+  (sandboxing, Agent-as-a-Service, observability) into the main framework and
+  adds current pipeline/SOP/A2A patterns; the standalone Runtime repository is
+  being archived.
 - DeepSeek DSec treats execution as an elastic fleet of heterogeneous sandbox
   backends rather than one universal sandbox.
 - Paper2Agent turns scientific artifacts into MCP/skill-style executable
@@ -147,24 +151,31 @@ the exact guarantee vector required by the Profile.
 DSec-like infrastructure is therefore a future execution provider, not a Morn
 kernel dependency.
 
-## 5. AgentScope / AgentScope Runtime
+## 5. AgentScope 2.0 / former AgentScope Runtime
 
-Source:
+Sources:
 
+- https://github.com/agentscope-ai/agentscope
 - https://github.com/agentscope-ai/agentscope-runtime
 
-AgentScope Runtime provides production-facing agent infrastructure including
-secure tool sandboxing, Agent-as-a-Service APIs, scalable deployment,
-observability and broad framework compatibility.
+Freshness note (2026-10-08): the standalone AgentScope Runtime repository now
+carries an archive/migration notice. Its sandboxing, Agent-as-a-Service and
+observability capabilities have been folded into AgentScope 2.0. AgentScope 2.0
+also exposes Pipeline/TeamPipeline, experimental SOP execution, A2A support and
+model routing.
 
 Morn decision:
 
-Treat AgentScope as another provider family. Its production runtime capabilities
-can satisfy execution/deployment concerns, while Morn continues to own Work,
-authority, business truth and accepted outcome.
+Treat AgentScope **2.0**, not the archived standalone Runtime repository, as the
+active provider/framework reference. It can satisfy agent execution, pipeline,
+A2A and deployment concerns behind Morn provider contracts, while Morn
+continues to own Work, Authority, binding identity, external-effect truth,
+Outcome and Acceptance.
 
-This is important because “production-ready agent runtime” and “work control
-plane” are not the same layer.
+This update further supports a provider-family abstraction: framework projects
+will merge, split and deprecate runtime packages over time, so Morn must bind to
+versioned provider contracts rather than making any vendor repository part of
+its semantic constitution.
 
 ## 6. Paper2Agent
 
