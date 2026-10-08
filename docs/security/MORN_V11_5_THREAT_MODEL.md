@@ -228,3 +228,16 @@ Control: the v11.5 admission API requires a persisted
 `ProfileConformanceAttestation` with evaluator identity, evidence references,
 exact site/Profile and optional expiry. Raw conformance fields on the admission
 request are rejected. Fixture attestations never count as real-site evidence.
+
+
+## Localhost browser CSRF
+
+Threat: a malicious internet page sends browser-originated POST requests to the
+loopback Morn API while permissive CORS treats the page as a trusted local
+client.
+
+Control: the reference server binds to loopback, uses an explicit CORS
+allowlist, and rejects mutating requests carrying any unapproved Origin. Native
+CLI/provider traffic without an Origin remains allowed for the reference
+runtime. Remote/enterprise deployment still requires real authentication,
+workload identity/TLS and network policy.
