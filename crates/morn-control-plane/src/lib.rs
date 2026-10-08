@@ -78,6 +78,9 @@ impl WorkController {
         profile: &DomainProfile,
         inputs: &ControllerInputs,
     ) {
+        if work.status.phase.is_terminal() {
+            return;
+        }
         work.status.phase = WorkPhase::Resolving;
 
         Self::condition(
@@ -248,6 +251,10 @@ pub struct WorkProgressController;
 impl WorkProgressController {
     pub fn reconcile(&self, work: &mut WorkResource, inputs: &WorkProgressInputs<'_>) {
         use morn_runtime::AttemptState;
+
+        if work.status.phase.is_terminal() {
+            return;
+        }
         use morn_work::acceptance_decision::AcceptanceDisposition;
 
         if !work.required_conditions_satisfied() {
@@ -1259,3 +1266,49 @@ mod v115_protocol_migration_tests {
         assert_eq!(work.generation, 1);
     }
 }
+
+#[cfg(test)]
+mod terminal_phase_tests {
+    use super::*;
+    use morn_kernel::ids::{WorkPackageId, WorkspaceId};
+
+    #[test]
+    fn late_evidence_cannot_silently_reopen_accepted_work() {
+        let spec = morn_work::control::WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "accepted work",
+            "morn.lite@1.0.0",
+        );
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        work.status.phase = WorkPhase::Accepted;
+        work.status.observed_generation = work.generation;
+
+        WorkController.reconcile(
+            &mut work,
+            &DomainProfile::lite_v1(),
+            &ControllerInputs {
+                capability_resolved: false,
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Accepted);
+
+        WorkProgressController.reconcile(&mut work, &WorkProgressInputs::default());
+        assert_eq!(work.status.phase, WorkPhase::Accepted);
+
+        let mut next = work.spec.clone();
+        next.goal = "explicitly changed generation".to_string();
+        work.replace_spec(next);
+        assert_eq!(work.status.phase, WorkPhase::Proposed);
+        WorkController.reconcile(
+            &mut work,
+            &DomainProfile::lite_v1(),
+            &ControllerInputs {
+                capability_resolved: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Ready);
+    }
+}
+
