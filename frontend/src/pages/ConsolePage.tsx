@@ -105,6 +105,7 @@ export default function ConsolePage() {
             <KeyValue k="Work" v={v115Control.work.length} />
             <KeyValue k="Source-of-truth bindings" v={v115Control.source_of_truth_bindings.length} />
             <KeyValue k="Execution bindings" v={v115Control.execution_bindings.length} />
+            <KeyValue k="Durable workflow bindings" v={v115Control.durable_workflow_bindings.length} />
             <KeyValue k="Attempts" v={v115Control.attempts.length} />
             <KeyValue k="Reconciliations" v={v115Control.reconciliations.length} />
             <KeyValue k="Outcomes" v={v115Control.outcomes.length} />
@@ -124,10 +125,10 @@ export default function ConsolePage() {
               <KeyValue k="Real factory" v={v115.claims.real_factory} />
             </Card>
             <Card title="Evidence Class / Non-Claim Discipline">
-              <KeyValue k="Evidence classes" v={v115.evidence_policy.classes.join(" → ")} />
+              <KeyValue k="Evidence classes (categorical)" v={v115.evidence_policy.classes.join(", ")} />
               <KeyValue
-                k="Auto-promotion"
-                v={v115.evidence_policy.lower_class_never_auto_promotes ? "forbidden" : "allowed"}
+                k="Implicit promotion"
+                v={v115.evidence_policy.no_implicit_promotion ? "forbidden" : "allowed"}
               />
               {v115.evidence_policy.claims.map((claim) => (
                 <div key={claim.id} className="kv">
