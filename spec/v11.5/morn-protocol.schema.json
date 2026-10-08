@@ -306,8 +306,7 @@
         "micro-vm",
         "full-vm",
         "remote",
-        "physical",
-        "microvm"
+        "physical"
       ]
     },
     "ExecutionGuarantee": {
