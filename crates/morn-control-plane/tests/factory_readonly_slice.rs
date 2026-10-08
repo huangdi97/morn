@@ -16,8 +16,8 @@ use morn_capability::{
 use morn_control_plane::{
     begin_external_attempt_with_effect, enforce_profile_action, evaluate_profile_action,
     issue_external_action_permit_for_work, resolve_external_action_finalizer, ControlPlaneStore,
-    ControllerInputs, ExternalActionMode, ReconciliationController, WorkController,
-    WorkProgressController, WorkProgressInputs,
+    ControllerInputs, ExternalActionMode, ProviderGate, ProviderGatePolicy,
+    ReconciliationController, WorkController, WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
@@ -30,10 +30,11 @@ use morn_kernel::policy::{Policy, PolicyRule};
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
     decide_bound, enforce_authority, ActionAttempt, AttemptState, AuthorityProvider,
-    AuthorityRequest, BindingMigrationReason, BindingMigrationRequest, ExecutionBinding,
-    ExecutionEnvironmentOffer, ExecutionEnvironmentProvider, ExecutionEnvironmentResolver,
-    ExecutionEnvironmentSpec, FixtureEnvironmentProvider, NativePolicyAuthority, OutcomeReconciler,
-    ReconciliationObservation,
+    AuthorityRequest, BindingMigrationReason, BindingMigrationRequest, CompositionRuntimeRef,
+    ExecutionBinding, ExecutionEnvironmentOffer, ExecutionEnvironmentProvider,
+    ExecutionEnvironmentResolver, ExecutionEnvironmentSpec, ExecutionManifest,
+    FixtureEnvironmentProvider, NativePolicyAuthority, OutcomeReconciler, ProviderDescriptor,
+    ProviderFamily, ProviderRegistry, ProviderStatus, ReconciliationObservation,
 };
 use morn_store::MornStore;
 use morn_work::acceptance::AcceptanceSpec;
@@ -110,7 +111,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     let mut manifest = CapabilityManifest::new(
         CapabilityId::generate_with("cap"),
         "equipment-investigator",
-        "harness://dsh",
+        "dsh-fixture",
         CapabilityKind::Agent,
         EffectClass::E0LifecycleReversible,
     );
@@ -193,7 +194,27 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .unwrap();
     assert_eq!(capability.stage, CapabilityStage::Admitted);
 
-    // Resolver selects only a capability admitted for the target site.
+    // Factory resolution also requires a live provider projection. A manifest
+    // cannot make an unavailable harness selectable merely by naming it.
+    let now = morn_kernel::time::Timestamp::now();
+    let mut providers = ProviderRegistry::default();
+    let mut dsh_fixture =
+        ProviderDescriptor::new("dsh-fixture", ProviderFamily::Harness, "fixture-v1");
+    dsh_fixture.status = ProviderStatus::Healthy;
+    dsh_fixture.health_valid_until =
+        Some(morn_kernel::time::Timestamp::from_millis(now.millis() + 60_000));
+    providers.register(dsh_fixture).unwrap();
+
+    let gate = ProviderGate.evaluate(
+        &[capability.clone()],
+        &providers,
+        ProviderGatePolicy::strict(),
+        now,
+    );
+    assert_eq!(gate.selectable.len(), 1);
+
+    // Resolver selects only a capability admitted for the target site/profile
+    // after the provider-health gate succeeds.
     let resolved = CapabilityResolver.resolve(
         &CapabilityRequest {
             required_provides: vec!["equipment.anomaly.investigate".to_string()],
@@ -205,7 +226,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             profile_ref: Some(conformance.profile_ref.clone()),
             ..Default::default()
         },
-        &[capability.clone()],
+        &gate.selectable,
     );
     assert_eq!(resolved.len(), 1);
 
@@ -321,13 +342,21 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     binding.authority_decision_ref = Some(authority_decision.id.to_string());
     work.record_active_binding(binding.id.clone());
 
+    let execution_manifest = ExecutionManifest::from_binding(
+        &work,
+        &binding,
+        CompositionRuntimeRef::new("cordis-reference", "4.0.4"),
+    )
+    .unwrap();
+    assert!(execution_manifest.validates_against(&work, &binding));
+
     // A separate connector capability owns the write-like sandbox action.
     // The read-only investigator binding cannot be reused to smuggle an E2
     // side effect through an E0 capability.
     let mut cmms_manifest = CapabilityManifest::new(
         CapabilityId::generate_with("cap"),
         "cmms-sandbox-create-order",
-        "connector://cmms-fixture",
+        "cmms-fixture",
         CapabilityKind::Api,
         EffectClass::E2Compensatable,
     );
@@ -398,6 +427,20 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         )
         .unwrap();
 
+    let mut cmms_provider =
+        ProviderDescriptor::new("cmms-fixture", ProviderFamily::Connector, "fixture-v1");
+    cmms_provider.status = ProviderStatus::Healthy;
+    cmms_provider.health_valid_until =
+        Some(morn_kernel::time::Timestamp::from_millis(now.millis() + 60_000));
+    providers.register(cmms_provider).unwrap();
+    let cmms_gate = ProviderGate.evaluate(
+        &[cmms_capability.clone()],
+        &providers,
+        ProviderGatePolicy::strict(),
+        now,
+    );
+    assert_eq!(cmms_gate.selectable.len(), 1);
+
     let cmms_resolved = CapabilityResolver.resolve(
         &CapabilityRequest {
             required_provides: vec!["cmms.sandbox.create-order".to_string()],
@@ -410,7 +453,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             profile_ref: Some(conformance.profile_ref.clone()),
             ..Default::default()
         },
-        &[cmms_capability.clone()],
+        &cmms_gate.selectable,
     );
     assert_eq!(cmms_resolved.len(), 1);
     let mut cmms_binding =
@@ -508,7 +551,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         )
         .with_evidence(vec!["harness-neutrality:passed".to_string()]),
     );
-    assert_eq!(binding.provider_ref, "harness://dsh");
+    assert_eq!(binding.provider_ref, "dsh-fixture");
     assert_eq!(attempt.binding_id, cmms_binding.id);
     assert_eq!(migrated.migration_from, Some(binding.id.clone()));
     assert_eq!(migrated.provider_ref, "pi");
