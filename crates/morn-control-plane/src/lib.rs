@@ -803,6 +803,10 @@ impl ControlPlaneStore for MornStore {
             ));
         }
         let kind = "action_attempt_v115";
+        // Capture the revision before inspecting the snapshot. Re-reading it
+        // after validation could let a competing writer advance the row and
+        // accidentally supply our stale projection with that newer revision.
+        let expected = self.record_revision(kind, attempt.id.as_str())?.unwrap_or(0);
         let previous: Option<ActionAttempt> = self.load_record(kind, attempt.id.as_str())?;
         if let Some(previous) = &previous {
             if previous.binding_id != attempt.binding_id
@@ -839,9 +843,7 @@ impl ControlPlaneStore for MornStore {
                 return Ok(());
             }
         }
-        // CAS protects against a competing controller snapshot committing
-        // between the read/validation above and this durable projection write.
-        let expected = self.record_revision(kind, attempt.id.as_str())?.unwrap_or(0);
+        // CAS rejects a concurrent update after our revision snapshot.
         self.save_record_cas(
             kind,
             attempt.id.as_str(),
