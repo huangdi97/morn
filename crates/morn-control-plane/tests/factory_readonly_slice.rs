@@ -15,8 +15,8 @@ use morn_capability::{
 };
 use morn_control_plane::{
     begin_external_attempt_with_effect, enforce_profile_action, evaluate_profile_action,
-    issue_external_action_permit_for_work, resolve_external_action_finalizer, ControlPlaneStore,
-    ControllerInputs, ExternalActionMode, ProviderGate, ProviderGatePolicy,
+    issue_external_action_permit_for_work, resolve_external_action_finalizer,
+    CapabilityEligibilityGate, ControlPlaneStore, ControllerInputs, ExternalActionMode,
     ReconciliationController, WorkController, WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
@@ -205,16 +205,18 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         Some(morn_kernel::time::Timestamp::from_millis(now.millis() + 60_000));
     providers.register(dsh_fixture).unwrap();
 
-    let gate = ProviderGate.evaluate(
+    let gate = CapabilityEligibilityGate.strict(
         &[capability.clone()],
+        &admission,
         &providers,
-        ProviderGatePolicy::strict(),
+        "plant-a",
+        &conformance.profile_ref,
         now,
     );
     assert_eq!(gate.selectable.len(), 1);
 
-    // Resolver selects only a capability admitted for the target site/profile
-    // after the provider-health gate succeeds.
+    // Resolver receives only candidates whose qualification/release/site
+    // admission and concrete provider health are all current.
     let resolved = CapabilityResolver.resolve(
         &CapabilityRequest {
             required_provides: vec!["equipment.anomaly.investigate".to_string()],
@@ -433,10 +435,12 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     cmms_provider.health_valid_until =
         Some(morn_kernel::time::Timestamp::from_millis(now.millis() + 60_000));
     providers.register(cmms_provider).unwrap();
-    let cmms_gate = ProviderGate.evaluate(
+    let cmms_gate = CapabilityEligibilityGate.strict(
         &[cmms_capability.clone()],
+        &admission,
         &providers,
-        ProviderGatePolicy::strict(),
+        "plant-a",
+        &conformance.profile_ref,
         now,
     );
     assert_eq!(cmms_gate.selectable.len(), 1);
