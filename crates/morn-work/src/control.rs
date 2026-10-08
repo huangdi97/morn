@@ -229,7 +229,11 @@ impl WorkResource {
                 "cannot add a new Work finalizer after termination is requested",
             ));
         }
-        if !self.finalizers.iter().any(|existing| existing == &finalizer) {
+        if !self
+            .finalizers
+            .iter()
+            .any(|existing| existing == &finalizer)
+        {
             self.finalizers.push(finalizer);
             self.finalizers.sort();
         }
@@ -303,7 +307,9 @@ impl WorkResource {
     }
 
     pub fn remove_active_binding(&mut self, binding_id: &RuntimeBindingId) {
-        self.status.active_bindings.retain(|existing| existing != binding_id);
+        self.status
+            .active_bindings
+            .retain(|existing| existing != binding_id);
         if self.status.active_binding.as_ref() == Some(binding_id) {
             self.status.active_binding = self.status.active_bindings.first().cloned();
         }
@@ -341,15 +347,11 @@ mod tests {
         let work_id = WorkPackageId::generate_with("wp");
         let spec = WorkSpec::new(work_id, "goal", "morn.enterprise@1.0.0");
         let mut resource = WorkResource::new(ws, spec);
-        resource
-            .add_finalizer("morn.io/external-effects")
-            .unwrap();
+        resource.add_finalizer("morn.io/external-effects").unwrap();
         resource.request_termination("operator cancelled").unwrap();
         assert_eq!(resource.status.phase, WorkPhase::Terminating);
         assert!(resource.finalize_termination().is_err());
-        assert!(resource
-            .add_finalizer("morn.io/new-finalizer")
-            .is_err());
+        assert!(resource.add_finalizer("morn.io/new-finalizer").is_err());
         assert!(resource.remove_finalizer("morn.io/external-effects"));
         resource.finalize_termination().unwrap();
         assert_eq!(resource.status.phase, WorkPhase::Cancelled);
