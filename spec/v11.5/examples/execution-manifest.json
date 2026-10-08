@@ -1,0 +1,37 @@
+{
+  "schema": "morn.execution-manifest/v11.5",
+  "protocol_version": "11.5.0",
+  "protocol_invariants": [
+    "active-binding-pinned",
+    "authority-before-restricted-effect",
+    "compiler-not-qualification",
+    "evidence-class-explicit",
+    "history-no-silent-rewrite",
+    "profile-effect-gate-before-dispatch",
+    "profile-guarantees-not-provider-names",
+    "profile-version-pinned",
+    "proposal-execution-receipt-outcome-acceptance-distinct",
+    "qualification-not-admission",
+    "unknown-requires-reconciliation",
+    "work-truth-independent-of-executor",
+    "workflow-runtime-not-work-truth"
+  ],
+  "work_ref": "work-1042",
+  "work_generation": 1,
+  "profile_ref": "morn.factory.readonly@1.0.0",
+  "site_ref": "plant-a",
+  "source_solution_ref": "solution:factory-exception@1.0.0",
+  "execution_binding_ref": "binding-1042-agent",
+  "capability_manifest_ref": "cmanifest-equipment-investigator-v1",
+  "provider_ref": "harness://dsh",
+  "provider_version": "fixture-v1",
+  "provider_digest": "sha256:provider-fixture",
+  "composition_runtime": {
+    "id": "cordis-reference",
+    "version": "4.0.4",
+    "digest": "sha256:cordis-fixture"
+  },
+  "runtime_ref": "runtime://dsh/session-contract",
+  "authority_decision_ref": "authz-1042-read",
+  "created_at": "2026-10-08T05:01:05Z"
+}
