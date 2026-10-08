@@ -165,6 +165,7 @@ impl PiRpcClient {
 
         let mut response: Option<PiRpcResponse> = None;
         let mut events = Vec::new();
+        let mut settled = false;
 
         loop {
             let record = self.read_record()?;
@@ -177,22 +178,22 @@ impl PiRpcClient {
                             parsed.error.unwrap_or_else(|| "unknown error".to_string())
                         )));
                     }
+                    let handled = prompt_disposition(&parsed) == Some("handled");
                     response = Some(parsed);
+                    if handled || settled {
+                        break;
+                    }
                 }
                 continue;
             }
 
             let event = parse_event(record);
-            let settled = event.event_type == PI_EVENT_AGENT_SETTLED;
-            events.push(event);
-            if settled {
-                break;
+            if event.event_type == PI_EVENT_AGENT_SETTLED {
+                settled = true;
             }
-
-            if let Some(parsed) = &response {
-                if prompt_disposition(parsed) == Some("handled") {
-                    break;
-                }
+            events.push(event);
+            if settled && response.is_some() {
+                break;
             }
         }
 
@@ -281,7 +282,7 @@ impl PiRpcClient {
             if bytes == 0 {
                 return Err(Error::external("Pi RPC runtime closed stdout"));
             }
-            let trimmed = line.trim_end_matches(['\r', '\n']);
+            let trimmed = line.trim_end_matches(|ch| ch == '\r' || ch == '\n');
             if trimmed.is_empty() {
                 continue;
             }
@@ -375,6 +376,24 @@ mod tests {
             events: vec![parse_event(json!({"type":"agent_settled"}))],
         };
         assert!(run.settled());
+    }
+
+    #[test]
+    fn settled_before_response_is_retained_until_correlated_response() {
+        // The parser/state machine deliberately treats response correlation and
+        // settled state as two independent conditions. This mirrors Pi's
+        // asynchronous event/response streams.
+        let settled = parse_event(json!({"type":"agent_settled"}));
+        let response = parse_response(&json!({
+            "id":"morn-prompt-3",
+            "type":"response",
+            "command":"prompt",
+            "success":true,
+            "data":{"disposition":"started"}
+        }))
+        .unwrap();
+        assert_eq!(settled.event_type, PI_EVENT_AGENT_SETTLED);
+        assert_eq!(prompt_disposition(&response), Some("started"));
     }
 
     #[test]
