@@ -36,8 +36,9 @@ use morn_profile::{
     plan_profile_migration, DomainProfile, ProfileCompatibility, ProfileMigrationPlan,
 };
 use morn_runtime::{
-    reconcile_attempt, ActionAttempt, BindingMigrationDecision, DurableWorkflowEvidence,
-    ExecutionBinding, ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
+    reconcile_attempt, ActionAttempt, BindingMigrationDecision, DurableWorkflowBinding,
+    DurableWorkflowEvidence, ExecutionBinding, ExecutionManifest, OutcomeReconciler,
+    ReconciliationRecord,
 };
 use morn_store::MornStore;
 use morn_work::acceptance_decision::AcceptanceDecision;
@@ -515,6 +516,11 @@ pub trait ControlPlaneStore {
         work: &WorkResource,
         decision: &BindingMigrationDecision,
     ) -> Result<()>;
+    fn save_durable_workflow_binding(
+        &self,
+        work: &WorkResource,
+        binding: &DurableWorkflowBinding,
+    ) -> Result<()>;
     fn save_action_attempt(&self, work: &WorkResource, attempt: &ActionAttempt) -> Result<()>;
     fn save_reconciliation(&self, work: &WorkResource, record: &ReconciliationRecord)
         -> Result<()>;
@@ -602,6 +608,20 @@ impl ControlPlaneStore for MornStore {
             work.workspace_id.as_str(),
             decision.created_at.millis(),
             decision,
+        )
+    }
+
+    fn save_durable_workflow_binding(
+        &self,
+        work: &WorkResource,
+        binding: &DurableWorkflowBinding,
+    ) -> Result<()> {
+        self.save_record_immutable(
+            "durable_workflow_binding_v115",
+            binding.id.as_str(),
+            work.workspace_id.as_str(),
+            binding.created_at.millis(),
+            binding,
         )
     }
 
