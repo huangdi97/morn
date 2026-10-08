@@ -133,8 +133,7 @@ mod tests {
     fn provider_must_be_healthy_and_fresh() {
         let now = Timestamp::now();
         let mut registry = ProviderRegistry::default();
-        let mut provider =
-            ProviderDescriptor::new("runtime-a", ProviderFamily::Runtime, "1.0.0");
+        let mut provider = ProviderDescriptor::new("runtime-a", ProviderFamily::Runtime, "1.0.0");
         provider.status = ProviderStatus::Healthy;
         provider.health_valid_until = Some(Timestamp::from_millis(now.millis() + 500));
         registry.register(provider).unwrap();
