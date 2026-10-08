@@ -9,9 +9,7 @@ use morn_capability::{CapabilityRecord, WorkcellPlan};
 use morn_integration::SourceOfTruthBinding;
 use morn_kernel::error::{Error, Result};
 use morn_kernel::time::Timestamp;
-use morn_runtime::{
-    BoundAuthorityDecision, ExecutionBinding, ExecutionManifest,
-};
+use morn_runtime::BoundAuthorityDecision;
 use morn_work::control::WorkResource;
 
 use crate::ConditionEvidence;
@@ -133,26 +131,48 @@ pub fn source_of_truth_condition_evidence(
     )
 }
 
+/// Pre-execution provenance gate. This intentionally validates capability/source
+/// lineage rather than ExecutionManifest, because the latter is created only
+/// after an ExecutionBinding exists. Binding/runtime provenance is checked by
+/// the separate ExecutionManifest path after Work becomes Ready.
 pub fn provenance_condition_evidence(
     work: &WorkResource,
-    binding: &ExecutionBinding,
-    manifest: &ExecutionManifest,
+    capabilities: &[CapabilityRecord],
 ) -> Result<ConditionEvidence> {
-    if !manifest.validates_against(work, binding) {
+    if capabilities.is_empty() {
         return Err(Error::validation(
-            "execution manifest does not validate against Work/ExecutionBinding",
+            "ProvenanceReady requires at least one selected capability",
         ));
+    }
+    let mut refs = Vec::new();
+    for capability in capabilities {
+        let source_ref = capability.manifest.provenance.source_ref.trim();
+        let source_digest = capability
+            .manifest
+            .provenance
+            .source_digest
+            .as_deref()
+            .unwrap_or("")
+            .trim();
+        if source_ref.is_empty() || source_digest.is_empty() {
+            return Err(Error::invalid_state(format!(
+                "capability {} lacks source reference/digest provenance",
+                capability.manifest.id
+            )));
+        }
+        refs.push(capability.manifest.id.to_string());
+        refs.push(capability.manifest.provenance.source_ref.clone());
+        refs.push(source_digest.to_string());
+    }
+    if let Some(solution) = &work.spec.source_solution_ref {
+        refs.push(solution.clone());
     }
     ConditionEvidence::new(
         work,
         "ProvenanceReady",
         true,
-        "controller://execution-provenance",
-        vec![
-            manifest.execution_binding_ref.clone(),
-            manifest.capability_manifest_ref.clone(),
-            manifest.provider_ref.clone(),
-        ],
+        "controller://provenance",
+        refs,
     )
 }
 
@@ -164,6 +184,34 @@ mod tests {
     };
     use morn_kernel::ids::{CapabilityId, WorkPackageId, WorkspaceId};
     use morn_work::control::WorkSpec;
+
+    #[test]
+    fn provenance_readiness_does_not_depend_on_future_execution_binding() {
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "review",
+                "morn.factory.readonly@1.0.0",
+            ),
+        );
+        let mut manifest = CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            "reader",
+            "reader-provider",
+            CapabilityKind::Program,
+            EffectClass::E0LifecycleReversible,
+        );
+        manifest.provenance.source_ref = "repo://reader".to_string();
+        manifest.provenance.source_digest = Some("sha256:fixture".to_string());
+        let capability = CapabilityRecord::new(manifest);
+        let evidence = provenance_condition_evidence(&work, &[capability]).unwrap();
+        assert_eq!(evidence.condition_type, "ProvenanceReady");
+        assert!(evidence
+            .evidence_refs
+            .iter()
+            .any(|item| item == "repo://reader"));
+    }
 
     #[test]
     fn incomplete_workcell_cannot_produce_capability_resolved() {
