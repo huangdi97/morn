@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiGet, HubV2Data, HubV3Data } from "../api";
-import { Card, EmptyState, ErrorBox, Loading, StatusPill } from "../components/ui";
+import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
 
 interface SupplyCapability {
