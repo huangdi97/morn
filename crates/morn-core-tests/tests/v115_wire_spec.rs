@@ -26,6 +26,8 @@ const OUTCOME: &str = include_str!("../../../spec/v11.5/examples/observed-outcom
 const ACCEPTANCE: &str = include_str!("../../../spec/v11.5/examples/acceptance-decision.json");
 const EXECUTION_MANIFEST: &str =
     include_str!("../../../spec/v11.5/examples/execution-manifest.json");
+const SEMANTIC_VECTORS: &str =
+    include_str!("../../../spec/v11.5/conformance/semantic-vectors.json");
 
 #[test]
 fn published_protocol_manifest_names_all_v115_semantic_slots() {
@@ -170,4 +172,24 @@ fn executor_receipt_external_receipt_outcome_and_acceptance_are_distinct() {
     );
     assert_ne!(external_receipt.id.to_string(), outcome.id.to_string());
     assert_ne!(outcome.id.to_string(), acceptance.id.to_string());
+}
+
+#[test]
+fn published_black_box_vectors_cover_every_protocol_invariant() {
+    let snapshot = morn_kernel::protocol::ProtocolSnapshot::v11_5();
+    let vectors: Value = serde_json::from_str(SEMANTIC_VECTORS).unwrap();
+    assert_eq!(vectors["protocol"], "11.5.0");
+
+    let published: std::collections::BTreeSet<String> = vectors["vectors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|vector| vector["required"].as_bool() == Some(true))
+        .filter_map(|vector| vector["id"].as_str())
+        .map(str::to_string)
+        .collect();
+    let required: std::collections::BTreeSet<String> =
+        snapshot.invariant_ids().into_iter().collect();
+
+    assert_eq!(published, required);
 }
