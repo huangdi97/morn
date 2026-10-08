@@ -207,12 +207,13 @@ impl CapabilityResolver {
             }) {
                 continue;
             }
-            if let (Some(maximum), Some(cost)) = (
-                request.max_estimated_cost_micros,
-                manifest.economics.estimated_cost_micros,
-            ) {
-                if cost > maximum {
-                    continue;
+            // Unknown price is not evidence that a hard budget can be met.
+            // Unbounded/Lite requests may use unknown-cost capabilities, but a
+            // bounded Work must fail closed instead of silently pricing at zero.
+            if let Some(maximum) = request.max_estimated_cost_micros {
+                match manifest.economics.estimated_cost_micros {
+                    Some(cost) if cost <= maximum => {}
+                    _ => continue,
                 }
             }
             if let Some(maximum) = request.max_latency_p95_ms {
@@ -703,6 +704,39 @@ mod tests {
             &[record],
         );
         assert!(blocked.is_empty());
+    }
+
+    #[test]
+    fn bounded_request_rejects_capability_with_unknown_cost() {
+        let mut record = admitted(
+            "unknown-cost",
+            "provider",
+            CapabilityKind::Program,
+            &["inspect"],
+            10,
+        );
+        record.manifest.economics.estimated_cost_micros = None;
+
+        let bounded = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["inspect".to_string()],
+                max_estimated_cost_micros: Some(100),
+                site_ref: Some("plant-a".to_string()),
+                ..Default::default()
+            },
+            &[record.clone()],
+        );
+        assert!(bounded.is_empty(), "unknown cost cannot meet a hard budget");
+
+        let unbounded = CapabilityResolver.resolve(
+            &CapabilityRequest {
+                required_provides: vec!["inspect".to_string()],
+                site_ref: Some("plant-a".to_string()),
+                ..Default::default()
+            },
+            &[record],
+        );
+        assert_eq!(unbounded.len(), 1);
     }
 
     #[test]
