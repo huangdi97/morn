@@ -1407,8 +1407,8 @@ mod control_plane_persistence_scope_tests {
             "verified",
         );
         decision.outcome_refs.push(outcome.id.clone());
-        assert!(store.save_acceptance_decision(&other, &decision).is_err());
-        store.save_acceptance_decision(&work, &decision).unwrap();
+        assert!(ControlPlaneStore::save_acceptance_decision(&store, &other, &decision).is_err());
+        ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
 
         let mut foreign_decision = AcceptanceDecision::new(
             other.id.clone(),
@@ -1419,7 +1419,7 @@ mod control_plane_persistence_scope_tests {
             "incorrect cross-work outcome",
         );
         foreign_decision.outcome_refs.push(outcome.id.clone());
-        assert!(store.save_acceptance_decision(&other, &foreign_decision).is_err());
+        assert!(ControlPlaneStore::save_acceptance_decision(&store, &other, &foreign_decision).is_err());
 
         let assessment = ValueAssessment::new(
             work.id.clone(),
