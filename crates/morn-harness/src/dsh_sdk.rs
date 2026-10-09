@@ -603,12 +603,22 @@ mod tests {
         };
         assert!(completed.completed_successfully());
 
-        for reason in ["aborted", "blocked", "error", "max-tokens", "interrupted", "forked"] {
+        for reason in [
+            "aborted",
+            "blocked",
+            "error",
+            "max-tokens",
+            "interrupted",
+            "forked",
+        ] {
             let run = DshSdkRunResult {
                 finish_reason: Some(reason.to_string()),
                 ..completed.clone()
             };
-            assert!(!run.completed_successfully(), "{reason} must not be promoted as success");
+            assert!(
+                !run.completed_successfully(),
+                "{reason} must not be promoted as success"
+            );
         }
         let missing = DshSdkRunResult {
             finish_reason: None,
@@ -619,9 +629,9 @@ mod tests {
 
     #[test]
     fn sdk_subprocess_environment_is_explicitly_scrubbed() {
-        let names = crate::subprocess_env::allowed_environment_names(
-            Some("CUSTOM_PROXY_TOKEN,MY_PROVIDER_KEY"),
-        );
+        let names = crate::subprocess_env::allowed_environment_names(Some(
+            "CUSTOM_PROXY_TOKEN,MY_PROVIDER_KEY",
+        ));
         for secret in [
             "GITHUB_TOKEN",
             "AWS_SECRET_ACCESS_KEY",

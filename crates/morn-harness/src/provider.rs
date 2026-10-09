@@ -428,6 +428,105 @@ impl DeepSeekHarnessProvider {
     }
 }
 
+fn normalize_dsh_notifications(
+    workspace_id: &WorkspaceId,
+    session_id: &str,
+    notifications: &[DshNotification],
+) -> Vec<ExecutionEvent> {
+    let mut normalized = Vec::new();
+    for notification in notifications {
+        if notification.method != "session.event"
+            || notification.params.get("sessionId").and_then(serde_json::Value::as_str)
+                != Some(session_id)
+        {
+            continue;
+        }
+        let Some(event) = notification.params.get("event") else {
+            continue;
+        };
+        let Some(event_type) = event.get("type").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let data = event.get("data").unwrap_or(&serde_json::Value::Null);
+        let (kind, summary) = match event_type {
+            "request/header" => (
+                ExecutionEventKind::ModelRequest,
+                "DSH model request header committed".to_string(),
+            ),
+            "assistant/message" => (
+                ExecutionEventKind::ModelResponse,
+                "DSH assistant message committed".to_string(),
+            ),
+            "assistant/attempt" => (
+                ExecutionEventKind::Failed,
+                "DSH model attempt settled without a surface message".to_string(),
+            ),
+            "tool/call" => {
+                let name = data
+                    .get("name")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown");
+                (
+                    ExecutionEventKind::ToolProposed,
+                    format!("DSH tool call proposed: {name}"),
+                )
+            }
+            "tool/result" => {
+                let failed = data.get("error").is_some()
+                    || data
+                        .get("message")
+                        .and_then(|message| message.get("isError"))
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false);
+                (
+                    if failed {
+                        ExecutionEventKind::ToolFailed
+                    } else {
+                        ExecutionEventKind::ToolCompleted
+                    },
+                    if failed {
+                        "DSH tool result committed as error".to_string()
+                    } else {
+                        "DSH tool result committed".to_string()
+                    },
+                )
+            }
+            "turn/end" => {
+                let reason = data
+                    .get("reason")
+                    .and_then(|reason| reason.get("kind"))
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown");
+                (
+                    ExecutionEventKind::Checkpoint,
+                    format!("DSH durable turn/end: {reason}"),
+                )
+            }
+            _ => continue,
+        };
+        let mut record =
+            ExecutionEvent::new(workspace_id.clone(), session_id.to_string(), kind, summary);
+        if event_type == "request/header" {
+            record.model_version = data
+                .get("header")
+                .and_then(|header| header.get("config"))
+                .and_then(|config| config.get("model"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string);
+        }
+        if let Some(call_id) = data
+            .get("callId")
+            .or_else(|| data.get("message").and_then(|message| message.get("toolCallId")))
+            .and_then(serde_json::Value::as_str)
+        {
+            record.refs.push(format!("dsh-tool-call:{call_id}"));
+        }
+        normalized.push(record);
+    }
+    normalized
+}
+
+
 impl HarnessProvider for DeepSeekHarnessProvider {
     fn provider_name(&self) -> &str {
         &self.name
@@ -717,103 +816,6 @@ impl HarnessProvider for DeepSeekHarnessProvider {
         Ok(())
     }
 
-fn normalize_dsh_notifications(
-    workspace_id: &WorkspaceId,
-    session_id: &str,
-    notifications: &[DshNotification],
-) -> Vec<ExecutionEvent> {
-    let mut normalized = Vec::new();
-    for notification in notifications {
-        if notification.method != "session.event"
-            || notification.params.get("sessionId").and_then(serde_json::Value::as_str)
-                != Some(session_id)
-        {
-            continue;
-        }
-        let Some(event) = notification.params.get("event") else {
-            continue;
-        };
-        let Some(event_type) = event.get("type").and_then(serde_json::Value::as_str) else {
-            continue;
-        };
-        let data = event.get("data").unwrap_or(&serde_json::Value::Null);
-        let (kind, summary) = match event_type {
-            "request/header" => (
-                ExecutionEventKind::ModelRequest,
-                "DSH model request header committed".to_string(),
-            ),
-            "assistant/message" => (
-                ExecutionEventKind::ModelResponse,
-                "DSH assistant message committed".to_string(),
-            ),
-            "assistant/attempt" => (
-                ExecutionEventKind::Failed,
-                "DSH model attempt settled without a surface message".to_string(),
-            ),
-            "tool/call" => {
-                let name = data
-                    .get("name")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or("unknown");
-                (
-                    ExecutionEventKind::ToolProposed,
-                    format!("DSH tool call proposed: {name}"),
-                )
-            }
-            "tool/result" => {
-                let failed = data.get("error").is_some()
-                    || data
-                        .get("message")
-                        .and_then(|message| message.get("isError"))
-                        .and_then(serde_json::Value::as_bool)
-                        .unwrap_or(false);
-                (
-                    if failed {
-                        ExecutionEventKind::ToolFailed
-                    } else {
-                        ExecutionEventKind::ToolCompleted
-                    },
-                    if failed {
-                        "DSH tool result committed as error".to_string()
-                    } else {
-                        "DSH tool result committed".to_string()
-                    },
-                )
-            }
-            "turn/end" => {
-                let reason = data
-                    .get("reason")
-                    .and_then(|reason| reason.get("kind"))
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or("unknown");
-                (
-                    ExecutionEventKind::Checkpoint,
-                    format!("DSH durable turn/end: {reason}"),
-                )
-            }
-            _ => continue,
-        };
-        let mut record =
-            ExecutionEvent::new(workspace_id.clone(), session_id.to_string(), kind, summary);
-        if event_type == "request/header" {
-            record.model_version = data
-                .get("header")
-                .and_then(|header| header.get("config"))
-                .and_then(|config| config.get("model"))
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string);
-        }
-        if let Some(call_id) = data
-            .get("callId")
-            .or_else(|| data.get("message").and_then(|message| message.get("toolCallId")))
-            .and_then(serde_json::Value::as_str)
-        {
-            record.refs.push(format!("dsh-tool-call:{call_id}"));
-        }
-        normalized.push(record);
-    }
-    normalized
-}
 
     fn terminate(&mut self, session_id: &str) -> Result<ExecutionReceipt> {
         if self.mode == DshMode::Real {
