@@ -60,7 +60,23 @@ pub fn run_harness_smoke(
             provider: name.clone(),
             scope_id: "none".to_string(),
         });
-    let session = provider.start(ctx);
+    let scoped_ctx = match ctx.clone().with_scope_id(handle.scope_id.clone()) {
+        Ok(context) => context,
+        Err(error) => {
+            return Ok(HarnessSmokeReport {
+                provider: name,
+                connected: false,
+                health: false,
+                scoped_execution: false,
+                action_gateway_mediated: true,
+                events_normalized: false,
+                provenance_preserved: false,
+                teardown_ok: false,
+                detail: format!("cannot bind smoke scope to RuntimeContext: {error}"),
+            });
+        }
+    };
+    let session = provider.start(&scoped_ctx);
     let connected = scope.is_ok() && session.is_ok();
     if !connected {
         return Ok(HarnessSmokeReport {
@@ -94,7 +110,7 @@ pub fn run_harness_smoke(
             let events = provider.stream_events(id);
             !events.is_empty()
                 && events.iter().all(|event| {
-                    event.workspace_id == ctx.workspace_id
+                    event.workspace_id == scoped_ctx.workspace_id
                         && event.session_id == *id
                         && !event.summary.trim().is_empty()
                 })
@@ -103,7 +119,7 @@ pub fn run_harness_smoke(
 
     // Providers never mutate canonical state: they only emit events (mediated).
     let action_gateway_mediated = true;
-    let provenance_preserved = !ctx.provenance_refs.is_empty();
+    let provenance_preserved = !scoped_ctx.provenance_refs.is_empty();
 
     let features = provider.features();
     let teardown_ok = match &session_id {
