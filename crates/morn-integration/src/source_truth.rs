@@ -31,6 +31,7 @@ pub struct SourceObservationAttestation {
     pub attestation_id: String,
     pub workspace_id: WorkspaceId,
     pub work_package_id: WorkPackageId,
+    pub work_generation: u64,
     pub source_binding_id: SourceOfTruthBindingId,
     pub fact_type: String,
     pub objective: String,
@@ -44,6 +45,7 @@ pub struct SourceObservationAttestation {
 impl SourceObservationAttestation {
     pub fn validate(&self) -> Result<()> {
         if self.attestation_id.trim().is_empty()
+            || self.work_generation == 0
             || self.fact_type.trim().is_empty()
             || self.objective.trim().is_empty()
             || self.source_ref.trim().is_empty()
@@ -69,6 +71,7 @@ impl SourceObservationAttestation {
         &self,
         workspace_id: &WorkspaceId,
         work_package_id: &WorkPackageId,
+        work_generation: u64,
         source_binding_id: &SourceOfTruthBindingId,
         fact_type: &str,
         now: Timestamp,
@@ -76,6 +79,7 @@ impl SourceObservationAttestation {
         self.validate().is_ok()
             && &self.workspace_id == workspace_id
             && &self.work_package_id == work_package_id
+            && self.work_generation == work_generation
             && &self.source_binding_id == source_binding_id
             && self.fact_type == fact_type
             && self.observed_at <= now
@@ -133,6 +137,7 @@ mod tests {
             attestation_id: "obs-attest-1".to_string(),
             workspace_id: workspace.clone(),
             work_package_id: work.clone(),
+            work_generation: 2,
             source_binding_id: binding.clone(),
             fact_type: "maintenance.order".to_string(),
             objective: "maintenance order completed".to_string(),
@@ -146,6 +151,7 @@ mod tests {
         assert!(attestation.active_for(
             &workspace,
             &work,
+            2,
             &binding,
             "maintenance.order",
             Timestamp::from_millis(15),
@@ -153,6 +159,7 @@ mod tests {
         assert!(!attestation.active_for(
             &workspace,
             &work,
+            2,
             &binding,
             "machine.temperature",
             Timestamp::from_millis(15),
@@ -160,6 +167,7 @@ mod tests {
         assert!(!attestation.active_for(
             &workspace,
             &work,
+            2,
             &binding,
             "maintenance.order",
             Timestamp::from_millis(21),

@@ -887,6 +887,7 @@ async fn v115_work_observe_outcome(
     if !attestation.active_for(
         &work.workspace_id,
         &work.id,
+        work.generation,
         &binding.id,
         &attestation.fact_type,
         now,
@@ -949,6 +950,7 @@ async fn v115_work_observe_outcome(
         attestation.source_ref.clone(),
         attestation.observed_facts.clone(),
     );
+    outcome.pin_work_generation(work.generation)?;
     outcome.evidence_refs = attestation.evidence_refs.clone();
     outcome.observed_at = attestation.observed_at;
 
@@ -2012,6 +2014,7 @@ async fn v115_work_review_outcome(
                 &reviewer.principal_id,
                 acting_role,
                 &work.id,
+                work.generation,
                 &outcome.id,
                 disposition,
                 now,
@@ -2048,6 +2051,7 @@ async fn v115_work_review_outcome(
         acting_role,
         reason,
     );
+    decision.pin_work_generation(work.generation)?;
     decision.outcome_refs.push(outcome.id.clone());
     decision.evidence_refs = evidence_refs;
     decision
@@ -4957,6 +4961,7 @@ mod workspace_boundary_tests {
                     attestation_id: "obs-outside".to_string(),
                     workspace_id: guard.workspace.id.clone(),
                     work_package_id: work.id.clone(),
+                    work_generation: work.generation,
                     source_binding_id: binding_id.clone(),
                     fact_type: "delivery.status".to_string(),
                     objective: "observe delivery".to_string(),
@@ -4972,6 +4977,7 @@ mod workspace_boundary_tests {
                     attestation_id: "obs-grounded".to_string(),
                     workspace_id: guard.workspace.id.clone(),
                     work_package_id: work.id.clone(),
+                    work_generation: work.generation,
                     source_binding_id: binding_id,
                     fact_type: "delivery.status".to_string(),
                     objective: "observe delivery".to_string(),
@@ -5100,6 +5106,7 @@ mod workspace_boundary_tests {
                     principal_id: reviewer_id.clone(),
                     acting_role: "independent-reviewer".to_string(),
                     work_package_id: work.id.clone(),
+                    work_generation: work.generation,
                     outcome_id: grounded.id.clone(),
                     disposition: morn_work::acceptance_decision::AcceptanceDisposition::Accept,
                     evidence_refs: vec![

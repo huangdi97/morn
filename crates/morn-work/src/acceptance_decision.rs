@@ -18,10 +18,17 @@ pub enum AcceptanceDisposition {
     RequestMoreEvidence,
 }
 
+fn default_work_generation() -> u64 {
+    1
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AcceptanceDecision {
     pub id: AcceptanceDecisionId,
     pub work_package_id: WorkPackageId,
+    /// Exact desired Work generation reviewed by this decision.
+    #[serde(default = "default_work_generation")]
+    pub work_generation: u64,
     pub acceptance_spec_id: AcceptanceSpecId,
     pub disposition: AcceptanceDisposition,
     pub outcome_refs: Vec<OutcomeRecordId>,
@@ -45,6 +52,7 @@ impl AcceptanceDecision {
         Self {
             id: AcceptanceDecisionId::generate_with("adec"),
             work_package_id,
+            work_generation: 1,
             acceptance_spec_id,
             disposition,
             outcome_refs: Vec::new(),
@@ -55,6 +63,16 @@ impl AcceptanceDecision {
             conditions: Vec::new(),
             decided_at: Timestamp::now(),
         }
+    }
+
+    pub fn pin_work_generation(&mut self, generation: u64) -> morn_kernel::error::Result<()> {
+        if generation == 0 {
+            return Err(morn_kernel::error::Error::validation(
+                "acceptance Work generation must be positive",
+            ));
+        }
+        self.work_generation = generation;
+        Ok(())
     }
 
     pub fn is_final_acceptance(&self) -> bool {

@@ -452,13 +452,16 @@ impl WorkProgressController {
         }
 
         if let Some(acceptance) = inputs.acceptance {
-            if acceptance.work_package_id == work.id {
+            if acceptance.work_package_id == work.id
+                && acceptance.work_generation == work.generation
+            {
                 let spec_matches =
                     work.spec.acceptance_ref.as_deref().is_none_or(|expected| {
                         expected == acceptance.acceptance_spec_id.to_string()
                     });
                 let grounded_outcome = inputs.outcome.filter(|outcome| {
                     outcome.work_package_id == work.id
+                        && outcome.work_generation == work.generation
                         && outcome.is_source_grounded()
                         && acceptance.outcome_refs.iter().any(|id| id == &outcome.id)
                 });
@@ -522,7 +525,10 @@ impl WorkProgressController {
         }
 
         if let Some(outcome) = inputs.outcome {
-            if outcome.work_package_id == work.id && outcome.is_source_grounded() {
+            if outcome.work_package_id == work.id
+                && outcome.work_generation == work.generation
+                && outcome.is_source_grounded()
+            {
                 let mut condition = WorkCondition::new("OutcomeObservation", ConditionStatus::True);
                 condition.reason = format!("source-grounded outcome {}", outcome.id);
                 condition.evidence_refs = outcome.evidence_refs.clone();
@@ -1127,9 +1133,12 @@ impl ControlPlaneStore for MornStore {
 
     fn save_observed_outcome(&self, work: &WorkResource, outcome: &ObservedOutcome) -> Result<()> {
         require_canonical_work_workspace(self, work)?;
-        if outcome.work_package_id != work.id || outcome.workspace_id != work.workspace_id {
+        if outcome.work_package_id != work.id
+            || outcome.workspace_id != work.workspace_id
+            || outcome.work_generation != work.generation
+        {
             return Err(Error::validation(
-                "observed outcome must belong to the exact Work and workspace",
+                "observed outcome must belong to the exact Work, workspace and generation",
             ));
         }
         self.save_record_immutable(
@@ -1147,9 +1156,9 @@ impl ControlPlaneStore for MornStore {
         decision: &AcceptanceDecision,
     ) -> Result<()> {
         require_canonical_work_workspace(self, work)?;
-        if decision.work_package_id != work.id {
+        if decision.work_package_id != work.id || decision.work_generation != work.generation {
             return Err(Error::validation(
-                "acceptance decision belongs to another Work",
+                "acceptance decision belongs to another Work generation",
             ));
         }
         let is_accept = decision.disposition == AcceptanceDisposition::Accept;
@@ -1169,9 +1178,12 @@ impl ControlPlaneStore for MornStore {
             let outcome: ObservedOutcome = self
                 .load_record("observed_outcome_v115", outcome_id.as_str())?
                 .ok_or_else(|| Error::not_found("referenced observed outcome"))?;
-            if outcome.work_package_id != work.id || outcome.workspace_id != work.workspace_id {
+            if outcome.work_package_id != work.id
+                || outcome.workspace_id != work.workspace_id
+                || outcome.work_generation != work.generation
+            {
                 return Err(Error::validation(
-                    "acceptance must reference outcomes from the same Work and workspace",
+                    "acceptance must reference outcomes from the same Work generation and workspace",
                 ));
             }
             if is_terminal_decision && !outcome.is_source_grounded() {
@@ -1203,9 +1215,12 @@ impl ControlPlaneStore for MornStore {
         let outcome: ObservedOutcome = self
             .load_record("observed_outcome_v115", assessment.outcome_ref.as_str())?
             .ok_or_else(|| Error::not_found("value assessment outcome"))?;
-        if outcome.work_package_id != work.id || outcome.workspace_id != work.workspace_id {
+        if outcome.work_package_id != work.id
+            || outcome.workspace_id != work.workspace_id
+            || outcome.work_generation != work.generation
+        {
             return Err(Error::validation(
-                "value assessment must reference an outcome from the same Work and workspace",
+                "value assessment must reference an outcome from the same Work generation and workspace",
             ));
         }
         if assessment.evidence_class == ValueEvidenceClass::CustomerValidated {
@@ -1222,6 +1237,7 @@ impl ControlPlaneStore for MornStore {
                 .load_record("acceptance_decision_v115", acceptance_id.as_str())?
                 .ok_or_else(|| Error::not_found("customer value acceptance decision"))?;
             if acceptance.work_package_id != work.id
+                || acceptance.work_generation != work.generation
                 || !acceptance.is_final_acceptance()
                 || !acceptance.outcome_refs.contains(&assessment.outcome_ref)
             {
@@ -2138,6 +2154,61 @@ mod control_plane_persistence_scope_tests {
             .evidence_refs
             .push("review://ticket-reject".to_string());
         ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).unwrap();
+    }
+
+    #[test]
+    fn old_generation_outcome_and_acceptance_cannot_advance_new_work_generation() {
+        use morn_kernel::ids::{AcceptanceSpecId, PrincipalId};
+        use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+        use morn_world::{ObservedOutcome, OutcomeSourceKind};
+        use serde_json::json;
+
+        let store = MornStore::open_in_memory().unwrap();
+        let mut work = fixture_work();
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "generation one result",
+            OutcomeSourceKind::ExternalSystem,
+            "system://result/1",
+            json!({"status":"complete"}),
+        );
+        outcome.evidence_refs.push("system://result/1/receipt".to_string());
+        store.save_observed_outcome(&work, &outcome).unwrap();
+
+        let mut decision = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("accept"),
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("reviewer"),
+            "independent-reviewer",
+            "generation one accepted",
+        );
+        decision.outcome_refs.push(outcome.id.clone());
+        decision.evidence_refs.push("review://generation-one".to_string());
+        ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
+
+        let mut next = work.spec.clone();
+        next.goal = "different generation two objective".to_string();
+        work.replace_spec(next);
+        store.save_work_resource_cas(&mut work).unwrap();
+        assert_eq!(work.generation, 2);
+
+        assert!(store.save_observed_outcome(&work, &outcome).is_err());
+        assert!(ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).is_err());
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                outcome: Some(&outcome),
+                acceptance: Some(&decision),
+                ..Default::default()
+            },
+        );
+        assert_ne!(work.status.phase, WorkPhase::Accepted);
+        assert_ne!(work.status.phase, WorkPhase::Delivered);
     }
 
     #[test]

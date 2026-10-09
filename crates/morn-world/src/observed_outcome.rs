@@ -18,11 +18,19 @@ pub enum OutcomeSourceKind {
     ValidatedComputation,
 }
 
+fn default_work_generation() -> u64 {
+    1
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ObservedOutcome {
     pub id: OutcomeRecordId,
     pub workspace_id: WorkspaceId,
     pub work_package_id: WorkPackageId,
+    /// Desired Work generation whose world state this observation witnesses.
+    /// Legacy v11.5 JSON defaults to generation 1 and can never advance a later generation.
+    #[serde(default = "default_work_generation")]
+    pub work_generation: u64,
     pub objective: String,
     pub source_kind: OutcomeSourceKind,
     pub source_ref: String,
@@ -45,6 +53,7 @@ impl ObservedOutcome {
             id: OutcomeRecordId::generate_with("out"),
             workspace_id,
             work_package_id,
+            work_generation: 1,
             objective: objective.into(),
             source_kind,
             source_ref: source_ref.into(),
@@ -55,8 +64,20 @@ impl ObservedOutcome {
         }
     }
 
+    pub fn pin_work_generation(&mut self, generation: u64) -> morn_kernel::error::Result<()> {
+        if generation == 0 {
+            return Err(morn_kernel::error::Error::validation(
+                "observed outcome Work generation must be positive",
+            ));
+        }
+        self.work_generation = generation;
+        Ok(())
+    }
+
     pub fn is_source_grounded(&self) -> bool {
-        !self.source_ref.trim().is_empty() && !self.evidence_refs.is_empty()
+        self.work_generation > 0
+            && !self.source_ref.trim().is_empty()
+            && !self.evidence_refs.is_empty()
     }
 }
 
@@ -64,6 +85,22 @@ impl ObservedOutcome {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn outcome_generation_is_explicit_and_positive() {
+        let mut outcome = ObservedOutcome::new(
+            WorkspaceId::generate(),
+            WorkPackageId::generate_with("work"),
+            "result",
+            OutcomeSourceKind::ExternalSystem,
+            "system://result",
+            json!({"status":"complete"}),
+        );
+        assert_eq!(outcome.work_generation, 1);
+        outcome.pin_work_generation(2).unwrap();
+        assert_eq!(outcome.work_generation, 2);
+        assert!(outcome.pin_work_generation(0).is_err());
+    }
 
     #[test]
     fn harness_statement_alone_is_not_a_grounded_outcome() {

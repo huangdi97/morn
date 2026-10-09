@@ -37,6 +37,7 @@ pub struct AcceptanceReviewAuthorization {
     pub principal_id: PrincipalId,
     pub acting_role: String,
     pub work_package_id: WorkPackageId,
+    pub work_generation: u64,
     pub outcome_id: OutcomeRecordId,
     pub disposition: AcceptanceDisposition,
     pub evidence_refs: Vec<String>,
@@ -48,6 +49,7 @@ impl AcceptanceReviewAuthorization {
     pub fn validate(&self) -> morn_kernel::error::Result<()> {
         if self.authorization_id.trim().is_empty()
             || self.acting_role.trim().is_empty()
+            || self.work_generation == 0
             || self.evidence_refs.is_empty()
         {
             return Err(morn_kernel::error::Error::validation(
@@ -67,6 +69,7 @@ impl AcceptanceReviewAuthorization {
         principal_id: &PrincipalId,
         role: &str,
         work_package_id: &WorkPackageId,
+        work_generation: u64,
         outcome_id: &OutcomeRecordId,
         disposition: AcceptanceDisposition,
         now: Timestamp,
@@ -75,6 +78,7 @@ impl AcceptanceReviewAuthorization {
             && &self.principal_id == principal_id
             && self.acting_role == role
             && &self.work_package_id == work_package_id
+            && self.work_generation == work_generation
             && &self.outcome_id == outcome_id
             && self.disposition == disposition
             && self.issued_at <= now
@@ -153,6 +157,7 @@ mod tests {
             principal_id: principal.clone(),
             acting_role: "independent-reviewer".to_string(),
             work_package_id: work.clone(),
+            work_generation: 2,
             outcome_id: outcome.clone(),
             disposition: AcceptanceDisposition::Accept,
             evidence_refs: vec!["iam://signed-review/review-auth-1".to_string()],
@@ -164,6 +169,7 @@ mod tests {
             &principal,
             "independent-reviewer",
             &work,
+            2,
             &outcome,
             AcceptanceDisposition::Accept,
             Timestamp::from_millis(15),
@@ -172,6 +178,7 @@ mod tests {
             &principal,
             "independent-reviewer",
             &work,
+            2,
             &outcome,
             AcceptanceDisposition::Reject,
             Timestamp::from_millis(15),
@@ -180,6 +187,7 @@ mod tests {
             &principal,
             "independent-reviewer",
             &work,
+            2,
             &outcome,
             AcceptanceDisposition::Accept,
             Timestamp::from_millis(21),

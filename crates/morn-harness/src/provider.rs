@@ -580,14 +580,12 @@ impl DeepSeekHarnessProvider {
                     .clone()
                     .ok_or_else(|| self.real_unavailable())?;
                 config.validate_for_real()?;
-                let runtime_version = config
-                    .runtime_version
-                    .clone()
-                    .ok_or_else(|| Error::validation("DSH runtime version missing after validation"))?;
-                let runtime_digest = config
-                    .runtime_digest
-                    .clone()
-                    .ok_or_else(|| Error::validation("DSH runtime digest missing after validation"))?;
+                let runtime_version = config.runtime_version.clone().ok_or_else(|| {
+                    Error::validation("DSH runtime version missing after validation")
+                })?;
+                let runtime_digest = config.runtime_digest.clone().ok_or_else(|| {
+                    Error::validation("DSH runtime digest missing after validation")
+                })?;
                 let mut client = DshSdkStdioClient::spawn(&config)?;
                 let server = client.initialize(&config)?;
                 Ok::<_, Error>((client, server, runtime_version, runtime_digest))
@@ -1185,7 +1183,10 @@ mod dsh_provider_tests {
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/pinned")
-        .with_runtime_identity("fixture-runtime-1", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        .with_runtime_identity(
+            "fixture-runtime-1",
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        );
         let provider = DeepSeekHarnessProvider::with_real_sdk(config);
         let ctx = RuntimeContext::new(
             WorkspaceId::generate(),
@@ -1228,7 +1229,10 @@ mod dsh_provider_tests {
             DshSdkConfig::profile_sdk(cwd.to_string_lossy(), "fixture-provider", "fixture-model")
                 .with_dsh_home(home.to_string_lossy())
                 .with_execution_environment_ref(environment_ref)
-                .with_runtime_identity("fixture-runtime-1", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+                .with_runtime_identity(
+            "fixture-runtime-1",
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        );
         config.command = executable.to_string_lossy().to_string();
         config.args = vec![
             "--exact".to_string(),
@@ -1298,9 +1302,15 @@ mod dsh_provider_tests {
             provider.runtime_health().state,
             HarnessRuntimeHealthState::Initialized
         );
-        assert_eq!(provider.runtime_version().as_deref(), Some("fixture-runtime-1"));
+        assert_eq!(
+            provider.runtime_version().as_deref(),
+            Some("fixture-runtime-1")
+        );
         assert_eq!(provider.wire_server_version(), Some("0.0.1"));
-        assert_eq!(provider.configured_runtime_digest(), Some("sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"));
+        assert_eq!(
+            provider.configured_runtime_digest(),
+            Some("sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        );
 
         let output = provider.send(&session.id, "hello").unwrap();
         assert_eq!(output.text, "hello from fake sdk");
@@ -1357,7 +1367,10 @@ mod dsh_provider_tests {
             DshSdkConfig::profile_sdk(cwd.to_string_lossy(), "fixture-provider", "fixture-model")
                 .with_dsh_home(home.to_string_lossy())
                 .with_execution_environment_ref(environment_ref)
-                .with_runtime_identity("fixture-runtime-1", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+                .with_runtime_identity(
+            "fixture-runtime-1",
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        );
         config.command = executable.to_string_lossy().to_string();
         config.args = vec![
             "--exact".to_string(),

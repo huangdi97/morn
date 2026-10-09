@@ -63,7 +63,11 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
     const id = textField(row, "attempt_id");
     return id !== null && attemptIds.has(id);
   });
-  const outcomes = control.outcomes.filter((row) => textField(row, "work_package_id") === workId);
+  const outcomes = control.outcomes.filter(
+    (row) =>
+      textField(row, "work_package_id") === workId &&
+      row.work_generation === generation,
+  );
   const outcomeIds = new Set(outcomes.map((row) => textField(row, "id")).filter((id): id is string => !!id));
   const acceptances = control.acceptance_decisions.filter(
     (row) => textField(row, "work_package_id") === workId &&
@@ -654,6 +658,7 @@ function AuthoritativeOutcomePanel({
   const trustedObservations = (observations?.observations ?? []).filter(
     (observation) =>
       observation.work_package_id === effectiveWorkId &&
+      observation.work_generation === work?.generation &&
       observation.source_binding_id === effectiveSourceBindingId,
   );
   const effectiveObservationAttestationId =
@@ -865,6 +870,7 @@ function OutcomeReviewPanel({
       outcomes: control.outcomes.filter(
         (outcome) =>
           textField(outcome, "work_package_id") === work.id &&
+          outcome.work_generation === work.generation &&
           !!textField(outcome, "source_ref") &&
           fieldRefs(outcome, "evidence_refs").length > 0,
       ),

@@ -147,6 +147,7 @@ export interface SourceObservationCatalog {
     attestation_id: string;
     workspace_id: string;
     work_package_id: string;
+    work_generation: number;
     source_binding_id: string;
     fact_type: string;
     objective: string;

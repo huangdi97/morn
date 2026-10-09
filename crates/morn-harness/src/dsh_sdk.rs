@@ -661,7 +661,10 @@ mod tests {
         )
         .with_dsh_home(nested_home.to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
-        .with_runtime_identity("fixture-runtime-1", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        .with_runtime_identity(
+            "fixture-runtime-1",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        );
         assert!(config.validate_for_real().is_err());
 
         config.dsh_home = Some(root.join("dsh-home").to_string_lossy().to_string());
@@ -808,7 +811,10 @@ mod tests {
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
-        .with_runtime_identity("fixture-runtime-1", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        .with_runtime_identity(
+            "fixture-runtime-1",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        );
         assert!(configured.validate_for_real().is_ok());
     }
 
