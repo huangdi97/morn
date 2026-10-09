@@ -862,9 +862,13 @@ impl ControlPlaneStore for MornStore {
         if !binding.matches_work_generation(work)
             || receipt.provider_ref.as_deref() != Some(binding.provider_ref.as_str())
             || receipt.execution_environment_ref != binding.execution_environment_ref
+            || receipt
+                .runtime_version
+                .as_deref()
+                .is_some_and(|version| version != binding.provider_version)
         {
             return Err(Error::validation(
-                "execution receipt provider/environment does not match its persisted Work binding",
+                "execution receipt provider/version/environment does not match its persisted Work binding",
             ));
         }
         if receipt.ended_at.is_some() && (receipt.event_ids.is_empty() || receipt.trace_refs.is_empty())

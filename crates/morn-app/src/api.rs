@@ -482,6 +482,7 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
     );
     receipt.event_ids = events.iter().map(|event| event.id.to_string()).collect();
     receipt.trace_refs = receipt.event_ids.clone();
+    receipt.runtime_version = provider.runtime_version();
     match (&result, snapshot_status.as_str()) {
         (Ok(_), _) => {
             receipt.outcome = "completed".to_string();

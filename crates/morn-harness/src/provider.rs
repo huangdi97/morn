@@ -191,6 +191,12 @@ pub trait HarnessProvider: Send + Sync {
         HarnessProviderFeatures::full_reference()
     }
 
+    /// Exact provider runtime version observed by the transport handshake when
+    /// available. Absence must never be replaced with a guessed version.
+    fn runtime_version(&self) -> Option<String> {
+        None
+    }
+
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle>;
     fn unmount(&mut self, handle: &ProviderHandle) -> Result<()>;
 
@@ -439,6 +445,7 @@ pub struct DeepSeekHarnessProvider {
     scopes: Vec<CapabilityScope>,
     real_config: Option<DshSdkConfig>,
     real_client: Option<DshSdkStdioClient>,
+    real_runtime_version: Option<String>,
     runtime_health: HarnessRuntimeHealth,
 }
 
@@ -459,6 +466,7 @@ impl DeepSeekHarnessProvider {
             scopes: Vec::new(),
             real_config: None,
             real_client: None,
+            real_runtime_version: None,
             runtime_health,
         }
     }
@@ -506,6 +514,7 @@ impl DeepSeekHarnessProvider {
             },
         );
         self.runtime_health.mark_closed(close_reason);
+        self.real_runtime_version = None;
         for state in self.sessions.values_mut() {
             if state.status != "terminated" {
                 state.status = "runtime-closed".to_string();
@@ -520,22 +529,26 @@ impl DeepSeekHarnessProvider {
 
     fn ensure_real_client(&mut self) -> Result<&mut DshSdkStdioClient> {
         if self.real_client.is_none() {
-            let setup = (|| -> Result<DshSdkStdioClient> {
+            let setup = (|| {
                 let config = self
                     .real_config
                     .clone()
                     .ok_or_else(|| self.real_unavailable())?;
                 config.validate_for_real()?;
                 let mut client = DshSdkStdioClient::spawn(&config)?;
-                client.initialize(&config)?;
-                Ok(client)
+                let server = client.initialize(&config)?;
+                Ok::<_, Error>((client, server))
             })();
             match setup {
-                Ok(client) => {
+                Ok((client, server)) => {
+                    self.real_runtime_version = Some(server.version.clone());
                     self.real_client = Some(client);
                     self.runtime_health.mark_initialized(
-                        "official DSH SDK runtime handshake succeeded; no settled live turn yet",
-                        "runtime://deepseek-harness/initialize",
+                        format!(
+                            "official DSH SDK runtime {} handshake succeeded; no settled live turn yet",
+                            server.version
+                        ),
+                        format!("runtime://deepseek-harness/{}", server.version),
                     );
                 }
                 Err(error) => {
@@ -717,6 +730,13 @@ impl HarnessProvider for DeepSeekHarnessProvider {
         match self.mode {
             DshMode::Fixture => HarnessProviderFeatures::full_reference(),
             DshMode::Real => HarnessProviderFeatures::dsh_sdk_current(),
+        }
+    }
+
+    fn runtime_version(&self) -> Option<String> {
+        match self.mode {
+            DshMode::Fixture => Some("fixture".to_string()),
+            DshMode::Real => self.real_runtime_version.clone(),
         }
     }
 

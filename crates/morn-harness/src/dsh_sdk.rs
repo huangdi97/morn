@@ -23,6 +23,7 @@ use morn_kernel::error::{Error, Result};
 pub const DSH_METHOD_INITIALIZE: &str = "initialize";
 pub const DSH_METHOD_SESSION_PROMPT: &str = "session/prompt";
 pub const DSH_METHOD_SHUTDOWN: &str = "shutdown";
+pub const DSH_SDK_SERVER_NAME: &str = "deepseek-harness-sdk-runtime";
 
 pub const DSH_NOTIFICATION_SESSION_EVENT: &str = "session.event";
 pub const DSH_NOTIFICATION_SESSION_STATUS: &str = "session.status";
@@ -179,6 +180,12 @@ impl DshSdkConfig {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DshSdkServerInfo {
+    pub name: String,
+    pub version: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DshNotification {
     pub method: String,
@@ -305,7 +312,7 @@ impl DshSdkStdioClient {
         })
     }
 
-    pub fn initialize(&mut self, config: &DshSdkConfig) -> Result<Value> {
+    pub fn initialize(&mut self, config: &DshSdkConfig) -> Result<DshSdkServerInfo> {
         let mut params = json!({
             "cwd": config.cwd,
             "provider": config.provider,
@@ -321,17 +328,7 @@ impl DshSdkStdioClient {
             object.insert("maxTokens".to_string(), json!(max_tokens));
         }
         let result = self.request(DSH_METHOD_INITIALIZE, Some(params))?;
-        let name = result
-            .get("serverInfo")
-            .and_then(|info| info.get("name"))
-            .and_then(Value::as_str)
-            .ok_or_else(|| Error::external("DSH initialize result missing serverInfo.name"))?;
-        if name != "deepseek-harness-sdk-runtime" {
-            return Err(Error::external(format!(
-                "unexpected DSH SDK server identity {name:?}"
-            )));
-        }
-        Ok(result)
+        parse_server_info(&result)
     }
 
     pub fn enqueue_text_prompt(&mut self, session_id: &str, text: &str) -> Result<String> {
@@ -508,6 +505,31 @@ impl Drop for DshSdkStdioClient {
     }
 }
 
+fn parse_server_info(result: &Value) -> Result<DshSdkServerInfo> {
+    let info = result
+        .get("serverInfo")
+        .ok_or_else(|| Error::external("DSH initialize result missing serverInfo"))?;
+    let name = info
+        .get("name")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| Error::external("DSH initialize result missing serverInfo.name"))?;
+    let version = info
+        .get("version")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| Error::external("DSH initialize result missing serverInfo.version"))?;
+    if name != DSH_SDK_SERVER_NAME {
+        return Err(Error::external(format!(
+            "unexpected DSH SDK server identity {name:?}"
+        )));
+    }
+    Ok(DshSdkServerInfo {
+        name: name.to_string(),
+        version: version.to_string(),
+    })
+}
+
 fn inbox_receipt_matches(
     notification: &DshNotification,
     session_id: &str,
@@ -614,6 +636,22 @@ mod tests {
             DSH_NOTIFICATION_SUBAGENT_FINISHED,
         ];
         assert_eq!(notifications.len(), 4);
+    }
+
+    #[test]
+    fn sdk_server_identity_requires_wire_name_and_non_empty_version() {
+        assert!(parse_server_info(&json!({
+            "serverInfo":{"name":DSH_SDK_SERVER_NAME,"version":"0.0.1"}
+        }))
+        .is_ok());
+        assert!(parse_server_info(&json!({
+            "serverInfo":{"name":"lookalike-runtime","version":"0.0.1"}
+        }))
+        .is_err());
+        assert!(parse_server_info(&json!({
+            "serverInfo":{"name":DSH_SDK_SERVER_NAME,"version":""}
+        }))
+        .is_err());
     }
 
     #[test]
@@ -750,10 +788,8 @@ mod tests {
         };
         let mut client = DshSdkStdioClient::spawn(&config).unwrap();
         let initialized = client.initialize(&config).unwrap();
-        assert_eq!(
-            initialized["serverInfo"]["name"],
-            "deepseek-harness-sdk-runtime"
-        );
+        assert_eq!(initialized.name, DSH_SDK_SERVER_NAME);
+        assert_eq!(initialized.version, "0.0.1");
 
         let run = client.run_text_prompt("session-1", "hello").unwrap();
         assert_eq!(run.message_id, "message-1");
