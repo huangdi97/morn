@@ -80,6 +80,51 @@ fn schema_bundle_is_parseable_and_covers_cross_runtime_resources() {
     ] {
         assert!(defs.contains_key(required), "{required}");
     }
+    for record in ["ExecutionBinding", "ExecutionManifest"] {
+        let properties = defs[record]["properties"].as_object().unwrap();
+        for field in [
+            "execution_environment_ref",
+            "execution_class",
+            "execution_guarantees",
+        ] {
+            assert!(
+                properties.contains_key(field),
+                "{record} wire schema missing {field}"
+            );
+        }
+        let required = defs[record]["required"].as_array().unwrap();
+        assert!(
+            !required
+                .iter()
+                .any(|field| field == "execution_environment_ref"),
+            "environment projection must remain optional for earlier v11.5 records"
+        );
+    }
+}
+
+#[test]
+fn canonical_binding_and_manifest_keys_are_declared_by_closed_wire_schema() {
+    let schema: Value = serde_json::from_str(SCHEMA).unwrap();
+    let defs = schema["$defs"].as_object().unwrap();
+
+    for (definition, example) in [
+        ("ExecutionBinding", BINDING),
+        ("ExecutionManifest", EXECUTION_MANIFEST),
+    ] {
+        assert_eq!(
+            defs[definition]["additionalProperties"],
+            Value::Bool(false),
+            "{definition} must remain a closed wire object"
+        );
+        let properties = defs[definition]["properties"].as_object().unwrap();
+        let document: Value = serde_json::from_str(example).unwrap();
+        for field in document.as_object().unwrap().keys() {
+            assert!(
+                properties.contains_key(field),
+                "{definition} example field {field} is not published in schema"
+            );
+        }
+    }
 }
 
 #[test]
@@ -95,6 +140,15 @@ fn canonical_wire_examples_deserialize_into_reference_implementation() {
     let binding: ExecutionBinding = serde_json::from_str(BINDING).unwrap();
     assert_eq!(binding.work_id, work.id);
     assert_eq!(binding.work_generation, work.generation);
+    assert_eq!(
+        binding.execution_environment_ref.as_deref(),
+        Some("env://fixture/container-a")
+    );
+    assert_eq!(
+        binding.execution_class,
+        Some(morn_kernel::ExecutionClass::Container)
+    );
+    assert!(binding.environment_identity_consistent());
 
     let attempt: ActionAttempt = serde_json::from_str(ATTEMPT).unwrap();
     assert_eq!(attempt.binding_id.as_str(), "binding-1042-cmms");
@@ -131,6 +185,15 @@ fn canonical_wire_examples_deserialize_into_reference_implementation() {
     assert_eq!(manifest.protocol_version, "11.5.0");
     assert_eq!(manifest.work_ref, work.id.to_string());
     assert_eq!(manifest.execution_binding_ref, binding.id.to_string());
+    assert_eq!(
+        manifest.execution_environment_ref,
+        binding.execution_environment_ref
+    );
+    assert_eq!(manifest.execution_class, binding.execution_class);
+    assert_eq!(
+        manifest.execution_guarantees,
+        binding.execution_guarantees
+    );
 
     let event: EventEnvelope = serde_json::from_str(EVENT).unwrap();
     assert_eq!(event.specversion, "1.0");

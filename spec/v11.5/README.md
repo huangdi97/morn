@@ -16,6 +16,13 @@ The schema bundle intentionally covers the cross-runtime boundary rather than
 every internal implementation type. Provider-specific state belongs behind a
 provider contract.
 
+`ExecutionBinding` and `ExecutionManifest` also permit the optional
+`execution_environment_ref` / `execution_class` / `execution_guarantees`
+projection. These fields are optional for compatibility with earlier v11.5
+records, but when present they are pinned together by the reference
+implementation and cannot be silently migrated across providers. They describe
+execution interpretation/provenance, not a new canonical business-truth slot.
+
 ## Compatibility rule
 
 Published artifacts are content-addressable/versioned. A patch may fix

@@ -33,5 +33,12 @@
   },
   "runtime_ref": "runtime://dsh/session-contract",
   "authority_decision_ref": "authz-1042-read",
-  "created_at": "2026-10-08T05:01:05Z"
+  "created_at": "2026-10-08T05:01:05Z",
+  "execution_environment_ref": "env://fixture/container-a",
+  "execution_class": "container",
+  "execution_guarantees": [
+    "filesystem-write-policy",
+    "network-egress-policy",
+    "secret-indirection"
+  ]
 }

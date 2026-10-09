@@ -835,6 +835,28 @@
         },
         "created_at": {
           "$ref": "#/$defs/Timestamp"
+        },
+        "execution_environment_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "execution_class": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExecutionClass"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution_guarantees": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExecutionGuarantee"
+          }
         }
       }
     },
@@ -1629,6 +1651,28 @@
         },
         "created_at": {
           "$ref": "#/$defs/Timestamp"
+        },
+        "execution_environment_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "execution_class": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExecutionClass"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution_guarantees": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExecutionGuarantee"
+          }
         }
       }
     }
