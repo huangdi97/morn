@@ -2411,7 +2411,9 @@ mod control_plane_persistence_scope_tests {
             "reviewed against the wrong criteria",
         );
         wrong.outcome_refs.push(outcome.id.clone());
-        wrong.evidence_refs.push("review://ticket-wrong".to_string());
+        wrong
+            .evidence_refs
+            .push("review://ticket-wrong".to_string());
         assert!(ControlPlaneStore::save_acceptance_decision(&store, &work, &wrong).is_err());
 
         let mut correct = AcceptanceDecision::new(
@@ -2423,7 +2425,9 @@ mod control_plane_persistence_scope_tests {
             "reviewed against the pinned criteria",
         );
         correct.outcome_refs.push(outcome.id.clone());
-        correct.evidence_refs.push("review://ticket-correct".to_string());
+        correct
+            .evidence_refs
+            .push("review://ticket-correct".to_string());
         ControlPlaneStore::save_acceptance_decision(&store, &work, &correct).unwrap();
     }
 
