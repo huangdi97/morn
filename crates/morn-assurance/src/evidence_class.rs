@@ -84,7 +84,9 @@ impl EvidenceClaim {
             return Err(Error::validation("evidence claim issuer is required"));
         }
         if reason.trim().is_empty() {
-            return Err(Error::validation("proven evidence claim reason is required"));
+            return Err(Error::validation(
+                "proven evidence claim reason is required",
+            ));
         }
         Ok(Self {
             id: EvidenceClaimId::generate_with("evidence-claim"),
