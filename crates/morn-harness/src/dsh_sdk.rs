@@ -1042,6 +1042,39 @@ mod tests {
                         std::thread::sleep(std::time::Duration::from_secs(30));
                         continue;
                     }
+                    if prompt_text == "__tool_activity__" {
+                        write(
+                            &mut stdout,
+                            json!({
+                                "jsonrpc":"2.0",
+                                "method":"session.event",
+                                "params":{
+                                    "sessionId":session_id,
+                                    "event":{
+                                        "type":"tool/call",
+                                        "data":{"callId":"call-1","name":"bash","arguments":"{}"}
+                                    }
+                                }
+                            }),
+                        );
+                        write(
+                            &mut stdout,
+                            json!({
+                                "jsonrpc":"2.0",
+                                "method":"session.event",
+                                "params":{
+                                    "sessionId":session_id,
+                                    "event":{
+                                        "type":"tool/result",
+                                        "data":{
+                                            "callId":"call-1",
+                                            "message":{"toolCallId":"call-1","isError":false}
+                                        }
+                                    }
+                                }
+                            }),
+                        );
+                    }
                     write(
                         &mut stdout,
                         json!({

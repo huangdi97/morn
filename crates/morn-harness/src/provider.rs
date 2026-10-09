@@ -1018,11 +1018,47 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     .sessions
                     .get_mut(session_id)
                     .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                let mut prohibited_tool_activity = false;
                 if let Ok(run) = &run {
-                    state.events.extend(normalize_dsh_notifications(
+                    let normalized = normalize_dsh_notifications(
                         &state.ctx.workspace_id,
                         session_id,
                         &run.notifications,
+                    );
+                    prohibited_tool_activity = normalized.iter().any(|event| {
+                        matches!(
+                            event.kind,
+                            ExecutionEventKind::ToolProposed
+                                | ExecutionEventKind::ToolStarted
+                                | ExecutionEventKind::ToolCompleted
+                                | ExecutionEventKind::ToolFailed
+                        )
+                    });
+                    state.events.extend(normalized);
+                }
+                if prohibited_tool_activity {
+                    // Real DSH is admitted only through Morn's E0 harness seam.
+                    // Tool execution belongs behind governed Capability /
+                    // ExternalAction boundaries. We cannot undo a tool that
+                    // already ran inside the external runtime, so fail closed,
+                    // reap the owned process and refuse to promote its output.
+                    let _owned_runtime = self.real_client.take();
+                    self.real_runtime_version = None;
+                    self.real_runtime_digest = None;
+                    self.real_wire_server_version = None;
+                    self.runtime_health.mark_degraded(
+                        "DSH SDK emitted tool activity on an E0-only provider path; owned runtime reaped",
+                    );
+                    state.status = "policy-violation-runtime-reaped".to_string();
+                    state.events.push(ExecutionEvent::new(
+                        state.ctx.workspace_id.clone(),
+                        session_id.to_string(),
+                        ExecutionEventKind::Failed,
+                        "DSH E0 provider observed prohibited tool activity; output rejected and runtime reaped",
+                    ));
+                    state.last_event = "dsh_e0_tool_policy_violation".to_string();
+                    return Err(Error::external(
+                        "DSH E0 provider observed tool activity; executor output was rejected",
                     ));
                 }
                 match run {
@@ -1353,6 +1389,31 @@ mod dsh_provider_tests {
 
         provider.unmount(&original_handle).unwrap();
         provider.shutdown_real_runtime().unwrap();
+    }
+
+    #[test]
+    fn real_dsh_e0_provider_rejects_tool_activity_and_reaps_runtime() {
+        let (mut provider, ctx, _handle) = real_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        let error = provider.send(&session.id, "__tool_activity__").unwrap_err();
+        assert!(format!("{error}").contains("tool activity"));
+        assert!(provider.real_client.is_none());
+        assert!(provider.runtime_version().is_none());
+        assert_eq!(
+            provider.runtime_health().state,
+            HarnessRuntimeHealthState::Degraded
+        );
+        let snapshot = provider.inspect(&session.id).unwrap();
+        assert_eq!(snapshot.status, "policy-violation-runtime-reaped");
+        assert_eq!(snapshot.last_event, "dsh_e0_tool_policy_violation");
+        let events = provider.stream_events(&session.id);
+        assert!(events.iter().any(|event| {
+            matches!(
+                event.kind,
+                ExecutionEventKind::ToolProposed | ExecutionEventKind::ToolCompleted
+            )
+        }));
+        assert!(provider.send(&session.id, "blind retry forbidden").is_err());
     }
 
     #[test]
