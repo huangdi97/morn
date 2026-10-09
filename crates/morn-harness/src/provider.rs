@@ -159,6 +159,10 @@ impl HarnessRuntimeHealth {
     pub fn mark_degraded(&mut self, reason: impl Into<String>) {
         self.state = HarnessRuntimeHealthState::Degraded;
         self.reason = reason.into();
+        // Evidence refs describe the *current* health observation. Carrying a
+        // prior successful-turn reference across degradation would make status
+        // APIs appear to cite stale success as evidence for the failure state.
+        self.evidence_refs.clear();
         self.observed_at = Timestamp::now();
         self.health_valid_until = None;
     }
@@ -166,6 +170,7 @@ impl HarnessRuntimeHealth {
     pub fn mark_closed(&mut self, reason: impl Into<String>) {
         self.state = HarnessRuntimeHealthState::Closed;
         self.reason = reason.into();
+        self.evidence_refs.clear();
         self.observed_at = Timestamp::now();
         self.health_valid_until = None;
     }
@@ -1476,9 +1481,17 @@ mod dsh_provider_tests {
         assert!(!health.selectable_at(expired));
         assert!(health.remaining_lease_ms(expired).is_none());
 
+        assert_eq!(health.evidence_refs, vec!["runtime://dsh/turn".to_string()]);
         health.mark_degraded("transport failed");
         assert_eq!(health.state, HarnessRuntimeHealthState::Degraded);
+        assert!(health.evidence_refs.is_empty());
         assert!(!health.selectable_at(Timestamp::now()));
+
+        health.mark_initialized("restarted", "runtime://dsh/restarted");
+        assert_eq!(health.evidence_refs, vec!["runtime://dsh/restarted".to_string()]);
+        health.mark_closed("runtime closed");
+        assert_eq!(health.state, HarnessRuntimeHealthState::Closed);
+        assert!(health.evidence_refs.is_empty());
     }
 
     #[test]
