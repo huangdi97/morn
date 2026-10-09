@@ -1230,9 +1230,9 @@ mod dsh_provider_tests {
                 .with_dsh_home(home.to_string_lossy())
                 .with_execution_environment_ref(environment_ref)
                 .with_runtime_identity(
-            "fixture-runtime-1",
-            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        );
+                    "fixture-runtime-1",
+                    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                );
         config.command = executable.to_string_lossy().to_string();
         config.args = vec![
             "--exact".to_string(),
@@ -1368,9 +1368,9 @@ mod dsh_provider_tests {
                 .with_dsh_home(home.to_string_lossy())
                 .with_execution_environment_ref(environment_ref)
                 .with_runtime_identity(
-            "fixture-runtime-1",
-            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        );
+                    "fixture-runtime-1",
+                    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                );
         config.command = executable.to_string_lossy().to_string();
         config.args = vec![
             "--exact".to_string(),

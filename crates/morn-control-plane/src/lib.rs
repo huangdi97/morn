@@ -2175,7 +2175,9 @@ mod control_plane_persistence_scope_tests {
             "system://result/1",
             json!({"status":"complete"}),
         );
-        outcome.evidence_refs.push("system://result/1/receipt".to_string());
+        outcome
+            .evidence_refs
+            .push("system://result/1/receipt".to_string());
         store.save_observed_outcome(&work, &outcome).unwrap();
 
         let mut decision = AcceptanceDecision::new(
@@ -2187,7 +2189,9 @@ mod control_plane_persistence_scope_tests {
             "generation one accepted",
         );
         decision.outcome_refs.push(outcome.id.clone());
-        decision.evidence_refs.push("review://generation-one".to_string());
+        decision
+            .evidence_refs
+            .push("review://generation-one".to_string());
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
 
         let mut next = work.spec.clone();
