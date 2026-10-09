@@ -600,11 +600,8 @@ pub trait ControlPlaneStore {
         work: &WorkResource,
         manifest: &ExecutionManifest,
     ) -> Result<()>;
-    fn save_execution_receipt(
-        &self,
-        work: &WorkResource,
-        receipt: &ExecutionReceipt,
-    ) -> Result<()>;
+    fn save_execution_receipt(&self, work: &WorkResource, receipt: &ExecutionReceipt)
+        -> Result<()>;
     fn save_binding_migration(
         &self,
         work: &WorkResource,
@@ -871,7 +868,8 @@ impl ControlPlaneStore for MornStore {
                 "execution receipt provider/version/environment does not match its persisted Work binding",
             ));
         }
-        if receipt.ended_at.is_some() && (receipt.event_ids.is_empty() || receipt.trace_refs.is_empty())
+        if receipt.ended_at.is_some()
+            && (receipt.event_ids.is_empty() || receipt.trace_refs.is_empty())
         {
             return Err(Error::validation(
                 "settled execution receipt requires durable event and trace references",
