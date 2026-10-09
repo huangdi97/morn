@@ -531,6 +531,14 @@ impl DeepSeekHarnessProvider {
                 "DSH runtime preflight is only valid in real mode",
             ));
         }
+        let now = Timestamp::now();
+        if self.real_client.is_some() && !self.runtime_health.ready_for_new_turn_at(now) {
+            // The official SDK wire has no independent health/ping request.
+            // Re-initialize through a new owned runtime rather than extending
+            // stale evidence locally. Provider methods are mutex-serialized,
+            // so this cannot race an in-flight send.
+            self.shutdown_real_runtime()?;
+        }
         self.ensure_real_client()?;
         self.real_runtime_version
             .clone()

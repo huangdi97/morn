@@ -112,6 +112,34 @@ impl PiHarnessProvider {
             ));
         }
         self.ensure_real_client()?;
+        let now = Timestamp::now();
+        if !self.runtime_health.ready_for_new_turn_at(now) {
+            let client = self
+                .real_client
+                .as_mut()
+                .ok_or_else(|| Error::internal("Pi RPC client missing during preflight refresh"))?;
+            if let Err(error) = client.get_state() {
+                self.runtime_health
+                    .mark_degraded(format!("Pi RPC preflight refresh failed: {error}"));
+                return Err(error);
+            }
+            let version = self
+                .real_config
+                .as_ref()
+                .and_then(|config| config.runtime_version.as_deref())
+                .ok_or_else(|| Error::validation("Pi runtime version missing after validation"))?;
+            let digest = self
+                .real_config
+                .as_ref()
+                .and_then(|config| config.runtime_digest.as_deref())
+                .ok_or_else(|| Error::validation("Pi runtime digest missing after validation"))?;
+            self.runtime_health.mark_initialized(
+                format!(
+                    "Pi RPC get_state preflight refreshed; deployment pins distribution {version} ({digest}); no newly settled live turn yet"
+                ),
+                format!("runtime://pi/{version}#{digest}"),
+            );
+        }
         self.real_config
             .as_ref()
             .and_then(|config| config.runtime_version.clone())
