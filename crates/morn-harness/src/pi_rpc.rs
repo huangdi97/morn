@@ -176,14 +176,12 @@ impl PiRpcConfig {
                     Error::validation("MORN_PI_EXECUTION_ENVIRONMENT_REF is required for real Pi")
                 })?,
             ),
-            runtime_version: Some(
-                std::env::var("MORN_PI_RUNTIME_VERSION")
-                    .map_err(|_| Error::validation("MORN_PI_RUNTIME_VERSION is required for real Pi"))?,
-            ),
-            runtime_digest: Some(
-                std::env::var("MORN_PI_RUNTIME_DIGEST")
-                    .map_err(|_| Error::validation("MORN_PI_RUNTIME_DIGEST is required for real Pi"))?,
-            ),
+            runtime_version: Some(std::env::var("MORN_PI_RUNTIME_VERSION").map_err(|_| {
+                Error::validation("MORN_PI_RUNTIME_VERSION is required for real Pi")
+            })?),
+            runtime_digest: Some(std::env::var("MORN_PI_RUNTIME_DIGEST").map_err(|_| {
+                Error::validation("MORN_PI_RUNTIME_DIGEST is required for real Pi")
+            })?),
             ..Self::default()
         };
         if let Ok(command) = std::env::var("MORN_PI_COMMAND") {
