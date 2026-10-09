@@ -322,9 +322,10 @@ mod tests {
             "morn.lite@1.0.0",
         );
         let plan = instantiate_approved_solution(&pkg, request).unwrap();
+        let expected_acceptance_ref = format!("{package_ref}#acceptance");
         assert_eq!(
             plan.work.spec.acceptance_ref.as_deref(),
-            Some(format!("{package_ref}#acceptance").as_str())
+            Some(expected_acceptance_ref.as_str())
         );
 
         let mut forged = SolutionInstantiationRequest::new(

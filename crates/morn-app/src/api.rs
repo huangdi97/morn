@@ -978,11 +978,10 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
             })?;
         let now = morn_kernel::time::Timestamp::now();
         if profile.requires("CapabilityQualification") {
-            let site = work
-                .spec
-                .site_ref
-                .as_deref()
-                .ok_or_else(|| AppError(Error::validation("governed Work requires site_ref")))?;
+            let site =
+                work.spec.site_ref.as_deref().ok_or_else(|| {
+                    AppError(Error::validation("governed Work requires site_ref"))
+                })?;
             if !guard.v115_admission.site_profile_admission_active_at(
                 capability,
                 site,
@@ -1001,7 +1000,8 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     .native_harness
                     .lock()
                     .map_err(|_| AppError(Error::internal("native harness lock poisoned")))?;
-                if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str()) {
+                if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str())
+                {
                     return Err(AppError(Error::invalid_state(
                         "bound native provider identity no longer matches the active runtime",
                     )));
@@ -1012,7 +1012,8 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     .dsh_harness
                     .lock()
                     .map_err(|_| AppError(Error::internal("dsh harness lock poisoned")))?;
-                if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str()) {
+                if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str())
+                {
                     return Err(AppError(Error::invalid_state(
                         "bound DSH provider identity no longer matches the active runtime",
                     )));
@@ -1030,7 +1031,8 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     .pi_harness
                     .lock()
                     .map_err(|_| AppError(Error::internal("pi harness lock poisoned")))?;
-                if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str()) {
+                if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str())
+                {
                     return Err(AppError(Error::invalid_state(
                         "bound Pi provider identity no longer matches the active runtime",
                     )));
@@ -4102,7 +4104,10 @@ mod workspace_boundary_tests {
                 "model://claim",
                 json!({"status":"complete"}),
             );
-            guard.store.save_observed_outcome(&work, &ungrounded).unwrap();
+            guard
+                .store
+                .save_observed_outcome(&work, &ungrounded)
+                .unwrap();
             (work, grounded, ungrounded)
         };
 
