@@ -42,6 +42,9 @@ function fieldRefs(record: Record<string, unknown>, field: string): string[] {
 /** Correlate only persisted records explicitly linked to the same Work.
  *  A provider result, unlinked receipt or fixture must never count as accepted outcome. */
 export function workEvidenceTrace(control: V115ControlPlaneData, workId: string, generation: number) {
+  const resolutions = control.capability_resolutions.filter(
+    (row) => textField(row, "work_ref") === workId && row.work_generation === generation,
+  );
   const bindings = control.execution_bindings.filter((row) => textField(row, "work_id") === workId);
   const bindingIds = new Set(bindings.map((row) => textField(row, "id")).filter((id): id is string => !!id));
   const receipts = control.execution_receipts.filter((row) => {
@@ -66,7 +69,7 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
   const evidence = control.condition_evidence.filter((row) =>
     textField(row, "work_ref") === workId && row.work_generation === generation,
   );
-  return { bindings, receipts, attempts, reconciliations, outcomes, acceptances, evidence };
+  return { resolutions, bindings, receipts, attempts, reconciliations, outcomes, acceptances, evidence };
 }
 
 function WorkEvidenceTrace({
@@ -79,11 +82,27 @@ function WorkEvidenceTrace({
   generation: number;
 }) {
   const trace = workEvidenceTrace(control, workId, generation);
-  const summary = `${trace.bindings.length} bindings · ${trace.receipts.length} harness receipts · ${trace.attempts.length} external attempts · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions`;
+  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} bindings · ${trace.receipts.length} harness receipts · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions`;
   return (
     <details className="work-truth-trace">
       <summary>Execution, reality &amp; independent acceptance — {summary}</summary>
       <div className="work-truth-trace-grid">
+        <section>
+          <strong>Capability resolution</strong>
+          {trace.resolutions.length === 0 ? (
+            <p>No durable Workcell resolution decision for this generation.</p>
+          ) : (
+            <ul>
+              {trace.resolutions.map((decision, index) => (
+                <li key={textField(decision, "id") ?? index}>
+                  <b>{textField(decision, "id") ?? "Resolution decision"}</b>
+                  <small>Generation: {String(decision.work_generation ?? "unknown")}</small>
+                  <small>Source solution: {textField(decision, "source_solution_ref") ?? "Not linked"}</small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
         <section>
           <strong>Harness execution evidence</strong>
           {trace.receipts.length === 0 ? (

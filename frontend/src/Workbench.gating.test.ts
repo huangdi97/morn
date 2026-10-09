@@ -19,6 +19,7 @@ describe("domain-gated UI extension point", () => {
 describe("canonical Work remains a separate product surface", () => {
   const base: V115ControlPlaneData = {
     condition_evidence: [],
+    capability_resolutions: [],
     profile_conformance_attestations: [],
     work: [{
       id: "work:canonical-1",
@@ -83,6 +84,11 @@ describe("canonical Work remains a separate product surface", () => {
   it("correlates Work receipts and acceptance by binding, outcome and generation", () => {
     const state: V115ControlPlaneData = {
       ...base,
+      capability_resolutions: [
+        { id: "resolution-1", work_ref: "work:canonical-1", work_generation: 1, source_solution_ref: "solution://one@1.0.0" },
+        { id: "resolution-old", work_ref: "work:canonical-1", work_generation: 0 },
+        { id: "resolution-other", work_ref: "work:foreign", work_generation: 1 },
+      ],
       execution_bindings: [
         { id: "binding-1", work_id: "work:canonical-1" },
         { id: "binding-other", work_id: "work:foreign" },
@@ -114,6 +120,7 @@ describe("canonical Work remains a separate product surface", () => {
       ],
     };
     const trace = workEvidenceTrace(state, "work:canonical-1", 1);
+    expect(trace.resolutions).toHaveLength(1);
     expect(trace.bindings).toHaveLength(1);
     expect(trace.receipts).toHaveLength(1);
     expect(trace.attempts).toHaveLength(1);

@@ -59,6 +59,7 @@ export interface UiExtensionRegistry {
 
 export interface V115ControlPlaneData {
   condition_evidence: Array<Record<string, unknown>>;
+  capability_resolutions: Array<Record<string, unknown>>;
   profile_conformance_attestations: Array<Record<string, unknown>>;
   work: Array<{
     id: string;

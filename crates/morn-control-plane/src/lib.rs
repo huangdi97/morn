@@ -29,7 +29,8 @@ pub use provider_gate::{ProviderGate, ProviderGateBlock, ProviderGatePolicy, Pro
 pub use readiness::{
     authority_condition_evidence, capability_qualification_evidence,
     capability_resolution_evidence, provenance_condition_evidence,
-    source_of_truth_condition_evidence,
+    source_of_truth_condition_evidence, workcell_qualification_evidence,
+    CapabilityResolutionDecision, CapabilityResolutionDecisionId,
 };
 
 pub use profile_guard::{
@@ -595,6 +596,11 @@ pub trait ControlPlaneStore {
         work: &WorkResource,
         evidence: &ConditionEvidence,
     ) -> Result<()>;
+    fn save_capability_resolution(
+        &self,
+        work: &WorkResource,
+        decision: &CapabilityResolutionDecision,
+    ) -> Result<()>;
     fn save_execution_manifest(
         &self,
         work: &WorkResource,
@@ -774,6 +780,26 @@ impl ControlPlaneStore for MornStore {
             work.workspace_id.as_str(),
             evidence.observed_at.millis(),
             evidence,
+        )
+    }
+
+    fn save_capability_resolution(
+        &self,
+        work: &WorkResource,
+        decision: &CapabilityResolutionDecision,
+    ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
+        if !decision.matches_work(work) {
+            return Err(Error::validation(
+                "capability resolution decision must match the exact Work generation and source solution",
+            ));
+        }
+        self.save_record_immutable(
+            "capability_resolution_v115",
+            decision.id.as_str(),
+            work.workspace_id.as_str(),
+            decision.created_at.millis(),
+            decision,
         )
     }
 
@@ -1796,6 +1822,51 @@ mod control_plane_persistence_scope_tests {
         forged.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
         forged.provider_ref = Some("provider:b".to_string());
         assert!(store.save_execution_receipt(&work, &forged).is_err());
+    }
+
+    #[test]
+    fn capability_resolution_decision_cannot_be_reused_across_work_generations() {
+        use morn_capability::{
+            CapabilityKind, EffectClass, ResolvedCapability, WorkcellMember, WorkcellPlan,
+        };
+        use morn_kernel::ExecutionClass;
+
+        let store = MornStore::open_in_memory().unwrap();
+        let mut work = fixture_work();
+        work.spec.source_solution_ref = Some("solution://fixture@1.0.0".to_string());
+        store.save_work_resource(&work).unwrap();
+        let decision = CapabilityResolutionDecision::new(
+            &work,
+            WorkcellPlan {
+                members: vec![WorkcellMember {
+                    capability: ResolvedCapability {
+                        manifest_id: morn_capability::CapabilityManifestId::generate_with("manifest"),
+                        provider_ref: "morn-native".to_string(),
+                        kind: CapabilityKind::Program,
+                        estimated_cost_micros: None,
+                        maximum_effect: EffectClass::E0LifecycleReversible,
+                        compensation_ref: None,
+                        idempotency_key_required: false,
+                        required_execution_class: ExecutionClass::NoIsolation,
+                        required_execution_guarantees: vec![],
+                        score: 1,
+                        rationale: vec![],
+                    },
+                    covers: vec!["draft".to_string()],
+                }],
+                uncovered: vec![],
+                total_estimated_cost_micros: 0,
+                rationale: vec!["fixture".to_string()],
+            },
+        )
+        .unwrap();
+        store.save_capability_resolution(&work, &decision).unwrap();
+
+        let mut next = work.spec.clone();
+        next.goal = "changed".to_string();
+        work.replace_spec(next);
+        store.save_work_resource(&work).unwrap();
+        assert!(store.save_capability_resolution(&work, &decision).is_err());
     }
 
     #[test]

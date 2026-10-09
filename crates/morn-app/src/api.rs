@@ -92,6 +92,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/ui/extensions", get(v115_ui_extensions))
         .route("/api/v115/control-plane", get(v115_control_plane))
         .route("/api/v115/work/reconcile", post(v115_work_reconcile))
+        .route("/api/v115/work/resolve", post(v115_work_resolve))
         .route("/api/v115/work/bind-e0", post(v115_work_bind_e0))
         .route("/api/v115/work/execute-e0", post(v115_work_execute_e0))
         .route("/api/v115/solutions", get(v115_solutions))
@@ -395,6 +396,199 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             "real_factory": "external-blocked until lawful site data/authority exists",
             "production_write": "not entered"
         }
+    })))
+}
+
+async fn v115_work_resolve(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_capability::{CapabilityResolver, EffectClass, WorkcellRequest};
+    use morn_control_plane::{
+        capability_resolution_evidence, provenance_condition_evidence,
+        workcell_qualification_evidence, CapabilityResolutionDecision, ControlPlaneStore,
+        DurableWorkControllerRuntime,
+    };
+    use morn_foundry::solution_package_ref;
+    use morn_kernel::time::Timestamp;
+    use morn_work::control::AutonomyPosture;
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let now = Timestamp::now();
+    let guard = state.lock();
+    let work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
+    }
+    if work.status.phase.is_terminal() {
+        return Err(AppError(Error::invalid_state(
+            "terminal Work cannot be re-resolved without an explicit new generation",
+        )));
+    }
+
+    let solution_ref = work
+        .spec
+        .source_solution_ref
+        .as_deref()
+        .ok_or_else(|| {
+            AppError(Error::invalid_state(
+                "automatic capability resolution requires Work.source_solution_ref",
+            ))
+        })?;
+    let package_id = solution_ref
+        .strip_prefix("solution://")
+        .and_then(|rest| rest.rsplit_once('@').map(|(id, _)| id))
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(|| {
+            AppError(Error::validation(
+                "Work.source_solution_ref is not a canonical solution://<id>@<version> reference",
+            ))
+        })?;
+    let package = guard
+        .store
+        .load_record::<morn_foundry::SolutionPackage>("solution_package_v115", package_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("SolutionPackage {package_id}"))))?;
+    if solution_package_ref(&package) != solution_ref {
+        return Err(AppError(Error::conflict(
+            "persisted SolutionPackage identity/version does not match Work.source_solution_ref",
+        )));
+    }
+    let policy = package.policy_v115().ok_or_else(|| {
+        AppError(Error::invalid_state(
+            "automatic resolver requires a reviewed morn.solution-package/v11.5 policy",
+        ))
+    })?;
+    if policy.required_capabilities.is_empty() {
+        return Err(AppError(Error::validation(
+            "SolutionPackage declares no required_capabilities to resolve",
+        )));
+    }
+    let profile = morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+        AppError(Error::validation(format!(
+            "unsupported Work profile {}",
+            work.spec.profile_ref
+        )))
+    })?;
+
+    let mut unavailable_providers = Vec::new();
+    {
+        let dsh = guard
+            .dsh_harness
+            .lock()
+            .map_err(|_| AppError(Error::internal("dsh harness lock poisoned")))?;
+        if dsh.mode() == morn_harness::provider::DshMode::Real
+            && !dsh.runtime_health().selectable_at(now)
+        {
+            unavailable_providers.push("deepseek-harness".to_string());
+        }
+    }
+    {
+        let pi = guard
+            .pi_harness
+            .lock()
+            .map_err(|_| AppError(Error::internal("pi harness lock poisoned")))?;
+        if pi.mode() == morn_harness::PiMode::Real && !pi.runtime_health().selectable_at(now) {
+            unavailable_providers.push("pi".to_string());
+        }
+    }
+
+    let strict_admission = profile.requires("CapabilityQualification");
+    let maximum_effect = if work.spec.autonomy_posture == AutonomyPosture::Assist
+        || profile.forbids("ProductionWrite")
+    {
+        Some(EffectClass::E0LifecycleReversible)
+    } else {
+        None
+    };
+    let request = WorkcellRequest {
+        required_provides: policy.required_capabilities.clone(),
+        minimum_isolation: morn_kernel::ExecutionClass::parse(&profile.minimum_isolation),
+        maximum_effect,
+        required_execution_guarantees: profile.required_execution_guarantees.clone(),
+        site_ref: strict_admission.then(|| work.spec.site_ref.clone()).flatten(),
+        profile_ref: strict_admission.then(|| work.spec.profile_ref.clone()),
+        unavailable_providers,
+        ..Default::default()
+    };
+    let plan = CapabilityResolver.resolve_minimum_workcell(&request, &guard.v115_capabilities);
+    if !plan.is_complete() {
+        return Ok(Json(json!({
+            "resolved": false,
+            "plan": plan,
+            "work": work,
+            "evidence_blockers": ["required capability coverage is incomplete"],
+            "note": "No positive CapabilityResolved witness was written."
+        })));
+    }
+
+    let selected = plan
+        .members
+        .iter()
+        .map(|member| {
+            guard
+                .v115_capabilities
+                .iter()
+                .find(|record| record.manifest.id == member.capability.manifest_id)
+                .cloned()
+                .ok_or_else(|| {
+                    AppError(Error::internal(format!(
+                        "resolved capability {} disappeared from the canonical catalog",
+                        member.capability.manifest_id
+                    )))
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let decision = CapabilityResolutionDecision::new(&work, plan.clone())?;
+    let mut resolution = capability_resolution_evidence(&work, &plan)?;
+    resolution.evidence_refs.push(decision.id.to_string());
+    resolution.evidence_refs.sort();
+    resolution.evidence_refs.dedup();
+
+    let mut additional = Vec::new();
+    let mut blockers = Vec::new();
+    if profile.requires("CapabilityQualification") {
+        match workcell_qualification_evidence(&work, &selected, &guard.v115_admission, now) {
+            Ok(evidence) => additional.push(evidence),
+            Err(error) => blockers.push(error.to_string()),
+        }
+    }
+    if profile.requires("Provenance") {
+        match provenance_condition_evidence(&work, &selected) {
+            Ok(evidence) => additional.push(evidence),
+            Err(error) => blockers.push(error.to_string()),
+        }
+    }
+
+    guard.store.save_capability_resolution(&work, &decision)?;
+    guard.store.save_condition_evidence(&work, &resolution)?;
+    for evidence in &additional {
+        guard.store.save_condition_evidence(&work, evidence)?;
+    }
+    let tick = DurableWorkControllerRuntime::new("api-v115-capability-resolver")
+        .reconcile_from_evidence(&guard.store, work.id.as_str(), &profile, now)?;
+    let current = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work.id.as_str())?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {}", work.id))))?;
+
+    Ok(Json(json!({
+        "resolved": true,
+        "decision": decision,
+        "plan": plan,
+        "evidence_blockers": blockers,
+        "controller_tick": tick,
+        "work": current,
+        "note": "Resolution is generation-scoped evidence only. It grants neither ExecutionBinding nor authority."
     })))
 }
 
@@ -924,6 +1118,7 @@ async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
     Ok(Json(json!({
         "work": load("work_resource_v115")?,
         "condition_evidence": load("condition_evidence_v115")?,
+        "capability_resolutions": load("capability_resolution_v115")?,
         "profile_conformance_attestations": load("profile_conformance_attestation_v115")?,
         "source_of_truth_bindings": load("source_of_truth_binding_v115")?,
         "execution_bindings": load("execution_binding_v115")?,
@@ -3217,6 +3412,118 @@ mod workspace_boundary_tests {
         let works = body["work"].as_array().unwrap();
         assert_eq!(works.len(), 1);
         assert_eq!(works[0]["id"], "visible");
+    }
+
+    #[tokio::test]
+    async fn resolve_uses_approved_solution_requirements_and_writes_generation_scoped_evidence() {
+        use morn_capability::{
+            CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass,
+        };
+        use morn_control_plane::ControlPlaneStore;
+        use morn_kernel::ids::{ApprovedSolutionId, CapabilityId, ProposedSolutionId, SolutionPackageId};
+        use morn_kernel::version::Version;
+        use morn_work::control::WorkPhase;
+
+        let state = AppState::new(":memory:").unwrap();
+        let work_id = {
+            let mut guard = state.lock();
+            let mut capability = CapabilityRecord::new(CapabilityManifest::new(
+                CapabilityId::generate_with("capability"),
+                "draft-agent",
+                "deepseek-harness",
+                CapabilityKind::Agent,
+                EffectClass::E0LifecycleReversible,
+            ));
+            capability.manifest.provides = vec!["draft.generate".to_string()];
+            capability.manifest.provenance.source_ref = "repo://draft-agent".to_string();
+            capability.stage = CapabilityStage::Qualified;
+            guard.v115_capabilities.push(capability);
+            guard.persist_all().unwrap();
+
+            let package = morn_foundry::SolutionPackage {
+                id: SolutionPackageId::generate_with("solution-package"),
+                name: "draft solution".to_string(),
+                version: Version::new(1, 0, 0),
+                manifest: json!({
+                    "schema":"morn.solution-package/v11.5",
+                    "profile_ref":"morn.lite@1.0.0",
+                    "site_ref":null,
+                    "acceptance_criteria":["reviewed"],
+                    "required_capabilities":["draft.generate"],
+                    "harness_policy":"provider-neutral",
+                    "production_write_allowed":false
+                }),
+                proposed_solution_id: ProposedSolutionId::generate_with("proposed"),
+                approved_solution_id: Some(ApprovedSolutionId::generate_with("approved")),
+                created_at: morn_kernel::time::Timestamp::now(),
+            };
+            guard
+                .store
+                .save_record(
+                    "solution_package_v115",
+                    package.id.as_str(),
+                    guard.workspace.id.as_str(),
+                    package.created_at.millis(),
+                    &package,
+                )
+                .unwrap();
+            let plan = morn_foundry::instantiate_approved_solution(
+                &package,
+                morn_foundry::SolutionInstantiationRequest::new(
+                    guard.workspace.id.clone(),
+                    "create reviewed draft",
+                    "morn.lite@1.0.0",
+                ),
+            )
+            .unwrap();
+            let mut work = plan.work;
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+            work.id.to_string()
+        };
+
+        let Json(response) = v115_work_resolve(
+            State(state.clone()),
+            Json(json!({"work_id": work_id})),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response["resolved"], true);
+        assert_eq!(response["work"]["status"]["phase"], "Ready");
+        assert_eq!(response["plan"]["uncovered"], json!([]));
+
+        let guard = state.lock();
+        let decisions = guard
+            .store
+            .load_records_in_workspace::<morn_control_plane::CapabilityResolutionDecision>(
+                "capability_resolution_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap();
+        assert_eq!(decisions.len(), 1);
+        let evidence = guard
+            .store
+            .load_records_in_workspace::<morn_control_plane::ConditionEvidence>(
+                "condition_evidence_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap();
+        assert!(evidence.iter().any(|item| {
+            item.work_ref == work_id
+                && item.condition_type == "CapabilityResolved"
+                && item.satisfied
+                && item
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference == decisions[0].id.as_str())
+        }));
+        assert!(guard
+            .store
+            .load_records_in_workspace::<morn_runtime::ExecutionBinding>(
+                "execution_binding_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]
