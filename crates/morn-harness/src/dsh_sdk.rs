@@ -495,27 +495,36 @@ impl DshSdkStdioClient {
         let deadline = Instant::now() + self.request_timeout;
         loop {
             let incoming = self.read_frame_until(deadline, method)?;
-            if incoming.get("id").is_some() && incoming.get("method").is_some() {
+            require_jsonrpc_v2(&incoming)?;
+
+            let has_id = incoming.get("id").is_some();
+            let has_method = incoming.get("method").is_some();
+            if has_id && has_method {
                 return Err(Error::external(
                     "DSH SDK sent an unsupported server-to-client request",
                 ));
             }
-            if incoming.get("id").and_then(Value::as_u64) == Some(id) {
-                if let Some(error) = incoming.get("error") {
-                    return Err(Error::external(format!(
-                        "DSH JSON-RPC {method} failed: {error}"
-                    )));
-                }
-                return Ok(incoming.get("result").cloned().unwrap_or(Value::Null));
+
+            if has_id {
+                return response_result_for_id(&incoming, id, method);
             }
-            if incoming.get("id").is_none() {
-                if let Some(method) = incoming.get("method").and_then(Value::as_str) {
-                    self.notifications.push(DshNotification {
-                        method: method.to_string(),
-                        params: incoming.get("params").cloned().unwrap_or(Value::Null),
-                    });
-                }
+
+            if has_method {
+                let notification_method = incoming
+                    .get("method")
+                    .and_then(Value::as_str)
+                    .filter(|method| !method.trim().is_empty())
+                    .ok_or_else(|| Error::external("DSH SDK notification method is empty"))?;
+                self.notifications.push(DshNotification {
+                    method: notification_method.to_string(),
+                    params: incoming.get("params").cloned().unwrap_or(Value::Null),
+                });
+                continue;
             }
+
+            return Err(Error::external(
+                "DSH SDK emitted a JSON-RPC frame with neither id nor method",
+            ));
         }
     }
 
@@ -549,6 +558,49 @@ impl Drop for DshSdkStdioClient {
             let _ = reader.join();
         }
     }
+}
+
+fn require_jsonrpc_v2(value: &Value) -> Result<()> {
+    if value.get("jsonrpc").and_then(Value::as_str) == Some("2.0") {
+        Ok(())
+    } else {
+        Err(Error::external(
+            "DSH SDK emitted a frame without jsonrpc=\"2.0\"",
+        ))
+    }
+}
+
+fn response_result_for_id(
+    value: &Value,
+    expected_id: u64,
+    operation: &str,
+) -> Result<Value> {
+    require_jsonrpc_v2(value)?;
+    let response_id = value
+        .get("id")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| Error::external("DSH SDK response id must be an unsigned integer"))?;
+    if response_id != expected_id {
+        return Err(Error::external(format!(
+            "DSH SDK response id mismatch: expected {expected_id}, received {response_id}"
+        )));
+    }
+    let has_result = value.get("result").is_some();
+    let has_error = value.get("error").is_some();
+    if has_result == has_error {
+        return Err(Error::external(
+            "DSH SDK response must contain exactly one of result or error",
+        ));
+    }
+    if let Some(error) = value.get("error") {
+        return Err(Error::external(format!(
+            "DSH JSON-RPC {operation} failed: {error}"
+        )));
+    }
+    value
+        .get("result")
+        .cloned()
+        .ok_or_else(|| Error::external("DSH SDK response result disappeared"))
 }
 
 fn parse_server_info(result: &Value) -> Result<DshSdkServerInfo> {
@@ -686,6 +738,38 @@ mod tests {
             DSH_NOTIFICATION_SUBAGENT_FINISHED,
         ];
         assert_eq!(notifications.len(), 4);
+    }
+
+    #[test]
+    fn jsonrpc_response_shape_fails_closed() {
+        assert!(response_result_for_id(
+            &json!({"jsonrpc":"1.0","id":1,"result":{}}),
+            1,
+            "test"
+        )
+        .is_err());
+        assert!(response_result_for_id(
+            &json!({"jsonrpc":"2.0","id":2,"result":{}}),
+            1,
+            "test"
+        )
+        .is_err());
+        assert!(response_result_for_id(
+            &json!({"jsonrpc":"2.0","id":1,"result":{},"error":{"code":-1}}),
+            1,
+            "test"
+        )
+        .is_err());
+        assert!(response_result_for_id(&json!({"jsonrpc":"2.0","id":1}), 1, "test").is_err());
+        assert_eq!(
+            response_result_for_id(
+                &json!({"jsonrpc":"2.0","id":1,"result":{"ok":true}}),
+                1,
+                "test"
+            )
+            .unwrap(),
+            json!({"ok":true})
+        );
     }
 
     #[test]
