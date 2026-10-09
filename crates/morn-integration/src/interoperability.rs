@@ -198,7 +198,8 @@ impl GovernedExternalTaskObservation {
         }
         match &self.snapshot {
             ExternalTaskSnapshot::Mcp(task)
-                if task.server_ref.trim().is_empty() || task.server_ref != self.endpoint.endpoint_ref =>
+                if task.server_ref.trim().is_empty()
+                    || task.server_ref != self.endpoint.endpoint_ref =>
             {
                 return Err(Error::validation(
                     "MCP task server must match the bound endpoint",
