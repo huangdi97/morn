@@ -4975,11 +4975,12 @@ mod workspace_boundary_tests {
         {
             let mut guard = state.lock();
             let binding_id = SourceOfTruthBindingId::new(work_binding_id.clone());
+            let workspace_id = guard.workspace.id.clone();
             guard
                 .source_observation_attestations
                 .push(SourceObservationAttestation {
                     attestation_id: "obs-outside".to_string(),
-                    workspace_id: guard.workspace.id.clone(),
+                    workspace_id: workspace_id.clone(),
                     work_package_id: work.id.clone(),
                     work_generation: work.generation,
                     source_binding_id: binding_id.clone(),
@@ -4995,7 +4996,7 @@ mod workspace_boundary_tests {
                 .source_observation_attestations
                 .push(SourceObservationAttestation {
                     attestation_id: "obs-grounded".to_string(),
-                    workspace_id: guard.workspace.id.clone(),
+                    workspace_id,
                     work_package_id: work.id.clone(),
                     work_generation: work.generation,
                     source_binding_id: binding_id,
