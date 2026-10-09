@@ -122,6 +122,20 @@ impl SourceOfTruthBinding {
             .iter()
             .any(|item| item == fact_type)
     }
+
+    /// Freshness is a property of the bound source contract, independent of an
+    /// attestation's own validity window. A deployment cannot extend the
+    /// source-of-truth SLA by issuing a long-lived attestation over stale data.
+    pub fn observation_is_fresh(&self, observed_at: Timestamp, now: Timestamp) -> bool {
+        if observed_at > now {
+            return false;
+        }
+        self.freshness_sla_ms.is_none_or(|sla_ms| {
+            let age_ms = now.millis().saturating_sub(observed_at.millis());
+            let sla_ms = i64::try_from(sla_ms).unwrap_or(i64::MAX);
+            age_ms <= sla_ms
+        })
+    }
 }
 
 #[cfg(test)]
@@ -171,6 +185,42 @@ mod tests {
             &binding,
             "maintenance.order",
             Timestamp::from_millis(21),
+        ));
+    }
+
+    #[test]
+    fn source_freshness_sla_cannot_be_extended_by_attestation_validity() {
+        let binding = SourceOfTruthBinding {
+            id: SourceOfTruthBindingId::generate_with("sot"),
+            site_ref: None,
+            source_ref: "erp://orders".to_string(),
+            authority_kind: TruthAuthorityKind::SystemOfRecord,
+            authoritative_fact_types: vec!["order.status".to_string()],
+            key_mapping_ref: "mapping://orders@1".to_string(),
+            query_capability_ref: "capability://orders.read@1".to_string(),
+            freshness_sla_ms: Some(30_000),
+            conflict_policy: ConflictPolicy::ReconcileBeforeUse,
+            version_ref: "binding:v1".to_string(),
+            created_at: Timestamp::from_millis(1),
+        };
+        assert!(binding.observation_is_fresh(
+            Timestamp::from_millis(70_000),
+            Timestamp::from_millis(100_000),
+        ));
+        assert!(!binding.observation_is_fresh(
+            Timestamp::from_millis(69_999),
+            Timestamp::from_millis(100_000),
+        ));
+        assert!(!binding.observation_is_fresh(
+            Timestamp::from_millis(100_001),
+            Timestamp::from_millis(100_000),
+        ));
+
+        let mut unbounded = binding.clone();
+        unbounded.freshness_sla_ms = None;
+        assert!(unbounded.observation_is_fresh(
+            Timestamp::from_millis(1),
+            Timestamp::from_millis(100_000),
         ));
     }
 

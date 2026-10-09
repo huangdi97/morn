@@ -904,6 +904,11 @@ async fn v115_work_observe_outcome(
             "attested observation falls outside the bound source authority",
         )));
     }
+    if !binding.observation_is_fresh(attestation.observed_at, now) {
+        return Err(AppError(Error::not_authorized(
+            "attested observation violates the source-of-truth freshness SLA",
+        )));
+    }
     let bound_for_work = guard
         .store
         .load_records_in_workspace::<morn_control_plane::ConditionEvidence>(
@@ -5009,6 +5014,41 @@ mod workspace_boundary_tests {
                     valid_until: None,
                 });
         }
+
+        {
+            let mut guard = state.lock();
+            let binding_id = SourceOfTruthBindingId::new(work_binding_id.clone());
+            let workspace_id = guard.workspace.id.clone();
+            guard
+                .source_observation_attestations
+                .push(SourceObservationAttestation {
+                    attestation_id: "obs-stale".to_string(),
+                    workspace_id,
+                    work_package_id: work.id.clone(),
+                    work_generation: work.generation,
+                    source_binding_id: binding_id,
+                    fact_type: "delivery.status".to_string(),
+                    objective: "observe stale delivery".to_string(),
+                    source_ref: "system://orders/42".to_string(),
+                    observed_facts: json!({"status":"complete"}),
+                    evidence_refs: vec!["system://orders/42/stale-receipt".to_string()],
+                    observed_at: Timestamp::from_millis(
+                        Timestamp::now().millis().saturating_sub(30_001),
+                    ),
+                    valid_until: Some(Timestamp::from_millis(
+                        Timestamp::now().millis().saturating_add(60_000),
+                    )),
+                });
+        }
+        let stale = v115_work_observe_outcome(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "observation_attestation_id": "obs-stale"
+            })),
+        )
+        .await;
+        assert!(stale.is_err());
 
         let outside = v115_work_observe_outcome(
             State(state.clone()),
