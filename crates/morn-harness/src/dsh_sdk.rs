@@ -21,9 +21,7 @@ use serde_json::{json, Value};
 
 use morn_kernel::error::{Error, Result};
 
-use crate::subprocess_wire::{
-    read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_FRAMES,
-};
+use crate::subprocess_wire::{read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_FRAMES};
 
 pub const DSH_METHOD_INITIALIZE: &str = "initialize";
 pub const DSH_METHOD_SESSION_PROMPT: &str = "session/prompt";

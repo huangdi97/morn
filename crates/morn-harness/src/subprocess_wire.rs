@@ -55,14 +55,20 @@ mod tests {
     fn bounded_reader_accepts_line_and_eof_record() {
         let mut reader = Cursor::new(b"{\"ok\":true}\nlast".to_vec());
         assert_eq!(
-            read_bounded_utf8_line(&mut reader, "fixture").unwrap().as_deref(),
+            read_bounded_utf8_line(&mut reader, "fixture")
+                .unwrap()
+                .as_deref(),
             Some("{\"ok\":true}\n")
         );
         assert_eq!(
-            read_bounded_utf8_line(&mut reader, "fixture").unwrap().as_deref(),
+            read_bounded_utf8_line(&mut reader, "fixture")
+                .unwrap()
+                .as_deref(),
             Some("last")
         );
-        assert!(read_bounded_utf8_line(&mut reader, "fixture").unwrap().is_none());
+        assert!(read_bounded_utf8_line(&mut reader, "fixture")
+            .unwrap()
+            .is_none());
     }
 
     #[test]

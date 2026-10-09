@@ -23,9 +23,7 @@ use serde_json::{json, Value};
 
 use morn_kernel::error::{Error, Result};
 
-use crate::subprocess_wire::{
-    read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_FRAMES,
-};
+use crate::subprocess_wire::{read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_FRAMES};
 
 pub const PI_COMMAND_PROMPT: &str = "prompt";
 pub const PI_COMMAND_GET_STATE: &str = "get_state";
@@ -325,10 +323,9 @@ impl PiRpcClient {
                 }
                 let (item, terminate_after_send) = match serde_json::from_str::<Value>(trimmed) {
                     Ok(value) => (Ok(value), false),
-                    Err(error) if strict_jsonl => (
-                        Err(format!("invalid Pi RPC JSONL record: {error}")),
-                        true,
-                    ),
+                    Err(error) if strict_jsonl => {
+                        (Err(format!("invalid Pi RPC JSONL record: {error}")), true)
+                    }
                     Err(_) => continue,
                 };
                 match sender.try_send(item) {
@@ -424,18 +421,17 @@ impl PiRpcClient {
             let record = self.read_record_until(deadline, "prompt settlement")?;
             if is_response(&record) {
                 let parsed = parse_response(&record)?;
-                if parsed.id.as_deref() == Some(id.as_str()) {
-                    if !parsed.success {
-                        return Err(Error::external(format!(
-                            "Pi prompt rejected: {}",
-                            parsed.error.unwrap_or_else(|| "unknown error".to_string())
-                        )));
-                    }
-                    let handled = prompt_disposition(&parsed) == Some("handled");
-                    response = Some(parsed);
-                    if handled || settled {
-                        break;
-                    }
+                require_correlated_response(&parsed, &id, PI_COMMAND_PROMPT)?;
+                if !parsed.success {
+                    return Err(Error::external(format!(
+                        "Pi prompt rejected: {}",
+                        parsed.error.unwrap_or_else(|| "unknown error".to_string())
+                    )));
+                }
+                let handled = prompt_disposition(&parsed) == Some("handled");
+                response = Some(parsed);
+                if handled || settled {
+                    break;
                 }
                 continue;
             }
@@ -500,20 +496,18 @@ impl PiRpcClient {
             let incoming = self.read_record_until(deadline, command)?;
             if is_response(&incoming) {
                 let response = parse_response(&incoming)?;
-                if response.id.as_deref() == Some(id.as_str()) {
-                    if response.success {
-                        return Ok(response);
-                    }
-                    return Err(Error::external(format!(
-                        "Pi RPC {command} failed: {}",
-                        response
-                            .error
-                            .unwrap_or_else(|| "unknown error".to_string())
-                    )));
+                require_correlated_response(&response, &id, command)?;
+                if response.success {
+                    return Ok(response);
                 }
-            } else {
-                self.buffered_events.push(parse_event(incoming));
+                return Err(Error::external(format!(
+                    "Pi RPC {command} failed: {}",
+                    response
+                        .error
+                        .unwrap_or_else(|| "unknown error".to_string())
+                )));
             }
+            self.buffered_events.push(parse_event(incoming));
         }
     }
 
@@ -605,6 +599,26 @@ fn parse_response(value: &Value) -> Result<PiRpcResponse> {
             .and_then(Value::as_str)
             .map(str::to_string),
     })
+}
+
+fn require_correlated_response(
+    response: &PiRpcResponse,
+    expected_id: &str,
+    expected_command: &str,
+) -> Result<()> {
+    if response.id.as_deref() != Some(expected_id) {
+        return Err(Error::external(format!(
+            "Pi RPC response id mismatch for {expected_command}: expected {expected_id:?}, received {:?}",
+            response.id
+        )));
+    }
+    if response.command != expected_command {
+        return Err(Error::external(format!(
+            "Pi RPC response command mismatch: expected {expected_command:?}, received {:?}",
+            response.command
+        )));
+    }
+    Ok(())
 }
 
 fn parse_event(value: Value) -> PiRpcEvent {
@@ -765,6 +779,21 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(ok.data.unwrap()["text"], "answer");
+    }
+
+    #[test]
+    fn response_correlation_rejects_cross_request_or_cross_command_records() {
+        let response = parse_response(&json!({
+            "id":"morn-prompt-1",
+            "type":"response",
+            "command":"prompt",
+            "success":true,
+            "data":{"disposition":"started"}
+        }))
+        .unwrap();
+        assert!(require_correlated_response(&response, "morn-prompt-1", "prompt").is_ok());
+        assert!(require_correlated_response(&response, "morn-prompt-2", "prompt").is_err());
+        assert!(require_correlated_response(&response, "morn-prompt-1", "abort").is_err());
     }
 
     #[test]
