@@ -10,7 +10,7 @@ use morn_assurance::replacement::ReplacementPilot;
 use morn_assurance::replay::ReplayRunner;
 use morn_assurance::rollback::RollbackService;
 use morn_assurance::shadow::ShadowRunner;
-use morn_assurance::AdmissionService;
+use morn_assurance::{reference_evidence_ledger, AdmissionService, EvidenceClaim, EvidenceLedger};
 #[cfg(feature = "domain-biolab")]
 use morn_biolab_reference::dream_factory::{LoopAResult, LoopCResult};
 #[cfg(feature = "domain-biolab")]
@@ -69,6 +69,10 @@ pub struct AppInner {
     /// Deployment-issued, exact Work/Outcome/disposition review authorizations.
     /// IDs are bearer references delivered out-of-band and are never listed by the API.
     pub acceptance_review_authorizations: Vec<AcceptanceReviewAuthorization>,
+    /// Deployment-owned evidence claims. Repository/reference claims are loaded
+    /// first; external RealSite/ProductionWrite proof may only come from the
+    /// explicit deployment file, never from an HTTP self-assertion.
+    pub evidence_ledger: EvidenceLedger,
     pub evolution: EvolutionEngine,
     pub durable: DurableWorkService,
     pub durable_v2: DurableRuntime,
@@ -354,6 +358,48 @@ fn configured_acceptance_review_authorizations(
     Ok(authorizations)
 }
 
+fn configured_evidence_ledger() -> morn_kernel::Result<EvidenceLedger> {
+    let mut ledger = reference_evidence_ledger();
+    let Ok(path) = std::env::var("MORN_EVIDENCE_CLAIMS_FILE") else {
+        return Ok(ledger);
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_EVIDENCE_CLAIMS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read evidence claim file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid evidence claim JSON in {path:?}: {error}"
+        ))
+    })?;
+    let claims: Vec<EvidenceClaim> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid evidence claim entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid evidence claim entry: {error}"
+            ))
+        })?],
+    };
+    for claim in claims {
+        ledger.append(claim)?;
+    }
+    Ok(ledger)
+}
+
 fn configured_pi_harness() -> morn_kernel::Result<PiHarnessProvider> {
     match std::env::var("MORN_PI_MODE") {
         Err(std::env::VarError::NotPresent) => Ok(PiHarnessProvider::new(PiMode::Fixture)),
@@ -401,6 +447,7 @@ impl AppState {
         let source_observation_attestations = configured_source_observation_attestations()?;
         let acceptance_reviewers = configured_acceptance_reviewers()?;
         let acceptance_review_authorizations = configured_acceptance_review_authorizations()?;
+        let evidence_ledger = configured_evidence_ledger()?;
         let mut inner = AppInner {
             store,
             workspace,
@@ -417,6 +464,7 @@ impl AppState {
             source_observation_attestations,
             acceptance_reviewers,
             acceptance_review_authorizations,
+            evidence_ledger,
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
             durable_v2: DurableRuntime::new(),

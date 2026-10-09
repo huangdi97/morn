@@ -124,6 +124,22 @@ impl EvidenceLedger {
         if claim.issuer.trim().is_empty() {
             return Err(Error::validation("evidence claim issuer is required"));
         }
+        if claim.state == EvidenceClaimState::Proven && claim.evidence_refs.is_empty() {
+            return Err(Error::validation(
+                "a proven evidence claim requires explicit evidence references",
+            ));
+        }
+        if claim.state == EvidenceClaimState::BlockedExternal && claim.reason.trim().is_empty() {
+            return Err(Error::validation(
+                "an external blocker requires an explicit reason",
+            ));
+        }
+        if self.claims.iter().any(|existing| existing.id == claim.id) {
+            return Err(Error::conflict(format!(
+                "evidence claim {} already exists",
+                claim.id
+            )));
+        }
         self.claims.push(claim);
         Ok(())
     }
@@ -260,6 +276,23 @@ pub fn reference_evidence_ledger() -> EvidenceLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deserialized_proven_claim_cannot_bypass_evidence_requirements() {
+        let claim: EvidenceClaim = serde_json::from_value(serde_json::json!({
+            "id": "evidence-claim:deployment-forged",
+            "subject": "value:work:g1:outcome",
+            "class": "real-site",
+            "state": "proven",
+            "evidence_refs": [],
+            "issuer": "deployment-loader",
+            "reason": "missing actual witness",
+            "observed_at": "1970-01-01T00:00:00Z"
+        }))
+        .unwrap();
+        let mut ledger = EvidenceLedger::default();
+        assert!(ledger.append(claim).is_err());
+    }
 
     #[test]
     fn reference_ledger_never_upgrades_external_blockers() {

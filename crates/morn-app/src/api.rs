@@ -123,6 +123,7 @@ pub fn router(state: AppState) -> Router {
             "/api/v115/work/review-outcome",
             post(v115_work_review_outcome),
         )
+        .route("/api/v115/work/assess-value", post(v115_work_assess_value))
         .route("/api/v115/solutions", get(v115_solutions))
         .route("/api/v115/capabilities", get(v115_capabilities))
         .route("/api/v115/discovery", get(v115_discovery))
@@ -288,12 +289,13 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         .map(|item| json!({ "id": item.id, "version": item.version }))
         .collect();
     let mut provider_catalog = morn_runtime::reference_provider_catalog();
-    let (dsh_harness, pi_harness, execution_environment_attestations) = {
+    let (dsh_harness, pi_harness, execution_environment_attestations, evidence_ledger) = {
         let guard = state.lock();
         (
             guard.dsh_harness.clone(),
             guard.pi_harness.clone(),
             guard.execution_environments.attestations(),
+            guard.evidence_ledger.clone(),
         )
     };
     let (
@@ -387,7 +389,6 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
     project_runtime_health("deepseek-harness", &dsh_health)?;
     project_runtime_health("pi", &pi_health)?;
     drop(project_runtime_health);
-    let evidence_ledger = morn_assurance::reference_evidence_ledger();
     let providers = provider_catalog.list();
     let provider_observations = provider_catalog.observations();
     let required_guarantees: Vec<String> = profile
@@ -1057,6 +1058,175 @@ async fn v115_work_observe_outcome(
         "caller_supplied_world_facts": false,
         "independent_acceptance": false,
         "note": "Deployment-attested authoritative observation advances Work to Delivered, not Accepted. Independent review remains required."
+    })))
+}
+
+fn value_claim_subject(
+    work_id: &morn_kernel::ids::WorkPackageId,
+    generation: u64,
+    outcome_id: &morn_kernel::ids::OutcomeRecordId,
+) -> String {
+    format!("value:{}:g{}:{}", work_id, generation, outcome_id)
+}
+
+async fn v115_work_assess_value(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_assurance::EvidenceClass;
+    use morn_control_plane::ControlPlaneStore;
+    use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+    use morn_work::control::{WorkPhase, WorkResource};
+    use morn_work::value::{ValueAssessment, ValueEvidenceClass};
+    use morn_world::ObservedOutcome;
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let outcome_id = body
+        .get("outcome_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("outcome_id is required")))?;
+    let acceptance_id = body
+        .get("acceptance_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("acceptance_id is required")))?;
+    let evidence_class = match body
+        .get("evidence_class")
+        .and_then(Value::as_str)
+        .unwrap_or("observed-operational")
+    {
+        "fixture" => ValueEvidenceClass::Fixture,
+        "simulation" => ValueEvidenceClass::Simulation,
+        "shadow" => ValueEvidenceClass::Shadow,
+        "observed-operational" => ValueEvidenceClass::ObservedOperational,
+        "customer-validated" => ValueEvidenceClass::CustomerValidated,
+        other => {
+            return Err(AppError(Error::validation(format!(
+                "unsupported value evidence class {other:?}"
+            ))))
+        }
+    };
+    let evidence_refs: Vec<String> = body
+        .get("evidence_refs")
+        .and_then(Value::as_array)
+        .ok_or_else(|| AppError(Error::validation("evidence_refs array is required")))?
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect();
+    if evidence_refs.is_empty() {
+        return Err(AppError(Error::validation(
+            "value assessment requires explicit evidence references",
+        )));
+    }
+
+    let guard = state.lock();
+    let work = guard
+        .store
+        .load_record::<WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+    }
+    if work.status.phase != WorkPhase::Accepted {
+        return Err(AppError(Error::invalid_state(
+            "value assessment requires an independently Accepted Work generation",
+        )));
+    }
+    let outcome = guard
+        .store
+        .load_record::<ObservedOutcome>("observed_outcome_v115", outcome_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("ObservedOutcome {outcome_id}"))))?;
+    if outcome.work_package_id != work.id
+        || outcome.workspace_id != work.workspace_id
+        || outcome.work_generation != work.generation
+        || !outcome.is_source_grounded()
+    {
+        return Err(AppError(Error::validation(
+            "value assessment requires a source-grounded outcome from the exact current Work generation",
+        )));
+    }
+    let acceptance = guard
+        .store
+        .load_record::<AcceptanceDecision>("acceptance_decision_v115", acceptance_id)?
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "AcceptanceDecision {acceptance_id}"
+            )))
+        })?;
+    if acceptance.work_package_id != work.id
+        || acceptance.work_generation != work.generation
+        || acceptance.disposition != AcceptanceDisposition::Accept
+        || !acceptance.is_final_acceptance()
+        || !acceptance.outcome_refs.contains(&outcome.id)
+    {
+        return Err(AppError(Error::validation(
+            "value assessment requires final independent acceptance of the exact outcome",
+        )));
+    }
+
+    let subject = value_claim_subject(&work.id, work.generation, &outcome.id);
+    let mut assessment = ValueAssessment::new(work.id.clone(), outcome.id.clone(), evidence_class);
+    assessment.pin_work_generation(work.generation)?;
+    assessment.acceptance_ref = Some(acceptance.id.clone());
+    assessment.evidence_refs = evidence_refs;
+    assessment.baseline_ref = body
+        .get("baseline_ref")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    if let Some(kpis) = body.get("kpis").and_then(Value::as_object) {
+        for (name, value) in kpis {
+            if name.trim().is_empty() {
+                return Err(AppError(Error::validation("KPI name must not be empty")));
+            }
+            let value = value
+                .as_f64()
+                .ok_or_else(|| AppError(Error::validation("KPI values must be numeric")))?;
+            if !value.is_finite() {
+                return Err(AppError(Error::validation("KPI values must be finite")));
+            }
+            assessment.kpis.push((name.clone(), value));
+        }
+    }
+
+    let mut real_site_evidence = Vec::new();
+    if evidence_class == ValueEvidenceClass::CustomerValidated {
+        let claims: Vec<_> = guard
+            .evidence_ledger
+            .proven_for(&subject)
+            .into_iter()
+            .filter(|claim| claim.class == EvidenceClass::RealSite)
+            .collect();
+        if claims.is_empty() {
+            return Err(AppError(Error::not_authorized(format!(
+                "CustomerValidated value requires deployment-owned RealSite evidence for subject {subject}"
+            ))));
+        }
+        for claim in claims {
+            real_site_evidence.extend(claim.evidence_refs.iter().cloned());
+        }
+        assessment.evidence_refs.extend(real_site_evidence.clone());
+        assessment.evidence_refs.sort();
+        assessment.evidence_refs.dedup();
+    }
+
+    guard.store.save_value_assessment(&work, &assessment)?;
+
+    Ok(Json(json!({
+        "value_assessment": assessment,
+        "value_subject": subject,
+        "real_site_evidence_refs": real_site_evidence,
+        "customer_validated": evidence_class == ValueEvidenceClass::CustomerValidated,
+        "note": "Value is attached to an exact accepted, source-grounded Work outcome. CustomerValidated additionally requires deployment-owned RealSite evidence."
     })))
 }
 
