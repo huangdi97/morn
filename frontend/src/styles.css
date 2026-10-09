@@ -393,3 +393,38 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
     font-size: 13px;
   }
 }
+
+/* v11.5 governed Work -> Binding -> Harness execution controls. */
+.governed-execution-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin: 12px 0;
+}
+.governed-execution-grid label,
+.governed-execution-prompt {
+  display: grid;
+  gap: 7px;
+  color: #aebed4;
+  font-size: 12px;
+}
+.governed-execution-grid select,
+.governed-execution-prompt textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #3a4a63;
+  border-radius: 9px;
+  background: #101927;
+  color: #e8eef8;
+  padding: 9px 10px;
+}
+.governed-execution-prompt {
+  margin-top: 14px;
+}
+.governed-execution-prompt textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+@media (max-width: 760px) {
+  .governed-execution-grid { grid-template-columns: 1fr; }
+}

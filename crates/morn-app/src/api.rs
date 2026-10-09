@@ -398,10 +398,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
     })))
 }
 
-async fn v115_work_bind_e0(
-    State(state): State<AppState>,
-    Json(body): Json<Value>,
-) -> ApiResult {
+async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_capability::{CapabilityStage, EffectClass};
     use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
     use morn_kernel::time::Timestamp;
@@ -484,12 +481,13 @@ async fn v115_work_bind_e0(
         )));
     }
 
-    let profile = morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
-        AppError(Error::validation(format!(
-            "unsupported Work profile {}",
-            work.spec.profile_ref
-        )))
-    })?;
+    let profile =
+        morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+            AppError(Error::validation(format!(
+                "unsupported Work profile {}",
+                work.spec.profile_ref
+            )))
+        })?;
     if profile.requires("CapabilityQualification") {
         let site = work
             .spec
@@ -551,10 +549,8 @@ async fn v115_work_bind_e0(
         }
     };
 
-    if capability.manifest.execution.minimum_isolation
-        != morn_kernel::ExecutionClass::NoIsolation
-        && capability.manifest.execution.minimum_isolation
-            != morn_kernel::ExecutionClass::Process
+    if capability.manifest.execution.minimum_isolation != morn_kernel::ExecutionClass::NoIsolation
+        && capability.manifest.execution.minimum_isolation != morn_kernel::ExecutionClass::Process
     {
         return Err(AppError(Error::invalid_state(
             "reference bind-e0 cannot fabricate a stronger execution environment; use an attested deployment binding",
@@ -3225,7 +3221,9 @@ mod workspace_boundary_tests {
 
     #[tokio::test]
     async fn bind_e0_requires_current_resolution_evidence_and_never_starts_execution() {
-        use morn_capability::{CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass};
+        use morn_capability::{
+            CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass,
+        };
         use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
         use morn_kernel::ids::CapabilityId;
         use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
@@ -3263,7 +3261,10 @@ mod workspace_boundary_tests {
                 vec![capability.manifest.id.to_string()],
             )
             .unwrap();
-            guard.store.save_condition_evidence(&work, &evidence).unwrap();
+            guard
+                .store
+                .save_condition_evidence(&work, &evidence)
+                .unwrap();
             work.status.phase = WorkPhase::Ready;
             work.set_condition(morn_work::control::WorkCondition {
                 condition_type: "CapabilityResolved".to_string(),

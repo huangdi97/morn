@@ -244,6 +244,158 @@ export function CanonicalWorkOverview({
   );
 }
 
+type E0HarnessCapability = {
+  manifest: {
+    id: string;
+    name: string;
+    provider_ref: string;
+    authority: { maximum_effect: string };
+  };
+  stage: string;
+};
+
+function GovernedE0Executor({
+  control,
+  capabilities,
+  reload,
+}: {
+  control: V115ControlPlaneData;
+  capabilities: E0HarnessCapability[];
+  reload: () => void;
+}) {
+  const [workId, setWorkId] = useState("");
+  const [capabilityId, setCapabilityId] = useState("");
+  const [prompt, setPrompt] = useState("Execute the bound E0 capability and return executor evidence only.");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const candidateWorks = control.work.filter((work) =>
+    ["Ready", "Running", "Waiting"].includes(work.status.phase),
+  );
+  const eligibleCapabilities = capabilities.filter(
+    (capability) =>
+      ["Qualified", "Admitted"].includes(capability.stage) &&
+      ["morn-native", "deepseek-harness", "pi"].includes(capability.manifest.provider_ref) &&
+      capability.manifest.authority.maximum_effect === "E0LifecycleReversible",
+  );
+  const effectiveWorkId = workId || candidateWorks[0]?.id || "";
+  const workBindings = control.execution_bindings.filter(
+    (binding) =>
+      textField(binding, "work_id") === effectiveWorkId &&
+      binding.work_generation ===
+        candidateWorks.find((work) => work.id === effectiveWorkId)?.generation,
+  );
+  const effectiveCapabilityId = capabilityId || eligibleCapabilities[0]?.manifest.id || "";
+
+  const bind = async () => {
+    if (!effectiveWorkId || !effectiveCapabilityId) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      await apiPostJson("/v115/work/bind-e0", {
+        work_id: effectiveWorkId,
+        capability_manifest_id: effectiveCapabilityId,
+      });
+      setMessage("Binding persisted. Execution has not started.");
+      reload();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const execute = async () => {
+    const bindingId = textField(workBindings[0] ?? {}, "id");
+    if (!effectiveWorkId || !bindingId || !prompt.trim()) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await apiPostJson<{
+        executor_status: string;
+        business_outcome_observed: boolean;
+        independent_acceptance: boolean;
+      }>("/v115/work/execute-e0", {
+        work_id: effectiveWorkId,
+        binding_id: bindingId,
+        input: prompt,
+      });
+      setMessage(
+        `Executor: ${response.executor_status}. Business outcome: ${response.business_outcome_observed ? "observed" : "not observed"}. Independent acceptance: ${response.independent_acceptance ? "yes" : "no"}.`,
+      );
+      reload();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (candidateWorks.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card title="Governed E0 execution">
+      <p>
+        Bind only a current-generation resolved E0 capability, then execute it as executor evidence.
+        Real DSH/Pi bindings fail closed without trusted environment attestation. Harness completion
+        never creates a business outcome or acceptance.
+      </p>
+      <div className="governed-execution-grid">
+        <label>
+          Work
+          <select value={effectiveWorkId} onChange={(event) => setWorkId(event.target.value)}>
+            {candidateWorks.map((work) => (
+              <option key={work.id} value={work.id}>
+                {work.spec.goal} · {work.status.phase}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          E0 capability
+          <select
+            value={effectiveCapabilityId}
+            onChange={(event) => setCapabilityId(event.target.value)}
+            disabled={eligibleCapabilities.length === 0}
+          >
+            {eligibleCapabilities.length === 0 ? (
+              <option value="">No qualified/admitted Harness E0 capability</option>
+            ) : (
+              eligibleCapabilities.map((capability) => (
+                <option key={capability.manifest.id} value={capability.manifest.id}>
+                  {capability.manifest.name} · {capability.manifest.provider_ref}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </div>
+      <div className="page-actions">
+        <button disabled={busy || !effectiveCapabilityId} onClick={bind}>
+          Persist binding
+        </button>
+        <span className="muted">
+          {workBindings.length > 0
+            ? `${workBindings.length} binding(s) persisted for this generation`
+            : "No binding persisted for this generation"}
+        </span>
+      </div>
+      <label className="governed-execution-prompt">
+        Executor input
+        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+      </label>
+      <div className="page-actions">
+        <button disabled={busy || workBindings.length === 0 || !prompt.trim()} onClick={execute}>
+          Execute bound E0 capability
+        </button>
+      </div>
+      {message && <p role="status" className="work-focus-empty">{message}</p>}
+    </Card>
+  );
+}
+
 export default function Workbench() {
   const [data, setData] = useState<WorkbenchData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -265,6 +417,7 @@ export default function Workbench() {
   const [v115ControlError, setV115ControlError] = useState<string | null>(null);
   const [v115ControlLoading, setV115ControlLoading] = useState(true);
   const [uiExtensions, setUiExtensions] = useState<UiExtensionRegistry | null>(null);
+  const [v115Capabilities, setV115Capabilities] = useState<E0HarnessCapability[]>([]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -286,6 +439,9 @@ export default function Workbench() {
     apiGet<UiExtensionRegistry>("/v115/ui/extensions")
       .then(setUiExtensions)
       .catch(() => undefined);
+    apiGet<{ capabilities: E0HarnessCapability[] }>("/v115/capabilities")
+      .then((response) => setV115Capabilities(response.capabilities))
+      .catch(() => setV115Capabilities([]));
   }, []);
 
   useEffect(load, [load]);
@@ -323,6 +479,13 @@ export default function Workbench() {
           <h1>Workbench</h1>
         </header>
         <CanonicalWorkOverview control={v115Control} error={v115ControlError} />
+        {v115Control && (
+          <GovernedE0Executor
+            control={v115Control}
+            capabilities={v115Capabilities}
+            reload={load}
+          />
+        )}
         <p role="status" className="work-focus-empty">
           {error
             ? `Legacy diagnostic data is unavailable: ${error}. Canonical Work remains authoritative.`
@@ -479,6 +642,13 @@ export default function Workbench() {
       </header>
 
       <CanonicalWorkOverview control={v115Control} error={v115ControlError} />
+      {v115Control && (
+        <GovernedE0Executor
+          control={v115Control}
+          capabilities={v115Capabilities}
+          reload={load}
+        />
+      )}
 
       <details className="workbench-reference" data-testid="reference-tools">
         <summary>Reference runs &amp; engineering diagnostics</summary>
