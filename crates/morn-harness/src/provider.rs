@@ -210,6 +210,13 @@ pub trait HarnessProvider: Send + Sync {
         HarnessProviderFeatures::full_reference()
     }
 
+    /// Scope restrictions required before this provider may start work.
+    /// Generic contract/smoke runners consume this rather than guessing
+    /// provider-specific admission rules.
+    fn required_scope_restrictions(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     /// Exact provider runtime version observed by the transport handshake when
     /// available. Absence must never be replaced with a guessed version.
     fn runtime_version(&self) -> Option<String> {
@@ -817,6 +824,13 @@ impl HarnessProvider for DeepSeekHarnessProvider {
         match self.mode {
             DshMode::Fixture => HarnessProviderFeatures::full_reference(),
             DshMode::Real => HarnessProviderFeatures::dsh_sdk_current(),
+        }
+    }
+
+    fn required_scope_restrictions(&self) -> &'static [&'static str] {
+        match self.mode {
+            DshMode::Fixture => &[],
+            DshMode::Real => &[DSH_REAL_E0_SCOPE_RESTRICTION],
         }
     }
 

@@ -5,7 +5,6 @@ use morn_kernel::error::Result;
 use morn_kernel::ids::WorkspaceId;
 
 use crate::context::RuntimeContext;
-use crate::event::ExecutionEventKind;
 use crate::provider::{HarnessProvider, ProviderHandle};
 use crate::scope::{CapabilityScope, ScopeKind};
 use morn_kernel::ids::{ActorInstanceId, WorkPackageId};
@@ -40,12 +39,16 @@ pub fn run_provider_contract(
     let provider_name = provider.provider_name().to_string();
 
     // lifecycle
-    let mount_result = provider.mount(CapabilityScope::new(
+    let mut contract_scope = CapabilityScope::new(
         ScopeKind::Workcell,
         None,
         ctx.workspace_id.clone(),
         "contract-scope",
-    ));
+    );
+    for restriction in provider.required_scope_restrictions() {
+        contract_scope = contract_scope.with_restriction(*restriction);
+    }
+    let mount_result = provider.mount(contract_scope);
     let handle: ProviderHandle = match mount_result {
         Ok(h) => {
             check(&mut report, "mount", true);
@@ -76,22 +79,19 @@ pub fn run_provider_contract(
         &mut report,
         "event normalization",
         !events.is_empty()
-            && events.iter().all(|e| {
-                matches!(
-                    e.kind,
-                    ExecutionEventKind::SessionStarted
-                        | ExecutionEventKind::ModelResponse
-                        | ExecutionEventKind::ToolCompleted
-                )
+            && events.iter().all(|event| {
+                event.workspace_id == ctx.workspace_id
+                    && event.session_id == session.id
+                    && !event.summary.trim().is_empty()
             }),
     );
 
     check(
         &mut report,
         "inspect",
-        provider
-            .inspect(&session.id)
-            .is_ok_and(|s| s.status == "running"),
+        provider.inspect(&session.id).is_ok_and(|snapshot| {
+            snapshot.session_id == session.id && !snapshot.status.trim().is_empty()
+        }),
     );
 
     let features = provider.features();

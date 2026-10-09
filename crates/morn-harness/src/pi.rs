@@ -291,6 +291,13 @@ impl HarnessProvider for PiHarnessProvider {
         }
     }
 
+    fn required_scope_restrictions(&self) -> &'static [&'static str] {
+        match self.mode {
+            PiMode::Fixture => &[],
+            PiMode::Real => &[PI_REAL_E0_SCOPE_RESTRICTION],
+        }
+    }
+
     fn runtime_version(&self) -> Option<String> {
         match self.mode {
             PiMode::Fixture => Some("fixture".to_string()),

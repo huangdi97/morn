@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use morn_kernel::error::Result;
 
 use crate::context::RuntimeContext;
-use crate::event::ExecutionEventKind;
 use crate::provider::HarnessProvider;
 use crate::scope::{CapabilityScope, ScopeKind};
 
@@ -45,12 +44,16 @@ pub fn run_harness_smoke(
     ctx: &RuntimeContext,
 ) -> Result<HarnessSmokeReport> {
     let name = provider.provider_name().to_string();
-    let scope = provider.mount(CapabilityScope::new(
+    let mut smoke_scope = CapabilityScope::new(
         ScopeKind::Workcell,
         None,
         ctx.workspace_id.clone(),
         "smoke-scope",
-    ));
+    );
+    for restriction in provider.required_scope_restrictions() {
+        smoke_scope = smoke_scope.with_restriction(*restriction);
+    }
+    let scope = provider.mount(smoke_scope);
     let handle = scope
         .clone()
         .unwrap_or_else(|_| crate::provider::ProviderHandle {
@@ -74,9 +77,9 @@ pub fn run_harness_smoke(
     }
     let session_id = session.as_ref().ok().map(|s| s.id.clone());
     let health = match session.as_ref().ok() {
-        Some(s) => provider
-            .inspect(&s.id)
-            .is_ok_and(|snap| snap.status == "running"),
+        Some(session) => provider.inspect(&session.id).is_ok_and(|snapshot| {
+            snapshot.session_id == session.id && !snapshot.status.trim().is_empty()
+        }),
         None => false,
     };
 
@@ -90,13 +93,10 @@ pub fn run_harness_smoke(
         .map(|id| {
             let events = provider.stream_events(id);
             !events.is_empty()
-                && events.iter().all(|e| {
-                    matches!(
-                        e.kind,
-                        ExecutionEventKind::SessionStarted
-                            | ExecutionEventKind::ModelResponse
-                            | ExecutionEventKind::ToolCompleted
-                    )
+                && events.iter().all(|event| {
+                    event.workspace_id == ctx.workspace_id
+                        && event.session_id == *id
+                        && !event.summary.trim().is_empty()
                 })
         })
         .unwrap_or(false);
@@ -105,8 +105,16 @@ pub fn run_harness_smoke(
     let action_gateway_mediated = true;
     let provenance_preserved = !ctx.provenance_refs.is_empty();
 
+    let features = provider.features();
     let teardown_ok = match &session_id {
-        Some(id) => provider.terminate(id).is_ok() && provider.unmount(&handle).is_ok(),
+        Some(id) => {
+            let session_cleanup = if features.session_close {
+                provider.terminate(id).is_ok()
+            } else {
+                true
+            };
+            session_cleanup && provider.unmount(&handle).is_ok()
+        }
         None => false,
     };
 
@@ -119,7 +127,11 @@ pub fn run_harness_smoke(
         events_normalized,
         provenance_preserved,
         teardown_ok,
-        detail: "smoke contract complete".to_string(),
+        detail: if features.session_close {
+            "smoke contract complete".to_string()
+        } else {
+            "smoke contract complete; per-session close is unsupported and was not fabricated".to_string()
+        },
     })
 }
 
