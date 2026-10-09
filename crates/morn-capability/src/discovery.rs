@@ -142,9 +142,7 @@ pub fn project_oasf(
         ));
     }
     let taxonomy_version = taxonomy_version.into();
-    if taxonomy_version.trim().is_empty()
-        || domains.iter().any(|domain| domain.trim().is_empty())
-    {
+    if taxonomy_version.trim().is_empty() || domains.iter().any(|domain| domain.trim().is_empty()) {
         return Err(Error::validation(
             "OASF projection requires taxonomy version and non-empty domain labels",
         ));
@@ -227,7 +225,9 @@ mod tests {
         // Even a qualified/admitted canonical record is exported only as
         // declared discovery metadata.
         record.stage = CapabilityStage::Qualified;
-        record.qualification_refs.push("qualification://q1".to_string());
+        record
+            .qualification_refs
+            .push("qualification://q1".to_string());
         record.admitted_sites.push("site-a".to_string());
         record
     }

@@ -135,9 +135,7 @@ pub fn validate_wasm_component_binding(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        CapabilityInterface, CapabilityKind, CapabilityManifest, EffectClass,
-    };
+    use crate::{CapabilityInterface, CapabilityKind, CapabilityManifest, EffectClass};
     use morn_kernel::ids::CapabilityId;
 
     fn manifest() -> CapabilityManifest {
@@ -190,7 +188,9 @@ mod tests {
         .is_err());
 
         let mut m = manifest();
-        m.execution.writable_paths.push("/workspace/out".to_string());
+        m.execution
+            .writable_paths
+            .push("/workspace/out".to_string());
         let grant = WasmHostGrant {
             writable_paths: vec!["/workspace/out".to_string()],
             ..Default::default()
@@ -210,7 +210,8 @@ mod tests {
     fn component_cannot_exist_without_explicit_wit_interface() {
         let mut m = manifest();
         m.interfaces.clear();
-        assert!(validate_wasm_component_binding(&m, &component(), &WasmHostGrant::default())
-            .is_err());
+        assert!(
+            validate_wasm_component_binding(&m, &component(), &WasmHostGrant::default()).is_err()
+        );
     }
 }

@@ -61,11 +61,7 @@ impl MornTelemetryOperation {
                 ATTR_EXECUTION_ENVIRONMENT_ID,
             ],
             Self::ExternalAction => &[ATTR_WORK_ID, ATTR_BINDING_ID, ATTR_ATTEMPT_ID],
-            Self::Reconciliation => &[
-                ATTR_WORK_ID,
-                ATTR_ATTEMPT_ID,
-                ATTR_RECONCILIATION_ID,
-            ],
+            Self::Reconciliation => &[ATTR_WORK_ID, ATTR_ATTEMPT_ID, ATTR_RECONCILIATION_ID],
             Self::OutcomeObservation => &[ATTR_WORK_ID, ATTR_OUTCOME_ID],
             Self::AcceptanceDecision => &[ATTR_WORK_ID, ATTR_OUTCOME_ID, ATTR_ACCEPTANCE_ID],
         }
@@ -150,7 +146,10 @@ impl TelemetryRecord {
         evidence_refs: Vec<String>,
     ) -> Result<Self> {
         context.validate_for(operation)?;
-        if evidence_refs.iter().any(|reference| reference.trim().is_empty()) {
+        if evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+        {
             return Err(Error::validation(
                 "telemetry evidence references must be non-empty identifiers",
             ));
@@ -176,9 +175,16 @@ fn validate_telemetry_attribute(key: &str, value: &str) -> Result<()> {
         ));
     }
     let normalized = key.to_ascii_lowercase();
-    if ["token", "password", "secret", "credential", "api_key", "apikey"]
-        .iter()
-        .any(|sensitive| normalized.contains(sensitive))
+    if [
+        "token",
+        "password",
+        "secret",
+        "credential",
+        "api_key",
+        "apikey",
+    ]
+    .iter()
+    .any(|sensitive| normalized.contains(sensitive))
     {
         return Err(Error::validation(
             "credentials/secrets must not be emitted as telemetry attributes",

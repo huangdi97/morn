@@ -78,7 +78,7 @@ Morn remains Work-first, not Agent-first:
 | site + profile admission | SiteAdmission + exact admission refs | implemented |
 | Profile as guarantees, not vendors | `morn-profile` | implemented |
 | Profile registry/evolution | ProfileRegistry + compatibility/migration plan | implemented |
-| Artifact2Capability | OpenAPI/SOP/Repo/reviewed-paper compilers | implemented |
+| Artifact2Capability | OpenAPI/SOP/Repo/reviewed-paper/model/workflow compilers + Studio/API E2E | implemented |
 | capability packaging | OCI-oriented descriptor + Sigstore/SLSA refs | implemented contract; real registry external |
 | package compatibility axes | protocol/profile/composition compatibility separated from legacy core_compat ABI | implemented |
 | CloudEvents-style integration envelope | kernel event envelope | implemented |
@@ -422,3 +422,21 @@ list of attribute constants:
 The implementation intentionally does not select an OpenTelemetry SDK,
 collector, backend or vendor. Those remain deployment concerns and cannot
 become canonical Work/Outcome truth.
+
+
+## 18. Artifact2Capability model/workflow closure — 2026-10-09
+
+- Model manifests must pin a non-empty model reference, sha256 model digest,
+  explicit input/output schema references and declared capabilities.
+- A model compiler emits an E0 Model-kind Declared candidate only. Model
+  availability/inference success does not prove qualification, site admission,
+  Outcome or Acceptance.
+- Workflow manifests must pin engine + workflow reference and explicit steps.
+  Step effects determine the conservative capability effect ceiling; E2 requires
+  an explicit compensation reference.
+- Durable workflow identity remains executor/runtime metadata beneath Morn Work.
+  Workflow completion cannot replace Work identity or directly create
+  ObservedOutcome / AcceptanceDecision.
+- API and Studio expose both flows and Playwright exercises them through the
+  product surface, while the candidates remain in the normal qualification /
+  release / site-admission supply chain.

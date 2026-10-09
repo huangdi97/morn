@@ -50,6 +50,14 @@ export default function Studio() {
     '{"reviewed":true,"executable":true,"provides":["method.execute"],"code_bindings":["repo://paper-code#run"],"evidence_refs":["doi://example#method"]}',
   );
   const [paperCandidate, setPaperCandidate] = useState<OpenApiCompileOutcome | null>(null);
+  const [modelText, setModelText] = useState(
+    '{"model_ref":"model://risk/v1","model_digest":"sha256:model123","provides":["risk.score"],"input_schema_ref":"schema://risk/input","output_schema_ref":"schema://risk/output","runtime_kinds":["onnx"]}',
+  );
+  const [modelCandidate, setModelCandidate] = useState<OpenApiCompileOutcome | null>(null);
+  const [workflowText, setWorkflowText] = useState(
+    '{"engine":"temporal","workflow_ref":"workflow://delivery-review/v1","provides":["delivery.review"],"steps":[{"id":"read","capability":"erp.read","effect":"E0"},{"id":"notify","capability":"notification.send","effect":"E1"}]}',
+  );
+  const [workflowCandidate, setWorkflowCandidate] = useState<OpenApiCompileOutcome | null>(null);
   const [profileRef, setProfileRef] = useState("morn.lite@1.0.0");
   const [profileOptions, setProfileOptions] = useState<string[]>([
     "morn.lite@1.0.0",
@@ -192,6 +200,34 @@ export default function Studio() {
         content: paperText,
       });
       setPaperCandidate(result);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const compileModel = async () => {
+    setError(null);
+    try {
+      const result = await apiPostJson<OpenApiCompileOutcome>("/v115/artifact/model/compile", {
+        name: "studio-model-capability",
+        source_ref: "studio://model-manifest",
+        content: modelText,
+      });
+      setModelCandidate(result);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const compileWorkflow = async () => {
+    setError(null);
+    try {
+      const result = await apiPostJson<OpenApiCompileOutcome>("/v115/artifact/workflow/compile", {
+        name: "studio-workflow-capability",
+        source_ref: "studio://workflow-manifest",
+        content: workflowText,
+      });
+      setWorkflowCandidate(result);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -467,8 +503,9 @@ export default function Studio() {
       <details className="studio-capability-details">
         <summary>Advanced · Import assets as candidate capabilities</summary>
         <p className="studio-capability-warning">
-          OpenAPI, procedures, repositories and reviewed papers create <strong>candidate</strong>
-          capabilities. Qualification, release, site admission and execution authority are separate gates.
+          OpenAPI, procedures, repositories, reviewed papers, models and workflows create{" "}
+          <strong>candidate</strong> capabilities. Qualification, release, site admission and
+          execution authority are separate gates.
         </p>
       <Card title="Artifact → Capability Candidate">
         <p>
@@ -564,6 +601,56 @@ export default function Studio() {
             />
             <KeyValue k="Paper admission" v={paperCandidate.admission} />
             <KeyValue k="Paper next gates" v={paperCandidate.next.join(" → ")} />
+          </>
+        )}
+
+        <hr style={{ margin: "20px 0" }} />
+        <p>
+          Model manifests must pin an immutable model reference/digest and explicit schemas.
+          A runnable model is still only a Declared capability candidate.
+        </p>
+        <textarea
+          style={{ width: "100%", minHeight: 110, padding: 8 }}
+          value={modelText}
+          onChange={(e) => setModelText(e.target.value)}
+        />
+        <div className="page-actions" style={{ marginTop: 8 }}>
+          <button onClick={compileModel}>Compile Model Manifest</button>
+        </div>
+        {modelCandidate && (
+          <>
+            <KeyValue k="Model stage" v={modelCandidate.candidate.record.stage} />
+            <KeyValue
+              k="Model capabilities"
+              v={modelCandidate.candidate.report.discovered_operations.join(", ")}
+            />
+            <KeyValue k="Model admission" v={modelCandidate.admission} />
+            <KeyValue k="Model next gates" v={modelCandidate.next.join(" → ")} />
+          </>
+        )}
+
+        <hr style={{ margin: "20px 0" }} />
+        <p>
+          Durable workflow manifests describe executor orchestration only. Workflow completion does
+          not replace Morn Work identity or independently prove Outcome / Acceptance.
+        </p>
+        <textarea
+          style={{ width: "100%", minHeight: 110, padding: 8 }}
+          value={workflowText}
+          onChange={(e) => setWorkflowText(e.target.value)}
+        />
+        <div className="page-actions" style={{ marginTop: 8 }}>
+          <button onClick={compileWorkflow}>Compile Workflow Manifest</button>
+        </div>
+        {workflowCandidate && (
+          <>
+            <KeyValue k="Workflow stage" v={workflowCandidate.candidate.record.stage} />
+            <KeyValue
+              k="Workflow steps"
+              v={workflowCandidate.candidate.report.discovered_operations.join(", ")}
+            />
+            <KeyValue k="Workflow admission" v={workflowCandidate.admission} />
+            <KeyValue k="Workflow next gates" v={workflowCandidate.next.join(" → ")} />
           </>
         )}
       </Card>

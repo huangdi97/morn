@@ -216,9 +216,9 @@ Planned/allowed compiler kinds include:
 - model -> model capability;
 - workflow -> workflow capability.
 
-The implemented compiler family currently includes conservative OpenAPI JSON,
-structured SOP/procedure, explicit repository-manifest and reviewed
-paper-manifest compilers. They only consume declared/reviewed source facts,
+The implemented compiler family includes conservative OpenAPI JSON,
+structured SOP/procedure, explicit repository-manifest, reviewed
+paper-manifest, pinned model-manifest and durable workflow-manifest compilers. They only consume declared/reviewed source facts,
 record provenance, emit `Declared` candidates and explicitly leave
 qualification/release/site-admission unresolved. Paper-derived executable
 candidates require a real code binding; free-form paper text alone is not

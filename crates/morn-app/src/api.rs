@@ -125,6 +125,11 @@ pub fn router(state: AppState) -> Router {
             post(v115_compile_repository),
         )
         .route("/api/v115/artifact/paper/compile", post(v115_compile_paper))
+        .route("/api/v115/artifact/model/compile", post(v115_compile_model))
+        .route(
+            "/api/v115/artifact/workflow/compile",
+            post(v115_compile_workflow),
+        )
         .route(
             "/api/v115/solution/instantiate",
             post(v115_instantiate_solution),
@@ -354,7 +359,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         },
         "capability_supply_chain": {
             "stages": ["Declared", "Observed", "Qualified", "Admitted", "Suspended", "Retired"],
-            "artifact_compilers": ["OpenAPI2Capability", "SOP2ProcedureCapability", "Repo2Capability", "ReviewedPaper2Capability"],
+            "artifact_compilers": ["OpenAPI2Capability", "SOP2ProcedureCapability", "Repo2Capability", "ReviewedPaper2Capability", "Model2Capability", "Workflow2Capability"],
             "qualification_is_not_admission": true
         },
         "profiles": profiles,
@@ -1072,6 +1077,85 @@ async fn v115_compile_paper(State(state): State<AppState>, Json(body): Json<Valu
         "candidate": candidate,
         "admission": "not-qualified-not-admitted",
         "next": ["independent-evaluation", "qualify", "release", "site-conformance", "admit"]
+    })))
+}
+
+async fn v115_compile_model(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
+    use morn_foundry::{ArtifactCompiler, ArtifactKind, ArtifactSource, ModelManifestCompiler};
+
+    let source = ArtifactSource {
+        kind: ArtifactKind::Model,
+        name: body
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("model-capability")
+            .to_string(),
+        source_ref: body
+            .get("source_ref")
+            .and_then(Value::as_str)
+            .unwrap_or("model://declared-manifest")
+            .to_string(),
+        source_digest: body
+            .get("source_digest")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        content: body
+            .get("content")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                AppError(Error::validation(
+                    "content must contain structured model manifest JSON",
+                ))
+            })?
+            .to_string(),
+    };
+    let candidate = ModelManifestCompiler.compile(&source)?;
+    register_v115_candidate(&state, &candidate.record)?;
+    Ok(Json(json!({
+        "candidate": candidate,
+        "admission": "not-qualified-not-admitted",
+        "next": ["independent-evaluation", "qualify", "release", "site-conformance", "admit"]
+    })))
+}
+
+async fn v115_compile_workflow(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_foundry::{ArtifactCompiler, ArtifactKind, ArtifactSource, WorkflowManifestCompiler};
+
+    let source = ArtifactSource {
+        kind: ArtifactKind::Workflow,
+        name: body
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("workflow-capability")
+            .to_string(),
+        source_ref: body
+            .get("source_ref")
+            .and_then(Value::as_str)
+            .unwrap_or("workflow://declared-manifest")
+            .to_string(),
+        source_digest: body
+            .get("source_digest")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        content: body
+            .get("content")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                AppError(Error::validation(
+                    "content must contain structured workflow manifest JSON",
+                ))
+            })?
+            .to_string(),
+    };
+    let candidate = WorkflowManifestCompiler.compile(&source)?;
+    register_v115_candidate(&state, &candidate.record)?;
+    Ok(Json(json!({
+        "candidate": candidate,
+        "admission": "not-qualified-not-admitted",
+        "next": ["evaluate-workflow-contract", "qualify", "release", "site-conformance", "admit"]
     })))
 }
 

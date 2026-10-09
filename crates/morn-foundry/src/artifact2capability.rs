@@ -554,6 +554,258 @@ impl ArtifactCompiler for ReviewedPaperManifestCompiler {
     }
 }
 
+
+/// Structured model-manifest compiler. A model reference is discovery/runtime
+/// metadata only; model availability or inference success never implies
+/// qualification, site admission, Outcome or Acceptance.
+#[derive(Debug, Default)]
+pub struct ModelManifestCompiler;
+
+impl ArtifactCompiler for ModelManifestCompiler {
+    fn compiler_name(&self) -> &str {
+        "model-manifest-json"
+    }
+
+    fn supports(&self, kind: &ArtifactKind) -> bool {
+        *kind == ArtifactKind::Model
+    }
+
+    fn compile(&self, source: &ArtifactSource) -> Result<CandidateCapability> {
+        if !self.supports(&source.kind) {
+            return Err(Error::invalid_state(
+                "compiler does not support artifact kind",
+            ));
+        }
+        let doc: serde_json::Value = serde_json::from_str(&source.content)
+            .map_err(|error| Error::external(format!("invalid model manifest JSON: {error}")))?;
+        let model_ref = doc
+            .get("model_ref")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| Error::validation("model manifest requires model_ref"))?;
+        let model_digest = doc
+            .get("model_digest")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| value.starts_with("sha256:"))
+            .ok_or_else(|| Error::validation("model manifest requires sha256 model_digest"))?;
+        let provides: Vec<String> = doc
+            .get("provides")
+            .and_then(serde_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if provides.is_empty() {
+            return Err(Error::validation(
+                "model manifest must explicitly declare provides",
+            ));
+        }
+        let input_schema_ref = doc
+            .get("input_schema_ref")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| Error::validation("model manifest requires input_schema_ref"))?;
+        let output_schema_ref = doc
+            .get("output_schema_ref")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| Error::validation("model manifest requires output_schema_ref"))?;
+
+        let mut manifest = CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            &source.name,
+            model_ref,
+            CapabilityKind::Model,
+            EffectClass::E0LifecycleReversible,
+        );
+        manifest.provides = provides.clone();
+        manifest.interfaces.push(CapabilityInterface {
+            protocol: "model-inference".to_string(),
+            input_schema_ref: input_schema_ref.to_string(),
+            output_schema_ref: output_schema_ref.to_string(),
+        });
+        manifest.execution.runtime_kinds = doc
+            .get("runtime_kinds")
+            .and_then(serde_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        manifest.provenance.source_ref = source.source_ref.clone();
+        manifest.provenance.source_digest = source
+            .source_digest
+            .clone()
+            .or_else(|| Some(model_digest.to_string()));
+
+        Ok(CandidateCapability {
+            record: CapabilityRecord::new(manifest),
+            report: CompilationReport {
+                compiler: self.compiler_name().to_string(),
+                source_ref: source.source_ref.clone(),
+                discovered_operations: provides,
+                warnings: vec![
+                    format!("model artifact pinned as {model_ref}@{model_digest}"),
+                    "model compilation does not prove model quality, qualification or site admission"
+                        .to_string(),
+                ],
+            },
+        })
+    }
+}
+
+/// Structured durable-workflow compiler. The workflow task/run remains an
+/// executor object bound beneath Morn Work and can never replace Work identity
+/// or directly assert an accepted business outcome.
+#[derive(Debug, Default)]
+pub struct WorkflowManifestCompiler;
+
+impl ArtifactCompiler for WorkflowManifestCompiler {
+    fn compiler_name(&self) -> &str {
+        "workflow-manifest-json"
+    }
+
+    fn supports(&self, kind: &ArtifactKind) -> bool {
+        *kind == ArtifactKind::Workflow
+    }
+
+    fn compile(&self, source: &ArtifactSource) -> Result<CandidateCapability> {
+        if !self.supports(&source.kind) {
+            return Err(Error::invalid_state(
+                "compiler does not support artifact kind",
+            ));
+        }
+        let doc: serde_json::Value = serde_json::from_str(&source.content)
+            .map_err(|error| Error::external(format!("invalid workflow manifest JSON: {error}")))?;
+        let engine = doc
+            .get("engine")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| Error::validation("workflow manifest requires engine"))?;
+        let workflow_ref = doc
+            .get("workflow_ref")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| Error::validation("workflow manifest requires workflow_ref"))?;
+        let provides: Vec<String> = doc
+            .get("provides")
+            .and_then(serde_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if provides.is_empty() {
+            return Err(Error::validation(
+                "workflow manifest must explicitly declare provides",
+            ));
+        }
+        let steps = doc
+            .get("steps")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| Error::validation("workflow manifest requires steps"))?;
+        if steps.is_empty() {
+            return Err(Error::validation(
+                "workflow manifest must contain at least one step",
+            ));
+        }
+
+        let mut discovered = Vec::new();
+        let mut requires = Vec::new();
+        let mut maximum_effect = EffectClass::E0LifecycleReversible;
+        for step in steps {
+            let id = step
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| Error::validation("workflow step requires id"))?;
+            let capability = step
+                .get("capability")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| Error::validation("workflow step requires capability"))?;
+            let effect = step
+                .get("effect")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("E0");
+            maximum_effect = match effect {
+                "E0" => maximum_effect,
+                "E1" => match maximum_effect {
+                    EffectClass::E0LifecycleReversible => EffectClass::E1Transactional,
+                    current => current,
+                },
+                "E2" => match maximum_effect {
+                    EffectClass::E3Irreversible => EffectClass::E3Irreversible,
+                    _ => EffectClass::E2Compensatable,
+                },
+                "E3" => EffectClass::E3Irreversible,
+                other => {
+                    return Err(Error::validation(format!(
+                        "unsupported workflow effect class {other}"
+                    )))
+                }
+            };
+            if !requires.iter().any(|required| required == capability) {
+                requires.push(capability.to_string());
+            }
+            discovered.push(format!("{id}:{capability}:{effect}"));
+        }
+
+        let mut manifest = CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            &source.name,
+            workflow_ref,
+            CapabilityKind::Hybrid,
+            maximum_effect,
+        );
+        manifest.provides = provides;
+        manifest.requires = requires;
+        manifest.execution.runtime_kinds = vec![format!("workflow:{engine}")];
+        if maximum_effect == EffectClass::E2Compensatable {
+            manifest.compensation_ref = Some(
+                doc.get("compensation_ref")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| {
+                        Error::validation("workflow E2 requires top-level compensation_ref")
+                    })?
+                    .to_string(),
+            );
+        }
+        manifest.interfaces.push(CapabilityInterface {
+            protocol: "durable-workflow".to_string(),
+            input_schema_ref: format!("{workflow_ref}#input"),
+            output_schema_ref: format!("{workflow_ref}#output"),
+        });
+        manifest.provenance.source_ref = source.source_ref.clone();
+        manifest.provenance.source_digest = source.source_digest.clone();
+
+        Ok(CandidateCapability {
+            record: CapabilityRecord::new(manifest),
+            report: CompilationReport {
+                compiler: self.compiler_name().to_string(),
+                source_ref: source.source_ref.clone(),
+                discovered_operations: discovered,
+                warnings: vec![
+                    format!("workflow engine {engine} is executor metadata, not Work identity"),
+                    "workflow completion does not create Morn Outcome or Acceptance".to_string(),
+                    "compiled candidate is not qualified or site-admitted".to_string(),
+                ],
+            },
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -750,6 +1002,108 @@ mod tests {
             .to_string(),
         };
         assert!(ReviewedPaperManifestCompiler.compile(&source).is_err());
+    }
+
+    #[test]
+    fn model_manifest_compiler_requires_pinned_model_and_stays_declared() {
+        let source = ArtifactSource {
+            kind: ArtifactKind::Model,
+            name: "risk-model".to_string(),
+            source_ref: "registry://models/risk".to_string(),
+            source_digest: None,
+            content: r#"{
+                "model_ref":"model://risk/v1",
+                "model_digest":"sha256:model123",
+                "provides":["risk.score"],
+                "input_schema_ref":"schema://risk/input",
+                "output_schema_ref":"schema://risk/output",
+                "runtime_kinds":["onnx"]
+            }"#
+            .to_string(),
+        };
+        let candidate = ModelManifestCompiler.compile(&source).unwrap();
+        assert_eq!(candidate.record.stage, CapabilityStage::Declared);
+        assert_eq!(candidate.record.manifest.kind, CapabilityKind::Model);
+        assert_eq!(
+            candidate.record.manifest.provenance.source_digest.as_deref(),
+            Some("sha256:model123")
+        );
+        assert_eq!(
+            candidate.record.manifest.execution.runtime_kinds,
+            vec!["onnx".to_string()]
+        );
+    }
+
+    #[test]
+    fn model_manifest_without_content_digest_is_rejected() {
+        let source = ArtifactSource {
+            kind: ArtifactKind::Model,
+            name: "floating-model".to_string(),
+            source_ref: "registry://models/floating".to_string(),
+            source_digest: None,
+            content: r#"{
+                "model_ref":"model://floating/latest",
+                "provides":["predict"],
+                "input_schema_ref":"schema://in",
+                "output_schema_ref":"schema://out"
+            }"#
+            .to_string(),
+        };
+        assert!(ModelManifestCompiler.compile(&source).is_err());
+    }
+
+    #[test]
+    fn workflow_compiler_preserves_executor_boundary_and_effect_ceiling() {
+        let source = ArtifactSource {
+            kind: ArtifactKind::Workflow,
+            name: "delivery-review".to_string(),
+            source_ref: "repo://workflow/delivery-review.json".to_string(),
+            source_digest: Some("sha256:wf".to_string()),
+            content: r#"{
+                "engine":"temporal",
+                "workflow_ref":"workflow://delivery-review/v1",
+                "provides":["delivery.review"],
+                "steps":[
+                    {"id":"read","capability":"erp.read","effect":"E0"},
+                    {"id":"notify","capability":"notification.send","effect":"E1"}
+                ]
+            }"#
+            .to_string(),
+        };
+        let candidate = WorkflowManifestCompiler.compile(&source).unwrap();
+        assert_eq!(candidate.record.stage, CapabilityStage::Declared);
+        assert_eq!(candidate.record.manifest.kind, CapabilityKind::Hybrid);
+        assert_eq!(
+            candidate.record.manifest.authority.maximum_effect,
+            EffectClass::E1Transactional
+        );
+        assert_eq!(
+            candidate.record.manifest.execution.runtime_kinds,
+            vec!["workflow:temporal".to_string()]
+        );
+        assert!(candidate
+            .report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("does not create Morn Outcome")));
+    }
+
+    #[test]
+    fn e2_workflow_requires_explicit_compensation() {
+        let source = ArtifactSource {
+            kind: ArtifactKind::Workflow,
+            name: "compensatable".to_string(),
+            source_ref: "workflow://source".to_string(),
+            source_digest: Some("sha256:wf".to_string()),
+            content: r#"{
+                "engine":"dapr",
+                "workflow_ref":"workflow://compensatable/v1",
+                "provides":["order.prepare"],
+                "steps":[{"id":"reserve","capability":"inventory.reserve","effect":"E2"}]
+            }"#
+            .to_string(),
+        };
+        assert!(WorkflowManifestCompiler.compile(&source).is_err());
     }
 
     #[test]

@@ -99,6 +99,22 @@ try {
         if (!(await page.getByRole("button", { name: "Compile OpenAPI" }).isVisible())) {
           errors.push("studio: expanded artifact candidate compiler is unavailable");
         }
+        if (!(await page.getByRole("button", { name: "Compile Model Manifest" }).isVisible())) {
+          errors.push("studio: model artifact compiler is unavailable");
+        }
+        if (!(await page.getByRole("button", { name: "Compile Workflow Manifest" }).isVisible())) {
+          errors.push("studio: workflow artifact compiler is unavailable");
+        }
+        await page.getByRole("button", { name: "Compile Model Manifest" }).click();
+        await page.getByText("Model stage").waitFor({ state: "visible", timeout: 10000 });
+        if (!(await page.locator("body").innerText()).includes("Declared")) {
+          errors.push("studio: model compiler did not preserve Declared candidate state");
+        }
+        await page.getByRole("button", { name: "Compile Workflow Manifest" }).click();
+        await page.getByText("Workflow stage").waitFor({ state: "visible", timeout: 10000 });
+        if (!(await page.locator("body").innerText()).includes("Workflow admission")) {
+          errors.push("studio: workflow compiler did not return governed admission state");
+        }
         await advanced.locator("summary").click();
       }
     }

@@ -190,10 +190,7 @@ fn canonical_wire_examples_deserialize_into_reference_implementation() {
         binding.execution_environment_ref
     );
     assert_eq!(manifest.execution_class, binding.execution_class);
-    assert_eq!(
-        manifest.execution_guarantees,
-        binding.execution_guarantees
-    );
+    assert_eq!(manifest.execution_guarantees, binding.execution_guarantees);
 
     let event: EventEnvelope = serde_json::from_str(EVENT).unwrap();
     assert_eq!(event.specversion, "1.0");

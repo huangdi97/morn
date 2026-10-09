@@ -12,13 +12,13 @@ pub mod registry;
 pub mod resolver;
 pub mod wasm_abi;
 
-pub use discovery::{
-    project_a2a_agent_card, project_oasf, project_xregistry, A2aAgentCardProjection,
-    A2aSkillProjection, DiscoveryProvenance, ImportedDiscoveryMetadata,
-    OasfDiscoveryProjection, XRegistryResourceProjection, DISCOVERY_PROJECTION_VERSION,
-};
 pub use definition::{
     CapabilityConsumer, CapabilityDefinition, CapabilityProvider, CapabilityRequirements,
+};
+pub use discovery::{
+    project_a2a_agent_card, project_oasf, project_xregistry, A2aAgentCardProjection,
+    A2aSkillProjection, DiscoveryProvenance, ImportedDiscoveryMetadata, OasfDiscoveryProjection,
+    XRegistryResourceProjection, DISCOVERY_PROJECTION_VERSION,
 };
 pub use effect::{EffectClass, EffectContract};
 pub use manifest::{
@@ -33,6 +33,5 @@ pub use resolver::{
 };
 
 pub use wasm_abi::{
-    validate_wasm_component_binding, WasmComponentDescriptor, WasmHostGrant,
-    WIT_COMPONENT_PROTOCOL,
+    validate_wasm_component_binding, WasmComponentDescriptor, WasmHostGrant, WIT_COMPONENT_PROTOCOL,
 };
