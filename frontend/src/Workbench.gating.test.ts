@@ -285,6 +285,7 @@ describe("accepted outcome value UI", () => {
         acting_role: "customer-owner",
       }],
       value_assessments: [],
+      value_assessment_support: [],
       note: "test",
     };
     const html = renderToStaticMarkup(
