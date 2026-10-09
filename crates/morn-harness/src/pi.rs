@@ -851,19 +851,30 @@ mod tests {
 
     #[test]
     fn real_pi_wire_fixture_passes_capability_negotiated_contract_and_smoke() {
-        let (mut provider, mut ctx, original_handle) = real_pi_wire_fixture_provider();
-        ctx.provenance_refs
-            .push("evidence://real-pi-wire-fixture".to_string());
+        let (mut contract_provider, mut contract_ctx, contract_handle) =
+            real_pi_wire_fixture_provider();
+        contract_ctx
+            .provenance_refs
+            .push("evidence://real-pi-wire-fixture/contract".to_string());
 
-        let contract = crate::contract::run_provider_contract(&mut provider, &ctx).unwrap();
+        let contract =
+            crate::contract::run_provider_contract(&mut contract_provider, &contract_ctx).unwrap();
         assert!(contract.all_passed(), "checks: {:?}", contract.checks);
+        contract_provider.unmount(&contract_handle).unwrap();
+        contract_provider.shutdown_real_runtime().unwrap();
 
-        let smoke = crate::smoke::run_harness_smoke(&mut provider, &ctx).unwrap();
+        // Pi RPC advertises multi_session=false and no per-session close.
+        // Smoke therefore owns a fresh runtime instead of fabricating a second
+        // concurrent/reusable session on the contract process.
+        let (mut smoke_provider, mut smoke_ctx, smoke_handle) = real_pi_wire_fixture_provider();
+        smoke_ctx
+            .provenance_refs
+            .push("evidence://real-pi-wire-fixture/smoke".to_string());
+        let smoke = crate::smoke::run_harness_smoke(&mut smoke_provider, &smoke_ctx).unwrap();
         assert!(smoke.all_ok(), "smoke: {smoke:?}");
         assert!(smoke.detail.contains("session close is unsupported"));
-
-        provider.unmount(&original_handle).unwrap();
-        provider.shutdown_real_runtime().unwrap();
+        smoke_provider.unmount(&smoke_handle).unwrap();
+        smoke_provider.shutdown_real_runtime().unwrap();
     }
 
     #[test]
