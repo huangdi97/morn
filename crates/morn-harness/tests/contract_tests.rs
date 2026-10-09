@@ -4,7 +4,9 @@
 use morn_harness::contract::{run_provider_contract, test_context};
 use morn_harness::provider::{
     DeepSeekHarnessProvider, DshMode, HarnessProvider, MornNativeHarness,
+    DSH_REAL_E0_SCOPE_RESTRICTION,
 };
+use morn_harness::{CapabilityScope, ScopeKind};
 use morn_kernel::ids::WorkspaceId;
 use morn_world::object::{Object, ObjectType};
 use serde_json::json;
@@ -93,6 +95,18 @@ fn provider_switch_preserves_actor_identity_and_canonical_records() {
     assert_eq!(rb_native.actor_id, rb_dsh.actor_id);
     assert_eq!(actor.workspace_bindings.len(), 0);
     assert_eq!(actor.role_bindings.len(), 0);
+}
+
+#[test]
+fn real_dsh_scope_is_e0_only_before_any_runtime_starts() {
+    let ws = WorkspaceId::generate();
+    let mut provider = DeepSeekHarnessProvider::new(DshMode::Real);
+    let unsafe_scope = CapabilityScope::new(ScopeKind::ExecutionRun, None, ws.clone(), "unsafe");
+    assert!(provider.mount(unsafe_scope).is_err());
+
+    let safe_scope = CapabilityScope::new(ScopeKind::ExecutionRun, None, ws, "isolated")
+        .with_restriction(DSH_REAL_E0_SCOPE_RESTRICTION);
+    assert!(provider.mount(safe_scope).is_ok());
 }
 
 #[test]

@@ -96,3 +96,10 @@ DSH Tool Request
 - Morn contract tests 是否仍过
 
 不得把 fixture 测试写成“真实 DSH 已集成”。
+
+## 2026-10-09 SDK safety convergence
+
+- The real DSH SDK adapter is intentionally **E0-only** at the HarnessProvider seam because the current SDK wire has no Morn-controlled permission callback for internal tool calls.
+- A real DSH execution scope must carry `morn.effects<=E0`. E1/E2/E3 actions remain governed Morn ExternalAction operations; provider output cannot bypass Authority/permit/reconciliation.
+- Public durable DSH `session.event` records are normalized into Morn ExecutionEvents for model request/response summaries, tool proposal/result and turn checkpoints. Assistant text, tool arguments/results and private reasoning are not copied into audit summaries.
+- This restriction is a control-plane admission rule, **not a sandbox attestation**. Real deployments still require an execution environment that independently confines the DSH process/workspace.

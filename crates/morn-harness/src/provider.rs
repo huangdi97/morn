@@ -5,11 +5,11 @@ use std::collections::HashMap;
 use morn_kernel::error::{Error, Result};
 
 use crate::context::RuntimeContext;
-use crate::dsh_sdk::{DshSdkConfig, DshSdkStdioClient};
+use crate::dsh_sdk::{DshNotification, DshSdkConfig, DshSdkStdioClient};
 use crate::event::{ExecutionEvent, ExecutionEventKind};
 use crate::receipt::ExecutionReceipt;
 use crate::scope::CapabilityScope;
-use morn_kernel::ids::ExecutionReceiptId;
+use morn_kernel::ids::{ExecutionReceiptId, WorkspaceId};
 
 /// A mounted provider handle; unmount performs E0 lifecycle cleanup only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -327,6 +327,8 @@ pub enum DshMode {
     Real,
 }
 
+pub const DSH_REAL_E0_SCOPE_RESTRICTION: &str = "morn.effects<=E0";
+
 #[derive(Debug)]
 pub struct DeepSeekHarnessProvider {
     name: String,
@@ -403,6 +405,27 @@ impl DeepSeekHarnessProvider {
             "DeepSeek Harness real SDK transport is not configured; use explicit DshSdkConfig or MORN_DSH_* deployment variables",
         )
     }
+
+    fn require_real_e0_scope(&self, ctx: &RuntimeContext) -> Result<()> {
+        let eligible = self.scopes.iter().any(|scope| {
+            scope.workspace_id == ctx.workspace_id
+                && scope
+                    .restrictions
+                    .iter()
+                    .any(|restriction| restriction == DSH_REAL_E0_SCOPE_RESTRICTION)
+                && ctx
+                    .scope_id
+                    .as_deref()
+                    .is_none_or(|scope_id| scope.id.as_str() == scope_id)
+        });
+        if eligible {
+            Ok(())
+        } else {
+            Err(Error::validation(
+                "real DSH SDK requires a matching isolated E0 scope; E1/E2/E3 actions must use Morn ExternalAction",
+            ))
+        }
+    }
 }
 
 impl HarnessProvider for DeepSeekHarnessProvider {
@@ -418,6 +441,16 @@ impl HarnessProvider for DeepSeekHarnessProvider {
     }
 
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
+        if self.mode == DshMode::Real
+            && !scope
+                .restrictions
+                .iter()
+                .any(|restriction| restriction == DSH_REAL_E0_SCOPE_RESTRICTION)
+        {
+            return Err(Error::validation(
+                "real DSH SDK scope must explicitly declare morn.effects<=E0",
+            ));
+        }
         let handle = ProviderHandle {
             provider: self.name.clone(),
             scope_id: scope.id.to_string(),
@@ -463,6 +496,10 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                 })
             }
             DshMode::Real => {
+                if self.real_config.is_none() {
+                    return Err(self.real_unavailable());
+                }
+                self.require_real_e0_scope(ctx)?;
                 self.ensure_real_client()?;
                 let session_id = format!("morn-dsh-{}", uuid::Uuid::new_v4());
                 let event = ExecutionEvent::new(
@@ -546,15 +583,22 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     .sessions
                     .get_mut(session_id)
                     .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                if let Ok(run) = &run {
+                    state.events.extend(normalize_dsh_notifications(
+                        &state.ctx.workspace_id,
+                        session_id,
+                        &run.notifications,
+                    ));
+                }
                 match run {
                     Ok(run) if run.completed_successfully() => {
                         state.status = "idle".to_string();
                         state.events.push(ExecutionEvent::new(
                             state.ctx.workspace_id.clone(),
                             session_id.to_string(),
-                            ExecutionEventKind::ModelResponse,
+                            ExecutionEventKind::Checkpoint,
                             format!(
-                                "DSH SDK turn completed; message={} finish=completed",
+                                "DSH SDK owned turn settled; message={} finish=completed",
                                 run.message_id
                             ),
                         ));
@@ -673,6 +717,104 @@ impl HarnessProvider for DeepSeekHarnessProvider {
         Ok(())
     }
 
+fn normalize_dsh_notifications(
+    workspace_id: &WorkspaceId,
+    session_id: &str,
+    notifications: &[DshNotification],
+) -> Vec<ExecutionEvent> {
+    let mut normalized = Vec::new();
+    for notification in notifications {
+        if notification.method != "session.event"
+            || notification.params.get("sessionId").and_then(serde_json::Value::as_str)
+                != Some(session_id)
+        {
+            continue;
+        }
+        let Some(event) = notification.params.get("event") else {
+            continue;
+        };
+        let Some(event_type) = event.get("type").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let data = event.get("data").unwrap_or(&serde_json::Value::Null);
+        let (kind, summary) = match event_type {
+            "request/header" => (
+                ExecutionEventKind::ModelRequest,
+                "DSH model request header committed".to_string(),
+            ),
+            "assistant/message" => (
+                ExecutionEventKind::ModelResponse,
+                "DSH assistant message committed".to_string(),
+            ),
+            "assistant/attempt" => (
+                ExecutionEventKind::Failed,
+                "DSH model attempt settled without a surface message".to_string(),
+            ),
+            "tool/call" => {
+                let name = data
+                    .get("name")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown");
+                (
+                    ExecutionEventKind::ToolProposed,
+                    format!("DSH tool call proposed: {name}"),
+                )
+            }
+            "tool/result" => {
+                let failed = data.get("error").is_some()
+                    || data
+                        .get("message")
+                        .and_then(|message| message.get("isError"))
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false);
+                (
+                    if failed {
+                        ExecutionEventKind::ToolFailed
+                    } else {
+                        ExecutionEventKind::ToolCompleted
+                    },
+                    if failed {
+                        "DSH tool result committed as error".to_string()
+                    } else {
+                        "DSH tool result committed".to_string()
+                    },
+                )
+            }
+            "turn/end" => {
+                let reason = data
+                    .get("reason")
+                    .and_then(|reason| reason.get("kind"))
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown");
+                (
+                    ExecutionEventKind::Checkpoint,
+                    format!("DSH durable turn/end: {reason}"),
+                )
+            }
+            _ => continue,
+        };
+        let mut record =
+            ExecutionEvent::new(workspace_id.clone(), session_id.to_string(), kind, summary);
+        if event_type == "request/header" {
+            record.model_version = data
+                .get("header")
+                .and_then(|header| header.get("config"))
+                .and_then(|config| config.get("model"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string);
+        }
+        if let Some(call_id) = data
+            .get("callId")
+            .or_else(|| data.get("message").and_then(|message| message.get("toolCallId")))
+            .and_then(serde_json::Value::as_str)
+        {
+            record.refs.push(format!("dsh-tool-call:{call_id}"));
+        }
+        normalized.push(record);
+    }
+    normalized
+}
+
     fn terminate(&mut self, session_id: &str) -> Result<ExecutionReceipt> {
         if self.mode == DshMode::Real {
             if !self.sessions.contains_key(session_id) {
@@ -712,5 +854,59 @@ impl HarnessProvider for DeepSeekHarnessProvider {
             runtime_version: Some("deepseek-harness-fixture".to_string()),
             event_ids,
         })
+    }
+}
+
+#[cfg(test)]
+mod dsh_provider_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn normalizes_durable_dsh_events_without_copying_content() {
+        let workspace = WorkspaceId::generate();
+        let notifications = vec![
+            DshNotification {
+                method: "session.event".to_string(),
+                params: json!({
+                    "sessionId":"s1",
+                    "event":{"type":"request/header","data":{"header":{"config":{"model":"deepseek-v4"}}}}
+                }),
+            },
+            DshNotification {
+                method: "session.event".to_string(),
+                params: json!({
+                    "sessionId":"s1",
+                    "event":{"type":"assistant/message","data":{"message":{"content":[{"type":"text","text":"private output body"}]}}}
+                }),
+            },
+            DshNotification {
+                method: "session.event".to_string(),
+                params: json!({
+                    "sessionId":"s1",
+                    "event":{"type":"tool/call","data":{"callId":"call-1","name":"shell","arguments":"secret args"}}
+                }),
+            },
+            DshNotification {
+                method: "session.event".to_string(),
+                params: json!({
+                    "sessionId":"s1",
+                    "event":{"type":"tool/result","data":{"message":{"toolCallId":"call-1","isError":false,"content":[{"type":"text","text":"secret result"}]}}}
+                }),
+            },
+        ];
+        let events = normalize_dsh_notifications(&workspace, "s1", &notifications);
+        assert_eq!(events.len(), 4);
+        assert_eq!(events[0].kind, ExecutionEventKind::ModelRequest);
+        assert_eq!(events[0].model_version.as_deref(), Some("deepseek-v4"));
+        assert_eq!(events[1].kind, ExecutionEventKind::ModelResponse);
+        assert_eq!(events[2].kind, ExecutionEventKind::ToolProposed);
+        assert_eq!(events[3].kind, ExecutionEventKind::ToolCompleted);
+        for event in &events {
+            assert!(!event.summary.contains("private output body"));
+            assert!(!event.summary.contains("secret args"));
+            assert!(!event.summary.contains("secret result"));
+        }
+        assert!(events[2].refs.contains(&"dsh-tool-call:call-1".to_string()));
     }
 }
