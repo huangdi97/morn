@@ -12,8 +12,9 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TrySendError};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -21,6 +22,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use morn_kernel::error::{Error, Result};
+
+use crate::subprocess_wire::{
+    read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_FRAMES,
+};
 
 pub const PI_COMMAND_PROMPT: &str = "prompt";
 pub const PI_COMMAND_GET_STATE: &str = "get_state";
@@ -241,6 +246,7 @@ pub struct PiRpcClient {
     stdin: Option<ChildStdin>,
     incoming: Mutex<Receiver<PiWireItem>>,
     reader: Option<JoinHandle<()>>,
+    wire_overflowed: Arc<AtomicBool>,
     next_id: u64,
     request_timeout: Duration,
     prompt_timeout: Duration,
@@ -295,39 +301,44 @@ impl PiRpcClient {
             .take()
             .ok_or_else(|| Error::external("Pi RPC runtime has no stdout"))?;
         let strict_jsonl = config.strict_jsonl;
-        let (sender, incoming) = mpsc::sync_channel::<PiWireItem>(1024);
+        let (sender, incoming) =
+            mpsc::sync_channel::<PiWireItem>(MAX_PROVIDER_WIRE_BUFFERED_FRAMES);
+        let wire_overflowed = Arc::new(AtomicBool::new(false));
+        let reader_overflowed = Arc::clone(&wire_overflowed);
         let reader = thread::spawn(move || {
             let mut stdout = BufReader::new(stdout);
             loop {
-                let mut line = String::new();
-                match stdout.read_line(&mut line) {
-                    Ok(0) => {
-                        let _ = sender.send(Err("Pi RPC runtime closed stdout".to_string()));
+                let line = match read_bounded_utf8_line(&mut stdout, "Pi RPC JSONL") {
+                    Ok(Some(line)) => line,
+                    Ok(None) => {
+                        let _ = sender.try_send(Err("Pi RPC runtime closed stdout".to_string()));
                         break;
-                    }
-                    Ok(_) => {
-                        let trimmed = line.trim_end_matches(['\r', '\n']);
-                        if trimmed.is_empty() {
-                            continue;
-                        }
-                        match serde_json::from_str::<Value>(trimmed) {
-                            Ok(value) => {
-                                if sender.send(Ok(value)).is_err() {
-                                    break;
-                                }
-                            }
-                            Err(error) if strict_jsonl => {
-                                let _ = sender
-                                    .send(Err(format!("invalid Pi RPC JSONL record: {error}")));
-                                break;
-                            }
-                            Err(_) => {}
-                        }
                     }
                     Err(error) => {
-                        let _ = sender.send(Err(format!("read Pi RPC JSONL: {error}")));
+                        let _ = sender.try_send(Err(error));
                         break;
                     }
+                };
+                let trimmed = line.trim_end_matches(['\r', '\n']);
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let (item, terminate_after_send) = match serde_json::from_str::<Value>(trimmed) {
+                    Ok(value) => (Ok(value), false),
+                    Err(error) if strict_jsonl => (
+                        Err(format!("invalid Pi RPC JSONL record: {error}")),
+                        true,
+                    ),
+                    Err(_) => continue,
+                };
+                match sender.try_send(item) {
+                    Ok(()) if terminate_after_send => break,
+                    Ok(()) => {}
+                    Err(TrySendError::Full(_)) => {
+                        reader_overflowed.store(true, Ordering::Release);
+                        break;
+                    }
+                    Err(TrySendError::Disconnected(_)) => break,
                 }
             }
         });
@@ -337,6 +348,7 @@ impl PiRpcClient {
             stdin: Some(stdin),
             incoming: Mutex::new(incoming),
             reader: Some(reader),
+            wire_overflowed,
             next_id: 1,
             request_timeout: Duration::from_millis(config.request_timeout_ms),
             prompt_timeout: Duration::from_millis(config.prompt_timeout_ms),
@@ -525,6 +537,11 @@ impl PiRpcClient {
     }
 
     fn read_record_until(&mut self, deadline: Instant, operation: &str) -> Result<Value> {
+        if self.wire_overflowed.load(Ordering::Acquire) {
+            return Err(Error::external(
+                "Pi RPC wire exceeded buffered frame capacity; runtime containment required",
+            ));
+        }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             return Err(Error::external(format!("Pi RPC {operation} timed out")));
@@ -533,7 +550,7 @@ impl PiRpcClient {
             .incoming
             .lock()
             .map_err(|_| Error::internal("provider wire receiver lock poisoned"))?;
-        match incoming.recv_timeout(remaining) {
+        let result = match incoming.recv_timeout(remaining) {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(message)) => Err(Error::external(message)),
             Err(RecvTimeoutError::Timeout) => {
@@ -542,7 +559,13 @@ impl PiRpcClient {
             Err(RecvTimeoutError::Disconnected) => {
                 Err(Error::external("Pi RPC stdout reader disconnected"))
             }
+        };
+        if self.wire_overflowed.load(Ordering::Acquire) {
+            return Err(Error::external(
+                "Pi RPC wire exceeded buffered frame capacity; runtime containment required",
+            ));
         }
+        result
     }
 }
 

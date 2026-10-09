@@ -16,6 +16,7 @@ pub mod scope;
 pub mod smoke;
 pub mod spec;
 mod subprocess_env;
+mod subprocess_wire;
 
 pub use binding::{HarnessBinding, RuntimeBinding};
 pub use context::RuntimeContext;

@@ -10,8 +10,9 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TrySendError};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -19,6 +20,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use morn_kernel::error::{Error, Result};
+
+use crate::subprocess_wire::{
+    read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_FRAMES,
+};
 
 pub const DSH_METHOD_INITIALIZE: &str = "initialize";
 pub const DSH_METHOD_SESSION_PROMPT: &str = "session/prompt";
@@ -262,6 +267,7 @@ pub struct DshSdkStdioClient {
     stdin: ChildStdin,
     incoming: Mutex<Receiver<DshWireItem>>,
     reader: Option<JoinHandle<()>>,
+    wire_overflowed: Arc<AtomicBool>,
     next_id: u64,
     request_timeout: Duration,
     turn_timeout: Duration,
@@ -318,31 +324,42 @@ impl DshSdkStdioClient {
             .stdout
             .take()
             .ok_or_else(|| Error::external("DSH SDK runtime has no stdout"))?;
-        let (sender, incoming) = mpsc::sync_channel::<DshWireItem>(1024);
+        let (sender, incoming) =
+            mpsc::sync_channel::<DshWireItem>(MAX_PROVIDER_WIRE_BUFFERED_FRAMES);
+        let wire_overflowed = Arc::new(AtomicBool::new(false));
+        let reader_overflowed = Arc::clone(&wire_overflowed);
         let reader = thread::spawn(move || {
             let mut stdout = BufReader::new(stdout);
             loop {
-                let mut line = String::new();
-                match stdout.read_line(&mut line) {
-                    Ok(0) => {
-                        let _ = sender.send(Err("DSH SDK runtime closed stdout".to_string()));
+                let line = match read_bounded_utf8_line(&mut stdout, "DSH SDK JSON-RPC") {
+                    Ok(Some(line)) => line,
+                    Ok(None) => {
+                        let _ = sender.try_send(Err("DSH SDK runtime closed stdout".to_string()));
                         break;
-                    }
-                    Ok(_) => {
-                        let trimmed = line.trim();
-                        if trimmed.is_empty() {
-                            continue;
-                        }
-                        if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-                            if sender.send(Ok(value)).is_err() {
-                                break;
-                            }
-                        }
                     }
                     Err(error) => {
-                        let _ = sender.send(Err(format!("read DSH JSON-RPC: {error}")));
+                        let _ = sender.try_send(Err(error));
                         break;
                     }
+                };
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let value = match serde_json::from_str::<Value>(trimmed) {
+                    Ok(value) => value,
+                    Err(_) => {
+                        // Upstream explicitly permits malformed lines to be ignored.
+                        continue;
+                    }
+                };
+                match sender.try_send(Ok(value)) {
+                    Ok(()) => {}
+                    Err(TrySendError::Full(_)) => {
+                        reader_overflowed.store(true, Ordering::Release);
+                        break;
+                    }
+                    Err(TrySendError::Disconnected(_)) => break,
                 }
             }
         });
@@ -351,6 +368,7 @@ impl DshSdkStdioClient {
             stdin,
             incoming: Mutex::new(incoming),
             reader: Some(reader),
+            wire_overflowed,
             next_id: 1,
             request_timeout: Duration::from_millis(config.request_timeout_ms),
             turn_timeout: Duration::from_millis(config.turn_timeout_ms),
@@ -529,6 +547,11 @@ impl DshSdkStdioClient {
     }
 
     fn read_frame_until(&mut self, deadline: Instant, operation: &str) -> Result<Value> {
+        if self.wire_overflowed.load(Ordering::Acquire) {
+            return Err(Error::external(
+                "DSH SDK wire exceeded buffered frame capacity; runtime containment required",
+            ));
+        }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             return Err(Error::external(format!("DSH {operation} timed out")));
@@ -537,7 +560,7 @@ impl DshSdkStdioClient {
             .incoming
             .lock()
             .map_err(|_| Error::internal("provider wire receiver lock poisoned"))?;
-        match incoming.recv_timeout(remaining) {
+        let result = match incoming.recv_timeout(remaining) {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(message)) => Err(Error::external(message)),
             Err(RecvTimeoutError::Timeout) => {
@@ -546,7 +569,13 @@ impl DshSdkStdioClient {
             Err(RecvTimeoutError::Disconnected) => {
                 Err(Error::external("DSH SDK stdout reader disconnected"))
             }
+        };
+        if self.wire_overflowed.load(Ordering::Acquire) {
+            return Err(Error::external(
+                "DSH SDK wire exceeded buffered frame capacity; runtime containment required",
+            ));
         }
+        result
     }
 }
 
