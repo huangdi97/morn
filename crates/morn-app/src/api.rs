@@ -1060,6 +1060,21 @@ async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value
 }
 
 #[derive(Debug)]
+fn classify_e0_turn_receipt(
+    success: bool,
+    snapshot_status: &str,
+) -> (&'static str, bool) {
+    if success {
+        return ("completed", true);
+    }
+    if snapshot_status == "outcome-unknown"
+        || snapshot_status.starts_with("outcome-unknown-")
+    {
+        return ("outcome-unknown", false);
+    }
+    ("failed", true)
+}
+
 struct E0HarnessTurnEvidence {
     output: Option<morn_harness::provider::HarnessOutput>,
     error: Option<String>,
@@ -1145,20 +1160,10 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
     receipt.event_ids = events.iter().map(|event| event.id.to_string()).collect();
     receipt.trace_refs = receipt.event_ids.clone();
     receipt.runtime_version = provider.runtime_version();
-    match (&result, snapshot_status.as_str()) {
-        (Ok(_), _) => {
-            receipt.outcome = "completed".to_string();
-            receipt.ended_at = Some(morn_kernel::time::Timestamp::now());
-        }
-        (Err(_), "outcome-unknown") => {
-            receipt.outcome = "outcome-unknown".to_string();
-            receipt.ended_at = None;
-        }
-        (Err(_), _) => {
-            receipt.outcome = "failed".to_string();
-            receipt.ended_at = Some(morn_kernel::time::Timestamp::now());
-        }
-    }
+    let (receipt_outcome, terminally_settled) =
+        classify_e0_turn_receipt(result.is_ok(), &snapshot_status);
+    receipt.outcome = receipt_outcome.to_string();
+    receipt.ended_at = terminally_settled.then(morn_kernel::time::Timestamp::now);
 
     let cleanup_error = provider
         .unmount(&handle)
@@ -1426,7 +1431,11 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
     };
 
     Ok(Json(json!({
-        "executor_status": if turn.error.is_some() { "failed" } else { "completed" },
+        "executor_status": match turn.receipt.outcome.as_str() {
+            "completed" => "completed",
+            "outcome-unknown" => "outcome-unknown",
+            _ => "failed",
+        },
         "provider_ref": provider_ref,
         "output": turn.output,
         "executor_error": turn.error,
@@ -4164,6 +4173,26 @@ mod workspace_boundary_tests {
             )
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn reaped_real_runtime_remains_outcome_unknown_not_false_failure() {
+        assert_eq!(
+            classify_e0_turn_receipt(false, "outcome-unknown-runtime-reaped"),
+            ("outcome-unknown", false)
+        );
+        assert_eq!(
+            classify_e0_turn_receipt(false, "outcome-unknown"),
+            ("outcome-unknown", false)
+        );
+        assert_eq!(
+            classify_e0_turn_receipt(false, "idle-non-success"),
+            ("failed", true)
+        );
+        assert_eq!(
+            classify_e0_turn_receipt(true, "idle"),
+            ("completed", true)
+        );
     }
 
     #[tokio::test]
