@@ -207,7 +207,7 @@ semantic distinction.
 Artifact2Capability is a compiler family, not an automatic production-deployment
 mechanism.
 
-Planned/allowed compiler kinds include:
+Implemented compiler kinds include:
 
 - OpenAPI -> Capability candidate;
 - repository -> Capability candidate;

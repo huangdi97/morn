@@ -84,6 +84,42 @@ export interface V115ControlPlaneData {
   note: string;
 }
 
+export interface V115DiscoveryData {
+  xregistry: Array<{
+    group: string;
+    resource_id: string;
+    version: string;
+    name: string;
+    capability_kind: string;
+    provider_ref: string;
+    provides: string[];
+    provenance: {
+      adapter_version: string;
+      canonical_manifest_ref: string;
+      canonical_manifest_digest: string | null;
+      metadata_class: string;
+    };
+  }>;
+  a2a_agent_cards: Array<{
+    name: string;
+    card_url: string;
+    protocol_version: string;
+    skills: Array<{ id: string; name: string }>;
+    provenance: { canonical_manifest_ref: string; metadata_class: string };
+  }>;
+  oasf: Array<{
+    name: string;
+    taxonomy_version: string;
+    skills: string[];
+    domains: string[];
+    provenance: { canonical_manifest_ref: string; metadata_class: string };
+  }>;
+  rejected: Array<{ manifest_id: string; projection: string; reason: string }>;
+  metadata_class: string;
+  business_truth: boolean;
+  invariant: string;
+}
+
 export interface V115Status {
   provider_catalog: Array<{
     id: string;

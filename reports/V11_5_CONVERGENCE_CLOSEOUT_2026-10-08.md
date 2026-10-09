@@ -39,7 +39,7 @@ Morn remains Work-first, not Agent-first:
 | --- | --- | --- |
 | versioned semantic constitution | `morn-kernel/src/protocol.rs` | implemented |
 | language-neutral protocol artifacts | `spec/v11.5/` + wire-spec conformance tests | implemented |
-| standards-oriented registry projection boundary | ADR-042 + `morn-capability/src/discovery.rs`; xRegistry/A2A/OASF declared-metadata adapters, no second truth | implemented contract |
+| standards-oriented registry projection boundary | ADR-042 + `morn-capability/src/discovery.rs` + `/api/v115/discovery` + Hub; xRegistry/A2A/OASF declared-metadata views, no second truth | implemented end-to-end |
 | optional typed local component ABI | ADR-043 + `morn-capability/src/wasm_abi.rs`; WIT/Wasm least-capability binding contract, no embedded runtime | implemented contract; concrete Wasm executor optional |
 | external protocol task boundary | ADR-044; MCP/A2A durable Tasks remain executor state | implemented contract |
 | explicit protocol migration | protocol compatibility + `ProtocolMigrationController` | implemented |
@@ -440,3 +440,19 @@ become canonical Work/Outcome truth.
 - API and Studio expose both flows and Playwright exercises them through the
   product surface, while the candidates remain in the normal qualification /
   release / site-admission supply chain.
+
+
+## 19. Hub discovery projection closure — 2026-10-09
+
+- `GET /api/v115/discovery` derives xRegistry-style resources directly from
+  canonical CapabilityRecords on every read.
+- A2A Agent Card projection is emitted only for Agent-kind capabilities that
+  explicitly declare an A2A interface/card reference; Morn does not fabricate a
+  remote Agent Card URL.
+- OASF projections remain declared skill/domain metadata and do not carry
+  qualification, release, site-admission, Authority or Outcome/Acceptance
+  fields.
+- Hub renders these projections as an explicitly non-authoritative discovery
+  surface and Playwright verifies that the boundary is visible.
+- The projection is not persisted separately, preventing external discovery
+  formats from becoming a second capability registry truth.

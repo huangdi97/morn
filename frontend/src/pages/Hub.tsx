@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiGet, HubV2Data, HubV3Data, V115Status } from "../api";
+import { apiGet, HubV2Data, HubV3Data, V115DiscoveryData, V115Status } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
 
@@ -100,6 +100,8 @@ export default function Hub() {
   const [supplyError, setSupplyError] = useState<string | null>(null);
   const [providerStatus, setProviderStatus] = useState<V115Status | null>(null);
   const [providerError, setProviderError] = useState<string | null>(null);
+  const [discovery, setDiscovery] = useState<V115DiscoveryData | null>(null);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
 
   useEffect(() => {
     apiGet<HubData>("/hub")
@@ -117,6 +119,9 @@ export default function Hub() {
     apiGet<V115Status>("/v115/status")
       .then(setProviderStatus)
       .catch((e: Error) => setProviderError(e.message));
+    apiGet<V115DiscoveryData>("/v115/discovery")
+      .then(setDiscovery)
+      .catch((e: Error) => setDiscoveryError(e.message));
   }, []);
 
   if (error) return <ErrorBox message={error} />;
@@ -231,6 +236,82 @@ export default function Hub() {
           </div>
         )}
       </section>
+      <section className="hub-discovery" aria-label="Registry discovery projections">
+        <div className="hub-supply-head">
+          <span className="work-focus-eyebrow">DISCOVERY PROJECTIONS · DECLARED METADATA</span>
+          <h2>Registry projections</h2>
+          <p>
+            xRegistry, A2A and OASF are discovery views over canonical Morn capabilities.
+            They never carry qualification, site admission, authority or accepted-outcome truth.
+          </p>
+        </div>
+        {discoveryError ? (
+          <p role="alert">Discovery projections are unavailable: {discoveryError}.</p>
+        ) : !discovery ? (
+          <p role="status">Loading registry projections…</p>
+        ) : (
+          <>
+            <div className="hub-supply-grid">
+              <article className="hub-capability">
+                <header className="hub-capability-header">
+                  <h3>xRegistry projection</h3>
+                  <StatusPill value={discovery.metadata_class} />
+                </header>
+                <KeyValue k="Resources" v={discovery.xregistry.length} />
+                <KeyValue
+                  k="Capabilities"
+                  v={discovery.xregistry.map((item) => item.name).join(", ") || "No projected resources"}
+                />
+                <KeyValue
+                  k="Canonical refs"
+                  v={discovery.xregistry
+                    .map((item) => item.provenance.canonical_manifest_ref)
+                    .join(", ") || "None"}
+                />
+              </article>
+              <article className="hub-capability">
+                <header className="hub-capability-header">
+                  <h3>A2A Agent Cards</h3>
+                  <StatusPill value={discovery.metadata_class} />
+                </header>
+                <KeyValue k="Cards" v={discovery.a2a_agent_cards.length} />
+                <KeyValue
+                  k="Agents"
+                  v={discovery.a2a_agent_cards.map((item) => item.name).join(", ") || "No A2A-declared Agent interfaces"}
+                />
+                <KeyValue
+                  k="Skills"
+                  v={discovery.a2a_agent_cards
+                    .flatMap((item) => item.skills.map((skill) => skill.name))
+                    .join(", ") || "None"}
+                />
+              </article>
+              <article className="hub-capability">
+                <header className="hub-capability-header">
+                  <h3>OASF metadata</h3>
+                  <StatusPill value={discovery.metadata_class} />
+                </header>
+                <KeyValue k="Agent projections" v={discovery.oasf.length} />
+                <KeyValue
+                  k="Skills"
+                  v={discovery.oasf.flatMap((item) => item.skills).join(", ") || "None"}
+                />
+                <KeyValue k="Business truth" v={discovery.business_truth ? "yes" : "no"} />
+              </article>
+            </div>
+            <p className="work-focus-empty">{discovery.invariant}</p>
+            {discovery.rejected.length > 0 && (
+              <p className="work-focus-empty">
+                Projection rejects:{" "}
+                {discovery.rejected
+                  .map((item) => `${item.manifest_id} / ${item.projection}: ${item.reason}`)
+                  .join(" · ")}
+              </p>
+            )}
+          </>
+        )}
+      </section>
+
       <div className="grid">
         <AssetTable
           title="Enabled Domain Packs"

@@ -13,8 +13,8 @@ pub mod workcell_plan;
 
 pub use artifact2capability::{
     ArtifactCompiler, ArtifactKind, ArtifactSource, CandidateCapability, CompilationReport,
-    ModelManifestCompiler, OpenApiJsonCompiler, ProcedureJsonCompiler,
-    RepositoryManifestCompiler, ReviewedPaperManifestCompiler, WorkflowManifestCompiler,
+    ModelManifestCompiler, OpenApiJsonCompiler, ProcedureJsonCompiler, RepositoryManifestCompiler,
+    ReviewedPaperManifestCompiler, WorkflowManifestCompiler,
 };
 pub use blueprint::{BlueprintBundle, RoleBlueprint, WorkBlueprint, WorkcellTemplate};
 pub use compiler::{CompilerDecisionSource, SolutionCompiler};

@@ -94,6 +94,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/work/reconcile", post(v115_work_reconcile))
         .route("/api/v115/solutions", get(v115_solutions))
         .route("/api/v115/capabilities", get(v115_capabilities))
+        .route("/api/v115/discovery", get(v115_discovery))
         .route(
             "/api/v115/capability/observe",
             post(v115_capability_observe),
@@ -527,6 +528,66 @@ async fn v115_capabilities(State(state): State<AppState>) -> ApiResult {
         "admissions": guard.v115_admission.admissions,
         "lifecycle_events": guard.v115_admission.events,
         "invariant": "compile != observe != qualify != release != site admission; lifecycle projection changes append events"
+    })))
+}
+
+async fn v115_discovery(State(state): State<AppState>) -> ApiResult {
+    use morn_capability::{
+        project_a2a_agent_card, project_oasf, project_xregistry, CapabilityKind,
+    };
+
+    let guard = state.lock();
+    let mut xregistry = Vec::new();
+    let mut a2a_agent_cards = Vec::new();
+    let mut oasf = Vec::new();
+    let mut rejected = Vec::new();
+
+    for record in &guard.v115_capabilities {
+        match project_xregistry(record) {
+            Ok(projection) => xregistry.push(projection),
+            Err(error) => rejected.push(json!({
+                "manifest_id": record.manifest.id,
+                "projection": "xregistry",
+                "reason": error.to_string()
+            })),
+        }
+
+        if record.manifest.kind == CapabilityKind::Agent {
+            let a2a_card_url = record
+                .manifest
+                .interfaces
+                .iter()
+                .find(|interface| interface.protocol.eq_ignore_ascii_case("a2a"))
+                .map(|interface| interface.input_schema_ref.clone());
+            if let Some(card_url) = a2a_card_url {
+                match project_a2a_agent_card(record, card_url, "1.0") {
+                    Ok(projection) => a2a_agent_cards.push(projection),
+                    Err(error) => rejected.push(json!({
+                        "manifest_id": record.manifest.id,
+                        "projection": "a2a-agent-card",
+                        "reason": error.to_string()
+                    })),
+                }
+            }
+            match project_oasf(record, "declared", Vec::new()) {
+                Ok(projection) => oasf.push(projection),
+                Err(error) => rejected.push(json!({
+                    "manifest_id": record.manifest.id,
+                    "projection": "oasf",
+                    "reason": error.to_string()
+                })),
+            }
+        }
+    }
+
+    Ok(Json(json!({
+        "xregistry": xregistry,
+        "a2a_agent_cards": a2a_agent_cards,
+        "oasf": oasf,
+        "rejected": rejected,
+        "metadata_class": "declared",
+        "business_truth": false,
+        "invariant": "registry projections are discovery metadata only; qualification, release, site admission, authority and accepted outcomes remain canonical Morn records"
     })))
 }
 
@@ -1487,7 +1548,9 @@ async fn hub(State(state): State<AppState>) -> ApiResult {
             { "id": "openapi2capability@v11.5", "name": "OpenAPI → Capability Candidate", "trust": "LocalVerified" },
             { "id": "sop2capability@v11.5", "name": "SOP / Procedure → Capability Candidate", "trust": "LocalVerified" },
             { "id": "repo2capability@v11.5", "name": "Repository Manifest → Capability Candidate", "trust": "LocalVerified" },
-            { "id": "reviewed-paper2capability@v11.5", "name": "Reviewed Paper Manifest → Capability Candidate", "trust": "LocalVerified" }
+            { "id": "reviewed-paper2capability@v11.5", "name": "Reviewed Paper Manifest → Capability Candidate", "trust": "LocalVerified" },
+            { "id": "model2capability@v11.5", "name": "Pinned Model Manifest → Capability Candidate", "trust": "LocalVerified" },
+            { "id": "workflow2capability@v11.5", "name": "Durable Workflow Manifest → Capability Candidate", "trust": "LocalVerified" }
         ],
         "work_package_templates": [ { "id": "generic-work@1.0", "name": "Generic Work Package", "trust": "Verified" } ],
         "workcell_blueprints": [ { "id": "generic-workcell@1.0", "name": "Generic Workcell", "trust": "Verified" } ],

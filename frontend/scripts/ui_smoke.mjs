@@ -51,10 +51,17 @@ try {
     if (route === "/hub" && !(await page.getByRole("heading", { name: "Provider Fabric" }).isVisible())) {
       errors.push("hub: canonical Provider Fabric registry is not visible");
     }
+    if (route === "/hub" && !(await page.getByRole("heading", { name: "Registry projections" }).isVisible())) {
+      errors.push("hub: declared-only registry projections are not visible");
+    }
     if (route === "/hub") {
       const hubText = await page.locator(".hub-provider-fabric").innerText();
       if (!hubText.includes("deepseek-harness") || !hubText.includes("pi")) {
         errors.push("hub: DSH/Pi provider registry entries are missing");
+      }
+      const discoveryText = await page.locator(".hub-discovery").innerText();
+      if (!discoveryText.includes("declared metadata") || !discoveryText.includes("Business truth")) {
+        errors.push("hub: discovery projection boundary is not explicit");
       }
       const legacy = page.locator("details.hub-reference-details");
       if (!(await legacy.count())) {

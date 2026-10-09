@@ -554,7 +554,6 @@ impl ArtifactCompiler for ReviewedPaperManifestCompiler {
     }
 }
 
-
 /// Structured model-manifest compiler. A model reference is discovery/runtime
 /// metadata only; model availability or inference success never implies
 /// qualification, site admission, Outcome or Acceptance.
@@ -1025,7 +1024,12 @@ mod tests {
         assert_eq!(candidate.record.stage, CapabilityStage::Declared);
         assert_eq!(candidate.record.manifest.kind, CapabilityKind::Model);
         assert_eq!(
-            candidate.record.manifest.provenance.source_digest.as_deref(),
+            candidate
+                .record
+                .manifest
+                .provenance
+                .source_digest
+                .as_deref(),
             Some("sha256:model123")
         );
         assert_eq!(

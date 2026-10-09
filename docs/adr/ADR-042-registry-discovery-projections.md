@@ -56,7 +56,7 @@ represent Morn governance truth by itself.
 ## Implementation
 
 The reference adapter contract lives in
-`crates/morn-capability/src/discovery.rs`.
+`crates/morn-capability/src/discovery.rs`, is projected by `GET /api/v115/discovery`, and is surfaced in Hub as a non-authoritative discovery view.
 
 It implements:
 
@@ -68,3 +68,8 @@ It implements:
 The serialized projection types deliberately have no qualification, release,
 site-admission, Authority or accepted-outcome fields. A projection therefore
 cannot be deserialized back into governed truth by accident.
+
+
+The Hub/API projection is generated from the current canonical
+`CapabilityRecord` set at read time. It does not persist an xRegistry/A2A/OASF
+copy and therefore cannot drift into a second Morn registry truth.
