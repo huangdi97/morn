@@ -107,12 +107,14 @@ describe("canonical Work remains a separate product surface", () => {
         { id: "reconcile-other", attempt_id: "attempt-other" },
       ],
       outcomes: [
-        { id: "outcome-1", work_package_id: "work:canonical-1", objective: "Validated review", source_ref: "cmms://plant-a", evidence_refs: ["receipt-1"] },
-        { id: "outcome-other", work_package_id: "work:foreign", objective: "Foreign review" },
+        { id: "outcome-1", work_package_id: "work:canonical-1", work_generation: 1, objective: "Validated review", source_ref: "cmms://plant-a", evidence_refs: ["receipt-1"] },
+        { id: "outcome-old", work_package_id: "work:canonical-1", work_generation: 0, objective: "Old generation review", source_ref: "cmms://plant-a", evidence_refs: ["receipt-old"] },
+        { id: "outcome-other", work_package_id: "work:foreign", work_generation: 1, objective: "Foreign review" },
       ],
       acceptance_decisions: [
-        { id: "decision-1", work_package_id: "work:canonical-1", disposition: "Conditional", outcome_refs: ["outcome-1"], acting_role: "reviewer" },
-        { id: "decision-spoof", work_package_id: "work:canonical-1", disposition: "Accept", outcome_refs: ["outcome-other"] },
+        { id: "decision-1", work_package_id: "work:canonical-1", work_generation: 1, disposition: "Conditional", outcome_refs: ["outcome-1"], acting_role: "reviewer" },
+        { id: "decision-old", work_package_id: "work:canonical-1", work_generation: 0, disposition: "Accept", outcome_refs: ["outcome-old"], acting_role: "reviewer" },
+        { id: "decision-spoof", work_package_id: "work:canonical-1", work_generation: 1, disposition: "Accept", outcome_refs: ["outcome-other"] },
       ],
       condition_evidence: [
         { id: "witness-1", work_ref: "work:canonical-1", work_generation: 1, condition_type: "SourceOfTruthBound", satisfied: true, producer_ref: "cmms://plant-a" },
@@ -133,6 +135,7 @@ describe("canonical Work remains a separate product surface", () => {
     expect(html).toContain("OutcomeUnknown");
     expect(html).toContain("Conditional");
     expect(html).not.toContain("Foreign review");
+    expect(html).not.toContain("Old generation review");
     expect(html).not.toContain("cmms.foreign");
   });
 });
