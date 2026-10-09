@@ -384,7 +384,7 @@ function GovernedE0Executor({
       await apiPostJson(path, {
         work_id: effectiveWorkId,
         capability_manifest_id: effectiveCapabilityId,
-        ...(realDsh ? { environment_ref: effectiveEnvironmentRef } : {}),
+        ...(realDsh ? { execution_environment_ref: effectiveEnvironmentRef } : {}),
       });
       setMessage(
         realDsh
