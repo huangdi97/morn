@@ -465,6 +465,180 @@ function GovernedE0Executor({
   );
 }
 
+
+function OutcomeReviewPanel({
+  control,
+  reload,
+}: {
+  control: V115ControlPlaneData;
+  reload: () => void;
+}) {
+  const [workId, setWorkId] = useState("");
+  const [outcomeId, setOutcomeId] = useState("");
+  const [disposition, setDisposition] = useState("accept");
+  const [actingRole, setActingRole] = useState("independent-reviewer");
+  const [reason, setReason] = useState("");
+  const [evidenceRef, setEvidenceRef] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const candidates = control.work
+    .filter((work) => ["Delivered", "Waiting"].includes(work.status.phase))
+    .map((work) => ({
+      work,
+      outcomes: control.outcomes.filter(
+        (outcome) =>
+          textField(outcome, "work_package_id") === work.id &&
+          !!textField(outcome, "source_ref") &&
+          fieldRefs(outcome, "evidence_refs").length > 0,
+      ),
+    }))
+    .filter((entry) => entry.outcomes.length > 0);
+
+  const effectiveWorkId = workId || candidates[0]?.work.id || "";
+  const selected = candidates.find((entry) => entry.work.id === effectiveWorkId);
+  const effectiveOutcomeId = outcomeId || textField(selected?.outcomes[0] ?? {}, "id") || "";
+  const selectedOutcome = selected?.outcomes.find(
+    (outcome) => textField(outcome, "id") === effectiveOutcomeId,
+  );
+
+  const review = async () => {
+    if (
+      !effectiveWorkId ||
+      !effectiveOutcomeId ||
+      !actingRole.trim() ||
+      !reason.trim() ||
+      !evidenceRef.trim()
+    ) {
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await apiPostJson<{
+        work: { status: { phase: string } };
+        decision: { disposition: string };
+      }>("/v115/work/review-outcome", {
+        work_id: effectiveWorkId,
+        outcome_id: effectiveOutcomeId,
+        disposition,
+        acting_role: actingRole,
+        reason,
+        evidence_refs: [evidenceRef.trim()],
+      });
+      setMessage(
+        `Review persisted: ${response.decision.disposition}. Work phase: ${response.work.status.phase}.`,
+      );
+      reload();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (candidates.length === 0) {
+    return (
+      <Card title="Independent outcome review">
+        <p>
+          No source-grounded Outcome is ready for review. Harness completion alone cannot create one;
+          an authoritative observation must be persisted first.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="Independent outcome review">
+      <p>
+        Review only an already-persisted source-grounded Outcome. This action cannot convert model
+        output or a Harness receipt into business truth.
+      </p>
+      <div className="governed-execution-grid">
+        <label>
+          Work
+          <select
+            value={effectiveWorkId}
+            onChange={(event) => {
+              setWorkId(event.target.value);
+              setOutcomeId("");
+            }}
+          >
+            {candidates.map(({ work }) => (
+              <option key={work.id} value={work.id}>
+                {work.spec.goal} · {work.status.phase}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Source-grounded Outcome
+          <select value={effectiveOutcomeId} onChange={(event) => setOutcomeId(event.target.value)}>
+            {selected?.outcomes.map((outcome, index) => {
+              const id = textField(outcome, "id") ?? `outcome-${index}`;
+              return (
+                <option key={id} value={textField(outcome, "id") ?? ""}>
+                  {textField(outcome, "objective") ?? id}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        <label>
+          Decision
+          <select value={disposition} onChange={(event) => setDisposition(event.target.value)}>
+            <option value="accept">Accept</option>
+            <option value="reject">Reject</option>
+            <option value="conditional">Conditional</option>
+            <option value="request-more-evidence">Request more evidence</option>
+          </select>
+        </label>
+        <label>
+          Acting role
+          <input value={actingRole} onChange={(event) => setActingRole(event.target.value)} />
+        </label>
+      </div>
+      {selectedOutcome && (
+        <p className="work-focus-empty">
+          Source: {textField(selectedOutcome, "source_ref")} · witness refs:{" "}
+          {fieldRefs(selectedOutcome, "evidence_refs").length}
+        </p>
+      )}
+      <label className="governed-execution-prompt">
+        Review reason
+        <textarea
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="Explain how the authoritative evidence satisfies or fails the acceptance criteria."
+        />
+      </label>
+      <label className="governed-execution-prompt">
+        Independent review evidence reference
+        <input
+          value={evidenceRef}
+          onChange={(event) => setEvidenceRef(event.target.value)}
+          placeholder="review://ticket-or-signed-record"
+        />
+      </label>
+      <div className="page-actions">
+        <button
+          disabled={
+            busy ||
+            !effectiveOutcomeId ||
+            !actingRole.trim() ||
+            !reason.trim() ||
+            !evidenceRef.trim()
+          }
+          onClick={review}
+        >
+          Persist independent review
+        </button>
+      </div>
+      {message && <p role="status" className="work-focus-empty">{message}</p>}
+    </Card>
+  );
+}
+
 export default function Workbench() {
   const [data, setData] = useState<WorkbenchData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -549,11 +723,14 @@ export default function Workbench() {
         </header>
         <CanonicalWorkOverview control={v115Control} error={v115ControlError} />
         {v115Control && (
-          <GovernedE0Executor
-            control={v115Control}
-            capabilities={v115Capabilities}
-            reload={load}
-          />
+          <>
+            <GovernedE0Executor
+              control={v115Control}
+              capabilities={v115Capabilities}
+              reload={load}
+            />
+            <OutcomeReviewPanel control={v115Control} reload={load} />
+          </>
         )}
         <p role="status" className="work-focus-empty">
           {error
@@ -712,11 +889,14 @@ export default function Workbench() {
 
       <CanonicalWorkOverview control={v115Control} error={v115ControlError} />
       {v115Control && (
-        <GovernedE0Executor
-          control={v115Control}
-          capabilities={v115Capabilities}
-          reload={load}
-        />
+        <>
+          <GovernedE0Executor
+            control={v115Control}
+            capabilities={v115Capabilities}
+            reload={load}
+          />
+          <OutcomeReviewPanel control={v115Control} reload={load} />
+        </>
       )}
 
       <details className="workbench-reference" data-testid="reference-tools">
