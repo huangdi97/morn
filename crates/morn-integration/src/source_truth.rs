@@ -1,10 +1,10 @@
 //! Explicit binding to an authoritative external source for a class of facts.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{Id, WorkPackageId, WorkspaceId};
-use serde_json::Value;
 use morn_kernel::time::Timestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -54,10 +54,7 @@ impl SourceObservationAttestation {
                 "source observation attestation requires id, fact type, objective, source ref, object facts and evidence",
             ));
         }
-        if self
-            .valid_until
-            .is_some_and(|until| until < self.observed_at)
-        {
+        if self.valid_until.is_some_and(|until| until < self.observed_at) {
             return Err(Error::validation(
                 "source observation attestation validity cannot end before observation",
             ));

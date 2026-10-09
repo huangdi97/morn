@@ -5086,7 +5086,9 @@ mod workspace_boundary_tests {
                     work_package_id: work.id.clone(),
                     outcome_id: grounded.id.clone(),
                     disposition: morn_work::acceptance_decision::AcceptanceDisposition::Accept,
-                    evidence_refs: vec!["iam://review-authorizations/review-auth-grounded-1".to_string()],
+                    evidence_refs: vec![
+                        "iam://review-authorizations/review-auth-grounded-1".to_string()
+                    ],
                     issued_at: morn_kernel::time::Timestamp::now(),
                     valid_until: None,
                 },

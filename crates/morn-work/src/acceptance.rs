@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use morn_kernel::ids::{AcceptanceSpecId, OutcomeRecordId, PrincipalId, WorkPackageId};
 use crate::acceptance_decision::AcceptanceDisposition;
+use morn_kernel::ids::{AcceptanceSpecId, OutcomeRecordId, PrincipalId, WorkPackageId};
 use morn_kernel::time::Timestamp;
 
 /// A WorkPackage can only be accepted when its AcceptanceSpec is satisfied.
@@ -54,10 +54,7 @@ impl AcceptanceReviewAuthorization {
                 "review authorization requires id, role and deployment evidence",
             ));
         }
-        if self
-            .valid_until
-            .is_some_and(|until| until < self.issued_at)
-        {
+        if self.valid_until.is_some_and(|until| until < self.issued_at) {
             return Err(morn_kernel::error::Error::validation(
                 "review authorization validity cannot end before issue time",
             ));
