@@ -1042,6 +1042,42 @@ fn execution_spec_for_capability_and_profile(
     })
 }
 
+fn ensure_live_environment_for_binding(
+    binding: &morn_runtime::ExecutionBinding,
+    capability: &morn_capability::CapabilityRecord,
+    profile: &morn_profile::DomainProfile,
+    environments: &morn_runtime::AttestedExecutionEnvironmentProvider,
+    now: morn_kernel::time::Timestamp,
+) -> Result<(), Error> {
+    let environment_ref = binding
+        .execution_environment_ref
+        .as_deref()
+        .filter(|reference| !reference.trim().is_empty())
+        .ok_or_else(|| Error::invalid_state("real provider binding has no execution environment"))?;
+    let attestation = environments.attestation(environment_ref).ok_or_else(|| {
+        Error::invalid_state(
+            "execution environment attestation no longer exists for the bound real provider",
+        )
+    })?;
+    let requested = execution_spec_for_capability_and_profile(capability, profile)?;
+    if !attestation.satisfies(&requested, now) {
+        return Err(Error::invalid_state(
+            "bound execution environment attestation expired or no longer satisfies the capability/profile contract",
+        ));
+    }
+    if binding.execution_class != Some(attestation.isolation)
+        || !binding
+            .execution_guarantees
+            .iter()
+            .all(|guarantee| attestation.attested_spec.required_guarantees.contains(guarantee))
+    {
+        return Err(Error::invalid_state(
+            "current execution-environment attestation no longer covers the guarantees pinned by the binding",
+        ));
+    }
+    Ok(())
+}
+
 async fn v115_work_bind_attested_e0(
     State(state): State<AppState>,
     Json(body): Json<Value>,
@@ -1713,6 +1749,15 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     .dsh_harness
                     .lock()
                     .map_err(|_| AppError(Error::internal("dsh harness lock poisoned")))?;
+                if provider.mode() == morn_harness::provider::DshMode::Real {
+                    ensure_live_environment_for_binding(
+                        &binding,
+                        capability,
+                        &profile,
+                        &guard.execution_environments,
+                        now,
+                    )?;
+                }
                 if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str())
                 {
                     return Err(AppError(Error::invalid_state(
@@ -1734,6 +1779,15 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     .pi_harness
                     .lock()
                     .map_err(|_| AppError(Error::internal("pi harness lock poisoned")))?;
+                if provider.mode() == morn_harness::PiMode::Real {
+                    ensure_live_environment_for_binding(
+                        &binding,
+                        capability,
+                        &profile,
+                        &guard.execution_environments,
+                        now,
+                    )?;
+                }
                 if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str())
                 {
                     return Err(AppError(Error::invalid_state(
@@ -4738,6 +4792,99 @@ mod workspace_boundary_tests {
             ("failed", true)
         );
         assert_eq!(classify_e0_turn_receipt(true, "idle"), ("completed", true));
+    }
+
+    #[test]
+    fn real_binding_requires_a_fresh_environment_attestation_at_execution_time() {
+        use morn_capability::{
+            CapabilityKind, CapabilityManifest, CapabilityRecord, EffectClass,
+        };
+        use morn_kernel::ids::{CapabilityId, WorkspaceId};
+        use morn_kernel::{ExecutionClass, ExecutionGuarantee};
+        use morn_runtime::{
+            AttestedExecutionEnvironmentProvider, ExecutionBinding,
+            ExecutionEnvironmentAttestation, ExecutionEnvironmentProvider,
+            ExecutionEnvironmentSpec,
+        };
+        use morn_work::control::{WorkResource, WorkSpec};
+
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "run isolated analysis",
+                morn_profile::DomainProfile::lite_v1().canonical_ref(),
+            ),
+        );
+        let mut capability = CapabilityRecord::new(CapabilityManifest::new(
+            CapabilityId::generate_with("capability"),
+            "real-agent",
+            "deepseek-harness",
+            CapabilityKind::Agent,
+            EffectClass::E0LifecycleReversible,
+        ));
+        capability.manifest.execution.minimum_isolation = ExecutionClass::Container;
+        capability.manifest.execution.required_guarantees = vec![
+            ExecutionGuarantee::ProcessBoundary,
+            ExecutionGuarantee::RuntimeAttestation,
+        ];
+        let profile = morn_profile::DomainProfile::lite_v1();
+
+        let now = morn_kernel::time::Timestamp::from_millis(100);
+        let mut environments =
+            AttestedExecutionEnvironmentProvider::new("deployment-attestor").unwrap();
+        environments
+            .register_attestation(ExecutionEnvironmentAttestation {
+                environment_ref: "env://real/a".to_string(),
+                provider: "deployment-attestor".to_string(),
+                isolation: ExecutionClass::Container,
+                attested_spec: ExecutionEnvironmentSpec {
+                    minimum_isolation: ExecutionClass::Container,
+                    required_guarantees: vec![
+                        ExecutionGuarantee::ProcessBoundary,
+                        ExecutionGuarantee::RuntimeAttestation,
+                    ],
+                    ..Default::default()
+                },
+                evidence_refs: vec!["attestation://real/a".to_string()],
+                observed_at: morn_kernel::time::Timestamp::from_millis(10),
+                valid_until: morn_kernel::time::Timestamp::from_millis(110),
+            })
+            .unwrap();
+
+        let mut binding = ExecutionBinding::for_work(
+            &work,
+            capability.manifest.id.to_string(),
+            "deepseek-harness",
+            "runtime-1",
+        );
+        binding
+            .pin_execution_environment(
+                "env://real/a",
+                ExecutionClass::Container,
+                vec![
+                    ExecutionGuarantee::ProcessBoundary,
+                    ExecutionGuarantee::RuntimeAttestation,
+                ],
+            )
+            .unwrap();
+
+        ensure_live_environment_for_binding(
+            &binding,
+            &capability,
+            &profile,
+            &environments,
+            now,
+        )
+        .unwrap();
+        assert!(ensure_live_environment_for_binding(
+            &binding,
+            &capability,
+            &profile,
+            &environments,
+            morn_kernel::time::Timestamp::from_millis(111),
+        )
+        .is_err());
     }
 
     #[tokio::test]
