@@ -3420,7 +3420,6 @@ mod workspace_boundary_tests {
             ApprovedSolutionId, CapabilityId, ProposedSolutionId, SolutionPackageId,
         };
         use morn_kernel::version::Version;
-        use morn_work::control::WorkPhase;
 
         let state = AppState::new(":memory:").unwrap();
         let work_id = {
