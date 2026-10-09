@@ -106,7 +106,14 @@ impl EvidenceClaim {
         issuer: impl Into<String>,
         reason: impl Into<String>,
     ) -> Result<Self> {
+        let subject = subject.into();
+        let issuer = issuer.into();
         let reason = reason.into();
+        if subject.trim().is_empty() || issuer.trim().is_empty() {
+            return Err(Error::validation(
+                "external blocker requires subject and issuer",
+            ));
+        }
         if reason.trim().is_empty() {
             return Err(Error::validation(
                 "external blocker requires an explicit reason",
@@ -114,11 +121,47 @@ impl EvidenceClaim {
         }
         Ok(Self {
             id: EvidenceClaimId::generate_with("evidence-claim"),
-            subject: subject.into(),
+            subject,
             class,
             state: EvidenceClaimState::BlockedExternal,
             evidence_refs: Vec::new(),
-            issuer: issuer.into(),
+            issuer,
+            reason,
+            observed_at: Timestamp::now(),
+        })
+    }
+
+    pub fn revoked(
+        subject: impl Into<String>,
+        class: EvidenceClass,
+        evidence_refs: Vec<String>,
+        issuer: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Result<Self> {
+        let subject = subject.into();
+        let issuer = issuer.into();
+        let reason = reason.into();
+        if subject.trim().is_empty() || issuer.trim().is_empty() || reason.trim().is_empty() {
+            return Err(Error::validation(
+                "evidence revocation requires subject, issuer and reason",
+            ));
+        }
+        if evidence_refs.is_empty()
+            || evidence_refs
+                .iter()
+                .any(|reference| reference.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "evidence revocation requires explicit non-empty evidence references",
+            ));
+        }
+        Ok(Self {
+            id: EvidenceClaimId::generate_with("evidence-claim"),
+            subject,
+            class,
+            state: EvidenceClaimState::Revoked,
+            evidence_refs,
+            issuer,
             reason,
             observed_at: Timestamp::now(),
         })
@@ -155,6 +198,30 @@ impl EvidenceLedger {
                 "an external blocker requires an explicit reason",
             ));
         }
+        if claim.state == EvidenceClaimState::Revoked
+            && (claim.reason.trim().is_empty()
+                || claim.evidence_refs.is_empty()
+                || claim
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference.trim().is_empty()))
+        {
+            return Err(Error::validation(
+                "a revoked evidence claim requires non-empty evidence references and reason",
+            ));
+        }
+        if let Some(previous) = self
+            .claims
+            .iter()
+            .rev()
+            .find(|existing| existing.subject == claim.subject && existing.class == claim.class)
+        {
+            if claim.observed_at < previous.observed_at {
+                return Err(Error::validation(
+                    "evidence history must be appended in non-decreasing observed_at order per subject/class",
+                ));
+            }
+        }
         if self.claims.iter().any(|existing| existing.id == claim.id) {
             return Err(Error::conflict(format!(
                 "evidence claim {} already exists",
@@ -169,10 +236,27 @@ impl EvidenceLedger {
         &self.claims
     }
 
-    pub fn proven_for(&self, subject: &str) -> Vec<&EvidenceClaim> {
+    pub fn current_claim(&self, subject: &str, class: EvidenceClass) -> Option<&EvidenceClaim> {
         self.claims
             .iter()
-            .filter(|claim| claim.subject == subject && claim.state == EvidenceClaimState::Proven)
+            .rev()
+            .find(|claim| claim.subject == subject && claim.class == class)
+    }
+
+    /// Return only currently-active proofs, one per evidence class. Historical
+    /// Proven entries remain auditable but a later BlockedExternal/Revoked entry
+    /// for the same subject/class makes them inactive until a fresh Proven claim
+    /// is explicitly appended.
+    pub fn proven_for(&self, subject: &str) -> Vec<&EvidenceClaim> {
+        use std::collections::BTreeMap;
+
+        let mut current = BTreeMap::new();
+        for claim in self.claims.iter().filter(|claim| claim.subject == subject) {
+            current.insert(claim.class, claim);
+        }
+        current
+            .into_values()
+            .filter(|claim| claim.state == EvidenceClaimState::Proven)
             .collect()
     }
 
@@ -180,9 +264,8 @@ impl EvidenceLedger {
     /// not semantically include local-fixture evidence, and real-site evidence
     /// does not silently include a production-write claim.
     pub fn satisfies(&self, subject: &str, required: EvidenceClass) -> bool {
-        self.proven_for(subject)
-            .into_iter()
-            .any(|claim| claim.class == required)
+        self.current_claim(subject, required)
+            .is_some_and(|claim| claim.state == EvidenceClaimState::Proven)
     }
 
     pub fn proven_classes(&self, subject: &str) -> std::collections::BTreeSet<EvidenceClass> {
@@ -421,6 +504,115 @@ mod tests {
             ledger.claims()[0].state,
             EvidenceClaimState::BlockedExternal
         );
+    }
+
+    #[test]
+    fn revocation_invalidates_a_previous_proof_until_fresh_evidence_is_appended() {
+        let mut ledger = EvidenceLedger::default();
+        let mut proof = EvidenceClaim::proven(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec!["runtime://smoke/1".to_string()],
+            "deployment-attestor",
+            "authenticated settled turn observed",
+        )
+        .unwrap();
+        proof.observed_at = Timestamp::from_millis(10);
+        ledger.append(proof).unwrap();
+        assert!(ledger.satisfies("deepseek-harness", EvidenceClass::RealRuntime));
+
+        let mut revoked = EvidenceClaim::revoked(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec!["runtime://incident/1".to_string()],
+            "deployment-attestor",
+            "credential and runtime attestation were withdrawn",
+        )
+        .unwrap();
+        revoked.observed_at = Timestamp::from_millis(20);
+        ledger.append(revoked).unwrap();
+        assert!(!ledger.satisfies("deepseek-harness", EvidenceClass::RealRuntime));
+        assert!(ledger.proven_for("deepseek-harness").is_empty());
+
+        let mut reproved = EvidenceClaim::proven(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec!["runtime://smoke/2".to_string()],
+            "deployment-attestor",
+            "fresh runtime identity and settled turn re-established",
+        )
+        .unwrap();
+        reproved.observed_at = Timestamp::from_millis(30);
+        ledger.append(reproved).unwrap();
+        assert!(ledger.satisfies("deepseek-harness", EvidenceClass::RealRuntime));
+        assert_eq!(
+            ledger
+                .current_claim("deepseek-harness", EvidenceClass::RealRuntime)
+                .unwrap()
+                .state,
+            EvidenceClaimState::Proven
+        );
+    }
+
+    #[test]
+    fn external_blocker_after_proof_also_removes_current_satisfaction() {
+        let mut ledger = EvidenceLedger::default();
+        let mut proof = EvidenceClaim::proven(
+            "factory-customer",
+            EvidenceClass::RealSite,
+            vec!["site://acceptance/1".to_string()],
+            "site-evaluator",
+            "authorized read-only pilot observed",
+        )
+        .unwrap();
+        proof.observed_at = Timestamp::from_millis(10);
+        ledger.append(proof).unwrap();
+
+        let mut blocked = EvidenceClaim::blocked_external(
+            "factory-customer",
+            EvidenceClass::RealSite,
+            "site-evaluator",
+            "site authorization expired",
+        )
+        .unwrap();
+        blocked.observed_at = Timestamp::from_millis(20);
+        ledger.append(blocked).unwrap();
+
+        assert!(!ledger.satisfies("factory-customer", EvidenceClass::RealSite));
+        assert_eq!(
+            ledger
+                .current_claim("factory-customer", EvidenceClass::RealSite)
+                .unwrap()
+                .state,
+            EvidenceClaimState::BlockedExternal
+        );
+    }
+
+    #[test]
+    fn evidence_history_rejects_out_of_order_replay_for_same_subject_and_class() {
+        let mut ledger = EvidenceLedger::default();
+        let mut revoked = EvidenceClaim::revoked(
+            "provider",
+            EvidenceClass::RealRuntime,
+            vec!["incident://2".to_string()],
+            "deployment",
+            "runtime compromised",
+        )
+        .unwrap();
+        revoked.observed_at = Timestamp::from_millis(20);
+        ledger.append(revoked).unwrap();
+
+        let mut stale = EvidenceClaim::proven(
+            "provider",
+            EvidenceClass::RealRuntime,
+            vec!["runtime://old".to_string()],
+            "deployment",
+            "old smoke replayed",
+        )
+        .unwrap();
+        stale.observed_at = Timestamp::from_millis(10);
+        assert!(ledger.append(stale).is_err());
+        assert!(!ledger.satisfies("provider", EvidenceClass::RealRuntime));
     }
 
     #[test]
