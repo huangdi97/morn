@@ -581,16 +581,18 @@ mod tests {
     fn real_pi_rejects_context_from_a_different_execution_environment() {
         use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 
-        let mut config = PiRpcConfig::default();
-        config.cwd = Some(
-            std::env::current_dir()
-                .unwrap()
-                .to_string_lossy()
-                .to_string(),
-        );
-        config.provider = Some("fixture-provider".to_string());
-        config.model = Some("fixture-model".to_string());
-        config.execution_environment_ref = Some("env://container/pinned".to_string());
+        let config = PiRpcConfig {
+            cwd: Some(
+                std::env::current_dir()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string(),
+            ),
+            provider: Some("fixture-provider".to_string()),
+            model: Some("fixture-model".to_string()),
+            execution_environment_ref: Some("env://container/pinned".to_string()),
+            ..Default::default()
+        };
         let provider = PiHarnessProvider::with_real_rpc(config);
         let ctx = RuntimeContext::new(
             WorkspaceId::generate(),
