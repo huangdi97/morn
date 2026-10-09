@@ -850,6 +850,23 @@ mod tests {
     }
 
     #[test]
+    fn real_pi_wire_fixture_passes_capability_negotiated_contract_and_smoke() {
+        let (mut provider, mut ctx, original_handle) = real_pi_wire_fixture_provider();
+        ctx.provenance_refs
+            .push("evidence://real-pi-wire-fixture".to_string());
+
+        let contract = crate::contract::run_provider_contract(&mut provider, &ctx).unwrap();
+        assert!(contract.all_passed(), "checks: {:?}", contract.checks);
+
+        let smoke = crate::smoke::run_harness_smoke(&mut provider, &ctx).unwrap();
+        assert!(smoke.all_ok(), "smoke: {smoke:?}");
+        assert!(smoke.detail.contains("session close is unsupported"));
+
+        provider.unmount(&original_handle).unwrap();
+        provider.shutdown_real_runtime().unwrap();
+    }
+
+    #[test]
     fn real_pi_preflight_refreshes_expired_initialization_with_get_state() {
         let (mut provider, _ctx, _handle) = real_pi_wire_fixture_provider();
         assert_eq!(provider.preflight_real_runtime().unwrap(), "1.0.0");
