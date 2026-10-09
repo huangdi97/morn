@@ -677,7 +677,9 @@ async fn v115_work_bind_attested_e0(
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
     if work.workspace_id != guard.workspace.id {
-        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
     }
     if work.status.phase != WorkPhase::Ready || !work.required_conditions_satisfied() {
         return Err(AppError(Error::invalid_state(
@@ -836,10 +838,7 @@ async fn v115_work_bind_attested_e0(
         attestation.isolation,
         attestation.attested_spec.required_guarantees.clone(),
     )?;
-    if !binding.environment_satisfies(
-        requested.minimum_isolation,
-        &requested.required_guarantees,
-    ) {
+    if !binding.environment_satisfies(requested.minimum_isolation, &requested.required_guarantees) {
         return Err(AppError(Error::invalid_state(
             "pinned execution environment does not satisfy the computed execution contract",
         )));

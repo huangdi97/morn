@@ -24,15 +24,13 @@ use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
 use morn_harness::{PiHarnessProvider, PiMode};
-use morn_runtime::{
-    AttestedExecutionEnvironmentProvider, ExecutionEnvironmentAttestation,
-};
 #[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;
 use morn_kernel::workspace::{Workspace, WorkspaceKind};
 use morn_opint::dataset::OutcomeDataset;
 use morn_opint::episode::EpisodeAssembler;
 use morn_opint::predictor::PredictorRegistry;
+use morn_runtime::{AttestedExecutionEnvironmentProvider, ExecutionEnvironmentAttestation};
 use morn_store::store::MornStore;
 use morn_work::durable::DurableRuntime;
 use morn_work::service::{DurableWorkService, WorkService};
@@ -106,8 +104,8 @@ fn configured_dsh_harness() -> morn_kernel::Result<DeepSeekHarnessProvider> {
     }
 }
 
-fn configured_execution_environments(
-) -> morn_kernel::Result<AttestedExecutionEnvironmentProvider> {
+fn configured_execution_environments() -> morn_kernel::Result<AttestedExecutionEnvironmentProvider>
+{
     let provider_name = std::env::var("MORN_EXECUTION_ATTESTOR")
         .unwrap_or_else(|_| "deployment-attestor".to_string());
     let mut provider = AttestedExecutionEnvironmentProvider::new(provider_name)?;
