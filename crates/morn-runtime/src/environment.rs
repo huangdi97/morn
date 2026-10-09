@@ -251,9 +251,11 @@ impl ExecutionEnvironmentAttestation {
                 .all(|item| self.attested_spec.secret_refs.contains(item))
             && self.attested_spec.persistence_scope == requested.persistence_scope
             && self.attested_spec.side_effect_policy == requested.side_effect_policy
-            && requested
-                .timeout_ms
-                .is_none_or(|required| self.attested_spec.timeout_ms.is_some_and(|actual| actual >= required))
+            && requested.timeout_ms.is_none_or(|required| {
+                self.attested_spec
+                    .timeout_ms
+                    .is_some_and(|actual| actual >= required)
+            })
     }
 }
 
@@ -347,9 +349,7 @@ impl ExecutionEnvironmentProvider for AttestedExecutionEnvironmentProvider {
         let mut active = self
             .attestations
             .values()
-            .filter(|attestation| {
-                attestation.isolation == class && attestation.active_at(now)
-            });
+            .filter(|attestation| attestation.isolation == class && attestation.active_at(now));
         let Some(first) = active.next() else {
             return Vec::new();
         };
@@ -407,10 +407,9 @@ impl ExecutionEnvironmentProvider for AttestedExecutionEnvironmentProvider {
     }
 
     fn release(&mut self, handle: &ExecutionEnvironmentHandle) -> Result<()> {
-        let environment_ref = self
-            .leases
-            .get(handle.id.as_str())
-            .ok_or_else(|| Error::not_found(format!("execution environment lease {}", handle.id)))?;
+        let environment_ref = self.leases.get(handle.id.as_str()).ok_or_else(|| {
+            Error::not_found(format!("execution environment lease {}", handle.id))
+        })?;
         if handle.provider != self.name || handle.runtime_ref != *environment_ref {
             return Err(Error::validation(
                 "execution environment handle does not match its attested lease",
