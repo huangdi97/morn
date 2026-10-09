@@ -197,7 +197,11 @@ export default function ConsolePage() {
             <Card title="v11.5 Control / Trust / Composition">
               <KeyValue k="Semantic slots" v={v115.architecture.semantic_slots.join(", ")} />
               <KeyValue k="Authority" v={v115.providers.authority} />
-              <KeyValue k="Execution environments" v={v115.providers.execution_environment.join(", ")} />
+              <KeyValue k="Execution class vocabulary" v={v115.providers.execution_environment.join(", ")} />
+              <KeyValue
+                k="Active attested environments"
+                v={v115.execution_environment_attestations.filter((item) => item.active).length}
+              />
               <KeyValue k="Factory guarantees" v={v115.factory_profile.required_guarantees.length} />
               <KeyValue k="Real DSH" v={v115.claims.real_dsh} />
               <KeyValue k="Real Pi" v={v115.claims.real_pi} />

@@ -1029,7 +1029,10 @@ impl ControlPlaneStore for MornStore {
             ));
         }
         let interop: InteropBinding = self
-            .load_record("interop_binding_v115", observation.execution_binding_ref.as_str())?
+            .load_record(
+                "interop_binding_v115",
+                observation.execution_binding_ref.as_str(),
+            )?
             .ok_or_else(|| Error::not_found("governed interop endpoint binding"))?;
         interop.validate_against_execution_binding(&binding)?;
         if interop.endpoint != observation.endpoint {
@@ -2172,8 +2175,8 @@ mod control_plane_persistence_scope_tests {
     #[test]
     fn external_task_observation_cannot_predate_binding_or_arrive_from_the_future() {
         use morn_integration::{
-            ExternalEndpoint, ExternalTaskSnapshot, GovernedExternalTaskObservation, InteropBinding,
-            InteropProtocol, McpTaskEvidence, McpTaskState,
+            ExternalEndpoint, ExternalTaskSnapshot, GovernedExternalTaskObservation,
+            InteropBinding, InteropProtocol, McpTaskEvidence, McpTaskState,
         };
 
         let store = MornStore::open_in_memory().unwrap();
@@ -2222,8 +2225,9 @@ mod control_plane_persistence_scope_tests {
             .save_external_task_observation(&work, &observation)
             .is_err());
 
-        observation.observed_at =
-            morn_kernel::time::Timestamp::from_millis(morn_kernel::time::Timestamp::now().millis() + 60_000);
+        observation.observed_at = morn_kernel::time::Timestamp::from_millis(
+            morn_kernel::time::Timestamp::now().millis() + 60_000,
+        );
         assert!(store
             .save_external_task_observation(&work, &observation)
             .is_err());
@@ -2232,8 +2236,8 @@ mod control_plane_persistence_scope_tests {
     #[test]
     fn terminal_external_task_observation_cannot_be_resurrected() {
         use morn_integration::{
-            ExternalEndpoint, ExternalTaskSnapshot, GovernedExternalTaskObservation, InteropBinding,
-            InteropProtocol, McpTaskEvidence, McpTaskState,
+            ExternalEndpoint, ExternalTaskSnapshot, GovernedExternalTaskObservation,
+            InteropBinding, InteropProtocol, McpTaskEvidence, McpTaskState,
         };
 
         let store = MornStore::open_in_memory().unwrap();

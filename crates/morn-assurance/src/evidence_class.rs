@@ -65,23 +65,35 @@ impl EvidenceClaim {
         issuer: impl Into<String>,
         reason: impl Into<String>,
     ) -> Result<Self> {
-        if evidence_refs.is_empty() {
+        if evidence_refs.is_empty()
+            || evidence_refs
+                .iter()
+                .any(|reference| reference.trim().is_empty())
+        {
             return Err(Error::validation(
-                "a proven evidence claim requires at least one evidence reference",
+                "a proven evidence claim requires explicit non-empty evidence references",
             ));
         }
+        let subject = subject.into();
         let issuer = issuer.into();
+        let reason = reason.into();
+        if subject.trim().is_empty() {
+            return Err(Error::validation("evidence claim subject is required"));
+        }
         if issuer.trim().is_empty() {
             return Err(Error::validation("evidence claim issuer is required"));
         }
+        if reason.trim().is_empty() {
+            return Err(Error::validation("proven evidence claim reason is required"));
+        }
         Ok(Self {
             id: EvidenceClaimId::generate_with("evidence-claim"),
-            subject: subject.into(),
+            subject,
             class,
             state: EvidenceClaimState::Proven,
             evidence_refs,
             issuer,
-            reason: reason.into(),
+            reason,
             observed_at: Timestamp::now(),
         })
     }
@@ -124,9 +136,16 @@ impl EvidenceLedger {
         if claim.issuer.trim().is_empty() {
             return Err(Error::validation("evidence claim issuer is required"));
         }
-        if claim.state == EvidenceClaimState::Proven && claim.evidence_refs.is_empty() {
+        if claim.state == EvidenceClaimState::Proven
+            && (claim.evidence_refs.is_empty()
+                || claim
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference.trim().is_empty())
+                || claim.reason.trim().is_empty())
+        {
             return Err(Error::validation(
-                "a proven evidence claim requires explicit evidence references",
+                "a proven evidence claim requires non-empty evidence references and reason",
             ));
         }
         if claim.state == EvidenceClaimState::BlockedExternal && claim.reason.trim().is_empty() {
@@ -226,11 +245,11 @@ pub fn reference_evidence_ledger() -> EvidenceLedger {
     for (subject, reason) in [
         (
             "deepseek-harness",
-            "real DSH process/model/configuration is external to deterministic contract tests",
+            "real DSH adapter exists; authenticated runtime/model/credential and attested environment evidence remain external to deterministic contract tests",
         ),
         (
             "pi-harness",
-            "real Pi binary/model transport is external to deterministic contract tests",
+            "real Pi adapter exists; installed runtime/model/credential and attested environment evidence remain external to deterministic contract tests",
         ),
     ] {
         ledger
@@ -276,6 +295,26 @@ pub fn reference_evidence_ledger() -> EvidenceLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proven_claim_requires_auditable_reason_and_non_empty_references() {
+        assert!(EvidenceClaim::proven(
+            "subject",
+            EvidenceClass::RealRuntime,
+            vec!["runtime://evidence".to_string()],
+            "deployment",
+            "",
+        )
+        .is_err());
+        assert!(EvidenceClaim::proven(
+            "subject",
+            EvidenceClass::RealRuntime,
+            vec![" ".to_string()],
+            "deployment",
+            "runtime attested",
+        )
+        .is_err());
+    }
 
     #[test]
     fn deserialized_proven_claim_cannot_bypass_evidence_requirements() {

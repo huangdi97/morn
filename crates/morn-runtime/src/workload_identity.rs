@@ -71,6 +71,16 @@ impl WorkloadIdentityProvider for FixtureWorkloadIdentityProvider {
                 "workload identity requires workload, work and trust-domain references",
             ));
         }
+        if request.attestation_refs.is_empty()
+            || request
+                .attestation_refs
+                .iter()
+                .any(|reference| reference.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "workload identity requires explicit non-empty attestation references",
+            ));
+        }
         if request.ttl_seconds == 0 {
             return Err(Error::validation("workload identity ttl must be positive"));
         }
@@ -135,6 +145,31 @@ mod tests {
         assert!(!serialized.contains("password"));
 
         provider.revoke(&identity).unwrap();
+    }
+
+    #[test]
+    fn workload_identity_cannot_be_minted_without_attestation_evidence() {
+        let mut provider = FixtureWorkloadIdentityProvider::default();
+        assert!(provider
+            .attest(&WorkloadIdentityRequest {
+                workload_ref: "capability/worker".to_string(),
+                work_ref: "work-1".to_string(),
+                site_ref: None,
+                trust_domain: "example.test".to_string(),
+                ttl_seconds: 60,
+                attestation_refs: vec![],
+            })
+            .is_err());
+        assert!(provider
+            .attest(&WorkloadIdentityRequest {
+                workload_ref: "capability/worker".to_string(),
+                work_ref: "work-1".to_string(),
+                site_ref: None,
+                trust_domain: "example.test".to_string(),
+                ttl_seconds: 60,
+                attestation_refs: vec!["   ".to_string()],
+            })
+            .is_err());
     }
 
     #[test]

@@ -307,11 +307,15 @@ pub fn reference_provider_catalog() -> ProviderRegistry {
         .protocols
         .insert("morn-execution-environment".to_string());
     fixture_env.features.extend(
-        ["process", "container", "microvm"]
+        ["fixture-process", "fixture-container", "fixture-microvm"]
             .into_iter()
             .map(str::to_string),
     );
-    fixture_env.status = ProviderStatus::Healthy;
+    // This descriptor advertises only deterministic engineering fixtures.
+    // The in-process FixtureEnvironmentProvider may emulate stronger classes
+    // for conformance tests, but the product registry must not select those
+    // simulations as a live execution environment.
+    fixture_env.status = ProviderStatus::Registered;
     fixture_env
         .evidence_refs
         .push("crates/morn-runtime/src/environment.rs".to_string());
@@ -460,6 +464,18 @@ mod tests {
         );
         assert_eq!(event.previous_status, ProviderStatus::Healthy);
         assert_eq!(registry.observations().len(), 1);
+    }
+
+    #[test]
+    fn reference_fixture_environment_is_not_selectable_as_live_isolation() {
+        let registry = reference_provider_catalog();
+        let fixture = registry.get("fixture-environment").unwrap();
+        assert_eq!(fixture.status, ProviderStatus::Registered);
+        assert!(fixture.features.contains("fixture-container"));
+        assert!(!fixture.features.contains("container"));
+        assert!(registry
+            .eligible(ProviderFamily::ExecutionEnvironment, &BTreeSet::new())
+            .is_empty());
     }
 
     #[test]

@@ -100,7 +100,9 @@ pub struct McpTaskEvidence {
 impl McpTaskEvidence {
     pub fn validate(&self) -> Result<()> {
         if self.server_ref.trim().is_empty() || self.task_id.trim().is_empty() {
-            return Err(Error::validation("MCP task requires server and task identity"));
+            return Err(Error::validation(
+                "MCP task requires server and task identity",
+            ));
         }
         match self.state {
             McpTaskState::Completed if self.result.is_none() || self.error.is_some() => {
@@ -625,12 +627,8 @@ mod tests {
                 "morn.lite@1.0.0",
             ),
         );
-        let binding = ExecutionBinding::for_work(
-            &work,
-            "capability://orders",
-            "mcp-provider",
-            "2026-07-28",
-        );
+        let binding =
+            ExecutionBinding::for_work(&work, "capability://orders", "mcp-provider", "2026-07-28");
         let mut interop = InteropBinding {
             work_ref: work.id.to_string(),
             execution_binding_ref: binding.id.to_string(),
@@ -642,13 +640,19 @@ mod tests {
             },
             capability_ref: binding.capability_manifest_ref.clone(),
         };
-        interop.validate_against_execution_binding(&binding).unwrap();
+        interop
+            .validate_against_execution_binding(&binding)
+            .unwrap();
 
         interop.capability_ref = "capability://other".to_string();
-        assert!(interop.validate_against_execution_binding(&binding).is_err());
+        assert!(interop
+            .validate_against_execution_binding(&binding)
+            .is_err());
         interop.capability_ref = binding.capability_manifest_ref.clone();
         interop.execution_binding_ref = "binding://other".to_string();
-        assert!(interop.validate_against_execution_binding(&binding).is_err());
+        assert!(interop
+            .validate_against_execution_binding(&binding)
+            .is_err());
     }
 
     #[test]
