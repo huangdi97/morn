@@ -276,15 +276,18 @@ type E0HarnessCapability = {
 function GovernedE0Executor({
   control,
   capabilities,
+  status,
   reload,
 }: {
   control: V115ControlPlaneData;
   capabilities: E0HarnessCapability[];
+  status: V115Status | null;
   reload: () => void;
 }) {
   const [workId, setWorkId] = useState("");
   const [capabilityId, setCapabilityId] = useState("");
   const [bindingId, setBindingId] = useState("");
+  const [environmentRef, setEnvironmentRef] = useState("");
   const [prompt, setPrompt] = useState("Execute the bound E0 capability and return executor evidence only.");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -319,6 +322,27 @@ function GovernedE0Executor({
         candidateWorks.find((work) => work.id === effectiveWorkId)?.generation,
   );
   const effectiveCapabilityId = capabilityId || eligibleCapabilities[0]?.manifest.id || "";
+  const selectedCapability = eligibleCapabilities.find(
+    (capability) => capability.manifest.id === effectiveCapabilityId,
+  );
+  const realDsh =
+    selectedCapability?.manifest.provider_ref === "deepseek-harness" &&
+    status?.harness_runtime.dsh.mode === "real";
+  const realPi =
+    selectedCapability?.manifest.provider_ref === "pi" &&
+    status?.harness_runtime.pi.mode === "real";
+  const configuredDshEnvironment =
+    status?.harness_runtime.dsh.configured_execution_environment_ref ?? "";
+  const eligibleEnvironments = (status?.execution_environment_attestations ?? []).filter(
+    (environment) =>
+      environment.active &&
+      (!realDsh || environment.environment_ref === configuredDshEnvironment),
+  );
+  const effectiveEnvironmentRef =
+    environmentRef ||
+    (realDsh && eligibleEnvironments.length === 1
+      ? eligibleEnvironments[0].environment_ref
+      : "");
   const activeBindingId = selectedWork?.status.active_binding ?? "";
   const activeBindingMatches = workBindings.some(
     (binding) => textField(binding, "id") === activeBindingId,
@@ -351,15 +375,22 @@ function GovernedE0Executor({
   };
 
   const bind = async () => {
-    if (!effectiveWorkId || !effectiveCapabilityId) return;
+    if (!effectiveWorkId || !effectiveCapabilityId || realPi) return;
+    if (realDsh && !effectiveEnvironmentRef) return;
     setBusy(true);
     setMessage(null);
     try {
-      await apiPostJson("/v115/work/bind-e0", {
+      const path = realDsh ? "/v115/work/bind-attested-e0" : "/v115/work/bind-e0";
+      await apiPostJson(path, {
         work_id: effectiveWorkId,
         capability_manifest_id: effectiveCapabilityId,
+        ...(realDsh ? { environment_ref: effectiveEnvironmentRef } : {}),
       });
-      setMessage("Binding persisted. Execution has not started.");
+      setMessage(
+        realDsh
+          ? "Trusted environment and exact DSH runtime identity pinned. Execution has not started."
+          : "Binding persisted. Execution has not started.",
+      );
       reload();
     } catch (e) {
       setMessage((e as Error).message);
@@ -418,6 +449,7 @@ function GovernedE0Executor({
               setWorkId(event.target.value);
               setCapabilityId("");
               setBindingId("");
+              setEnvironmentRef("");
             }}
           >
             {candidateWorks.map((work) => (
@@ -431,7 +463,10 @@ function GovernedE0Executor({
           E0 capability
           <select
             value={effectiveCapabilityId}
-            onChange={(event) => setCapabilityId(event.target.value)}
+            onChange={(event) => {
+              setCapabilityId(event.target.value);
+              setEnvironmentRef("");
+            }}
             disabled={eligibleCapabilities.length === 0}
           >
             {eligibleCapabilities.length === 0 ? (
@@ -446,6 +481,45 @@ function GovernedE0Executor({
           </select>
         </label>
       </div>
+      {realDsh && (
+        <label className="governed-execution-environment">
+          Trusted execution environment
+          <select
+            value={effectiveEnvironmentRef}
+            onChange={(event) => setEnvironmentRef(event.target.value)}
+            disabled={eligibleEnvironments.length === 0}
+          >
+            {eligibleEnvironments.length === 0 ? (
+              <option value="">No fresh matching deployment attestation</option>
+            ) : eligibleEnvironments.length > 1 && !environmentRef ? (
+              <>
+                <option value="">Select an attested environment</option>
+                {eligibleEnvironments.map((environment) => (
+                  <option key={environment.environment_ref} value={environment.environment_ref}>
+                    {environment.environment_ref} · {environment.isolation}
+                  </option>
+                ))}
+              </>
+            ) : (
+              eligibleEnvironments.map((environment) => (
+                <option key={environment.environment_ref} value={environment.environment_ref}>
+                  {environment.environment_ref} · {environment.isolation}
+                </option>
+              ))
+            )}
+          </select>
+          <small>
+            Real DSH binding is allowed only when this fresh deployment attestation exactly matches
+            the environment pinned by the DSH launch configuration.
+          </small>
+        </label>
+      )}
+      {realPi && (
+        <p className="work-focus-alert" role="status">
+          Real Pi binding remains fail-closed because the current RPC boundary does not expose a
+          verifiable runtime version. Fixture Pi remains available for conformance only.
+        </p>
+      )}
       <div className="page-actions">
         <button
           disabled={busy || !selectedWork?.spec.source_solution_ref}
@@ -454,7 +528,13 @@ function GovernedE0Executor({
           Resolve approved Solution requirements
         </button>
         <button
-          disabled={busy || selectedWork?.status.phase !== "Ready" || !effectiveCapabilityId}
+          disabled={
+            busy ||
+            selectedWork?.status.phase !== "Ready" ||
+            !effectiveCapabilityId ||
+            realPi ||
+            (realDsh && !effectiveEnvironmentRef)
+          }
           onClick={bind}
         >
           Persist binding
@@ -781,6 +861,7 @@ export default function Workbench() {
             <GovernedE0Executor
               control={v115Control}
               capabilities={v115Capabilities}
+              status={v115}
               reload={load}
             />
             <OutcomeReviewPanel control={v115Control} reload={load} />
@@ -947,6 +1028,7 @@ export default function Workbench() {
           <GovernedE0Executor
             control={v115Control}
             capabilities={v115Capabilities}
+            status={v115}
             reload={load}
           />
           <OutcomeReviewPanel control={v115Control} reload={load} />

@@ -155,6 +155,28 @@ export interface V115Status {
     registered: string;
     healthy: string;
   };
+  harness_runtime: {
+    dsh: {
+      mode: "fixture" | "real";
+      health: string;
+      configured_execution_environment_ref: string | null;
+    };
+    pi: {
+      mode: "fixture" | "real";
+      health: string;
+    };
+  };
+  execution_environment_attestations: Array<{
+    environment_ref: string;
+    provider: string;
+    isolation: string;
+    required_guarantees: string[];
+    runtime: string | null;
+    evidence_refs: string[];
+    observed_at: number | string | Record<string, unknown>;
+    valid_until: number | string | Record<string, unknown> | null;
+    active: boolean;
+  }>;
   architecture: {
     definition: string;
     protocol_version: { major: number; minor: number; patch: number };

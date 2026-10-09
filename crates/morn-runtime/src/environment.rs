@@ -318,6 +318,12 @@ impl AttestedExecutionEnvironmentProvider {
         self.attestations.get(environment_ref)
     }
 
+    /// Deployment-safe discovery surface. Attestations expose only runtime
+    /// identity, guarantee metadata and evidence references; they contain no secrets.
+    pub fn attestations(&self) -> Vec<ExecutionEnvironmentAttestation> {
+        self.attestations.values().cloned().collect()
+    }
+
     fn environment_is_leased(&self, environment_ref: &str) -> bool {
         self.leases.values().any(|leased| leased == environment_ref)
     }
@@ -530,6 +536,12 @@ mod tests {
             observed_at: now,
             valid_until: Timestamp::from_millis(now.millis() + 60_000),
         }
+    }
+
+    #[test]
+    fn attested_provider_discovery_starts_empty_without_deployment_evidence() {
+        let provider = AttestedExecutionEnvironmentProvider::new("deployment-attestor").unwrap();
+        assert!(provider.attestations().is_empty());
     }
 
     #[test]

@@ -268,20 +268,35 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         .map(|item| json!({ "id": item.id, "version": item.version }))
         .collect();
     let mut provider_catalog = morn_runtime::reference_provider_catalog();
-    let (dsh_harness, pi_harness) = {
+    let (dsh_harness, pi_harness, execution_environment_attestations) = {
         let guard = state.lock();
-        (guard.dsh_harness.clone(), guard.pi_harness.clone())
+        (
+            guard.dsh_harness.clone(),
+            guard.pi_harness.clone(),
+            guard.execution_environments.attestations(),
+        )
     };
-    let dsh_health = dsh_harness
-        .lock()
-        .expect("dsh harness poisoned")
-        .runtime_health()
-        .clone();
-    let pi_health = pi_harness
-        .lock()
-        .expect("pi harness poisoned")
-        .runtime_health()
-        .clone();
+    let (dsh_health, dsh_mode, dsh_environment_ref) = {
+        let provider = dsh_harness.lock().expect("dsh harness poisoned");
+        (
+            provider.runtime_health().clone(),
+            match provider.mode() {
+                morn_harness::provider::DshMode::Fixture => "fixture",
+                morn_harness::provider::DshMode::Real => "real",
+            },
+            provider.configured_execution_environment_ref().map(str::to_string),
+        )
+    };
+    let (pi_health, pi_mode) = {
+        let provider = pi_harness.lock().expect("pi harness poisoned");
+        (
+            provider.runtime_health().clone(),
+            match provider.mode() {
+                morn_harness::PiMode::Fixture => "fixture",
+                morn_harness::PiMode::Real => "real",
+            },
+        )
+    };
     let now = morn_kernel::time::Timestamp::now();
     let mut project_runtime_health = |provider_id: &str,
                                       health: &morn_harness::HarnessRuntimeHealth|
@@ -351,6 +366,28 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         },
         "provider_catalog": providers,
         "provider_observations": provider_observations,
+        "harness_runtime": {
+            "dsh": {
+                "mode": dsh_mode,
+                "health": dsh_health.state,
+                "configured_execution_environment_ref": dsh_environment_ref
+            },
+            "pi": {
+                "mode": pi_mode,
+                "health": pi_health.state
+            }
+        },
+        "execution_environment_attestations": execution_environment_attestations.iter().map(|attestation| json!({
+            "environment_ref": attestation.environment_ref,
+            "provider": attestation.provider,
+            "isolation": attestation.isolation,
+            "required_guarantees": attestation.attested_spec.required_guarantees,
+            "runtime": attestation.attested_spec.runtime,
+            "evidence_refs": attestation.evidence_refs,
+            "observed_at": attestation.observed_at,
+            "valid_until": attestation.valid_until,
+            "active": attestation.active_at(now)
+        })).collect::<Vec<_>>(),
         "provider_status_semantics": {
             "registered": "configured/known but not selectable until live health evidence exists",
             "healthy": "live evidence-backed and selectable within its feature/effect constraints"
@@ -1059,7 +1096,6 @@ async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value
     })))
 }
 
-#[derive(Debug)]
 fn classify_e0_turn_receipt(
     success: bool,
     snapshot_status: &str,
@@ -1075,6 +1111,7 @@ fn classify_e0_turn_receipt(
     ("failed", true)
 }
 
+#[derive(Debug)]
 struct E0HarnessTurnEvidence {
     output: Option<morn_harness::provider::HarnessOutput>,
     error: Option<String>,
@@ -3935,6 +3972,21 @@ mod workspace_boundary_tests {
     use super::*;
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
     use morn_work::control::{WorkResource, WorkSpec};
+
+    #[tokio::test]
+    async fn v115_status_exposes_runtime_mode_and_only_deployment_attestations() {
+        let state = AppState::new(":memory:").unwrap();
+        let Json(body) = v115_status(State(state)).await.unwrap();
+        assert_eq!(body["harness_runtime"]["dsh"]["mode"], "fixture");
+        assert_eq!(body["harness_runtime"]["pi"]["mode"], "fixture");
+        assert_eq!(
+            body["execution_environment_attestations"]
+                .as_array()
+                .unwrap()
+                .len(),
+            0
+        );
+    }
 
     #[tokio::test]
     async fn v115_work_projection_only_returns_current_workspace_records() {

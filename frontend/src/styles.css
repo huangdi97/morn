@@ -403,6 +403,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 }
  .governed-execution-grid label,
 .governed-execution-binding,
+.governed-execution-environment,
 .governed-execution-prompt {
   display: grid;
   gap: 7px;
@@ -411,6 +412,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 }
  .governed-execution-grid select,
 .governed-execution-binding select,
+.governed-execution-environment select,
 .governed-execution-prompt textarea {
   width: 100%;
   box-sizing: border-box;
@@ -421,10 +423,12 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   padding: 9px 10px;
 }
 .governed-execution-binding,
+.governed-execution-environment,
 .governed-execution-prompt {
   margin-top: 14px;
 }
-.governed-execution-binding small {
+.governed-execution-binding small,
+.governed-execution-environment small {
   color: #8fa1bb;
   line-height: 1.45;
 }
