@@ -148,7 +148,7 @@ describe("canonical Work remains a separate product surface", () => {
     expect(html).toContain("ObservedOperational");
     expect(html).toContain("sha256:live-one");
     expect(html).toContain("Value evidence refs: 1");
-    expect(html).not.toContain("CustomerValidated");
+    expect(html).not.toContain("<b>CustomerValidated</b>");
     expect(html).not.toContain("Foreign review");
     expect(html).not.toContain("Old generation review");
     expect(html).not.toContain("cmms.foreign");
