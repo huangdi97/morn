@@ -181,6 +181,9 @@ export default function ConsolePage() {
             <KeyValue k="Work" v={v115Control.work.length} />
             <KeyValue k="Source-of-truth bindings" v={v115Control.source_of_truth_bindings.length} />
             <KeyValue k="Execution bindings" v={v115Control.execution_bindings.length} />
+            <KeyValue k="Execution receipts" v={v115Control.execution_receipts.length} />
+            <KeyValue k="Interop endpoint bindings" v={v115Control.interop_bindings.length} />
+            <KeyValue k="External task observations" v={v115Control.external_task_observations.length} />
             <KeyValue k="Durable workflow bindings" v={v115Control.durable_workflow_bindings.length} />
             <KeyValue k="Attempts" v={v115Control.attempts.length} />
             <KeyValue k="Reconciliations" v={v115Control.reconciliations.length} />

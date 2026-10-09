@@ -978,13 +978,23 @@ objects. Morn reuses them without collapsing the control model:
 ```text
 Morn Work
   -> ExecutionBinding
-      -> A2A Task / MCP Task / WorkflowRun / HarnessSession
-  -> external Receipt
-  -> ObservedOutcome
-  -> AcceptanceDecision
+      -> InteropBinding (exact protocol endpoint + capability)
+          -> A2A Task / MCP Task
+      -> WorkflowRun / HarnessSession
+  -> external Receipt / task observation (executor evidence only)
+  -> ObservedOutcome (source-of-truth grounded)
+  -> AcceptanceDecision (independent)
 ```
 
 A2A 1.0 Task/Artifact state and MCP 2026-07-28 Tasks-extension state are
 provider/runtime evidence. A completed external Task never means the Work is
 accepted. Provider task TTL, cancellation or deletion also cannot erase the
 durable Morn Work/history.
+
+For protocol-backed executors, the control plane persists an `InteropBinding`
+before it accepts durable task observations. The binding pins the exact
+`ExecutionBinding`, capability manifest and protocol endpoint. A later MCP/A2A
+task observation must match that persisted endpoint and Work generation; merely
+presenting a valid Work/ExecutionBinding id is insufficient. This prevents an
+unrelated remote endpoint from laundering executor state into a Work evidence
+trace. The binding still confers no authority and no outcome/acceptance status.
