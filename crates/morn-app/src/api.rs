@@ -1180,6 +1180,14 @@ async fn workbench(State(state): State<AppState>) -> ApiResult {
                 "provider": guard.dsh_harness.provider_name(),
                 "status": dsh_status,
                 "features": guard.dsh_harness.features()
+            },
+            "pi": {
+                "provider": guard.pi_harness.provider_name(),
+                "mode": match guard.pi_harness.mode() {
+                    morn_harness::PiMode::Fixture => "fixture",
+                    morn_harness::PiMode::Real => "real-rpc",
+                },
+                "features": guard.pi_harness.features()
             }
         },
         "evolution_candidates": guard.evolution.candidates().len(),
@@ -1277,6 +1285,22 @@ async fn console(State(state): State<AppState>) -> ApiResult {
                 "credential_boundary": match guard.dsh_harness.mode() {
                     morn_harness::provider::DshMode::Fixture => "no live provider credential",
                     morn_harness::provider::DshMode::Real => "scrubbed child environment; explicit MORN_DSH_ENV_PASSTHROUGH only",
+                }
+            },
+            "pi": {
+                "provider": guard.pi_harness.provider_name(),
+                "mode": match guard.pi_harness.mode() {
+                    morn_harness::PiMode::Fixture => "fixture",
+                    morn_harness::PiMode::Real => "real-rpc",
+                },
+                "features": guard.pi_harness.features(),
+                "effect_ceiling": match guard.pi_harness.mode() {
+                    morn_harness::PiMode::Fixture => "fixture-reference",
+                    morn_harness::PiMode::Real => "E0-only; E1/E2/E3 via Morn ExternalAction",
+                },
+                "credential_boundary": match guard.pi_harness.mode() {
+                    morn_harness::PiMode::Fixture => "no live provider credential",
+                    morn_harness::PiMode::Real => "scrubbed child environment; explicit MORN_PI_ENV_PASSTHROUGH only",
                 }
             }
         },

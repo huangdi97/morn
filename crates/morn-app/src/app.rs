@@ -23,6 +23,7 @@ use morn_foundry::compiler::SolutionCompiler;
 use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
+use morn_harness::{PiHarnessProvider, PiMode};
 #[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;
 use morn_kernel::workspace::{Workspace, WorkspaceKind};
@@ -47,6 +48,7 @@ pub struct AppInner {
     pub biolab: BioLabService,
     pub native_harness: MornNativeHarness,
     pub dsh_harness: DeepSeekHarnessProvider,
+    pub pi_harness: PiHarnessProvider,
     pub evolution: EvolutionEngine,
     pub durable: DurableWorkService,
     pub durable_v2: DurableRuntime,
@@ -96,6 +98,22 @@ fn configured_dsh_harness() -> morn_kernel::Result<DeepSeekHarnessProvider> {
     }
 }
 
+fn configured_pi_harness() -> morn_kernel::Result<PiHarnessProvider> {
+    match std::env::var("MORN_PI_MODE") {
+        Err(std::env::VarError::NotPresent) => Ok(PiHarnessProvider::new(PiMode::Fixture)),
+        Ok(mode) if mode.eq_ignore_ascii_case("fixture") => {
+            Ok(PiHarnessProvider::new(PiMode::Fixture))
+        }
+        Ok(mode) if mode.eq_ignore_ascii_case("real") => PiHarnessProvider::from_real_env(),
+        Ok(mode) => Err(morn_kernel::error::Error::validation(format!(
+            "unsupported MORN_PI_MODE {mode:?}; expected fixture or real"
+        ))),
+        Err(error) => Err(morn_kernel::error::Error::validation(format!(
+            "cannot read MORN_PI_MODE: {error}"
+        ))),
+    }
+}
+
 /// Thread-safe shared state for HTTP handlers.
 #[derive(Clone)]
 pub struct AppState(pub Arc<Mutex<AppInner>>);
@@ -132,6 +150,7 @@ impl AppState {
             biolab,
             native_harness: MornNativeHarness::new(),
             dsh_harness: configured_dsh_harness()?,
+            pi_harness: configured_pi_harness()?,
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
             durable_v2: DurableRuntime::new(),

@@ -50,6 +50,17 @@ $env:MORN_DSH_HOME = "C:\morn\runtime\dsh-home"
 $env:MORN_DSH_ENV_PASSTHROUGH = "DEEPSEEK_API_KEY,HTTPS_PROXY"
 ```
 
+Pi uses the same opt-in model:
+
+```powershell
+$env:MORN_PI_MODE = "real"
+$env:MORN_PI_WORKSPACE = "C:\\morn\\workspaces\\pi"
+$env:MORN_PI_PROVIDER = "<exact-provider>"
+$env:MORN_PI_MODEL = "<exact-model>"
+# Only when that provider requires environment credentials:
+$env:MORN_PI_ENV_PASSTHROUGH = "<REQUIRED_API_KEY_NAME>"
+```
+
 This implements ADR-009: credentials are resolved at the execution/provider boundary and do not become general Morn process context.
 
 ## Migration / upgrade

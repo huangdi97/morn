@@ -10,6 +10,7 @@
 //! provider extensions without entering the Morn semantic constitution.
 
 use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::Mutex;
@@ -71,6 +72,72 @@ impl PiRpcConfig {
             args.push(model.clone());
         }
         args
+    }
+
+    pub fn validate_for_real(&self) -> Result<()> {
+        let cwd = self
+            .cwd
+            .as_deref()
+            .filter(|cwd| !cwd.trim().is_empty())
+            .ok_or_else(|| Error::validation("real Pi RPC requires an explicit workspace"))?;
+        if self.command.trim().is_empty()
+            || self
+                .provider
+                .as_deref()
+                .is_none_or(|provider| provider.trim().is_empty())
+            || self
+                .model
+                .as_deref()
+                .is_none_or(|model| model.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "real Pi RPC requires command, provider and model",
+            ));
+        }
+        if !Path::new(cwd).is_absolute() {
+            return Err(Error::validation(
+                "real Pi RPC workspace must be an absolute path",
+            ));
+        }
+        if self.request_timeout_ms == 0 || self.prompt_timeout_ms == 0 {
+            return Err(Error::validation(
+                "Pi request and prompt timeouts must be positive",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn from_env() -> Result<Self> {
+        let mut config = Self {
+            cwd: Some(
+                std::env::var("MORN_PI_WORKSPACE")
+                    .map_err(|_| Error::validation("MORN_PI_WORKSPACE is required for real Pi"))?,
+            ),
+            provider: Some(
+                std::env::var("MORN_PI_PROVIDER")
+                    .map_err(|_| Error::validation("MORN_PI_PROVIDER is required for real Pi"))?,
+            ),
+            model: Some(
+                std::env::var("MORN_PI_MODEL")
+                    .map_err(|_| Error::validation("MORN_PI_MODEL is required for real Pi"))?,
+            ),
+            ..Self::default()
+        };
+        if let Ok(command) = std::env::var("MORN_PI_COMMAND") {
+            config.command = command;
+        }
+        if let Ok(timeout) = std::env::var("MORN_PI_REQUEST_TIMEOUT_MS") {
+            config.request_timeout_ms = timeout
+                .parse()
+                .map_err(|_| Error::validation("MORN_PI_REQUEST_TIMEOUT_MS must be an integer"))?;
+        }
+        if let Ok(timeout) = std::env::var("MORN_PI_PROMPT_TIMEOUT_MS") {
+            config.prompt_timeout_ms = timeout
+                .parse()
+                .map_err(|_| Error::validation("MORN_PI_PROMPT_TIMEOUT_MS must be an integer"))?;
+        }
+        config.validate_for_real()?;
+        Ok(config)
     }
 }
 
@@ -579,6 +646,19 @@ mod tests {
                 ),
             }
         }
+    }
+
+    #[test]
+    fn live_pi_config_requires_absolute_workspace_and_pinned_route() {
+        let cwd = std::env::current_dir().unwrap();
+        let mut config = PiRpcConfig::default();
+        assert!(config.validate_for_real().is_err());
+        config.cwd = Some(cwd.to_string_lossy().to_string());
+        config.provider = Some("fixture-provider".to_string());
+        config.model = Some("fixture-model".to_string());
+        assert!(config.validate_for_real().is_ok());
+        config.cwd = Some("relative-workspace".to_string());
+        assert!(config.validate_for_real().is_err());
     }
 
     #[test]

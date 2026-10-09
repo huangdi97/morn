@@ -67,6 +67,11 @@ impl PiHarnessProvider {
         provider
     }
 
+    pub fn from_real_env() -> Result<Self> {
+        let config = PiRpcConfig::from_env()?;
+        Ok(Self::with_real_rpc(config))
+    }
+
     pub fn mode(&self) -> PiMode {
         self.mode
     }

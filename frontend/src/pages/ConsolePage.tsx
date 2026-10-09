@@ -29,7 +29,7 @@ interface ConsoleData {
   identity: { workspace: string; owner: string };
   world_state: number;
   work: number;
-  harness_health: { native: string; dsh: HarnessHealth };
+  harness_health: { native: string; dsh: HarnessHealth; pi: HarnessHealth };
   approvals_satisfied: string[];
   attention: number;
   policy: string;
@@ -124,6 +124,22 @@ export default function ConsolePage() {
               data.harness_health.dsh.features.session_close && "session-close",
               data.harness_health.dsh.features.durable_events && "durable-events",
               data.harness_health.dsh.features.multi_session && "multi-session",
+            ]
+              .filter(Boolean)
+              .join(", ") || "no optional lifecycle features"}
+          />
+          <KeyValue k="Pi Harness" v={data.harness_health.pi.provider} />
+          <KeyValue k="Pi mode" v={data.harness_health.pi.mode} />
+          <KeyValue k="Pi effect ceiling" v={data.harness_health.pi.effect_ceiling} />
+          <KeyValue k="Pi credentials" v={data.harness_health.pi.credential_boundary} />
+          <KeyValue
+            k="Pi lifecycle"
+            v={[
+              data.harness_health.pi.features.interrupt && "interrupt",
+              data.harness_health.pi.features.resume && "resume",
+              data.harness_health.pi.features.session_close && "session-close",
+              data.harness_health.pi.features.durable_events && "durable-events",
+              data.harness_health.pi.features.multi_session && "multi-session",
             ]
               .filter(Boolean)
               .join(", ") || "no optional lifecycle features"}
