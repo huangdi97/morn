@@ -166,6 +166,13 @@ impl ExternalTaskSnapshot {
             Self::A2a(task) => task.is_executor_terminal(),
         }
     }
+
+    /// Terminal protocol tasks are immutable execution facts. A later
+    /// observation may add a distinct Morn evidence record only if it reports
+    /// the same terminal snapshot; it may never resurrect that task.
+    pub fn terminal_compatible_with(&self, later: &Self) -> bool {
+        !self.is_executor_terminal() || self == later
+    }
 }
 
 /// Append-only observation of a durable external protocol task.
@@ -313,6 +320,7 @@ pub enum A2aTaskState {
     Submitted,
     Working,
     InputRequired,
+    AuthRequired,
     Completed,
     Canceled,
     Failed,
@@ -519,6 +527,39 @@ mod tests {
         let mut invalid = card;
         invalid.protocol_version = "1.0.0".to_string();
         assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn a2a_auth_required_is_interrupted_not_terminal_and_terminal_tasks_cannot_resurrect() {
+        let interrupted = ExternalTaskSnapshot::A2a(A2aTaskEvidence {
+            agent_ref: "a2a://planner".to_string(),
+            task_id: "task-auth".to_string(),
+            context_id: Some("ctx-1".to_string()),
+            state: A2aTaskState::AuthRequired,
+            artifact_refs: vec![],
+            raw_status: None,
+        });
+        assert!(!interrupted.is_executor_terminal());
+
+        let completed = ExternalTaskSnapshot::A2a(A2aTaskEvidence {
+            agent_ref: "a2a://planner".to_string(),
+            task_id: "task-1".to_string(),
+            context_id: Some("ctx-1".to_string()),
+            state: A2aTaskState::Completed,
+            artifact_refs: vec!["artifact://result".to_string()],
+            raw_status: None,
+        });
+        let resurrected = ExternalTaskSnapshot::A2a(A2aTaskEvidence {
+            agent_ref: "a2a://planner".to_string(),
+            task_id: "task-1".to_string(),
+            context_id: Some("ctx-1".to_string()),
+            state: A2aTaskState::Working,
+            artifact_refs: vec![],
+            raw_status: None,
+        });
+        assert!(completed.is_executor_terminal());
+        assert!(!completed.terminal_compatible_with(&resurrected));
+        assert!(completed.terminal_compatible_with(&completed));
     }
 
     #[test]

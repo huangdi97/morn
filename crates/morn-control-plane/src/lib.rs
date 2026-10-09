@@ -1031,6 +1031,38 @@ impl ControlPlaneStore for MornStore {
                 "external task observation endpoint differs from the persisted interop binding",
             ));
         }
+        let previous = self
+            .load_records_in_workspace::<GovernedExternalTaskObservation>(
+                "external_task_observation_v115",
+                work.workspace_id.as_str(),
+            )?
+            .into_iter()
+            .filter(|item| {
+                item.work_id == work.id
+                    && item.work_generation == work.generation
+                    && item.execution_binding_ref == observation.execution_binding_ref
+                    && item.endpoint == observation.endpoint
+                    && item.snapshot.task_id() == observation.snapshot.task_id()
+            })
+            .max_by_key(|item| item.observed_at.millis());
+        if let Some(previous) = previous {
+            if observation.observed_at < previous.observed_at
+                || (observation.observed_at == previous.observed_at
+                    && observation.snapshot != previous.snapshot)
+            {
+                return Err(Error::conflict(
+                    "external task observation is stale or ambiguously ordered",
+                ));
+            }
+            if !previous
+                .snapshot
+                .terminal_compatible_with(&observation.snapshot)
+            {
+                return Err(Error::conflict(
+                    "terminal external task cannot return to a non-terminal or different terminal state",
+                ));
+            }
+        }
         self.save_record_immutable(
             "external_task_observation_v115",
             observation.id.as_str(),
@@ -2128,6 +2160,79 @@ mod control_plane_persistence_scope_tests {
             .unwrap();
         assert_eq!(restored.work_id, work.id);
         assert_eq!(restored.execution_binding_ref, binding.id);
+    }
+
+    #[test]
+    fn terminal_external_task_observation_cannot_be_resurrected() {
+        use morn_integration::{
+            ExternalEndpoint, ExternalTaskSnapshot, GovernedExternalTaskObservation, InteropBinding,
+            InteropProtocol, McpTaskEvidence, McpTaskState,
+        };
+
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+        let binding = ExecutionBinding::for_work(&work, "cap:mcp", "mcp-provider", "2026-07-28");
+        store.save_execution_binding(&work, &binding).unwrap();
+        let endpoint = ExternalEndpoint {
+            protocol: InteropProtocol::Mcp,
+            endpoint_ref: "https://mcp.example.com".to_string(),
+            protocol_version: Some("2026-07-28".to_string()),
+            identity_ref: None,
+        };
+        store
+            .save_interop_binding(
+                &work,
+                &InteropBinding {
+                    work_ref: work.id.to_string(),
+                    execution_binding_ref: binding.id.to_string(),
+                    endpoint: endpoint.clone(),
+                    capability_ref: binding.capability_manifest_ref.clone(),
+                },
+            )
+            .unwrap();
+
+        let completed = GovernedExternalTaskObservation::new(
+            work.id.clone(),
+            work.generation,
+            binding.id.clone(),
+            endpoint.clone(),
+            ExternalTaskSnapshot::Mcp(McpTaskEvidence {
+                server_ref: endpoint.endpoint_ref.clone(),
+                task_id: "task-terminal".to_string(),
+                state: McpTaskState::Completed,
+                status_message: None,
+                result: Some(json!({"content":[],"isError":false})),
+                error: None,
+            }),
+            vec!["mcp://task-terminal/final".to_string()],
+        )
+        .unwrap();
+        store
+            .save_external_task_observation(&work, &completed)
+            .unwrap();
+
+        let mut resurrected = GovernedExternalTaskObservation::new(
+            work.id.clone(),
+            work.generation,
+            binding.id.clone(),
+            endpoint,
+            ExternalTaskSnapshot::Mcp(McpTaskEvidence {
+                server_ref: "https://mcp.example.com".to_string(),
+                task_id: "task-terminal".to_string(),
+                state: McpTaskState::Working,
+                status_message: Some("impossible restart".to_string()),
+                result: None,
+                error: None,
+            }),
+            vec!["mcp://task-terminal/restarted".to_string()],
+        )
+        .unwrap();
+        resurrected.observed_at =
+            morn_kernel::time::Timestamp::from_millis(completed.observed_at.millis() + 1);
+        assert!(store
+            .save_external_task_observation(&work, &resurrected)
+            .is_err());
     }
 
     #[test]

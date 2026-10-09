@@ -998,3 +998,11 @@ task observation must match that persisted endpoint and Work generation; merely
 presenting a valid Work/ExecutionBinding id is insufficient. This prevents an
 unrelated remote endpoint from laundering executor state into a Work evidence
 trace. The binding still confers no authority and no outcome/acceptance status.
+
+External task observations are append-only but lifecycle-monotonic. A task already
+observed in a protocol terminal state cannot later reappear as working,
+input-required/auth-required, submitted, or a different terminal fact. A2A 1.0
+`AUTH_REQUIRED` is modeled as an interrupted, non-terminal state. MCP task
+status payloads are validated against the 2026-07-28 Tasks extension: completed
+requires a result, failed requires a JSON-RPC error, and non-result states may
+not carry terminal result/error payloads.
