@@ -797,21 +797,17 @@ async fn v115_source_observations(State(state): State<AppState>) -> ApiResult {
             continue;
         }
 
-        let Some(work) = guard
-            .store
-            .load_record::<WorkResource>(
-                "work_resource_v115",
-                attestation.work_package_id.as_str(),
-            )?
+        let Some(work) = guard.store.load_record::<WorkResource>(
+            "work_resource_v115",
+            attestation.work_package_id.as_str(),
+        )?
         else {
             continue;
         };
-        let Some(binding) = guard
-            .store
-            .load_record::<SourceOfTruthBinding>(
-                "source_of_truth_binding_v115",
-                attestation.source_binding_id.as_str(),
-            )?
+        let Some(binding) = guard.store.load_record::<SourceOfTruthBinding>(
+            "source_of_truth_binding_v115",
+            attestation.source_binding_id.as_str(),
+        )?
         else {
             continue;
         };
@@ -1102,7 +1098,9 @@ fn ensure_live_environment_for_binding(
         .execution_environment_ref
         .as_deref()
         .filter(|reference| !reference.trim().is_empty())
-        .ok_or_else(|| Error::invalid_state("real provider binding has no execution environment"))?;
+        .ok_or_else(|| {
+            Error::invalid_state("real provider binding has no execution environment")
+        })?;
     let attestation = environments.attestation(environment_ref).ok_or_else(|| {
         Error::invalid_state(
             "execution environment attestation no longer exists for the bound real provider",
@@ -1115,10 +1113,12 @@ fn ensure_live_environment_for_binding(
         ));
     }
     if binding.execution_class != Some(attestation.isolation)
-        || !binding
-            .execution_guarantees
-            .iter()
-            .all(|guarantee| attestation.attested_spec.required_guarantees.contains(guarantee))
+        || !binding.execution_guarantees.iter().all(|guarantee| {
+            attestation
+                .attested_spec
+                .required_guarantees
+                .contains(guarantee)
+        })
     {
         return Err(Error::invalid_state(
             "current execution-environment attestation no longer covers the guarantees pinned by the binding",
@@ -4857,9 +4857,7 @@ mod workspace_boundary_tests {
 
     #[test]
     fn real_binding_requires_a_fresh_environment_attestation_at_execution_time() {
-        use morn_capability::{
-            CapabilityKind, CapabilityManifest, CapabilityRecord, EffectClass,
-        };
+        use morn_capability::{CapabilityKind, CapabilityManifest, CapabilityRecord, EffectClass};
         use morn_kernel::ids::{CapabilityId, WorkspaceId};
         use morn_kernel::{ExecutionClass, ExecutionGuarantee};
         use morn_runtime::{
@@ -4930,14 +4928,8 @@ mod workspace_boundary_tests {
             )
             .unwrap();
 
-        ensure_live_environment_for_binding(
-            &binding,
-            &capability,
-            &profile,
-            &environments,
-            now,
-        )
-        .unwrap();
+        ensure_live_environment_for_binding(&binding, &capability, &profile, &environments, now)
+            .unwrap();
         assert!(ensure_live_environment_for_binding(
             &binding,
             &capability,
@@ -5258,7 +5250,9 @@ mod workspace_boundary_tests {
         .await;
         assert!(stale.is_err());
 
-        let Json(catalog) = v115_source_observations(State(state.clone())).await.unwrap();
+        let Json(catalog) = v115_source_observations(State(state.clone()))
+            .await
+            .unwrap();
         let listed_ids: Vec<_> = catalog["observations"]
             .as_array()
             .unwrap()

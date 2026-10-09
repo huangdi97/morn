@@ -594,10 +594,7 @@ mod tests {
             .push(ExecutionGuarantee::NetworkEgressPolicy);
         provider.register_attestation(refreshed.clone()).unwrap();
         assert_eq!(
-            provider
-                .attestation("env://sandbox/a")
-                .unwrap()
-                .observed_at,
+            provider.attestation("env://sandbox/a").unwrap().observed_at,
             refreshed.observed_at
         );
     }

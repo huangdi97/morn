@@ -218,10 +218,8 @@ mod tests {
 
         let mut unbounded = binding.clone();
         unbounded.freshness_sla_ms = None;
-        assert!(unbounded.observation_is_fresh(
-            Timestamp::from_millis(1),
-            Timestamp::from_millis(100_000),
-        ));
+        assert!(unbounded
+            .observation_is_fresh(Timestamp::from_millis(1), Timestamp::from_millis(100_000),));
     }
 
     #[test]

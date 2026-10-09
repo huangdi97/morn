@@ -1510,7 +1510,10 @@ mod dsh_provider_tests {
         assert!(!health.selectable_at(Timestamp::now()));
 
         health.mark_initialized("restarted", "runtime://dsh/restarted");
-        assert_eq!(health.evidence_refs, vec!["runtime://dsh/restarted".to_string()]);
+        assert_eq!(
+            health.evidence_refs,
+            vec!["runtime://dsh/restarted".to_string()]
+        );
         health.mark_closed("runtime closed");
         assert_eq!(health.state, HarnessRuntimeHealthState::Closed);
         assert!(health.evidence_refs.is_empty());
