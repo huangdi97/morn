@@ -230,6 +230,12 @@ try {
         await page.screenshot({ path: join(screenshotsDir, "studio-compiled-after.png"), fullPage: true });
       }
       if (!t.includes("solutionpackage manifest")) errors.push("studio manifest missing");
+      if (!t.includes("reviewed outcome exists")) {
+        errors.push("studio: reviewed acceptance criterion was not preserved into SolutionPackage");
+      }
+      if (!t.includes('"production_write_allowed": false')) {
+        errors.push("studio: default Work creation must not silently enable ProductionWrite");
+      }
       await page.getByRole("button", { name: "Instantiate Work", exact: true }).click();
       await page.locator('[role="status"]').filter({ hasText: "Readiness gates" }).waitFor();
       t = (await page.locator("body").innerText()).toLowerCase();

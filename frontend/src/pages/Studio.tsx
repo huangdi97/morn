@@ -133,11 +133,23 @@ export default function Studio() {
     setLoading(true);
     try {
       const caps = capabilities.split(",").map((c) => c.trim()).filter(Boolean);
+      const acceptance = creatorAcceptance
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const constraints = [
+        `profile=${profileRef}`,
+        ...(siteRef.trim() ? [`site=${siteRef.trim()}`] : []),
+        ...acceptance.map((criterion) => `acceptance=${criterion}`),
+        `autonomy=${creatorAutonomy}`,
+        "forbid=ProductionWrite",
+      ];
       const r = await apiPostJson<CompilerRun>("/compiler/run", {
         goal,
         domain: "generic",
         capabilities: caps.length ? caps : ["*"],
         harnesses: ["morn-native"],
+        constraints,
       });
       setCompiled(r);
       setApproved(false);
