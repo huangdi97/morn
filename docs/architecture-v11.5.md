@@ -77,6 +77,16 @@ Current projections are mutable. Published contracts evolve by version. A
 running binding is pinned within its execution scope. Historical facts may be
 superseded, retracted, migrated or redacted, but not silently overwritten.
 
+Trust evidence follows the same append-only rule. `EvidenceClaim` history is
+scoped by subject + evidence class. The latest appended claim is the current
+state for that pair: `Proven`, `BlockedExternal`, or `Revoked`. A revoked
+or newly blocked claim immediately stops satisfying current gates, while the
+older proof remains auditable. Re-establishing trust requires an explicit later
+`Proven` claim with fresh evidence; stale older proof cannot be replayed.
+Historical `CustomerValidated` ValueAssessment records are never rewritten,
+but product surfaces must separately project whether their exact RealSite
+support is **currently** proven.
+
 ## Capability model
 
 A Morn Capability contains implementation/provider reference, machine-readable

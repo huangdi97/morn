@@ -34,6 +34,8 @@ Goal1-5 checklist. Every regression should first preserve a reproducer, then fix
 - Outcome/Acceptance are exact Work-generation scoped.
 - Accept requires source-grounded outcome(s), reviewer identity, authorization, reason and evidence.
 - CustomerValidated value requires final acceptance of the exact assessed outcome.
+- CustomerValidated additionally requires the **current** RealSite evidence claim for its exact value subject; a later Revoked or BlockedExternal claim removes current support without deleting historical assessments.
+- Evidence history is append-ordered per subject/class; stale older proof cannot be replayed after revocation.
 - Previous-generation outcome/acceptance does not authorize current-generation Work.
 
 ## 2. Provider Fabric contract

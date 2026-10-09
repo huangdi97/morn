@@ -79,6 +79,7 @@ describe("canonical Work remains a separate product surface", () => {
     outcomes: [],
     acceptance_decisions: [],
     value_assessments: [],
+    value_assessment_support: [],
     note: "reference implementation",
   };
 
@@ -98,6 +99,60 @@ describe("canonical Work remains a separate product surface", () => {
     expect(html).toContain("Not bound");
     expect(html).toContain("Blocked");
     expect(html).not.toContain("Accepted");
+  });
+
+  it("shows revoked RealSite support without rewriting a historical CustomerValidated assessment", () => {
+    const state: V115ControlPlaneData = {
+      ...base,
+      outcomes: [
+        {
+          id: "outcome-1",
+          work_package_id: "work:canonical-1",
+          work_generation: 1,
+          objective: "Customer delivery result",
+          source_ref: "erp://delivery/42",
+          evidence_refs: ["erp://delivery/42/receipt"],
+        },
+      ],
+      acceptance_decisions: [
+        {
+          id: "decision-1",
+          work_package_id: "work:canonical-1",
+          work_generation: 1,
+          disposition: "Accept",
+          outcome_refs: ["outcome-1"],
+          acting_role: "independent-reviewer",
+          reason: "accepted",
+        },
+      ],
+      value_assessments: [
+        {
+          id: "value-1",
+          work_package_id: "work:canonical-1",
+          work_generation: 1,
+          outcome_ref: "outcome-1",
+          acceptance_ref: "decision-1",
+          evidence_class: "CustomerValidated",
+          evidence_refs: ["customer://site-pilot/42"],
+        },
+      ],
+      value_assessment_support: [
+        {
+          assessment_id: "value-1",
+          subject: "value:work:canonical-1:g1:outcome-1",
+          requires_real_site: true,
+          currently_supported: false,
+          current_real_site_state: "revoked",
+          current_real_site_claim_id: "evidence-claim:revocation-1",
+          current_real_site_evidence_refs: ["incident://revocation-1"],
+        },
+      ],
+    };
+    const html = render(state, null);
+    expect(html).toContain("CustomerValidated");
+    expect(html).toContain("Current RealSite support: revoked");
+    expect(html).toContain("evidence-claim:revocation-1");
+    expect(html).toContain("historical evidence, not a permanent entitlement");
   });
 
   it("shows an explicit canonical failure rather than legacy health as truth", () => {

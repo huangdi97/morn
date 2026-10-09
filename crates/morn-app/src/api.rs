@@ -5799,6 +5799,47 @@ mod workspace_boundary_tests {
             customer["real_site_evidence_refs"],
             json!(["customer://site-pilot/42"])
         );
+        let customer_assessment_id = customer["value_assessment"]["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        let Json(control) = v115_control_plane(State(state.clone())).await.unwrap();
+        let support = control["value_assessment_support"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["assessment_id"] == customer_assessment_id)
+            .unwrap();
+        assert_eq!(support["currently_supported"], true);
+        assert_eq!(support["current_real_site_state"], "proven");
+
+        {
+            let mut guard = state.lock();
+            guard
+                .evidence_ledger
+                .append(
+                    EvidenceClaim::revoked(
+                        subject.clone(),
+                        EvidenceClass::RealSite,
+                        vec!["customer://site-pilot/42/revocation".to_string()],
+                        "customer-site-owner",
+                        "site evidence authorization was withdrawn",
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+        }
+
+        let Json(control) = v115_control_plane(State(state.clone())).await.unwrap();
+        let support = control["value_assessment_support"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["assessment_id"] == customer_assessment_id)
+            .unwrap();
+        assert_eq!(support["currently_supported"], false);
+        assert_eq!(support["current_real_site_state"], "revoked");
 
         let guard = state.lock();
         let values = guard

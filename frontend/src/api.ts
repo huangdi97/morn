@@ -91,6 +91,15 @@ export interface V115ControlPlaneData {
   outcomes: Array<Record<string, unknown>>;
   acceptance_decisions: Array<Record<string, unknown>>;
   value_assessments: Array<Record<string, unknown>>;
+  value_assessment_support: Array<{
+    assessment_id: string;
+    subject: string;
+    requires_real_site: boolean;
+    currently_supported: boolean;
+    current_real_site_state: "proven" | "blocked-external" | "revoked" | null;
+    current_real_site_claim_id: string | null;
+    current_real_site_evidence_refs: string[];
+  }>;
   note: string;
 }
 

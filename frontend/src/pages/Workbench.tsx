@@ -197,6 +197,12 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
       (acceptanceRef === null || acceptanceIds.has(acceptanceRef))
     );
   });
+  const valueIds = new Set(
+    values.map((row) => textField(row, "id")).filter((id): id is string => !!id),
+  );
+  const valueSupport = control.value_assessment_support.filter((support) =>
+    valueIds.has(support.assessment_id),
+  );
   const evidence = control.condition_evidence.filter((row) =>
     textField(row, "work_ref") === workId && row.work_generation === generation,
   );
@@ -211,6 +217,7 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
     outcomes,
     acceptances,
     values,
+    valueSupport,
     evidence,
   };
 }
@@ -360,24 +367,41 @@ function WorkEvidenceTrace({
           ) : (
             <ul>
               {trace.values.map((assessment, index) => {
+                const assessmentId = textField(assessment, "id");
                 const evidenceClass = textField(assessment, "evidence_class") ?? "Unclassified";
                 const acceptanceRef = textField(assessment, "acceptance_ref");
+                const support = trace.valueSupport.find(
+                  (candidate) => candidate.assessment_id === assessmentId,
+                );
+                const customerValidated = evidenceClass === "CustomerValidated";
+                const currentTrust = support?.currently_supported
+                  ? "proven"
+                  : support?.current_real_site_state ?? "missing";
                 return (
-                  <li key={textField(assessment, "id") ?? index}>
+                  <li key={assessmentId ?? index}>
                     <b>{evidenceClass}</b>
                     <small>Outcome: {textField(assessment, "outcome_ref") ?? "Missing"}</small>
                     <small>
                       Acceptance: {acceptanceRef ?? "Not linked — cannot be CustomerValidated"}
                     </small>
                     <small>Value evidence refs: {fieldRefs(assessment, "evidence_refs").length}</small>
+                    {customerValidated && (
+                      <small>
+                        Current RealSite support: {currentTrust}
+                        {support?.current_real_site_claim_id
+                          ? ` · ${support.current_real_site_claim_id}`
+                          : ""}
+                      </small>
+                    )}
                   </li>
                 );
               })}
             </ul>
           )}
           <p>
-            CustomerValidated is a claim class, not a shortcut: it still requires the exact accepted
-            outcome, independent acceptance and real-site evidence.
+            CustomerValidated is historical evidence, not a permanent entitlement. Current RealSite
+            support is re-evaluated from the latest evidence claim; revoked or externally blocked
+            support remains visible without rewriting the original assessment.
           </p>
         </section>
         <section>
