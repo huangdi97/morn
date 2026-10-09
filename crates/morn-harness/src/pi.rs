@@ -26,6 +26,8 @@ pub enum PiMode {
     Real,
 }
 
+pub const PI_REAL_E0_SCOPE_RESTRICTION: &str = "morn.effects<=E0";
+
 #[derive(Debug)]
 struct PiSessionState {
     ctx: RuntimeContext,
@@ -108,6 +110,27 @@ impl PiHarnessProvider {
             "Pi real RPC transport is not configured; construct PiHarnessProvider::with_real_rpc with an explicit runtime config",
         )
     }
+
+    fn require_real_e0_scope(&self, ctx: &RuntimeContext) -> Result<()> {
+        let eligible = self.scopes.iter().any(|scope| {
+            scope.workspace_id == ctx.workspace_id
+                && scope
+                    .restrictions
+                    .iter()
+                    .any(|restriction| restriction == PI_REAL_E0_SCOPE_RESTRICTION)
+                && ctx
+                    .scope_id
+                    .as_deref()
+                    .is_none_or(|scope_id| scope.id.as_str() == scope_id)
+        });
+        if eligible {
+            Ok(())
+        } else {
+            Err(Error::validation(
+                "real Pi RPC requires a matching isolated E0 scope; E1/E2/E3 actions must use Morn ExternalAction",
+            ))
+        }
+    }
 }
 
 impl HarnessProvider for PiHarnessProvider {
@@ -123,6 +146,16 @@ impl HarnessProvider for PiHarnessProvider {
     }
 
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
+        if self.mode == PiMode::Real
+            && !scope
+                .restrictions
+                .iter()
+                .any(|restriction| restriction == PI_REAL_E0_SCOPE_RESTRICTION)
+        {
+            return Err(Error::validation(
+                "real Pi RPC scope must explicitly declare morn.effects<=E0",
+            ));
+        }
         let handle = ProviderHandle {
             provider: self.name.clone(),
             scope_id: scope.id.to_string(),
@@ -171,6 +204,10 @@ impl HarnessProvider for PiHarnessProvider {
                 })
             }
             PiMode::Real => {
+                if self.real_config.is_none() {
+                    return Err(self.real_unavailable());
+                }
+                self.require_real_e0_scope(ctx)?;
                 if let Some(active) = self.active_session.as_ref() {
                     if self
                         .sessions

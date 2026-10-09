@@ -21,6 +21,8 @@ interface HarnessHealth {
     durable_events: boolean;
     multi_session: boolean;
   };
+  effect_ceiling: string;
+  credential_boundary: string;
 }
 
 interface ConsoleData {
@@ -112,6 +114,8 @@ export default function ConsolePage() {
           <KeyValue k="Native" v={data.harness_health.native} />
           <KeyValue k="DeepSeek Harness" v={data.harness_health.dsh.provider} />
           <KeyValue k="DSH mode" v={data.harness_health.dsh.mode} />
+          <KeyValue k="DSH effect ceiling" v={data.harness_health.dsh.effect_ceiling} />
+          <KeyValue k="DSH credentials" v={data.harness_health.dsh.credential_boundary} />
           <KeyValue
             k="DSH lifecycle"
             v={[

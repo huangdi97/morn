@@ -319,8 +319,8 @@ async fn v115_status() -> ApiResult {
         },
         "claims": {
             "local_engineering": "reference implementation + fixture/conformance tests",
-            "real_dsh": "wire adapter implemented; runtime/model/credential smoke remains external-blocked",
-            "real_pi": "JSONL RPC adapter implemented; installed Pi binary/model/credential smoke remains external-blocked",
+            "real_dsh": "SDK wire adapter implemented; real mode is E0-only with scrubbed child environment; authenticated runtime/model smoke remains external-blocked",
+            "real_pi": "JSONL RPC adapter implemented; real mode is E0-only with scrubbed child environment; installed Pi binary/model/credential smoke remains external-blocked",
             "real_factory": "external-blocked until lawful site data/authority exists",
             "production_write": "not entered"
         }
@@ -1269,7 +1269,15 @@ async fn console(State(state): State<AppState>) -> ApiResult {
                     morn_harness::provider::DshMode::Fixture => "fixture",
                     morn_harness::provider::DshMode::Real => "real-sdk",
                 },
-                "features": guard.dsh_harness.features()
+                "features": guard.dsh_harness.features(),
+                "effect_ceiling": match guard.dsh_harness.mode() {
+                    morn_harness::provider::DshMode::Fixture => "fixture-reference",
+                    morn_harness::provider::DshMode::Real => "E0-only; E1/E2/E3 via Morn ExternalAction",
+                },
+                "credential_boundary": match guard.dsh_harness.mode() {
+                    morn_harness::provider::DshMode::Fixture => "no live provider credential",
+                    morn_harness::provider::DshMode::Real => "scrubbed child environment; explicit MORN_DSH_ENV_PASSTHROUGH only",
+                }
             }
         },
         "approvals_satisfied": approvals,
