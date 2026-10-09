@@ -39,9 +39,17 @@ pub struct PiRpcConfig {
     pub execution_environment_ref: Option<String>,
     pub request_timeout_ms: u64,
     pub prompt_timeout_ms: u64,
+    /// True for the official Pi CLI. Alternative test/wrapper executables may
+    /// own route configuration themselves and opt out of Pi-specific argv.
+    #[serde(default = "default_true")]
+    pub append_route_args: bool,
     /// True for production. Test fixtures may disable strictness only to skip
     /// libtest's own stdout preamble before the fake JSONL peer starts.
     pub strict_jsonl: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for PiRpcConfig {
@@ -59,6 +67,7 @@ impl Default for PiRpcConfig {
             execution_environment_ref: None,
             request_timeout_ms: 30_000,
             prompt_timeout_ms: 60_000,
+            append_route_args: true,
             strict_jsonl: true,
         }
     }
@@ -67,13 +76,15 @@ impl Default for PiRpcConfig {
 impl PiRpcConfig {
     pub fn command_line(&self) -> Vec<String> {
         let mut args = self.args.clone();
-        if let Some(provider) = &self.provider {
-            args.push("--provider".to_string());
-            args.push(provider.clone());
-        }
-        if let Some(model) = &self.model {
-            args.push("--model".to_string());
-            args.push(model.clone());
+        if self.append_route_args {
+            if let Some(provider) = &self.provider {
+                args.push("--provider".to_string());
+                args.push(provider.clone());
+            }
+            if let Some(model) = &self.model {
+                args.push("--model".to_string());
+                args.push(model.clone());
+            }
         }
         args
     }
@@ -582,6 +593,7 @@ mod tests {
             execution_environment_ref: None,
             request_timeout_ms: 10_000,
             prompt_timeout_ms: 10_000,
+            append_route_args: false,
             strict_jsonl: false,
         };
         let mut client = PiRpcClient::spawn(&config).unwrap();

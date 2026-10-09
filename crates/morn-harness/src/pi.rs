@@ -134,6 +134,7 @@ impl PiHarnessProvider {
                     .real_config
                     .clone()
                     .ok_or_else(|| self.real_unavailable())?;
+                config.validate_for_real()?;
                 let mut client = PiRpcClient::spawn(&config)?;
                 client.get_state()?;
                 Ok(client)
@@ -706,6 +707,7 @@ mod tests {
             execution_environment_ref: Some(environment_ref.to_string()),
             request_timeout_ms: 10_000,
             prompt_timeout_ms: 10_000,
+            append_route_args: false,
             strict_jsonl: false,
         };
         let workspace = WorkspaceId::generate();
