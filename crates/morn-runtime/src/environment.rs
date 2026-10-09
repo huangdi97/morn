@@ -309,6 +309,21 @@ impl AttestedExecutionEnvironmentProvider {
         }
         attestation.attested_spec.required_guarantees.sort();
         attestation.attested_spec.required_guarantees.dedup();
+        if let Some(existing) = self.attestations.get(&attestation.environment_ref) {
+            if attestation.observed_at < existing.observed_at {
+                return Err(Error::conflict(
+                    "stale execution environment attestation cannot replace newer evidence",
+                ));
+            }
+            if attestation.observed_at == existing.observed_at {
+                if &attestation == existing {
+                    return Ok(());
+                }
+                return Err(Error::conflict(
+                    "conflicting execution environment attestations share the same observation time",
+                ));
+            }
+        }
         self.attestations
             .insert(attestation.environment_ref.clone(), attestation);
         Ok(())
@@ -542,6 +557,49 @@ mod tests {
     fn attested_provider_discovery_starts_empty_without_deployment_evidence() {
         let provider = AttestedExecutionEnvironmentProvider::new("deployment-attestor").unwrap();
         assert!(provider.attestations().is_empty());
+    }
+
+    #[test]
+    fn environment_attestation_updates_are_monotonic_and_replay_safe() {
+        let mut provider = AttestedExecutionEnvironmentProvider::new("sandbox-fleet").unwrap();
+        let mut current = attestation(
+            "sandbox-fleet",
+            "env://sandbox/a",
+            vec![ExecutionGuarantee::ProcessBoundary],
+        );
+        current.observed_at = Timestamp::from_millis(100);
+        current.valid_until = Timestamp::from_millis(1_000);
+        provider.register_attestation(current.clone()).unwrap();
+
+        // Exact redelivery is idempotent.
+        provider.register_attestation(current.clone()).unwrap();
+
+        let mut stale = current.clone();
+        stale.observed_at = Timestamp::from_millis(99);
+        assert!(provider.register_attestation(stale).is_err());
+
+        let mut conflicting = current.clone();
+        conflicting
+            .attested_spec
+            .required_guarantees
+            .push(ExecutionGuarantee::NetworkEgressPolicy);
+        assert!(provider.register_attestation(conflicting).is_err());
+
+        let mut refreshed = current.clone();
+        refreshed.observed_at = Timestamp::from_millis(101);
+        refreshed.valid_until = Timestamp::from_millis(2_000);
+        refreshed
+            .attested_spec
+            .required_guarantees
+            .push(ExecutionGuarantee::NetworkEgressPolicy);
+        provider.register_attestation(refreshed.clone()).unwrap();
+        assert_eq!(
+            provider
+                .attestation("env://sandbox/a")
+                .unwrap()
+                .observed_at,
+            refreshed.observed_at
+        );
     }
 
     #[test]
