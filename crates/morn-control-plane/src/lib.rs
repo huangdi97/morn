@@ -1383,6 +1383,9 @@ mod tests {
             "accepted",
         );
         acceptance.outcome_refs.push(outcome.id.clone());
+        acceptance
+            .evidence_refs
+            .push("review://independent-owner-review".to_string());
         WorkProgressController.reconcile(
             &mut work,
             &WorkProgressInputs {

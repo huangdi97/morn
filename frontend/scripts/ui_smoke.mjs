@@ -231,7 +231,7 @@ try {
       }
       if (!t.includes("solutionpackage manifest")) errors.push("studio manifest missing");
       await page.getByRole("button", { name: "Instantiate Work", exact: true }).click();
-      await page.getByText("Execution started", { exact: true }).waitFor();
+      await page.locator('[role="status"]').filter({ hasText: "Readiness gates" }).waitFor();
       t = (await page.locator("body").innerText()).toLowerCase();
       if (!t.includes("no — explicit gates remain")) {
         errors.push("Studio: Work instantiation skipped execution readiness gates");
