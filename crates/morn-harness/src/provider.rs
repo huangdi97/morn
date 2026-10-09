@@ -1339,6 +1339,23 @@ mod dsh_provider_tests {
     }
 
     #[test]
+    fn real_dsh_wire_fixture_passes_capability_negotiated_contract_and_smoke() {
+        let (mut provider, mut ctx, original_handle) = real_wire_fixture_provider();
+        ctx.provenance_refs
+            .push("evidence://real-dsh-wire-fixture".to_string());
+
+        let contract = crate::contract::run_provider_contract(&mut provider, &ctx).unwrap();
+        assert!(contract.all_passed(), "checks: {:?}", contract.checks);
+
+        let smoke = crate::smoke::run_harness_smoke(&mut provider, &ctx).unwrap();
+        assert!(smoke.all_ok(), "smoke: {smoke:?}");
+        assert!(smoke.detail.contains("session close is unsupported"));
+
+        provider.unmount(&original_handle).unwrap();
+        provider.shutdown_real_runtime().unwrap();
+    }
+
+    #[test]
     fn real_dsh_preflight_refreshes_expired_initialization_by_restarting_owned_runtime() {
         let (mut provider, _ctx, _handle) = real_wire_fixture_provider();
         assert_eq!(
