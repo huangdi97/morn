@@ -1,7 +1,6 @@
 # ADR-043 — WIT/Wasm Component Model is an optional local capability ABI
 
-Status: Accepted as a deferred provider option for v11.5; not required for the
-reference runtime.
+Status: Accepted; the provider-neutral ABI/host-grant contract is implemented for v11.5. A concrete Wasm executor remains optional and is not a Core dependency.
 
 ## Context
 
@@ -41,3 +40,24 @@ portable, least-capability local providers.
   proxy a Wasm capability.
 - Future edge/industrial deployments can evaluate Wasm as one execution class
   without redesigning the semantic protocol.
+
+
+## Implementation
+
+`crates/morn-capability/src/wasm_abi.rs` implements the typed binding contract
+without embedding a Wasm engine.
+
+The contract requires:
+
+- content-addressed component identity;
+- pinned WIT world/package/version and optional WASI version;
+- imports contained by `CapabilityManifest.requires`;
+- exports satisfying `CapabilityManifest.provides`;
+- an explicit `wit-component` Capability interface;
+- filesystem/network/secret grants contained by ExecutionRequirements;
+- explicit Authority permissions for filesystem writes, network egress,
+  secret access, clock and randomness.
+
+The empty host grant has no ambient privileges. A future concrete
+`WasmComponentProvider` must pass this validation before execution and still
+cannot own Work, Authority, Outcome or Acceptance.

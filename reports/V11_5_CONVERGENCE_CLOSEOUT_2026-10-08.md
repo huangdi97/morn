@@ -39,8 +39,8 @@ Morn remains Work-first, not Agent-first:
 | --- | --- | --- |
 | versioned semantic constitution | `morn-kernel/src/protocol.rs` | implemented |
 | language-neutral protocol artifacts | `spec/v11.5/` + wire-spec conformance tests | implemented |
-| standards-oriented registry projection boundary | ADR-042; xRegistry/A2A/OASF adapters, no second truth | design frozen |
-| optional typed local component ABI | ADR-043; WIT/Wasm provider option, not core | design frozen |
+| standards-oriented registry projection boundary | ADR-042 + `morn-capability/src/discovery.rs`; xRegistry/A2A/OASF declared-metadata adapters, no second truth | implemented contract |
+| optional typed local component ABI | ADR-043 + `morn-capability/src/wasm_abi.rs`; WIT/Wasm least-capability binding contract, no embedded runtime | implemented contract; concrete Wasm executor optional |
 | external protocol task boundary | ADR-044; MCP/A2A durable Tasks remain executor state | implemented contract |
 | explicit protocol migration | protocol compatibility + `ProtocolMigrationController` | implemented |
 | non-destructive history | `morn-kernel/src/history.rs` | implemented |
@@ -386,3 +386,21 @@ could otherwise be mistaken for live evidence:
 
 These are repository-local engineering closures. They do not manufacture a
 customer runtime, credential, site policy or containment attestation.
+
+
+## 16. Registry projection and optional WIT/Wasm ABI closure — 2026-10-09
+
+- xRegistry, A2A Agent Card and OASF adapters are implemented as one-way
+  **declared-metadata projections** from the canonical CapabilityManifest.
+  Qualification, releases, site admission, Authority and accepted outcomes are
+  intentionally absent from the projection types. Imported external discovery
+  metadata also has no fields capable of asserting governed Morn truth.
+- A2A/OASF projections are restricted to Agent-kind capabilities; other Morn
+  capability kinds remain first-class rather than being mislabeled as agents.
+- The WIT/Wasm contract pins content digest, WIT world/package/version and
+  optional WASI version. Component imports/exports must fit the canonical
+  CapabilityManifest.
+- Wasm host filesystem/network/secret/clock/random access is deny-by-default and
+  must fit both ExecutionRequirements and explicit Authority permissions.
+- No Wasm engine is embedded into Morn Core. A future Wasmtime/Wasmer/edge
+  provider may implement this contract without changing Work/Outcome truth.

@@ -5,11 +5,18 @@
 //! services and devices can be composed under the same qualification model.
 
 pub mod definition;
+pub mod discovery;
 pub mod effect;
 pub mod manifest;
 pub mod registry;
 pub mod resolver;
+pub mod wasm_abi;
 
+pub use discovery::{
+    project_a2a_agent_card, project_oasf, project_xregistry, A2aAgentCardProjection,
+    A2aSkillProjection, DiscoveryProvenance, ImportedDiscoveryMetadata,
+    OasfDiscoveryProjection, XRegistryResourceProjection, DISCOVERY_PROJECTION_VERSION,
+};
 pub use definition::{
     CapabilityConsumer, CapabilityDefinition, CapabilityProvider, CapabilityRequirements,
 };
@@ -23,4 +30,9 @@ pub use registry::{CapabilityBinding, CapabilityKind, CapabilityRegistry, Invoca
 pub use resolver::{
     CapabilityRequest, CapabilityResolver, ResolvedCapability, WorkcellMember, WorkcellPlan,
     WorkcellRequest,
+};
+
+pub use wasm_abi::{
+    validate_wasm_component_binding, WasmComponentDescriptor, WasmHostGrant,
+    WIT_COMPONENT_PROTOCOL,
 };

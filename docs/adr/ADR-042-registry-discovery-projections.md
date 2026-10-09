@@ -1,6 +1,6 @@
 # ADR-042 — Registry/discovery standards are projections, not qualification truth
 
-Status: Accepted for v11.5 convergence.
+Status: Accepted and implemented as a v11.5 projection contract.
 
 ## Context
 
@@ -51,3 +51,20 @@ represent Morn governance truth by itself.
   Work truth or qualification truth.
 - Search/ranking can combine declared discovery metadata with observed and
   qualified Morn evidence while keeping those evidence classes distinct.
+
+
+## Implementation
+
+The reference adapter contract lives in
+`crates/morn-capability/src/discovery.rs`.
+
+It implements:
+
+- xRegistry-style resource projection for all Capability kinds;
+- A2A Agent Card projection for Agent-kind capabilities only;
+- OASF skill/domain discovery projection for Agent-kind capabilities only;
+- declared-only external metadata import.
+
+The serialized projection types deliberately have no qualification, release,
+site-admission, Authority or accepted-outcome fields. A projection therefore
+cannot be deserialized back into governed truth by accident.
