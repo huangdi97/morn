@@ -70,12 +70,18 @@ active `ExecutionBinding`.
 The repository contains a shared `HarnessProvider` contract with:
 
 - Morn Native reference provider;
-- DeepSeek Harness fixture boundary;
-- Pi fixture boundary;
-- DSH/Pi neutrality conformance benchmark.
+- DeepSeek Harness deterministic fixture boundary **and** governed real SDK
+  stdio/JSON-RPC adapter;
+- Pi deterministic fixture boundary **and** governed real JSONL-RPC adapter;
+- DSH/Pi neutrality conformance benchmark;
+- runtime-health leases, exact provider version/digest pins, bounded wire
+  readers and runtime-attested execution-environment requirements.
 
-Real DSH/Pi transport remains separate from Morn semantics and is not faked when
-the external runtime is unavailable.
+Real adapters remain separate from Morn semantics: a live harness turn is
+executor evidence, never canonical Work/Outcome/Acceptance. When an authorized
+runtime/model/credential path or attested execution environment is unavailable,
+the real provider fails closed instead of upgrading fixture/CI evidence into a
+live-runtime claim.
 
 ## Repository layout
 
@@ -313,9 +319,11 @@ tests.
 
 ## External blockers / non-claims
 
-- real DeepSeek Harness process/configuration is external to the current
-  deterministic fixture contract;
-- real Pi transport is not configured by the reference runtime;
+- Morn's real DSH SDK and Pi JSONL-RPC adapters are implemented, but an
+  **authorized live runtime/model/credential path plus runtime-attested
+  execution environment** is still external evidence and is not supplied by CI;
+- no authenticated DSH/Pi live settled-turn claim is made unless that exact
+  runtime evidence exists;
 - real Factory/customer pilot requires lawful site data and explicit authority;
 - OCI publication/signing, real microVM/DSec-class execution and customer
   OPA/Cedar/IAM integration require external infrastructure;

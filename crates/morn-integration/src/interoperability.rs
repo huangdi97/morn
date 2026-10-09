@@ -91,6 +91,8 @@ pub struct McpTaskEvidence {
     pub task_id: String,
     pub state: McpTaskState,
     pub status_message: Option<String>,
+    #[serde(default)]
+    pub input_requests: Option<Value>,
     pub result: Option<Value>,
     pub error: Option<Value>,
 }
@@ -111,11 +113,27 @@ impl McpTaskEvidence {
                     "MCP failed task requires JSON-RPC error and must not carry completed result",
                 ));
             }
-            McpTaskState::Working | McpTaskState::InputRequired | McpTaskState::Cancelled
-                if self.result.is_some() || self.error.is_some() =>
+            McpTaskState::InputRequired
+                if self.input_requests.is_none()
+                    || self.result.is_some()
+                    || self.error.is_some() =>
             {
                 return Err(Error::validation(
-                    "non-result MCP task state must not carry terminal result/error payload",
+                    "MCP input_required task requires inputRequests and no terminal result/error",
+                ));
+            }
+            McpTaskState::Working | McpTaskState::Cancelled
+                if self.input_requests.is_some()
+                    || self.result.is_some()
+                    || self.error.is_some() =>
+            {
+                return Err(Error::validation(
+                    "MCP non-input/non-result task state must not carry inputRequests/result/error",
+                ));
+            }
+            McpTaskState::Completed | McpTaskState::Failed if self.input_requests.is_some() => {
+                return Err(Error::validation(
+                    "terminal MCP task state must not carry outstanding inputRequests",
                 ));
             }
             _ => {}
@@ -422,6 +440,7 @@ mod tests {
             task_id: "task-complete".to_string(),
             state: McpTaskState::Completed,
             status_message: None,
+            input_requests: None,
             result: Some(json!({"content":[],"isError":true})),
             error: None,
         };
@@ -436,6 +455,7 @@ mod tests {
             task_id: "task-failed".to_string(),
             state: McpTaskState::Failed,
             status_message: Some("JSON-RPC failure".to_string()),
+            input_requests: None,
             result: None,
             error: Some(json!({"code":-32603,"message":"execution failed"})),
         };
@@ -448,6 +468,20 @@ mod tests {
         let mut working = completed;
         working.state = McpTaskState::Working;
         assert!(working.validate().is_err());
+
+        let input_required = McpTaskEvidence {
+            server_ref: "https://mcp.example.com".to_string(),
+            task_id: "task-input".to_string(),
+            state: McpTaskState::InputRequired,
+            status_message: Some("additional input needed".to_string()),
+            input_requests: Some(json!({"approval":{"method":"elicitation"}})),
+            result: None,
+            error: None,
+        };
+        input_required.validate().unwrap();
+        let mut malformed = input_required;
+        malformed.input_requests = None;
+        assert!(malformed.validate().is_err());
     }
 
     #[test]
@@ -457,6 +491,7 @@ mod tests {
             task_id: "task-1".to_string(),
             state: McpTaskState::Completed,
             status_message: Some("tool computation complete".to_string()),
+            input_requests: None,
             result: Some(json!({"resultType":"complete","value":42})),
             error: None,
         };
@@ -485,6 +520,7 @@ mod tests {
                 task_id: "task-42".to_string(),
                 state: McpTaskState::Completed,
                 status_message: Some("executor completed".to_string()),
+                input_requests: None,
                 result: Some(json!({"artifact":"result"})),
                 error: None,
             }),

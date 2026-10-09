@@ -1005,4 +1005,7 @@ input-required/auth-required, submitted, or a different terminal fact. A2A 1.0
 `AUTH_REQUIRED` is modeled as an interrupted, non-terminal state. MCP task
 status payloads are validated against the 2026-07-28 Tasks extension: completed
 requires a result, failed requires a JSON-RPC error, and non-result states may
-not carry terminal result/error payloads.
+not carry terminal result/error payloads. `input_required` additionally retains
+the protocol's `inputRequests` object so interruption/recovery evidence records
+what the external task is actually waiting for instead of collapsing it into a
+bare status label.

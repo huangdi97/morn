@@ -1022,6 +1022,12 @@ impl ControlPlaneStore for MornStore {
             )?
             .ok_or_else(|| Error::not_found("external task execution binding"))?;
         observation.validate_against_binding(&binding)?;
+        let now = morn_kernel::time::Timestamp::now();
+        if observation.observed_at < binding.created_at || observation.observed_at > now {
+            return Err(Error::validation(
+                "external task observation timestamp must be within the bound execution lifetime",
+            ));
+        }
         let interop: InteropBinding = self
             .load_record("interop_binding_v115", observation.execution_binding_ref.as_str())?
             .ok_or_else(|| Error::not_found("governed interop endpoint binding"))?;
@@ -2127,6 +2133,7 @@ mod control_plane_persistence_scope_tests {
                 task_id: "task-42".to_string(),
                 state: McpTaskState::Completed,
                 status_message: Some("executor completed".to_string()),
+                input_requests: None,
                 result: Some(json!({"artifact":"result"})),
                 error: None,
             }),
@@ -2160,6 +2167,66 @@ mod control_plane_persistence_scope_tests {
             .unwrap();
         assert_eq!(restored.work_id, work.id);
         assert_eq!(restored.execution_binding_ref, binding.id);
+    }
+
+    #[test]
+    fn external_task_observation_cannot_predate_binding_or_arrive_from_the_future() {
+        use morn_integration::{
+            ExternalEndpoint, ExternalTaskSnapshot, GovernedExternalTaskObservation, InteropBinding,
+            InteropProtocol, McpTaskEvidence, McpTaskState,
+        };
+
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+        let binding = ExecutionBinding::for_work(&work, "cap:mcp", "mcp-provider", "2026-07-28");
+        store.save_execution_binding(&work, &binding).unwrap();
+        let endpoint = ExternalEndpoint {
+            protocol: InteropProtocol::Mcp,
+            endpoint_ref: "https://mcp.example.com".to_string(),
+            protocol_version: Some("2026-07-28".to_string()),
+            identity_ref: None,
+        };
+        store
+            .save_interop_binding(
+                &work,
+                &InteropBinding {
+                    work_ref: work.id.to_string(),
+                    execution_binding_ref: binding.id.to_string(),
+                    endpoint: endpoint.clone(),
+                    capability_ref: binding.capability_manifest_ref.clone(),
+                },
+            )
+            .unwrap();
+        let mut observation = GovernedExternalTaskObservation::new(
+            work.id.clone(),
+            work.generation,
+            binding.id.clone(),
+            endpoint,
+            ExternalTaskSnapshot::Mcp(McpTaskEvidence {
+                server_ref: "https://mcp.example.com".to_string(),
+                task_id: "task-time".to_string(),
+                state: McpTaskState::Working,
+                status_message: None,
+                input_requests: None,
+                result: None,
+                error: None,
+            }),
+            vec!["mcp://task-time/status".to_string()],
+        )
+        .unwrap();
+
+        observation.observed_at =
+            morn_kernel::time::Timestamp::from_millis(binding.created_at.millis() - 1);
+        assert!(store
+            .save_external_task_observation(&work, &observation)
+            .is_err());
+
+        observation.observed_at =
+            morn_kernel::time::Timestamp::from_millis(morn_kernel::time::Timestamp::now().millis() + 60_000);
+        assert!(store
+            .save_external_task_observation(&work, &observation)
+            .is_err());
     }
 
     #[test]
@@ -2202,6 +2269,7 @@ mod control_plane_persistence_scope_tests {
                 task_id: "task-terminal".to_string(),
                 state: McpTaskState::Completed,
                 status_message: None,
+                input_requests: None,
                 result: Some(json!({"content":[],"isError":false})),
                 error: None,
             }),
@@ -2222,6 +2290,7 @@ mod control_plane_persistence_scope_tests {
                 task_id: "task-terminal".to_string(),
                 state: McpTaskState::Working,
                 status_message: Some("impossible restart".to_string()),
+                input_requests: None,
                 result: None,
                 error: None,
             }),
