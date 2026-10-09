@@ -7,6 +7,7 @@ import {
   biolabEnabled,
   CanonicalWorkOverview,
   governedRealHarnessEnvironment,
+  ValueAssessmentPanel,
   workEvidenceTrace,
 } from "./pages/Workbench";
 
@@ -155,6 +156,58 @@ describe("canonical Work remains a separate product surface", () => {
   });
 });
 
+
+describe("accepted outcome value UI", () => {
+  it("requires an accepted Work, exact source-grounded outcome and Accept decision", () => {
+    const control: V115ControlPlaneData = {
+      condition_evidence: [],
+      capability_resolutions: [],
+      profile_conformance_attestations: [],
+      work: [{
+        id: "work:value",
+        generation: 2,
+        spec: { goal: "Measure delivery improvement", profile_ref: "morn.lite@1.0.0", required_conditions: [] },
+        status: { phase: "Accepted", observed_generation: 2, conditions: [], active_binding: null },
+      }],
+      source_of_truth_bindings: [],
+      execution_bindings: [],
+      execution_manifests: [],
+      execution_receipts: [],
+      binding_migrations: [],
+      durable_workflow_bindings: [],
+      attempts: [],
+      reconciliations: [],
+      outcomes: [{
+        id: "outcome:value",
+        work_package_id: "work:value",
+        work_generation: 2,
+        objective: "Delivery improved",
+        source_ref: "erp://delivery/42",
+        evidence_refs: ["erp://delivery/42/receipt"],
+      }],
+      acceptance_decisions: [{
+        id: "accept:value",
+        work_package_id: "work:value",
+        work_generation: 2,
+        disposition: "Accept",
+        outcome_refs: ["outcome:value"],
+        acting_role: "customer-owner",
+      }],
+      value_assessments: [],
+      note: "test",
+    };
+    const html = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(ValueAssessmentPanel, {
+        control,
+        reload: () => undefined,
+      })),
+    );
+    expect(html).toContain("Accepted outcome value");
+    expect(html).toContain("Delivery improved");
+    expect(html).toContain("Customer validated (requires RealSite)");
+    expect(html).toContain("Persist value assessment");
+  });
+});
 
 describe("real Harness environment gating", () => {
   const status = {

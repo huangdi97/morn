@@ -1142,6 +1142,233 @@ function OutcomeReviewPanel({
   );
 }
 
+export function ValueAssessmentPanel({
+  control,
+  reload,
+}: {
+  control: V115ControlPlaneData;
+  reload: () => void;
+}) {
+  const [workId, setWorkId] = useState("");
+  const [outcomeId, setOutcomeId] = useState("");
+  const [acceptanceId, setAcceptanceId] = useState("");
+  const [evidenceClass, setEvidenceClass] = useState("observed-operational");
+  const [evidenceRef, setEvidenceRef] = useState("");
+  const [baselineRef, setBaselineRef] = useState("");
+  const [kpisText, setKpisText] = useState("{}");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const candidates = control.work
+    .filter((work) => work.status.phase === "Accepted")
+    .map((work) => {
+      const outcomes = control.outcomes.filter(
+        (outcome) =>
+          textField(outcome, "work_package_id") === work.id &&
+          outcome.work_generation === work.generation &&
+          !!textField(outcome, "source_ref") &&
+          fieldRefs(outcome, "evidence_refs").length > 0,
+      );
+      const outcomeIds = new Set(
+        outcomes.map((outcome) => textField(outcome, "id")).filter((id): id is string => !!id),
+      );
+      const acceptances = control.acceptance_decisions.filter(
+        (decision) =>
+          textField(decision, "work_package_id") === work.id &&
+          decision.work_generation === work.generation &&
+          textField(decision, "disposition") === "Accept" &&
+          fieldRefs(decision, "outcome_refs").some((id) => outcomeIds.has(id)),
+      );
+      return { work, outcomes, acceptances };
+    })
+    .filter((entry) => entry.outcomes.length > 0 && entry.acceptances.length > 0);
+
+  const effectiveWorkId = workId || candidates[0]?.work.id || "";
+  const selected = candidates.find((entry) => entry.work.id === effectiveWorkId);
+  const effectiveOutcomeId = outcomeId || textField(selected?.outcomes[0] ?? {}, "id") || "";
+  const compatibleAcceptances =
+    selected?.acceptances.filter((decision) =>
+      fieldRefs(decision, "outcome_refs").includes(effectiveOutcomeId),
+    ) ?? [];
+  const effectiveAcceptanceId =
+    acceptanceId || textField(compatibleAcceptances[0] ?? {}, "id") || "";
+
+  const assess = async () => {
+    if (!effectiveWorkId || !effectiveOutcomeId || !effectiveAcceptanceId || !evidenceRef.trim()) {
+      return;
+    }
+    let kpis: Record<string, number>;
+    try {
+      const parsed = JSON.parse(kpisText) as unknown;
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+        throw new Error("KPI JSON must be an object");
+      }
+      kpis = Object.fromEntries(
+        Object.entries(parsed as Record<string, unknown>).map(([key, value]) => {
+          if (typeof value !== "number" || !Number.isFinite(value)) {
+            throw new Error(`KPI ${key} must be a finite number`);
+          }
+          return [key, value];
+        }),
+      );
+    } catch (e) {
+      setMessage((e as Error).message);
+      return;
+    }
+
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await apiPostJson<{
+        value_assessment: { id: string; evidence_class: string };
+        value_subject: string;
+        customer_validated: boolean;
+      }>("/v115/work/assess-value", {
+        work_id: effectiveWorkId,
+        outcome_id: effectiveOutcomeId,
+        acceptance_id: effectiveAcceptanceId,
+        evidence_class: evidenceClass,
+        evidence_refs: [evidenceRef.trim()],
+        baseline_ref: baselineRef.trim() || undefined,
+        kpis,
+      });
+      setMessage(
+        `Value assessment persisted: ${response.value_assessment.evidence_class}. Subject: ${response.value_subject}.`,
+      );
+      reload();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (candidates.length === 0) {
+    return (
+      <Card title="Accepted outcome value">
+        <p>
+          No independently Accepted, source-grounded Outcome is ready for value assessment.
+          Executor completion, Delivered Work or a conditional review is insufficient.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="Accepted outcome value">
+      <p>
+        Measure value only against an exact accepted Outcome. CustomerValidated additionally
+        requires a deployment-owned RealSite evidence claim; this form cannot self-assert one.
+      </p>
+      <div className="governed-execution-grid">
+        <label>
+          Accepted Work
+          <select
+            value={effectiveWorkId}
+            onChange={(event) => {
+              setWorkId(event.target.value);
+              setOutcomeId("");
+              setAcceptanceId("");
+            }}
+          >
+            {candidates.map(({ work }) => (
+              <option key={work.id} value={work.id}>
+                {work.spec.goal} · generation {work.generation}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Source-grounded Outcome
+          <select
+            value={effectiveOutcomeId}
+            onChange={(event) => {
+              setOutcomeId(event.target.value);
+              setAcceptanceId("");
+            }}
+          >
+            {selected?.outcomes.map((outcome, index) => {
+              const id = textField(outcome, "id") ?? `outcome-${index}`;
+              return (
+                <option key={id} value={textField(outcome, "id") ?? ""}>
+                  {textField(outcome, "objective") ?? id}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        <label>
+          Independent Acceptance
+          <select
+            value={effectiveAcceptanceId}
+            onChange={(event) => setAcceptanceId(event.target.value)}
+          >
+            {compatibleAcceptances.map((decision, index) => {
+              const id = textField(decision, "id") ?? `acceptance-${index}`;
+              return <option key={id} value={textField(decision, "id") ?? ""}>{id}</option>;
+            })}
+          </select>
+        </label>
+        <label>
+          Value evidence class
+          <select value={evidenceClass} onChange={(event) => setEvidenceClass(event.target.value)}>
+            <option value="fixture">Fixture</option>
+            <option value="simulation">Simulation</option>
+            <option value="shadow">Shadow</option>
+            <option value="observed-operational">Observed operational</option>
+            <option value="customer-validated">Customer validated (requires RealSite)</option>
+          </select>
+        </label>
+      </div>
+      <label className="governed-execution-prompt">
+        Value evidence reference
+        <input
+          value={evidenceRef}
+          onChange={(event) => setEvidenceRef(event.target.value)}
+          placeholder="metric://report-or-signed-analysis"
+        />
+      </label>
+      <label className="governed-execution-prompt">
+        Baseline reference (optional)
+        <input
+          value={baselineRef}
+          onChange={(event) => setBaselineRef(event.target.value)}
+          placeholder="baseline://approved-reference"
+        />
+      </label>
+      <label className="governed-execution-prompt">
+        KPI JSON (optional)
+        <textarea
+          value={kpisText}
+          onChange={(event) => setKpisText(event.target.value)}
+          placeholder='{"human_minutes_saved": 12.5}'
+        />
+      </label>
+      {evidenceClass === "customer-validated" && (
+        <p className="work-focus-empty">
+          CustomerValidated will be rejected unless deployment evidence contains a Proven real-site
+          claim for this exact Work generation and Outcome.
+        </p>
+      )}
+      <div className="page-actions">
+        <button
+          disabled={
+            busy ||
+            !effectiveWorkId ||
+            !effectiveOutcomeId ||
+            !effectiveAcceptanceId ||
+            !evidenceRef.trim()
+          }
+          onClick={assess}
+        >
+          Persist value assessment
+        </button>
+      </div>
+      {message && <p role="status" className="work-focus-empty">{message}</p>}
+    </Card>
+  );
+}
+
 export default function Workbench() {
   const [data, setData] = useState<WorkbenchData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1253,6 +1480,7 @@ export default function Workbench() {
               reload={load}
             />
             <OutcomeReviewPanel control={v115Control} reviewers={reviewerCatalog} reload={load} />
+            <ValueAssessmentPanel control={v115Control} reload={load} />
           </>
         )}
         <p role="status" className="work-focus-empty">
@@ -1426,6 +1654,7 @@ export default function Workbench() {
               reload={load}
             />
             <OutcomeReviewPanel control={v115Control} reviewers={reviewerCatalog} reload={load} />
+            <ValueAssessmentPanel control={v115Control} reload={load} />
         </>
       )}
 
