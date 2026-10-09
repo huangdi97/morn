@@ -42,6 +42,7 @@ describe("canonical Work remains a separate product surface", () => {
     source_of_truth_bindings: [],
     execution_bindings: [],
     execution_manifests: [],
+    execution_receipts: [],
     binding_migrations: [],
     durable_workflow_bindings: [],
     attempts: [],
@@ -86,6 +87,11 @@ describe("canonical Work remains a separate product surface", () => {
         { id: "binding-1", work_id: "work:canonical-1" },
         { id: "binding-other", work_id: "work:foreign" },
       ],
+      execution_receipts: [
+        { id: "receipt-harness-1", execution_binding_ref: "binding-1", work_generation: 1, provider_ref: "deepseek-harness", outcome: "completed", session_id: "session-1" },
+        { id: "receipt-harness-old", execution_binding_ref: "binding-1", work_generation: 0, provider_ref: "deepseek-harness", outcome: "completed" },
+        { id: "receipt-harness-other", execution_binding_ref: "binding-other", work_generation: 1, provider_ref: "pi", outcome: "completed" },
+      ],
       attempts: [
         { id: "attempt-1", binding_id: "binding-1", action: "cmms.create", state: "OutcomeUnknown", business_key: "work:canonical-1:create" },
         { id: "attempt-other", binding_id: "binding-other", action: "cmms.foreign", state: "Verified" },
@@ -109,6 +115,7 @@ describe("canonical Work remains a separate product surface", () => {
     };
     const trace = workEvidenceTrace(state, "work:canonical-1", 1);
     expect(trace.bindings).toHaveLength(1);
+    expect(trace.receipts).toHaveLength(1);
     expect(trace.attempts).toHaveLength(1);
     expect(trace.reconciliations).toHaveLength(1);
     expect(trace.outcomes).toHaveLength(1);

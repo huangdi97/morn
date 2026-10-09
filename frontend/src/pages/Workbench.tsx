@@ -44,6 +44,10 @@ function fieldRefs(record: Record<string, unknown>, field: string): string[] {
 export function workEvidenceTrace(control: V115ControlPlaneData, workId: string, generation: number) {
   const bindings = control.execution_bindings.filter((row) => textField(row, "work_id") === workId);
   const bindingIds = new Set(bindings.map((row) => textField(row, "id")).filter((id): id is string => !!id));
+  const receipts = control.execution_receipts.filter((row) => {
+    const id = textField(row, "execution_binding_ref");
+    return id !== null && bindingIds.has(id) && row.work_generation === generation;
+  });
   const attempts = control.attempts.filter((row) => {
     const id = textField(row, "binding_id");
     return id !== null && bindingIds.has(id);
@@ -62,7 +66,7 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
   const evidence = control.condition_evidence.filter((row) =>
     textField(row, "work_ref") === workId && row.work_generation === generation,
   );
-  return { bindings, attempts, reconciliations, outcomes, acceptances, evidence };
+  return { bindings, receipts, attempts, reconciliations, outcomes, acceptances, evidence };
 }
 
 function WorkEvidenceTrace({
@@ -75,13 +79,30 @@ function WorkEvidenceTrace({
   generation: number;
 }) {
   const trace = workEvidenceTrace(control, workId, generation);
-  const summary = `${trace.bindings.length} bindings · ${trace.attempts.length} attempts · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions`;
+  const summary = `${trace.bindings.length} bindings · ${trace.receipts.length} harness receipts · ${trace.attempts.length} external attempts · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions`;
   return (
     <details className="work-truth-trace">
       <summary>Execution, reality &amp; independent acceptance — {summary}</summary>
       <div className="work-truth-trace-grid">
         <section>
-          <strong>Execution &amp; side-effect truth</strong>
+          <strong>Harness execution evidence</strong>
+          {trace.receipts.length === 0 ? (
+            <p>No pinned harness execution receipt; provider completion is not implied.</p>
+          ) : (
+            <ul>
+              {trace.receipts.map((receipt, index) => (
+                <li key={textField(receipt, "id") ?? index}>
+                  <b>{textField(receipt, "provider_ref") ?? "Unknown provider"}</b> — {textField(receipt, "outcome") ?? "Unsettled"}
+                  <small>Session: {textField(receipt, "session_id") ?? "Unknown"}</small>
+                  <small>Environment: {textField(receipt, "execution_environment_ref") ?? "Fixture / not pinned"}</small>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p>Harness receipts are executor evidence only; they never establish a business outcome or acceptance.</p>
+        </section>
+        <section>
+          <strong>External action &amp; side-effect truth</strong>
           {trace.attempts.length === 0 ? (
             <p>No recorded external action attempts; no side effect may be inferred.</p>
           ) : (

@@ -38,6 +38,7 @@ pub use profile_guard::{
     ExternalActionPermit, ExternalActionPermitId, ProfileActionDecision,
 };
 
+use morn_harness::ExecutionReceipt;
 use morn_integration::SourceOfTruthBinding;
 use morn_kernel::error::{Error, Result};
 use morn_kernel::protocol::{
@@ -244,6 +245,7 @@ impl ProfileMigrationController {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct WorkProgressInputs<'a> {
     pub binding: Option<&'a ExecutionBinding>,
+    pub receipt: Option<&'a ExecutionReceipt>,
     pub workflow: Option<&'a DurableWorkflowEvidence>,
     pub attempt: Option<&'a ActionAttempt>,
     pub outcome: Option<&'a ObservedOutcome>,
@@ -305,6 +307,66 @@ impl WorkProgressController {
             condition.reason = format!("binding {} pins {}", binding.id, binding.profile_ref);
             condition.evidence_refs = vec![binding.id.to_string()];
             work.set_condition(condition);
+        }
+
+        if let Some(receipt) = inputs.receipt {
+            let Some(binding) = inputs.binding else {
+                let mut condition =
+                    WorkCondition::new("ExecutionReceiptObserved", ConditionStatus::False);
+                condition.reason = format!(
+                    "execution receipt {} cannot advance Work without its pinned ExecutionBinding",
+                    receipt.id
+                );
+                condition.evidence_refs = vec![receipt.id.to_string()];
+                work.set_condition(condition);
+                work.status.phase = WorkPhase::Blocked;
+                work.mark_observed();
+                return;
+            };
+            let matches = receipt.is_pinned_work_evidence()
+                && receipt.workspace_id == work.workspace_id
+                && receipt.work_package_id.as_ref() == Some(&work.id)
+                && receipt.work_generation == Some(work.generation)
+                && receipt.execution_binding_ref.as_ref() == Some(&binding.id)
+                && receipt.provider_ref.as_deref() == Some(binding.provider_ref.as_str())
+                && receipt.execution_environment_ref == binding.execution_environment_ref;
+            let mut condition = WorkCondition::new(
+                "ExecutionReceiptObserved",
+                if matches {
+                    ConditionStatus::True
+                } else {
+                    ConditionStatus::False
+                },
+            );
+            condition.reason = if matches {
+                format!(
+                    "executor receipt {} is pinned to Work {} generation {} binding {}",
+                    receipt.id, work.id, work.generation, binding.id
+                )
+            } else {
+                "executor receipt identity does not match canonical Work/binding".to_string()
+            };
+            condition.evidence_refs = std::iter::once(receipt.id.to_string())
+                .chain(receipt.trace_refs.iter().cloned())
+                .collect();
+            work.set_condition(condition);
+            if !matches {
+                work.status.phase = WorkPhase::Blocked;
+                work.mark_observed();
+                return;
+            }
+            if receipt.ended_at.is_some()
+                && receipt.outcome == "completed"
+                && inputs.workflow.is_none()
+                && inputs.outcome.is_none()
+                && inputs.acceptance.is_none()
+                && inputs.attempt.is_none()
+            {
+                // Harness completion is execution evidence, not a business outcome.
+                work.status.phase = WorkPhase::Waiting;
+                work.mark_observed();
+                return;
+            }
         }
 
         if let Some(workflow) = inputs.workflow {
@@ -538,6 +600,11 @@ pub trait ControlPlaneStore {
         work: &WorkResource,
         manifest: &ExecutionManifest,
     ) -> Result<()>;
+    fn save_execution_receipt(
+        &self,
+        work: &WorkResource,
+        receipt: &ExecutionReceipt,
+    ) -> Result<()>;
     fn save_binding_migration(
         &self,
         work: &WorkResource,
@@ -762,6 +829,56 @@ impl ControlPlaneStore for MornStore {
             work.workspace_id.as_str(),
             manifest.created_at.millis(),
             manifest,
+        )
+    }
+
+    fn save_execution_receipt(
+        &self,
+        work: &WorkResource,
+        receipt: &ExecutionReceipt,
+    ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
+        if !receipt.is_pinned_work_evidence()
+            || receipt.workspace_id != work.workspace_id
+            || receipt.work_package_id.as_ref() != Some(&work.id)
+            || receipt.work_generation != Some(work.generation)
+            || receipt.session_id.trim().is_empty()
+            || receipt.outcome.trim().is_empty()
+            || receipt
+                .ended_at
+                .is_some_and(|ended_at| ended_at < receipt.started_at)
+        {
+            return Err(Error::validation(
+                "execution receipt must be complete and pinned to the exact Work generation",
+            ));
+        }
+        let binding_id = receipt
+            .execution_binding_ref
+            .as_ref()
+            .ok_or_else(|| Error::validation("execution receipt binding is required"))?;
+        let binding: ExecutionBinding = self
+            .load_record("execution_binding_v115", binding_id.as_str())?
+            .ok_or_else(|| Error::not_found("execution receipt binding"))?;
+        if !binding.matches_work_generation(work)
+            || receipt.provider_ref.as_deref() != Some(binding.provider_ref.as_str())
+            || receipt.execution_environment_ref != binding.execution_environment_ref
+        {
+            return Err(Error::validation(
+                "execution receipt provider/environment does not match its persisted Work binding",
+            ));
+        }
+        if receipt.ended_at.is_some() && (receipt.event_ids.is_empty() || receipt.trace_refs.is_empty())
+        {
+            return Err(Error::validation(
+                "settled execution receipt requires durable event and trace references",
+            ));
+        }
+        self.save_record_immutable(
+            "execution_receipt_v115",
+            receipt.id.as_str(),
+            work.workspace_id.as_str(),
+            receipt.started_at.millis(),
+            receipt,
         )
     }
 
@@ -1629,6 +1746,54 @@ mod control_plane_persistence_scope_tests {
             .unwrap()
             .unwrap();
         assert_eq!(persisted.workspace_id, canonical.workspace_id);
+    }
+
+    #[test]
+    fn execution_receipt_is_executor_evidence_not_accepted_outcome() {
+        use morn_harness::ExecutionReceipt;
+        use morn_kernel::ids::ActorInstanceId;
+        use morn_work::control::WorkPhase;
+
+        let store = MornStore::open_in_memory().unwrap();
+        let mut work = fixture_work();
+        work.status.phase = WorkPhase::Ready;
+        store.save_work_resource(&work).unwrap();
+        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        store.save_execution_binding(&work, &binding).unwrap();
+
+        let ctx = morn_harness::RuntimeContext::new(
+            work.workspace_id.clone(),
+            ActorInstanceId::generate_with("actor"),
+            work.id.clone(),
+        )
+        .with_work_binding(work.generation, binding.id.clone())
+        .unwrap()
+        .with_scope_id("scope://run")
+        .unwrap();
+        let mut receipt = ExecutionReceipt::from_runtime_context(&ctx, "provider:a", "session-a");
+        receipt.outcome = "completed".to_string();
+        receipt.ended_at = Some(morn_kernel::time::Timestamp::now());
+        receipt.event_ids.push("event://1".to_string());
+        receipt.trace_refs.push("event://1".to_string());
+        store.save_execution_receipt(&work, &receipt).unwrap();
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                binding: Some(&binding),
+                receipt: Some(&receipt),
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Waiting);
+        assert!(work.condition_is_true("ExecutionReceiptObserved"));
+        assert!(!work.condition_is_true("OutcomeObservation"));
+        assert!(!work.condition_is_true("IndependentAcceptance"));
+
+        let mut forged = receipt.clone();
+        forged.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
+        forged.provider_ref = Some("provider:b".to_string());
+        assert!(store.save_execution_receipt(&work, &forged).is_err());
     }
 
     #[test]
