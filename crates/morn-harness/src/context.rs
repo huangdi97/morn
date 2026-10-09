@@ -118,7 +118,11 @@ mod tests {
         assert!(!base.proves_real_harness_environment());
         assert!(context().with_scope_id("   ").is_err());
         assert_eq!(
-            context().with_scope_id("scope://one").unwrap().scope_id.as_deref(),
+            context()
+                .with_scope_id("scope://one")
+                .unwrap()
+                .scope_id
+                .as_deref(),
             Some("scope://one")
         );
 

@@ -489,12 +489,15 @@ impl DeepSeekHarnessProvider {
         // when the protocol-level shutdown request fails. Projection cleanup
         // must therefore happen in this same call rather than requiring a
         // second shutdown attempt to make state truthful.
-        let shutdown_error = self.real_client.take().and_then(|mut client| client.shutdown().err());
+        let shutdown_error = self
+            .real_client
+            .take()
+            .and_then(|mut client| client.shutdown().err());
         let close_reason = shutdown_error.as_ref().map_or_else(
             || "DSH SDK runtime was explicitly shut down".to_string(),
-            |error| format!(
-                "DSH SDK graceful shutdown failed; owned process was force-reaped: {error}"
-            ),
+            |error| {
+                format!("DSH SDK graceful shutdown failed; owned process was force-reaped: {error}")
+            },
         );
         self.runtime_health.mark_closed(close_reason);
         for state in self.sessions.values_mut() {
@@ -553,9 +556,7 @@ impl DeepSeekHarnessProvider {
             .as_deref()
             .filter(|scope_id| !scope_id.trim().is_empty())
             .ok_or_else(|| {
-                Error::validation(
-                    "real DSH SDK requires an explicit RuntimeContext.scope_id",
-                )
+                Error::validation("real DSH SDK requires an explicit RuntimeContext.scope_id")
             })?;
         let eligible = self.scopes.iter().any(|scope| {
             scope.workspace_id == ctx.workspace_id
@@ -889,9 +890,7 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     Ok(run) if run.completed_successfully() => {
                         self.runtime_health.mark_live_turn(
                             "live DSH SDK turn completed successfully",
-                            format!(
-                                "runtime://deepseek-harness/session/{session_id}/settled-turn"
-                            ),
+                            format!("runtime://deepseek-harness/session/{session_id}/settled-turn"),
                         );
                         state.status = "idle".to_string();
                         state.events.push(ExecutionEvent::new(
@@ -1118,18 +1117,13 @@ mod dsh_provider_tests {
 
         let executable = std::env::current_exe().unwrap();
         let cwd = std::env::current_dir().unwrap();
-        let home = std::env::temp_dir().join(format!(
-            "morn-dsh-provider-home-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let home =
+            std::env::temp_dir().join(format!("morn-dsh-provider-home-{}", uuid::Uuid::new_v4()));
         let environment_ref = "env://container/dsh-provider-test";
-        let mut config = DshSdkConfig::profile_sdk(
-            cwd.to_string_lossy(),
-            "fixture-provider",
-            "fixture-model",
-        )
-        .with_dsh_home(home.to_string_lossy())
-        .with_execution_environment_ref(environment_ref);
+        let mut config =
+            DshSdkConfig::profile_sdk(cwd.to_string_lossy(), "fixture-provider", "fixture-model")
+                .with_dsh_home(home.to_string_lossy())
+                .with_execution_environment_ref(environment_ref);
         config.command = executable.to_string_lossy().to_string();
         config.args = vec![
             "--exact".to_string(),
@@ -1207,8 +1201,12 @@ mod dsh_provider_tests {
         let snapshot = provider.inspect(&session.id).unwrap();
         assert_eq!(snapshot.status, "idle");
         let events = provider.stream_events(&session.id);
-        assert!(events.iter().any(|event| event.kind == ExecutionEventKind::ModelResponse));
-        assert!(events.iter().any(|event| event.kind == ExecutionEventKind::Checkpoint));
+        assert!(events
+            .iter()
+            .any(|event| event.kind == ExecutionEventKind::ModelResponse));
+        assert!(events
+            .iter()
+            .any(|event| event.kind == ExecutionEventKind::Checkpoint));
 
         assert!(!provider.features().interrupt);
         assert!(!provider.features().resume);

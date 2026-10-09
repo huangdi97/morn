@@ -103,12 +103,15 @@ impl PiHarnessProvider {
         // when the protocol-level shutdown request fails. Projection cleanup
         // must therefore happen in this same call rather than requiring a
         // second shutdown attempt to make state truthful.
-        let shutdown_error = self.real_client.take().and_then(|mut client| client.shutdown().err());
+        let shutdown_error = self
+            .real_client
+            .take()
+            .and_then(|mut client| client.shutdown().err());
         let close_reason = shutdown_error.as_ref().map_or_else(
             || "Pi RPC runtime was explicitly shut down".to_string(),
-            |error| format!(
-                "Pi RPC graceful shutdown failed; owned process was force-reaped: {error}"
-            ),
+            |error| {
+                format!("Pi RPC graceful shutdown failed; owned process was force-reaped: {error}")
+            },
         );
         self.runtime_health.mark_closed(close_reason);
         for state in self.sessions.values_mut() {
@@ -167,9 +170,7 @@ impl PiHarnessProvider {
             .as_deref()
             .filter(|scope_id| !scope_id.trim().is_empty())
             .ok_or_else(|| {
-                Error::validation(
-                    "real Pi RPC requires an explicit RuntimeContext.scope_id",
-                )
+                Error::validation("real Pi RPC requires an explicit RuntimeContext.scope_id")
             })?;
         let eligible = self.scopes.iter().any(|scope| {
             scope.workspace_id == ctx.workspace_id
@@ -414,10 +415,9 @@ impl HarnessProvider for PiHarnessProvider {
                                 self.runtime_health.mark_degraded(format!(
                                     "Pi RPC settled turn but assistant output retrieval failed: {error}"
                                 ));
-                                let state = self
-                                    .sessions
-                                    .get_mut(session_id)
-                                    .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                                let state = self.sessions.get_mut(session_id).ok_or_else(|| {
+                                    Error::not_found(format!("session {session_id}"))
+                                })?;
                                 state.status = "idle-non-success".to_string();
                                 state.events.push(ExecutionEvent::new(
                                     state.ctx.workspace_id.clone(),
@@ -763,7 +763,9 @@ mod tests {
 
         provider.unmount(&handle).unwrap();
         assert!(
-            provider.send(&session.id, "must not run after scope revocation").is_err(),
+            provider
+                .send(&session.id, "must not run after scope revocation")
+                .is_err(),
             "an unmounted E0 scope must revoke later prompt admission"
         );
         assert_eq!(provider.inspect(&session.id).unwrap().status, "idle");
