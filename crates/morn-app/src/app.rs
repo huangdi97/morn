@@ -33,7 +33,7 @@ use morn_opint::episode::EpisodeAssembler;
 use morn_opint::predictor::PredictorRegistry;
 use morn_runtime::{AttestedExecutionEnvironmentProvider, ExecutionEnvironmentAttestation};
 use morn_store::store::MornStore;
-use morn_work::acceptance::AcceptanceReviewerAttestation;
+use morn_work::acceptance::{AcceptanceReviewAuthorization, AcceptanceReviewerAttestation};
 use morn_work::durable::DurableRuntime;
 use morn_work::service::{DurableWorkService, WorkService};
 use morn_world::service::WorldService;
@@ -63,6 +63,9 @@ pub struct AppInner {
     /// Deployment-attested reviewer identities. UI/API callers may select a
     /// reviewer but cannot self-assert principal identity or reviewer role.
     pub acceptance_reviewers: Vec<AcceptanceReviewerAttestation>,
+    /// Deployment-issued, exact Work/Outcome/disposition review authorizations.
+    /// IDs are bearer references delivered out-of-band and are never listed by the API.
+    pub acceptance_review_authorizations: Vec<AcceptanceReviewAuthorization>,
     pub evolution: EvolutionEngine,
     pub durable: DurableWorkService,
     pub durable_v2: DurableRuntime,
@@ -252,6 +255,54 @@ fn configured_acceptance_reviewers() -> morn_kernel::Result<Vec<AcceptanceReview
     Ok(reviewers)
 }
 
+fn configured_acceptance_review_authorizations(
+) -> morn_kernel::Result<Vec<AcceptanceReviewAuthorization>> {
+    let Ok(path) = std::env::var("MORN_ACCEPTANCE_REVIEW_AUTHORIZATIONS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_ACCEPTANCE_REVIEW_AUTHORIZATIONS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read acceptance review authorization file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid acceptance review authorization JSON in {path:?}: {error}"
+        ))
+    })?;
+    let authorizations: Vec<AcceptanceReviewAuthorization> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid acceptance review authorization entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid acceptance review authorization entry: {error}"
+            ))
+        })?],
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    for authorization in &authorizations {
+        authorization.validate()?;
+        if !ids.insert(authorization.authorization_id.clone()) {
+            return Err(morn_kernel::error::Error::validation(
+                "acceptance review authorization ids must be unique",
+            ));
+        }
+    }
+    Ok(authorizations)
+}
+
 fn configured_pi_harness() -> morn_kernel::Result<PiHarnessProvider> {
     match std::env::var("MORN_PI_MODE") {
         Err(std::env::VarError::NotPresent) => Ok(PiHarnessProvider::new(PiMode::Fixture)),
@@ -297,6 +348,7 @@ impl AppState {
         let execution_environments = configured_execution_environments()?;
         let source_of_truth_catalog = configured_source_of_truth_bindings()?;
         let acceptance_reviewers = configured_acceptance_reviewers()?;
+        let acceptance_review_authorizations = configured_acceptance_review_authorizations()?;
         let mut inner = AppInner {
             store,
             workspace,
@@ -311,6 +363,7 @@ impl AppState {
             execution_environments,
             source_of_truth_catalog,
             acceptance_reviewers,
+            acceptance_review_authorizations,
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
             durable_v2: DurableRuntime::new(),

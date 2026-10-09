@@ -1786,7 +1786,9 @@ async fn v115_acceptance_reviewers(State(state): State<AppState>) -> ApiResult {
     Ok(Json(json!({
         "reviewers": reviewers,
         "deployment_attested": true,
-        "caller_can_self_assert_identity": false
+        "caller_can_self_assert_identity": false,
+        "final_review_requires_exact_out_of_band_authorization": true,
+        "authorization_ids_are_listed": false
     })))
 }
 
@@ -1810,6 +1812,11 @@ async fn v115_work_review_outcome(
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| AppError(Error::validation("outcome_id is required")))?;
+    let review_authorization_id = body
+        .get("review_authorization_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("review_authorization_id is required")))?;
     let reviewer_principal_id = body
         .get("reviewer_principal_id")
         .and_then(Value::as_str)
@@ -1919,6 +1926,37 @@ async fn v115_work_review_outcome(
         )));
     }
 
+    let authorization = guard
+        .acceptance_review_authorizations
+        .iter()
+        .find(|authorization| authorization.authorization_id == review_authorization_id)
+        .filter(|authorization| {
+            authorization.authorizes(
+                &reviewer.principal_id,
+                acting_role,
+                &work.id,
+                &outcome.id,
+                disposition,
+                now,
+            )
+        })
+        .cloned()
+        .ok_or_else(|| {
+            AppError(Error::not_authorized(
+                "review request lacks an active deployment authorization for this exact reviewer, role, Work, outcome and disposition",
+            ))
+        })?;
+    let consumed_kind = "acceptance_review_authorization_consumed_v115";
+    if guard
+        .store
+        .load_record::<Value>(consumed_kind, review_authorization_id)?
+        .is_some()
+    {
+        return Err(AppError(Error::conflict(
+            "acceptance review authorization was already consumed",
+        )));
+    }
+
     let acceptance_spec_id = work
         .spec
         .acceptance_ref
@@ -1938,6 +1976,9 @@ async fn v115_work_review_outcome(
     decision
         .evidence_refs
         .extend(reviewer.evidence_refs.clone());
+    decision
+        .evidence_refs
+        .extend(authorization.evidence_refs.clone());
     decision.evidence_refs.sort();
     decision.evidence_refs.dedup();
     if let Some(conditions) = body.get("conditions").and_then(Value::as_array) {
@@ -1950,6 +1991,23 @@ async fn v115_work_review_outcome(
             .collect();
     }
 
+    // Consume before writing the decision: if a later persistence step fails,
+    // the authorization fails closed and must be re-issued rather than becoming replayable.
+    guard.store.save_record_immutable(
+        consumed_kind,
+        review_authorization_id,
+        work.workspace_id.as_str(),
+        now.millis(),
+        &json!({
+            "authorization_id": review_authorization_id,
+            "work_id": work.id,
+            "outcome_id": outcome.id,
+            "reviewer_principal_id": reviewer.principal_id,
+            "acting_role": acting_role,
+            "disposition": disposition,
+            "consumed_at": now
+        }),
+    )?;
     ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &decision)?;
     WorkProgressController.reconcile(
         &mut work,
@@ -1967,6 +2025,8 @@ async fn v115_work_review_outcome(
         "reviewed_outcome": outcome.id,
         "reviewer_principal_id": reviewer.principal_id,
         "reviewer_identity_evidence": reviewer.evidence_refs,
+        "review_authorization_evidence": authorization.evidence_refs,
+        "review_authorization_consumed": true,
         "business_outcome_source_grounded": true,
         "note": "Review consumes an already-persisted source-grounded outcome. It never promotes a Harness receipt or model output into business truth."
     })))
@@ -4876,7 +4936,7 @@ mod workspace_boundary_tests {
         use morn_world::{ObservedOutcome, OutcomeSourceKind};
 
         let state = AppState::new(":memory:").unwrap();
-        let (work, grounded, ungrounded, reviewer_id) = {
+        let (work, grounded, ungrounded, reviewer_id, authorization_id) = {
             let mut guard = state.lock();
             let reviewer_id = morn_kernel::ids::PrincipalId::generate_with("reviewer");
             guard
@@ -4924,7 +4984,22 @@ mod workspace_boundary_tests {
                 .store
                 .save_observed_outcome(&work, &ungrounded)
                 .unwrap();
-            (work, grounded, ungrounded, reviewer_id)
+
+            let authorization_id = "review-auth-grounded-1".to_string();
+            guard.acceptance_review_authorizations.push(
+                morn_work::acceptance::AcceptanceReviewAuthorization {
+                    authorization_id: authorization_id.clone(),
+                    principal_id: reviewer_id.clone(),
+                    acting_role: "independent-reviewer".to_string(),
+                    work_package_id: work.id.clone(),
+                    outcome_id: grounded.id.clone(),
+                    disposition: morn_work::acceptance_decision::AcceptanceDisposition::Accept,
+                    evidence_refs: vec!["iam://review-authorizations/review-auth-grounded-1".to_string()],
+                    issued_at: morn_kernel::time::Timestamp::now(),
+                    valid_until: None,
+                },
+            );
+            (work, grounded, ungrounded, reviewer_id, authorization_id)
         };
 
         let weak = v115_work_review_outcome(
@@ -4933,6 +5008,7 @@ mod workspace_boundary_tests {
                 "work_id": work.id.to_string(),
                 "outcome_id": ungrounded.id.to_string(),
                 "disposition": "accept",
+                "review_authorization_id": "review-auth-not-for-ungrounded",
                 "reviewer_principal_id": reviewer_id.to_string(),
                 "acting_role": "independent-reviewer",
                 "reason": "must not accept an ungrounded assertion",
@@ -4948,6 +5024,7 @@ mod workspace_boundary_tests {
                 "work_id": work.id.to_string(),
                 "outcome_id": grounded.id.to_string(),
                 "disposition": "accept",
+                "review_authorization_id": authorization_id,
                 "reviewer_principal_id": reviewer_id.to_string(),
                 "acting_role": "independent-reviewer",
                 "reason": "authoritative source evidence satisfies the reviewed acceptance criteria",
@@ -4973,6 +5050,17 @@ mod workspace_boundary_tests {
         assert!(decisions[0]
             .evidence_refs
             .contains(&"iam://reviewers/alice".to_string()));
+        assert!(decisions[0]
+            .evidence_refs
+            .contains(&"iam://review-authorizations/review-auth-grounded-1".to_string()));
+        assert!(guard
+            .store
+            .load_record::<Value>(
+                "acceptance_review_authorization_consumed_v115",
+                "review-auth-grounded-1",
+            )
+            .unwrap()
+            .is_some());
     }
 
     #[tokio::test]

@@ -2,7 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use morn_kernel::ids::{AcceptanceSpecId, PrincipalId};
+use morn_kernel::ids::{AcceptanceSpecId, OutcomeRecordId, PrincipalId, WorkPackageId};
+use crate::acceptance_decision::AcceptanceDisposition;
 use morn_kernel::time::Timestamp;
 
 /// A WorkPackage can only be accepted when its AcceptanceSpec is satisfied.
@@ -28,6 +29,60 @@ pub struct AcceptanceReviewerAttestation {
     pub evidence_refs: Vec<String>,
     pub observed_at: Timestamp,
     pub valid_until: Option<Timestamp>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AcceptanceReviewAuthorization {
+    pub authorization_id: String,
+    pub principal_id: PrincipalId,
+    pub acting_role: String,
+    pub work_package_id: WorkPackageId,
+    pub outcome_id: OutcomeRecordId,
+    pub disposition: AcceptanceDisposition,
+    pub evidence_refs: Vec<String>,
+    pub issued_at: Timestamp,
+    pub valid_until: Option<Timestamp>,
+}
+
+impl AcceptanceReviewAuthorization {
+    pub fn validate(&self) -> morn_kernel::error::Result<()> {
+        if self.authorization_id.trim().is_empty()
+            || self.acting_role.trim().is_empty()
+            || self.evidence_refs.is_empty()
+        {
+            return Err(morn_kernel::error::Error::validation(
+                "review authorization requires id, role and deployment evidence",
+            ));
+        }
+        if self
+            .valid_until
+            .is_some_and(|until| until < self.issued_at)
+        {
+            return Err(morn_kernel::error::Error::validation(
+                "review authorization validity cannot end before issue time",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn authorizes(
+        &self,
+        principal_id: &PrincipalId,
+        role: &str,
+        work_package_id: &WorkPackageId,
+        outcome_id: &OutcomeRecordId,
+        disposition: AcceptanceDisposition,
+        now: Timestamp,
+    ) -> bool {
+        self.validate().is_ok()
+            && &self.principal_id == principal_id
+            && self.acting_role == role
+            && &self.work_package_id == work_package_id
+            && &self.outcome_id == outcome_id
+            && self.disposition == disposition
+            && self.issued_at <= now
+            && self.valid_until.is_none_or(|until| now <= until)
+    }
 }
 
 impl AcceptanceReviewerAttestation {
@@ -90,6 +145,49 @@ impl AcceptanceSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn review_authorization_is_exact_and_time_bounded() {
+        let principal = PrincipalId::generate_with("reviewer");
+        let work = WorkPackageId::generate_with("work");
+        let outcome = OutcomeRecordId::generate_with("outcome");
+        let authorization = AcceptanceReviewAuthorization {
+            authorization_id: "review-auth-1".to_string(),
+            principal_id: principal.clone(),
+            acting_role: "independent-reviewer".to_string(),
+            work_package_id: work.clone(),
+            outcome_id: outcome.clone(),
+            disposition: AcceptanceDisposition::Accept,
+            evidence_refs: vec!["iam://signed-review/review-auth-1".to_string()],
+            issued_at: Timestamp::from_millis(10),
+            valid_until: Some(Timestamp::from_millis(20)),
+        };
+        authorization.validate().unwrap();
+        assert!(authorization.authorizes(
+            &principal,
+            "independent-reviewer",
+            &work,
+            &outcome,
+            AcceptanceDisposition::Accept,
+            Timestamp::from_millis(15),
+        ));
+        assert!(!authorization.authorizes(
+            &principal,
+            "independent-reviewer",
+            &work,
+            &outcome,
+            AcceptanceDisposition::Reject,
+            Timestamp::from_millis(15),
+        ));
+        assert!(!authorization.authorizes(
+            &principal,
+            "independent-reviewer",
+            &work,
+            &outcome,
+            AcceptanceDisposition::Accept,
+            Timestamp::from_millis(21),
+        ));
+    }
 
     #[test]
     fn reviewer_attestation_requires_identity_evidence_and_active_role() {
