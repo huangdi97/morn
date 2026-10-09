@@ -78,6 +78,55 @@ configured DSH/Pi command actually executes inside that named environment;
 Morn does not infer containment from a binary name or from Docker being
 installed.
 
+
+
+## Live provider evidence gate
+
+Morn includes a one-shot deployment gate for proving the **executor transport**
+against the exact configured real provider and deployment-owned execution
+environment:
+
+```powershell
+cargo run -p morn-app --bin provider_smoke
+```
+
+Set `MORN_PROVIDER_SMOKE_PROVIDER` to `deepseek-harness` (or `dsh`) or
+`pi`. The gate loads the normal application deployment configuration, requires
+an active attestation whose `environment_ref` exactly matches the provider's
+configured environment, mounts the provider's required E0 scope, runs a no-tool
+probe, verifies the live health lease, and reaps the owned provider runtime.
+Unexpected Harness tool activity makes the gate fail closed.
+
+DSH example (values are deployment-specific; never commit secret values):
+
+```powershell
+$env:MORN_PROVIDER_SMOKE_PROVIDER = "deepseek-harness"
+$env:MORN_DSH_MODE = "real"
+$env:MORN_DSH_WORKSPACE = "C:\morn\workspaces\dsh"
+$env:MORN_DSH_HOME = "C:\morn\runtime\dsh-home"
+$env:MORN_DSH_PROVIDER = "deepseek-official"
+$env:MORN_DSH_MODEL = "<exact-model-route>"
+$env:MORN_DSH_EXECUTION_ENVIRONMENT_REF = "env://container/dsh-runtime-a"
+$env:MORN_DSH_RUNTIME_VERSION = "<deployment-attested-version>"
+$env:MORN_DSH_RUNTIME_DIGEST = "sha256:<64-hex>"
+$env:MORN_EXECUTION_ATTESTOR = "<deployment-attestor-name>"
+$env:MORN_EXECUTION_ATTESTATION_FILE = "C:\morn\trust\execution-environments.json"
+# Only if this exact provider route requires an environment credential:
+$env:MORN_DSH_ENV_PASSTHROUGH = "DEEPSEEK_API_KEY"
+cargo run -p morn-app --bin provider_smoke
+```
+
+Pi uses the same gate with `MORN_PROVIDER_SMOKE_PROVIDER=pi`,
+`MORN_PI_MODE=real`, `MORN_PI_WORKSPACE`, `MORN_PI_PROVIDER`,
+`MORN_PI_MODEL`, `MORN_PI_EXECUTION_ENVIRONMENT_REF`,
+`MORN_PI_RUNTIME_VERSION`, `MORN_PI_RUNTIME_DIGEST`, and optionally
+`MORN_PI_COMMAND` / `MORN_PI_ENV_PASSTHROUGH`.
+
+A successful JSON report sets `executor_live_evidence=true`. It **always**
+keeps `canonical_work_outcome=false`, `customer_acceptance=false`, and
+`production_write=false`: a provider/model turn is execution evidence, not
+business truth. Exit code 2 means `NOT_PROVEN` rather than a fabricated pass.
+
 ## Authoritative source bindings
 
 Morn does not allow an HTTP/UI caller or a Harness to self-declare a business

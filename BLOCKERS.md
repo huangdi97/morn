@@ -9,13 +9,16 @@ entries below are retained as historical evidence and must not be read as the
 current implementation state.
 
 - **B-001 / DSH live evidence — EXTERNAL_BLOCKED.** The official DSH
-  distribution and Morn real SDK/JSON-RPC adapter now exist. Remaining evidence
-  requires an authorized runtime, exact model route/credentials, a real
-  runtime-attested execution environment, and a live settled-turn smoke.
-  Fixture/wire tests do not satisfy this gate.
+  distribution and Morn real SDK/JSON-RPC adapter now exist, and the repository
+  includes the one-shot `provider_smoke` live gate. Remaining evidence requires
+  an authorized runtime, exact model route/credentials and a real
+  runtime-attested execution environment. Fixture/wire tests do not satisfy
+  this gate; only a successful deployment-run live gate does.
 - **B-002 / Pi live evidence — EXTERNAL_BLOCKED.** Morn has a real Pi JSONL RPC
-  adapter; a live installed Pi runtime/model/credential path and an authorized
-  runtime-attested execution environment are still required for a real smoke.
+  adapter and the same `provider_smoke` live gate; a live installed Pi
+  runtime/model/credential path and an authorized runtime-attested execution
+  environment are still required. The gate entrypoint exists; the external
+  evidence does not yet.
 - **B-003 / execution containment — EXTERNAL_BLOCKED for live evidence.** Morn
   has provider-neutral environment contracts and an attestation-backed external
   environment adapter. A real container/microVM/Kubernetes/customer-sandbox
