@@ -1189,6 +1189,17 @@ impl ControlPlaneStore for MornStore {
         let is_reject = decision.disposition == AcceptanceDisposition::Reject;
         let is_terminal_decision = is_accept || is_reject;
         if is_terminal_decision
+            && work
+                .spec
+                .acceptance_ref
+                .as_deref()
+                .is_some_and(|expected| expected != decision.acceptance_spec_id.as_str())
+        {
+            return Err(Error::validation(
+                "terminal acceptance/rejection must match the Work's pinned AcceptanceSpec",
+            ));
+        }
+        if is_terminal_decision
             && (decision.outcome_refs.is_empty()
                 || decision.evidence_refs.is_empty()
                 || decision.acting_role.trim().is_empty()
@@ -2281,6 +2292,52 @@ mod control_plane_persistence_scope_tests {
         );
         assert_ne!(work.status.phase, WorkPhase::Accepted);
         assert_ne!(work.status.phase, WorkPhase::Delivered);
+    }
+
+    #[test]
+    fn terminal_acceptance_must_match_pinned_acceptance_spec_before_persistence() {
+        let store = MornStore::open_in_memory().unwrap();
+        let mut work = fixture_work();
+        let expected = AcceptanceSpecId::generate_with("acceptance");
+        work.spec.acceptance_ref = Some(expected.to_string());
+        store.save_work_resource(&work).unwrap();
+
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "delivery-impact review",
+            OutcomeSourceKind::ExternalSystem,
+            "cmms://plant-a/status",
+            json!({"delivered": true}),
+        );
+        outcome
+            .evidence_refs
+            .push("cmms://plant-a/status/receipt".to_string());
+        store.save_observed_outcome(&work, &outcome).unwrap();
+
+        let mut wrong = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("other-acceptance"),
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("principal"),
+            "independent-reviewer",
+            "reviewed against the wrong criteria",
+        );
+        wrong.outcome_refs.push(outcome.id.clone());
+        wrong.evidence_refs.push("review://ticket-wrong".to_string());
+        assert!(ControlPlaneStore::save_acceptance_decision(&store, &work, &wrong).is_err());
+
+        let mut correct = AcceptanceDecision::new(
+            work.id.clone(),
+            expected,
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("principal"),
+            "independent-reviewer",
+            "reviewed against the pinned criteria",
+        );
+        correct.outcome_refs.push(outcome.id.clone());
+        correct.evidence_refs.push("review://ticket-correct".to_string());
+        ControlPlaneStore::save_acceptance_decision(&store, &work, &correct).unwrap();
     }
 
     #[test]
