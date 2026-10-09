@@ -588,9 +588,10 @@ impl HarnessProvider for PiHarnessProvider {
                             self.runtime_health.mark_degraded(
                                 "Pi RPC emitted tool activity on an E0-only provider path; owned runtime reaped",
                             );
-                            let state = self.sessions.get_mut(session_id).ok_or_else(|| {
-                                Error::not_found(format!("session {session_id}"))
-                            })?;
+                            let state = self
+                                .sessions
+                                .get_mut(session_id)
+                                .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
                             state.events.extend(normalized);
                             state.status = "policy-violation-runtime-reaped".to_string();
                             state.events.push(ExecutionEvent::new(

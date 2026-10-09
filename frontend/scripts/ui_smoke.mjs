@@ -256,13 +256,12 @@ try {
       }
       await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
       await page.waitForTimeout(500);
-      await page.getByText("Deliver a reviewed report", { exact: false }).first().waitFor({
+      const canonicalWork = page.locator('section[aria-label="Canonical Work overview"]');
+      await canonicalWork.getByText("Deliver a reviewed report", { exact: false }).first().waitFor({
         state: "visible",
         timeout: 10000,
       });
-      const focusText = await page
-        .locator('section[aria-label="Canonical Work overview"]')
-        .innerText();
+      const focusText = await canonicalWork.innerText();
       if (!focusText.includes("Deliver a reviewed report") || !focusText.includes("Proposed")) {
         errors.push("Workbench: Studio-instantiated Work is not shown as canonical state");
       }

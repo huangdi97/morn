@@ -725,10 +725,7 @@ mod tests {
                     response("get_state", json!({"agent":{"status":"idle"}})),
                 ),
                 "prompt" => {
-                    let prompt_text = request
-                        .get("message")
-                        .and_then(Value::as_str)
-                        .unwrap_or("");
+                    let prompt_text = request.get("message").and_then(Value::as_str).unwrap_or("");
                     write(
                         &mut stdout,
                         response("prompt", json!({"disposition":"started"})),

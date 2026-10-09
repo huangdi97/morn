@@ -62,9 +62,7 @@ fn find_attestation(
 
 fn run_gate() -> Result<Value> {
     let provider_name = std::env::var("MORN_PROVIDER_SMOKE_PROVIDER").map_err(|_| {
-        Error::validation(
-            "MORN_PROVIDER_SMOKE_PROVIDER is required (deepseek-harness or pi)",
-        )
+        Error::validation("MORN_PROVIDER_SMOKE_PROVIDER is required (deepseek-harness or pi)")
     })?;
     let db_path =
         std::env::var("MORN_PROVIDER_SMOKE_DB").unwrap_or_else(|_| ":memory:".to_string());

@@ -174,7 +174,8 @@ pub fn run_harness_smoke(
         } else if features.session_close {
             "smoke contract complete".to_string()
         } else {
-            "smoke contract complete; per-session close is unsupported and was not fabricated".to_string()
+            "smoke contract complete; per-session close is unsupported and was not fabricated"
+                .to_string()
         },
     })
 }
