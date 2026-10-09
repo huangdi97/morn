@@ -280,6 +280,19 @@ type E0HarnessCapability = {
   stage: string;
 };
 
+export function governedRealHarnessEnvironment(
+  providerRef: string | undefined,
+  status: V115Status | null,
+): string | null {
+  if (providerRef === "deepseek-harness" && status?.harness_runtime.dsh.mode === "real") {
+    return status.harness_runtime.dsh.configured_execution_environment_ref;
+  }
+  if (providerRef === "pi" && status?.harness_runtime.pi.mode === "real") {
+    return status.harness_runtime.pi.configured_execution_environment_ref;
+  }
+  return null;
+}
+
 function GovernedE0Executor({
   control,
   capabilities,
@@ -338,16 +351,17 @@ function GovernedE0Executor({
   const realPi =
     selectedCapability?.manifest.provider_ref === "pi" &&
     status?.harness_runtime.pi.mode === "real";
-  const configuredDshEnvironment =
-    status?.harness_runtime.dsh.configured_execution_environment_ref ?? "";
+  const realHarness = realDsh || realPi;
+  const configuredHarnessEnvironment =
+    governedRealHarnessEnvironment(selectedCapability?.manifest.provider_ref, status) ?? "";
   const eligibleEnvironments = (status?.execution_environment_attestations ?? []).filter(
     (environment) =>
       environment.active &&
-      (!realDsh || environment.environment_ref === configuredDshEnvironment),
+      (!realHarness || environment.environment_ref === configuredHarnessEnvironment),
   );
   const effectiveEnvironmentRef =
     environmentRef ||
-    (realDsh && eligibleEnvironments.length === 1
+    (realHarness && eligibleEnvironments.length === 1
       ? eligibleEnvironments[0].environment_ref
       : "");
   const activeBindingId = selectedWork?.status.active_binding ?? "";
@@ -382,20 +396,20 @@ function GovernedE0Executor({
   };
 
   const bind = async () => {
-    if (!effectiveWorkId || !effectiveCapabilityId || realPi) return;
-    if (realDsh && !effectiveEnvironmentRef) return;
+    if (!effectiveWorkId || !effectiveCapabilityId) return;
+    if (realHarness && !effectiveEnvironmentRef) return;
     setBusy(true);
     setMessage(null);
     try {
-      const path = realDsh ? "/v115/work/bind-attested-e0" : "/v115/work/bind-e0";
+      const path = realHarness ? "/v115/work/bind-attested-e0" : "/v115/work/bind-e0";
       await apiPostJson(path, {
         work_id: effectiveWorkId,
         capability_manifest_id: effectiveCapabilityId,
-        ...(realDsh ? { execution_environment_ref: effectiveEnvironmentRef } : {}),
+        ...(realHarness ? { execution_environment_ref: effectiveEnvironmentRef } : {}),
       });
       setMessage(
-        realDsh
-          ? "Trusted environment and exact DSH runtime identity pinned. Execution has not started."
+        realHarness
+          ? `Trusted environment and exact ${selectedCapability?.manifest.provider_ref ?? "provider"} runtime identity pinned. Execution has not started.`
           : "Binding persisted. Execution has not started.",
       );
       reload();
@@ -488,7 +502,7 @@ function GovernedE0Executor({
           </select>
         </label>
       </div>
-      {realDsh && (
+      {realHarness && (
         <label className="governed-execution-environment">
           Trusted execution environment
           <select
@@ -516,16 +530,11 @@ function GovernedE0Executor({
             )}
           </select>
           <small>
-            Real DSH binding is allowed only when this fresh deployment attestation exactly matches
-            the environment pinned by the DSH launch configuration.
+            Real {selectedCapability?.manifest.provider_ref ?? "Harness"} binding is allowed only
+            when this fresh deployment attestation exactly matches the environment pinned by that
+            provider's launch configuration and runtime distribution identity.
           </small>
         </label>
-      )}
-      {realPi && (
-        <p className="work-focus-alert" role="status">
-          Real Pi binding remains fail-closed because the current RPC boundary does not expose a
-          verifiable runtime version. Fixture Pi remains available for conformance only.
-        </p>
       )}
       <div className="page-actions">
         <button
@@ -539,8 +548,7 @@ function GovernedE0Executor({
             busy ||
             selectedWork?.status.phase !== "Ready" ||
             !effectiveCapabilityId ||
-            realPi ||
-            (realDsh && !effectiveEnvironmentRef)
+            (realHarness && !effectiveEnvironmentRef)
           }
           onClick={bind}
         >

@@ -3,7 +3,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import type { V115ControlPlaneData } from "./api";
-import { biolabEnabled, CanonicalWorkOverview, workEvidenceTrace } from "./pages/Workbench";
+import {
+  biolabEnabled,
+  CanonicalWorkOverview,
+  governedRealHarnessEnvironment,
+  workEvidenceTrace,
+} from "./pages/Workbench";
 
 describe("domain-gated UI extension point", () => {
   it("zero-domain: no BioLab UI is rendered", () => {
@@ -137,5 +142,29 @@ describe("canonical Work remains a separate product surface", () => {
     expect(html).not.toContain("Foreign review");
     expect(html).not.toContain("Old generation review");
     expect(html).not.toContain("cmms.foreign");
+  });
+});
+
+
+describe("real Harness environment gating", () => {
+  const status = {
+    harness_runtime: {
+      dsh: {
+        mode: "real",
+        health: "initialized",
+        configured_execution_environment_ref: "env://dsh/a",
+      },
+      pi: {
+        mode: "real",
+        health: "initialized",
+        configured_execution_environment_ref: "env://pi/a",
+      },
+    },
+  } as import("./api").V115Status;
+
+  it("pins both real DSH and real Pi to their deployment-configured environment", () => {
+    expect(governedRealHarnessEnvironment("deepseek-harness", status)).toBe("env://dsh/a");
+    expect(governedRealHarnessEnvironment("pi", status)).toBe("env://pi/a");
+    expect(governedRealHarnessEnvironment("morn-native", status)).toBeNull();
   });
 });

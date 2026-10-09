@@ -216,6 +216,7 @@ export interface V115Status {
     pi: {
       mode: "fixture" | "real";
       health: string;
+      configured_execution_environment_ref: string | null;
     };
   };
   execution_environment_attestations: Array<{

@@ -309,7 +309,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
                 .map(str::to_string),
         )
     };
-    let (pi_health, pi_mode) = {
+    let (pi_health, pi_mode, pi_environment_ref) = {
         let provider = pi_harness.lock().expect("pi harness poisoned");
         (
             provider.runtime_health().clone(),
@@ -317,6 +317,9 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
                 morn_harness::PiMode::Fixture => "fixture",
                 morn_harness::PiMode::Real => "real",
             },
+            provider
+                .configured_execution_environment_ref()
+                .map(str::to_string),
         )
     };
     let now = morn_kernel::time::Timestamp::now();
@@ -396,7 +399,8 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             },
             "pi": {
                 "mode": pi_mode,
-                "health": pi_health.state
+                "health": pi_health.state,
+                "configured_execution_environment_ref": pi_environment_ref
             }
         },
         "execution_environment_attestations": execution_environment_attestations.iter().map(|attestation| json!({
