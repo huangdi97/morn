@@ -333,9 +333,19 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             HarnessRuntimeHealthState::Fixture | HarnessRuntimeHealthState::Unconfigured => {
                 return Ok(());
             }
-            HarnessRuntimeHealthState::Configured | HarnessRuntimeHealthState::Initialized => {
+            HarnessRuntimeHealthState::Configured => {
                 (ProviderStatus::Registered, health.reason.clone(), None)
             }
+            HarnessRuntimeHealthState::Initialized if health.ready_for_new_turn_at(now) => (
+                ProviderStatus::Registered,
+                health.reason.clone(),
+                health.remaining_lease_ms(now),
+            ),
+            HarnessRuntimeHealthState::Initialized => (
+                ProviderStatus::Degraded,
+                "runtime initialization lease expired before a settled live turn; fresh preflight is required".to_string(),
+                None,
+            ),
             HarnessRuntimeHealthState::Healthy if health.selectable_at(now) => (
                 ProviderStatus::Healthy,
                 health.reason.clone(),
