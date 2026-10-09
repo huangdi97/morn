@@ -725,7 +725,10 @@ mod tests {
             ActorInstanceId::generate_with("actor"),
             WorkPackageId::generate_with("work"),
         )
-        .with_work_binding(1, morn_kernel::ids::RuntimeBindingId::generate_with("binding"))
+        .with_work_binding(
+            1,
+            morn_kernel::ids::RuntimeBindingId::generate_with("binding"),
+        )
         .unwrap()
         .with_scope_id(handle.scope_id.clone())
         .unwrap()

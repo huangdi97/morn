@@ -61,7 +61,8 @@ impl RuntimeContext {
     }
 
     pub fn proves_pinned_work_execution(&self) -> bool {
-        self.work_generation.is_some_and(|generation| generation > 0)
+        self.work_generation
+            .is_some_and(|generation| generation > 0)
             && self
                 .execution_binding_ref
                 .as_ref()
@@ -149,11 +150,9 @@ mod tests {
             .with_work_binding(1, RuntimeBindingId::generate_with("binding"))
             .unwrap();
         assert!(pinned.proves_pinned_work_execution());
-        assert!(
-            context()
-                .with_work_binding(0, RuntimeBindingId::generate_with("binding"))
-                .is_err()
-        );
+        assert!(context()
+            .with_work_binding(0, RuntimeBindingId::generate_with("binding"))
+            .is_err());
         assert_eq!(
             context()
                 .with_scope_id("scope://one")

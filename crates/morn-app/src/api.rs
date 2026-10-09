@@ -257,23 +257,20 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         .map(|item| json!({ "id": item.id, "version": item.version }))
         .collect();
     let mut provider_catalog = morn_runtime::reference_provider_catalog();
-    let (dsh_health, pi_health) = {
+    let (dsh_harness, pi_harness) = {
         let guard = state.lock();
-        (
-            guard
-                .dsh_harness
-                .lock()
-                .expect("dsh harness poisoned")
-                .runtime_health()
-                .clone(),
-            guard
-                .pi_harness
-                .lock()
-                .expect("pi harness poisoned")
-                .runtime_health()
-                .clone(),
-        )
+        (guard.dsh_harness.clone(), guard.pi_harness.clone())
     };
+    let dsh_health = dsh_harness
+        .lock()
+        .expect("dsh harness poisoned")
+        .runtime_health()
+        .clone();
+    let pi_health = pi_harness
+        .lock()
+        .expect("pi harness poisoned")
+        .runtime_health()
+        .clone();
     let now = morn_kernel::time::Timestamp::now();
     let mut project_runtime_health = |provider_id: &str,
                                       health: &morn_harness::HarnessRuntimeHealth|
@@ -1336,7 +1333,10 @@ async fn workbench(State(state): State<AppState>) -> ApiResult {
     let world = &guard.world;
     let work = &guard.work;
     let durable = &guard.durable;
-    let native_harness = guard.native_harness.lock().expect("native harness poisoned");
+    let native_harness = guard
+        .native_harness
+        .lock()
+        .expect("native harness poisoned");
     let dsh_harness = guard.dsh_harness.lock().expect("dsh harness poisoned");
     let pi_harness = guard.pi_harness.lock().expect("pi harness poisoned");
     let dsh_status = match dsh_harness.mode() {
@@ -1454,7 +1454,10 @@ async fn studio(State(state): State<AppState>) -> ApiResult {
 
 async fn console(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
-    let native_harness = guard.native_harness.lock().expect("native harness poisoned");
+    let native_harness = guard
+        .native_harness
+        .lock()
+        .expect("native harness poisoned");
     let dsh_harness = guard.dsh_harness.lock().expect("dsh harness poisoned");
     let pi_harness = guard.pi_harness.lock().expect("pi harness poisoned");
     let ws = &guard.workspace;

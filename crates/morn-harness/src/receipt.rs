@@ -73,7 +73,9 @@ impl ExecutionReceipt {
 
     pub fn is_pinned_work_evidence(&self) -> bool {
         self.work_package_id.is_some()
-            && self.work_generation.is_some_and(|generation| generation > 0)
+            && self
+                .work_generation
+                .is_some_and(|generation| generation > 0)
             && self.execution_binding_ref.is_some()
             && self
                 .provider_ref
@@ -98,7 +100,9 @@ mod tests {
             ActorInstanceId::generate_with("actor"),
             WorkPackageId::generate_with("work"),
         );
-        assert!(!ExecutionReceipt::from_runtime_context(&base, "dsh", "s").is_pinned_work_evidence());
+        assert!(
+            !ExecutionReceipt::from_runtime_context(&base, "dsh", "s").is_pinned_work_evidence()
+        );
 
         let pinned = base
             .with_work_binding(3, RuntimeBindingId::generate_with("binding"))
