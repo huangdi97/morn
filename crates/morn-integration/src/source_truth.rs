@@ -54,7 +54,10 @@ impl SourceObservationAttestation {
                 "source observation attestation requires id, fact type, objective, source ref, object facts and evidence",
             ));
         }
-        if self.valid_until.is_some_and(|until| until < self.observed_at) {
+        if self
+            .valid_until
+            .is_some_and(|until| until < self.observed_at)
+        {
             return Err(Error::validation(
                 "source observation attestation validity cannot end before observation",
             ));

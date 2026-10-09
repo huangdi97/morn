@@ -845,7 +845,9 @@ async fn v115_work_observe_outcome(
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
     if work.workspace_id != guard.workspace.id {
-        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
     }
     if work.status.phase.is_terminal() {
         return Err(AppError(Error::invalid_state(
@@ -4949,32 +4951,36 @@ mod workspace_boundary_tests {
         {
             let mut guard = state.lock();
             let binding_id = SourceOfTruthBindingId::new(work_binding_id.clone());
-            guard.source_observation_attestations.push(SourceObservationAttestation {
-                attestation_id: "obs-outside".to_string(),
-                workspace_id: guard.workspace.id.clone(),
-                work_package_id: work.id.clone(),
-                source_binding_id: binding_id.clone(),
-                fact_type: "delivery.status".to_string(),
-                objective: "observe delivery".to_string(),
-                source_ref: "system://orders-evil/42".to_string(),
-                observed_facts: json!({"status":"complete"}),
-                evidence_refs: vec!["system://orders-evil/42/receipt".to_string()],
-                observed_at: Timestamp::now(),
-                valid_until: None,
-            });
-            guard.source_observation_attestations.push(SourceObservationAttestation {
-                attestation_id: "obs-grounded".to_string(),
-                workspace_id: guard.workspace.id.clone(),
-                work_package_id: work.id.clone(),
-                source_binding_id: binding_id,
-                fact_type: "delivery.status".to_string(),
-                objective: "observe delivery".to_string(),
-                source_ref: "system://orders/42".to_string(),
-                observed_facts: json!({"status":"complete"}),
-                evidence_refs: vec!["system://orders/42/receipt".to_string()],
-                observed_at: Timestamp::now(),
-                valid_until: None,
-            });
+            guard
+                .source_observation_attestations
+                .push(SourceObservationAttestation {
+                    attestation_id: "obs-outside".to_string(),
+                    workspace_id: guard.workspace.id.clone(),
+                    work_package_id: work.id.clone(),
+                    source_binding_id: binding_id.clone(),
+                    fact_type: "delivery.status".to_string(),
+                    objective: "observe delivery".to_string(),
+                    source_ref: "system://orders-evil/42".to_string(),
+                    observed_facts: json!({"status":"complete"}),
+                    evidence_refs: vec!["system://orders-evil/42/receipt".to_string()],
+                    observed_at: Timestamp::now(),
+                    valid_until: None,
+                });
+            guard
+                .source_observation_attestations
+                .push(SourceObservationAttestation {
+                    attestation_id: "obs-grounded".to_string(),
+                    workspace_id: guard.workspace.id.clone(),
+                    work_package_id: work.id.clone(),
+                    source_binding_id: binding_id,
+                    fact_type: "delivery.status".to_string(),
+                    objective: "observe delivery".to_string(),
+                    source_ref: "system://orders/42".to_string(),
+                    observed_facts: json!({"status":"complete"}),
+                    evidence_refs: vec!["system://orders/42/receipt".to_string()],
+                    observed_at: Timestamp::now(),
+                    valid_until: None,
+                });
         }
 
         let outside = v115_work_observe_outcome(

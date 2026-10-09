@@ -211,7 +211,8 @@ fn configured_source_of_truth_bindings() -> morn_kernel::Result<Vec<SourceOfTrut
     Ok(bindings)
 }
 
-fn configured_source_observation_attestations() -> morn_kernel::Result<Vec<SourceObservationAttestation>> {
+fn configured_source_observation_attestations(
+) -> morn_kernel::Result<Vec<SourceObservationAttestation>> {
     let Ok(path) = std::env::var("MORN_SOURCE_OBSERVATION_ATTESTATIONS_FILE") else {
         return Ok(Vec::new());
     };
