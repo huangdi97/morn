@@ -803,6 +803,24 @@ mod tests {
                     }),
                 ),
                 DSH_METHOD_SESSION_PROMPT => {
+                    let session_id = request
+                        .get("params")
+                        .and_then(|params| params.get("sessionId"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("session-1");
+                    let prompt_text = request
+                        .get("params")
+                        .and_then(|params| params.get("contentBlocks"))
+                        .and_then(Value::as_array)
+                        .and_then(|blocks| blocks.first())
+                        .and_then(|block| block.get("text"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+                    let finish_kind = if prompt_text == "__non_success__" {
+                        "error"
+                    } else {
+                        "completed"
+                    };
                     write(
                         &mut stdout,
                         json!({"jsonrpc":"2.0","id":id,"result":{"messageId":"message-1"}}),
@@ -813,7 +831,7 @@ mod tests {
                             "jsonrpc":"2.0",
                             "method":"session.event",
                             "params":{
-                                "sessionId":"session-1",
+                                "sessionId":session_id,
                                 "event":{
                                     "type":"agent/inbox/spliced",
                                     "data":{"inserted":[{"id":"message-1"}]}
@@ -827,7 +845,7 @@ mod tests {
                             "jsonrpc":"2.0",
                             "method":"session.event",
                             "params":{
-                                "sessionId":"session-1",
+                                "sessionId":session_id,
                                 "event":{
                                     "type":"assistant/message",
                                     "data":{"message":{"content":[
@@ -843,10 +861,10 @@ mod tests {
                             "jsonrpc":"2.0",
                             "method":"session.event",
                             "params":{
-                                "sessionId":"session-1",
+                                "sessionId":session_id,
                                 "event":{
                                     "type":"turn/end",
-                                    "data":{"reason":{"kind":"completed"}}
+                                    "data":{"reason":{"kind":finish_kind}}
                                 }
                             }
                         }),
@@ -856,7 +874,7 @@ mod tests {
                         json!({
                             "jsonrpc":"2.0",
                             "method":"session.status",
-                            "params":{"sessionId":"session-1","status":"idle"}
+                            "params":{"sessionId":session_id,"status":"idle"}
                         }),
                     );
                 }

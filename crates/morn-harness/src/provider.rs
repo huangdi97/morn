@@ -816,6 +816,13 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                 if input.trim().is_empty() {
                     return Err(Error::validation("DSH prompt must be non-empty"));
                 }
+
+                // Bootstrap/handshake happens before we mutate the session into
+                // a running state. A configuration or initialize failure means
+                // no prompt was dispatched and must not strand the session as
+                // "running" or manufacture OUTCOME_UNKNOWN.
+                self.ensure_real_client()?;
+
                 {
                     let state = self
                         .sessions
@@ -839,7 +846,9 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                 }
 
                 let run = self
-                    .ensure_real_client()?
+                    .real_client
+                    .as_mut()
+                    .ok_or_else(|| Error::internal("DSH SDK client missing after initialization"))?
                     .run_text_prompt(session_id, input);
                 let state = self
                     .sessions
@@ -852,20 +861,14 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                         &run.notifications,
                     ));
                 }
-                if let Ok(settled) = &run {
-                    self.runtime_health.mark_live_turn(
-                        format!(
-                            "live DSH SDK turn settled with finish reason {}",
-                            settled.finish_reason.as_deref().unwrap_or("missing")
-                        ),
-                        format!("runtime://deepseek-harness/session/{session_id}/settled-turn"),
-                    );
-                } else if let Err(error) = &run {
-                    self.runtime_health
-                        .mark_degraded(format!("DSH SDK turn failed to settle: {error}"));
-                }
                 match run {
                     Ok(run) if run.completed_successfully() => {
+                        self.runtime_health.mark_live_turn(
+                            "live DSH SDK turn completed successfully",
+                            format!(
+                                "runtime://deepseek-harness/session/{session_id}/settled-turn"
+                            ),
+                        );
                         state.status = "idle".to_string();
                         state.events.push(ExecutionEvent::new(
                             state.ctx.workspace_id.clone(),
@@ -885,6 +888,9 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     }
                     Ok(run) => {
                         let reason = run.finish_reason.as_deref().unwrap_or("missing");
+                        self.runtime_health.mark_degraded(format!(
+                            "DSH SDK turn settled with non-success finish reason {reason}"
+                        ));
                         state.status = "idle-non-success".to_string();
                         state.events.push(ExecutionEvent::new(
                             state.ctx.workspace_id.clone(),
@@ -901,6 +907,8 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                         )))
                     }
                     Err(error) => {
+                        self.runtime_health
+                            .mark_degraded(format!("DSH SDK turn failed to settle: {error}"));
                         state.status = "outcome-unknown".to_string();
                         state.events.push(ExecutionEvent::new(
                             state.ctx.workspace_id.clone(),
@@ -1078,6 +1086,123 @@ mod dsh_provider_tests {
             ..ctx
         };
         assert!(provider.require_pinned_real_environment(&pinned).is_ok());
+    }
+
+    fn real_wire_fixture_provider() -> (DeepSeekHarnessProvider, RuntimeContext, ProviderHandle) {
+        use morn_kernel::ids::{ActorInstanceId, WorkPackageId};
+        use morn_kernel::{ExecutionClass, ExecutionGuarantee};
+
+        let executable = std::env::current_exe().unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        let home = std::env::temp_dir().join(format!(
+            "morn-dsh-provider-home-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let environment_ref = "env://container/dsh-provider-test";
+        let mut config = DshSdkConfig::profile_sdk(
+            cwd.to_string_lossy(),
+            "fixture-provider",
+            "fixture-model",
+        )
+        .with_dsh_home(home.to_string_lossy())
+        .with_execution_environment_ref(environment_ref);
+        config.command = executable.to_string_lossy().to_string();
+        config.args = vec![
+            "--exact".to_string(),
+            "dsh_sdk::tests::fake_sdk_runtime".to_string(),
+            "--ignored".to_string(),
+            "--nocapture".to_string(),
+        ];
+        config.request_timeout_ms = 10_000;
+        config.turn_timeout_ms = 10_000;
+
+        let workspace = WorkspaceId::generate();
+        let mut provider = DeepSeekHarnessProvider::with_real_sdk(config);
+        let scope = CapabilityScope::new(
+            crate::scope::ScopeKind::ExecutionRun,
+            None,
+            workspace.clone(),
+            "real-dsh-wire-fixture",
+        )
+        .with_restriction(DSH_REAL_E0_SCOPE_RESTRICTION);
+        let handle = provider.mount(scope).unwrap();
+        let ctx = RuntimeContext::new(
+            workspace,
+            ActorInstanceId::generate_with("actor"),
+            WorkPackageId::generate_with("work"),
+        )
+        .with_execution_environment(
+            environment_ref,
+            ExecutionClass::Container,
+            vec![
+                ExecutionGuarantee::FilesystemReadPolicy,
+                ExecutionGuarantee::FilesystemWritePolicy,
+                ExecutionGuarantee::ProcessBoundary,
+                ExecutionGuarantee::ResourceLimits,
+                ExecutionGuarantee::NetworkEgressPolicy,
+                ExecutionGuarantee::SecretIndirection,
+                ExecutionGuarantee::RuntimeAttestation,
+            ],
+        )
+        .unwrap();
+        (provider, ctx, handle)
+    }
+
+    #[test]
+    fn real_dsh_provider_completes_official_sdk_wire_contract_without_fake_lifecycle() {
+        let (mut provider, ctx, handle) = real_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        assert_eq!(
+            provider.runtime_health().state,
+            HarnessRuntimeHealthState::Initialized
+        );
+
+        let output = provider.send(&session.id, "hello").unwrap();
+        assert_eq!(output.text, "hello from fake sdk");
+        assert_eq!(
+            provider.runtime_health().state,
+            HarnessRuntimeHealthState::Healthy
+        );
+        assert_eq!(provider.runtime_health().settled_turns, 1);
+        assert!(provider.runtime_health().selectable_at(Timestamp::now()));
+
+        let snapshot = provider.inspect(&session.id).unwrap();
+        assert_eq!(snapshot.status, "idle");
+        let events = provider.stream_events(&session.id);
+        assert!(events.iter().any(|event| event.kind == ExecutionEventKind::ModelResponse));
+        assert!(events.iter().any(|event| event.kind == ExecutionEventKind::Checkpoint));
+
+        assert!(!provider.features().interrupt);
+        assert!(!provider.features().resume);
+        assert!(!provider.features().session_close);
+        assert!(provider.interrupt(&session.id).is_err());
+        assert!(provider.resume(&session.id).is_err());
+        assert!(provider.terminate(&session.id).is_err());
+
+        provider.unmount(&handle).unwrap();
+        provider.shutdown_real_runtime().unwrap();
+        assert_eq!(
+            provider.runtime_health().state,
+            HarnessRuntimeHealthState::Closed
+        );
+    }
+
+    #[test]
+    fn non_successful_real_dsh_turn_never_refreshes_provider_health() {
+        let (mut provider, ctx, _handle) = real_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        assert!(provider.send(&session.id, "__non_success__").is_err());
+        assert_eq!(
+            provider.runtime_health().state,
+            HarnessRuntimeHealthState::Degraded
+        );
+        assert_eq!(provider.runtime_health().settled_turns, 0);
+        assert!(!provider.runtime_health().selectable_at(Timestamp::now()));
+        assert_eq!(
+            provider.inspect(&session.id).unwrap().status,
+            "idle-non-success"
+        );
+        provider.shutdown_real_runtime().unwrap();
     }
 
     #[test]
