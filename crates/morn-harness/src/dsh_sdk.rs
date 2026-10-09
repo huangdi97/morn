@@ -875,6 +875,12 @@ mod tests {
                             }
                         }),
                     );
+                    if prompt_text == "__hang__" {
+                        // Parent timeout/containment tests intentionally leave this
+                        // owned turn unsettled until the subprocess is reaped.
+                        std::thread::sleep(std::time::Duration::from_secs(30));
+                        continue;
+                    }
                     write(
                         &mut stdout,
                         json!({

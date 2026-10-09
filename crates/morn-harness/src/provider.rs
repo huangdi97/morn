@@ -965,16 +965,25 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                         )))
                     }
                     Err(error) => {
-                        self.runtime_health
-                            .mark_degraded(format!("DSH SDK turn failed to settle: {error}"));
-                        state.status = "outcome-unknown".to_string();
+                        // The current official SDK wire has no mid-turn cancel. Once
+                        // settlement is lost, keeping the subprocess alive would permit
+                        // unobserved background execution after Morn already returned an
+                        // error. This provider is E0-only, so containment is to reap the
+                        // owned runtime process and require a fresh handshake for any
+                        // later Work/session.
+                        let _owned_runtime = self.real_client.take();
+                        self.real_runtime_version = None;
+                        self.runtime_health.mark_degraded(format!(
+                            "DSH SDK turn failed to settle; owned runtime reaped: {error}"
+                        ));
+                        state.status = "outcome-unknown-runtime-reaped".to_string();
                         state.events.push(ExecutionEvent::new(
                             state.ctx.workspace_id.clone(),
                             session_id.to_string(),
                             ExecutionEventKind::Failed,
-                            "DSH SDK turn lost definitive settlement; blind retry is forbidden",
+                            "DSH SDK turn lost definitive settlement; owned runtime reaped and blind retry forbidden",
                         ));
-                        state.last_event = "dsh_turn_outcome_unknown".to_string();
+                        state.last_event = "dsh_turn_outcome_unknown_runtime_reaped".to_string();
                         Err(error)
                     }
                 }
@@ -1274,6 +1283,83 @@ mod dsh_provider_tests {
             provider.runtime_health().state,
             HarnessRuntimeHealthState::Closed
         );
+    }
+
+    #[test]
+    fn unsettled_real_dsh_turn_reaps_owned_runtime_before_returning() {
+        use morn_kernel::ids::{ActorInstanceId, WorkPackageId};
+        use morn_kernel::{ExecutionClass, ExecutionGuarantee};
+
+        let executable = std::env::current_exe().unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        let home =
+            std::env::temp_dir().join(format!("morn-dsh-timeout-home-{}", uuid::Uuid::new_v4()));
+        let environment_ref = "env://container/dsh-timeout-test";
+        let mut config =
+            DshSdkConfig::profile_sdk(cwd.to_string_lossy(), "fixture-provider", "fixture-model")
+                .with_dsh_home(home.to_string_lossy())
+                .with_execution_environment_ref(environment_ref);
+        config.command = executable.to_string_lossy().to_string();
+        config.args = vec![
+            "--exact".to_string(),
+            "dsh_sdk::tests::fake_sdk_runtime".to_string(),
+            "--ignored".to_string(),
+            "--nocapture".to_string(),
+        ];
+        config.request_timeout_ms = 2_000;
+        config.turn_timeout_ms = 100;
+
+        let workspace = WorkspaceId::generate();
+        let mut provider = DeepSeekHarnessProvider::with_real_sdk(config);
+        let scope = CapabilityScope::new(
+            crate::scope::ScopeKind::ExecutionRun,
+            None,
+            workspace.clone(),
+            "real-dsh-timeout",
+        )
+        .with_restriction(DSH_REAL_E0_SCOPE_RESTRICTION);
+        let handle = provider.mount(scope).unwrap();
+        let ctx = RuntimeContext::new(
+            workspace,
+            ActorInstanceId::generate_with("actor"),
+            WorkPackageId::generate_with("work"),
+        )
+        .with_work_binding(
+            1,
+            morn_kernel::ids::RuntimeBindingId::generate_with("binding"),
+        )
+        .unwrap()
+        .with_scope_id(handle.scope_id)
+        .unwrap()
+        .with_execution_environment(
+            environment_ref,
+            ExecutionClass::Container,
+            vec![
+                ExecutionGuarantee::FilesystemReadPolicy,
+                ExecutionGuarantee::FilesystemWritePolicy,
+                ExecutionGuarantee::ProcessBoundary,
+                ExecutionGuarantee::ResourceLimits,
+                ExecutionGuarantee::NetworkEgressPolicy,
+                ExecutionGuarantee::SecretIndirection,
+                ExecutionGuarantee::RuntimeAttestation,
+            ],
+        )
+        .unwrap();
+
+        let session = provider.start(&ctx).unwrap();
+        let error = provider.send(&session.id, "__hang__").unwrap_err();
+        assert!(format!("{error}").contains("timed out"));
+        assert!(provider.real_client.is_none());
+        assert!(provider.runtime_version().is_none());
+        assert_eq!(
+            provider.runtime_health().state,
+            HarnessRuntimeHealthState::Degraded
+        );
+        assert_eq!(
+            provider.inspect(&session.id).unwrap().status,
+            "outcome-unknown-runtime-reaped"
+        );
+        assert!(provider.send(&session.id, "do not retry").is_err());
     }
 
     #[test]
