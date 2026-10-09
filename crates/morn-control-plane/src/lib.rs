@@ -356,6 +356,23 @@ impl WorkProgressController {
                 work.mark_observed();
                 return;
             }
+            if receipt.outcome == "outcome-unknown" {
+                let mut uncertain = WorkCondition::new(
+                    "ExecutorOutcomeKnown",
+                    ConditionStatus::False,
+                );
+                uncertain.reason = format!(
+                    "executor receipt {} lost definitive settlement; reconciliation is required before any new execution",
+                    receipt.id
+                );
+                uncertain.evidence_refs = std::iter::once(receipt.id.to_string())
+                    .chain(receipt.trace_refs.iter().cloned())
+                    .collect();
+                work.set_condition(uncertain);
+                work.status.phase = WorkPhase::Reconciling;
+                work.mark_observed();
+                return;
+            }
             if receipt.ended_at.is_some()
                 && receipt.outcome == "completed"
                 && inputs.workflow.is_none()
@@ -363,6 +380,14 @@ impl WorkProgressController {
                 && inputs.acceptance.is_none()
                 && inputs.attempt.is_none()
             {
+                let mut known =
+                    WorkCondition::new("ExecutorOutcomeKnown", ConditionStatus::True);
+                known.reason = format!(
+                    "executor receipt {} settled as completed; business outcome still requires independent observation",
+                    receipt.id
+                );
+                known.evidence_refs = vec![receipt.id.to_string()];
+                work.set_condition(known);
                 // Harness completion is execution evidence, not a business outcome.
                 work.status.phase = WorkPhase::Waiting;
                 work.mark_observed();
@@ -1956,6 +1981,45 @@ mod control_plane_persistence_scope_tests {
         record.observation.business_key = attempt.business_key.clone();
         assert!(store.save_reconciliation(&other, &record).is_err());
         store.save_reconciliation(&work, &record).unwrap();
+    }
+
+    #[test]
+    fn outcome_unknown_harness_receipt_forces_reconciliation_before_new_execution() {
+        let mut work = fixture_work();
+        work.status.phase = WorkPhase::Ready;
+        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        let mut receipt = morn_harness::ExecutionReceipt::from_runtime_context(
+            &morn_harness::RuntimeContext::new(
+                work.workspace_id.clone(),
+                morn_kernel::ids::ActorInstanceId::generate_with("actor"),
+                work.id.clone(),
+            )
+            .with_work_binding(work.generation, binding.id.clone())
+            .unwrap(),
+            "provider:a",
+            "session-a",
+        );
+        receipt.outcome = "outcome-unknown".to_string();
+        receipt.ended_at = None;
+        receipt.trace_refs.push("provider://ambiguous-turn".to_string());
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                binding: Some(&binding),
+                receipt: Some(&receipt),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(work.status.phase, WorkPhase::Reconciling);
+        assert!(!work.condition_is_true("ExecutorOutcomeKnown"));
+        assert!(work
+            .status
+            .conditions
+            .iter()
+            .any(|condition| condition.condition_type == "ExecutorOutcomeKnown"
+                && condition.status == ConditionStatus::False));
     }
 
     #[test]
