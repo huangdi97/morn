@@ -2013,8 +2013,7 @@ async fn v115_work_review_outcome(
             authorization.authorizes(
                 &reviewer.principal_id,
                 acting_role,
-                &work.id,
-                work.generation,
+                (&work.id, work.generation),
                 &outcome.id,
                 disposition,
                 now,

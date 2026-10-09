@@ -68,8 +68,7 @@ impl AcceptanceReviewAuthorization {
         &self,
         principal_id: &PrincipalId,
         role: &str,
-        work_package_id: &WorkPackageId,
-        work_generation: u64,
+        work_identity: (&WorkPackageId, u64),
         outcome_id: &OutcomeRecordId,
         disposition: AcceptanceDisposition,
         now: Timestamp,
@@ -77,8 +76,8 @@ impl AcceptanceReviewAuthorization {
         self.validate().is_ok()
             && &self.principal_id == principal_id
             && self.acting_role == role
-            && &self.work_package_id == work_package_id
-            && self.work_generation == work_generation
+            && &self.work_package_id == work_identity.0
+            && self.work_generation == work_identity.1
             && &self.outcome_id == outcome_id
             && self.disposition == disposition
             && self.issued_at <= now
@@ -168,8 +167,7 @@ mod tests {
         assert!(authorization.authorizes(
             &principal,
             "independent-reviewer",
-            &work,
-            2,
+            (&work, 2),
             &outcome,
             AcceptanceDisposition::Accept,
             Timestamp::from_millis(15),
@@ -177,8 +175,7 @@ mod tests {
         assert!(!authorization.authorizes(
             &principal,
             "independent-reviewer",
-            &work,
-            2,
+            (&work, 2),
             &outcome,
             AcceptanceDisposition::Reject,
             Timestamp::from_millis(15),
@@ -186,8 +183,7 @@ mod tests {
         assert!(!authorization.authorizes(
             &principal,
             "independent-reviewer",
-            &work,
-            2,
+            (&work, 2),
             &outcome,
             AcceptanceDisposition::Accept,
             Timestamp::from_millis(21),
