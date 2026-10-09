@@ -295,14 +295,10 @@ pub fn exact_runtime_identity(provider: &str, version: &str, digest: &str) -> Re
 
 fn validate_runtime_identity(identity: &str) -> Result<()> {
     let (provider_version, digest) = identity.rsplit_once('#').ok_or_else(|| {
-        Error::validation(
-            "runtime identity must use provider@version#sha256:<64-hex>",
-        )
+        Error::validation("runtime identity must use provider@version#sha256:<64-hex>")
     })?;
     let (provider, version) = provider_version.rsplit_once('@').ok_or_else(|| {
-        Error::validation(
-            "runtime identity must use provider@version#sha256:<64-hex>",
-        )
+        Error::validation("runtime identity must use provider@version#sha256:<64-hex>")
     })?;
     let expected = exact_runtime_identity(provider, version, digest)?;
     if expected != identity {
@@ -638,18 +634,8 @@ mod tests {
         evidence.valid_until = Timestamp::from_millis(150);
         evidence.runtime_identities = vec![identity.clone()];
         assert!(evidence.validate().is_ok());
-        assert!(evidence.attests_runtime_identity(
-            "deepseek-harness",
-            "1.2.3",
-            &digest,
-            now,
-        ));
-        assert!(!evidence.attests_runtime_identity(
-            "deepseek-harness",
-            "1.2.4",
-            &digest,
-            now,
-        ));
+        assert!(evidence.attests_runtime_identity("deepseek-harness", "1.2.3", &digest, now,));
+        assert!(!evidence.attests_runtime_identity("deepseek-harness", "1.2.4", &digest, now,));
         assert!(!evidence.attests_runtime_identity(
             "deepseek-harness",
             "1.2.3",
@@ -657,7 +643,8 @@ mod tests {
             Timestamp::from_millis(151),
         ));
 
-        evidence.runtime_identities = vec!["deepseek-harness@1.2.3#sha256:not-a-digest".to_string()];
+        evidence.runtime_identities =
+            vec!["deepseek-harness@1.2.3#sha256:not-a-digest".to_string()];
         assert!(evidence.validate().is_err());
     }
 
