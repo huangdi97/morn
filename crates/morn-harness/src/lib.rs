@@ -15,6 +15,7 @@ pub mod receipt;
 pub mod scope;
 pub mod smoke;
 pub mod spec;
+mod subprocess_env;
 
 pub use binding::{HarnessBinding, RuntimeBinding};
 pub use context::RuntimeContext;

@@ -142,6 +142,10 @@ impl PiRpcClient {
         let mut command = Command::new(&config.command);
         command
             .args(config.command_line())
+            .env_clear()
+            .envs(crate::subprocess_env::scrubbed_environment(
+                "MORN_PI_ENV_PASSTHROUGH",
+            ))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());

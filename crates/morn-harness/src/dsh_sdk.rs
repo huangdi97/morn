@@ -205,6 +205,10 @@ impl DshSdkStdioClient {
         command
             .args(&config.args)
             .current_dir(&config.cwd)
+            .env_clear()
+            .envs(crate::subprocess_env::scrubbed_environment(
+                "MORN_DSH_ENV_PASSTHROUGH",
+            ))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
@@ -412,6 +416,11 @@ impl DshSdkStdioClient {
         let deadline = Instant::now() + self.request_timeout;
         loop {
             let incoming = self.read_frame_until(deadline, method)?;
+            if incoming.get("id").is_some() && incoming.get("method").is_some() {
+                return Err(Error::external(
+                    "DSH SDK sent an unsupported server-to-client request",
+                ));
+            }
             if incoming.get("id").and_then(Value::as_u64) == Some(id) {
                 if let Some(error) = incoming.get("error") {
                     return Err(Error::external(format!(
@@ -606,6 +615,28 @@ mod tests {
             ..completed
         };
         assert!(!missing.completed_successfully());
+    }
+
+    #[test]
+    fn sdk_subprocess_environment_is_explicitly_scrubbed() {
+        let names = crate::subprocess_env::allowed_environment_names(
+            Some("CUSTOM_PROXY_TOKEN,MY_PROVIDER_KEY"),
+        );
+        for secret in [
+            "GITHUB_TOKEN",
+            "AWS_SECRET_ACCESS_KEY",
+            "DATABASE_URL",
+            "OPENAI_API_KEY",
+            "DEEPSEEK_API_KEY",
+        ] {
+            assert!(
+                !names.contains(secret),
+                "{secret} must require explicit passthrough"
+            );
+        }
+        assert!(names.contains("PATH"));
+        assert!(names.contains("CUSTOM_PROXY_TOKEN"));
+        assert!(names.contains("MY_PROVIDER_KEY"));
     }
 
     #[test]
