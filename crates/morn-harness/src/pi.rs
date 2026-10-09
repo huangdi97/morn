@@ -831,6 +831,30 @@ mod tests {
     }
 
     #[test]
+    fn real_pi_preflight_refreshes_expired_initialization_with_get_state() {
+        let (mut provider, _ctx, _handle) = real_pi_wire_fixture_provider();
+        assert_eq!(provider.preflight_real_runtime().unwrap(), "1.0.0");
+        let first_observed = provider.runtime_health().observed_at;
+        provider.runtime_health.health_valid_until = Some(morn_kernel::time::Timestamp::from_millis(
+            morn_kernel::time::Timestamp::now().millis().saturating_sub(1),
+        ));
+        assert!(!provider
+            .runtime_health()
+            .ready_for_new_turn_at(morn_kernel::time::Timestamp::now()));
+
+        assert_eq!(provider.preflight_real_runtime().unwrap(), "1.0.0");
+        assert_eq!(
+            provider.runtime_health().state,
+            crate::provider::HarnessRuntimeHealthState::Initialized
+        );
+        assert!(provider
+            .runtime_health()
+            .ready_for_new_turn_at(morn_kernel::time::Timestamp::now()));
+        assert!(provider.runtime_health().observed_at >= first_observed);
+        provider.shutdown_real_runtime().unwrap();
+    }
+
+    #[test]
     fn real_pi_scope_admission_requires_exact_scope_identity() {
         let (provider, ctx, handle) = real_pi_wire_fixture_provider();
         let mut missing = ctx.clone();
