@@ -725,10 +725,36 @@ mod tests {
                     response("get_state", json!({"agent":{"status":"idle"}})),
                 ),
                 "prompt" => {
+                    let prompt_text = request
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
                     write(
                         &mut stdout,
                         response("prompt", json!({"disposition":"started"})),
                     );
+                    if prompt_text == "__tool_activity__" {
+                        write(
+                            &mut stdout,
+                            json!({
+                                "type":"tool_execution_start",
+                                "toolCallId":"call-1",
+                                "toolName":"bash",
+                                "args":{"command":"echo fixture"}
+                            }),
+                        );
+                        write(
+                            &mut stdout,
+                            json!({
+                                "type":"tool_execution_end",
+                                "toolCallId":"call-1",
+                                "toolName":"bash",
+                                "result":{"content":[]},
+                                "isError":false,
+                                "durationMs":1
+                            }),
+                        );
+                    }
                     write(&mut stdout, json!({"type":"agent_settled"}));
                 }
                 "get_last_assistant_text" => write(
