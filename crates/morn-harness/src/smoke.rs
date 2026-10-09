@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use morn_kernel::error::Result;
 
 use crate::context::RuntimeContext;
+use crate::event::ExecutionEventKind;
 use crate::provider::HarnessProvider;
 use crate::scope::{CapabilityScope, ScopeKind};
 
@@ -105,26 +106,45 @@ pub fn run_harness_smoke(
         None => false,
     };
 
+    let governed_external_runtime = !provider.required_scope_restrictions().is_empty();
     let scoped_execution = session_id
         .as_ref()
-        .map(|id| provider.send(id, "run smoke").is_ok())
-        .unwrap_or(false);
-
-    let events_normalized = session_id
-        .as_ref()
         .map(|id| {
-            let events = provider.stream_events(id);
-            !events.is_empty()
-                && events.iter().all(|event| {
-                    event.workspace_id == scoped_ctx.workspace_id
-                        && event.session_id == *id
-                        && !event.summary.trim().is_empty()
-                })
+            provider
+                .send(
+                    id,
+                    "Return exactly MORN_PROVIDER_SMOKE_OK. Do not call tools, access files, use the network, or modify any external system.",
+                )
+                .is_ok()
         })
         .unwrap_or(false);
 
-    // Providers never mutate canonical state: they only emit events (mediated).
-    let action_gateway_mediated = true;
+    let events = session_id
+        .as_ref()
+        .map(|id| provider.stream_events(id))
+        .unwrap_or_default();
+    let events_normalized = session_id.as_ref().is_some_and(|id| {
+        !events.is_empty()
+            && events.iter().all(|event| {
+                event.workspace_id == scoped_ctx.workspace_id
+                    && event.session_id.as_str() == id.as_str()
+                    && !event.summary.trim().is_empty()
+            })
+    });
+    let tool_activity = events.iter().any(|event| {
+        matches!(
+            event.kind,
+            ExecutionEventKind::ToolProposed
+                | ExecutionEventKind::ToolStarted
+                | ExecutionEventKind::ToolCompleted
+                | ExecutionEventKind::ToolFailed
+        )
+    });
+
+    // Real external harnesses are admitted only as E0 executors. During this
+    // live smoke they receive an explicit no-tool prompt; any tool lifecycle
+    // event therefore proves the provider escaped the intended mediation path.
+    let action_gateway_mediated = !governed_external_runtime || !tool_activity;
     let provenance_preserved = !scoped_ctx.provenance_refs.is_empty();
 
     let features = provider.features();
@@ -149,7 +169,9 @@ pub fn run_harness_smoke(
         events_normalized,
         provenance_preserved,
         teardown_ok,
-        detail: if features.session_close {
+        detail: if governed_external_runtime && tool_activity {
+            "smoke observed tool activity despite an explicit E0/no-tool probe".to_string()
+        } else if features.session_close {
             "smoke contract complete".to_string()
         } else {
             "smoke contract complete; per-session close is unsupported and was not fabricated".to_string()
