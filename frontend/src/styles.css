@@ -491,3 +491,22 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .governed-outcome-grid { grid-template-columns: 1fr; }
   .governed-outcome-facts { grid-column: auto; }
 }
+
+.ui-extension-safe-data {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.ui-extension-safe-json {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #34445d;
+  border-radius: 10px;
+  background: #101927;
+  font-size: 12px;
+  line-height: 1.5;
+}

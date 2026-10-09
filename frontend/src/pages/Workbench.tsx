@@ -32,6 +32,95 @@ export function biolabEnabled(domainPacks: string[]): boolean {
   return domainPacks.includes("biolab-reference");
 }
 
+export function uiExtensionEnabledForProfiles(
+  requiredProfile: string | null,
+  activeProfiles: string[],
+): boolean {
+  return requiredProfile === null || activeProfiles.includes(requiredProfile);
+}
+
+type UiExtension = UiExtensionRegistry["extensions"][number];
+
+function safeExtensionPreview(payload: unknown): string {
+  const serialized = JSON.stringify(payload, null, 2);
+  if (!serialized) return "No serializable data";
+  return serialized.length > 8000
+    ? `${serialized.slice(0, 8000)}\n… payload truncated by safe renderer`
+    : serialized;
+}
+
+function UiExtensionData({
+  extension,
+  enabled,
+}: {
+  extension: UiExtension;
+  enabled: boolean;
+}) {
+  const [payload, setPayload] = useState<unknown>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !extension.data_endpoint) {
+      setPayload(null);
+      setLoadError(null);
+      return;
+    }
+    if (!extension.data_endpoint.startsWith("/api/")) {
+      setPayload(null);
+      setLoadError("Unsafe extension data endpoint rejected.");
+      return;
+    }
+    const path = extension.data_endpoint.slice(4);
+    apiGet<unknown>(path)
+      .then((value) => {
+        setPayload(value);
+        setLoadError(null);
+      })
+      .catch((error: Error) => {
+        setPayload(null);
+        setLoadError(error.message);
+      });
+  }, [enabled, extension.data_endpoint]);
+
+  if (!extension.data_endpoint) return null;
+  if (!enabled) return <p className="work-focus-empty">Profile gate blocks extension data access.</p>;
+  if (loadError) return <p role="alert">Extension data unavailable: {loadError}</p>;
+  if (payload === null) return <Loading />;
+
+  if (
+    extension.renderer === "key-value" &&
+    typeof payload === "object" &&
+    payload !== null &&
+    !Array.isArray(payload)
+  ) {
+    const fields = Object.entries(payload as Record<string, unknown>)
+      .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value) || value === null)
+      .slice(0, 12);
+    if (fields.length > 0) {
+      return (
+        <div className="ui-extension-safe-data">
+          {fields.map(([key, value]) => (
+            <KeyValue key={key} k={key} v={String(value ?? "null")} />
+          ))}
+        </div>
+      );
+    }
+  }
+
+  if (extension.renderer === "status" && typeof payload === "object" && payload !== null) {
+    const status =
+      Object.entries(payload as Record<string, unknown>).find(
+        ([key, value]) => /status|state|phase/i.test(key) && typeof value === "string",
+      )?.[1] ?? "available";
+    return <StatusPill value={String(status)} />;
+  }
+
+  return (
+    <pre className="ui-extension-safe-json" aria-label={`${extension.title} data`}>
+      {safeExtensionPreview(payload)}
+    </pre>
+  );
+}
 
 function textField(record: Record<string, unknown>, field: string): string | null {
   return typeof record[field] === "string" ? (record[field] as string) : null;
@@ -1743,29 +1832,51 @@ export default function Workbench() {
 
         {uiExtensions?.extensions
           .filter((extension) => extension.surface === "workbench")
-          .map((extension) => (
-            <Card key={extension.id} title={`Extension · ${extension.title}`}>
-              <KeyValue k="Domain" v={extension.domain} />
-              <KeyValue k="Slot" v={extension.slot} />
-              <KeyValue k="Renderer" v={extension.renderer} />
-              <KeyValue
-                k="Safety model"
-                v={uiExtensions.arbitrary_remote_js ? "remote JS enabled" : "declarative / no arbitrary remote JS"}
-              />
-              {extension.actions.length > 0 && (
-                <div className="page-actions" style={{ marginTop: 8 }}>
-                  {extension.actions.map((action) => (
-                    <button
-                      key={action.id}
-                      onClick={() => runUiExtensionAction(action.method, action.endpoint)}
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </Card>
-          ))}
+          .map((extension) => {
+            const activeProfiles = v115Control?.work.map((work) => work.spec.profile_ref) ?? [];
+            const enabled = uiExtensionEnabledForProfiles(
+              extension.required_profile,
+              activeProfiles,
+            );
+            return (
+              <Card key={extension.id} title={`Extension · ${extension.title}`}>
+                <KeyValue k="Domain" v={extension.domain} />
+                <KeyValue k="Slot" v={extension.slot} />
+                <KeyValue k="Renderer" v={extension.renderer} />
+                <KeyValue
+                  k="Required profile"
+                  v={extension.required_profile ?? "Any active profile"}
+                />
+                <KeyValue
+                  k="Profile gate"
+                  v={<StatusPill value={enabled ? "Eligible" : "Blocked"} />}
+                />
+                <KeyValue
+                  k="Safety model"
+                  v={uiExtensions.arbitrary_remote_js ? "remote JS enabled" : "declarative / no arbitrary remote JS"}
+                />
+                <UiExtensionData extension={extension} enabled={enabled} />
+                {extension.actions.length > 0 && (
+                  <div className="page-actions" style={{ marginTop: 8 }}>
+                    {extension.actions.map((action) => (
+                      <button
+                        key={action.id}
+                        disabled={!enabled}
+                        title={
+                          action.authority_semantic
+                            ? `Backend authority semantic: ${action.authority_semantic}`
+                            : "Presentation action; backend enforcement remains authoritative"
+                        }
+                        onClick={() => runUiExtensionAction(action.method, action.endpoint)}
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
 
         {v115Control && (
           <Card title="v11.5 Durable Work Truth">

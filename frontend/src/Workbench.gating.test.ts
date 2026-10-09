@@ -6,6 +6,7 @@ import type { V115ControlPlaneData } from "./api";
 import {
   biolabEnabled,
   CanonicalWorkOverview,
+  uiExtensionEnabledForProfiles,
   governedRealHarnessEnvironment,
   ValueAssessmentPanel,
   workEvidenceTrace,
@@ -19,6 +20,25 @@ describe("domain-gated UI extension point", () => {
 
   it("enabled only when the backend advertises the biolab-reference pack", () => {
     expect(biolabEnabled(["biolab-reference"])).toBe(true);
+  });
+});
+
+describe("declarative UI extension profile gate", () => {
+  it("allows profile-neutral extensions but blocks mismatched profile declarations", () => {
+    expect(uiExtensionEnabledForProfiles(null, [])).toBe(true);
+    expect(
+      uiExtensionEnabledForProfiles(
+        "morn.factory.readonly@1.0.0",
+        ["morn.factory.readonly@1.0.0"],
+      ),
+    ).toBe(true);
+    expect(
+      uiExtensionEnabledForProfiles(
+        "morn.enterprise@1.0.0",
+        ["morn.factory.readonly@1.0.0"],
+      ),
+    ).toBe(false);
+    expect(uiExtensionEnabledForProfiles("morn.enterprise@1.0.0", [])).toBe(false);
   });
 });
 
