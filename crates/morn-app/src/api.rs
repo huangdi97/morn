@@ -935,6 +935,117 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
             .store
             .load_record::<morn_runtime::ExecutionBinding>("execution_binding_v115", binding_id)?
             .ok_or_else(|| AppError(Error::not_found(format!("ExecutionBinding {binding_id}"))))?;
+
+        // An immutable binding is historical provenance, not a perpetual lease
+        // to issue new effects. Re-check the current capability/admission and
+        // exact provider identity immediately before every new E0 execution.
+        let capability = guard
+            .v115_capabilities
+            .iter()
+            .find(|record| record.manifest.id.as_str() == binding.capability_manifest_ref)
+            .ok_or_else(|| {
+                AppError(Error::invalid_state(
+                    "bound capability is no longer present in the canonical capability catalog",
+                ))
+            })?;
+        if !matches!(
+            capability.stage,
+            morn_capability::CapabilityStage::Qualified
+                | morn_capability::CapabilityStage::Admitted
+        ) {
+            return Err(AppError(Error::invalid_state(
+                "bound capability is suspended, retired, or no longer qualified for new execution",
+            )));
+        }
+        capability.manifest.validate_governance()?;
+        if capability.manifest.authority.maximum_effect
+            != morn_capability::EffectClass::E0LifecycleReversible
+        {
+            return Err(AppError(Error::not_authorized(
+                "bound capability no longer satisfies the E0 execution ceiling",
+            )));
+        }
+        let profile =
+            morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+                AppError(Error::validation(format!(
+                    "unsupported Work profile {}",
+                    work.spec.profile_ref
+                )))
+            })?;
+        let now = morn_kernel::time::Timestamp::now();
+        if profile.requires("CapabilityQualification") {
+            let site = work
+                .spec
+                .site_ref
+                .as_deref()
+                .ok_or_else(|| AppError(Error::validation("governed Work requires site_ref")))?;
+            if !guard.v115_admission.site_profile_admission_active_at(
+                capability,
+                site,
+                &work.spec.profile_ref,
+                now,
+            ) {
+                return Err(AppError(Error::invalid_state(
+                    "bound capability admission was revoked or expired; new execution is blocked",
+                )));
+            }
+        }
+
+        match binding.provider_ref.as_str() {
+            "morn-native" => {
+                let provider = guard
+                    .native_harness
+                    .lock()
+                    .map_err(|_| AppError(Error::internal("native harness lock poisoned")))?;
+                if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str()) {
+                    return Err(AppError(Error::invalid_state(
+                        "bound native provider identity no longer matches the active runtime",
+                    )));
+                }
+            }
+            "deepseek-harness" => {
+                let provider = guard
+                    .dsh_harness
+                    .lock()
+                    .map_err(|_| AppError(Error::internal("dsh harness lock poisoned")))?;
+                if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str()) {
+                    return Err(AppError(Error::invalid_state(
+                        "bound DSH provider identity no longer matches the active runtime",
+                    )));
+                }
+                if provider.mode() == morn_harness::provider::DshMode::Real
+                    && !provider.runtime_health().selectable_at(now)
+                {
+                    return Err(AppError(Error::invalid_state(
+                        "real DSH provider has no fresh healthy runtime lease; new execution is blocked",
+                    )));
+                }
+            }
+            "pi" => {
+                let provider = guard
+                    .pi_harness
+                    .lock()
+                    .map_err(|_| AppError(Error::internal("pi harness lock poisoned")))?;
+                if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str()) {
+                    return Err(AppError(Error::invalid_state(
+                        "bound Pi provider identity no longer matches the active runtime",
+                    )));
+                }
+                if provider.mode() == morn_harness::PiMode::Real
+                    && !provider.runtime_health().selectable_at(now)
+                {
+                    return Err(AppError(Error::invalid_state(
+                        "real Pi provider has no fresh healthy runtime lease; new execution is blocked",
+                    )));
+                }
+            }
+            other => {
+                return Err(AppError(Error::validation(format!(
+                    "binding provider {other:?} is not an executable harness provider"
+                ))))
+            }
+        }
+
         (
             work,
             binding,
@@ -3622,14 +3733,17 @@ mod workspace_boundary_tests {
 
     #[tokio::test]
     async fn execute_e0_persists_harness_receipt_without_inventing_outcome_or_acceptance() {
-        use morn_capability::EffectClass;
+        use morn_capability::{
+            CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass,
+        };
         use morn_control_plane::ControlPlaneStore;
+        use morn_kernel::ids::CapabilityId;
         use morn_runtime::ExecutionBinding;
         use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
 
         let state = AppState::new(":memory:").unwrap();
         let (work, binding) = {
-            let guard = state.lock();
+            let mut guard = state.lock();
             let mut work = WorkResource::new(
                 guard.workspace.id.clone(),
                 WorkSpec::new(
@@ -3641,12 +3755,21 @@ mod workspace_boundary_tests {
             work.status.phase = WorkPhase::Ready;
             guard.store.save_work_resource_cas(&mut work).unwrap();
 
-            let mut binding = ExecutionBinding::for_work(
-                &work,
-                "capability://fixture/e0",
+            let mut capability = CapabilityRecord::new(CapabilityManifest::new(
+                CapabilityId::generate_with("capability"),
+                "fixture-agent",
                 "deepseek-harness",
-                "fixture",
-            );
+                CapabilityKind::Agent,
+                EffectClass::E0LifecycleReversible,
+            ));
+            capability.manifest.provenance.source_ref = "repo://fixture-agent".to_string();
+            capability.stage = CapabilityStage::Qualified;
+            let manifest_id = capability.manifest.id.to_string();
+            guard.v115_capabilities.push(capability);
+            guard.persist_all().unwrap();
+
+            let mut binding =
+                ExecutionBinding::for_work(&work, manifest_id, "deepseek-harness", "fixture");
             binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
             guard.store.save_execution_binding(&work, &binding).unwrap();
             (work, binding)
@@ -3694,6 +3817,85 @@ mod workspace_boundary_tests {
             .store
             .load_records_in_workspace::<Value>(
                 "acceptance_decision_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn execute_e0_rechecks_capability_revocation_before_new_turn() {
+        use morn_capability::{
+            CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass,
+        };
+        use morn_control_plane::ControlPlaneStore;
+        use morn_kernel::ids::CapabilityId;
+        use morn_runtime::ExecutionBinding;
+        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+
+        let state = AppState::new(":memory:").unwrap();
+        let (work, binding, manifest_id) = {
+            let mut guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "draft only",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            work.status.phase = WorkPhase::Ready;
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+
+            let mut capability = CapabilityRecord::new(CapabilityManifest::new(
+                CapabilityId::generate_with("capability"),
+                "revocable-fixture-agent",
+                "deepseek-harness",
+                CapabilityKind::Agent,
+                EffectClass::E0LifecycleReversible,
+            ));
+            capability.manifest.provenance.source_ref = "repo://fixture-agent".to_string();
+            capability.stage = CapabilityStage::Qualified;
+            let manifest_id = capability.manifest.id.to_string();
+            guard.v115_capabilities.push(capability);
+
+            let mut binding = ExecutionBinding::for_work(
+                &work,
+                manifest_id.clone(),
+                "deepseek-harness",
+                "fixture",
+            );
+            binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
+            guard.store.save_execution_binding(&work, &binding).unwrap();
+            (work, binding, manifest_id)
+        };
+
+        {
+            let mut guard = state.lock();
+            let capability = guard
+                .v115_capabilities
+                .iter_mut()
+                .find(|record| record.manifest.id.as_str() == manifest_id)
+                .unwrap();
+            capability.stage = CapabilityStage::Suspended;
+        }
+
+        let result = v115_work_execute_e0(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "binding_id": binding.id.to_string(),
+                "input": "must not run after revocation"
+            })),
+        )
+        .await;
+        assert!(result.is_err());
+
+        let guard = state.lock();
+        assert!(guard
+            .store
+            .load_records_in_workspace::<morn_harness::ExecutionReceipt>(
+                "execution_receipt_v115",
                 guard.workspace.id.as_str(),
             )
             .unwrap()
