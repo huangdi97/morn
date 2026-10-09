@@ -4886,8 +4886,7 @@ mod workspace_boundary_tests {
         use morn_kernel::{ExecutionClass, ExecutionGuarantee};
         use morn_runtime::{
             AttestedExecutionEnvironmentProvider, ExecutionBinding,
-            ExecutionEnvironmentAttestation, ExecutionEnvironmentProvider,
-            ExecutionEnvironmentSpec,
+            ExecutionEnvironmentAttestation, ExecutionEnvironmentSpec,
         };
         use morn_work::control::{WorkResource, WorkSpec};
 
