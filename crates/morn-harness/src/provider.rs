@@ -436,7 +436,10 @@ fn normalize_dsh_notifications(
     let mut normalized = Vec::new();
     for notification in notifications {
         if notification.method != "session.event"
-            || notification.params.get("sessionId").and_then(serde_json::Value::as_str)
+            || notification
+                .params
+                .get("sessionId")
+                .and_then(serde_json::Value::as_str)
                 != Some(session_id)
         {
             continue;
@@ -516,7 +519,10 @@ fn normalize_dsh_notifications(
         }
         if let Some(call_id) = data
             .get("callId")
-            .or_else(|| data.get("message").and_then(|message| message.get("toolCallId")))
+            .or_else(|| {
+                data.get("message")
+                    .and_then(|message| message.get("toolCallId"))
+            })
             .and_then(serde_json::Value::as_str)
         {
             record.refs.push(format!("dsh-tool-call:{call_id}"));
@@ -525,7 +531,6 @@ fn normalize_dsh_notifications(
     }
     normalized
 }
-
 
 impl HarnessProvider for DeepSeekHarnessProvider {
     fn provider_name(&self) -> &str {
@@ -815,7 +820,6 @@ impl HarnessProvider for DeepSeekHarnessProvider {
         state.last_event = "resumed".to_string();
         Ok(())
     }
-
 
     fn terminate(&mut self, session_id: &str) -> Result<ExecutionReceipt> {
         if self.mode == DshMode::Real {

@@ -337,7 +337,13 @@ Implemented locally on the v11.5 branch:
 - ExecutionBinding, ActionAttempt and reconciliation;
 - durable control-plane persistence adapter;
 - exact-pinned Cordis reference host;
-- DSH fixture provider and Pi fixture provider;
+- DSH fixture providers plus real out-of-process DSH SDK and Pi JSONL-RPC
+  transport adapters with bounded turns, explicit runtime configuration and
+  scrubbed child-process environments;
+- DSH/Pi real-provider E0 authority ceiling at the HarnessProvider seam; E1/E2/E3
+  effects remain governed ExternalAction operations;
+- durable DSH public event normalization into Morn audit events without copying
+  assistant text, tool arguments/results or private reasoning;
 - DSH/Pi harness-neutrality contract benchmark;
 - provider-neutral AuthorityProvider reference adapter;
 - Work-scoped credential and SPIFFE-compatible workload-identity provider seams;
@@ -355,8 +361,11 @@ Implemented locally on the v11.5 branch:
 
 Not claimed complete without external evidence:
 
-- real DSH process integration;
-- real Pi transport integration;
+- authenticated live DSH runtime/model/credential smoke and runtime health lease;
+- installed/live Pi runtime/model/credential smoke and runtime health lease;
+- a real execution-environment backend proving the isolation/egress/secret
+  guarantees required by the selected Profile (the repository fixture provider
+  is not a production sandbox);
 - real factory/customer data;
 - real site IAM/OPA/Cedar deployment;
 - real OCI registry publishing/signing;

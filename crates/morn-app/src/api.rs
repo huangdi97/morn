@@ -241,7 +241,7 @@ async fn v115_ui_extensions() -> ApiResult {
     })))
 }
 
-async fn v115_status() -> ApiResult {
+async fn v115_status(State(state): State<AppState>) -> ApiResult {
     let protocol = morn_kernel::protocol::ProtocolSnapshot::v11_5();
     let profile = morn_profile::DomainProfile::factory_readonly_v1();
     let profile_registry = morn_profile::reference_profile_registry();
@@ -250,9 +250,33 @@ async fn v115_status() -> ApiResult {
         .into_iter()
         .map(|item| json!({ "id": item.id, "version": item.version }))
         .collect();
-    let provider_catalog = morn_runtime::reference_provider_catalog();
+    let mut provider_catalog = morn_runtime::reference_provider_catalog();
+    let (dsh_real, pi_real) = {
+        let guard = state.lock();
+        (
+            guard.dsh_harness.mode() == morn_harness::provider::DshMode::Real,
+            guard.pi_harness.mode() == morn_harness::PiMode::Real,
+        )
+    };
+    if dsh_real {
+        provider_catalog.observe_status(
+            "deepseek-harness",
+            morn_runtime::provider_registry::ProviderStatus::Registered,
+            "real SDK configuration is present; live runtime health has not been proven",
+            vec!["config://morn-dsh-real".to_string()],
+        )?;
+    }
+    if pi_real {
+        provider_catalog.observe_status(
+            "pi",
+            morn_runtime::provider_registry::ProviderStatus::Registered,
+            "real RPC configuration is present; live runtime health has not been proven",
+            vec!["config://morn-pi-real".to_string()],
+        )?;
+    }
     let evidence_ledger = morn_assurance::reference_evidence_ledger();
     let providers = provider_catalog.list();
+    let provider_observations = provider_catalog.observations();
     let required_guarantees: Vec<String> = profile
         .requirements
         .iter()
@@ -275,6 +299,11 @@ async fn v115_status() -> ApiResult {
             }
         },
         "provider_catalog": providers,
+        "provider_observations": provider_observations,
+        "provider_status_semantics": {
+            "registered": "configured/known but not selectable until live health evidence exists",
+            "healthy": "live evidence-backed and selectable within its feature/effect constraints"
+        },
         "providers": {
             "harness": [
                 { "id": "morn-native", "status": "reference" },
