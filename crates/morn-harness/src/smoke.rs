@@ -63,6 +63,7 @@ pub fn run_harness_smoke(
     let scoped_ctx = match ctx.clone().with_scope_id(handle.scope_id.clone()) {
         Ok(context) => context,
         Err(error) => {
+            let cleanup_ok = provider.unmount(&handle).is_ok();
             return Ok(HarnessSmokeReport {
                 provider: name,
                 connected: false,
@@ -71,7 +72,7 @@ pub fn run_harness_smoke(
                 action_gateway_mediated: true,
                 events_normalized: false,
                 provenance_preserved: false,
-                teardown_ok: false,
+                teardown_ok: cleanup_ok,
                 detail: format!("cannot bind smoke scope to RuntimeContext: {error}"),
             });
         }
@@ -79,6 +80,11 @@ pub fn run_harness_smoke(
     let session = provider.start(&scoped_ctx);
     let connected = scope.is_ok() && session.is_ok();
     if !connected {
+        let cleanup_ok = if scope.is_ok() {
+            provider.unmount(&handle).is_ok()
+        } else {
+            true
+        };
         return Ok(HarnessSmokeReport {
             provider: name,
             connected: false,
@@ -87,8 +93,8 @@ pub fn run_harness_smoke(
             action_gateway_mediated: true,
             events_normalized: false,
             provenance_preserved: false,
-            teardown_ok: false,
-            detail: "provider could not mount/start (external blocker)".to_string(),
+            teardown_ok: cleanup_ok,
+            detail: "provider could not mount/start (external blocker); any mounted scope was cleaned up".to_string(),
         });
     }
     let session_id = session.as_ref().ok().map(|s| s.id.clone());

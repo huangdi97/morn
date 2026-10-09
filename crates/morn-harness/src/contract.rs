@@ -60,10 +60,13 @@ pub fn run_provider_contract(
         }
     };
 
-    let scoped_ctx = ctx
-        .clone()
-        .with_scope_id(handle.scope_id.clone())
-        .map_err(morn_kernel::error::Error::validation)?;
+    let scoped_ctx = match ctx.clone().with_scope_id(handle.scope_id.clone()) {
+        Ok(context) => context,
+        Err(error) => {
+            let _ = provider.unmount(&handle);
+            return Err(morn_kernel::error::Error::validation(error));
+        }
+    };
     let session = match provider.start(&scoped_ctx) {
         Ok(s) => {
             check(&mut report, "start", true);
@@ -71,6 +74,7 @@ pub fn run_provider_contract(
         }
         Err(e) => {
             check(&mut report, "start", false);
+            let _ = provider.unmount(&handle);
             return Err(e);
         }
     };
