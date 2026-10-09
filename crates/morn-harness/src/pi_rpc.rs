@@ -9,7 +9,7 @@
 //! event collection until `agent_settled`. Rich Pi-specific controls can remain
 //! provider extensions without entering the Morn semantic constitution.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};

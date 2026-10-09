@@ -7,7 +7,7 @@
 //! `subagent.finished`. The current wire has no cancel/session-close method,
 //! so Morn must not fabricate those semantics.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
