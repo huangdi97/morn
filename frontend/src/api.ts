@@ -241,6 +241,7 @@ export interface V115Status {
     isolation: string;
     required_guarantees: string[];
     runtime: string | null;
+    runtime_identities: string[];
     evidence_refs: string[];
     observed_at: number | string | Record<string, unknown>;
     valid_until: number | string | Record<string, unknown> | null;

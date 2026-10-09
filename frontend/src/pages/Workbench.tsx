@@ -521,6 +521,25 @@ export function governedRealHarnessEnvironment(
   return null;
 }
 
+export function governedRealHarnessRuntimeIdentity(
+  providerRef: string | undefined,
+  status: V115Status | null,
+): string | null {
+  if (providerRef === "deepseek-harness" && status?.harness_runtime.dsh.mode === "real") {
+    const runtime = status.harness_runtime.dsh;
+    return runtime.runtime_version && runtime.runtime_digest
+      ? `deepseek-harness@${runtime.runtime_version}#${runtime.runtime_digest}`
+      : null;
+  }
+  if (providerRef === "pi" && status?.harness_runtime.pi.mode === "real") {
+    const runtime = status.harness_runtime.pi;
+    return runtime.runtime_version && runtime.runtime_digest
+      ? `pi@${runtime.runtime_version}#${runtime.runtime_digest}`
+      : null;
+  }
+  return null;
+}
+
 function GovernedE0Executor({
   control,
   capabilities,
@@ -582,10 +601,15 @@ function GovernedE0Executor({
   const realHarness = realDsh || realPi;
   const configuredHarnessEnvironment =
     governedRealHarnessEnvironment(selectedCapability?.manifest.provider_ref, status) ?? "";
+  const configuredRuntimeIdentity =
+    governedRealHarnessRuntimeIdentity(selectedCapability?.manifest.provider_ref, status);
   const eligibleEnvironments = (status?.execution_environment_attestations ?? []).filter(
     (environment) =>
       environment.active &&
-      (!realHarness || environment.environment_ref === configuredHarnessEnvironment),
+      (!realHarness ||
+        (environment.environment_ref === configuredHarnessEnvironment &&
+          configuredRuntimeIdentity !== null &&
+          environment.runtime_identities.includes(configuredRuntimeIdentity))),
   );
   const effectiveEnvironmentRef =
     environmentRef ||

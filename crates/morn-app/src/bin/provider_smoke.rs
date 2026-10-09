@@ -93,7 +93,10 @@ fn run_gate() -> Result<Value> {
                 .ok_or_else(|| Error::validation("real DSH has no execution environment ref"))?
                 .to_string();
             let attestation = find_attestation(&attestations, &environment_ref)?;
-            let pinned_version = provider.preflight_real_runtime()?;
+            let pinned_version = provider
+                .configured_runtime_version()
+                .ok_or_else(|| Error::validation("real DSH has no pinned runtime version"))?
+                .to_string();
             let pinned_digest = provider
                 .configured_runtime_digest()
                 .ok_or_else(|| Error::validation("real DSH has no pinned runtime digest"))?
@@ -106,6 +109,12 @@ fn run_gate() -> Result<Value> {
             ) {
                 return Err(Error::external(
                     "execution-environment attestation does not bind the exact DSH runtime artifact",
+                ));
+            }
+            let initialized_version = provider.preflight_real_runtime()?;
+            if initialized_version != pinned_version {
+                return Err(Error::external(
+                    "initialized DSH runtime identity differs from the pre-authorized version",
                 ));
             }
             let context = live_context(workspace_id, &attestation)?;
@@ -157,7 +166,10 @@ fn run_gate() -> Result<Value> {
                 .ok_or_else(|| Error::validation("real Pi has no execution environment ref"))?
                 .to_string();
             let attestation = find_attestation(&attestations, &environment_ref)?;
-            let pinned_version = provider.preflight_real_runtime()?;
+            let pinned_version = provider
+                .configured_runtime_version()
+                .ok_or_else(|| Error::validation("real Pi has no pinned runtime version"))?
+                .to_string();
             let pinned_digest = provider
                 .configured_runtime_digest()
                 .ok_or_else(|| Error::validation("real Pi has no pinned runtime digest"))?
@@ -170,6 +182,12 @@ fn run_gate() -> Result<Value> {
             ) {
                 return Err(Error::external(
                     "execution-environment attestation does not bind the exact Pi runtime artifact",
+                ));
+            }
+            let initialized_version = provider.preflight_real_runtime()?;
+            if initialized_version != pinned_version {
+                return Err(Error::external(
+                    "initialized Pi runtime identity differs from the pre-authorized version",
                 ));
             }
             let context = live_context(workspace_id, &attestation)?;

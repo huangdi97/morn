@@ -8,6 +8,7 @@ import {
   CanonicalWorkOverview,
   uiExtensionEnabledForProfiles,
   governedRealHarnessEnvironment,
+  governedRealHarnessRuntimeIdentity,
   ValueAssessmentPanel,
   workEvidenceTrace,
 } from "./pages/Workbench";
@@ -308,11 +309,16 @@ describe("real Harness environment gating", () => {
         mode: "real",
         health: "initialized",
         configured_execution_environment_ref: "env://dsh/a",
+        runtime_version: "1.2.3",
+        runtime_digest: `sha256:${"d".repeat(64)}`,
+        wire_server_version: "0.0.1",
       },
       pi: {
         mode: "real",
         health: "initialized",
         configured_execution_environment_ref: "env://pi/a",
+        runtime_version: "0.9.0",
+        runtime_digest: `sha256:${"p".repeat(64)}`,
       },
     },
   } as import("./api").V115Status;
@@ -321,5 +327,15 @@ describe("real Harness environment gating", () => {
     expect(governedRealHarnessEnvironment("deepseek-harness", status)).toBe("env://dsh/a");
     expect(governedRealHarnessEnvironment("pi", status)).toBe("env://pi/a");
     expect(governedRealHarnessEnvironment("morn-native", status)).toBeNull();
+  });
+
+  it("derives the exact attested runtime artifact identity before real binding", () => {
+    expect(governedRealHarnessRuntimeIdentity("deepseek-harness", status)).toBe(
+      `deepseek-harness@1.2.3#sha256:${"d".repeat(64)}`,
+    );
+    expect(governedRealHarnessRuntimeIdentity("pi", status)).toBe(
+      `pi@0.9.0#sha256:${"p".repeat(64)}`,
+    );
+    expect(governedRealHarnessRuntimeIdentity("morn-native", status)).toBeNull();
   });
 });

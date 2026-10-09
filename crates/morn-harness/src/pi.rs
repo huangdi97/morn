@@ -100,6 +100,12 @@ impl PiHarnessProvider {
             .and_then(|config| config.execution_environment_ref.as_deref())
     }
 
+    pub fn configured_runtime_version(&self) -> Option<&str> {
+        self.real_config
+            .as_ref()
+            .and_then(|config| config.runtime_version.as_deref())
+    }
+
     pub fn configured_runtime_digest(&self) -> Option<&str> {
         self.real_config
             .as_ref()

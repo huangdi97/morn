@@ -316,7 +316,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             provider
                 .configured_execution_environment_ref()
                 .map(str::to_string),
-            provider.runtime_version(),
+            provider.configured_runtime_version().map(str::to_string),
             provider.configured_runtime_digest().map(str::to_string),
             provider.wire_server_version().map(str::to_string),
         )
@@ -332,7 +332,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             provider
                 .configured_execution_environment_ref()
                 .map(str::to_string),
-            provider.runtime_version(),
+            provider.configured_runtime_version().map(str::to_string),
             provider.configured_runtime_digest().map(str::to_string),
         )
     };
@@ -1496,7 +1496,14 @@ async fn v115_work_bind_attested_e0(
                     "attested environment does not match the environment pinned by the real DSH launch configuration",
                 )));
             }
-            let version = provider.preflight_real_runtime()?;
+            let version = provider
+                .configured_runtime_version()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    AppError(Error::invalid_state(
+                        "real DSH runtime distribution version is not pinned",
+                    ))
+                })?;
             let digest = provider
                 .configured_runtime_digest()
                 .map(str::to_string)
@@ -1505,6 +1512,22 @@ async fn v115_work_bind_attested_e0(
                         "real DSH runtime distribution digest is not pinned",
                     ))
                 })?;
+            if !attestation.attests_runtime_identity(
+                "deepseek-harness",
+                &version,
+                &digest,
+                now,
+            ) {
+                return Err(AppError(Error::invalid_state(
+                    "execution-environment attestation does not authorize the configured DSH runtime artifact",
+                )));
+            }
+            let initialized = provider.preflight_real_runtime()?;
+            if initialized != version {
+                return Err(AppError(Error::invalid_state(
+                    "initialized DSH runtime identity differs from the pre-authorized deployment version",
+                )));
+            }
             (version, Some(digest))
         }
         "pi" => {
@@ -1522,7 +1545,14 @@ async fn v115_work_bind_attested_e0(
                     "attested environment does not match the environment pinned by the real Pi launch configuration",
                 )));
             }
-            let version = provider.preflight_real_runtime()?;
+            let version = provider
+                .configured_runtime_version()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    AppError(Error::invalid_state(
+                        "real Pi runtime distribution version is not pinned",
+                    ))
+                })?;
             let digest = provider
                 .configured_runtime_digest()
                 .map(str::to_string)
@@ -1531,6 +1561,17 @@ async fn v115_work_bind_attested_e0(
                         "real Pi runtime distribution digest is not pinned",
                     ))
                 })?;
+            if !attestation.attests_runtime_identity("pi", &version, &digest, now) {
+                return Err(AppError(Error::invalid_state(
+                    "execution-environment attestation does not authorize the configured Pi runtime artifact",
+                )));
+            }
+            let initialized = provider.preflight_real_runtime()?;
+            if initialized != version {
+                return Err(AppError(Error::invalid_state(
+                    "initialized Pi runtime identity differs from the pre-authorized deployment version",
+                )));
+            }
             (version, Some(digest))
         }
         other => {
