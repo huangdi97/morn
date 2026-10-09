@@ -768,32 +768,67 @@ async fn v115_work_bind_source_of_truth(
 }
 
 async fn v115_source_observations(State(state): State<AppState>) -> ApiResult {
+    use morn_integration::SourceOfTruthBinding;
+    use morn_work::control::WorkResource;
+
     let guard = state.lock();
     let now = morn_kernel::time::Timestamp::now();
     let mut observations = Vec::new();
     for attestation in &guard.source_observation_attestations {
         if attestation.workspace_id != guard.workspace.id
-            || attestation.observed_at > now
-            || attestation.valid_until.is_some_and(|until| now > until)
+            || guard
+                .store
+                .load_record::<Value>(
+                    "source_observation_attestation_consumed_v115",
+                    &attestation.attestation_id,
+                )?
+                .is_some()
         {
             continue;
         }
-        if guard
+
+        let Some(work) = guard
             .store
-            .load_record::<Value>(
-                "source_observation_attestation_consumed_v115",
-                &attestation.attestation_id,
+            .load_record::<WorkResource>(
+                "work_resource_v115",
+                attestation.work_package_id.as_str(),
             )?
-            .is_none()
+        else {
+            continue;
+        };
+        let Some(binding) = guard
+            .store
+            .load_record::<SourceOfTruthBinding>(
+                "source_of_truth_binding_v115",
+                attestation.source_binding_id.as_str(),
+            )?
+        else {
+            continue;
+        };
+        if work.workspace_id != guard.workspace.id
+            || !attestation.active_for(
+                &work.workspace_id,
+                &work.id,
+                work.generation,
+                &binding.id,
+                &attestation.fact_type,
+                now,
+            )
+            || !binding.authoritative_for(&attestation.fact_type)
+            || binding.site_ref != work.spec.site_ref
+            || !source_ref_within_binding(&binding.source_ref, &attestation.source_ref)
+            || !binding.observation_is_fresh(attestation.observed_at, now)
         {
-            observations.push(attestation.clone());
+            continue;
         }
+        observations.push(attestation.clone());
     }
     Ok(Json(json!({
         "observations": observations,
         "deployment_attested": true,
         "caller_can_submit_world_facts": false,
-        "consumed_attestations_are_listed": false
+        "consumed_attestations_are_listed": false,
+        "only_currently_consumable": true
     })))
 }
 
@@ -5200,6 +5235,16 @@ mod workspace_boundary_tests {
         )
         .await;
         assert!(stale.is_err());
+
+        let Json(catalog) = v115_source_observations(State(state.clone())).await.unwrap();
+        let listed_ids: Vec<_> = catalog["observations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|item| item["attestation_id"].as_str())
+            .collect();
+        assert!(!listed_ids.contains(&"obs-stale"));
+        assert!(listed_ids.contains(&"obs-grounded"));
 
         let outside = v115_work_observe_outcome(
             State(state.clone()),
