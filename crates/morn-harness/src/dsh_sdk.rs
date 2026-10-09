@@ -47,6 +47,12 @@ pub struct DshSdkConfig {
     /// isolation label alone is insufficient.
     #[serde(default)]
     pub execution_environment_ref: Option<String>,
+    /// Deployment-attested DSH distribution identity. The SDK serverInfo
+    /// version is a wire identity and must never be substituted for these.
+    #[serde(default)]
+    pub runtime_version: Option<String>,
+    #[serde(default)]
+    pub runtime_digest: Option<String>,
     pub request_timeout_ms: u64,
     pub turn_timeout_ms: u64,
 }
@@ -67,6 +73,8 @@ impl DshSdkConfig {
             max_tokens: None,
             dsh_home: None,
             execution_environment_ref: None,
+            runtime_version: None,
+            runtime_digest: None,
             request_timeout_ms: 30_000,
             turn_timeout_ms: 300_000,
         }
@@ -79,6 +87,16 @@ impl DshSdkConfig {
 
     pub fn with_execution_environment_ref(mut self, environment_ref: impl Into<String>) -> Self {
         self.execution_environment_ref = Some(environment_ref.into());
+        self
+    }
+
+    pub fn with_runtime_identity(
+        mut self,
+        version: impl Into<String>,
+        digest: impl Into<String>,
+    ) -> Self {
+        self.runtime_version = Some(version.into());
+        self.runtime_digest = Some(digest.into());
         self
     }
 
@@ -104,6 +122,29 @@ impl DshSdkConfig {
         {
             return Err(Error::validation(
                 "real DSH SDK requires a pinned execution_environment_ref",
+            ));
+        }
+        if self
+            .runtime_version
+            .as_deref()
+            .is_none_or(|version| version.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "real DSH SDK requires a deployment-attested runtime version",
+            ));
+        }
+        let digest = self
+            .runtime_digest
+            .as_deref()
+            .ok_or_else(|| Error::validation("real DSH SDK requires a runtime SHA-256 digest"))?;
+        let Some(hex) = digest.strip_prefix("sha256:") else {
+            return Err(Error::validation(
+                "real DSH SDK runtime digest must use sha256:<64-hex>",
+            ));
+        };
+        if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(Error::validation(
+                "real DSH SDK runtime digest must use sha256:<64-hex>",
             ));
         }
         let workspace = Path::new(&self.cwd);
@@ -147,9 +188,14 @@ impl DshSdkConfig {
             std::env::var("MORN_DSH_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
                 Error::validation("MORN_DSH_EXECUTION_ENVIRONMENT_REF is required for real DSH")
             })?;
+        let runtime_version = std::env::var("MORN_DSH_RUNTIME_VERSION")
+            .map_err(|_| Error::validation("MORN_DSH_RUNTIME_VERSION is required for real DSH"))?;
+        let runtime_digest = std::env::var("MORN_DSH_RUNTIME_DIGEST")
+            .map_err(|_| Error::validation("MORN_DSH_RUNTIME_DIGEST is required for real DSH"))?;
         let mut config = Self::profile_sdk(cwd, provider, model)
             .with_dsh_home(home)
-            .with_execution_environment_ref(environment_ref);
+            .with_execution_environment_ref(environment_ref)
+            .with_runtime_identity(runtime_version, runtime_digest);
         if let Ok(command) = std::env::var("MORN_DSH_COMMAND") {
             config.command = command;
         }
@@ -614,7 +660,8 @@ mod tests {
             "deepseek-v4-flash",
         )
         .with_dsh_home(nested_home.to_string_lossy())
-        .with_execution_environment_ref("env://container/dsh");
+        .with_execution_environment_ref("env://container/dsh")
+        .with_runtime_identity("fixture-runtime-1", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         assert!(config.validate_for_real().is_err());
 
         config.dsh_home = Some(root.join("dsh-home").to_string_lossy().to_string());
@@ -760,7 +807,8 @@ mod tests {
             "deepseek-v4-flash",
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
-        .with_execution_environment_ref("env://container/dsh");
+        .with_execution_environment_ref("env://container/dsh")
+        .with_runtime_identity("fixture-runtime-1", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         assert!(configured.validate_for_real().is_ok());
     }
 
@@ -783,6 +831,8 @@ mod tests {
             max_tokens: Some(64),
             dsh_home: None,
             execution_environment_ref: None,
+            runtime_version: None,
+            runtime_digest: None,
             request_timeout_ms: 10_000,
             turn_timeout_ms: 10_000,
         };

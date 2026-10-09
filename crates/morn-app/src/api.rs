@@ -1183,7 +1183,7 @@ async fn v115_work_bind_attested_e0(
     }
 
     let provider_ref = capability.manifest.provider_ref.clone();
-    let provider_version = match provider_ref.as_str() {
+    let (provider_version, provider_digest) = match provider_ref.as_str() {
         "deepseek-harness" => {
             let mut provider = guard
                 .dsh_harness
@@ -1199,7 +1199,16 @@ async fn v115_work_bind_attested_e0(
                     "attested environment does not match the environment pinned by the real DSH launch configuration",
                 )));
             }
-            provider.preflight_real_runtime()?
+            let version = provider.preflight_real_runtime()?;
+            let digest = provider
+                .configured_runtime_digest()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    AppError(Error::invalid_state(
+                        "real DSH runtime distribution digest is not pinned",
+                    ))
+                })?;
+            (version, Some(digest))
         }
         "pi" => {
             return Err(AppError(Error::invalid_state(
@@ -1219,6 +1228,7 @@ async fn v115_work_bind_attested_e0(
         provider_ref,
         provider_version,
     );
+    binding.provider_digest = provider_digest;
     binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
     binding.compensation_ref = capability.manifest.compensation_ref.clone();
     binding.idempotency_key_required = capability.manifest.idempotency_key_required;
@@ -1253,7 +1263,7 @@ async fn v115_work_bind_attested_e0(
             "valid_until": attestation.valid_until
         },
         "execution_started": false,
-        "note": "Trusted deployment attestation and exact DSH runtime identity are pinned; no Harness turn, world outcome, authority grant or acceptance was created."
+        "note": "Trusted deployment attestation plus deployment-pinned DSH distribution version/digest are recorded; SDK serverInfo remains wire identity only. No Harness turn, world outcome, authority grant or acceptance was created."
     })))
 }
 

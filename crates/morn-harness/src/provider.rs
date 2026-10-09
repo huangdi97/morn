@@ -449,7 +449,11 @@ pub struct DeepSeekHarnessProvider {
     scopes: Vec<CapabilityScope>,
     real_config: Option<DshSdkConfig>,
     real_client: Option<DshSdkStdioClient>,
+    /// Deployment-attested DSH distribution identity; never sourced from SDK serverInfo.
     real_runtime_version: Option<String>,
+    real_runtime_digest: Option<String>,
+    /// Wire peer version observed from initialize.serverInfo. Protocol evidence only.
+    real_wire_server_version: Option<String>,
     runtime_health: HarnessRuntimeHealth,
 }
 
@@ -471,6 +475,8 @@ impl DeepSeekHarnessProvider {
             real_config: None,
             real_client: None,
             real_runtime_version: None,
+            real_runtime_digest: None,
+            real_wire_server_version: None,
             runtime_health,
         }
     }
@@ -498,10 +504,8 @@ impl DeepSeekHarnessProvider {
     }
 
     /// Deployment preflight for creating a real ExecutionBinding. This performs
-    /// only the official SDK initialize handshake; it does not create a Harness
-    /// session, send a prompt, or claim provider health. The returned version is
-    /// the exact wire-observed runtime identity that may be pinned into a new
-    /// generation-scoped binding.
+    /// the official SDK initialize handshake but returns the deployment-attested
+    /// DSH distribution version. initialize.serverInfo.version remains wire-only.
     pub fn preflight_real_runtime(&mut self) -> Result<String> {
         if self.mode != DshMode::Real {
             return Err(Error::invalid_state(
@@ -518,6 +522,18 @@ impl DeepSeekHarnessProvider {
         self.real_config
             .as_ref()
             .and_then(|config| config.execution_environment_ref.as_deref())
+    }
+
+    pub fn configured_runtime_digest(&self) -> Option<&str> {
+        self.real_runtime_digest.as_deref().or_else(|| {
+            self.real_config
+                .as_ref()
+                .and_then(|config| config.runtime_digest.as_deref())
+        })
+    }
+
+    pub fn wire_server_version(&self) -> Option<&str> {
+        self.real_wire_server_version.as_deref()
     }
 
     pub fn shutdown_real_runtime(&mut self) -> Result<()> {
@@ -542,6 +558,8 @@ impl DeepSeekHarnessProvider {
         );
         self.runtime_health.mark_closed(close_reason);
         self.real_runtime_version = None;
+        self.real_runtime_digest = None;
+        self.real_wire_server_version = None;
         for state in self.sessions.values_mut() {
             if state.status != "terminated" {
                 state.status = "runtime-closed".to_string();
@@ -562,20 +580,30 @@ impl DeepSeekHarnessProvider {
                     .clone()
                     .ok_or_else(|| self.real_unavailable())?;
                 config.validate_for_real()?;
+                let runtime_version = config
+                    .runtime_version
+                    .clone()
+                    .ok_or_else(|| Error::validation("DSH runtime version missing after validation"))?;
+                let runtime_digest = config
+                    .runtime_digest
+                    .clone()
+                    .ok_or_else(|| Error::validation("DSH runtime digest missing after validation"))?;
                 let mut client = DshSdkStdioClient::spawn(&config)?;
                 let server = client.initialize(&config)?;
-                Ok::<_, Error>((client, server))
+                Ok::<_, Error>((client, server, runtime_version, runtime_digest))
             })();
             match setup {
-                Ok((client, server)) => {
-                    self.real_runtime_version = Some(server.version.clone());
+                Ok((client, server, runtime_version, runtime_digest)) => {
+                    self.real_runtime_version = Some(runtime_version.clone());
+                    self.real_runtime_digest = Some(runtime_digest.clone());
+                    self.real_wire_server_version = Some(server.version.clone());
                     self.real_client = Some(client);
                     self.runtime_health.mark_initialized(
                         format!(
-                            "official DSH SDK runtime {} handshake succeeded; no settled live turn yet",
-                            server.version
+                            "official DSH SDK wire {} handshake succeeded; deployment pins distribution {} ({}) and no settled live turn yet",
+                            server.version, runtime_version, runtime_digest
                         ),
-                        format!("runtime://deepseek-harness/{}", server.version),
+                        format!("runtime://deepseek-harness/{runtime_version}#{runtime_digest}"),
                     );
                 }
                 Err(error) => {
@@ -996,6 +1024,8 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                         // later Work/session.
                         let _owned_runtime = self.real_client.take();
                         self.real_runtime_version = None;
+                        self.real_runtime_digest = None;
+                        self.real_wire_server_version = None;
                         self.runtime_health.mark_degraded(format!(
                             "DSH SDK turn failed to settle; owned runtime reaped: {error}"
                         ));
@@ -1154,7 +1184,8 @@ mod dsh_provider_tests {
             "deepseek-v4-flash",
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
-        .with_execution_environment_ref("env://container/pinned");
+        .with_execution_environment_ref("env://container/pinned")
+        .with_runtime_identity("fixture-runtime-1", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
         let provider = DeepSeekHarnessProvider::with_real_sdk(config);
         let ctx = RuntimeContext::new(
             WorkspaceId::generate(),
@@ -1196,7 +1227,8 @@ mod dsh_provider_tests {
         let mut config =
             DshSdkConfig::profile_sdk(cwd.to_string_lossy(), "fixture-provider", "fixture-model")
                 .with_dsh_home(home.to_string_lossy())
-                .with_execution_environment_ref(environment_ref);
+                .with_execution_environment_ref(environment_ref)
+                .with_runtime_identity("fixture-runtime-1", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
         config.command = executable.to_string_lossy().to_string();
         config.args = vec![
             "--exact".to_string(),
@@ -1266,6 +1298,9 @@ mod dsh_provider_tests {
             provider.runtime_health().state,
             HarnessRuntimeHealthState::Initialized
         );
+        assert_eq!(provider.runtime_version().as_deref(), Some("fixture-runtime-1"));
+        assert_eq!(provider.wire_server_version(), Some("0.0.1"));
+        assert_eq!(provider.configured_runtime_digest(), Some("sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"));
 
         let output = provider.send(&session.id, "hello").unwrap();
         assert_eq!(output.text, "hello from fake sdk");
@@ -1321,7 +1356,8 @@ mod dsh_provider_tests {
         let mut config =
             DshSdkConfig::profile_sdk(cwd.to_string_lossy(), "fixture-provider", "fixture-model")
                 .with_dsh_home(home.to_string_lossy())
-                .with_execution_environment_ref(environment_ref);
+                .with_execution_environment_ref(environment_ref)
+                .with_runtime_identity("fixture-runtime-1", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
         config.command = executable.to_string_lossy().to_string();
         config.args = vec![
             "--exact".to_string(),
