@@ -60,7 +60,8 @@ try {
         errors.push("hub: DSH/Pi provider registry entries are missing");
       }
       const discoveryText = await page.locator(".hub-discovery").innerText();
-      if (!discoveryText.includes("declared metadata") || !discoveryText.includes("Business truth")) {
+      const discoveryTextNormalized = discoveryText.toLowerCase();
+      if (!discoveryTextNormalized.includes("declared metadata") || !discoveryTextNormalized.includes("business truth")) {
         errors.push("hub: discovery projection boundary is not explicit");
       }
       const legacy = page.locator("details.hub-reference-details");
