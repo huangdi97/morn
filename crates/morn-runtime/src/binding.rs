@@ -301,6 +301,15 @@ impl ExecutionBinding {
         replacement.provider_ref = provider_ref.into();
         replacement.provider_version = provider_version.into();
         replacement.provider_digest = None;
+        // Provider replacement invalidates every provider/runtime/environment
+        // identity and prior per-action authority decision. The capability and
+        // Work semantics may remain the same, but execution must be resolved
+        // again against the new provider.
+        replacement.runtime_ref = None;
+        replacement.execution_environment_ref = None;
+        replacement.execution_class = None;
+        replacement.execution_guarantees.clear();
+        replacement.authority_decision_ref = None;
         replacement.migration_from = Some(self.id.clone());
         replacement.created_at = Timestamp::now();
         replacement
@@ -419,8 +428,10 @@ mod tests {
         assert_eq!(old.provider_ref, "dsh");
         assert_eq!(replacement.provider_ref, "pi");
         assert_eq!(replacement.migration_from, Some(old.id));
+        assert!(replacement.runtime_ref.is_none());
         assert!(replacement.execution_environment_ref.is_none());
         assert!(replacement.execution_class.is_none());
         assert!(replacement.execution_guarantees.is_empty());
+        assert!(replacement.authority_decision_ref.is_none());
     }
 }
