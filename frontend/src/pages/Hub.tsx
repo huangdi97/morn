@@ -232,6 +232,19 @@ export default function Hub() {
         )}
       </section>
       <div className="grid">
+        <AssetTable
+          title="Enabled Domain Packs"
+          rows={data.domain_packs.map((d) => ({ id: d, name: d, trust: "Enabled" }))}
+        />
+      </div>
+
+      <details className="hub-reference-details">
+        <summary>Reference catalogs &amp; legacy registries</summary>
+        <p className="hub-reference-note">
+          These template and v0.2/v0.3 registries remain available for compatibility.
+          Provider Fabric and the v11.5 Capability Supply Chain above are the governed source of truth.
+        </p>
+        <div className="grid">
         {v2 && (
           <>
             <AssetTable title="Solution Templates (v0.2)" rows={v2.solution_templates} />
@@ -284,10 +297,6 @@ export default function Hub() {
             </Card>
           </>
         )}
-        <AssetTable
-          title="Domain Packs"
-          rows={data.domain_packs.map((d) => ({ id: d, name: d, trust: "Enabled" }))}
-        />
         <AssetTable title="Actor Templates" rows={data.actor_templates} />
         <AssetTable title="Harness Templates" rows={data.harness_templates} />
         <AssetTable title="Composition Runtimes" rows={data.composition_runtimes} />
@@ -296,7 +305,8 @@ export default function Hub() {
         <AssetTable title="Workcell Blueprints" rows={data.workcell_blueprints} />
         <AssetTable title="Evaluation Packs" rows={data.evaluation_packs} />
         <AssetTable title="Operational Object Types" rows={data.operational_object_types} />
-      </div>
+        </div>
+      </details>
     </div>
   );
 }

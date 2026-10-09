@@ -206,6 +206,13 @@ export default function ConsolePage() {
             </Card>
           </>
         )}
+        <details className="console-reference-details">
+          <summary>Reference analytics &amp; legacy assurance views</summary>
+          <p className="console-reference-note">
+            These v0.2–v0.4 projections remain available for compatibility and diagnostics.
+            Canonical v11.5 Work, Provider health, evidence and control records above remain authoritative.
+          </p>
+          <div className="grid">
         <Card title="Outcomes / Metrics">
           {data.outcomes.length === 0 ? (
             <EmptyState label="No outcomes yet" />
@@ -317,6 +324,9 @@ export default function ConsolePage() {
             <EmptyState label="No predictor data yet" />
           )}
         </Card>
+          </div>
+        </details>
+
         <Card title="Trace / Errors (ledger)">
           {data.traces.length === 0 ? (
             <EmptyState label="No ledger entries" />

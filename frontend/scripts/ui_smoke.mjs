@@ -56,6 +56,24 @@ try {
       if (!hubText.includes("deepseek-harness") || !hubText.includes("pi")) {
         errors.push("hub: DSH/Pi provider registry entries are missing");
       }
+      const legacy = page.locator("details.hub-reference-details");
+      if (!(await legacy.count())) {
+        errors.push("hub: reference catalog disclosure is missing");
+      } else if (await legacy.evaluate((node) => node.open)) {
+        errors.push("hub: legacy/reference catalogs should be collapsed by default");
+      }
+    }
+    if (route === "/console") {
+      const legacy = page.locator("details.console-reference-details");
+      if (!(await legacy.count())) {
+        errors.push("console: legacy diagnostics disclosure is missing");
+      } else if (await legacy.evaluate((node) => node.open)) {
+        errors.push("console: legacy/reference diagnostics should be collapsed by default");
+      }
+      const consoleText = await page.locator("body").innerText();
+      if (!consoleText.includes("Harness / Runtime Health") || !consoleText.includes("v11.5 Persisted Control Records")) {
+        errors.push("console: canonical v11.5 provider/control health must remain visible");
+      }
     }
     if (route === "/studio") {
       const compilerGoal = page.locator(".studio-compiler-goal");

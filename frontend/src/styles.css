@@ -336,3 +336,56 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+
+
+/* Secondary diagnostic/catalog surfaces stay available without competing with
+   canonical v11.5 control and provider truth. */
+.console-reference-details,
+.hub-reference-details {
+  margin: 18px 0 24px;
+  min-width: 0;
+  padding: 0 16px;
+  border: 1px solid #374760;
+  border-radius: 14px;
+  background: #131d2c;
+}
+.console-reference-details {
+  grid-column: 1 / -1;
+}
+.console-reference-details > summary,
+.hub-reference-details > summary {
+  cursor: pointer;
+  padding: 17px 4px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #b9c9e5;
+}
+.console-reference-details > summary:hover,
+.hub-reference-details > summary:hover {
+  color: #ffffff;
+}
+.console-reference-details[open] > summary,
+.hub-reference-details[open] > summary {
+  border-bottom: 1px solid #36475d;
+}
+.console-reference-note,
+.hub-reference-note {
+  margin: 12px 0 16px;
+  color: #a9bad3;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.console-reference-details > .grid,
+.hub-reference-details > .grid {
+  margin-bottom: 14px;
+}
+@media (max-width: 760px) {
+  .console-reference-details,
+  .hub-reference-details {
+    padding: 0 12px;
+  }
+  .console-reference-details > summary,
+  .hub-reference-details > summary {
+    font-size: 13px;
+  }
+}

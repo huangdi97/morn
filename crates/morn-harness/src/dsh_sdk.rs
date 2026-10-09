@@ -85,9 +85,19 @@ impl DshSdkConfig {
             .as_deref()
             .filter(|home| !home.trim().is_empty())
             .ok_or_else(|| Error::validation("real DSH SDK requires isolated DSH_HOME"))?;
-        if !Path::new(&self.cwd).is_absolute() || !Path::new(home).is_absolute() {
+        let workspace = Path::new(&self.cwd);
+        let home_path = Path::new(home);
+        if !workspace.is_absolute() || !home_path.is_absolute() {
             return Err(Error::validation(
                 "real DSH SDK workspace and DSH_HOME must be absolute paths",
+            ));
+        }
+        if workspace == home_path
+            || home_path.starts_with(workspace)
+            || workspace.starts_with(home_path)
+        {
+            return Err(Error::validation(
+                "real DSH SDK workspace and DSH_HOME must be disjoint directory trees",
             ));
         }
         if self.request_timeout_ms == 0 || self.turn_timeout_ms == 0 {
@@ -544,6 +554,26 @@ pub fn assistant_text_from_session_event(params: &Value, session_id: &str) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn real_sdk_rejects_overlapping_workspace_and_harness_home() {
+        let root = std::env::temp_dir().join("morn-dsh-boundary");
+        let workspace = root.join("workspace");
+        let nested_home = workspace.join(".dsh");
+        let mut config = DshSdkConfig::profile_sdk(
+            workspace.to_string_lossy(),
+            "deepseek-official",
+            "deepseek-v4-flash",
+        )
+        .with_dsh_home(nested_home.to_string_lossy());
+        assert!(config.validate_for_real().is_err());
+
+        config.dsh_home = Some(root.join("dsh-home").to_string_lossy().to_string());
+        assert!(config.validate_for_real().is_ok());
+
+        config.cwd = root.to_string_lossy().to_string();
+        assert!(config.validate_for_real().is_err());
+    }
 
     #[test]
     fn sdk_method_set_matches_current_upstream_boundary() {
