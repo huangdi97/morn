@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::protocol::{ProtocolSnapshot, MORN_PROTOCOL_V11_5};
 use morn_kernel::time::Timestamp;
+use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 use morn_work::control::WorkResource;
 
 use crate::binding::ExecutionBinding;
@@ -47,6 +48,12 @@ pub struct ExecutionManifest {
     pub provider_digest: Option<String>,
     pub composition_runtime: CompositionRuntimeRef,
     pub runtime_ref: Option<String>,
+    #[serde(default)]
+    pub execution_environment_ref: Option<String>,
+    #[serde(default)]
+    pub execution_class: Option<ExecutionClass>,
+    #[serde(default)]
+    pub execution_guarantees: Vec<ExecutionGuarantee>,
     pub authority_decision_ref: Option<String>,
     pub created_at: Timestamp,
 }
@@ -70,6 +77,11 @@ impl ExecutionManifest {
         if binding.site_ref != work.spec.site_ref {
             return Err(Error::validation(
                 "execution manifest site must match the Work site",
+            ));
+        }
+        if !binding.environment_identity_consistent() {
+            return Err(Error::validation(
+                "execution manifest requires a complete or absent execution-environment identity",
             ));
         }
         if composition_runtime.id.trim().is_empty() || composition_runtime.version.trim().is_empty()
@@ -101,6 +113,9 @@ impl ExecutionManifest {
             provider_digest: binding.provider_digest.clone(),
             composition_runtime,
             runtime_ref: binding.runtime_ref.clone(),
+            execution_environment_ref: binding.execution_environment_ref.clone(),
+            execution_class: binding.execution_class,
+            execution_guarantees: binding.execution_guarantees.clone(),
             authority_decision_ref: binding.authority_decision_ref.clone(),
             created_at: Timestamp::now(),
         })
@@ -120,6 +135,9 @@ impl ExecutionManifest {
             && self.site_ref == work.spec.site_ref
             && self.source_solution_ref == work.spec.source_solution_ref
             && self.runtime_ref == binding.runtime_ref
+            && self.execution_environment_ref == binding.execution_environment_ref
+            && self.execution_class == binding.execution_class
+            && self.execution_guarantees == binding.execution_guarantees
             && self.authority_decision_ref == binding.authority_decision_ref
             && !self.composition_runtime.id.trim().is_empty()
             && !self.composition_runtime.version.trim().is_empty()
@@ -183,6 +201,17 @@ mod tests {
         let mut binding =
             ExecutionBinding::for_work(&work, "manifest:sha256:abc", "provider-a", "1.0.0");
         binding.runtime_ref = Some("runtime://session-a".to_string());
+        binding
+            .pin_execution_environment(
+                "env://container/a",
+                ExecutionClass::Container,
+                vec![
+                    ExecutionGuarantee::FilesystemWritePolicy,
+                    ExecutionGuarantee::NetworkEgressPolicy,
+                    ExecutionGuarantee::SecretIndirection,
+                ],
+            )
+            .unwrap();
         binding.authority_decision_ref = Some("authority://permit-a".to_string());
         let manifest = ExecutionManifest::from_binding(
             &work,
@@ -202,6 +231,14 @@ mod tests {
 
         let mut forged = manifest.clone();
         forged.authority_decision_ref = Some("authority://other".to_string());
+        assert!(!forged.validates_against(&work, &binding));
+
+        let mut forged = manifest.clone();
+        forged.execution_environment_ref = Some("env://container/other".to_string());
+        assert!(!forged.validates_against(&work, &binding));
+
+        let mut forged = manifest.clone();
+        forged.execution_guarantees.clear();
         assert!(!forged.validates_against(&work, &binding));
 
         let mut forged = manifest.clone();

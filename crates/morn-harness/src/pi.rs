@@ -213,6 +213,11 @@ impl HarnessProvider for PiHarnessProvider {
                     return Err(self.real_unavailable());
                 }
                 self.require_real_e0_scope(ctx)?;
+                if !ctx.proves_real_harness_environment() {
+                    return Err(Error::validation(
+                        "real Pi RPC requires a bound container-or-stronger execution environment with filesystem-write, network-egress and secret-indirection guarantees",
+                    ));
+                }
                 if let Some(active) = self.active_session.as_ref() {
                     if self
                         .sessions

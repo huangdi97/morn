@@ -8,8 +8,10 @@ use serde::{Deserialize, Serialize};
 
 use morn_capability::{EffectClass, ResolvedCapability};
 
+use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{Id, RuntimeBindingId, WorkPackageId};
 use morn_kernel::time::Timestamp;
+use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 use morn_work::control::{AutonomyPosture, WorkResource};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -107,6 +109,12 @@ pub struct ExecutionBinding {
     pub provider_version: String,
     pub provider_digest: Option<String>,
     pub runtime_ref: Option<String>,
+    #[serde(default)]
+    pub execution_environment_ref: Option<String>,
+    #[serde(default)]
+    pub execution_class: Option<ExecutionClass>,
+    #[serde(default)]
+    pub execution_guarantees: Vec<ExecutionGuarantee>,
     /// Maximum real-world effect the selected capability declared and was
     /// resolved under. None is legacy/untyped and must not authorize a write.
     #[serde(default)]
@@ -141,6 +149,9 @@ impl ExecutionBinding {
             provider_version: provider_version.into(),
             provider_digest: None,
             runtime_ref: None,
+            execution_environment_ref: None,
+            execution_class: None,
+            execution_guarantees: Vec::new(),
             effect_ceiling: None,
             compensation_ref: None,
             idempotency_key_required: false,
@@ -174,6 +185,50 @@ impl ExecutionBinding {
         self.work_id == work.id && self.work_generation == work.generation
     }
 
+    pub fn pin_execution_environment(
+        &mut self,
+        environment_ref: impl Into<String>,
+        class: ExecutionClass,
+        mut guarantees: Vec<ExecutionGuarantee>,
+    ) -> Result<()> {
+        let environment_ref = environment_ref.into();
+        if environment_ref.trim().is_empty() {
+            return Err(Error::validation(
+                "execution binding environment reference must be non-empty",
+            ));
+        }
+        guarantees.sort();
+        guarantees.dedup();
+        self.execution_environment_ref = Some(environment_ref);
+        self.execution_class = Some(class);
+        self.execution_guarantees = guarantees;
+        Ok(())
+    }
+
+    pub fn environment_identity_consistent(&self) -> bool {
+        match (&self.execution_environment_ref, self.execution_class) {
+            (None, None) => self.execution_guarantees.is_empty(),
+            (Some(reference), Some(_)) => !reference.trim().is_empty(),
+            _ => false,
+        }
+    }
+
+    pub fn environment_satisfies(
+        &self,
+        minimum_class: ExecutionClass,
+        required: &[ExecutionGuarantee],
+    ) -> bool {
+        self.execution_environment_ref
+            .as_deref()
+            .is_some_and(|reference| !reference.trim().is_empty())
+            && self
+                .execution_class
+                .is_some_and(|class| class.satisfies(minimum_class))
+            && required
+                .iter()
+                .all(|guarantee| self.execution_guarantees.contains(guarantee))
+    }
+
     /// Provider migration creates a new binding. The old binding is not edited.
     pub fn rebind_for_work(
         &self,
@@ -189,6 +244,9 @@ impl ExecutionBinding {
         );
         replacement.provider_digest = None;
         replacement.runtime_ref = None;
+        replacement.execution_environment_ref = None;
+        replacement.execution_class = None;
+        replacement.execution_guarantees.clear();
         replacement.effect_ceiling = request.new_effect_ceiling.or(if same_capability {
             self.effect_ceiling
         } else {
@@ -340,7 +398,16 @@ mod tests {
         let work_id = WorkPackageId::generate_with("wp");
         let spec = WorkSpec::new(work_id, "investigate", "factory/v1");
         let mut work = WorkResource::new(WorkspaceId::generate(), spec);
-        let old = ExecutionBinding::for_work(&work, "manifest@sha256:a", "dsh", "1");
+        let mut old = ExecutionBinding::for_work(&work, "manifest@sha256:a", "dsh", "1");
+        old.pin_execution_environment(
+            "env://container/a",
+            ExecutionClass::Container,
+            vec![
+                ExecutionGuarantee::SecretIndirection,
+                ExecutionGuarantee::NetworkEgressPolicy,
+            ],
+        )
+        .unwrap();
         assert!(old.matches_work_generation(&work));
 
         let mut next_spec = work.spec.clone();
@@ -352,5 +419,8 @@ mod tests {
         assert_eq!(old.provider_ref, "dsh");
         assert_eq!(replacement.provider_ref, "pi");
         assert_eq!(replacement.migration_from, Some(old.id));
+        assert!(replacement.execution_environment_ref.is_none());
+        assert!(replacement.execution_class.is_none());
+        assert!(replacement.execution_guarantees.is_empty());
     }
 }

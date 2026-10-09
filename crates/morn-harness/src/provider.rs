@@ -604,6 +604,11 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     return Err(self.real_unavailable());
                 }
                 self.require_real_e0_scope(ctx)?;
+                if !ctx.proves_real_harness_environment() {
+                    return Err(Error::validation(
+                        "real DSH SDK requires a bound container-or-stronger execution environment with filesystem-write, network-egress and secret-indirection guarantees",
+                    ));
+                }
                 self.ensure_real_client()?;
                 let session_id = format!("morn-dsh-{}", uuid::Uuid::new_v4());
                 let event = ExecutionEvent::new(

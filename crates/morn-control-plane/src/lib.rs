@@ -728,6 +728,11 @@ impl ControlPlaneStore for MornStore {
                 "execution binding must match the exact Work, generation, profile and site",
             ));
         }
+        if !binding.environment_identity_consistent() {
+            return Err(Error::validation(
+                "execution binding environment identity is partial or inconsistent",
+            ));
+        }
         self.save_record_immutable(
             "execution_binding_v115",
             binding.id.as_str(),
