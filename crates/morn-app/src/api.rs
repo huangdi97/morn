@@ -498,7 +498,10 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
         }
     }
 
-    let cleanup_error = provider.unmount(&handle).err().map(|error| error.to_string());
+    let cleanup_error = provider
+        .unmount(&handle)
+        .err()
+        .map(|error| error.to_string());
     Ok(E0HarnessTurnEvidence {
         output: result.as_ref().ok().cloned(),
         error: result.err().map(|error| error.to_string()),
@@ -509,10 +512,7 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
     })
 }
 
-async fn v115_work_execute_e0(
-    State(state): State<AppState>,
-    Json(body): Json<Value>,
-) -> ApiResult {
+async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_capability::EffectClass;
     use morn_control_plane::{ControlPlaneStore, WorkProgressController, WorkProgressInputs};
     use morn_work::control::WorkPhase;
@@ -548,11 +548,7 @@ async fn v115_work_execute_e0(
         let binding = guard
             .store
             .load_record::<morn_runtime::ExecutionBinding>("execution_binding_v115", binding_id)?
-            .ok_or_else(|| {
-                AppError(Error::not_found(format!(
-                    "ExecutionBinding {binding_id}"
-                )))
-            })?;
+            .ok_or_else(|| AppError(Error::not_found(format!("ExecutionBinding {binding_id}"))))?;
         (
             work,
             binding,
@@ -598,7 +594,11 @@ async fn v115_work_execute_e0(
             run_e0_harness_turn(&mut *provider, &work_for_turn, &binding_for_turn, &input)
         })
         .await
-        .map_err(|error| AppError(Error::internal(format!("native harness task failed: {error}"))))??,
+        .map_err(|error| {
+            AppError(Error::internal(format!(
+                "native harness task failed: {error}"
+            )))
+        })??,
         "deepseek-harness" => tokio::task::spawn_blocking(move || {
             let mut provider = dsh
                 .lock()
@@ -606,7 +606,9 @@ async fn v115_work_execute_e0(
             run_e0_harness_turn(&mut *provider, &work_for_turn, &binding_for_turn, &input)
         })
         .await
-        .map_err(|error| AppError(Error::internal(format!("DSH harness task failed: {error}"))))??,
+        .map_err(|error| {
+            AppError(Error::internal(format!("DSH harness task failed: {error}")))
+        })??,
         "pi" => tokio::task::spawn_blocking(move || {
             let mut provider = pi
                 .lock()
@@ -627,7 +629,10 @@ async fn v115_work_execute_e0(
         guard.store.save_execution_receipt(&work, &turn.receipt)?;
         let mut current = guard
             .store
-            .load_record::<morn_work::control::WorkResource>("work_resource_v115", work.id.as_str())?
+            .load_record::<morn_work::control::WorkResource>(
+                "work_resource_v115",
+                work.id.as_str(),
+            )?
             .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {}", work.id))))?;
         if current.generation == work.generation {
             WorkProgressController.reconcile(
