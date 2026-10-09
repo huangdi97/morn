@@ -48,6 +48,15 @@ try {
     if (route === "/hub" && !(await page.getByRole("heading", { name: "v11.5 Capability Supply Chain" }).isVisible())) {
       errors.push("hub: governed capability supply-chain section is not visible");
     }
+    if (route === "/hub" && !(await page.getByRole("heading", { name: "Provider Fabric" }).isVisible())) {
+      errors.push("hub: canonical Provider Fabric registry is not visible");
+    }
+    if (route === "/hub") {
+      const hubText = await page.locator(".hub-provider-fabric").innerText();
+      if (!hubText.includes("deepseek-harness") || !hubText.includes("pi")) {
+        errors.push("hub: DSH/Pi provider registry entries are missing");
+      }
+    }
     if (route === "/studio") {
       const compilerGoal = page.locator(".studio-compiler-goal");
       if (!(await compilerGoal.count()) || !(await compilerGoal.innerText()).includes("Deliver a reviewed report")) {

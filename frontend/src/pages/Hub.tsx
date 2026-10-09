@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiGet, HubV2Data, HubV3Data } from "../api";
+import { apiGet, HubV2Data, HubV3Data, V115Status } from "../api";
 import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
 
 
@@ -98,6 +98,8 @@ export default function Hub() {
   const [error, setError] = useState<string | null>(null);
   const [supply, setSupply] = useState<CapabilitySupplyData | null>(null);
   const [supplyError, setSupplyError] = useState<string | null>(null);
+  const [providerStatus, setProviderStatus] = useState<V115Status | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   useEffect(() => {
     apiGet<HubData>("/hub")
@@ -112,6 +114,9 @@ export default function Hub() {
     apiGet<CapabilitySupplyData>("/v115/capabilities")
       .then(setSupply)
       .catch((e: Error) => setSupplyError(e.message));
+    apiGet<V115Status>("/v115/status")
+      .then(setProviderStatus)
+      .catch((e: Error) => setProviderError(e.message));
   }, []);
 
   if (error) return <ErrorBox message={error} />;
@@ -122,6 +127,52 @@ export default function Hub() {
       <header className="page-header">
         <h1>Hub — Registry</h1>
       </header>
+      <section className="hub-provider-fabric" aria-label="Provider fabric registry">
+        <div className="hub-supply-head">
+          <span className="work-focus-eyebrow">PROVIDER FABRIC · V11.5</span>
+          <h2>Provider Fabric</h2>
+          <p>
+            Registered means configured or known, not healthy. Only evidence-backed Healthy providers
+            are selectable, and harness health never grants authority beyond the pinned Work/Profile boundary.
+          </p>
+        </div>
+        {providerError ? (
+          <p role="alert">The provider registry is unavailable: {providerError}.</p>
+        ) : !providerStatus ? (
+          <p role="status">Loading provider registry…</p>
+        ) : (
+          <>
+            <div className="hub-supply-grid">
+              {providerStatus.provider_catalog.map((provider) => (
+                <article className="hub-capability" key={provider.id}>
+                  <header className="hub-capability-header">
+                    <h3>{provider.id}</h3>
+                    <StatusPill value={provider.status} />
+                  </header>
+                  <KeyValue k="Family" v={provider.family} />
+                  <KeyValue k="Version" v={provider.version} />
+                  <KeyValue k="Protocols" v={provider.protocols.join(", ") || "None declared"} />
+                  <KeyValue k="Features" v={provider.features.join(", ") || "None declared"} />
+                  <KeyValue k="Digest" v={provider.digest ?? "Not pinned"} />
+                  <KeyValue
+                    k="Health lease"
+                    v={provider.health_valid_until ? String(provider.health_valid_until) : "No live health lease"}
+                  />
+                  <KeyValue k="Evidence" v={provider.evidence_refs.join(" · ") || "No evidence recorded"} />
+                </article>
+              ))}
+            </div>
+            {providerStatus.provider_observations.length > 0 && (
+              <p className="work-focus-empty">
+                Runtime configuration observations:{" "}
+                {providerStatus.provider_observations
+                  .map((item) => `${item.provider_id}: ${item.current_status} — ${item.reason}`)
+                  .join(" · ")}
+              </p>
+            )}
+          </>
+        )}
+      </section>
       <section className="hub-supply-chain" aria-label="Governed capability supply chain">
         <div className="hub-supply-head">
           <span className="work-focus-eyebrow">GOVERNED ASSETS · V11.5</span>

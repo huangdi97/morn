@@ -85,6 +85,32 @@ export interface V115ControlPlaneData {
 }
 
 export interface V115Status {
+  provider_catalog: Array<{
+    id: string;
+    family: string;
+    version: string;
+    digest: string | null;
+    endpoint_ref: string | null;
+    protocols: string[];
+    features: string[];
+    status: string;
+    evidence_refs: string[];
+    observed_at: number | string | Record<string, unknown>;
+    health_valid_until: number | string | Record<string, unknown> | null;
+  }>;
+  provider_observations: Array<{
+    provider_id: string;
+    previous_status: string;
+    current_status: string;
+    reason: string;
+    evidence_refs: string[];
+    observed_at: number | string | Record<string, unknown>;
+    health_valid_until: number | string | Record<string, unknown> | null;
+  }>;
+  provider_status_semantics: {
+    registered: string;
+    healthy: string;
+  };
   architecture: {
     definition: string;
     protocol_version: { major: number; minor: number; patch: number };
@@ -144,7 +170,11 @@ export interface WorkbenchData {
   artifacts: { versions: number };
   attention: Array<{ id: string; kind: string; subject: string; priority: string }>;
   outcomes: Array<{ id: string; objective: string; acceptance_met: boolean }>;
-  harness: { native: { provider: string; status: string }; dsh: { provider: string; status: string } };
+  harness: {
+    native: { provider: string; status: string };
+    dsh: { provider: string; status: string };
+    pi: { provider: string; mode: string; features: Record<string, boolean> };
+  };
   evolution_candidates: number;
   domain_packs: string[];
   e2e_result: { all_ok: boolean; steps: Array<{ step: string; ok: boolean; detail: string }>; claim_id: string } | null;
