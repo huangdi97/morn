@@ -1834,7 +1834,7 @@ mod control_plane_persistence_scope_tests {
         let store = MornStore::open_in_memory().unwrap();
         let mut work = fixture_work();
         work.spec.source_solution_ref = Some("solution://fixture@1.0.0".to_string());
-        store.save_work_resource(&work).unwrap();
+        store.save_work_resource_cas(&mut work).unwrap();
         let decision = CapabilityResolutionDecision::new(
             &work,
             WorkcellPlan {
@@ -1867,7 +1867,7 @@ mod control_plane_persistence_scope_tests {
         let mut next = work.spec.clone();
         next.goal = "changed".to_string();
         work.replace_spec(next);
-        store.save_work_resource(&work).unwrap();
+        store.save_work_resource_cas(&mut work).unwrap();
         assert!(store.save_capability_resolution(&work, &decision).is_err());
     }
 
