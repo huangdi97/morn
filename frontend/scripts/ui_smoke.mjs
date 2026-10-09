@@ -143,6 +143,13 @@ try {
       if (!(await page.getByRole("heading", { name: "Authoritative outcome observation" }).isVisible())) {
         errors.push("workbench: authoritative source-to-outcome surface is not visible");
       }
+      if (await page.getByLabel("Observed facts (JSON)").count()) {
+        errors.push("workbench: callers must not be able to self-assert authoritative world facts");
+      }
+      const trustNote = page.getByText(/HTTP callers cannot provide observed_facts/i);
+      if (!(await trustNote.count())) {
+        errors.push("workbench: source observation trust boundary is not explained");
+      }
     }
     if (route === "/workbench" && await page.locator("details.workbench-reference").evaluate((node) => node.open)) {
       errors.push("workbench: legacy diagnostics should be collapsed by default");

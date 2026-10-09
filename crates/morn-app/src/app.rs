@@ -24,7 +24,7 @@ use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
 use morn_harness::{PiHarnessProvider, PiMode};
-use morn_integration::SourceOfTruthBinding;
+use morn_integration::{SourceObservationAttestation, SourceOfTruthBinding};
 #[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;
 use morn_kernel::workspace::{Workspace, WorkspaceKind};
@@ -60,6 +60,9 @@ pub struct AppInner {
     /// Deployment-owned authoritative read bindings. HTTP callers may attach
     /// these reviewed bindings to Work, but cannot manufacture a new authority.
     pub source_of_truth_catalog: Vec<SourceOfTruthBinding>,
+    /// Deployment/connector-originated observations. HTTP callers may select
+    /// these immutable attestations but cannot submit world facts themselves.
+    pub source_observation_attestations: Vec<SourceObservationAttestation>,
     /// Deployment-attested reviewer identities. UI/API callers may select a
     /// reviewer but cannot self-assert principal identity or reviewer role.
     pub acceptance_reviewers: Vec<AcceptanceReviewerAttestation>,
@@ -208,6 +211,54 @@ fn configured_source_of_truth_bindings() -> morn_kernel::Result<Vec<SourceOfTrut
     Ok(bindings)
 }
 
+fn configured_source_observation_attestations(
+) -> morn_kernel::Result<Vec<SourceObservationAttestation>> {
+    let Ok(path) = std::env::var("MORN_SOURCE_OBSERVATION_ATTESTATIONS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_SOURCE_OBSERVATION_ATTESTATIONS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read source observation attestation file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid source observation attestation JSON in {path:?}: {error}"
+        ))
+    })?;
+    let attestations: Vec<SourceObservationAttestation> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid source observation attestation entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid source observation attestation entry: {error}"
+            ))
+        })?],
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    for attestation in &attestations {
+        attestation.validate()?;
+        if !ids.insert(attestation.attestation_id.clone()) {
+            return Err(morn_kernel::error::Error::validation(
+                "source observation attestation ids must be unique",
+            ));
+        }
+    }
+    Ok(attestations)
+}
+
 fn configured_acceptance_reviewers() -> morn_kernel::Result<Vec<AcceptanceReviewerAttestation>> {
     let Ok(path) = std::env::var("MORN_ACCEPTANCE_REVIEWERS_FILE") else {
         return Ok(Vec::new());
@@ -347,6 +398,7 @@ impl AppState {
         };
         let execution_environments = configured_execution_environments()?;
         let source_of_truth_catalog = configured_source_of_truth_bindings()?;
+        let source_observation_attestations = configured_source_observation_attestations()?;
         let acceptance_reviewers = configured_acceptance_reviewers()?;
         let acceptance_review_authorizations = configured_acceptance_review_authorizations()?;
         let mut inner = AppInner {
@@ -362,6 +414,7 @@ impl AppState {
             pi_harness: Arc::new(Mutex::new(configured_pi_harness()?)),
             execution_environments,
             source_of_truth_catalog,
+            source_observation_attestations,
             acceptance_reviewers,
             acceptance_review_authorizations,
             evolution: EvolutionEngine::new(),

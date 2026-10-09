@@ -19,7 +19,8 @@ pub use interoperability::{
     InteropProtocol, McpHttpAuthorizationBinding, McpTaskEvidence, McpTaskState, McpToolDescriptor,
 };
 pub use source_truth::{
-    ConflictPolicy, SourceOfTruthBinding, SourceOfTruthBindingId, TruthAuthorityKind,
+    ConflictPolicy, SourceObservationAttestation, SourceOfTruthBinding, SourceOfTruthBindingId,
+    TruthAuthorityKind,
 };
 
 macro_rules! local_id {

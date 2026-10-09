@@ -138,6 +138,27 @@ export interface AcceptanceReviewerCatalog {
   }>;
   deployment_attested: boolean;
   caller_can_self_assert_identity: boolean;
+  final_review_requires_exact_out_of_band_authorization: boolean;
+  authorization_ids_are_listed: boolean;
+}
+
+export interface SourceObservationCatalog {
+  observations: Array<{
+    attestation_id: string;
+    workspace_id: string;
+    work_package_id: string;
+    source_binding_id: string;
+    fact_type: string;
+    objective: string;
+    source_ref: string;
+    observed_facts: Record<string, unknown>;
+    evidence_refs: string[];
+    observed_at: number | string | Record<string, unknown>;
+    valid_until: number | string | Record<string, unknown> | null;
+  }>;
+  deployment_attested: boolean;
+  caller_can_submit_world_facts: boolean;
+  consumed_attestations_are_listed: boolean;
 }
 
 export interface SourceOfTruthCatalog {

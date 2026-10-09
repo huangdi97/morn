@@ -98,6 +98,10 @@ pub fn router(state: AppState) -> Router {
             get(v115_source_of_truth_catalog),
         )
         .route(
+            "/api/v115/source-of-truth/observations",
+            get(v115_source_observations),
+        )
+        .route(
             "/api/v115/work/bind-source-of-truth",
             post(v115_work_bind_source_of_truth),
         )
@@ -759,6 +763,36 @@ async fn v115_work_bind_source_of_truth(
     })))
 }
 
+async fn v115_source_observations(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    let now = morn_kernel::time::Timestamp::now();
+    let mut observations = Vec::new();
+    for attestation in &guard.source_observation_attestations {
+        if attestation.workspace_id != guard.workspace.id
+            || attestation.observed_at > now
+            || attestation.valid_until.is_some_and(|until| now > until)
+        {
+            continue;
+        }
+        if guard
+            .store
+            .load_record::<Value>(
+                "source_observation_attestation_consumed_v115",
+                &attestation.attestation_id,
+            )?
+            .is_none()
+        {
+            observations.push(attestation.clone());
+        }
+    }
+    Ok(Json(json!({
+        "observations": observations,
+        "deployment_attested": true,
+        "caller_can_submit_world_facts": false,
+        "consumed_attestations_are_listed": false
+    })))
+}
+
 fn source_ref_within_binding(binding_root: &str, source_ref: &str) -> bool {
     let root = binding_root.trim_end_matches('/');
     source_ref == root
@@ -780,65 +814,38 @@ async fn v115_work_observe_outcome(
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
-    let binding_id = body
-        .get("source_binding_id")
+    let attestation_id = body
+        .get("observation_attestation_id")
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| AppError(Error::validation("source_binding_id is required")))?;
-    let fact_type = body
-        .get("fact_type")
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| AppError(Error::validation("fact_type is required")))?;
-    let objective = body
-        .get("objective")
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| AppError(Error::validation("objective is required")))?;
-    let source_ref = body
-        .get("source_ref")
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| AppError(Error::validation("source_ref is required")))?;
-    let observed_facts = body
-        .get("observed_facts")
-        .cloned()
-        .ok_or_else(|| AppError(Error::validation("observed_facts is required")))?;
-    if !observed_facts.is_object() {
-        return Err(AppError(Error::validation(
-            "observed_facts must be a JSON object",
-        )));
-    }
-    let mut evidence_refs: Vec<String> = body
-        .get("evidence_refs")
-        .and_then(Value::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default();
-    evidence_refs.sort();
-    evidence_refs.dedup();
-    if evidence_refs.is_empty() {
-        return Err(AppError(Error::validation(
-            "authoritative outcome observation requires at least one evidence reference",
-        )));
+        .ok_or_else(|| {
+            AppError(Error::validation(
+                "observation_attestation_id is required; callers cannot submit world facts",
+            ))
+        })?;
+    for forbidden in [
+        "source_binding_id",
+        "fact_type",
+        "objective",
+        "source_ref",
+        "observed_facts",
+        "evidence_refs",
+    ] {
+        if body.get(forbidden).is_some() {
+            return Err(AppError(Error::validation(format!(
+                "{forbidden} is deployment-attested observation data and cannot be asserted by the caller"
+            ))));
+        }
     }
 
     let guard = state.lock();
+    let now = morn_kernel::time::Timestamp::now();
     let mut work = guard
         .store
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
     if work.workspace_id != guard.workspace.id {
-        return Err(AppError(Error::not_found(format!(
-            "WorkResource {work_id}"
-        ))));
+        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
     }
     if work.status.phase.is_terminal() {
         return Err(AppError(Error::invalid_state(
@@ -846,18 +853,52 @@ async fn v115_work_observe_outcome(
         )));
     }
 
+    let attestation = guard
+        .source_observation_attestations
+        .iter()
+        .find(|candidate| candidate.attestation_id == attestation_id)
+        .cloned()
+        .ok_or_else(|| {
+            AppError(Error::not_authorized(
+                "observation attestation is not present in the deployment trust set",
+            ))
+        })?;
+    if attestation.workspace_id != work.workspace_id || attestation.work_package_id != work.id {
+        return Err(AppError(Error::not_authorized(
+            "observation attestation does not belong to this exact Work and workspace",
+        )));
+    }
+
     let binding = guard
         .store
-        .load_record::<SourceOfTruthBinding>("source_of_truth_binding_v115", binding_id)?
+        .load_record::<SourceOfTruthBinding>(
+            "source_of_truth_binding_v115",
+            attestation.source_binding_id.as_str(),
+        )?
         .ok_or_else(|| {
             AppError(Error::not_found(format!(
-                "SourceOfTruthBinding {binding_id}"
+                "SourceOfTruthBinding {}",
+                attestation.source_binding_id
             )))
         })?;
     binding.validate()?;
-    if binding.site_ref != work.spec.site_ref || !binding.authoritative_for(fact_type) {
+    if !attestation.active_for(
+        &work.workspace_id,
+        &work.id,
+        &binding.id,
+        &attestation.fact_type,
+        now,
+    ) {
+        return Err(AppError(Error::not_authorized(
+            "source observation attestation is stale or does not match the Work/source binding",
+        )));
+    }
+    if binding.site_ref != work.spec.site_ref
+        || !binding.authoritative_for(&attestation.fact_type)
+        || !source_ref_within_binding(&binding.source_ref, &attestation.source_ref)
+    {
         return Err(AppError(Error::validation(
-            "source binding is not authoritative for this Work site and fact type",
+            "attested observation falls outside the bound source authority",
         )));
     }
     let bound_for_work = guard
@@ -868,7 +909,7 @@ async fn v115_work_observe_outcome(
         )?
         .into_iter()
         .any(|evidence| {
-            evidence.active_for(&work, morn_kernel::time::Timestamp::now())
+            evidence.active_for(&work, now)
                 && evidence.condition_type == "SourceOfTruthBound"
                 && evidence.satisfied
                 && evidence
@@ -881,9 +922,14 @@ async fn v115_work_observe_outcome(
             "source-of-truth binding is not attached to this Work generation",
         )));
     }
-    if !source_ref_within_binding(&binding.source_ref, source_ref) {
-        return Err(AppError(Error::validation(
-            "observed source_ref is outside the authoritative source binding",
+    let consumed_kind = "source_observation_attestation_consumed_v115";
+    if guard
+        .store
+        .load_record::<Value>(consumed_kind, attestation_id)?
+        .is_some()
+    {
+        return Err(AppError(Error::conflict(
+            "source observation attestation was already consumed",
         )));
     }
 
@@ -896,12 +942,30 @@ async fn v115_work_observe_outcome(
     let mut outcome = ObservedOutcome::new(
         work.workspace_id.clone(),
         work.id.clone(),
-        objective,
+        attestation.objective.clone(),
         source_kind,
-        source_ref,
-        observed_facts,
+        attestation.source_ref.clone(),
+        attestation.observed_facts.clone(),
     );
-    outcome.evidence_refs = evidence_refs;
+    outcome.evidence_refs = attestation.evidence_refs.clone();
+    outcome.observed_at = attestation.observed_at;
+
+    // Consume first. A later storage/controller failure burns the attestation
+    // fail-closed instead of making authoritative world evidence replayable.
+    guard.store.save_record_immutable(
+        consumed_kind,
+        attestation_id,
+        work.workspace_id.as_str(),
+        now.millis(),
+        &json!({
+            "attestation_id": attestation_id,
+            "work_id": work.id,
+            "source_binding_id": binding.id,
+            "fact_type": attestation.fact_type,
+            "outcome_id": outcome.id,
+            "consumed_at": now
+        }),
+    )?;
     guard.store.save_observed_outcome(&work, &outcome)?;
 
     WorkProgressController.reconcile(
@@ -917,10 +981,11 @@ async fn v115_work_observe_outcome(
         "outcome": outcome,
         "work": work,
         "source_binding": binding.id,
-        "fact_type": fact_type,
+        "observation_attestation_id": attestation_id,
         "business_outcome_source_grounded": true,
+        "caller_supplied_world_facts": false,
         "independent_acceptance": false,
-        "note": "Authoritative observation advances Work to Delivered, not Accepted. Independent review remains required."
+        "note": "Deployment-attested authoritative observation advances Work to Delivered, not Accepted. Independent review remains required."
     })))
 }
 
@@ -4809,7 +4874,8 @@ mod workspace_boundary_tests {
     async fn deployment_source_binding_is_required_before_authoritative_outcome_observation() {
         use morn_control_plane::ControlPlaneStore;
         use morn_integration::{
-            ConflictPolicy, SourceOfTruthBinding, SourceOfTruthBindingId, TruthAuthorityKind,
+            ConflictPolicy, SourceObservationAttestation, SourceOfTruthBinding,
+            SourceOfTruthBindingId, TruthAuthorityKind,
         };
         use morn_kernel::time::Timestamp;
         use morn_work::control::{WorkResource, WorkSpec};
@@ -4848,12 +4914,7 @@ mod workspace_boundary_tests {
             State(state.clone()),
             Json(json!({
                 "work_id": work.id.to_string(),
-                "source_binding_id": catalog_id,
-                "fact_type": "delivery.status",
-                "objective": "observe delivery",
-                "source_ref": "system://orders/42",
-                "observed_facts": {"status":"complete"},
-                "evidence_refs": ["system://orders/42/receipt"]
+                "observation_attestation_id": "missing-observation-attestation"
             })),
         )
         .await;
@@ -4875,16 +4936,42 @@ mod workspace_boundary_tests {
             "SourceOfTruthBound"
         );
 
+        {
+            let mut guard = state.lock();
+            let binding_id = SourceOfTruthBindingId::new(work_binding_id.clone());
+            guard.source_observation_attestations.push(SourceObservationAttestation {
+                attestation_id: "obs-outside".to_string(),
+                workspace_id: guard.workspace.id.clone(),
+                work_package_id: work.id.clone(),
+                source_binding_id: binding_id.clone(),
+                fact_type: "delivery.status".to_string(),
+                objective: "observe delivery".to_string(),
+                source_ref: "system://orders-evil/42".to_string(),
+                observed_facts: json!({"status":"complete"}),
+                evidence_refs: vec!["system://orders-evil/42/receipt".to_string()],
+                observed_at: Timestamp::now(),
+                valid_until: None,
+            });
+            guard.source_observation_attestations.push(SourceObservationAttestation {
+                attestation_id: "obs-grounded".to_string(),
+                workspace_id: guard.workspace.id.clone(),
+                work_package_id: work.id.clone(),
+                source_binding_id: binding_id,
+                fact_type: "delivery.status".to_string(),
+                objective: "observe delivery".to_string(),
+                source_ref: "system://orders/42".to_string(),
+                observed_facts: json!({"status":"complete"}),
+                evidence_refs: vec!["system://orders/42/receipt".to_string()],
+                observed_at: Timestamp::now(),
+                valid_until: None,
+            });
+        }
+
         let outside = v115_work_observe_outcome(
             State(state.clone()),
             Json(json!({
                 "work_id": work.id.to_string(),
-                "source_binding_id": work_binding_id,
-                "fact_type": "delivery.status",
-                "objective": "observe delivery",
-                "source_ref": "system://orders-evil/42",
-                "observed_facts": {"status":"complete"},
-                "evidence_refs": ["system://orders-evil/42/receipt"]
+                "observation_attestation_id": "obs-outside"
             })),
         )
         .await;
@@ -4894,18 +4981,15 @@ mod workspace_boundary_tests {
             State(state.clone()),
             Json(json!({
                 "work_id": work.id.to_string(),
-                "source_binding_id": work_binding_id,
-                "fact_type": "delivery.status",
-                "objective": "observe delivery",
-                "source_ref": "system://orders/42",
-                "observed_facts": {"status":"complete"},
-                "evidence_refs": ["system://orders/42/receipt"]
+                "observation_attestation_id": "obs-grounded"
             })),
         )
         .await
         .unwrap();
         assert_eq!(observed["work"]["status"]["phase"], "Delivered");
         assert_eq!(observed["independent_acceptance"], false);
+        assert_eq!(observed["caller_supplied_world_facts"], false);
+        assert_eq!(observed["observation_attestation_id"], "obs-grounded");
 
         let guard = state.lock();
         assert_eq!(
@@ -4927,6 +5011,14 @@ mod workspace_boundary_tests {
             )
             .unwrap()
             .is_empty());
+        assert!(guard
+            .store
+            .load_record::<Value>(
+                "source_observation_attestation_consumed_v115",
+                "obs-grounded",
+            )
+            .unwrap()
+            .is_some());
     }
 
     #[tokio::test]
