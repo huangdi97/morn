@@ -260,8 +260,18 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
     let (dsh_health, pi_health) = {
         let guard = state.lock();
         (
-            guard.dsh_harness.runtime_health().clone(),
-            guard.pi_harness.runtime_health().clone(),
+            guard
+                .dsh_harness
+                .lock()
+                .expect("dsh harness poisoned")
+                .runtime_health()
+                .clone(),
+            guard
+                .pi_harness
+                .lock()
+                .expect("pi harness poisoned")
+                .runtime_health()
+                .clone(),
         )
     };
     let now = morn_kernel::time::Timestamp::now();
@@ -1326,7 +1336,10 @@ async fn workbench(State(state): State<AppState>) -> ApiResult {
     let world = &guard.world;
     let work = &guard.work;
     let durable = &guard.durable;
-    let dsh_status = match guard.dsh_harness.mode() {
+    let native_harness = guard.native_harness.lock().expect("native harness poisoned");
+    let dsh_harness = guard.dsh_harness.lock().expect("dsh harness poisoned");
+    let pi_harness = guard.pi_harness.lock().expect("pi harness poisoned");
+    let dsh_status = match dsh_harness.mode() {
         morn_harness::provider::DshMode::Fixture => "fixture-mode",
         morn_harness::provider::DshMode::Real => "real-sdk-mode",
     };
@@ -1376,19 +1389,19 @@ async fn workbench(State(state): State<AppState>) -> ApiResult {
         "attention": attention,
         "outcomes": outcomes,
         "harness": {
-            "native": { "provider": guard.native_harness.provider_name(), "status": "mounted" },
+            "native": { "provider": native_harness.provider_name(), "status": "mounted" },
             "dsh": {
-                "provider": guard.dsh_harness.provider_name(),
+                "provider": dsh_harness.provider_name(),
                 "status": dsh_status,
-                "features": guard.dsh_harness.features()
+                "features": dsh_harness.features()
             },
             "pi": {
-                "provider": guard.pi_harness.provider_name(),
-                "mode": match guard.pi_harness.mode() {
+                "provider": pi_harness.provider_name(),
+                "mode": match pi_harness.mode() {
                     morn_harness::PiMode::Fixture => "fixture",
                     morn_harness::PiMode::Real => "real-rpc",
                 },
-                "features": guard.pi_harness.features()
+                "features": pi_harness.features()
             }
         },
         "evolution_candidates": guard.evolution.candidates().len(),
@@ -1441,6 +1454,9 @@ async fn studio(State(state): State<AppState>) -> ApiResult {
 
 async fn console(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
+    let native_harness = guard.native_harness.lock().expect("native harness poisoned");
+    let dsh_harness = guard.dsh_harness.lock().expect("dsh harness poisoned");
+    let pi_harness = guard.pi_harness.lock().expect("pi harness poisoned");
     let ws = &guard.workspace;
     let world = &guard.world;
     let ledger = world.ledger();
@@ -1471,40 +1487,40 @@ async fn console(State(state): State<AppState>) -> ApiResult {
         "world_state": world.objects().len(),
         "work": guard.work.work_packages().len(),
         "harness_health": {
-            "native": guard.native_harness.provider_name(),
+            "native": native_harness.provider_name(),
             "dsh": {
-                "provider": guard.dsh_harness.provider_name(),
-                "mode": match guard.dsh_harness.mode() {
+                "provider": dsh_harness.provider_name(),
+                "mode": match dsh_harness.mode() {
                     morn_harness::provider::DshMode::Fixture => "fixture",
                     morn_harness::provider::DshMode::Real => "real-sdk",
                 },
-                "features": guard.dsh_harness.features(),
-                "effect_ceiling": match guard.dsh_harness.mode() {
+                "features": dsh_harness.features(),
+                "effect_ceiling": match dsh_harness.mode() {
                     morn_harness::provider::DshMode::Fixture => "fixture-reference",
                     morn_harness::provider::DshMode::Real => "E0-only; E1/E2/E3 via Morn ExternalAction",
                 },
-                "credential_boundary": match guard.dsh_harness.mode() {
+                "credential_boundary": match dsh_harness.mode() {
                     morn_harness::provider::DshMode::Fixture => "no live provider credential",
                     morn_harness::provider::DshMode::Real => "scrubbed child environment; explicit MORN_DSH_ENV_PASSTHROUGH only",
                 },
-                "runtime_health": guard.dsh_harness.runtime_health()
+                "runtime_health": dsh_harness.runtime_health()
             },
             "pi": {
-                "provider": guard.pi_harness.provider_name(),
-                "mode": match guard.pi_harness.mode() {
+                "provider": pi_harness.provider_name(),
+                "mode": match pi_harness.mode() {
                     morn_harness::PiMode::Fixture => "fixture",
                     morn_harness::PiMode::Real => "real-rpc",
                 },
-                "features": guard.pi_harness.features(),
-                "effect_ceiling": match guard.pi_harness.mode() {
+                "features": pi_harness.features(),
+                "effect_ceiling": match pi_harness.mode() {
                     morn_harness::PiMode::Fixture => "fixture-reference",
                     morn_harness::PiMode::Real => "E0-only; E1/E2/E3 via Morn ExternalAction",
                 },
-                "credential_boundary": match guard.pi_harness.mode() {
+                "credential_boundary": match pi_harness.mode() {
                     morn_harness::PiMode::Fixture => "no live provider credential",
                     morn_harness::PiMode::Real => "scrubbed child environment; explicit MORN_PI_ENV_PASSTHROUGH only",
                 },
-                "runtime_health": guard.pi_harness.runtime_health()
+                "runtime_health": pi_harness.runtime_health()
             }
         },
         "approvals_satisfied": approvals,

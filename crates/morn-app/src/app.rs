@@ -46,9 +46,11 @@ pub struct AppInner {
     pub artifacts: ArtifactService,
     #[cfg(feature = "domain-biolab")]
     pub biolab: BioLabService,
-    pub native_harness: MornNativeHarness,
-    pub dsh_harness: DeepSeekHarnessProvider,
-    pub pi_harness: PiHarnessProvider,
+    /// Provider runtimes use independent locks. A long model turn must not hold
+    /// the global application-state mutex and block unrelated Work/Console reads.
+    pub native_harness: Arc<Mutex<MornNativeHarness>>,
+    pub dsh_harness: Arc<Mutex<DeepSeekHarnessProvider>>,
+    pub pi_harness: Arc<Mutex<PiHarnessProvider>>,
     pub evolution: EvolutionEngine,
     pub durable: DurableWorkService,
     pub durable_v2: DurableRuntime,
@@ -148,9 +150,9 @@ impl AppState {
             artifacts: ArtifactService::new(),
             #[cfg(feature = "domain-biolab")]
             biolab,
-            native_harness: MornNativeHarness::new(),
-            dsh_harness: configured_dsh_harness()?,
-            pi_harness: configured_pi_harness()?,
+            native_harness: Arc::new(Mutex::new(MornNativeHarness::new())),
+            dsh_harness: Arc::new(Mutex::new(configured_dsh_harness()?)),
+            pi_harness: Arc::new(Mutex::new(configured_pi_harness()?)),
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
             durable_v2: DurableRuntime::new(),
