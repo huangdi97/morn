@@ -158,6 +158,14 @@ pub struct DshSdkRunResult {
     pub notifications: Vec<DshNotification>,
 }
 
+impl DshSdkRunResult {
+    /// Only an explicit durable `turn/end: completed` is a successful executor turn.
+    /// Idle, text output, or a transport-level response alone are insufficient.
+    pub fn completed_successfully(&self) -> bool {
+        self.finish_reason.as_deref() == Some("completed")
+    }
+}
+
 type DshWireItem = std::result::Result<Value, String>;
 
 pub struct DshSdkStdioClient {
@@ -339,6 +347,11 @@ impl DshSdkStdioClient {
                         }
                     }
                     if session_idle_matches(&notification, session_id) {
+                        if finish_reason.is_none() {
+                            return Err(Error::external(
+                                "DSH session became idle without a durable turn/end reason",
+                            ));
+                        }
                         return Ok(DshSdkRunResult {
                             session_id: session_id.to_string(),
                             message_id,
@@ -568,6 +581,31 @@ mod tests {
                 .as_deref(),
             Some("completed")
         );
+    }
+
+    #[test]
+    fn finish_reasons_distinguish_completed_from_non_successful_settlement() {
+        let completed = DshSdkRunResult {
+            session_id: "s".to_string(),
+            message_id: "m".to_string(),
+            final_response: "ok".to_string(),
+            finish_reason: Some("completed".to_string()),
+            notifications: vec![],
+        };
+        assert!(completed.completed_successfully());
+
+        for reason in ["aborted", "blocked", "error", "max-tokens", "interrupted", "forked"] {
+            let run = DshSdkRunResult {
+                finish_reason: Some(reason.to_string()),
+                ..completed.clone()
+            };
+            assert!(!run.completed_successfully(), "{reason} must not be promoted as success");
+        }
+        let missing = DshSdkRunResult {
+            finish_reason: None,
+            ..completed
+        };
+        assert!(!missing.completed_successfully());
     }
 
     #[test]

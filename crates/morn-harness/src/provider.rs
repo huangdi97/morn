@@ -547,27 +547,40 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     .get_mut(session_id)
                     .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
                 match run {
-                    Ok(run) => {
+                    Ok(run) if run.completed_successfully() => {
                         state.status = "idle".to_string();
                         state.events.push(ExecutionEvent::new(
                             state.ctx.workspace_id.clone(),
                             session_id.to_string(),
                             ExecutionEventKind::ModelResponse,
                             format!(
-                                "DSH SDK turn completed; message={} finish={}",
-                                run.message_id,
-                                run.finish_reason.as_deref().unwrap_or("unknown")
+                                "DSH SDK turn completed; message={} finish=completed",
+                                run.message_id
                             ),
                         ));
-                        state.last_event = format!(
-                            "dsh_turn:{}",
-                            run.finish_reason.as_deref().unwrap_or("unknown")
-                        );
+                        state.last_event = "dsh_turn:completed".to_string();
                         Ok(HarnessOutput {
                             session_id: session_id.to_string(),
                             text: run.final_response,
                             proposal_ref: None,
                         })
+                    }
+                    Ok(run) => {
+                        let reason = run.finish_reason.as_deref().unwrap_or("missing");
+                        state.status = "idle-non-success".to_string();
+                        state.events.push(ExecutionEvent::new(
+                            state.ctx.workspace_id.clone(),
+                            session_id.to_string(),
+                            ExecutionEventKind::Failed,
+                            format!(
+                                "DSH SDK turn settled without success; message={} finish={reason}",
+                                run.message_id
+                            ),
+                        ));
+                        state.last_event = format!("dsh_turn_non_success:{reason}");
+                        Err(Error::external(format!(
+                            "DSH turn settled with non-success finish reason {reason:?}; executor output was not promoted"
+                        )))
                     }
                     Err(error) => {
                         state.status = "outcome-unknown".to_string();
