@@ -70,6 +70,7 @@ describe("canonical Work remains a separate product surface", () => {
     execution_bindings: [],
     execution_manifests: [],
     execution_receipts: [],
+    interop_bindings: [],
     external_task_observations: [],
     binding_migrations: [],
     durable_workflow_bindings: [],
@@ -125,6 +126,14 @@ describe("canonical Work remains a separate product surface", () => {
         { id: "receipt-harness-old", execution_binding_ref: "binding-1", work_generation: 0, provider_ref: "deepseek-harness", outcome: "completed" },
         { id: "receipt-harness-other", execution_binding_ref: "binding-other", work_generation: 1, provider_ref: "pi", outcome: "completed" },
       ],
+      interop_bindings: [
+        { work_ref: "work:canonical-1", execution_binding_ref: "binding-1", capability_ref: "cap:mcp", endpoint: { protocol: "Mcp", endpoint_ref: "https://mcp.example.com" } },
+        { work_ref: "work:foreign", execution_binding_ref: "binding-other", capability_ref: "cap:foreign", endpoint: { protocol: "A2a", endpoint_ref: "https://agent.example/a2a" } },
+      ],
+      external_task_observations: [
+        { id: "task-observation-1", work_id: "work:canonical-1", work_generation: 1, execution_binding_ref: "binding-1", endpoint: { protocol: "Mcp", endpoint_ref: "https://mcp.example.com" }, snapshot: { mcp: { task_id: "task-1" } } },
+        { id: "task-observation-unbound", work_id: "work:canonical-1", work_generation: 1, execution_binding_ref: "binding-other", endpoint: { protocol: "A2a", endpoint_ref: "https://agent.example/a2a" }, snapshot: { a2a: { task_id: "task-foreign" } } },
+      ],
       attempts: [
         { id: "attempt-1", binding_id: "binding-1", action: "cmms.create", state: "OutcomeUnknown", business_key: "work:canonical-1:create" },
         { id: "attempt-other", binding_id: "binding-other", action: "cmms.foreign", state: "Verified" },
@@ -157,6 +166,8 @@ describe("canonical Work remains a separate product surface", () => {
     expect(trace.resolutions).toHaveLength(1);
     expect(trace.bindings).toHaveLength(1);
     expect(trace.receipts).toHaveLength(1);
+    expect(trace.interopBindings).toHaveLength(1);
+    expect(trace.externalTasks).toHaveLength(1);
     expect(trace.attempts).toHaveLength(1);
     expect(trace.reconciliations).toHaveLength(1);
     expect(trace.outcomes).toHaveLength(1);
@@ -169,6 +180,8 @@ describe("canonical Work remains a separate product surface", () => {
     expect(html).toContain("Conditional");
     expect(html).toContain("ObservedOperational");
     expect(html).toContain("sha256:live-one");
+    expect(html).toContain("https://mcp.example.com");
+    expect(html).toContain("MCP task observation");
     expect(html).toContain("Value evidence refs: 1");
     expect(html).not.toContain("<b>CustomerValidated</b>");
     expect(html).not.toContain("Foreign review");
@@ -194,6 +207,7 @@ describe("accepted outcome value UI", () => {
       execution_bindings: [],
       execution_manifests: [],
       execution_receipts: [],
+    interop_bindings: [],
     external_task_observations: [],
       binding_migrations: [],
       durable_workflow_bindings: [],

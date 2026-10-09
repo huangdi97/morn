@@ -143,13 +143,23 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
     const id = textField(row, "execution_binding_ref");
     return id !== null && bindingIds.has(id) && row.work_generation === generation;
   });
+  const interopBindings = control.interop_bindings.filter((row) => {
+    const ref = textField(row, "execution_binding_ref");
+    return ref !== null && bindingIds.has(ref) && textField(row, "work_ref") === workId;
+  });
+  const interopBindingIds = new Set(
+    interopBindings
+      .map((row) => textField(row, "execution_binding_ref"))
+      .filter((id): id is string => !!id),
+  );
   const externalTasks = control.external_task_observations.filter((row) => {
     const bindingRef = textField(row, "execution_binding_ref");
     return (
       textField(row, "work_id") === workId &&
       row.work_generation === generation &&
       bindingRef !== null &&
-      bindingIds.has(bindingRef)
+      bindingIds.has(bindingRef) &&
+      interopBindingIds.has(bindingRef)
     );
   });
   const attempts = control.attempts.filter((row) => {
@@ -194,6 +204,7 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
     resolutions,
     bindings,
     receipts,
+    interopBindings,
     externalTasks,
     attempts,
     reconciliations,
@@ -214,7 +225,7 @@ function WorkEvidenceTrace({
   generation: number;
 }) {
   const trace = workEvidenceTrace(control, workId, generation);
-  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} bindings · ${trace.receipts.length} harness receipts · ${trace.externalTasks.length} external tasks · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions · ${trace.values.length} value assessments`;
+  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} execution bindings · ${trace.interopBindings.length} interop bindings · ${trace.receipts.length} harness receipts · ${trace.externalTasks.length} external tasks · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions · ${trace.values.length} value assessments`;
   return (
     <details className="work-truth-trace">
       <summary>Execution, reality &amp; independent acceptance — {summary}</summary>
@@ -253,6 +264,25 @@ function WorkEvidenceTrace({
             </ul>
           )}
           <p>Harness receipts are executor evidence only; they never establish a business outcome or acceptance.</p>
+        </section>
+        <section>
+          <strong>Governed interoperability bindings</strong>
+          {trace.interopBindings.length === 0 ? (
+            <p>No persisted MCP/A2A endpoint is pinned to this Work execution binding.</p>
+          ) : (
+            <ul>
+              {trace.interopBindings.map((interop, index) => {
+                const endpoint = interop.endpoint as Record<string, unknown> | undefined;
+                return (
+                  <li key={textField(interop, "execution_binding_ref") ?? index}>
+                    <b>{String(endpoint?.protocol ?? "external").toUpperCase()} endpoint</b>
+                    <small>Endpoint: {String(endpoint?.endpoint_ref ?? "Not pinned")}</small>
+                    <small>Capability: {textField(interop, "capability_ref") ?? "Not pinned"}</small>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
         <section>
           <strong>External protocol task evidence</strong>
