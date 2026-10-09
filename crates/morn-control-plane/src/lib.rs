@@ -2028,11 +2028,11 @@ mod control_plane_persistence_scope_tests {
 
     #[test]
     fn durable_external_task_observation_requires_exact_work_binding_and_never_closes_work() {
+        use morn_integration::InteropProtocol;
         use morn_integration::{
             ExternalEndpoint, ExternalTaskSnapshot, GovernedExternalTaskObservation,
             McpTaskEvidence, McpTaskState,
         };
-        use morn_integration::InteropProtocol;
 
         let store = MornStore::open_in_memory().unwrap();
         let work = fixture_work();
