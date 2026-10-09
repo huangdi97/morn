@@ -296,7 +296,9 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
                 morn_harness::provider::DshMode::Fixture => "fixture",
                 morn_harness::provider::DshMode::Real => "real",
             },
-            provider.configured_execution_environment_ref().map(str::to_string),
+            provider
+                .configured_execution_environment_ref()
+                .map(str::to_string),
         )
     };
     let (pi_health, pi_mode) = {
@@ -686,7 +688,9 @@ async fn v115_work_bind_source_of_truth(
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
     if work.workspace_id != guard.workspace.id {
-        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
     }
     if work.status.phase.is_terminal() {
         return Err(AppError(Error::invalid_state(
@@ -735,18 +739,10 @@ async fn v115_work_bind_source_of_truth(
             )))
         })?;
     let tick = DurableWorkControllerRuntime::new("api-v115-source-of-truth")
-        .reconcile_from_evidence(
-            &guard.store,
-            work.id.as_str(),
-            &profile,
-            Timestamp::now(),
-        )?;
+        .reconcile_from_evidence(&guard.store, work.id.as_str(), &profile, Timestamp::now())?;
     let current = guard
         .store
-        .load_record::<morn_work::control::WorkResource>(
-            "work_resource_v115",
-            work.id.as_str(),
-        )?
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work.id.as_str())?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {}", work.id))))?;
 
     Ok(Json(json!({
@@ -762,9 +758,9 @@ async fn v115_work_bind_source_of_truth(
 fn source_ref_within_binding(binding_root: &str, source_ref: &str) -> bool {
     let root = binding_root.trim_end_matches('/');
     source_ref == root
-        || source_ref
-            .strip_prefix(root)
-            .is_some_and(|suffix| suffix.starts_with('/') || suffix.starts_with('#') || suffix.starts_with('?'))
+        || source_ref.strip_prefix(root).is_some_and(|suffix| {
+            suffix.starts_with('/') || suffix.starts_with('#') || suffix.starts_with('?')
+        })
 }
 
 async fn v115_work_observe_outcome(
@@ -836,7 +832,9 @@ async fn v115_work_observe_outcome(
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
     if work.workspace_id != guard.workspace.id {
-        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
     }
     if work.status.phase.is_terminal() {
         return Err(AppError(Error::invalid_state(
@@ -4760,7 +4758,10 @@ mod workspace_boundary_tests {
         .unwrap();
         let work_binding_id = bound["binding"]["id"].as_str().unwrap().to_string();
         assert_ne!(work_binding_id, catalog_id);
-        assert_eq!(bound["condition_evidence"]["condition_type"], "SourceOfTruthBound");
+        assert_eq!(
+            bound["condition_evidence"]["condition_type"],
+            "SourceOfTruthBound"
+        );
 
         let outside = v115_work_observe_outcome(
             State(state.clone()),

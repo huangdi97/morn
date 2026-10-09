@@ -689,7 +689,16 @@ function AuthoritativeOutcomePanel({
     finally { setBusy(false); }
   };
 
-  if (works.length === 0) return null;
+  if (works.length === 0) {
+    return (
+      <Card title="Authoritative outcome observation">
+        <p>
+          No non-terminal canonical Work is available. Deployment source authority cannot be
+          attached until a Work exists; executor output is never promoted implicitly.
+        </p>
+      </Card>
+    );
+  }
   return (
     <Card title="Authoritative outcome observation">
       <p>
