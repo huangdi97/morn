@@ -401,14 +401,16 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   gap: 12px;
   margin: 12px 0;
 }
-.governed-execution-grid label,
+ .governed-execution-grid label,
+.governed-execution-binding,
 .governed-execution-prompt {
   display: grid;
   gap: 7px;
   color: #aebed4;
   font-size: 12px;
 }
-.governed-execution-grid select,
+ .governed-execution-grid select,
+.governed-execution-binding select,
 .governed-execution-prompt textarea {
   width: 100%;
   box-sizing: border-box;
@@ -418,8 +420,13 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   color: #e8eef8;
   padding: 9px 10px;
 }
+.governed-execution-binding,
 .governed-execution-prompt {
   margin-top: 14px;
+}
+.governed-execution-binding small {
+  color: #8fa1bb;
+  line-height: 1.45;
 }
 .governed-execution-prompt textarea {
   min-height: 82px;

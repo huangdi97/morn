@@ -284,6 +284,7 @@ function GovernedE0Executor({
 }) {
   const [workId, setWorkId] = useState("");
   const [capabilityId, setCapabilityId] = useState("");
+  const [bindingId, setBindingId] = useState("");
   const [prompt, setPrompt] = useState("Execute the bound E0 capability and return executor evidence only.");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -318,6 +319,13 @@ function GovernedE0Executor({
         candidateWorks.find((work) => work.id === effectiveWorkId)?.generation,
   );
   const effectiveCapabilityId = capabilityId || eligibleCapabilities[0]?.manifest.id || "";
+  const activeBindingId = selectedWork?.status.active_binding ?? "";
+  const activeBindingMatches = workBindings.some(
+    (binding) => textField(binding, "id") === activeBindingId,
+  );
+  const effectiveBindingId =
+    bindingId ||
+    (activeBindingMatches ? activeBindingId : workBindings.length === 1 ? textField(workBindings[0], "id") ?? "" : "");
 
   const resolve = async () => {
     if (!effectiveWorkId) return;
@@ -361,8 +369,7 @@ function GovernedE0Executor({
   };
 
   const execute = async () => {
-    const bindingId = textField(workBindings[0] ?? {}, "id");
-    if (!effectiveWorkId || !bindingId || !prompt.trim()) return;
+    if (!effectiveWorkId || !effectiveBindingId || !prompt.trim()) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -372,7 +379,7 @@ function GovernedE0Executor({
         independent_acceptance: boolean;
       }>("/v115/work/execute-e0", {
         work_id: effectiveWorkId,
-        binding_id: bindingId,
+        binding_id: effectiveBindingId,
         input: prompt,
       });
       setMessage(
@@ -405,7 +412,14 @@ function GovernedE0Executor({
       <div className="governed-execution-grid">
         <label>
           Work
-          <select value={effectiveWorkId} onChange={(event) => setWorkId(event.target.value)}>
+          <select
+            value={effectiveWorkId}
+            onChange={(event) => {
+              setWorkId(event.target.value);
+              setCapabilityId("");
+              setBindingId("");
+            }}
+          >
             {candidateWorks.map((work) => (
               <option key={work.id} value={work.id}>
                 {work.spec.goal} · {work.status.phase}
@@ -451,12 +465,52 @@ function GovernedE0Executor({
             : "No binding persisted for this generation"}
         </span>
       </div>
+      <label className="governed-execution-binding">
+        Execution binding
+        <select
+          value={effectiveBindingId}
+          onChange={(event) => setBindingId(event.target.value)}
+          disabled={workBindings.length === 0}
+        >
+          {workBindings.length === 0 ? (
+            <option value="">No binding persisted for this generation</option>
+          ) : workBindings.length > 1 && !activeBindingMatches && !bindingId ? (
+            <>
+              <option value="">Select an exact binding</option>
+              {workBindings.map((binding, index) => {
+                const id = textField(binding, "id") ?? "";
+                return (
+                  <option key={id || index} value={id}>
+                    {textField(binding, "provider_ref") ?? "Unknown provider"} · {id || "Unknown binding"}
+                  </option>
+                );
+              })}
+            </>
+          ) : (
+            workBindings.map((binding, index) => {
+              const id = textField(binding, "id") ?? "";
+              return (
+                <option key={id || index} value={id}>
+                  {textField(binding, "provider_ref") ?? "Unknown provider"} · {id || "Unknown binding"}
+                </option>
+              );
+            })
+          )}
+        </select>
+        <small>
+          {activeBindingMatches
+            ? "Canonical active binding selected by default."
+            : workBindings.length > 1 && !effectiveBindingId
+              ? "Multiple bindings exist; execution is blocked until one is selected explicitly."
+              : "Execution uses this exact immutable binding."}
+        </small>
+      </label>
       <label className="governed-execution-prompt">
         Executor input
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
       </label>
       <div className="page-actions">
-        <button disabled={busy || workBindings.length === 0 || !prompt.trim()} onClick={execute}>
+        <button disabled={busy || !effectiveBindingId || !prompt.trim()} onClick={execute}>
           Execute bound E0 capability
         </button>
       </div>

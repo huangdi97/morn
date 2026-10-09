@@ -135,6 +135,12 @@ try {
     ) {
       errors.push("workbench: independent source-grounded outcome review is not visible");
     }
+    if (
+      route === "/workbench" &&
+      !(await page.locator(".governed-execution-binding select").count())
+    ) {
+      errors.push("workbench: execution binding must be selected explicitly");
+    }
     if (route === "/workbench" && await page.locator("details.workbench-reference").evaluate((node) => node.open)) {
       errors.push("workbench: legacy diagnostics should be collapsed by default");
     }
