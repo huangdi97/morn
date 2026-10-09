@@ -319,6 +319,34 @@ pub fn reference_provider_catalog() -> ProviderRegistry {
         .register(fixture_env)
         .expect("reference provider valid");
 
+    let mut attested_env = ProviderDescriptor::new(
+        "attested-external-environment",
+        ProviderFamily::ExecutionEnvironment,
+        "v11.5",
+    );
+    attested_env
+        .protocols
+        .insert("morn-execution-environment-attestation".to_string());
+    attested_env.features.extend(
+        [
+            "ttl-attestation",
+            "exact-environment-identity",
+            "guarantee-vector",
+            "external-provisioning",
+        ]
+        .into_iter()
+        .map(str::to_string),
+    );
+    // Code exists locally, but no environment is selectable until a concrete
+    // provider supplies a fresh attestation for an exact environment.
+    attested_env.status = ProviderStatus::Registered;
+    attested_env
+        .evidence_refs
+        .push("crates/morn-runtime/src/environment.rs".to_string());
+    registry
+        .register(attested_env)
+        .expect("attested environment provider valid");
+
     let mut native_authority =
         ProviderDescriptor::new("morn-native-policy", ProviderFamily::Authority, "reference");
     native_authority
@@ -448,6 +476,13 @@ mod tests {
         assert_eq!(
             registry.get("pi").unwrap().status,
             ProviderStatus::Unavailable
+        );
+        assert_eq!(
+            registry
+                .get("attested-external-environment")
+                .unwrap()
+                .status,
+            ProviderStatus::Registered
         );
     }
 }

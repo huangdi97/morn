@@ -79,9 +79,13 @@ impl RuntimeContext {
         self.proves_environment(
             ExecutionClass::Container,
             &[
+                ExecutionGuarantee::FilesystemReadPolicy,
                 ExecutionGuarantee::FilesystemWritePolicy,
+                ExecutionGuarantee::ProcessBoundary,
+                ExecutionGuarantee::ResourceLimits,
                 ExecutionGuarantee::NetworkEgressPolicy,
                 ExecutionGuarantee::SecretIndirection,
+                ExecutionGuarantee::RuntimeAttestation,
             ],
         )
     }
@@ -129,14 +133,34 @@ mod tests {
             .unwrap();
         assert!(!remote_is_not_a_container_shortcut.proves_real_harness_environment());
 
+        let policy_labels_without_attestation = context()
+            .with_execution_environment(
+                "env://container/unattested",
+                ExecutionClass::Container,
+                vec![
+                    ExecutionGuarantee::FilesystemReadPolicy,
+                    ExecutionGuarantee::FilesystemWritePolicy,
+                    ExecutionGuarantee::ProcessBoundary,
+                    ExecutionGuarantee::ResourceLimits,
+                    ExecutionGuarantee::NetworkEgressPolicy,
+                    ExecutionGuarantee::SecretIndirection,
+                ],
+            )
+            .unwrap();
+        assert!(!policy_labels_without_attestation.proves_real_harness_environment());
+
         let isolated = context()
             .with_execution_environment(
                 "env://container/a",
                 ExecutionClass::Container,
                 vec![
+                    ExecutionGuarantee::FilesystemReadPolicy,
                     ExecutionGuarantee::FilesystemWritePolicy,
+                    ExecutionGuarantee::ProcessBoundary,
+                    ExecutionGuarantee::ResourceLimits,
                     ExecutionGuarantee::NetworkEgressPolicy,
                     ExecutionGuarantee::SecretIndirection,
+                    ExecutionGuarantee::RuntimeAttestation,
                 ],
             )
             .unwrap();

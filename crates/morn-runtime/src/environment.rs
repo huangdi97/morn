@@ -4,10 +4,13 @@
 //! into Morn. Providers may represent a local process, container, microVM,
 //! full VM, remote sandbox or physical executor.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::Id;
+use morn_kernel::time::Timestamp;
 use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -180,6 +183,244 @@ fn containment_preference(class: IsolationClass) -> u8 {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionEnvironmentAttestation {
+    pub environment_ref: String,
+    pub provider: String,
+    pub isolation: IsolationClass,
+    /// Attested capabilities/limits of this exact environment. Its
+    /// minimum_isolation must equal `isolation`.
+    pub attested_spec: ExecutionEnvironmentSpec,
+    pub evidence_refs: Vec<String>,
+    pub observed_at: Timestamp,
+    pub valid_until: Timestamp,
+}
+
+impl ExecutionEnvironmentAttestation {
+    pub fn validate(&self) -> Result<()> {
+        if self.environment_ref.trim().is_empty() || self.provider.trim().is_empty() {
+            return Err(Error::validation(
+                "execution environment attestation requires environment and provider identity",
+            ));
+        }
+        if self.attested_spec.minimum_isolation != self.isolation {
+            return Err(Error::validation(
+                "attested execution spec isolation must match the environment isolation",
+            ));
+        }
+        if self.evidence_refs.is_empty() {
+            return Err(Error::validation(
+                "execution environment attestation requires evidence",
+            ));
+        }
+        if self.valid_until < self.observed_at {
+            return Err(Error::validation(
+                "execution environment attestation validity cannot precede observation",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn active_at(&self, now: Timestamp) -> bool {
+        self.validate().is_ok() && self.observed_at <= now && now <= self.valid_until
+    }
+
+    pub fn satisfies(&self, requested: &ExecutionEnvironmentSpec, now: Timestamp) -> bool {
+        self.active_at(now)
+            && self.isolation.satisfies(requested.minimum_isolation)
+            && requested
+                .required_guarantees
+                .iter()
+                .all(|required| self.attested_spec.required_guarantees.contains(required))
+            && option_matches(&requested.os, &self.attested_spec.os)
+            && option_matches(&requested.runtime, &self.attested_spec.runtime)
+            && capacity_satisfies(requested.cpu_millis, self.attested_spec.cpu_millis)
+            && capacity_satisfies(requested.memory_mb, self.attested_spec.memory_mb)
+            && capacity_satisfies(requested.gpu_count, self.attested_spec.gpu_count)
+            && requested
+                .network_allowlist
+                .iter()
+                .all(|item| self.attested_spec.network_allowlist.contains(item))
+            && requested
+                .writable_paths
+                .iter()
+                .all(|item| self.attested_spec.writable_paths.contains(item))
+            && requested
+                .secret_refs
+                .iter()
+                .all(|item| self.attested_spec.secret_refs.contains(item))
+            && self.attested_spec.persistence_scope == requested.persistence_scope
+            && self.attested_spec.side_effect_policy == requested.side_effect_policy
+            && requested
+                .timeout_ms
+                .is_none_or(|required| self.attested_spec.timeout_ms.is_some_and(|actual| actual >= required))
+    }
+}
+
+fn option_matches(requested: &Option<String>, actual: &Option<String>) -> bool {
+    requested.as_ref().is_none_or(|required| {
+        actual
+            .as_ref()
+            .is_some_and(|value| value.eq_ignore_ascii_case(required))
+    })
+}
+
+fn capacity_satisfies<T: PartialOrd + Copy>(requested: Option<T>, actual: Option<T>) -> bool {
+    requested.is_none_or(|required| actual.is_some_and(|value| value >= required))
+}
+
+/// Adapter for environments that are provisioned/attested by an external
+/// platform (Kubernetes, container service, microVM fleet, customer sandbox,
+/// etc.). Morn leases an already-attested environment; it does not pretend to
+/// have created or contained the runtime itself.
+#[derive(Debug)]
+pub struct AttestedExecutionEnvironmentProvider {
+    name: String,
+    attestations: BTreeMap<String, ExecutionEnvironmentAttestation>,
+    leases: BTreeMap<String, String>,
+}
+
+impl AttestedExecutionEnvironmentProvider {
+    pub fn new(name: impl Into<String>) -> Result<Self> {
+        let name = name.into();
+        if name.trim().is_empty() {
+            return Err(Error::validation(
+                "attested execution environment provider name is required",
+            ));
+        }
+        Ok(Self {
+            name,
+            attestations: BTreeMap::new(),
+            leases: BTreeMap::new(),
+        })
+    }
+
+    pub fn register_attestation(
+        &mut self,
+        mut attestation: ExecutionEnvironmentAttestation,
+    ) -> Result<()> {
+        attestation.validate()?;
+        if attestation.provider != self.name {
+            return Err(Error::validation(
+                "execution environment attestation belongs to another provider",
+            ));
+        }
+        attestation.attested_spec.required_guarantees.sort();
+        attestation.attested_spec.required_guarantees.dedup();
+        self.attestations
+            .insert(attestation.environment_ref.clone(), attestation);
+        Ok(())
+    }
+
+    pub fn attestation(&self, environment_ref: &str) -> Option<&ExecutionEnvironmentAttestation> {
+        self.attestations.get(environment_ref)
+    }
+
+    fn environment_is_leased(&self, environment_ref: &str) -> bool {
+        self.leases.values().any(|leased| leased == environment_ref)
+    }
+}
+
+impl ExecutionEnvironmentProvider for AttestedExecutionEnvironmentProvider {
+    fn provider_name(&self) -> &str {
+        &self.name
+    }
+
+    fn supported_isolation_classes(&self) -> Vec<IsolationClass> {
+        let now = Timestamp::now();
+        let mut classes = Vec::new();
+        for attestation in self
+            .attestations
+            .values()
+            .filter(|attestation| attestation.active_at(now))
+        {
+            if !classes.contains(&attestation.isolation) {
+                classes.push(attestation.isolation);
+            }
+        }
+        classes.sort_by_key(|class| containment_preference(*class));
+        classes
+    }
+
+    fn supported_guarantees(&self, class: IsolationClass) -> Vec<ExecutionGuarantee> {
+        let now = Timestamp::now();
+        let mut active = self
+            .attestations
+            .values()
+            .filter(|attestation| {
+                attestation.isolation == class && attestation.active_at(now)
+            });
+        let Some(first) = active.next() else {
+            return Vec::new();
+        };
+        // Intersection is deliberately conservative. Union would falsely claim
+        // that one environment can combine guarantees present on different
+        // machines/sandboxes.
+        let mut common: BTreeSet<ExecutionGuarantee> = first
+            .attested_spec
+            .required_guarantees
+            .iter()
+            .copied()
+            .collect();
+        for attestation in active {
+            let guarantees: BTreeSet<_> = attestation
+                .attested_spec
+                .required_guarantees
+                .iter()
+                .copied()
+                .collect();
+            common = common.intersection(&guarantees).copied().collect();
+        }
+        common.into_iter().collect()
+    }
+
+    fn provision(&mut self, spec: &ExecutionEnvironmentSpec) -> Result<ExecutionEnvironmentHandle> {
+        let now = Timestamp::now();
+        let selected = self
+            .attestations
+            .values()
+            .filter(|attestation| !self.environment_is_leased(&attestation.environment_ref))
+            .filter(|attestation| attestation.satisfies(spec, now))
+            .min_by_key(|attestation| {
+                (
+                    containment_preference(attestation.isolation),
+                    attestation.environment_ref.clone(),
+                )
+            })
+            .cloned()
+            .ok_or_else(|| {
+                Error::external(
+                    "no fresh attested execution environment satisfies the requested contract",
+                )
+            })?;
+
+        let id = ExecutionEnvironmentId::generate_with("env-lease");
+        self.leases
+            .insert(id.to_string(), selected.environment_ref.clone());
+        Ok(ExecutionEnvironmentHandle {
+            id,
+            provider: self.name.clone(),
+            isolation: selected.isolation,
+            guarantees: selected.attested_spec.required_guarantees.clone(),
+            runtime_ref: selected.environment_ref,
+        })
+    }
+
+    fn release(&mut self, handle: &ExecutionEnvironmentHandle) -> Result<()> {
+        let environment_ref = self
+            .leases
+            .get(handle.id.as_str())
+            .ok_or_else(|| Error::not_found(format!("execution environment lease {}", handle.id)))?;
+        if handle.provider != self.name || handle.runtime_ref != *environment_ref {
+            return Err(Error::validation(
+                "execution environment handle does not match its attested lease",
+            ));
+        }
+        self.leases.remove(handle.id.as_str());
+        Ok(())
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct FixtureEnvironmentProvider {
     active: Vec<ExecutionEnvironmentId>,
@@ -266,6 +507,124 @@ impl ExecutionEnvironmentProvider for FixtureEnvironmentProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn attestation(
+        provider: &str,
+        environment_ref: &str,
+        guarantees: Vec<ExecutionGuarantee>,
+    ) -> ExecutionEnvironmentAttestation {
+        let now = Timestamp::now();
+        ExecutionEnvironmentAttestation {
+            environment_ref: environment_ref.to_string(),
+            provider: provider.to_string(),
+            isolation: IsolationClass::Container,
+            attested_spec: ExecutionEnvironmentSpec {
+                minimum_isolation: IsolationClass::Container,
+                runtime: Some("oci".to_string()),
+                required_guarantees: guarantees,
+                network_allowlist: vec!["api.deepseek.com".to_string()],
+                writable_paths: vec!["/workspace".to_string()],
+                secret_refs: vec!["secret://deepseek".to_string()],
+                ..Default::default()
+            },
+            evidence_refs: vec![format!("attestation://{environment_ref}")],
+            observed_at: now,
+            valid_until: Timestamp::from_millis(now.millis() + 60_000),
+        }
+    }
+
+    #[test]
+    fn attested_provider_binds_one_exact_fresh_environment() {
+        let mut provider = AttestedExecutionEnvironmentProvider::new("sandbox-fleet").unwrap();
+        provider
+            .register_attestation(attestation(
+                "sandbox-fleet",
+                "env://sandbox/a",
+                vec![
+                    ExecutionGuarantee::FilesystemWritePolicy,
+                    ExecutionGuarantee::NetworkEgressPolicy,
+                    ExecutionGuarantee::SecretIndirection,
+                ],
+            ))
+            .unwrap();
+
+        let requested = ExecutionEnvironmentSpec {
+            minimum_isolation: IsolationClass::Container,
+            runtime: Some("oci".to_string()),
+            required_guarantees: vec![
+                ExecutionGuarantee::FilesystemWritePolicy,
+                ExecutionGuarantee::NetworkEgressPolicy,
+                ExecutionGuarantee::SecretIndirection,
+            ],
+            network_allowlist: vec!["api.deepseek.com".to_string()],
+            writable_paths: vec!["/workspace".to_string()],
+            secret_refs: vec!["secret://deepseek".to_string()],
+            ..Default::default()
+        };
+        let handle = provider.provision(&requested).unwrap();
+        assert_eq!(handle.runtime_ref, "env://sandbox/a");
+        assert!(provider.provision(&requested).is_err());
+        provider.release(&handle).unwrap();
+        assert!(provider.provision(&requested).is_ok());
+    }
+
+    #[test]
+    fn attested_provider_never_unions_guarantees_from_different_environments() {
+        let mut provider = AttestedExecutionEnvironmentProvider::new("sandbox-fleet").unwrap();
+        provider
+            .register_attestation(attestation(
+                "sandbox-fleet",
+                "env://sandbox/network",
+                vec![ExecutionGuarantee::NetworkEgressPolicy],
+            ))
+            .unwrap();
+        provider
+            .register_attestation(attestation(
+                "sandbox-fleet",
+                "env://sandbox/secret",
+                vec![ExecutionGuarantee::SecretIndirection],
+            ))
+            .unwrap();
+
+        assert!(provider
+            .supported_guarantees(IsolationClass::Container)
+            .is_empty());
+        assert!(provider
+            .provision(&ExecutionEnvironmentSpec {
+                minimum_isolation: IsolationClass::Container,
+                required_guarantees: vec![
+                    ExecutionGuarantee::NetworkEgressPolicy,
+                    ExecutionGuarantee::SecretIndirection,
+                ],
+                ..Default::default()
+            })
+            .is_err());
+    }
+
+    #[test]
+    fn expired_or_cross_provider_environment_attestation_fails_closed() {
+        let mut provider = AttestedExecutionEnvironmentProvider::new("sandbox-fleet").unwrap();
+        let mut foreign = attestation(
+            "other-provider",
+            "env://other/a",
+            vec![ExecutionGuarantee::ProcessBoundary],
+        );
+        assert!(provider.register_attestation(foreign.clone()).is_err());
+
+        foreign.provider = "sandbox-fleet".to_string();
+        foreign.valid_until = Timestamp::from_millis(foreign.observed_at.millis() - 1);
+        assert!(provider.register_attestation(foreign.clone()).is_err());
+
+        let mut expired = attestation(
+            "sandbox-fleet",
+            "env://sandbox/expired",
+            vec![ExecutionGuarantee::ProcessBoundary],
+        );
+        expired.observed_at = Timestamp::from_millis(1);
+        expired.valid_until = Timestamp::from_millis(2);
+        provider.register_attestation(expired).unwrap();
+        assert!(provider.supported_isolation_classes().is_empty());
+    }
 
     #[test]
     fn resolver_selects_environment_from_requirements_not_provider_name() {

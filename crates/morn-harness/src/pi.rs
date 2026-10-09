@@ -179,7 +179,7 @@ impl PiHarnessProvider {
     fn require_pinned_real_environment(&self, ctx: &RuntimeContext) -> Result<()> {
         if !ctx.proves_real_harness_environment() {
             return Err(Error::validation(
-                "real Pi RPC requires a bound container-or-stronger execution environment with filesystem-write, network-egress and secret-indirection guarantees",
+                "real Pi RPC requires a runtime-attested container-or-stronger environment with read/write policy, process boundary, resource limits, network-egress and secret indirection",
             ));
         }
         let configured = self
@@ -603,9 +603,13 @@ mod tests {
             "env://container/forged",
             ExecutionClass::Container,
             vec![
+                ExecutionGuarantee::FilesystemReadPolicy,
                 ExecutionGuarantee::FilesystemWritePolicy,
+                ExecutionGuarantee::ProcessBoundary,
+                ExecutionGuarantee::ResourceLimits,
                 ExecutionGuarantee::NetworkEgressPolicy,
                 ExecutionGuarantee::SecretIndirection,
+                ExecutionGuarantee::RuntimeAttestation,
             ],
         )
         .unwrap();

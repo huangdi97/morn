@@ -41,6 +41,7 @@ pub use durable_workflow::{
     DurableWorkflowProvider, DurableWorkflowState, LegacyMornDurableWorkflowProvider,
 };
 pub use environment::{
+    AttestedExecutionEnvironmentProvider, ExecutionEnvironmentAttestation,
     ExecutionEnvironmentHandle, ExecutionEnvironmentId, ExecutionEnvironmentOffer,
     ExecutionEnvironmentProvider, ExecutionEnvironmentResolver, ExecutionEnvironmentSelection,
     ExecutionEnvironmentSpec, FixtureEnvironmentProvider, IsolationClass,

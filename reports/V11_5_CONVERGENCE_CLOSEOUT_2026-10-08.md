@@ -54,12 +54,12 @@ Morn remains Work-first, not Agent-first:
 | Work truth independent of harness | protocol invariant + conformance tests | implemented |
 | node-local composition | exact-pinned Cordis host + `CompositionRuntimeProvider` contract | implemented |
 | composition runtime abstraction | service-slot lifecycle contract above Cordis; no business truth | implemented |
-| DSH provider boundary | fixture + SDK/wire seam | local contract implemented; real runtime external |
-| Pi provider boundary | fixture provider + shared contract | local contract implemented; real transport external |
+| DSH provider boundary | fixture + real official SDK/JSON-RPC subprocess adapter, E0 scope, scrubbed env, bounded turn | implemented; authenticated live smoke external |
+| Pi provider boundary | fixture + real JSONL RPC subprocess adapter, E0 scope, scrubbed env, bounded prompt | implemented; authenticated live smoke external |
 | provider registry | `morn-runtime/src/provider_registry.rs` | implemented |
 | active binding validity gate | re-check admission/release/provider before new effect; reconciliation remains possible | implemented |
 | durable workflow provider boundary | DurableWorkflowBinding/Evidence + legacy DurableRuntime adapter | implemented |
-| explicit execution environment | class + guarantee-vector provider/resolver | implemented |
+| explicit execution environment | class + guarantee-vector provider/resolver + attested external-environment adapter | implemented contract; live containment attestation external |
 | workload identity | SPIFFE-compatible provider seam | implemented; real identity infra external |
 | opaque credentials | scoped credential handles | implemented; real secret backend external |
 | authority separate from enforcement | AuthorityProvider + action boundary | implemented |
@@ -83,7 +83,7 @@ Morn remains Work-first, not Agent-first:
 | package compatibility axes | protocol/profile/composition compatibility separated from legacy core_compat ABI | implemented |
 | CloudEvents-style integration envelope | kernel event envelope | implemented |
 | event semantic roles | runtime signal vs durable control/fact/observation taxonomy | implemented |
-| provider-health freshness gate | ProviderRegistry health lease + ProviderGate | implemented |
+| provider-health freshness gate | ProviderRegistry health lease + ProviderGate + DSH/Pi settled-turn runtime leases | implemented |
 | strict capability runtime eligibility | active qualification/release/site admission + live provider gate | implemented |
 | Pi JSONL RPC boundary | Rust subprocess client for prompt/get_state/abort/agent_settled | implemented; real binary/model smoke external |
 | atomic state + semantic outbox | CAS projection + durable event in one transaction | implemented |
@@ -249,8 +249,9 @@ the exact Work generation and ExecutionBinding through
 
 The following remain explicitly external or not entered:
 
-- real DeepSeek Harness runtime/model/credentials smoke;
-- real Pi transport/runtime;
+- authenticated live DeepSeek Harness runtime/model/credential smoke;
+- authenticated live Pi runtime/model/credential smoke;
+- real container/microVM/Kubernetes/customer-sandbox containment attestation for the exact launch environment;
 - real factory/customer data;
 - real factory source-system connection;
 - real site IAM / OPA / Cedar;
@@ -359,3 +360,29 @@ AcceptanceDecision
 ```
 
 None may be silently promoted into the next layer.
+
+## 15. Provider/runtime evidence hardening — 2026-10-09
+
+Late convergence work closes several places where deployment configuration
+could otherwise be mistaken for live evidence:
+
+- DSH/Pi provider configuration is only **Registered**. A successful
+  initialization is **Initialized**; only a real settled turn creates a
+  time-bounded **Healthy** lease. Failed/unknown transport settlement degrades
+  the provider and explicit shutdown closes the lease.
+- Real Harness configuration pins an exact `execution_environment_ref`; that
+  identity must match RuntimeContext, ExecutionBinding and ExecutionManifest.
+- A real Harness additionally requires read/write filesystem policy,
+  process-boundary evidence, resource limits, network-egress policy, secret
+  indirection and runtime attestation. A caller-provided `Container` label is
+  insufficient.
+- DSH workspace and Harness home are disjoint directory trees.
+- `AttestedExecutionEnvironmentProvider` consumes fresh, evidence-bearing
+  externally provisioned environments without pretending Morn created the
+  container/microVM itself. Required guarantees must be satisfied by one exact
+  environment; guarantees from different sandboxes are never unioned.
+- Console/Hub keep v11.5 canonical provider/control truth visible while legacy
+  v0.2–v0.4 diagnostics/catalogs remain available in collapsed disclosures.
+
+These are repository-local engineering closures. They do not manufacture a
+customer runtime, credential, site policy or containment attestation.

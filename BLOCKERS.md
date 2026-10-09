@@ -2,6 +2,38 @@
 
 只记录 **无法通过继续编码/测试在当前环境解决** 的真实阻塞。
 
+## Current blocker index — 2026-10-09
+
+This section is authoritative for the current v11.5 convergence branch. Older
+entries below are retained as historical evidence and must not be read as the
+current implementation state.
+
+- **B-001 / DSH live evidence — EXTERNAL_BLOCKED.** The official DSH
+  distribution and Morn real SDK/JSON-RPC adapter now exist. Remaining evidence
+  requires an authorized runtime, exact model route/credentials, a real
+  runtime-attested execution environment, and a live settled-turn smoke.
+  Fixture/wire tests do not satisfy this gate.
+- **B-002 / Pi live evidence — EXTERNAL_BLOCKED.** Morn has a real Pi JSONL RPC
+  adapter; a live installed Pi runtime/model/credential path and an authorized
+  runtime-attested execution environment are still required for a real smoke.
+- **B-003 / execution containment — EXTERNAL_BLOCKED for live evidence.** Morn
+  has provider-neutral environment contracts and an attestation-backed external
+  environment adapter. A real container/microVM/Kubernetes/customer-sandbox
+  attestation, with exact environment identity and required guarantee vector,
+  must come from the deployment platform. Morn does not infer containment from
+  a Docker binary or a caller-supplied label.
+- **G4-B-002 / real BioLab dataset — EXTERNAL_BLOCKED.** A lawful,
+  provenance-bearing real dataset is still required.
+- **G12 / customer-site acceptance — EXTERNAL_BLOCKED.** Real source-system
+  access, site IAM/policy, customer evidence and independent acceptance have not
+  been supplied.
+- **Production/physical write — NOT AUTHORIZED.** No local fixture, Harness
+  success, Provider health lease, or CI run upgrades this state.
+
+Current code therefore may reach **ALL_LOCAL_GATES_PASS** while these gates stay
+external. It must not claim authenticated provider, real-site, customer-value,
+production-write or physical-control evidence without those sources.
+
 ## Active
 
 ### B-001 — 真实 DeepSeek Harness smoke 无法在当前环境完成
