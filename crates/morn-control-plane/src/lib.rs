@@ -1992,6 +1992,8 @@ mod control_plane_persistence_scope_tests {
                 work.id.clone(),
             )
             .with_work_binding(work.generation, binding.id.clone())
+            .unwrap()
+            .with_scope_id("scope://unknown-reconciliation-test")
             .unwrap(),
             "provider:a",
             "session-a",
