@@ -129,6 +129,12 @@ try {
     if (route === "/workbench" && !(await page.getByRole("heading", { name: "Work is the unit of coordination" }).isVisible())) {
       errors.push("workbench: canonical Work-first overview is not visible");
     }
+    if (
+      route === "/workbench" &&
+      !(await page.getByRole("heading", { name: "Independent outcome review" }).isVisible())
+    ) {
+      errors.push("workbench: independent source-grounded outcome review is not visible");
+    }
     if (route === "/workbench" && await page.locator("details.workbench-reference").evaluate((node) => node.open)) {
       errors.push("workbench: legacy diagnostics should be collapsed by default");
     }
