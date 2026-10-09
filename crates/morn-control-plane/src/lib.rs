@@ -357,10 +357,8 @@ impl WorkProgressController {
                 return;
             }
             if receipt.outcome == "outcome-unknown" {
-                let mut uncertain = WorkCondition::new(
-                    "ExecutorOutcomeKnown",
-                    ConditionStatus::False,
-                );
+                let mut uncertain =
+                    WorkCondition::new("ExecutorOutcomeKnown", ConditionStatus::False);
                 uncertain.reason = format!(
                     "executor receipt {} lost definitive settlement; reconciliation is required before any new execution",
                     receipt.id
@@ -380,8 +378,7 @@ impl WorkProgressController {
                 && inputs.acceptance.is_none()
                 && inputs.attempt.is_none()
             {
-                let mut known =
-                    WorkCondition::new("ExecutorOutcomeKnown", ConditionStatus::True);
+                let mut known = WorkCondition::new("ExecutorOutcomeKnown", ConditionStatus::True);
                 known.reason = format!(
                     "executor receipt {} settled as completed; business outcome still requires independent observation",
                     receipt.id
@@ -2001,7 +1998,9 @@ mod control_plane_persistence_scope_tests {
         );
         receipt.outcome = "outcome-unknown".to_string();
         receipt.ended_at = None;
-        receipt.trace_refs.push("provider://ambiguous-turn".to_string());
+        receipt
+            .trace_refs
+            .push("provider://ambiguous-turn".to_string());
 
         WorkProgressController.reconcile(
             &mut work,
@@ -2018,8 +2017,10 @@ mod control_plane_persistence_scope_tests {
             .status
             .conditions
             .iter()
-            .any(|condition| condition.condition_type == "ExecutorOutcomeKnown"
-                && condition.status == ConditionStatus::False));
+            .any(
+                |condition| condition.condition_type == "ExecutorOutcomeKnown"
+                    && condition.status == ConditionStatus::False
+            ));
     }
 
     #[test]

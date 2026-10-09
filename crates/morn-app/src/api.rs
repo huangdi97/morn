@@ -1096,16 +1096,11 @@ async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value
     })))
 }
 
-fn classify_e0_turn_receipt(
-    success: bool,
-    snapshot_status: &str,
-) -> (&'static str, bool) {
+fn classify_e0_turn_receipt(success: bool, snapshot_status: &str) -> (&'static str, bool) {
     if success {
         return ("completed", true);
     }
-    if snapshot_status == "outcome-unknown"
-        || snapshot_status.starts_with("outcome-unknown-")
-    {
+    if snapshot_status == "outcome-unknown" || snapshot_status.starts_with("outcome-unknown-") {
         return ("outcome-unknown", false);
     }
     ("failed", true)
@@ -4241,10 +4236,7 @@ mod workspace_boundary_tests {
             classify_e0_turn_receipt(false, "idle-non-success"),
             ("failed", true)
         );
-        assert_eq!(
-            classify_e0_turn_receipt(true, "idle"),
-            ("completed", true)
-        );
+        assert_eq!(classify_e0_turn_receipt(true, "idle"), ("completed", true));
     }
 
     #[tokio::test]
