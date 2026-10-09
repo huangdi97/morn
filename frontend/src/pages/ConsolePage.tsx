@@ -23,6 +23,12 @@ interface HarnessHealth {
   };
   effect_ceiling: string;
   credential_boundary: string;
+  runtime_health: {
+    state: string;
+    settled_turns: number;
+    reason: string;
+    evidence_refs: string[];
+  };
 }
 
 interface ConsoleData {
@@ -116,6 +122,13 @@ export default function ConsolePage() {
           <KeyValue k="DSH mode" v={data.harness_health.dsh.mode} />
           <KeyValue k="DSH effect ceiling" v={data.harness_health.dsh.effect_ceiling} />
           <KeyValue k="DSH credentials" v={data.harness_health.dsh.credential_boundary} />
+          <KeyValue k="DSH runtime health" v={data.harness_health.dsh.runtime_health.state} />
+          <KeyValue k="DSH settled live turns" v={data.harness_health.dsh.runtime_health.settled_turns} />
+          <KeyValue k="DSH health reason" v={data.harness_health.dsh.runtime_health.reason} />
+          <KeyValue
+            k="DSH health evidence"
+            v={data.harness_health.dsh.runtime_health.evidence_refs.join(", ") || "none"}
+          />
           <KeyValue
             k="DSH lifecycle"
             v={[
@@ -132,6 +145,13 @@ export default function ConsolePage() {
           <KeyValue k="Pi mode" v={data.harness_health.pi.mode} />
           <KeyValue k="Pi effect ceiling" v={data.harness_health.pi.effect_ceiling} />
           <KeyValue k="Pi credentials" v={data.harness_health.pi.credential_boundary} />
+          <KeyValue k="Pi runtime health" v={data.harness_health.pi.runtime_health.state} />
+          <KeyValue k="Pi settled live turns" v={data.harness_health.pi.runtime_health.settled_turns} />
+          <KeyValue k="Pi health reason" v={data.harness_health.pi.runtime_health.reason} />
+          <KeyValue
+            k="Pi health evidence"
+            v={data.harness_health.pi.runtime_health.evidence_refs.join(", ") || "none"}
+          />
           <KeyValue
             k="Pi lifecycle"
             v={[

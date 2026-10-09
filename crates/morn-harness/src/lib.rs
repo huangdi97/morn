@@ -36,8 +36,9 @@ pub use pi_rpc::{
     PI_COMMAND_GET_STATE, PI_COMMAND_PROMPT, PI_EVENT_AGENT_SETTLED,
 };
 pub use provider::{
-    DeepSeekHarnessProvider, HarnessProvider, HarnessProviderFeatures, HarnessSession,
-    MornNativeHarness, ProviderHandle,
+    DeepSeekHarnessProvider, HarnessProvider, HarnessProviderFeatures, HarnessRuntimeHealth,
+    HarnessRuntimeHealthState, HarnessSession, MornNativeHarness, ProviderHandle,
+    HARNESS_RUNTIME_HEALTH_LEASE_MS,
 };
 pub use receipt::ExecutionReceipt;
 pub use scope::{CapabilityScope, ScopeKind};

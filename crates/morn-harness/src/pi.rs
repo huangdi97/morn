@@ -14,8 +14,8 @@ use crate::context::RuntimeContext;
 use crate::event::{ExecutionEvent, ExecutionEventKind};
 use crate::pi_rpc::{PiRpcClient, PiRpcConfig};
 use crate::provider::{
-    HarnessOutput, HarnessProvider, HarnessProviderFeatures, HarnessSession, HarnessSnapshot,
-    ProviderHandle,
+    HarnessOutput, HarnessProvider, HarnessProviderFeatures, HarnessRuntimeHealth, HarnessSession,
+    HarnessSnapshot, ProviderHandle,
 };
 use crate::receipt::ExecutionReceipt;
 use crate::scope::CapabilityScope;
@@ -46,10 +46,19 @@ pub struct PiHarnessProvider {
     real_config: Option<PiRpcConfig>,
     real_client: Option<PiRpcClient>,
     active_session: Option<String>,
+    runtime_health: HarnessRuntimeHealth,
 }
 
 impl PiHarnessProvider {
     pub fn new(mode: PiMode) -> Self {
+        let runtime_health = match mode {
+            PiMode::Fixture => HarnessRuntimeHealth::fixture(
+                "deterministic fixture contract; not a live external runtime",
+            ),
+            PiMode::Real => HarnessRuntimeHealth::unconfigured(
+                "real Pi mode selected without an explicit RPC configuration",
+            ),
+        };
         Self {
             name: "pi".to_string(),
             mode,
@@ -58,12 +67,16 @@ impl PiHarnessProvider {
             real_config: None,
             real_client: None,
             active_session: None,
+            runtime_health,
         }
     }
 
     pub fn with_real_rpc(config: PiRpcConfig) -> Self {
         let mut provider = Self::new(PiMode::Real);
         provider.real_config = Some(config);
+        provider.runtime_health = HarnessRuntimeHealth::configured(
+            "real Pi RPC configuration accepted; live handshake not yet performed",
+        );
         provider
     }
 
@@ -76,6 +89,10 @@ impl PiHarnessProvider {
         self.mode
     }
 
+    pub fn runtime_health(&self) -> &HarnessRuntimeHealth {
+        &self.runtime_health
+    }
+
     pub fn shutdown_real_runtime(&mut self) -> Result<()> {
         if self.mode != PiMode::Real {
             return Err(Error::invalid_state(
@@ -83,8 +100,14 @@ impl PiHarnessProvider {
             ));
         }
         if let Some(mut client) = self.real_client.take() {
-            client.shutdown()?;
+            if let Err(error) = client.shutdown() {
+                self.runtime_health
+                    .mark_degraded(format!("Pi RPC shutdown failed: {error}"));
+                return Err(error);
+            }
         }
+        self.runtime_health
+            .mark_closed("Pi RPC runtime was explicitly shut down");
         for state in self.sessions.values_mut() {
             if state.status != "terminated" {
                 state.status = "runtime-closed".to_string();
@@ -97,13 +120,29 @@ impl PiHarnessProvider {
 
     fn ensure_real_client(&mut self) -> Result<&mut PiRpcClient> {
         if self.real_client.is_none() {
-            let config = self
-                .real_config
-                .clone()
-                .ok_or_else(|| self.real_unavailable())?;
-            let mut client = PiRpcClient::spawn(&config)?;
-            client.get_state()?;
-            self.real_client = Some(client);
+            let setup = (|| -> Result<PiRpcClient> {
+                let config = self
+                    .real_config
+                    .clone()
+                    .ok_or_else(|| self.real_unavailable())?;
+                let mut client = PiRpcClient::spawn(&config)?;
+                client.get_state()?;
+                Ok(client)
+            })();
+            match setup {
+                Ok(client) => {
+                    self.real_client = Some(client);
+                    self.runtime_health.mark_initialized(
+                        "Pi RPC runtime handshake succeeded; no settled live turn yet",
+                        "runtime://pi/get-state",
+                    );
+                }
+                Err(error) => {
+                    self.runtime_health
+                        .mark_degraded(format!("Pi RPC startup/get_state failed: {error}"));
+                    return Err(error);
+                }
+            }
         }
         self.real_client
             .as_mut()
@@ -311,6 +350,18 @@ impl HarnessProvider for PiHarnessProvider {
                 }
 
                 let run = self.ensure_real_client()?.prompt_and_wait(input);
+                if let Ok(settled) = &run {
+                    self.runtime_health.mark_live_turn(
+                        format!(
+                            "live Pi RPC turn settled with disposition {}",
+                            settled.disposition
+                        ),
+                        "runtime://pi/settled-turn",
+                    );
+                } else if let Err(error) = &run {
+                    self.runtime_health
+                        .mark_degraded(format!("Pi RPC turn failed to settle: {error}"));
+                }
                 match run {
                     Ok(run) => {
                         let text = self
@@ -507,6 +558,24 @@ mod tests {
     use super::*;
     use crate::contract::run_provider_contract;
     use morn_kernel::ids::{ActorInstanceId, WorkPackageId, WorkspaceId};
+
+    #[test]
+    fn pi_runtime_health_does_not_claim_live_before_transport_evidence() {
+        let fixture = PiHarnessProvider::new(PiMode::Fixture);
+        assert_eq!(
+            fixture.runtime_health().state,
+            crate::provider::HarnessRuntimeHealthState::Fixture
+        );
+
+        let real = PiHarnessProvider::new(PiMode::Real);
+        assert_eq!(
+            real.runtime_health().state,
+            crate::provider::HarnessRuntimeHealthState::Unconfigured
+        );
+        assert!(!real
+            .runtime_health()
+            .selectable_at(morn_kernel::time::Timestamp::now()));
+    }
 
     #[test]
     fn pi_real_features_match_rpc_no_session_contract() {

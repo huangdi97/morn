@@ -251,29 +251,61 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         .map(|item| json!({ "id": item.id, "version": item.version }))
         .collect();
     let mut provider_catalog = morn_runtime::reference_provider_catalog();
-    let (dsh_real, pi_real) = {
+    let (dsh_health, pi_health) = {
         let guard = state.lock();
         (
-            guard.dsh_harness.mode() == morn_harness::provider::DshMode::Real,
-            guard.pi_harness.mode() == morn_harness::PiMode::Real,
+            guard.dsh_harness.runtime_health().clone(),
+            guard.pi_harness.runtime_health().clone(),
         )
     };
-    if dsh_real {
-        provider_catalog.observe_status(
-            "deepseek-harness",
-            morn_runtime::provider_registry::ProviderStatus::Registered,
-            "real SDK configuration is present; live runtime health has not been proven",
-            vec!["config://morn-dsh-real".to_string()],
-        )?;
-    }
-    if pi_real {
-        provider_catalog.observe_status(
-            "pi",
-            morn_runtime::provider_registry::ProviderStatus::Registered,
-            "real RPC configuration is present; live runtime health has not been proven",
-            vec!["config://morn-pi-real".to_string()],
-        )?;
-    }
+    let now = morn_kernel::time::Timestamp::now();
+    let mut project_runtime_health =
+        |provider_id: &str, health: &morn_harness::HarnessRuntimeHealth| -> Result<(), Error> {
+            use morn_harness::HarnessRuntimeHealthState;
+            use morn_runtime::provider_registry::ProviderStatus;
+
+            let (status, reason, ttl_ms) = match health.state {
+                HarnessRuntimeHealthState::Fixture | HarnessRuntimeHealthState::Unconfigured => {
+                    return Ok(());
+                }
+                HarnessRuntimeHealthState::Configured | HarnessRuntimeHealthState::Initialized => (
+                    ProviderStatus::Registered,
+                    health.reason.clone(),
+                    None,
+                ),
+                HarnessRuntimeHealthState::Healthy if health.selectable_at(now) => (
+                    ProviderStatus::Healthy,
+                    health.reason.clone(),
+                    health.remaining_lease_ms(now),
+                ),
+                HarnessRuntimeHealthState::Healthy => (
+                    ProviderStatus::Degraded,
+                    "live runtime health lease expired; a fresh settled turn is required".to_string(),
+                    None,
+                ),
+                HarnessRuntimeHealthState::Degraded => (
+                    ProviderStatus::Degraded,
+                    health.reason.clone(),
+                    None,
+                ),
+                HarnessRuntimeHealthState::Closed => (
+                    ProviderStatus::Unavailable,
+                    health.reason.clone(),
+                    None,
+                ),
+            };
+            provider_catalog.observe_status_with_ttl(
+                provider_id,
+                status,
+                reason,
+                health.evidence_refs.clone(),
+                ttl_ms,
+            )?;
+            Ok(())
+        };
+    project_runtime_health("deepseek-harness", &dsh_health)?;
+    project_runtime_health("pi", &pi_health)?;
+    drop(project_runtime_health);
     let evidence_ledger = morn_assurance::reference_evidence_ledger();
     let providers = provider_catalog.list();
     let provider_observations = provider_catalog.observations();
@@ -1314,7 +1346,8 @@ async fn console(State(state): State<AppState>) -> ApiResult {
                 "credential_boundary": match guard.dsh_harness.mode() {
                     morn_harness::provider::DshMode::Fixture => "no live provider credential",
                     morn_harness::provider::DshMode::Real => "scrubbed child environment; explicit MORN_DSH_ENV_PASSTHROUGH only",
-                }
+                },
+                "runtime_health": guard.dsh_harness.runtime_health()
             },
             "pi": {
                 "provider": guard.pi_harness.provider_name(),
@@ -1330,7 +1363,8 @@ async fn console(State(state): State<AppState>) -> ApiResult {
                 "credential_boundary": match guard.pi_harness.mode() {
                     morn_harness::PiMode::Fixture => "no live provider credential",
                     morn_harness::PiMode::Real => "scrubbed child environment; explicit MORN_PI_ENV_PASSTHROUGH only",
-                }
+                },
+                "runtime_health": guard.pi_harness.runtime_health()
             }
         },
         "approvals_satisfied": approvals,

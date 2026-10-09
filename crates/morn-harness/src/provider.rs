@@ -10,6 +10,7 @@ use crate::event::{ExecutionEvent, ExecutionEventKind};
 use crate::receipt::ExecutionReceipt;
 use crate::scope::CapabilityScope;
 use morn_kernel::ids::{ExecutionReceiptId, WorkspaceId};
+use morn_kernel::time::Timestamp;
 
 /// A mounted provider handle; unmount performs E0 lifecycle cleanup only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +84,101 @@ impl HarnessProviderFeatures {
             durable_events: false,
             multi_session: false,
         }
+    }
+}
+
+pub const HARNESS_RUNTIME_HEALTH_LEASE_MS: i64 = 300_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HarnessRuntimeHealthState {
+    Fixture,
+    Unconfigured,
+    Configured,
+    Initialized,
+    Healthy,
+    Degraded,
+    Closed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HarnessRuntimeHealth {
+    pub state: HarnessRuntimeHealthState,
+    pub settled_turns: u64,
+    pub reason: String,
+    pub evidence_refs: Vec<String>,
+    pub observed_at: Timestamp,
+    pub health_valid_until: Option<Timestamp>,
+}
+
+impl HarnessRuntimeHealth {
+    fn new(state: HarnessRuntimeHealthState, reason: impl Into<String>) -> Self {
+        Self {
+            state,
+            settled_turns: 0,
+            reason: reason.into(),
+            evidence_refs: Vec::new(),
+            observed_at: Timestamp::now(),
+            health_valid_until: None,
+        }
+    }
+
+    pub fn fixture(reason: impl Into<String>) -> Self {
+        Self::new(HarnessRuntimeHealthState::Fixture, reason)
+    }
+
+    pub fn unconfigured(reason: impl Into<String>) -> Self {
+        Self::new(HarnessRuntimeHealthState::Unconfigured, reason)
+    }
+
+    pub fn configured(reason: impl Into<String>) -> Self {
+        Self::new(HarnessRuntimeHealthState::Configured, reason)
+    }
+
+    pub fn mark_initialized(&mut self, reason: impl Into<String>, evidence_ref: impl Into<String>) {
+        self.state = HarnessRuntimeHealthState::Initialized;
+        self.reason = reason.into();
+        self.evidence_refs = vec![evidence_ref.into()];
+        self.observed_at = Timestamp::now();
+        self.health_valid_until = None;
+    }
+
+    pub fn mark_live_turn(&mut self, reason: impl Into<String>, evidence_ref: impl Into<String>) {
+        self.state = HarnessRuntimeHealthState::Healthy;
+        self.settled_turns = self.settled_turns.saturating_add(1);
+        self.reason = reason.into();
+        self.evidence_refs = vec![evidence_ref.into()];
+        self.observed_at = Timestamp::now();
+        self.health_valid_until = Some(Timestamp::from_millis(
+            self.observed_at
+                .millis()
+                .saturating_add(HARNESS_RUNTIME_HEALTH_LEASE_MS),
+        ));
+    }
+
+    pub fn mark_degraded(&mut self, reason: impl Into<String>) {
+        self.state = HarnessRuntimeHealthState::Degraded;
+        self.reason = reason.into();
+        self.observed_at = Timestamp::now();
+        self.health_valid_until = None;
+    }
+
+    pub fn mark_closed(&mut self, reason: impl Into<String>) {
+        self.state = HarnessRuntimeHealthState::Closed;
+        self.reason = reason.into();
+        self.observed_at = Timestamp::now();
+        self.health_valid_until = None;
+    }
+
+    pub fn selectable_at(&self, now: Timestamp) -> bool {
+        self.state == HarnessRuntimeHealthState::Healthy
+            && self.health_valid_until.is_some_and(|until| now <= until)
+    }
+
+    pub fn remaining_lease_ms(&self, now: Timestamp) -> Option<i64> {
+        self.health_valid_until
+            .map(|until| until.millis().saturating_sub(now.millis()))
+            .filter(|remaining| *remaining > 0)
     }
 }
 
@@ -337,10 +433,19 @@ pub struct DeepSeekHarnessProvider {
     scopes: Vec<CapabilityScope>,
     real_config: Option<DshSdkConfig>,
     real_client: Option<DshSdkStdioClient>,
+    runtime_health: HarnessRuntimeHealth,
 }
 
 impl DeepSeekHarnessProvider {
     pub fn new(mode: DshMode) -> Self {
+        let runtime_health = match mode {
+            DshMode::Fixture => HarnessRuntimeHealth::fixture(
+                "deterministic fixture contract; not a live external runtime",
+            ),
+            DshMode::Real => HarnessRuntimeHealth::unconfigured(
+                "real DSH mode selected without an explicit SDK configuration",
+            ),
+        };
         Self {
             name: "deepseek-harness".to_string(),
             mode,
@@ -348,12 +453,16 @@ impl DeepSeekHarnessProvider {
             scopes: Vec::new(),
             real_config: None,
             real_client: None,
+            runtime_health,
         }
     }
 
     pub fn with_real_sdk(config: DshSdkConfig) -> Self {
         let mut provider = Self::new(DshMode::Real);
         provider.real_config = Some(config);
+        provider.runtime_health = HarnessRuntimeHealth::configured(
+            "real DSH SDK configuration accepted; live handshake not yet performed",
+        );
         provider
     }
 
@@ -366,6 +475,10 @@ impl DeepSeekHarnessProvider {
         self.mode
     }
 
+    pub fn runtime_health(&self) -> &HarnessRuntimeHealth {
+        &self.runtime_health
+    }
+
     pub fn shutdown_real_runtime(&mut self) -> Result<()> {
         if self.mode != DshMode::Real {
             return Err(Error::invalid_state(
@@ -373,8 +486,14 @@ impl DeepSeekHarnessProvider {
             ));
         }
         if let Some(mut client) = self.real_client.take() {
-            client.shutdown()?;
+            if let Err(error) = client.shutdown() {
+                self.runtime_health
+                    .mark_degraded(format!("DSH SDK shutdown failed: {error}"));
+                return Err(error);
+            }
         }
+        self.runtime_health
+            .mark_closed("DSH SDK runtime was explicitly shut down");
         for state in self.sessions.values_mut() {
             if state.status != "terminated" {
                 state.status = "runtime-closed".to_string();
@@ -386,14 +505,30 @@ impl DeepSeekHarnessProvider {
 
     fn ensure_real_client(&mut self) -> Result<&mut DshSdkStdioClient> {
         if self.real_client.is_none() {
-            let config = self
-                .real_config
-                .clone()
-                .ok_or_else(|| self.real_unavailable())?;
-            config.validate_for_real()?;
-            let mut client = DshSdkStdioClient::spawn(&config)?;
-            client.initialize(&config)?;
-            self.real_client = Some(client);
+            let setup = (|| -> Result<DshSdkStdioClient> {
+                let config = self
+                    .real_config
+                    .clone()
+                    .ok_or_else(|| self.real_unavailable())?;
+                config.validate_for_real()?;
+                let mut client = DshSdkStdioClient::spawn(&config)?;
+                client.initialize(&config)?;
+                Ok(client)
+            })();
+            match setup {
+                Ok(client) => {
+                    self.real_client = Some(client);
+                    self.runtime_health.mark_initialized(
+                        "official DSH SDK runtime handshake succeeded; no settled live turn yet",
+                        "runtime://deepseek-harness/initialize",
+                    );
+                }
+                Err(error) => {
+                    self.runtime_health
+                        .mark_degraded(format!("DSH SDK startup/initialize failed: {error}"));
+                    return Err(error);
+                }
+            }
         }
         self.real_client
             .as_mut()
@@ -699,6 +834,18 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                         &run.notifications,
                     ));
                 }
+                if let Ok(settled) = &run {
+                    self.runtime_health.mark_live_turn(
+                        format!(
+                            "live DSH SDK turn settled with finish reason {}",
+                            settled.finish_reason.as_deref().unwrap_or("missing")
+                        ),
+                        "runtime://deepseek-harness/settled-turn",
+                    );
+                } else if let Err(error) = &run {
+                    self.runtime_health
+                        .mark_degraded(format!("DSH SDK turn failed to settle: {error}"));
+                }
                 match run {
                     Ok(run) if run.completed_successfully() => {
                         state.status = "idle".to_string();
@@ -872,6 +1019,35 @@ impl HarnessProvider for DeepSeekHarnessProvider {
 mod dsh_provider_tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn runtime_health_requires_a_fresh_live_turn_before_selection() {
+        let mut health = HarnessRuntimeHealth::configured("configured");
+        let configured_at = health.observed_at;
+        assert!(!health.selectable_at(configured_at));
+
+        health.mark_initialized("initialized", "runtime://dsh/init");
+        assert_eq!(health.state, HarnessRuntimeHealthState::Initialized);
+        assert!(!health.selectable_at(health.observed_at));
+
+        health.mark_live_turn("settled", "runtime://dsh/turn");
+        let observed = health.observed_at;
+        assert!(health.selectable_at(observed));
+        assert_eq!(health.settled_turns, 1);
+        assert!(health.remaining_lease_ms(observed).is_some());
+
+        let expired = Timestamp::from_millis(
+            observed
+                .millis()
+                .saturating_add(HARNESS_RUNTIME_HEALTH_LEASE_MS + 1),
+        );
+        assert!(!health.selectable_at(expired));
+        assert!(health.remaining_lease_ms(expired).is_none());
+
+        health.mark_degraded("transport failed");
+        assert_eq!(health.state, HarnessRuntimeHealthState::Degraded);
+        assert!(!health.selectable_at(Timestamp::now()));
+    }
 
     #[test]
     fn normalizes_durable_dsh_events_without_copying_content() {
