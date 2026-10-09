@@ -40,7 +40,7 @@ pub use profile_guard::{
 };
 
 use morn_harness::ExecutionReceipt;
-use morn_integration::{GovernedExternalTaskObservation, SourceOfTruthBinding};
+use morn_integration::{GovernedExternalTaskObservation, InteropBinding, SourceOfTruthBinding};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::protocol::{
     plan_protocol_migration, ProtocolCompatibility, ProtocolMigrationPlan, ProtocolSnapshot,
@@ -675,6 +675,7 @@ pub trait ControlPlaneStore {
     ) -> Result<()>;
     fn save_execution_receipt(&self, work: &WorkResource, receipt: &ExecutionReceipt)
         -> Result<()>;
+    fn save_interop_binding(&self, work: &WorkResource, binding: &InteropBinding) -> Result<()>;
     fn save_external_task_observation(
         &self,
         work: &WorkResource,
@@ -983,6 +984,26 @@ impl ControlPlaneStore for MornStore {
         )
     }
 
+    fn save_interop_binding(&self, work: &WorkResource, binding: &InteropBinding) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
+        let execution: ExecutionBinding = self
+            .load_record("execution_binding_v115", &binding.execution_binding_ref)?
+            .ok_or_else(|| Error::not_found("interop execution binding"))?;
+        if !execution.matches_work_generation(work) {
+            return Err(Error::validation(
+                "interop binding execution binding belongs to another Work generation",
+            ));
+        }
+        binding.validate_against_execution_binding(&execution)?;
+        self.save_record_immutable(
+            "interop_binding_v115",
+            execution.id.as_str(),
+            work.workspace_id.as_str(),
+            execution.created_at.millis(),
+            binding,
+        )
+    }
+
     fn save_external_task_observation(
         &self,
         work: &WorkResource,
@@ -1001,6 +1022,15 @@ impl ControlPlaneStore for MornStore {
             )?
             .ok_or_else(|| Error::not_found("external task execution binding"))?;
         observation.validate_against_binding(&binding)?;
+        let interop: InteropBinding = self
+            .load_record("interop_binding_v115", observation.execution_binding_ref.as_str())?
+            .ok_or_else(|| Error::not_found("governed interop endpoint binding"))?;
+        interop.validate_against_execution_binding(&binding)?;
+        if interop.endpoint != observation.endpoint {
+            return Err(Error::validation(
+                "external task observation endpoint differs from the persisted interop binding",
+            ));
+        }
         self.save_record_immutable(
             "external_task_observation_v115",
             observation.id.as_str(),
@@ -2041,17 +2071,25 @@ mod control_plane_persistence_scope_tests {
         store.save_work_resource(&other).unwrap();
         let binding = ExecutionBinding::for_work(&work, "cap:mcp", "mcp-provider", "2026-07-28");
         store.save_execution_binding(&work, &binding).unwrap();
+        let endpoint = ExternalEndpoint {
+            protocol: InteropProtocol::Mcp,
+            endpoint_ref: "https://mcp.example.com".to_string(),
+            protocol_version: Some("2026-07-28".to_string()),
+            identity_ref: None,
+        };
+        let interop = InteropBinding {
+            work_ref: work.id.to_string(),
+            execution_binding_ref: binding.id.to_string(),
+            endpoint: endpoint.clone(),
+            capability_ref: binding.capability_manifest_ref.clone(),
+        };
+        store.save_interop_binding(&work, &interop).unwrap();
 
         let observation = GovernedExternalTaskObservation::new(
             work.id.clone(),
             work.generation,
             binding.id.clone(),
-            ExternalEndpoint {
-                protocol: InteropProtocol::Mcp,
-                endpoint_ref: "https://mcp.example.com".to_string(),
-                protocol_version: Some("2026-07-28".to_string()),
-                identity_ref: None,
-            },
+            endpoint.clone(),
             ExternalTaskSnapshot::Mcp(McpTaskEvidence {
                 server_ref: "https://mcp.example.com".to_string(),
                 task_id: "task-42".to_string(),
@@ -2070,6 +2108,17 @@ mod control_plane_persistence_scope_tests {
         store
             .save_external_task_observation(&work, &observation)
             .unwrap();
+
+        let mut wrong_endpoint = observation.clone();
+        wrong_endpoint.id =
+            morn_integration::ExternalTaskObservationId::generate_with("external-task-observation");
+        wrong_endpoint.endpoint.endpoint_ref = "https://other-mcp.example.com".to_string();
+        if let ExternalTaskSnapshot::Mcp(task) = &mut wrong_endpoint.snapshot {
+            task.server_ref = "https://other-mcp.example.com".to_string();
+        }
+        assert!(store
+            .save_external_task_observation(&work, &wrong_endpoint)
+            .is_err());
         assert!(observation.snapshot.is_executor_terminal());
         assert!(!observation.proves_morn_acceptance());
 

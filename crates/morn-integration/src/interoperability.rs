@@ -341,6 +341,19 @@ impl InteropBinding {
         }
         self.endpoint.validate()
     }
+
+    pub fn validate_against_execution_binding(&self, binding: &ExecutionBinding) -> Result<()> {
+        self.validate()?;
+        if self.work_ref != binding.work_id.to_string()
+            || self.execution_binding_ref != binding.id.to_string()
+            || self.capability_ref != binding.capability_manifest_ref
+        {
+            return Err(Error::validation(
+                "interop binding must match the exact Work, ExecutionBinding and capability manifest",
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -458,6 +471,45 @@ mod tests {
         };
         assert!(evidence.is_executor_terminal());
         assert!(!evidence.proves_morn_acceptance());
+    }
+
+    #[test]
+    fn interop_binding_cannot_relabel_a_different_execution_binding_or_capability() {
+        use morn_kernel::ids::{WorkPackageId, WorkspaceId};
+        use morn_work::control::{WorkResource, WorkSpec};
+
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "external task",
+                "morn.lite@1.0.0",
+            ),
+        );
+        let binding = ExecutionBinding::for_work(
+            &work,
+            "capability://orders",
+            "mcp-provider",
+            "2026-07-28",
+        );
+        let mut interop = InteropBinding {
+            work_ref: work.id.to_string(),
+            execution_binding_ref: binding.id.to_string(),
+            endpoint: ExternalEndpoint {
+                protocol: InteropProtocol::Mcp,
+                endpoint_ref: "https://mcp.example.com".to_string(),
+                protocol_version: Some("2026-07-28".to_string()),
+                identity_ref: None,
+            },
+            capability_ref: binding.capability_manifest_ref.clone(),
+        };
+        interop.validate_against_execution_binding(&binding).unwrap();
+
+        interop.capability_ref = "capability://other".to_string();
+        assert!(interop.validate_against_execution_binding(&binding).is_err());
+        interop.capability_ref = binding.capability_manifest_ref.clone();
+        interop.execution_binding_ref = "binding://other".to_string();
+        assert!(interop.validate_against_execution_binding(&binding).is_err());
     }
 
     #[test]
