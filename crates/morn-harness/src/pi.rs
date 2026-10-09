@@ -93,6 +93,31 @@ impl PiHarnessProvider {
         &self.runtime_health
     }
 
+    pub fn configured_execution_environment_ref(&self) -> Option<&str> {
+        self.real_config
+            .as_ref()
+            .and_then(|config| config.execution_environment_ref.as_deref())
+    }
+
+    pub fn configured_runtime_digest(&self) -> Option<&str> {
+        self.real_config
+            .as_ref()
+            .and_then(|config| config.runtime_digest.as_deref())
+    }
+
+    pub fn preflight_real_runtime(&mut self) -> Result<String> {
+        if self.mode != PiMode::Real {
+            return Err(Error::invalid_state(
+                "Pi runtime preflight requires real provider mode",
+            ));
+        }
+        self.ensure_real_client()?;
+        self.real_config
+            .as_ref()
+            .and_then(|config| config.runtime_version.clone())
+            .ok_or_else(|| Error::validation("Pi runtime version missing after validation"))
+    }
+
     pub fn shutdown_real_runtime(&mut self) -> Result<()> {
         if self.mode != PiMode::Real {
             return Err(Error::invalid_state(
@@ -141,10 +166,22 @@ impl PiHarnessProvider {
             })();
             match setup {
                 Ok(client) => {
+                    let version = self
+                        .real_config
+                        .as_ref()
+                        .and_then(|config| config.runtime_version.as_deref())
+                        .unwrap_or("unknown");
+                    let digest = self
+                        .real_config
+                        .as_ref()
+                        .and_then(|config| config.runtime_digest.as_deref())
+                        .unwrap_or("unattested");
                     self.real_client = Some(client);
                     self.runtime_health.mark_initialized(
-                        "Pi RPC runtime handshake succeeded; no settled live turn yet",
-                        "runtime://pi/get-state",
+                        format!(
+                            "Pi RPC get_state handshake succeeded; deployment pins distribution {version} ({digest}); no settled live turn yet"
+                        ),
+                        format!("runtime://pi/{version}#{digest}"),
                     );
                 }
                 Err(error) => {
@@ -228,9 +265,12 @@ impl HarnessProvider for PiHarnessProvider {
     fn runtime_version(&self) -> Option<String> {
         match self.mode {
             PiMode::Fixture => Some("fixture".to_string()),
-            // The official Pi RPC boundary does not currently expose a
-            // runtime-version handshake. Do not invent a binary version.
-            PiMode::Real => None,
+            // Distribution identity is deployment-attested; RPC get_state is
+            // liveness/protocol evidence and never substitutes for provenance.
+            PiMode::Real => self
+                .real_config
+                .as_ref()
+                .and_then(|config| config.runtime_version.clone()),
         }
     }
 
@@ -664,6 +704,8 @@ mod tests {
             provider: Some("fixture-provider".to_string()),
             model: Some("fixture-model".to_string()),
             execution_environment_ref: Some("env://container/pinned".to_string()),
+            runtime_version: Some("1.0.0".to_string()),
+            runtime_digest: Some(format!("sha256:{}", "c".repeat(64))),
             ..Default::default()
         };
         let provider = PiHarnessProvider::with_real_rpc(config);
@@ -714,6 +756,8 @@ mod tests {
             provider: Some("fixture-provider".to_string()),
             model: Some("fixture-model".to_string()),
             execution_environment_ref: Some(environment_ref.to_string()),
+            runtime_version: Some("1.0.0".to_string()),
+            runtime_digest: Some(format!("sha256:{}", "c".repeat(64))),
             request_timeout_ms: 10_000,
             prompt_timeout_ms: 10_000,
             append_route_args: false,

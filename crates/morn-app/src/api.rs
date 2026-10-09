@@ -1215,9 +1215,30 @@ async fn v115_work_bind_attested_e0(
             (version, Some(digest))
         }
         "pi" => {
-            return Err(AppError(Error::invalid_state(
-                "the current official Pi RPC boundary does not expose a verifiable runtime version; real Pi binding remains blocked rather than inventing provider identity",
-            )));
+            let mut provider = guard
+                .pi_harness
+                .lock()
+                .map_err(|_| AppError(Error::internal("pi harness lock poisoned")))?;
+            if provider.mode() != morn_harness::pi::PiMode::Real {
+                return Err(AppError(Error::invalid_state(
+                    "bind-attested-e0 is reserved for a real Pi runtime; fixture providers use bind-e0",
+                )));
+            }
+            if provider.configured_execution_environment_ref() != Some(environment_ref) {
+                return Err(AppError(Error::invalid_state(
+                    "attested environment does not match the environment pinned by the real Pi launch configuration",
+                )));
+            }
+            let version = provider.preflight_real_runtime()?;
+            let digest = provider
+                .configured_runtime_digest()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    AppError(Error::invalid_state(
+                        "real Pi runtime distribution digest is not pinned",
+                    ))
+                })?;
+            (version, Some(digest))
         }
         other => {
             return Err(AppError(Error::validation(format!(

@@ -37,6 +37,12 @@ pub struct PiRpcConfig {
     /// Exact execution-environment identity that owns this Pi subprocess.
     #[serde(default)]
     pub execution_environment_ref: Option<String>,
+    /// Deployment-attested Pi distribution identity. RPC get_state/events prove
+    /// runtime behavior, not which package artifact launched the process.
+    #[serde(default)]
+    pub runtime_version: Option<String>,
+    #[serde(default)]
+    pub runtime_digest: Option<String>,
     pub request_timeout_ms: u64,
     pub prompt_timeout_ms: u64,
     /// True for the official Pi CLI. Alternative test/wrapper executables may
@@ -65,6 +71,8 @@ impl Default for PiRpcConfig {
             provider: None,
             model: None,
             execution_environment_ref: None,
+            runtime_version: None,
+            runtime_digest: None,
             request_timeout_ms: 30_000,
             prompt_timeout_ms: 60_000,
             append_route_args: true,
@@ -118,6 +126,29 @@ impl PiRpcConfig {
                 "real Pi RPC workspace must be an absolute path",
             ));
         }
+        if self
+            .runtime_version
+            .as_deref()
+            .is_none_or(|version| version.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "real Pi RPC requires a deployment-attested runtime version",
+            ));
+        }
+        let digest = self
+            .runtime_digest
+            .as_deref()
+            .ok_or_else(|| Error::validation("real Pi RPC requires a runtime SHA-256 digest"))?;
+        let Some(hex) = digest.strip_prefix("sha256:") else {
+            return Err(Error::validation(
+                "real Pi RPC runtime digest must use sha256:<64-hex>",
+            ));
+        };
+        if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(Error::validation(
+                "real Pi RPC runtime digest must use sha256:<64-hex>",
+            ));
+        }
         if self.request_timeout_ms == 0 || self.prompt_timeout_ms == 0 {
             return Err(Error::validation(
                 "Pi request and prompt timeouts must be positive",
@@ -144,6 +175,14 @@ impl PiRpcConfig {
                 std::env::var("MORN_PI_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
                     Error::validation("MORN_PI_EXECUTION_ENVIRONMENT_REF is required for real Pi")
                 })?,
+            ),
+            runtime_version: Some(
+                std::env::var("MORN_PI_RUNTIME_VERSION")
+                    .map_err(|_| Error::validation("MORN_PI_RUNTIME_VERSION is required for real Pi"))?,
+            ),
+            runtime_digest: Some(
+                std::env::var("MORN_PI_RUNTIME_DIGEST")
+                    .map_err(|_| Error::validation("MORN_PI_RUNTIME_DIGEST is required for real Pi"))?,
             ),
             ..Self::default()
         };
@@ -591,6 +630,8 @@ mod tests {
             provider: None,
             model: None,
             execution_environment_ref: None,
+            runtime_version: None,
+            runtime_digest: None,
             request_timeout_ms: 10_000,
             prompt_timeout_ms: 10_000,
             append_route_args: false,
@@ -684,6 +725,9 @@ mod tests {
         config.model = Some("fixture-model".to_string());
         assert!(config.validate_for_real().is_err());
         config.execution_environment_ref = Some("env://container/pi".to_string());
+        assert!(config.validate_for_real().is_err());
+        config.runtime_version = Some("1.0.0".to_string());
+        config.runtime_digest = Some(format!("sha256:{}", "a".repeat(64)));
         assert!(config.validate_for_real().is_ok());
         config.cwd = Some("relative-workspace".to_string());
         assert!(config.validate_for_real().is_err());
