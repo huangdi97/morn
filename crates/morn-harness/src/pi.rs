@@ -99,15 +99,18 @@ impl PiHarnessProvider {
                 "only a real Pi provider owns an RPC runtime",
             ));
         }
-        if let Some(mut client) = self.real_client.take() {
-            if let Err(error) = client.shutdown() {
-                self.runtime_health
-                    .mark_degraded(format!("Pi RPC shutdown failed: {error}"));
-                return Err(error);
-            }
-        }
-        self.runtime_health
-            .mark_closed("Pi RPC runtime was explicitly shut down");
+        // Taking the client guarantees Drop owns the final process reap even
+        // when the protocol-level shutdown request fails. Projection cleanup
+        // must therefore happen in this same call rather than requiring a
+        // second shutdown attempt to make state truthful.
+        let shutdown_error = self.real_client.take().and_then(|mut client| client.shutdown().err());
+        let close_reason = shutdown_error.as_ref().map_or_else(
+            || "Pi RPC runtime was explicitly shut down".to_string(),
+            |error| format!(
+                "Pi RPC graceful shutdown failed; owned process was force-reaped: {error}"
+            ),
+        );
+        self.runtime_health.mark_closed(close_reason);
         for state in self.sessions.values_mut() {
             if state.status != "terminated" {
                 state.status = "runtime-closed".to_string();
@@ -115,7 +118,10 @@ impl PiHarnessProvider {
             }
         }
         self.active_session = None;
-        Ok(())
+        match shutdown_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 
     fn ensure_real_client(&mut self) -> Result<&mut PiRpcClient> {
