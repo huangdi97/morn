@@ -437,6 +437,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             "isolation": attestation.isolation,
             "required_guarantees": attestation.attested_spec.required_guarantees,
             "runtime": attestation.attested_spec.runtime,
+            "runtime_identities": attestation.runtime_identities,
             "evidence_refs": attestation.evidence_refs,
             "observed_at": attestation.observed_at,
             "valid_until": attestation.valid_until,
@@ -1313,6 +1314,19 @@ fn ensure_live_environment_for_binding(
             "current execution-environment attestation no longer covers the guarantees pinned by the binding",
         ));
     }
+    let digest = binding.provider_digest.as_deref().ok_or_else(|| {
+        Error::invalid_state("real provider binding is missing an exact runtime digest")
+    })?;
+    if !attestation.attests_runtime_identity(
+        &binding.provider_ref,
+        &binding.provider_version,
+        digest,
+        now,
+    ) {
+        return Err(Error::invalid_state(
+            "execution environment no longer attests the exact provider runtime identity pinned by the binding",
+        ));
+    }
     Ok(())
 }
 
@@ -1526,6 +1540,22 @@ async fn v115_work_bind_attested_e0(
         }
     };
 
+    let provider_digest_value = provider_digest.as_deref().ok_or_else(|| {
+        AppError(Error::invalid_state(
+            "real harness provider must pin an exact runtime digest",
+        ))
+    })?;
+    if !attestation.attests_runtime_identity(
+        &provider_ref,
+        &provider_version,
+        provider_digest_value,
+        now,
+    ) {
+        return Err(AppError(Error::invalid_state(
+            "execution-environment attestation does not bind the exact provider runtime artifact",
+        )));
+    }
+
     let mut binding = ExecutionBinding::for_work(
         &work,
         capability.manifest.id.to_string(),
@@ -1562,6 +1592,7 @@ async fn v115_work_bind_attested_e0(
             "environment_ref": attestation.environment_ref,
             "provider": attestation.provider,
             "isolation": attestation.isolation,
+            "runtime_identities": attestation.runtime_identities,
             "evidence_refs": attestation.evidence_refs,
             "observed_at": attestation.observed_at,
             "valid_until": attestation.valid_until
@@ -5130,6 +5161,10 @@ mod workspace_boundary_tests {
                     ],
                     ..Default::default()
                 },
+                runtime_identities: vec![format!(
+                    "deepseek-harness@runtime-1#sha256:{}",
+                    "d".repeat(64)
+                )],
                 evidence_refs: vec!["attestation://real/a".to_string()],
                 observed_at: morn_kernel::time::Timestamp::from_millis(10),
                 valid_until: morn_kernel::time::Timestamp::from_millis(110),
@@ -5142,6 +5177,7 @@ mod workspace_boundary_tests {
             "deepseek-harness",
             "runtime-1",
         );
+        binding.provider_digest = Some(format!("sha256:{}", "d".repeat(64)));
         binding
             .pin_execution_environment(
                 "env://real/a",

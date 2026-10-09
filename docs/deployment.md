@@ -80,6 +80,59 @@ installed.
 
 
 
+## Execution-environment runtime identity attestation
+
+A real DSH/Pi provider version or digest is **not trusted merely because an
+environment variable says so**. The same deployment-owned environment
+attestation used for containment must list every exact provider runtime artifact
+allowed to execute there.
+
+Use `runtime_identities` with the canonical form
+`provider@version#sha256:<64-hex>`. For example:
+
+```json
+{
+  "environment_ref": "env://container/dsh-runtime-a",
+  "provider": "deployment-attestor",
+  "isolation": "container",
+  "attested_spec": {
+    "minimum_isolation": "container",
+    "required_guarantees": [
+      "filesystem-read-policy",
+      "filesystem-write-policy",
+      "process-boundary",
+      "resource-limits",
+      "network-egress-policy",
+      "secret-indirection",
+      "runtime-attestation"
+    ],
+    "network_allowlist": ["api.deepseek.com"],
+    "writable_paths": ["C:\\morn\\workspaces\\dsh"],
+    "secret_refs": ["secret://deepseek/provider-credential"],
+    "persistence_scope": "attempt",
+    "side_effect_policy": "profile-governed"
+  },
+  "runtime_identities": [
+    "deepseek-harness@<deployment-attested-version>#sha256:<64-hex>"
+  ],
+  "evidence_refs": [
+    "attestation://sandbox-fleet/dsh-runtime-a",
+    "artifact-attestation://deepseek-harness/<digest>"
+  ],
+  "observed_at": "2026-10-09T00:00:00Z",
+  "valid_until": "2026-10-10T00:00:00Z"
+}
+```
+
+For Pi, use `pi@<version>#sha256:<digest>`. The runtime identity must match the
+provider version/digest written into `ExecutionBinding` exactly. Expiry,
+revocation/replacement of the environment attestation, a different digest, or a
+different version blocks both new binding and later execution.
+
+This closes a deliberate trust boundary: SDK/RPC handshakes prove protocol
+behavior and liveness; they do not prove which distribution artifact the
+deployment launched.
+
 ## Live provider evidence gate
 
 Morn includes a one-shot deployment gate for proving the **executor transport**
@@ -93,8 +146,10 @@ cargo run -p morn-app --bin provider_smoke
 Set `MORN_PROVIDER_SMOKE_PROVIDER` to `deepseek-harness` (or `dsh`) or
 `pi`. The gate loads the normal application deployment configuration, requires
 an active attestation whose `environment_ref` exactly matches the provider's
-configured environment, mounts the provider's required E0 scope, runs a no-tool
-probe, verifies the live health lease, and reaps the owned provider runtime.
+configured environment, requires that attestation to bind the exact configured
+provider runtime artifact identity, mounts the provider's required E0 scope,
+runs a no-tool probe, verifies the live health lease, and reaps the owned
+provider runtime.
 Unexpected Harness tool activity makes the gate fail closed.
 
 DSH example (values are deployment-specific; never commit secret values):

@@ -191,6 +191,11 @@ pub struct ExecutionEnvironmentAttestation {
     /// Attested capabilities/limits of this exact environment. Its
     /// minimum_isolation must equal `isolation`.
     pub attested_spec: ExecutionEnvironmentSpec,
+    /// Exact provider runtime artifacts independently attested as present in
+    /// this environment. These are distribution identities, not generic
+    /// runtime kinds: `provider@version#sha256:<64-hex>`.
+    #[serde(default)]
+    pub runtime_identities: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub observed_at: Timestamp,
     pub valid_until: Timestamp,
@@ -208,6 +213,9 @@ impl ExecutionEnvironmentAttestation {
                 "attested execution spec isolation must match the environment isolation",
             ));
         }
+        for identity in &self.runtime_identities {
+            validate_runtime_identity(identity)?;
+        }
         if self.evidence_refs.is_empty() {
             return Err(Error::validation(
                 "execution environment attestation requires evidence",
@@ -223,6 +231,22 @@ impl ExecutionEnvironmentAttestation {
 
     pub fn active_at(&self, now: Timestamp) -> bool {
         self.validate().is_ok() && self.observed_at <= now && now <= self.valid_until
+    }
+
+    /// A live provider may be selected only when the deployment attestation
+    /// independently binds this exact environment to the exact distribution
+    /// identity that will be pinned into ExecutionBinding.
+    pub fn attests_runtime_identity(
+        &self,
+        provider: &str,
+        version: &str,
+        digest: &str,
+        now: Timestamp,
+    ) -> bool {
+        let Ok(identity) = exact_runtime_identity(provider, version, digest) else {
+            return false;
+        };
+        self.active_at(now) && self.runtime_identities.iter().any(|item| item == &identity)
     }
 
     pub fn satisfies(&self, requested: &ExecutionEnvironmentSpec, now: Timestamp) -> bool {
@@ -257,6 +281,50 @@ impl ExecutionEnvironmentAttestation {
                     .is_some_and(|actual| actual >= required)
             })
     }
+}
+
+pub fn exact_runtime_identity(provider: &str, version: &str, digest: &str) -> Result<String> {
+    if provider.trim().is_empty() || version.trim().is_empty() {
+        return Err(Error::validation(
+            "runtime identity requires non-empty provider and version",
+        ));
+    }
+    validate_sha256_digest(digest)?;
+    Ok(format!("{provider}@{version}#{digest}"))
+}
+
+fn validate_runtime_identity(identity: &str) -> Result<()> {
+    let (provider_version, digest) = identity.rsplit_once('#').ok_or_else(|| {
+        Error::validation(
+            "runtime identity must use provider@version#sha256:<64-hex>",
+        )
+    })?;
+    let (provider, version) = provider_version.rsplit_once('@').ok_or_else(|| {
+        Error::validation(
+            "runtime identity must use provider@version#sha256:<64-hex>",
+        )
+    })?;
+    let expected = exact_runtime_identity(provider, version, digest)?;
+    if expected != identity {
+        return Err(Error::validation(
+            "runtime identity must use provider@version#sha256:<64-hex>",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_sha256_digest(digest: &str) -> Result<()> {
+    let Some(hex) = digest.strip_prefix("sha256:") else {
+        return Err(Error::validation(
+            "runtime identity digest must use sha256:<64-hex>",
+        ));
+    };
+    if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(Error::validation(
+            "runtime identity digest must use sha256:<64-hex>",
+        ));
+    }
+    Ok(())
 }
 
 fn option_matches(requested: &Option<String>, actual: &Option<String>) -> bool {
@@ -309,6 +377,8 @@ impl AttestedExecutionEnvironmentProvider {
         }
         attestation.attested_spec.required_guarantees.sort();
         attestation.attested_spec.required_guarantees.dedup();
+        attestation.runtime_identities.sort();
+        attestation.runtime_identities.dedup();
         if let Some(existing) = self.attestations.get(&attestation.environment_ref) {
             if attestation.observed_at < existing.observed_at {
                 return Err(Error::conflict(
@@ -547,10 +617,48 @@ mod tests {
                 secret_refs: vec!["secret://deepseek".to_string()],
                 ..Default::default()
             },
+            runtime_identities: Vec::new(),
             evidence_refs: vec![format!("attestation://{environment_ref}")],
             observed_at: now,
             valid_until: Timestamp::from_millis(now.millis() + 60_000),
         }
+    }
+
+    #[test]
+    fn runtime_identity_attestation_is_exact_and_time_scoped() {
+        let now = Timestamp::from_millis(100);
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let identity = exact_runtime_identity("deepseek-harness", "1.2.3", &digest).unwrap();
+        let mut evidence = attestation(
+            "sandbox-fleet",
+            "env://sandbox/a",
+            vec![ExecutionGuarantee::ProcessBoundary],
+        );
+        evidence.observed_at = Timestamp::from_millis(50);
+        evidence.valid_until = Timestamp::from_millis(150);
+        evidence.runtime_identities = vec![identity.clone()];
+        assert!(evidence.validate().is_ok());
+        assert!(evidence.attests_runtime_identity(
+            "deepseek-harness",
+            "1.2.3",
+            &digest,
+            now,
+        ));
+        assert!(!evidence.attests_runtime_identity(
+            "deepseek-harness",
+            "1.2.4",
+            &digest,
+            now,
+        ));
+        assert!(!evidence.attests_runtime_identity(
+            "deepseek-harness",
+            "1.2.3",
+            &digest,
+            Timestamp::from_millis(151),
+        ));
+
+        evidence.runtime_identities = vec!["deepseek-harness@1.2.3#sha256:not-a-digest".to_string()];
+        assert!(evidence.validate().is_err());
     }
 
     #[test]
