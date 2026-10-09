@@ -95,6 +95,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/work/resolve", post(v115_work_resolve))
         .route("/api/v115/work/bind-e0", post(v115_work_bind_e0))
         .route("/api/v115/work/execute-e0", post(v115_work_execute_e0))
+        .route(
+            "/api/v115/work/review-outcome",
+            post(v115_work_review_outcome),
+        )
         .route("/api/v115/solutions", get(v115_solutions))
         .route("/api/v115/capabilities", get(v115_capabilities))
         .route("/api/v115/discovery", get(v115_discovery))
@@ -1158,6 +1162,161 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
         "business_outcome_observed": false,
         "independent_acceptance": false,
         "note": "E0 Harness execution evidence only. Provider completion never creates ObservedOutcome or AcceptanceDecision."
+    })))
+}
+
+async fn v115_work_review_outcome(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_control_plane::{ControlPlaneStore, WorkProgressController, WorkProgressInputs};
+    use morn_kernel::ids::{AcceptanceSpecId, OutcomeRecordId};
+    use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+    use morn_work::control::WorkPhase;
+    use morn_world::ObservedOutcome;
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let outcome_id = body
+        .get("outcome_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("outcome_id is required")))?;
+    let acting_role = body
+        .get("acting_role")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("acting_role is required")))?;
+    let reason = body
+        .get("reason")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("reason is required")))?;
+    let evidence_refs: Vec<String> = body
+        .get("evidence_refs")
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    if evidence_refs.is_empty() {
+        return Err(AppError(Error::validation(
+            "independent review requires at least one evidence reference",
+        )));
+    }
+    let disposition = match body
+        .get("disposition")
+        .and_then(Value::as_str)
+        .unwrap_or("accept")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "accept" => AcceptanceDisposition::Accept,
+        "reject" => AcceptanceDisposition::Reject,
+        "conditional" => AcceptanceDisposition::Conditional,
+        "request-more-evidence" | "request_more_evidence" => {
+            AcceptanceDisposition::RequestMoreEvidence
+        }
+        other => {
+            return Err(AppError(Error::validation(format!(
+                "unsupported acceptance disposition {other:?}"
+            ))))
+        }
+    };
+
+    let guard = state.lock();
+    let mut work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
+    }
+    if work.status.phase.is_terminal() {
+        return Err(AppError(Error::invalid_state(
+            "terminal Work cannot receive a new acceptance decision without a new generation",
+        )));
+    }
+    if !matches!(work.status.phase, WorkPhase::Delivered | WorkPhase::Waiting) {
+        return Err(AppError(Error::invalid_state(
+            "outcome review requires Work to be Delivered or Waiting",
+        )));
+    }
+
+    let outcome = guard
+        .store
+        .load_record::<ObservedOutcome>(
+            "observed_outcome_v115",
+            OutcomeRecordId::new(outcome_id).as_str(),
+        )?
+        .ok_or_else(|| AppError(Error::not_found(format!("ObservedOutcome {outcome_id}"))))?;
+    if outcome.workspace_id != work.workspace_id || outcome.work_package_id != work.id {
+        return Err(AppError(Error::validation(
+            "reviewed outcome must belong to the exact Work and workspace",
+        )));
+    }
+    if !outcome.is_source_grounded() {
+        return Err(AppError(Error::validation(
+            "independent review requires a source-grounded observed outcome",
+        )));
+    }
+
+    let acceptance_spec_id = work
+        .spec
+        .acceptance_ref
+        .as_deref()
+        .map(AcceptanceSpecId::new)
+        .unwrap_or_else(|| AcceptanceSpecId::generate_with("acceptance"));
+    let mut decision = AcceptanceDecision::new(
+        work.id.clone(),
+        acceptance_spec_id,
+        disposition,
+        guard.workspace.owner.clone(),
+        acting_role,
+        reason,
+    );
+    decision.outcome_refs.push(outcome.id.clone());
+    decision.evidence_refs = evidence_refs;
+    decision.evidence_refs.sort();
+    decision.evidence_refs.dedup();
+    if let Some(conditions) = body.get("conditions").and_then(Value::as_array) {
+        decision.conditions = conditions
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .collect();
+    }
+
+    ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &decision)?;
+    WorkProgressController.reconcile(
+        &mut work,
+        &WorkProgressInputs {
+            outcome: Some(&outcome),
+            acceptance: Some(&decision),
+            ..Default::default()
+        },
+    );
+    guard.store.save_work_resource_cas(&mut work)?;
+
+    Ok(Json(json!({
+        "decision": decision,
+        "work": work,
+        "reviewed_outcome": outcome.id,
+        "business_outcome_source_grounded": true,
+        "note": "Review consumes an already-persisted source-grounded outcome. It never promotes a Harness receipt or model output into business truth."
     })))
 }
 
@@ -3900,6 +4059,93 @@ mod workspace_boundary_tests {
             )
             .unwrap()
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn review_outcome_accepts_only_existing_source_grounded_work_outcome() {
+        use morn_control_plane::ControlPlaneStore;
+        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+        use morn_world::{ObservedOutcome, OutcomeSourceKind};
+
+        let state = AppState::new(":memory:").unwrap();
+        let (work, grounded, ungrounded) = {
+            let guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "verify delivered result",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            work.status.phase = WorkPhase::Waiting;
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+
+            let mut grounded = ObservedOutcome::new(
+                guard.workspace.id.clone(),
+                work.id.clone(),
+                "reviewed external result",
+                OutcomeSourceKind::ExternalSystem,
+                "system://authoritative/result-1",
+                json!({"status":"complete"}),
+            );
+            grounded
+                .evidence_refs
+                .push("system://authoritative/result-1/receipt".to_string());
+            guard.store.save_observed_outcome(&work, &grounded).unwrap();
+
+            let ungrounded = ObservedOutcome::new(
+                guard.workspace.id.clone(),
+                work.id.clone(),
+                "model assertion only",
+                OutcomeSourceKind::ValidatedComputation,
+                "model://claim",
+                json!({"status":"complete"}),
+            );
+            guard.store.save_observed_outcome(&work, &ungrounded).unwrap();
+            (work, grounded, ungrounded)
+        };
+
+        let weak = v115_work_review_outcome(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "outcome_id": ungrounded.id.to_string(),
+                "disposition": "accept",
+                "acting_role": "independent-reviewer",
+                "reason": "must not accept an ungrounded assertion",
+                "evidence_refs": ["review://ticket-1"]
+            })),
+        )
+        .await;
+        assert!(weak.is_err());
+
+        let Json(response) = v115_work_review_outcome(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "outcome_id": grounded.id.to_string(),
+                "disposition": "accept",
+                "acting_role": "independent-reviewer",
+                "reason": "authoritative source evidence satisfies the reviewed acceptance criteria",
+                "evidence_refs": ["review://ticket-2"]
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response["work"]["status"]["phase"], "Accepted");
+        assert_eq!(response["business_outcome_source_grounded"], true);
+
+        let guard = state.lock();
+        let decisions = guard
+            .store
+            .load_records_in_workspace::<morn_work::acceptance_decision::AcceptanceDecision>(
+                "acceptance_decision_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap();
+        assert_eq!(decisions.len(), 1);
+        assert_eq!(decisions[0].outcome_refs, vec![grounded.id]);
     }
 
     #[tokio::test]
