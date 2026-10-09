@@ -599,11 +599,7 @@ fn require_jsonrpc_v2(value: &Value) -> Result<()> {
     }
 }
 
-fn response_result_for_id(
-    value: &Value,
-    expected_id: u64,
-    operation: &str,
-) -> Result<Value> {
+fn response_result_for_id(value: &Value, expected_id: u64, operation: &str) -> Result<Value> {
     require_jsonrpc_v2(value)?;
     let response_id = value
         .get("id")
@@ -771,18 +767,14 @@ mod tests {
 
     #[test]
     fn jsonrpc_response_shape_fails_closed() {
-        assert!(response_result_for_id(
-            &json!({"jsonrpc":"1.0","id":1,"result":{}}),
-            1,
-            "test"
-        )
-        .is_err());
-        assert!(response_result_for_id(
-            &json!({"jsonrpc":"2.0","id":2,"result":{}}),
-            1,
-            "test"
-        )
-        .is_err());
+        assert!(
+            response_result_for_id(&json!({"jsonrpc":"1.0","id":1,"result":{}}), 1, "test")
+                .is_err()
+        );
+        assert!(
+            response_result_for_id(&json!({"jsonrpc":"2.0","id":2,"result":{}}), 1, "test")
+                .is_err()
+        );
         assert!(response_result_for_id(
             &json!({"jsonrpc":"2.0","id":1,"result":{},"error":{"code":-1}}),
             1,
