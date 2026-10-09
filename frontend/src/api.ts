@@ -82,6 +82,7 @@ export interface V115ControlPlaneData {
   execution_bindings: Array<Record<string, unknown>>;
   execution_manifests: Array<Record<string, unknown>>;
   execution_receipts: Array<Record<string, unknown>>;
+  external_task_observations: Array<Record<string, unknown>>;
   binding_migrations: Array<Record<string, unknown>>;
   durable_workflow_bindings: Array<Record<string, unknown>>;
   attempts: Array<Record<string, unknown>>;

@@ -143,6 +143,15 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
     const id = textField(row, "execution_binding_ref");
     return id !== null && bindingIds.has(id) && row.work_generation === generation;
   });
+  const externalTasks = control.external_task_observations.filter((row) => {
+    const bindingRef = textField(row, "execution_binding_ref");
+    return (
+      textField(row, "work_id") === workId &&
+      row.work_generation === generation &&
+      bindingRef !== null &&
+      bindingIds.has(bindingRef)
+    );
+  });
   const attempts = control.attempts.filter((row) => {
     const id = textField(row, "binding_id");
     return id !== null && bindingIds.has(id);
@@ -185,6 +194,7 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
     resolutions,
     bindings,
     receipts,
+    externalTasks,
     attempts,
     reconciliations,
     outcomes,
@@ -204,7 +214,7 @@ function WorkEvidenceTrace({
   generation: number;
 }) {
   const trace = workEvidenceTrace(control, workId, generation);
-  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} bindings · ${trace.receipts.length} harness receipts · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions · ${trace.values.length} value assessments`;
+  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} bindings · ${trace.receipts.length} harness receipts · ${trace.externalTasks.length} external tasks · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions · ${trace.values.length} value assessments`;
   return (
     <details className="work-truth-trace">
       <summary>Execution, reality &amp; independent acceptance — {summary}</summary>
@@ -243,6 +253,26 @@ function WorkEvidenceTrace({
             </ul>
           )}
           <p>Harness receipts are executor evidence only; they never establish a business outcome or acceptance.</p>
+        </section>
+        <section>
+          <strong>External protocol task evidence</strong>
+          {trace.externalTasks.length === 0 ? (
+            <p>No durable MCP/A2A task observation for this Work generation.</p>
+          ) : (
+            <ul>
+              {trace.externalTasks.map((task, index) => {
+                const snapshot = task.snapshot as Record<string, unknown> | undefined;
+                const protocol = snapshot ? Object.keys(snapshot)[0] ?? "external" : "external";
+                return (
+                  <li key={textField(task, "id") ?? index}>
+                    <b>{protocol.toUpperCase()} task observation</b>
+                    <small>Binding: {textField(task, "execution_binding_ref") ?? "Not pinned"}</small>
+                    <small>Executor state only — never Morn Outcome or Acceptance</small>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
         <section>
           <strong>External action &amp; side-effect truth</strong>
@@ -1885,6 +1915,7 @@ export default function Workbench() {
             <KeyValue k="Profile conformance attestations" v={v115Control.profile_conformance_attestations.length} />
             <KeyValue k="Bindings" v={v115Control.execution_bindings.length} />
             <KeyValue k="Execution manifests" v={v115Control.execution_manifests.length} />
+            <KeyValue k="External task observations" v={v115Control.external_task_observations.length} />
             <KeyValue k="Binding migrations" v={v115Control.binding_migrations.length} />
             <KeyValue k="Attempts" v={v115Control.attempts.length} />
             <KeyValue k="Reconciliations" v={v115Control.reconciliations.length} />

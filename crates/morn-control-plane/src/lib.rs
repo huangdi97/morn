@@ -40,7 +40,7 @@ pub use profile_guard::{
 };
 
 use morn_harness::ExecutionReceipt;
-use morn_integration::SourceOfTruthBinding;
+use morn_integration::{GovernedExternalTaskObservation, SourceOfTruthBinding};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::protocol::{
     plan_protocol_migration, ProtocolCompatibility, ProtocolMigrationPlan, ProtocolSnapshot,
@@ -675,6 +675,11 @@ pub trait ControlPlaneStore {
     ) -> Result<()>;
     fn save_execution_receipt(&self, work: &WorkResource, receipt: &ExecutionReceipt)
         -> Result<()>;
+    fn save_external_task_observation(
+        &self,
+        work: &WorkResource,
+        observation: &GovernedExternalTaskObservation,
+    ) -> Result<()>;
     fn save_binding_migration(
         &self,
         work: &WorkResource,
@@ -975,6 +980,33 @@ impl ControlPlaneStore for MornStore {
             work.workspace_id.as_str(),
             receipt.started_at.millis(),
             receipt,
+        )
+    }
+
+    fn save_external_task_observation(
+        &self,
+        work: &WorkResource,
+        observation: &GovernedExternalTaskObservation,
+    ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
+        if observation.work_id != work.id || observation.work_generation != work.generation {
+            return Err(Error::validation(
+                "external task observation belongs to another Work generation",
+            ));
+        }
+        let binding: ExecutionBinding = self
+            .load_record(
+                "execution_binding_v115",
+                observation.execution_binding_ref.as_str(),
+            )?
+            .ok_or_else(|| Error::not_found("external task execution binding"))?;
+        observation.validate_against_binding(&binding)?;
+        self.save_record_immutable(
+            "external_task_observation_v115",
+            observation.id.as_str(),
+            work.workspace_id.as_str(),
+            observation.observed_at.millis(),
+            observation,
         )
     }
 
@@ -1992,6 +2024,61 @@ mod control_plane_persistence_scope_tests {
         store.save_execution_binding(&work, &binding).unwrap();
         assert!(store.save_execution_manifest(&other, &manifest).is_err());
         store.save_execution_manifest(&work, &manifest).unwrap();
+    }
+
+    #[test]
+    fn durable_external_task_observation_requires_exact_work_binding_and_never_closes_work() {
+        use morn_integration::{
+            ExternalEndpoint, ExternalTaskSnapshot, GovernedExternalTaskObservation,
+            McpTaskEvidence, McpTaskState,
+        };
+        use morn_integration::InteropProtocol;
+
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        let other = fixture_work();
+        store.save_work_resource(&work).unwrap();
+        store.save_work_resource(&other).unwrap();
+        let binding = ExecutionBinding::for_work(&work, "cap:mcp", "mcp-provider", "2026-07-28");
+        store.save_execution_binding(&work, &binding).unwrap();
+
+        let observation = GovernedExternalTaskObservation::new(
+            work.id.clone(),
+            work.generation,
+            binding.id.clone(),
+            ExternalEndpoint {
+                protocol: InteropProtocol::Mcp,
+                endpoint_ref: "https://mcp.example.com".to_string(),
+                protocol_version: Some("2026-07-28".to_string()),
+                identity_ref: None,
+            },
+            ExternalTaskSnapshot::Mcp(McpTaskEvidence {
+                server_ref: "https://mcp.example.com".to_string(),
+                task_id: "task-42".to_string(),
+                state: McpTaskState::Completed,
+                status_message: Some("executor completed".to_string()),
+                result: Some(json!({"artifact":"result"})),
+                error: None,
+            }),
+            vec!["mcp://task-42/status/1".to_string()],
+        )
+        .unwrap();
+
+        assert!(store
+            .save_external_task_observation(&other, &observation)
+            .is_err());
+        store
+            .save_external_task_observation(&work, &observation)
+            .unwrap();
+        assert!(observation.snapshot.is_executor_terminal());
+        assert!(!observation.proves_morn_acceptance());
+
+        let restored: GovernedExternalTaskObservation = store
+            .load_record("external_task_observation_v115", observation.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(restored.work_id, work.id);
+        assert_eq!(restored.execution_binding_ref, binding.id);
     }
 
     #[test]

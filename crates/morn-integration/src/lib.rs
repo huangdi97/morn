@@ -15,8 +15,9 @@ use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
 
 pub use interoperability::{
-    A2aAgentCardRef, A2aTaskEvidence, A2aTaskState, ExternalEndpoint, InteropBinding,
-    InteropProtocol, McpHttpAuthorizationBinding, McpTaskEvidence, McpTaskState, McpToolDescriptor,
+    A2aAgentCardRef, A2aTaskEvidence, A2aTaskState, ExternalEndpoint, ExternalTaskObservationId,
+    ExternalTaskSnapshot, GovernedExternalTaskObservation, InteropBinding, InteropProtocol,
+    McpHttpAuthorizationBinding, McpTaskEvidence, McpTaskState, McpToolDescriptor,
 };
 pub use source_truth::{
     ConflictPolicy, SourceObservationAttestation, SourceOfTruthBinding, SourceOfTruthBindingId,

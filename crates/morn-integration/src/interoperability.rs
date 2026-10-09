@@ -8,6 +8,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use morn_kernel::error::{Error, Result};
+use morn_kernel::ids::{Id, RuntimeBindingId, WorkPackageId};
+use morn_kernel::time::Timestamp;
+use morn_runtime::ExecutionBinding;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct ExternalTaskObservationTag;
+pub type ExternalTaskObservationId = Id<ExternalTaskObservationTag>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum InteropProtocol {
@@ -97,6 +104,125 @@ impl McpTaskEvidence {
             self.state,
             McpTaskState::Completed | McpTaskState::Cancelled | McpTaskState::Failed
         )
+    }
+
+    pub fn proves_morn_acceptance(&self) -> bool {
+        false
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "protocol", content = "task", rename_all = "kebab-case")]
+pub enum ExternalTaskSnapshot {
+    Mcp(McpTaskEvidence),
+    A2a(A2aTaskEvidence),
+}
+
+impl ExternalTaskSnapshot {
+    pub fn task_id(&self) -> &str {
+        match self {
+            Self::Mcp(task) => &task.task_id,
+            Self::A2a(task) => &task.task_id,
+        }
+    }
+
+    pub fn protocol(&self) -> InteropProtocol {
+        match self {
+            Self::Mcp(_) => InteropProtocol::Mcp,
+            Self::A2a(_) => InteropProtocol::A2a,
+        }
+    }
+
+    pub fn is_executor_terminal(&self) -> bool {
+        match self {
+            Self::Mcp(task) => task.is_executor_terminal(),
+            Self::A2a(task) => task.is_executor_terminal(),
+        }
+    }
+}
+
+/// Append-only observation of a durable external protocol task.
+///
+/// The task handle is provider/runtime evidence tied to the exact Morn Work
+/// generation and ExecutionBinding that created or resumed it. It never owns
+/// Work phase, Outcome or Acceptance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GovernedExternalTaskObservation {
+    pub id: ExternalTaskObservationId,
+    pub work_id: WorkPackageId,
+    pub work_generation: u64,
+    pub execution_binding_ref: RuntimeBindingId,
+    pub endpoint: ExternalEndpoint,
+    pub snapshot: ExternalTaskSnapshot,
+    pub evidence_refs: Vec<String>,
+    pub observed_at: Timestamp,
+}
+
+impl GovernedExternalTaskObservation {
+    pub fn new(
+        work_id: WorkPackageId,
+        work_generation: u64,
+        execution_binding_ref: RuntimeBindingId,
+        endpoint: ExternalEndpoint,
+        snapshot: ExternalTaskSnapshot,
+        evidence_refs: Vec<String>,
+    ) -> Result<Self> {
+        let observation = Self {
+            id: ExternalTaskObservationId::generate_with("external-task-observation"),
+            work_id,
+            work_generation,
+            execution_binding_ref,
+            endpoint,
+            snapshot,
+            evidence_refs,
+            observed_at: Timestamp::now(),
+        };
+        observation.validate()?;
+        Ok(observation)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        self.endpoint.validate()?;
+        if self.work_generation == 0
+            || self.snapshot.task_id().trim().is_empty()
+            || self.evidence_refs.is_empty()
+        {
+            return Err(Error::validation(
+                "governed external task observation requires Work generation, task id and evidence",
+            ));
+        }
+        if self.endpoint.protocol != self.snapshot.protocol() {
+            return Err(Error::validation(
+                "external task snapshot protocol must match the bound endpoint",
+            ));
+        }
+        match &self.snapshot {
+            ExternalTaskSnapshot::Mcp(task)
+                if task.server_ref.trim().is_empty() || task.server_ref != self.endpoint.endpoint_ref =>
+            {
+                return Err(Error::validation(
+                    "MCP task server must match the bound endpoint",
+                ));
+            }
+            ExternalTaskSnapshot::A2a(task) if task.agent_ref.trim().is_empty() => {
+                return Err(Error::validation("A2A task requires agent identity"));
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    pub fn validate_against_binding(&self, binding: &ExecutionBinding) -> Result<()> {
+        self.validate()?;
+        if self.work_id != binding.work_id
+            || self.work_generation != binding.work_generation
+            || self.execution_binding_ref != binding.id
+        {
+            return Err(Error::validation(
+                "external task observation must match the exact Work generation and ExecutionBinding",
+            ));
+        }
+        Ok(())
     }
 
     pub fn proves_morn_acceptance(&self) -> bool {
@@ -252,6 +378,40 @@ mod tests {
         };
         assert!(task.is_executor_terminal());
         assert!(!task.proves_morn_acceptance());
+    }
+
+    #[test]
+    fn durable_external_task_observation_is_pinned_but_never_acceptance() {
+        use morn_kernel::ids::{RuntimeBindingId, WorkPackageId};
+
+        let work_id = WorkPackageId::generate_with("work");
+        let binding_id = RuntimeBindingId::generate_with("binding");
+        let observation = GovernedExternalTaskObservation::new(
+            work_id.clone(),
+            3,
+            binding_id.clone(),
+            ExternalEndpoint {
+                protocol: InteropProtocol::Mcp,
+                endpoint_ref: "https://mcp.example.com".to_string(),
+                protocol_version: Some("2026-07-28".to_string()),
+                identity_ref: None,
+            },
+            ExternalTaskSnapshot::Mcp(McpTaskEvidence {
+                server_ref: "https://mcp.example.com".to_string(),
+                task_id: "task-42".to_string(),
+                state: McpTaskState::Completed,
+                status_message: Some("executor completed".to_string()),
+                result: Some(json!({"artifact":"result"})),
+                error: None,
+            }),
+            vec!["mcp://task-42/status/1".to_string()],
+        )
+        .unwrap();
+
+        assert_eq!(observation.work_id, work_id);
+        assert_eq!(observation.execution_binding_ref, binding_id);
+        assert!(observation.snapshot.is_executor_terminal());
+        assert!(!observation.proves_morn_acceptance());
     }
 
     #[test]
