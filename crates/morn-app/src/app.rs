@@ -205,8 +205,7 @@ fn configured_source_of_truth_bindings() -> morn_kernel::Result<Vec<SourceOfTrut
     Ok(bindings)
 }
 
-fn configured_acceptance_reviewers(
-) -> morn_kernel::Result<Vec<AcceptanceReviewerAttestation>> {
+fn configured_acceptance_reviewers() -> morn_kernel::Result<Vec<AcceptanceReviewerAttestation>> {
     let Ok(path) = std::env::var("MORN_ACCEPTANCE_REVIEWERS_FILE") else {
         return Ok(Vec::new());
     };

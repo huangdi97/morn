@@ -1935,7 +1935,9 @@ async fn v115_work_review_outcome(
     );
     decision.outcome_refs.push(outcome.id.clone());
     decision.evidence_refs = evidence_refs;
-    decision.evidence_refs.extend(reviewer.evidence_refs.clone());
+    decision
+        .evidence_refs
+        .extend(reviewer.evidence_refs.clone());
     decision.evidence_refs.sort();
     decision.evidence_refs.dedup();
     if let Some(conditions) = body.get("conditions").and_then(Value::as_array) {

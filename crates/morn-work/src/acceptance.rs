@@ -40,7 +40,10 @@ impl AcceptanceReviewerAttestation {
                 "acceptance reviewer attestation requires roles and identity evidence",
             ));
         }
-        if self.valid_until.is_some_and(|until| until < self.observed_at) {
+        if self
+            .valid_until
+            .is_some_and(|until| until < self.observed_at)
+        {
             return Err(morn_kernel::error::Error::validation(
                 "reviewer attestation validity cannot end before observation",
             ));
