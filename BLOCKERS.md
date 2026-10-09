@@ -34,14 +34,19 @@ Current code therefore may reach **ALL_LOCAL_GATES_PASS** while these gates stay
 external. It must not claim authenticated provider, real-site, customer-value,
 production-write or physical-control evidence without those sources.
 
-## Active
+## Historical evidence retained below
 
-### B-001 — 真实 DeepSeek Harness smoke 无法在当前环境完成
-Status: Active
+> **Superseded:** the August B-001 record below captures what was observed in that older environment.
+> It is not the current blocker definition. The authoritative 2026-10-09 blocker index above and
+> the 2026-10-08 revalidation section below supersede claims such as “no official DSH distribution”
+> or “DshMode::Real is only a stub.” Do not use the historical reproduction as current product truth.
+
+### Historical B-001 — August environment could not complete a real DeepSeek Harness smoke
+Status: Superseded historical evidence
 Category: Credential / ExternalService
 
-What is blocked:
-官方 DeepSeek Harness（DSH，agent harness，Developer Preview）在当前环境没有官方可安装发行物；无法执行“真实 DSH 启动 + 至少一个真实 smoke”。Morn 侧 `DeepSeekHarnessProvider` 边界与 provider contract（fixture）已完成并通过，但这不是“真实 DSH 已集成”。
+What was blocked at that time:
+The August environment could not locate the later official DeepSeek Harness distribution or perform a credentialed real smoke. The commands and errors below are retained only as provenance for that historical observation.
 
 Why Codex cannot resolve locally:
 1. 无官方 DSH 二进制/包；唯一同名的 PyPI `deepseek-harness` 0.2.0 是第三方 OpenAI 兼容客户端，需要真实 DeepSeek API key（credential）与真实模型访问，当前无凭据；

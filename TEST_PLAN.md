@@ -51,6 +51,9 @@ Real DSH/Pi tests must verify:
 - E0 scope restriction and revocation;
 - runtime distribution version + digest pinning;
 - request/turn bounds;
+- bounded UTF-8 wire frames and bounded reader queues; overflow fails closed without teardown deadlock;
+- DSH JSON-RPC version/response-id/result-vs-error shape validation;
+- Pi RPC response-id + command correlation; cross-request responses fail closed;
 - settled success is required before Healthy lease;
 - non-success/timeout degrades health;
 - unsupported lifecycle methods fail closed;

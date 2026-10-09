@@ -80,19 +80,26 @@
 
 ## B. DSH Gate
 
-### B1 Morn 侧必须完成
-- [x] `DeepSeekHarnessProvider` contract（`run_provider_contract` 通过）
-- [x] Context provenance mapping（RuntimeContext.work_package_id/provenance_refs/policy_snapshot_version）
-- [x] Event normalization mapping（ExecutionEventKind 归一化 + contract 断言）
-- [x] Tool→ActionGateway enforcement seam（ActionGateway 唯一 write path）
-- [x] scope isolation test/fixture（CapabilityScope + contract suite）
-- [x] provider lifecycle test（mount/start/send/inspect/interrupt/resume/terminate）
+### B1 Morn 侧本地可完成项
+- [x] `DeepSeekHarnessProvider` fixture contract（`run_provider_contract`）
+- [x] 官方 DSH SDK stdio/JSON-RPC real adapter：`initialize` / `session/prompt` / `shutdown`
+- [x] Context provenance + exact Work generation / ExecutionBinding / execution-environment identity
+- [x] deployment-pinned runtime version + SHA-256 digest；`serverInfo.version` 仅作 wire peer evidence
+- [x] real provider 仅允许显式挂载 `morn.effects<=E0` scope；E1/E2/E3 必须走 Morn ExternalAction
+- [x] receipt→idle→durable `turn/end` settlement；只有 `completed` 可成为 executor success evidence
+- [x] timeout / lost settlement 强制回收 owned runtime，标记 outcome-unknown，禁止 blind retry
+- [x] 当前 SDK 不支持的 interrupt/resume/per-session close 明确 fail-closed，不伪造生命周期
+- [x] DSH public event normalization 不复制 private reasoning、assistant body、tool args/results
+- [x] child environment scrub + isolated DSH_HOME + attested execution environment requirement
+- [x] bounded wire frame / bounded reader queue / strict JSON-RPC version、response-id、result/error shape 校验
+- [x] real-wire fake runtime contract tests，无需把 fixture 当作 authenticated live evidence
 
 ### B2 外部真实集成
-- [ ] 若当前环境可安装/启动 DSH：真实 smoke 通过 → 不可（B-001）
-- [x] 若不可：`BLOCKERS.md` 有复现命令、原始错误、环境信息，且 Morn 侧 contract test 仍通过
+- [ ] 使用已授权真实 DSH distribution + model route + credential + runtime-attested environment 完成 live settled-turn smoke（B-001）
+- [ ] live provider health lease 的证据来自真实运行，而不是 wire fixture
+- [x] 缺少上述外部条件时保持 EXTERNAL_BLOCKED；本地 CI 不伪造 PASS
 
-B2 不允许伪造 → 真实 smoke 保持为 blocker，未标记完成。
+B2 仍不允许伪造。官方发行与 Morn real adapter 已存在；未完成的是**经过授权的真实运行证据**，不是代码占位。
 
 ## C. 不算完成
 

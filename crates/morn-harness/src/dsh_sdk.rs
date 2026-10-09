@@ -966,6 +966,8 @@ mod tests {
     #[test]
     #[ignore]
     fn fake_sdk_runtime() {
+        use std::io::BufRead as _;
+
         let stdin = std::io::stdin();
         let mut stdout = std::io::stdout().lock();
         for line in stdin.lock().lines() {
