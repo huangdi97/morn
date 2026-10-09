@@ -94,6 +94,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/work/reconcile", post(v115_work_reconcile))
         .route("/api/v115/work/resolve", post(v115_work_resolve))
         .route("/api/v115/work/bind-e0", post(v115_work_bind_e0))
+        .route(
+            "/api/v115/work/bind-attested-e0",
+            post(v115_work_bind_attested_e0),
+        )
         .route("/api/v115/work/execute-e0", post(v115_work_execute_e0))
         .route(
             "/api/v115/work/review-outcome",
@@ -596,6 +600,275 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
     })))
 }
 
+fn execution_spec_for_capability_and_profile(
+    capability: &morn_capability::CapabilityRecord,
+    profile: &morn_profile::DomainProfile,
+) -> Result<morn_runtime::ExecutionEnvironmentSpec, Error> {
+    use morn_kernel::ExecutionClass;
+
+    let profile_isolation = ExecutionClass::parse(&profile.minimum_isolation).ok_or_else(|| {
+        Error::validation(format!(
+            "unsupported profile isolation {}",
+            profile.minimum_isolation
+        ))
+    })?;
+    let capability_isolation = capability.manifest.execution.minimum_isolation;
+    let minimum_isolation = if capability_isolation.satisfies(profile_isolation) {
+        capability_isolation
+    } else {
+        profile_isolation
+    };
+    let mut required_guarantees = capability.manifest.execution.required_guarantees.clone();
+    required_guarantees.extend(profile.required_execution_guarantees.iter().copied());
+    required_guarantees.sort();
+    required_guarantees.dedup();
+
+    Ok(morn_runtime::ExecutionEnvironmentSpec {
+        minimum_isolation,
+        os: capability.manifest.execution.os.clone(),
+        runtime: if capability.manifest.execution.runtime_kinds.len() == 1 {
+            capability.manifest.execution.runtime_kinds.first().cloned()
+        } else {
+            None
+        },
+        required_guarantees,
+        cpu_millis: capability.manifest.execution.cpu_millis,
+        memory_mb: capability.manifest.execution.memory_mb,
+        gpu_count: capability.manifest.execution.gpu_count,
+        network_allowlist: capability.manifest.execution.network_allowlist.clone(),
+        writable_paths: capability.manifest.execution.writable_paths.clone(),
+        secret_refs: capability.manifest.execution.secret_refs.clone(),
+        persistence_scope: capability.manifest.execution.persistence_scope.clone(),
+        timeout_ms: capability.manifest.execution.timeout_ms,
+        side_effect_policy: capability.manifest.execution.side_effect_policy.clone(),
+    })
+}
+
+async fn v115_work_bind_attested_e0(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_capability::{CapabilityStage, EffectClass};
+    use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
+    use morn_kernel::time::Timestamp;
+    use morn_runtime::{CompositionRuntimeRef, ExecutionBinding, ExecutionManifest};
+    use morn_work::control::WorkPhase;
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let capability_id = body
+        .get("capability_manifest_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("capability_manifest_id is required")))?;
+    let environment_ref = body
+        .get("execution_environment_ref")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("execution_environment_ref is required")))?;
+
+    let now = Timestamp::now();
+    let guard = state.lock();
+    let work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+    }
+    if work.status.phase != WorkPhase::Ready || !work.required_conditions_satisfied() {
+        return Err(AppError(Error::invalid_state(
+            "attested binding requires a Ready Work with all current-generation conditions satisfied",
+        )));
+    }
+
+    let capability = guard
+        .v115_capabilities
+        .iter()
+        .find(|record| record.manifest.id.as_str() == capability_id)
+        .cloned()
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "CapabilityManifest {capability_id}"
+            )))
+        })?;
+    capability.manifest.validate_governance()?;
+    if !matches!(
+        capability.stage,
+        CapabilityStage::Qualified | CapabilityStage::Admitted
+    ) {
+        return Err(AppError(Error::invalid_state(
+            "attested execution binding requires a qualified or admitted capability",
+        )));
+    }
+    if capability.manifest.authority.maximum_effect != EffectClass::E0LifecycleReversible {
+        return Err(AppError(Error::not_authorized(
+            "bind-attested-e0 only permits an E0 lifecycle-reversible capability",
+        )));
+    }
+
+    let resolved_evidence = guard
+        .store
+        .load_records_in_workspace::<ConditionEvidence>(
+            "condition_evidence_v115",
+            guard.workspace.id.as_str(),
+        )?
+        .into_iter()
+        .any(|evidence| {
+            evidence.condition_type == "CapabilityResolved"
+                && evidence.satisfied
+                && evidence.active_for(&work, now)
+                && evidence
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference == capability.manifest.id.as_str())
+        });
+    if !resolved_evidence {
+        return Err(AppError(Error::invalid_state(
+            "capability is not witnessed by current-generation CapabilityResolved evidence",
+        )));
+    }
+
+    let profile =
+        morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+            AppError(Error::validation(format!(
+                "unsupported Work profile {}",
+                work.spec.profile_ref
+            )))
+        })?;
+    if profile.requires("CapabilityQualification") {
+        let site = work
+            .spec
+            .site_ref
+            .as_deref()
+            .ok_or_else(|| AppError(Error::validation("governed Work requires site_ref")))?;
+        if !guard.v115_admission.site_profile_admission_active_at(
+            &capability,
+            site,
+            &work.spec.profile_ref,
+            now,
+        ) {
+            return Err(AppError(Error::invalid_state(
+                "capability no longer has an active exact site/profile admission",
+            )));
+        }
+    }
+
+    let requested = execution_spec_for_capability_and_profile(&capability, &profile)?;
+    let attestation = guard
+        .execution_environments
+        .attestation(environment_ref)
+        .cloned()
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "trusted execution environment attestation {environment_ref}"
+            )))
+        })?;
+    if !attestation.satisfies(&requested, now) {
+        return Err(AppError(Error::invalid_state(
+            "trusted execution environment attestation is stale or does not satisfy the capability/profile contract",
+        )));
+    }
+    if !capability.manifest.execution.runtime_kinds.is_empty()
+        && attestation
+            .attested_spec
+            .runtime
+            .as_ref()
+            .is_none_or(|runtime| {
+                !capability
+                    .manifest
+                    .execution
+                    .runtime_kinds
+                    .iter()
+                    .any(|allowed| allowed.eq_ignore_ascii_case(runtime))
+            })
+    {
+        return Err(AppError(Error::invalid_state(
+            "attested runtime kind is not one of the capability's declared runtime kinds",
+        )));
+    }
+
+    let provider_ref = capability.manifest.provider_ref.clone();
+    let provider_version = match provider_ref.as_str() {
+        "deepseek-harness" => {
+            let mut provider = guard
+                .dsh_harness
+                .lock()
+                .map_err(|_| AppError(Error::internal("dsh harness lock poisoned")))?;
+            if provider.mode() != morn_harness::provider::DshMode::Real {
+                return Err(AppError(Error::invalid_state(
+                    "bind-attested-e0 is reserved for a real DSH runtime; fixture providers use bind-e0",
+                )));
+            }
+            if provider.configured_execution_environment_ref() != Some(environment_ref) {
+                return Err(AppError(Error::invalid_state(
+                    "attested environment does not match the environment pinned by the real DSH launch configuration",
+                )));
+            }
+            provider.preflight_real_runtime()?
+        }
+        "pi" => {
+            return Err(AppError(Error::invalid_state(
+                "the current official Pi RPC boundary does not expose a verifiable runtime version; real Pi binding remains blocked rather than inventing provider identity",
+            )));
+        }
+        other => {
+            return Err(AppError(Error::validation(format!(
+                "provider {other:?} does not use the attested real-harness binding path"
+            ))));
+        }
+    };
+
+    let mut binding = ExecutionBinding::for_work(
+        &work,
+        capability.manifest.id.to_string(),
+        provider_ref,
+        provider_version,
+    );
+    binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
+    binding.compensation_ref = capability.manifest.compensation_ref.clone();
+    binding.idempotency_key_required = capability.manifest.idempotency_key_required;
+    binding.pin_execution_environment(
+        attestation.environment_ref.clone(),
+        attestation.isolation,
+        attestation.attested_spec.required_guarantees.clone(),
+    )?;
+    if !binding.environment_satisfies(
+        requested.minimum_isolation,
+        &requested.required_guarantees,
+    ) {
+        return Err(AppError(Error::invalid_state(
+            "pinned execution environment does not satisfy the computed execution contract",
+        )));
+    }
+
+    guard.store.save_execution_binding(&work, &binding)?;
+    let manifest = ExecutionManifest::from_binding(
+        &work,
+        &binding,
+        CompositionRuntimeRef::new("cordis-reference", "4.0.4"),
+    )?;
+    guard.store.save_execution_manifest(&work, &manifest)?;
+
+    Ok(Json(json!({
+        "binding": binding,
+        "execution_manifest": manifest,
+        "attestation": {
+            "environment_ref": attestation.environment_ref,
+            "provider": attestation.provider,
+            "isolation": attestation.isolation,
+            "evidence_refs": attestation.evidence_refs,
+            "observed_at": attestation.observed_at,
+            "valid_until": attestation.valid_until
+        },
+        "execution_started": false,
+        "note": "Trusted deployment attestation and exact DSH runtime identity are pinned; no Harness turn, world outcome, authority grant or acceptance was created."
+    })))
+}
+
 async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_capability::{CapabilityStage, EffectClass};
     use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
@@ -1019,10 +1292,12 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     )));
                 }
                 if provider.mode() == morn_harness::provider::DshMode::Real
+                    && provider.runtime_health().state
+                        != morn_harness::provider::HarnessRuntimeHealthState::Initialized
                     && !provider.runtime_health().selectable_at(now)
                 {
                     return Err(AppError(Error::invalid_state(
-                        "real DSH provider has no fresh healthy runtime lease; new execution is blocked",
+                        "real DSH provider is neither freshly initialized for its first turn nor covered by a fresh healthy runtime lease",
                     )));
                 }
             }

@@ -24,6 +24,9 @@ use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
 use morn_harness::{PiHarnessProvider, PiMode};
+use morn_runtime::{
+    AttestedExecutionEnvironmentProvider, ExecutionEnvironmentAttestation,
+};
 #[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;
 use morn_kernel::workspace::{Workspace, WorkspaceKind};
@@ -51,6 +54,9 @@ pub struct AppInner {
     pub native_harness: Arc<Mutex<MornNativeHarness>>,
     pub dsh_harness: Arc<Mutex<DeepSeekHarnessProvider>>,
     pub pi_harness: Arc<Mutex<PiHarnessProvider>>,
+    /// Deployment-owned execution environment attestations. HTTP callers may
+    /// select only from this startup-loaded trust set; they cannot self-attest.
+    pub execution_environments: AttestedExecutionEnvironmentProvider,
     pub evolution: EvolutionEngine,
     pub durable: DurableWorkService,
     pub durable_v2: DurableRuntime,
@@ -100,6 +106,51 @@ fn configured_dsh_harness() -> morn_kernel::Result<DeepSeekHarnessProvider> {
     }
 }
 
+fn configured_execution_environments(
+) -> morn_kernel::Result<AttestedExecutionEnvironmentProvider> {
+    let provider_name = std::env::var("MORN_EXECUTION_ATTESTOR")
+        .unwrap_or_else(|_| "deployment-attestor".to_string());
+    let mut provider = AttestedExecutionEnvironmentProvider::new(provider_name)?;
+    let Ok(path) = std::env::var("MORN_EXECUTION_ATTESTATION_FILE") else {
+        return Ok(provider);
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_EXECUTION_ATTESTATION_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read execution attestation file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid execution attestation JSON in {path:?}: {error}"
+        ))
+    })?;
+    let attestations: Vec<ExecutionEnvironmentAttestation> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid execution attestation entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid execution attestation entry: {error}"
+            ))
+        })?],
+    };
+    for attestation in attestations {
+        provider.register_attestation(attestation)?;
+    }
+    Ok(provider)
+}
+
 fn configured_pi_harness() -> morn_kernel::Result<PiHarnessProvider> {
     match std::env::var("MORN_PI_MODE") {
         Err(std::env::VarError::NotPresent) => Ok(PiHarnessProvider::new(PiMode::Fixture)),
@@ -142,6 +193,7 @@ impl AppState {
             let workspace_id: WorkspaceId = workspace.id.clone();
             BioLabService::new(workspace_id)
         };
+        let execution_environments = configured_execution_environments()?;
         let mut inner = AppInner {
             store,
             workspace,
@@ -153,6 +205,7 @@ impl AppState {
             native_harness: Arc::new(Mutex::new(MornNativeHarness::new())),
             dsh_harness: Arc::new(Mutex::new(configured_dsh_harness()?)),
             pi_harness: Arc::new(Mutex::new(configured_pi_harness()?)),
+            execution_environments,
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
             durable_v2: DurableRuntime::new(),

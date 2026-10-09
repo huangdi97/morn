@@ -497,6 +497,29 @@ impl DeepSeekHarnessProvider {
         &self.runtime_health
     }
 
+    /// Deployment preflight for creating a real ExecutionBinding. This performs
+    /// only the official SDK initialize handshake; it does not create a Harness
+    /// session, send a prompt, or claim provider health. The returned version is
+    /// the exact wire-observed runtime identity that may be pinned into a new
+    /// generation-scoped binding.
+    pub fn preflight_real_runtime(&mut self) -> Result<String> {
+        if self.mode != DshMode::Real {
+            return Err(Error::invalid_state(
+                "DSH runtime preflight is only valid in real mode",
+            ));
+        }
+        self.ensure_real_client()?;
+        self.real_runtime_version
+            .clone()
+            .ok_or_else(|| Error::external("DSH initialize did not expose a runtime version"))
+    }
+
+    pub fn configured_execution_environment_ref(&self) -> Option<&str> {
+        self.real_config
+            .as_ref()
+            .and_then(|config| config.execution_environment_ref.as_deref())
+    }
+
     pub fn shutdown_real_runtime(&mut self) -> Result<()> {
         if self.mode != DshMode::Real {
             return Err(Error::invalid_state(
