@@ -689,6 +689,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         outcome.id.clone(),
         ValueEvidenceClass::Fixture,
     );
+    value.pin_work_generation(work.generation).unwrap();
     value.acceptance_ref = Some(acceptance_decision.id.clone());
     value.unknown_outcome_count = 1;
     value.retry_count = 0;
@@ -737,6 +738,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .unwrap();
     assert!(restored_outcome.is_source_grounded());
     assert!(restored_acceptance.is_final_acceptance());
+    assert_eq!(restored_value.work_generation, work.generation);
     assert!(!restored_value.is_customer_value_claim());
 
     environment_provider.release(&environment).unwrap();

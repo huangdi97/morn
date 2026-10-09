@@ -1231,9 +1231,11 @@ impl ControlPlaneStore for MornStore {
         assessment: &ValueAssessment,
     ) -> Result<()> {
         require_canonical_work_workspace(self, work)?;
-        if assessment.work_package_id != work.id {
+        if assessment.work_package_id != work.id
+            || assessment.work_generation != work.generation
+        {
             return Err(Error::validation(
-                "value assessment belongs to another Work",
+                "value assessment belongs to another Work generation",
             ));
         }
         let outcome: ObservedOutcome = self

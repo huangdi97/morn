@@ -17,10 +17,18 @@ pub enum ValueEvidenceClass {
     CustomerValidated,
 }
 
+fn default_work_generation() -> u64 {
+    1
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ValueAssessment {
     pub id: ValueAssessmentId,
     pub work_package_id: WorkPackageId,
+    /// Exact desired Work generation whose accepted outcome is being valued.
+    /// Legacy serialized records default to generation 1 and cannot validate a later generation.
+    #[serde(default = "default_work_generation")]
+    pub work_generation: u64,
     pub outcome_ref: OutcomeRecordId,
     pub acceptance_ref: Option<AcceptanceDecisionId>,
     pub evidence_class: ValueEvidenceClass,
@@ -44,6 +52,7 @@ impl ValueAssessment {
         Self {
             id: ValueAssessmentId::generate_with("value"),
             work_package_id,
+            work_generation: 1,
             outcome_ref,
             acceptance_ref: None,
             evidence_class,
@@ -59,8 +68,19 @@ impl ValueAssessment {
         }
     }
 
+    pub fn pin_work_generation(&mut self, generation: u64) -> morn_kernel::error::Result<()> {
+        if generation == 0 {
+            return Err(morn_kernel::error::Error::validation(
+                "value assessment Work generation must be positive",
+            ));
+        }
+        self.work_generation = generation;
+        Ok(())
+    }
+
     pub fn is_customer_value_claim(&self) -> bool {
-        self.evidence_class == ValueEvidenceClass::CustomerValidated
+        self.work_generation > 0
+            && self.evidence_class == ValueEvidenceClass::CustomerValidated
             && self.acceptance_ref.is_some()
             && !self.evidence_refs.is_empty()
     }
@@ -69,6 +89,19 @@ impl ValueAssessment {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn value_assessment_generation_is_explicit_and_positive() {
+        let mut assessment = ValueAssessment::new(
+            WorkPackageId::generate_with("work"),
+            OutcomeRecordId::generate_with("out"),
+            ValueEvidenceClass::ObservedOperational,
+        );
+        assert_eq!(assessment.work_generation, 1);
+        assessment.pin_work_generation(3).unwrap();
+        assert_eq!(assessment.work_generation, 3);
+        assert!(assessment.pin_work_generation(0).is_err());
+    }
 
     #[test]
     fn fixture_metrics_are_not_customer_value_claims() {
