@@ -1814,6 +1814,13 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     )));
                 }
                 if provider.mode() == morn_harness::provider::DshMode::Real
+                    && binding.provider_digest.as_deref() != provider.configured_runtime_digest()
+                {
+                    return Err(AppError(Error::invalid_state(
+                        "bound DSH provider digest no longer matches the configured runtime distribution",
+                    )));
+                }
+                if provider.mode() == morn_harness::provider::DshMode::Real
                     && !provider.runtime_health().ready_for_new_turn_at(now)
                 {
                     return Err(AppError(Error::invalid_state(
@@ -1839,6 +1846,13 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                 {
                     return Err(AppError(Error::invalid_state(
                         "bound Pi provider identity no longer matches the active runtime",
+                    )));
+                }
+                if provider.mode() == morn_harness::PiMode::Real
+                    && binding.provider_digest.as_deref() != provider.configured_runtime_digest()
+                {
+                    return Err(AppError(Error::invalid_state(
+                        "bound Pi provider digest no longer matches the configured runtime distribution",
                     )));
                 }
                 if provider.mode() == morn_harness::PiMode::Real
