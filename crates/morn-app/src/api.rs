@@ -93,6 +93,18 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/control-plane", get(v115_control_plane))
         .route("/api/v115/work/reconcile", post(v115_work_reconcile))
         .route("/api/v115/work/resolve", post(v115_work_resolve))
+        .route(
+            "/api/v115/source-of-truth/catalog",
+            get(v115_source_of_truth_catalog),
+        )
+        .route(
+            "/api/v115/work/bind-source-of-truth",
+            post(v115_work_bind_source_of_truth),
+        )
+        .route(
+            "/api/v115/work/observe-outcome",
+            post(v115_work_observe_outcome),
+        )
         .route("/api/v115/work/bind-e0", post(v115_work_bind_e0))
         .route(
             "/api/v115/work/bind-attested-e0",
@@ -634,6 +646,279 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
         "controller_tick": tick,
         "work": current,
         "note": "Resolution is generation-scoped evidence only. It grants neither ExecutionBinding nor authority."
+    })))
+}
+
+async fn v115_source_of_truth_catalog(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    Ok(Json(json!({
+        "bindings": guard.source_of_truth_catalog,
+        "deployment_owned": true,
+        "caller_can_create_authority": false,
+        "note": "Catalog entries are loaded at server startup from MORN_SOURCE_OF_TRUTH_BINDINGS_FILE."
+    })))
+}
+
+async fn v115_work_bind_source_of_truth(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_control_plane::{
+        source_of_truth_condition_evidence, ControlPlaneStore, DurableWorkControllerRuntime,
+    };
+    use morn_integration::SourceOfTruthBindingId;
+    use morn_kernel::time::Timestamp;
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let catalog_binding_id = body
+        .get("catalog_binding_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("catalog_binding_id is required")))?;
+
+    let guard = state.lock();
+    let work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+    }
+    if work.status.phase.is_terminal() {
+        return Err(AppError(Error::invalid_state(
+            "terminal Work cannot attach a new source-of-truth binding without a new generation",
+        )));
+    }
+
+    let catalog = guard
+        .source_of_truth_catalog
+        .iter()
+        .find(|binding| binding.id.as_str() == catalog_binding_id)
+        .cloned()
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "deployment source-of-truth binding {catalog_binding_id}"
+            )))
+        })?;
+    catalog.validate()?;
+    if catalog.site_ref != work.spec.site_ref {
+        return Err(AppError(Error::validation(
+            "deployment source-of-truth binding site does not match the Work site",
+        )));
+    }
+
+    // The deployment catalog entry is reusable configuration. Persist a unique
+    // Work-scoped immutable copy so the canonical store never aliases one
+    // binding record across unrelated Work resources.
+    let mut binding = catalog.clone();
+    binding.id = SourceOfTruthBindingId::generate_with("sot-work");
+    binding.created_at = Timestamp::now();
+    guard.store.save_source_of_truth_binding(&work, &binding)?;
+
+    let mut evidence = source_of_truth_condition_evidence(&work, &binding)?;
+    evidence
+        .evidence_refs
+        .push(format!("deployment-source-binding:{catalog_binding_id}"));
+    evidence.evidence_refs.sort();
+    evidence.evidence_refs.dedup();
+    guard.store.save_condition_evidence(&work, &evidence)?;
+
+    let profile =
+        morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+            AppError(Error::validation(format!(
+                "unsupported Work profile {}",
+                work.spec.profile_ref
+            )))
+        })?;
+    let tick = DurableWorkControllerRuntime::new("api-v115-source-of-truth")
+        .reconcile_from_evidence(
+            &guard.store,
+            work.id.as_str(),
+            &profile,
+            Timestamp::now(),
+        )?;
+    let current = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>(
+            "work_resource_v115",
+            work.id.as_str(),
+        )?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {}", work.id))))?;
+
+    Ok(Json(json!({
+        "binding": binding,
+        "catalog_binding_ref": catalog_binding_id,
+        "condition_evidence": evidence,
+        "controller_tick": tick,
+        "work": current,
+        "note": "Deployment-owned authority was attached to this Work. No world outcome or acceptance was created."
+    })))
+}
+
+fn source_ref_within_binding(binding_root: &str, source_ref: &str) -> bool {
+    let root = binding_root.trim_end_matches('/');
+    source_ref == root
+        || source_ref
+            .strip_prefix(root)
+            .is_some_and(|suffix| suffix.starts_with('/') || suffix.starts_with('#') || suffix.starts_with('?'))
+}
+
+async fn v115_work_observe_outcome(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_control_plane::{ControlPlaneStore, WorkProgressController, WorkProgressInputs};
+    use morn_integration::{SourceOfTruthBinding, TruthAuthorityKind};
+    use morn_world::{ObservedOutcome, OutcomeSourceKind};
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let binding_id = body
+        .get("source_binding_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("source_binding_id is required")))?;
+    let fact_type = body
+        .get("fact_type")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("fact_type is required")))?;
+    let objective = body
+        .get("objective")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("objective is required")))?;
+    let source_ref = body
+        .get("source_ref")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("source_ref is required")))?;
+    let observed_facts = body
+        .get("observed_facts")
+        .cloned()
+        .ok_or_else(|| AppError(Error::validation("observed_facts is required")))?;
+    if !observed_facts.is_object() {
+        return Err(AppError(Error::validation(
+            "observed_facts must be a JSON object",
+        )));
+    }
+    let mut evidence_refs: Vec<String> = body
+        .get("evidence_refs")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    if evidence_refs.is_empty() {
+        return Err(AppError(Error::validation(
+            "authoritative outcome observation requires at least one evidence reference",
+        )));
+    }
+
+    let guard = state.lock();
+    let mut work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+    }
+    if work.status.phase.is_terminal() {
+        return Err(AppError(Error::invalid_state(
+            "terminal Work cannot receive a new observed outcome without a new generation",
+        )));
+    }
+
+    let binding = guard
+        .store
+        .load_record::<SourceOfTruthBinding>("source_of_truth_binding_v115", binding_id)?
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "SourceOfTruthBinding {binding_id}"
+            )))
+        })?;
+    binding.validate()?;
+    if binding.site_ref != work.spec.site_ref || !binding.authoritative_for(fact_type) {
+        return Err(AppError(Error::validation(
+            "source binding is not authoritative for this Work site and fact type",
+        )));
+    }
+    let bound_for_work = guard
+        .store
+        .load_records_in_workspace::<morn_control_plane::ConditionEvidence>(
+            "condition_evidence_v115",
+            guard.workspace.id.as_str(),
+        )?
+        .into_iter()
+        .any(|evidence| {
+            evidence.active_for(&work, morn_kernel::time::Timestamp::now())
+                && evidence.condition_type == "SourceOfTruthBound"
+                && evidence.satisfied
+                && evidence
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference == binding.id.as_str())
+        });
+    if !bound_for_work {
+        return Err(AppError(Error::not_authorized(
+            "source-of-truth binding is not attached to this Work generation",
+        )));
+    }
+    if !source_ref_within_binding(&binding.source_ref, source_ref) {
+        return Err(AppError(Error::validation(
+            "observed source_ref is outside the authoritative source binding",
+        )));
+    }
+
+    let source_kind = match binding.authority_kind {
+        TruthAuthorityKind::SystemOfRecord => OutcomeSourceKind::ExternalSystem,
+        TruthAuthorityKind::Sensor => OutcomeSourceKind::Sensor,
+        TruthAuthorityKind::HumanAuthority => OutcomeSourceKind::HumanObservation,
+        TruthAuthorityKind::ValidatedComputation => OutcomeSourceKind::ValidatedComputation,
+    };
+    let mut outcome = ObservedOutcome::new(
+        work.workspace_id.clone(),
+        work.id.clone(),
+        objective,
+        source_kind,
+        source_ref,
+        observed_facts,
+    );
+    outcome.evidence_refs = evidence_refs;
+    guard.store.save_observed_outcome(&work, &outcome)?;
+
+    WorkProgressController.reconcile(
+        &mut work,
+        &WorkProgressInputs {
+            outcome: Some(&outcome),
+            ..Default::default()
+        },
+    );
+    guard.store.save_work_resource_cas(&mut work)?;
+
+    Ok(Json(json!({
+        "outcome": outcome,
+        "work": work,
+        "source_binding": binding.id,
+        "fact_type": fact_type,
+        "business_outcome_source_grounded": true,
+        "independent_acceptance": false,
+        "note": "Authoritative observation advances Work to Delivered, not Accepted. Independent review remains required."
     })))
 }
 
@@ -4404,6 +4689,127 @@ mod workspace_boundary_tests {
             .store
             .load_records_in_workspace::<morn_harness::ExecutionReceipt>(
                 "execution_receipt_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn deployment_source_binding_is_required_before_authoritative_outcome_observation() {
+        use morn_control_plane::ControlPlaneStore;
+        use morn_integration::{
+            ConflictPolicy, SourceOfTruthBinding, SourceOfTruthBindingId, TruthAuthorityKind,
+        };
+        use morn_kernel::time::Timestamp;
+        use morn_work::control::{WorkResource, WorkSpec};
+
+        let state = AppState::new(":memory:").unwrap();
+        let (work, catalog_id) = {
+            let mut guard = state.lock();
+            let binding = SourceOfTruthBinding {
+                id: SourceOfTruthBindingId::generate_with("sot-catalog"),
+                site_ref: None,
+                source_ref: "system://orders".to_string(),
+                authority_kind: TruthAuthorityKind::SystemOfRecord,
+                authoritative_fact_types: vec!["delivery.status".to_string()],
+                key_mapping_ref: "mapping://orders@1".to_string(),
+                query_capability_ref: "capability://orders.read@1".to_string(),
+                freshness_sla_ms: Some(30_000),
+                conflict_policy: ConflictPolicy::ReconcileBeforeUse,
+                version_ref: "binding:v1".to_string(),
+                created_at: Timestamp::now(),
+            };
+            let catalog_id = binding.id.to_string();
+            guard.source_of_truth_catalog.push(binding);
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "verify delivery outcome",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+            (work, catalog_id)
+        };
+
+        let unauthorized = v115_work_observe_outcome(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "source_binding_id": catalog_id,
+                "fact_type": "delivery.status",
+                "objective": "observe delivery",
+                "source_ref": "system://orders/42",
+                "observed_facts": {"status":"complete"},
+                "evidence_refs": ["system://orders/42/receipt"]
+            })),
+        )
+        .await;
+        assert!(unauthorized.is_err());
+
+        let Json(bound) = v115_work_bind_source_of_truth(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "catalog_binding_id": catalog_id
+            })),
+        )
+        .await
+        .unwrap();
+        let work_binding_id = bound["binding"]["id"].as_str().unwrap().to_string();
+        assert_ne!(work_binding_id, catalog_id);
+        assert_eq!(bound["condition_evidence"]["condition_type"], "SourceOfTruthBound");
+
+        let outside = v115_work_observe_outcome(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "source_binding_id": work_binding_id,
+                "fact_type": "delivery.status",
+                "objective": "observe delivery",
+                "source_ref": "system://orders-evil/42",
+                "observed_facts": {"status":"complete"},
+                "evidence_refs": ["system://orders-evil/42/receipt"]
+            })),
+        )
+        .await;
+        assert!(outside.is_err());
+
+        let Json(observed) = v115_work_observe_outcome(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "source_binding_id": work_binding_id,
+                "fact_type": "delivery.status",
+                "objective": "observe delivery",
+                "source_ref": "system://orders/42",
+                "observed_facts": {"status":"complete"},
+                "evidence_refs": ["system://orders/42/receipt"]
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(observed["work"]["status"]["phase"], "Delivered");
+        assert_eq!(observed["independent_acceptance"], false);
+
+        let guard = state.lock();
+        assert_eq!(
+            guard
+                .store
+                .load_records_in_workspace::<morn_world::ObservedOutcome>(
+                    "observed_outcome_v115",
+                    guard.workspace.id.as_str(),
+                )
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(guard
+            .store
+            .load_records_in_workspace::<morn_work::acceptance_decision::AcceptanceDecision>(
+                "acceptance_decision_v115",
                 guard.workspace.id.as_str(),
             )
             .unwrap()

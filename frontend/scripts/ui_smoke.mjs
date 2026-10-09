@@ -135,11 +135,14 @@ try {
     ) {
       errors.push("workbench: independent source-grounded outcome review is not visible");
     }
-    if (
-      route === "/workbench" &&
-      !(await page.locator(".governed-execution-binding select").count())
-    ) {
-      errors.push("workbench: execution binding must be selected explicitly");
+    if (route === "/workbench") {
+      const governedExecution = page.getByRole("heading", { name: "Governed E0 execution" });
+      if ((await governedExecution.count()) && !(await page.locator(".governed-execution-binding select").count())) {
+        errors.push("workbench: rendered governed execution must expose explicit binding selection");
+      }
+      if (!(await page.getByRole("heading", { name: "Authoritative outcome observation" }).isVisible())) {
+        errors.push("workbench: authoritative source-to-outcome surface is not visible");
+      }
     }
     if (route === "/workbench" && await page.locator("details.workbench-reference").evaluate((node) => node.open)) {
       errors.push("workbench: legacy diagnostics should be collapsed by default");

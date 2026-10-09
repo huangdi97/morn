@@ -128,6 +128,24 @@ export interface V115DiscoveryData {
   invariant: string;
 }
 
+export interface SourceOfTruthCatalog {
+  bindings: Array<{
+    id: string;
+    site_ref: string | null;
+    source_ref: string;
+    authority_kind: "SystemOfRecord" | "Sensor" | "HumanAuthority" | "ValidatedComputation";
+    authoritative_fact_types: string[];
+    key_mapping_ref: string;
+    query_capability_ref: string;
+    freshness_sla_ms: number | null;
+    conflict_policy: string;
+    version_ref: string;
+  }>;
+  deployment_owned: boolean;
+  caller_can_create_authority: boolean;
+  note: string;
+}
+
 export interface V115Status {
   provider_catalog: Array<{
     id: string;

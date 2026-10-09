@@ -78,6 +78,45 @@ configured DSH/Pi command actually executes inside that named environment;
 Morn does not infer containment from a binary name or from Docker being
 installed.
 
+## Authoritative source bindings
+
+Morn does not allow an HTTP/UI caller or a Harness to self-declare a business
+source as authoritative. Deployment-reviewed source bindings are loaded at
+server startup from `MORN_SOURCE_OF_TRUTH_BINDINGS_FILE`.
+
+The file may contain one binding or an array. It contains authority metadata
+and credential/query references, **not secret material**. Example:
+
+```json
+[
+  {
+    "id": "sot:plant-a-cmms-orders",
+    "site_ref": "plant-a",
+    "source_ref": "cmms://plant-a/orders",
+    "authority_kind": "SystemOfRecord",
+    "authoritative_fact_types": ["maintenance.order", "delivery.status"],
+    "key_mapping_ref": "mapping://cmms-order-key@1",
+    "query_capability_ref": "capability://cmms.read-order@1",
+    "freshness_sla_ms": 30000,
+    "conflict_policy": "ReconcileBeforeUse",
+    "version_ref": "binding:v1",
+    "created_at": "2026-10-09T00:00:00Z"
+  }
+]
+```
+
+At runtime the product flow is deliberately split:
+
+1. `GET /api/v115/source-of-truth/catalog` exposes only reviewed deployment metadata.
+2. `POST /api/v115/work/bind-source-of-truth` attaches a unique immutable copy to one exact Work generation and emits `SourceOfTruthBound` evidence.
+3. `POST /api/v115/work/observe-outcome` accepts an observation only when its fact type and source URI are covered by that Work-scoped binding and explicit evidence references are supplied. The server stamps observation time.
+4. The observation may make Work `Delivered`; it **never** makes it `Accepted`. Independent `review-outcome` remains a separate decision.
+
+A Harness receipt, assistant message, arbitrary URL, or caller-provided
+`authority_kind` cannot create this authority. Real connectors may later own
+the read operation itself, but must still terminate at the same
+`SourceOfTruthBinding -> ObservedOutcome` boundary.
+
 ## Migration / upgrade
 
 - Migrations are versioned with preflight, dry-run, apply, verify, and

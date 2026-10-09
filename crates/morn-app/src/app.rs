@@ -24,6 +24,7 @@ use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
 use morn_harness::{PiHarnessProvider, PiMode};
+use morn_integration::SourceOfTruthBinding;
 #[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;
 use morn_kernel::workspace::{Workspace, WorkspaceKind};
@@ -55,6 +56,9 @@ pub struct AppInner {
     /// Deployment-owned execution environment attestations. HTTP callers may
     /// select only from this startup-loaded trust set; they cannot self-attest.
     pub execution_environments: AttestedExecutionEnvironmentProvider,
+    /// Deployment-owned authoritative read bindings. HTTP callers may attach
+    /// these reviewed bindings to Work, but cannot manufacture a new authority.
+    pub source_of_truth_catalog: Vec<SourceOfTruthBinding>,
     pub evolution: EvolutionEngine,
     pub durable: DurableWorkService,
     pub durable_v2: DurableRuntime,
@@ -149,6 +153,54 @@ fn configured_execution_environments() -> morn_kernel::Result<AttestedExecutionE
     Ok(provider)
 }
 
+fn configured_source_of_truth_bindings() -> morn_kernel::Result<Vec<SourceOfTruthBinding>> {
+    let Ok(path) = std::env::var("MORN_SOURCE_OF_TRUTH_BINDINGS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_SOURCE_OF_TRUTH_BINDINGS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read source-of-truth binding file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid source-of-truth binding JSON in {path:?}: {error}"
+        ))
+    })?;
+    let bindings: Vec<SourceOfTruthBinding> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid source-of-truth binding entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid source-of-truth binding entry: {error}"
+            ))
+        })?],
+    };
+
+    let mut ids = std::collections::BTreeSet::new();
+    for binding in &bindings {
+        binding.validate()?;
+        if !ids.insert(binding.id.to_string()) {
+            return Err(morn_kernel::error::Error::validation(
+                "source-of-truth binding ids must be unique",
+            ));
+        }
+    }
+    Ok(bindings)
+}
+
 fn configured_pi_harness() -> morn_kernel::Result<PiHarnessProvider> {
     match std::env::var("MORN_PI_MODE") {
         Err(std::env::VarError::NotPresent) => Ok(PiHarnessProvider::new(PiMode::Fixture)),
@@ -192,6 +244,7 @@ impl AppState {
             BioLabService::new(workspace_id)
         };
         let execution_environments = configured_execution_environments()?;
+        let source_of_truth_catalog = configured_source_of_truth_bindings()?;
         let mut inner = AppInner {
             store,
             workspace,
@@ -204,6 +257,7 @@ impl AppState {
             dsh_harness: Arc::new(Mutex::new(configured_dsh_harness()?)),
             pi_harness: Arc::new(Mutex::new(configured_pi_harness()?)),
             execution_environments,
+            source_of_truth_catalog,
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
             durable_v2: DurableRuntime::new(),

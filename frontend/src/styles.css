@@ -454,3 +454,40 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   color: #b8c8df;
   font-size: 11px;
 }
+
+/* Source-of-truth -> observed outcome is distinct from executor evidence. */
+.governed-outcome-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.governed-outcome-grid label {
+  display: grid;
+  gap: 7px;
+  color: #aebed4;
+  font-size: 12px;
+}
+.governed-outcome-grid select,
+.governed-outcome-grid input,
+.governed-outcome-grid textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #3a4a63;
+  border-radius: 9px;
+  background: #101927;
+  color: #e8eef8;
+  padding: 9px 10px;
+}
+.governed-outcome-facts {
+  grid-column: 1 / -1;
+}
+.governed-outcome-facts textarea {
+  min-height: 86px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (max-width: 760px) {
+  .governed-outcome-grid { grid-template-columns: 1fr; }
+  .governed-outcome-facts { grid-column: auto; }
+}

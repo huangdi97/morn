@@ -16,6 +16,7 @@ import {
   ShadowOutcome,
   WorkbenchData,
   OpintPredictOutcome,
+  SourceOfTruthCatalog,
   V115Status,
   V115ControlPlaneData,
   UiExtensionRegistry,
@@ -600,6 +601,159 @@ function GovernedE0Executor({
 }
 
 
+function AuthoritativeOutcomePanel({
+  control,
+  catalog,
+  reload,
+}: {
+  control: V115ControlPlaneData;
+  catalog: SourceOfTruthCatalog | null;
+  reload: () => void;
+}) {
+  const [workId, setWorkId] = useState("");
+  const [catalogId, setCatalogId] = useState("");
+  const [sourceBindingId, setSourceBindingId] = useState("");
+  const [factType, setFactType] = useState("");
+  const [objective, setObjective] = useState("Observe authoritative business outcome");
+  const [sourceRef, setSourceRef] = useState("");
+  const [evidenceRef, setEvidenceRef] = useState("");
+  const [facts, setFacts] = useState('{"status":"complete"}');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const works = control.work.filter((work) => !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase));
+  const effectiveWorkId = workId || works[0]?.id || "";
+  const work = works.find((item) => item.id === effectiveWorkId);
+  const catalogBindings = (catalog?.bindings ?? []).filter(
+    (binding) => (binding.site_ref ?? null) === (work?.spec.site_ref ?? null),
+  );
+  const effectiveCatalogId = catalogId || (catalogBindings.length === 1 ? catalogBindings[0].id : "");
+
+  const boundIds = new Set(
+    control.condition_evidence
+      .filter((entry) =>
+        textField(entry, "work_ref") === effectiveWorkId &&
+        entry.work_generation === work?.generation &&
+        textField(entry, "condition_type") === "SourceOfTruthBound" &&
+        entry.satisfied === true)
+      .flatMap((entry) => fieldRefs(entry, "evidence_refs")),
+  );
+  const workBindings = control.source_of_truth_bindings.filter((binding) => {
+    const id = textField(binding, "id");
+    return id !== null && boundIds.has(id);
+  });
+  const effectiveSourceBindingId =
+    sourceBindingId || (workBindings.length === 1 ? textField(workBindings[0], "id") ?? "" : "");
+  const sourceBinding = workBindings.find((binding) => textField(binding, "id") === effectiveSourceBindingId);
+  const factTypes = fieldRefs(sourceBinding ?? {}, "authoritative_fact_types");
+  const effectiveFactType = factType || (factTypes.length === 1 ? factTypes[0] : "");
+
+  const attach = async () => {
+    if (!effectiveWorkId || !effectiveCatalogId) return;
+    setBusy(true); setMessage(null);
+    try {
+      await apiPostJson("/v115/work/bind-source-of-truth", {
+        work_id: effectiveWorkId,
+        catalog_binding_id: effectiveCatalogId,
+      });
+      setSourceBindingId("");
+      setMessage("Deployment-owned source authority attached to this Work generation.");
+      reload();
+    } catch (e) { setMessage((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const observe = async () => {
+    if (!effectiveWorkId || !effectiveSourceBindingId || !effectiveFactType ||
+        !sourceRef.trim() || !evidenceRef.trim() || !objective.trim()) return;
+    let observedFacts: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(facts) as unknown;
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("Observed facts must be a JSON object.");
+      observedFacts = parsed as Record<string, unknown>;
+    } catch (e) { setMessage((e as Error).message); return; }
+    setBusy(true); setMessage(null);
+    try {
+      await apiPostJson("/v115/work/observe-outcome", {
+        work_id: effectiveWorkId,
+        source_binding_id: effectiveSourceBindingId,
+        fact_type: effectiveFactType,
+        objective: objective.trim(),
+        source_ref: sourceRef.trim(),
+        observed_facts: observedFacts,
+        evidence_refs: [evidenceRef.trim()],
+      });
+      setMessage("Source-grounded Outcome persisted. Independent review is still required.");
+      reload();
+    } catch (e) { setMessage((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  if (works.length === 0) return null;
+  return (
+    <Card title="Authoritative outcome observation">
+      <p>
+        Attach a deployment-reviewed source of truth, then persist an authoritative world observation.
+        Executor/model output cannot be promoted here.
+      </p>
+      <div className="governed-outcome-grid">
+        <label>Work
+          <select value={effectiveWorkId} onChange={(e) => {
+            setWorkId(e.target.value); setCatalogId(""); setSourceBindingId(""); setFactType("");
+          }}>
+            {works.map((item) => <option key={item.id} value={item.id}>{item.spec.goal} · {item.status.phase}</option>)}
+          </select>
+        </label>
+        <label>Deployment authority
+          <select value={effectiveCatalogId} onChange={(e) => setCatalogId(e.target.value)} disabled={catalogBindings.length === 0}>
+            {catalogBindings.length === 0 && <option value="">No reviewed source for this site</option>}
+            {catalogBindings.length > 1 && !catalogId && <option value="">Select reviewed authority</option>}
+            {catalogBindings.map((binding) =>
+              <option key={binding.id} value={binding.id}>{binding.source_ref} · {binding.authority_kind}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="page-actions">
+        <button disabled={busy || !effectiveCatalogId} onClick={attach}>Attach authoritative source</button>
+        <span className="muted">{workBindings.length} Work-scoped source binding(s)</span>
+      </div>
+      <div className="governed-outcome-grid">
+        <label>Work-scoped source
+          <select value={effectiveSourceBindingId} onChange={(e) => { setSourceBindingId(e.target.value); setFactType(""); }} disabled={workBindings.length === 0}>
+            {workBindings.length === 0 && <option value="">Attach a source first</option>}
+            {workBindings.length > 1 && !sourceBindingId && <option value="">Select exact source binding</option>}
+            {workBindings.map((binding, index) => {
+              const id = textField(binding, "id") ?? "";
+              return <option key={id || index} value={id}>{textField(binding, "source_ref") ?? id}</option>;
+            })}
+          </select>
+        </label>
+        <label>Authoritative fact type
+          <select value={effectiveFactType} onChange={(e) => setFactType(e.target.value)} disabled={factTypes.length === 0}>
+            {factTypes.length === 0 && <option value="">No authoritative fact type</option>}
+            {factTypes.length > 1 && !factType && <option value="">Select fact type</option>}
+            {factTypes.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+        <label>Observation objective<input value={objective} onChange={(e) => setObjective(e.target.value)} /></label>
+        <label>Source record URI<input value={sourceRef} onChange={(e) => setSourceRef(e.target.value)}
+          placeholder={textField(sourceBinding ?? {}, "source_ref") ?? "system://authoritative/record"} /></label>
+        <label>Evidence reference<input value={evidenceRef} onChange={(e) => setEvidenceRef(e.target.value)}
+          placeholder="system://authoritative/record/receipt" /></label>
+        <label className="governed-outcome-facts">Observed facts (JSON)
+          <textarea value={facts} onChange={(e) => setFacts(e.target.value)} />
+        </label>
+      </div>
+      <div className="page-actions">
+        <button disabled={busy || !effectiveSourceBindingId || !effectiveFactType || !sourceRef.trim() || !evidenceRef.trim()} onClick={observe}>
+          Persist source-grounded Outcome
+        </button>
+      </div>
+      {message && <p role="status" className="work-focus-empty">{message}</p>}
+    </Card>
+  );
+}
+
 function OutcomeReviewPanel({
   control,
   reload,
@@ -795,6 +949,7 @@ export default function Workbench() {
   const [v115ControlLoading, setV115ControlLoading] = useState(true);
   const [uiExtensions, setUiExtensions] = useState<UiExtensionRegistry | null>(null);
   const [v115Capabilities, setV115Capabilities] = useState<E0HarnessCapability[]>([]);
+  const [sourceTruthCatalog, setSourceTruthCatalog] = useState<SourceOfTruthCatalog | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -819,6 +974,9 @@ export default function Workbench() {
     apiGet<{ capabilities: E0HarnessCapability[] }>("/v115/capabilities")
       .then((response) => setV115Capabilities(response.capabilities))
       .catch(() => setV115Capabilities([]));
+    apiGet<SourceOfTruthCatalog>("/v115/source-of-truth/catalog")
+      .then(setSourceTruthCatalog)
+      .catch(() => setSourceTruthCatalog(null));
   }, []);
 
   useEffect(load, [load]);
@@ -864,6 +1022,7 @@ export default function Workbench() {
               status={v115}
               reload={load}
             />
+            <AuthoritativeOutcomePanel control={v115Control} catalog={sourceTruthCatalog} reload={load} />
             <OutcomeReviewPanel control={v115Control} reload={load} />
           </>
         )}
@@ -1031,7 +1190,8 @@ export default function Workbench() {
             status={v115}
             reload={load}
           />
-          <OutcomeReviewPanel control={v115Control} reload={load} />
+          <AuthoritativeOutcomePanel control={v115Control} catalog={sourceTruthCatalog} reload={load} />
+            <OutcomeReviewPanel control={v115Control} reload={load} />
         </>
       )}
 
