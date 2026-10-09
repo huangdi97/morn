@@ -96,6 +96,33 @@ pub struct McpTaskEvidence {
 }
 
 impl McpTaskEvidence {
+    pub fn validate(&self) -> Result<()> {
+        if self.server_ref.trim().is_empty() || self.task_id.trim().is_empty() {
+            return Err(Error::validation("MCP task requires server and task identity"));
+        }
+        match self.state {
+            McpTaskState::Completed if self.result.is_none() || self.error.is_some() => {
+                return Err(Error::validation(
+                    "MCP completed task requires result and must not carry task-level JSON-RPC error",
+                ));
+            }
+            McpTaskState::Failed if self.error.is_none() || self.result.is_some() => {
+                return Err(Error::validation(
+                    "MCP failed task requires JSON-RPC error and must not carry completed result",
+                ));
+            }
+            McpTaskState::Working | McpTaskState::InputRequired | McpTaskState::Cancelled
+                if self.result.is_some() || self.error.is_some() =>
+            {
+                return Err(Error::validation(
+                    "non-result MCP task state must not carry terminal result/error payload",
+                ));
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// MCP Tasks are durable executor state for an augmented MCP request. Even
     /// a completed Task remains provider/runtime evidence until Morn observes
     /// a domain Outcome and evaluates Acceptance independently.
@@ -197,13 +224,13 @@ impl GovernedExternalTaskObservation {
             ));
         }
         match &self.snapshot {
-            ExternalTaskSnapshot::Mcp(task)
-                if task.server_ref.trim().is_empty()
-                    || task.server_ref != self.endpoint.endpoint_ref =>
-            {
-                return Err(Error::validation(
-                    "MCP task server must match the bound endpoint",
-                ));
+            ExternalTaskSnapshot::Mcp(task) => {
+                task.validate()?;
+                if task.server_ref != self.endpoint.endpoint_ref {
+                    return Err(Error::validation(
+                        "MCP task server must match the bound endpoint",
+                    ));
+                }
             }
             ExternalTaskSnapshot::A2a(task) if task.agent_ref.trim().is_empty() => {
                 return Err(Error::validation("A2A task requires agent identity"));
@@ -378,6 +405,41 @@ mod tests {
         let mut unsafe_binding = binding.clone();
         unsafe_binding.audience_bound = false;
         assert!(unsafe_binding.validate().is_err());
+    }
+
+    #[test]
+    fn mcp_task_state_payload_must_match_2026_07_28_semantics() {
+        let completed = McpTaskEvidence {
+            server_ref: "https://mcp.example.com".to_string(),
+            task_id: "task-complete".to_string(),
+            state: McpTaskState::Completed,
+            status_message: None,
+            result: Some(json!({"content":[],"isError":true})),
+            error: None,
+        };
+        completed.validate().unwrap();
+
+        let mut malformed = completed.clone();
+        malformed.result = None;
+        assert!(malformed.validate().is_err());
+
+        let failed = McpTaskEvidence {
+            server_ref: "https://mcp.example.com".to_string(),
+            task_id: "task-failed".to_string(),
+            state: McpTaskState::Failed,
+            status_message: Some("JSON-RPC failure".to_string()),
+            result: None,
+            error: Some(json!({"code":-32603,"message":"execution failed"})),
+        };
+        failed.validate().unwrap();
+
+        let mut malformed = failed.clone();
+        malformed.result = Some(json!({"unexpected":"result"}));
+        assert!(malformed.validate().is_err());
+
+        let mut working = completed;
+        working.state = McpTaskState::Working;
+        assert!(working.validate().is_err());
     }
 
     #[test]
