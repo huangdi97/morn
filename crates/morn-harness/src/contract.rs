@@ -60,7 +60,11 @@ pub fn run_provider_contract(
         }
     };
 
-    let session = match provider.start(ctx) {
+    let scoped_ctx = ctx
+        .clone()
+        .with_scope_id(handle.scope_id.clone())
+        .map_err(morn_kernel::error::Error::validation)?;
+    let session = match provider.start(&scoped_ctx) {
         Ok(s) => {
             check(&mut report, "start", true);
             s
@@ -80,7 +84,7 @@ pub fn run_provider_contract(
         "event normalization",
         !events.is_empty()
             && events.iter().all(|event| {
-                event.workspace_id == ctx.workspace_id
+                event.workspace_id == scoped_ctx.workspace_id
                     && event.session_id == session.id
                     && !event.summary.trim().is_empty()
             }),
