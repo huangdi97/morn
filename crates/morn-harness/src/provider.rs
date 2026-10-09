@@ -251,6 +251,10 @@ impl HarnessProvider for MornNativeHarness {
         &self.name
     }
 
+    fn runtime_version(&self) -> Option<String> {
+        Some("reference".to_string())
+    }
+
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
         let handle = ProviderHandle {
             provider: self.name.clone(),

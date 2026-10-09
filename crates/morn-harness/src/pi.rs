@@ -225,6 +225,15 @@ impl HarnessProvider for PiHarnessProvider {
         }
     }
 
+    fn runtime_version(&self) -> Option<String> {
+        match self.mode {
+            PiMode::Fixture => Some("fixture".to_string()),
+            // The official Pi RPC boundary does not currently expose a
+            // runtime-version handshake. Do not invent a binary version.
+            PiMode::Real => None,
+        }
+    }
+
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
         if self.mode == PiMode::Real
             && !scope

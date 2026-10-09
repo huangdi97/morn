@@ -92,6 +92,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/ui/extensions", get(v115_ui_extensions))
         .route("/api/v115/control-plane", get(v115_control_plane))
         .route("/api/v115/work/reconcile", post(v115_work_reconcile))
+        .route("/api/v115/work/bind-e0", post(v115_work_bind_e0))
         .route("/api/v115/work/execute-e0", post(v115_work_execute_e0))
         .route("/api/v115/solutions", get(v115_solutions))
         .route("/api/v115/capabilities", get(v115_capabilities))
@@ -394,6 +395,201 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             "real_factory": "external-blocked until lawful site data/authority exists",
             "production_write": "not entered"
         }
+    })))
+}
+
+async fn v115_work_bind_e0(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_capability::{CapabilityStage, EffectClass};
+    use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
+    use morn_kernel::time::Timestamp;
+    use morn_runtime::{CompositionRuntimeRef, ExecutionBinding, ExecutionManifest};
+    use morn_work::control::WorkPhase;
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let capability_id = body
+        .get("capability_manifest_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("capability_manifest_id is required")))?;
+
+    let now = Timestamp::now();
+    let guard = state.lock();
+    let work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
+    }
+    if work.status.phase != WorkPhase::Ready || !work.required_conditions_satisfied() {
+        return Err(AppError(Error::invalid_state(format!(
+            "Work {} must be Ready with all generation-scoped conditions satisfied before binding",
+            work.id
+        ))));
+    }
+
+    let capability = guard
+        .v115_capabilities
+        .iter()
+        .find(|record| record.manifest.id.as_str() == capability_id)
+        .cloned()
+        .ok_or_else(|| {
+            AppError(Error::not_found(format!(
+                "CapabilityManifest {capability_id}"
+            )))
+        })?;
+    capability.manifest.validate_governance()?;
+    if !matches!(
+        capability.stage,
+        CapabilityStage::Qualified | CapabilityStage::Admitted
+    ) {
+        return Err(AppError(Error::invalid_state(
+            "execution binding requires a qualified or admitted capability",
+        )));
+    }
+    if capability.manifest.authority.maximum_effect != EffectClass::E0LifecycleReversible {
+        return Err(AppError(Error::not_authorized(
+            "work/bind-e0 only accepts capabilities whose declared maximum effect is E0",
+        )));
+    }
+
+    let resolved_evidence = guard
+        .store
+        .load_records_in_workspace::<ConditionEvidence>(
+            "condition_evidence_v115",
+            guard.workspace.id.as_str(),
+        )?
+        .into_iter()
+        .any(|evidence| {
+            evidence.condition_type == "CapabilityResolved"
+                && evidence.satisfied
+                && evidence.active_for(&work, now)
+                && evidence
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference == capability.manifest.id.as_str())
+        });
+    if !resolved_evidence {
+        return Err(AppError(Error::invalid_state(
+            "capability is not witnessed by current-generation CapabilityResolved evidence",
+        )));
+    }
+
+    let profile = morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+        AppError(Error::validation(format!(
+            "unsupported Work profile {}",
+            work.spec.profile_ref
+        )))
+    })?;
+    if profile.requires("CapabilityQualification") {
+        let site = work
+            .spec
+            .site_ref
+            .as_deref()
+            .ok_or_else(|| AppError(Error::validation("governed Work requires site_ref")))?;
+        if !guard.v115_admission.site_profile_admission_active_at(
+            &capability,
+            site,
+            &work.spec.profile_ref,
+            now,
+        ) {
+            return Err(AppError(Error::invalid_state(
+                "capability no longer has an active exact site/profile admission",
+            )));
+        }
+    }
+
+    let provider_ref = capability.manifest.provider_ref.clone();
+    let provider_version = match provider_ref.as_str() {
+        "morn-native" => guard
+            .native_harness
+            .lock()
+            .map_err(|_| AppError(Error::internal("native harness lock poisoned")))?
+            .runtime_version()
+            .ok_or_else(|| AppError(Error::invalid_state("native runtime identity unavailable")))?,
+        "deepseek-harness" => {
+            let provider = guard
+                .dsh_harness
+                .lock()
+                .map_err(|_| AppError(Error::internal("dsh harness lock poisoned")))?;
+            if provider.mode() == morn_harness::provider::DshMode::Real {
+                return Err(AppError(Error::invalid_state(
+                    "real DSH binding requires a trusted fresh execution-environment attestation; use the deployment controller rather than the public bind-e0 endpoint",
+                )));
+            }
+            provider
+                .runtime_version()
+                .ok_or_else(|| AppError(Error::invalid_state("DSH runtime identity unavailable")))?
+        }
+        "pi" => {
+            let provider = guard
+                .pi_harness
+                .lock()
+                .map_err(|_| AppError(Error::internal("pi harness lock poisoned")))?;
+            if provider.mode() == morn_harness::PiMode::Real {
+                return Err(AppError(Error::invalid_state(
+                    "real Pi binding requires a trusted fresh execution-environment attestation and exact runtime identity; use the deployment controller rather than the public bind-e0 endpoint",
+                )));
+            }
+            provider
+                .runtime_version()
+                .ok_or_else(|| AppError(Error::invalid_state("Pi runtime identity unavailable")))?
+        }
+        other => {
+            return Err(AppError(Error::validation(format!(
+                "capability provider {other:?} is not an executable HarnessProvider"
+            ))))
+        }
+    };
+
+    if capability.manifest.execution.minimum_isolation
+        != morn_kernel::ExecutionClass::NoIsolation
+        && capability.manifest.execution.minimum_isolation
+            != morn_kernel::ExecutionClass::Process
+    {
+        return Err(AppError(Error::invalid_state(
+            "reference bind-e0 cannot fabricate a stronger execution environment; use an attested deployment binding",
+        )));
+    }
+    if !capability.manifest.execution.required_guarantees.is_empty()
+        || !profile.required_execution_guarantees.is_empty()
+    {
+        return Err(AppError(Error::invalid_state(
+            "reference bind-e0 cannot self-attest execution guarantees; use an attested deployment binding",
+        )));
+    }
+
+    let mut binding = ExecutionBinding::for_work(
+        &work,
+        capability.manifest.id.to_string(),
+        provider_ref,
+        provider_version,
+    );
+    binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
+    binding.compensation_ref = capability.manifest.compensation_ref.clone();
+    binding.idempotency_key_required = capability.manifest.idempotency_key_required;
+    guard.store.save_execution_binding(&work, &binding)?;
+    let manifest = ExecutionManifest::from_binding(
+        &work,
+        &binding,
+        CompositionRuntimeRef::new("cordis-reference", "4.0.4"),
+    )?;
+    guard.store.save_execution_manifest(&work, &manifest)?;
+
+    Ok(Json(json!({
+        "binding": binding,
+        "execution_manifest": manifest,
+        "execution_started": false,
+        "note": "Binding is immutable and generation-scoped. No Harness session, business outcome or acceptance was created."
     })))
 }
 
@@ -3025,6 +3221,96 @@ mod workspace_boundary_tests {
         let works = body["work"].as_array().unwrap();
         assert_eq!(works.len(), 1);
         assert_eq!(works[0]["id"], "visible");
+    }
+
+    #[tokio::test]
+    async fn bind_e0_requires_current_resolution_evidence_and_never_starts_execution() {
+        use morn_capability::{CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass};
+        use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
+        use morn_kernel::ids::CapabilityId;
+        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+
+        let state = AppState::new(":memory:").unwrap();
+        let (work, capability) = {
+            let mut guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "draft a reversible plan",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            work.spec.required_conditions = vec!["CapabilityResolved".to_string()];
+            let mut capability = CapabilityRecord::new(CapabilityManifest::new(
+                CapabilityId::generate_with("capability"),
+                "fixture-agent",
+                "deepseek-harness",
+                CapabilityKind::Agent,
+                EffectClass::E0LifecycleReversible,
+            ));
+            capability.manifest.provenance.source_ref = "repo://fixture-agent".to_string();
+            capability.stage = CapabilityStage::Qualified;
+            guard.v115_capabilities.push(capability.clone());
+            guard.persist_all().unwrap();
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+
+            let evidence = ConditionEvidence::new(
+                &work,
+                "CapabilityResolved",
+                true,
+                "controller://resolver",
+                vec![capability.manifest.id.to_string()],
+            )
+            .unwrap();
+            guard.store.save_condition_evidence(&work, &evidence).unwrap();
+            work.status.phase = WorkPhase::Ready;
+            work.set_condition(morn_work::control::WorkCondition {
+                condition_type: "CapabilityResolved".to_string(),
+                status: morn_work::control::ConditionStatus::True,
+                reason: "resolved from durable evidence".to_string(),
+                evidence_refs: vec![capability.manifest.id.to_string()],
+                observed_at: morn_kernel::time::Timestamp::now(),
+            });
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+            (work, capability)
+        };
+
+        let Json(response) = v115_work_bind_e0(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "capability_manifest_id": capability.manifest.id.to_string()
+            })),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response["execution_started"], false);
+        assert_eq!(response["binding"]["work_generation"], work.generation);
+        assert_eq!(response["binding"]["provider_ref"], "deepseek-harness");
+        assert_eq!(response["binding"]["provider_version"], "fixture");
+
+        let guard = state.lock();
+        assert_eq!(
+            guard
+                .store
+                .load_records_in_workspace::<morn_runtime::ExecutionBinding>(
+                    "execution_binding_v115",
+                    guard.workspace.id.as_str(),
+                )
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(guard
+            .store
+            .load_records_in_workspace::<morn_harness::ExecutionReceipt>(
+                "execution_receipt_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]
