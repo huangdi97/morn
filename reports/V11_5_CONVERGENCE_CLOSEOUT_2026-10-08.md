@@ -88,7 +88,7 @@ Morn remains Work-first, not Agent-first:
 | Pi JSONL RPC boundary | Rust subprocess client for prompt/get_state/abort/agent_settled | implemented; real binary/model smoke external |
 | atomic state + semantic outbox | CAS projection + durable event in one transaction | implemented |
 | MCP 2026 resource-bound auth contract | opaque credential/resource binding | implemented |
-| telemetry boundary | OTel-oriented semantic design | contract/design; backend deployment external |
+| telemetry boundary | `morn-kernel/src/telemetry.rs`; stable span/attribute contract with required-context and secret-safe validation | implemented contract; exporter/backend deployment external |
 | evidence-class claim ledger | categorical EvidenceClass + external blockers | implemented |
 | customer value claim gate | CustomerValidated + Acceptance + explicit RealSite evidence | implemented |
 | value evidence axes | deployment/engineering EvidenceClass kept orthogonal to ValueEvidenceClass | implemented |
@@ -404,3 +404,21 @@ customer runtime, credential, site policy or containment attestation.
   must fit both ExecutionRequirements and explicit Authority permissions.
 - No Wasm engine is embedded into Morn Core. A future Wasmtime/Wasmer/edge
   provider may implement this contract without changing Work/Outcome truth.
+
+
+## 17. Telemetry semantic contract closure — 2026-10-09
+
+Morn now publishes a transport-neutral telemetry contract instead of only a
+list of attribute constants:
+
+- stable semantic span names for Work reconcile, provider execution, governed
+  external action, reconciliation, outcome observation and acceptance;
+- required Morn context keys per operation, including Work generation and
+  execution-environment identity where relevant;
+- evidence references remain references only and do not duplicate raw evidence;
+- semantic validation rejects foreign namespaces and secret/credential-like
+  attributes before a TelemetryRecord is exported.
+
+The implementation intentionally does not select an OpenTelemetry SDK,
+collector, backend or vendor. Those remain deployment concerns and cannot
+become canonical Work/Outcome truth.
