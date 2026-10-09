@@ -131,9 +131,7 @@ impl PiRpcConfig {
             ),
             execution_environment_ref: Some(
                 std::env::var("MORN_PI_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
-                    Error::validation(
-                        "MORN_PI_EXECUTION_ENVIRONMENT_REF is required for real Pi",
-                    )
+                    Error::validation("MORN_PI_EXECUTION_ENVIRONMENT_REF is required for real Pi")
                 })?,
             ),
             ..Self::default()

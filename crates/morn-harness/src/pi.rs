@@ -188,9 +188,7 @@ impl PiHarnessProvider {
             .and_then(|config| config.execution_environment_ref.as_deref())
             .filter(|reference| !reference.trim().is_empty())
             .ok_or_else(|| {
-                Error::validation(
-                    "real Pi RPC configuration is missing execution_environment_ref",
-                )
+                Error::validation("real Pi RPC configuration is missing execution_environment_ref")
             })?;
         if ctx.execution_environment_ref.as_deref() != Some(configured) {
             return Err(Error::validation(
@@ -376,7 +374,7 @@ impl HarnessProvider for PiHarnessProvider {
                             "live Pi RPC turn settled with disposition {}",
                             settled.disposition
                         ),
-                        "runtime://pi/settled-turn",
+                        format!("runtime://pi/session/{session_id}/settled-turn"),
                     );
                 } else if let Err(error) = &run {
                     self.runtime_health
@@ -584,7 +582,12 @@ mod tests {
         use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 
         let mut config = PiRpcConfig::default();
-        config.cwd = Some(std::env::current_dir().unwrap().to_string_lossy().to_string());
+        config.cwd = Some(
+            std::env::current_dir()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        );
         config.provider = Some("fixture-provider".to_string());
         config.model = Some("fixture-model".to_string());
         config.execution_environment_ref = Some("env://container/pinned".to_string());

@@ -574,9 +574,7 @@ impl DeepSeekHarnessProvider {
             .and_then(|config| config.execution_environment_ref.as_deref())
             .filter(|reference| !reference.trim().is_empty())
             .ok_or_else(|| {
-                Error::validation(
-                    "real DSH SDK configuration is missing execution_environment_ref",
-                )
+                Error::validation("real DSH SDK configuration is missing execution_environment_ref")
             })?;
         if ctx.execution_environment_ref.as_deref() != Some(configured) {
             return Err(Error::validation(
@@ -860,7 +858,7 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                             "live DSH SDK turn settled with finish reason {}",
                             settled.finish_reason.as_deref().unwrap_or("missing")
                         ),
-                        "runtime://deepseek-harness/settled-turn",
+                        format!("runtime://deepseek-harness/session/{session_id}/settled-turn"),
                     );
                 } else if let Err(error) = &run {
                     self.runtime_health
@@ -1042,8 +1040,8 @@ mod dsh_provider_tests {
 
     #[test]
     fn real_dsh_rejects_context_from_a_different_execution_environment() {
-        use morn_kernel::{ExecutionClass, ExecutionGuarantee};
         use morn_kernel::ids::{ActorInstanceId, WorkPackageId};
+        use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 
         let root = std::env::temp_dir().join("morn-provider-env-pin");
         let config = DshSdkConfig::profile_sdk(

@@ -12,7 +12,22 @@ Secrets are represented to Morn/harnesses as opaque, scoped credential handles.
 Actual credential values are resolved only at the enforcement/execution
 boundary.
 
+A real Harness launch is also pinned to the **identity** of its execution
+environment, not only to an isolation enum. The deployment/provider launch
+configuration, RuntimeContext, ExecutionBinding and ExecutionManifest must
+refer to the same `execution_environment_ref`. A mismatched or missing ref
+fails closed even when the caller supplies a sufficient-looking guarantee
+vector.
+
+The identity match is necessary but not self-authenticating: the concrete
+ExecutionEnvironmentProvider/deployment must still prove that the configured
+command actually executes inside that environment. Morn never infers
+containment from the presence of Docker, a binary name, a remote endpoint or a
+caller-supplied label.
+
 ## Consequences
 
 A DSH/Pi local sandbox cannot satisfy stronger isolation by declaration alone.
-Credentials do not become prompt or agent-memory data.
+Provider replacement clears provider-bound runtime/environment/authority state
+and requires a freshly resolved environment identity. Credentials do not become
+prompt or agent-memory data.

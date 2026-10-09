@@ -142,9 +142,10 @@ impl DshSdkConfig {
             std::env::var("MORN_DSH_PROVIDER").unwrap_or_else(|_| "deepseek-official".to_string());
         let model =
             std::env::var("MORN_DSH_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".to_string());
-        let environment_ref = std::env::var("MORN_DSH_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
-            Error::validation("MORN_DSH_EXECUTION_ENVIRONMENT_REF is required for real DSH")
-        })?;
+        let environment_ref =
+            std::env::var("MORN_DSH_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
+                Error::validation("MORN_DSH_EXECUTION_ENVIRONMENT_REF is required for real DSH")
+            })?;
         let mut config = Self::profile_sdk(cwd, provider, model)
             .with_dsh_home(home)
             .with_execution_environment_ref(environment_ref);
