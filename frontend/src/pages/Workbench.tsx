@@ -16,6 +16,7 @@ import {
   ShadowOutcome,
   WorkbenchData,
   OpintPredictOutcome,
+  AcceptanceReviewerCatalog,
   SourceOfTruthCatalog,
   V115Status,
   V115ControlPlaneData,
@@ -765,15 +766,18 @@ function AuthoritativeOutcomePanel({
 
 function OutcomeReviewPanel({
   control,
+  reviewers,
   reload,
 }: {
   control: V115ControlPlaneData;
+  reviewers: AcceptanceReviewerCatalog | null;
   reload: () => void;
 }) {
   const [workId, setWorkId] = useState("");
   const [outcomeId, setOutcomeId] = useState("");
   const [disposition, setDisposition] = useState("accept");
-  const [actingRole, setActingRole] = useState("independent-reviewer");
+  const [reviewerPrincipalId, setReviewerPrincipalId] = useState("");
+  const [actingRole, setActingRole] = useState("");
   const [reason, setReason] = useState("");
   const [evidenceRef, setEvidenceRef] = useState("");
   const [busy, setBusy] = useState(false);
@@ -798,12 +802,22 @@ function OutcomeReviewPanel({
   const selectedOutcome = selected?.outcomes.find(
     (outcome) => textField(outcome, "id") === effectiveOutcomeId,
   );
+  const availableReviewers = reviewers?.reviewers ?? [];
+  const effectiveReviewerPrincipalId =
+    reviewerPrincipalId || (availableReviewers.length === 1 ? availableReviewers[0].principal_id : "");
+  const selectedReviewer = availableReviewers.find(
+    (reviewer) => reviewer.principal_id === effectiveReviewerPrincipalId,
+  );
+  const effectiveActingRole =
+    actingRole || (selectedReviewer?.acting_roles.length === 1 ? selectedReviewer.acting_roles[0] : "");
+
 
   const review = async () => {
     if (
       !effectiveWorkId ||
       !effectiveOutcomeId ||
-      !actingRole.trim() ||
+      !effectiveReviewerPrincipalId ||
+      !effectiveActingRole ||
       !reason.trim() ||
       !evidenceRef.trim()
     ) {
@@ -819,7 +833,8 @@ function OutcomeReviewPanel({
         work_id: effectiveWorkId,
         outcome_id: effectiveOutcomeId,
         disposition,
-        acting_role: actingRole,
+        reviewer_principal_id: effectiveReviewerPrincipalId,
+        acting_role: effectiveActingRole,
         reason,
         evidence_refs: [evidenceRef.trim()],
       });
@@ -891,8 +906,39 @@ function OutcomeReviewPanel({
           </select>
         </label>
         <label>
-          Acting role
-          <input value={actingRole} onChange={(event) => setActingRole(event.target.value)} />
+          Deployment-attested reviewer
+          <select
+            value={effectiveReviewerPrincipalId}
+            onChange={(event) => {
+              setReviewerPrincipalId(event.target.value);
+              setActingRole("");
+            }}
+            disabled={availableReviewers.length === 0}
+          >
+            {availableReviewers.length === 0 && <option value="">No independent reviewer attested</option>}
+            {availableReviewers.length > 1 && !reviewerPrincipalId && <option value="">Select reviewer</option>}
+            {availableReviewers.map((reviewer) => (
+              <option key={reviewer.principal_id} value={reviewer.principal_id}>
+                {reviewer.principal_id}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Attested reviewer role
+          <select
+            value={effectiveActingRole}
+            onChange={(event) => setActingRole(event.target.value)}
+            disabled={!selectedReviewer}
+          >
+            {!selectedReviewer && <option value="">Select reviewer first</option>}
+            {selectedReviewer && selectedReviewer.acting_roles.length > 1 && !actingRole && (
+              <option value="">Select attested role</option>
+            )}
+            {selectedReviewer?.acting_roles.map((role) => (
+              <option key={role} value={role}>{role}</option>
+            ))}
+          </select>
         </label>
       </div>
       {selectedOutcome && (
@@ -922,7 +968,8 @@ function OutcomeReviewPanel({
           disabled={
             busy ||
             !effectiveOutcomeId ||
-            !actingRole.trim() ||
+            !effectiveReviewerPrincipalId ||
+            !effectiveActingRole ||
             !reason.trim() ||
             !evidenceRef.trim()
           }
@@ -959,6 +1006,7 @@ export default function Workbench() {
   const [uiExtensions, setUiExtensions] = useState<UiExtensionRegistry | null>(null);
   const [v115Capabilities, setV115Capabilities] = useState<E0HarnessCapability[]>([]);
   const [sourceTruthCatalog, setSourceTruthCatalog] = useState<SourceOfTruthCatalog | null>(null);
+  const [reviewerCatalog, setReviewerCatalog] = useState<AcceptanceReviewerCatalog | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -986,6 +1034,9 @@ export default function Workbench() {
     apiGet<SourceOfTruthCatalog>("/v115/source-of-truth/catalog")
       .then(setSourceTruthCatalog)
       .catch(() => setSourceTruthCatalog(null));
+    apiGet<AcceptanceReviewerCatalog>("/v115/acceptance/reviewers")
+      .then(setReviewerCatalog)
+      .catch(() => setReviewerCatalog(null));
   }, []);
 
   useEffect(load, [load]);
@@ -1032,7 +1083,7 @@ export default function Workbench() {
               reload={load}
             />
             <AuthoritativeOutcomePanel control={v115Control} catalog={sourceTruthCatalog} reload={load} />
-            <OutcomeReviewPanel control={v115Control} reload={load} />
+            <OutcomeReviewPanel control={v115Control} reviewers={reviewerCatalog} reload={load} />
           </>
         )}
         <p role="status" className="work-focus-empty">
@@ -1200,7 +1251,7 @@ export default function Workbench() {
             reload={load}
           />
           <AuthoritativeOutcomePanel control={v115Control} catalog={sourceTruthCatalog} reload={load} />
-            <OutcomeReviewPanel control={v115Control} reload={load} />
+            <OutcomeReviewPanel control={v115Control} reviewers={reviewerCatalog} reload={load} />
         </>
       )}
 

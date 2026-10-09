@@ -33,6 +33,7 @@ use morn_opint::episode::EpisodeAssembler;
 use morn_opint::predictor::PredictorRegistry;
 use morn_runtime::{AttestedExecutionEnvironmentProvider, ExecutionEnvironmentAttestation};
 use morn_store::store::MornStore;
+use morn_work::acceptance::AcceptanceReviewerAttestation;
 use morn_work::durable::DurableRuntime;
 use morn_work::service::{DurableWorkService, WorkService};
 use morn_world::service::WorldService;
@@ -59,6 +60,9 @@ pub struct AppInner {
     /// Deployment-owned authoritative read bindings. HTTP callers may attach
     /// these reviewed bindings to Work, but cannot manufacture a new authority.
     pub source_of_truth_catalog: Vec<SourceOfTruthBinding>,
+    /// Deployment-attested reviewer identities. UI/API callers may select a
+    /// reviewer but cannot self-assert principal identity or reviewer role.
+    pub acceptance_reviewers: Vec<AcceptanceReviewerAttestation>,
     pub evolution: EvolutionEngine,
     pub durable: DurableWorkService,
     pub durable_v2: DurableRuntime,
@@ -201,6 +205,54 @@ fn configured_source_of_truth_bindings() -> morn_kernel::Result<Vec<SourceOfTrut
     Ok(bindings)
 }
 
+fn configured_acceptance_reviewers(
+) -> morn_kernel::Result<Vec<AcceptanceReviewerAttestation>> {
+    let Ok(path) = std::env::var("MORN_ACCEPTANCE_REVIEWERS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_ACCEPTANCE_REVIEWERS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read acceptance reviewer file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid acceptance reviewer JSON in {path:?}: {error}"
+        ))
+    })?;
+    let reviewers: Vec<AcceptanceReviewerAttestation> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid acceptance reviewer entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid acceptance reviewer entry: {error}"
+            ))
+        })?],
+    };
+    let mut principals = std::collections::BTreeSet::new();
+    for reviewer in &reviewers {
+        reviewer.validate()?;
+        if !principals.insert(reviewer.principal_id.to_string()) {
+            return Err(morn_kernel::error::Error::validation(
+                "acceptance reviewer principal ids must be unique",
+            ));
+        }
+    }
+    Ok(reviewers)
+}
+
 fn configured_pi_harness() -> morn_kernel::Result<PiHarnessProvider> {
     match std::env::var("MORN_PI_MODE") {
         Err(std::env::VarError::NotPresent) => Ok(PiHarnessProvider::new(PiMode::Fixture)),
@@ -245,6 +297,7 @@ impl AppState {
         };
         let execution_environments = configured_execution_environments()?;
         let source_of_truth_catalog = configured_source_of_truth_bindings()?;
+        let acceptance_reviewers = configured_acceptance_reviewers()?;
         let mut inner = AppInner {
             store,
             workspace,
@@ -258,6 +311,7 @@ impl AppState {
             pi_harness: Arc::new(Mutex::new(configured_pi_harness()?)),
             execution_environments,
             source_of_truth_catalog,
+            acceptance_reviewers,
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
             durable_v2: DurableRuntime::new(),

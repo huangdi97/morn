@@ -128,6 +128,18 @@ export interface V115DiscoveryData {
   invariant: string;
 }
 
+export interface AcceptanceReviewerCatalog {
+  reviewers: Array<{
+    principal_id: string;
+    acting_roles: string[];
+    evidence_refs: string[];
+    observed_at: number | string | Record<string, unknown>;
+    valid_until: number | string | Record<string, unknown> | null;
+  }>;
+  deployment_attested: boolean;
+  caller_can_self_assert_identity: boolean;
+}
+
 export interface SourceOfTruthCatalog {
   bindings: Array<{
     id: string;

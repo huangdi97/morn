@@ -112,6 +112,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/v115/work/execute-e0", post(v115_work_execute_e0))
         .route(
+            "/api/v115/acceptance/reviewers",
+            get(v115_acceptance_reviewers),
+        )
+        .route(
             "/api/v115/work/review-outcome",
             post(v115_work_review_outcome),
         )
@@ -1765,6 +1769,27 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
     })))
 }
 
+async fn v115_acceptance_reviewers(State(state): State<AppState>) -> ApiResult {
+    let guard = state.lock();
+    let now = morn_kernel::time::Timestamp::now();
+    let reviewers: Vec<_> = guard
+        .acceptance_reviewers
+        .iter()
+        .filter(|reviewer| {
+            reviewer.validate().is_ok()
+                && reviewer.observed_at <= now
+                && reviewer.valid_until.is_none_or(|until| now <= until)
+                && reviewer.principal_id != guard.workspace.owner
+        })
+        .cloned()
+        .collect();
+    Ok(Json(json!({
+        "reviewers": reviewers,
+        "deployment_attested": true,
+        "caller_can_self_assert_identity": false
+    })))
+}
+
 async fn v115_work_review_outcome(
     State(state): State<AppState>,
     Json(body): Json<Value>,
@@ -1785,6 +1810,11 @@ async fn v115_work_review_outcome(
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| AppError(Error::validation("outcome_id is required")))?;
+    let reviewer_principal_id = body
+        .get("reviewer_principal_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("reviewer_principal_id is required")))?;
     let acting_role = body
         .get("acting_role")
         .and_then(Value::as_str)
@@ -1834,6 +1864,23 @@ async fn v115_work_review_outcome(
     };
 
     let guard = state.lock();
+    let now = morn_kernel::time::Timestamp::now();
+    let reviewer = guard
+        .acceptance_reviewers
+        .iter()
+        .find(|reviewer| reviewer.principal_id.as_str() == reviewer_principal_id)
+        .filter(|reviewer| reviewer.active_for(acting_role, now))
+        .cloned()
+        .ok_or_else(|| {
+            AppError(Error::not_authorized(
+                "reviewer principal/role is not covered by an active deployment attestation",
+            ))
+        })?;
+    if reviewer.principal_id == guard.workspace.owner {
+        return Err(AppError(Error::not_authorized(
+            "independent acceptance reviewer must differ from the workspace owner",
+        )));
+    }
     let mut work = guard
         .store
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
@@ -1882,12 +1929,13 @@ async fn v115_work_review_outcome(
         work.id.clone(),
         acceptance_spec_id,
         disposition,
-        guard.workspace.owner.clone(),
+        reviewer.principal_id.clone(),
         acting_role,
         reason,
     );
     decision.outcome_refs.push(outcome.id.clone());
     decision.evidence_refs = evidence_refs;
+    decision.evidence_refs.extend(reviewer.evidence_refs.clone());
     decision.evidence_refs.sort();
     decision.evidence_refs.dedup();
     if let Some(conditions) = body.get("conditions").and_then(Value::as_array) {
@@ -1915,6 +1963,8 @@ async fn v115_work_review_outcome(
         "decision": decision,
         "work": work,
         "reviewed_outcome": outcome.id,
+        "reviewer_principal_id": reviewer.principal_id,
+        "reviewer_identity_evidence": reviewer.evidence_refs,
         "business_outcome_source_grounded": true,
         "note": "Review consumes an already-persisted source-grounded outcome. It never promotes a Harness receipt or model output into business truth."
     })))
@@ -4824,8 +4874,18 @@ mod workspace_boundary_tests {
         use morn_world::{ObservedOutcome, OutcomeSourceKind};
 
         let state = AppState::new(":memory:").unwrap();
-        let (work, grounded, ungrounded) = {
-            let guard = state.lock();
+        let (work, grounded, ungrounded, reviewer_id) = {
+            let mut guard = state.lock();
+            let reviewer_id = morn_kernel::ids::PrincipalId::generate_with("reviewer");
+            guard
+                .acceptance_reviewers
+                .push(morn_work::acceptance::AcceptanceReviewerAttestation {
+                    principal_id: reviewer_id.clone(),
+                    acting_roles: vec!["independent-reviewer".to_string()],
+                    evidence_refs: vec!["iam://reviewers/alice".to_string()],
+                    observed_at: morn_kernel::time::Timestamp::now(),
+                    valid_until: None,
+                });
             let mut work = WorkResource::new(
                 guard.workspace.id.clone(),
                 WorkSpec::new(
@@ -4862,7 +4922,7 @@ mod workspace_boundary_tests {
                 .store
                 .save_observed_outcome(&work, &ungrounded)
                 .unwrap();
-            (work, grounded, ungrounded)
+            (work, grounded, ungrounded, reviewer_id)
         };
 
         let weak = v115_work_review_outcome(
@@ -4871,6 +4931,7 @@ mod workspace_boundary_tests {
                 "work_id": work.id.to_string(),
                 "outcome_id": ungrounded.id.to_string(),
                 "disposition": "accept",
+                "reviewer_principal_id": reviewer_id.to_string(),
                 "acting_role": "independent-reviewer",
                 "reason": "must not accept an ungrounded assertion",
                 "evidence_refs": ["review://ticket-1"]
@@ -4885,6 +4946,7 @@ mod workspace_boundary_tests {
                 "work_id": work.id.to_string(),
                 "outcome_id": grounded.id.to_string(),
                 "disposition": "accept",
+                "reviewer_principal_id": reviewer_id.to_string(),
                 "acting_role": "independent-reviewer",
                 "reason": "authoritative source evidence satisfies the reviewed acceptance criteria",
                 "evidence_refs": ["review://ticket-2"]
@@ -4905,6 +4967,10 @@ mod workspace_boundary_tests {
             .unwrap();
         assert_eq!(decisions.len(), 1);
         assert_eq!(decisions[0].outcome_refs, vec![grounded.id]);
+        assert_eq!(decisions[0].decided_by, reviewer_id);
+        assert!(decisions[0]
+            .evidence_refs
+            .contains(&"iam://reviewers/alice".to_string()));
     }
 
     #[tokio::test]

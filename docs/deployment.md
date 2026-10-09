@@ -117,6 +117,37 @@ A Harness receipt, assistant message, arbitrary URL, or caller-provided
 the read operation itself, but must still terminate at the same
 `SourceOfTruthBinding -> ObservedOutcome` boundary.
 
+## Independent acceptance reviewers
+
+An acceptance role is not trusted because a browser submits the string
+`independent-reviewer`. Reviewer principals and allowed roles are deployment
+identity evidence loaded from `MORN_ACCEPTANCE_REVIEWERS_FILE`.
+
+Example:
+
+```json
+[
+  {
+    "principal_id": "prc:quality-reviewer-a",
+    "acting_roles": ["independent-reviewer"],
+    "evidence_refs": ["iam://quality/reviewers/a"],
+    "observed_at": "2026-10-09T00:00:00Z",
+    "valid_until": "2027-01-01T00:00:00Z"
+  }
+]
+```
+
+The Workbench may select one of these reviewers, but cannot invent a principal
+or role. The review API rejects expired/unattested principal-role pairs and
+rejects the workspace owner as the independent acceptance reviewer. Identity
+attestation evidence is copied into the immutable `AcceptanceDecision`
+alongside the review's own evidence.
+
+This is a separation-of-duties control, not proof of customer acceptance by
+itself. Production deployments should source these attestations from the
+customer IAM/governance system and independently audit who was allowed to
+approve which acceptance contract.
+
 ## Migration / upgrade
 
 - Migrations are versioned with preflight, dry-run, apply, verify, and
