@@ -41,6 +41,15 @@ impl RuntimeContext {
         }
     }
 
+    pub fn with_scope_id(mut self, scope_id: impl Into<String>) -> Result<Self, String> {
+        let scope_id = scope_id.into();
+        if scope_id.trim().is_empty() {
+            return Err("runtime scope id must be non-empty".to_string());
+        }
+        self.scope_id = Some(scope_id);
+        Ok(self)
+    }
+
     pub fn with_execution_environment(
         mut self,
         environment_ref: impl Into<String>,
@@ -107,6 +116,11 @@ mod tests {
     fn real_harness_environment_requires_container_and_factory_safety_vector() {
         let base = context();
         assert!(!base.proves_real_harness_environment());
+        assert!(context().with_scope_id("   ").is_err());
+        assert_eq!(
+            context().with_scope_id("scope://one").unwrap().scope_id.as_deref(),
+            Some("scope://one")
+        );
 
         let missing_secret = context()
             .with_execution_environment(

@@ -162,22 +162,28 @@ impl PiHarnessProvider {
     }
 
     fn require_real_e0_scope(&self, ctx: &RuntimeContext) -> Result<()> {
+        let scope_id = ctx
+            .scope_id
+            .as_deref()
+            .filter(|scope_id| !scope_id.trim().is_empty())
+            .ok_or_else(|| {
+                Error::validation(
+                    "real Pi RPC requires an explicit RuntimeContext.scope_id",
+                )
+            })?;
         let eligible = self.scopes.iter().any(|scope| {
             scope.workspace_id == ctx.workspace_id
+                && scope.id.as_str() == scope_id
                 && scope
                     .restrictions
                     .iter()
                     .any(|restriction| restriction == PI_REAL_E0_SCOPE_RESTRICTION)
-                && ctx
-                    .scope_id
-                    .as_deref()
-                    .is_none_or(|scope_id| scope.id.as_str() == scope_id)
         });
         if eligible {
             Ok(())
         } else {
             Err(Error::validation(
-                "real Pi RPC requires a matching isolated E0 scope; E1/E2/E3 actions must use Morn ExternalAction",
+                "real Pi RPC requires the exact mounted isolated E0 scope; E1/E2/E3 actions must use Morn ExternalAction",
             ))
         }
     }
@@ -706,6 +712,8 @@ mod tests {
             ActorInstanceId::generate_with("actor"),
             WorkPackageId::generate_with("work"),
         )
+        .with_scope_id(handle.scope_id.clone())
+        .unwrap()
         .with_execution_environment(
             environment_ref,
             ExecutionClass::Container,
@@ -721,6 +729,18 @@ mod tests {
         )
         .unwrap();
         (provider, ctx, handle)
+    }
+
+    #[test]
+    fn real_pi_scope_admission_requires_exact_scope_identity() {
+        let (provider, ctx, handle) = real_pi_wire_fixture_provider();
+        let mut missing = ctx.clone();
+        missing.scope_id = None;
+        assert!(provider.require_real_e0_scope(&missing).is_err());
+
+        let mut foreign = ctx;
+        foreign.scope_id = Some(format!("{}-other", handle.scope_id));
+        assert!(provider.require_real_e0_scope(&foreign).is_err());
     }
 
     #[test]
