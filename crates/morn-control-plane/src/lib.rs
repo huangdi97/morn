@@ -2049,10 +2049,10 @@ mod control_plane_persistence_scope_tests {
             "authoritative result does not meet criteria",
         );
         reject.outcome_refs.push(ungrounded.id.clone());
-        reject.evidence_refs.push("review://ticket-reject".to_string());
-        assert!(
-            ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).is_err()
-        );
+        reject
+            .evidence_refs
+            .push("review://ticket-reject".to_string());
+        assert!(ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).is_err());
 
         let mut grounded = ungrounded.clone();
         grounded.id = morn_kernel::ids::OutcomeRecordId::generate_with("out");
@@ -2063,10 +2063,10 @@ mod control_plane_persistence_scope_tests {
 
         reject.outcome_refs = vec![grounded.id.clone()];
         reject.evidence_refs.clear();
-        assert!(
-            ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).is_err()
-        );
-        reject.evidence_refs.push("review://ticket-reject".to_string());
+        assert!(ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).is_err());
+        reject
+            .evidence_refs
+            .push("review://ticket-reject".to_string());
         ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).unwrap();
     }
 
@@ -2233,7 +2233,9 @@ mod terminal_phase_tests {
         assert_eq!(work.status.phase, WorkPhase::Waiting);
 
         let mut grounded = outcome;
-        grounded.evidence_refs.push("system://result/receipt".to_string());
+        grounded
+            .evidence_refs
+            .push("system://result/receipt".to_string());
         WorkProgressController.reconcile(
             &mut work,
             &WorkProgressInputs {
