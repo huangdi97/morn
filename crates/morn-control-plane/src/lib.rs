@@ -440,11 +440,26 @@ impl WorkProgressController {
                         && outcome.is_source_grounded()
                         && acceptance.outcome_refs.iter().any(|id| id == &outcome.id)
                 });
-                let final_acceptance =
-                    acceptance.is_final_acceptance() && spec_matches && grounded_outcome.is_some();
+                let independently_witnessed = !acceptance.evidence_refs.is_empty()
+                    && !acceptance.acting_role.trim().is_empty()
+                    && !acceptance.reason.trim().is_empty();
+                let final_acceptance = acceptance.is_final_acceptance()
+                    && spec_matches
+                    && grounded_outcome.is_some()
+                    && independently_witnessed;
+                let final_rejection = acceptance.disposition == AcceptanceDisposition::Reject
+                    && spec_matches
+                    && grounded_outcome.is_some()
+                    && independently_witnessed;
 
-                let mut independent =
-                    WorkCondition::new("IndependentAcceptance", ConditionStatus::True);
+                let mut independent = WorkCondition::new(
+                    "IndependentAcceptance",
+                    if independently_witnessed {
+                        ConditionStatus::True
+                    } else {
+                        ConditionStatus::False
+                    },
+                );
                 independent.reason = format!(
                     "acceptance decision {} by role {}",
                     acceptance.id, acceptance.acting_role
@@ -473,10 +488,11 @@ impl WorkProgressController {
 
                 work.status.phase = match acceptance.disposition {
                     AcceptanceDisposition::Accept if final_acceptance => WorkPhase::Accepted,
-                    AcceptanceDisposition::Reject => WorkPhase::Rejected,
+                    AcceptanceDisposition::Reject if final_rejection => WorkPhase::Rejected,
                     AcceptanceDisposition::Conditional
                     | AcceptanceDisposition::RequestMoreEvidence
-                    | AcceptanceDisposition::Accept => WorkPhase::Waiting,
+                    | AcceptanceDisposition::Accept
+                    | AcceptanceDisposition::Reject => WorkPhase::Waiting,
                 };
                 work.mark_observed();
                 return;
@@ -1115,14 +1131,16 @@ impl ControlPlaneStore for MornStore {
             ));
         }
         let is_accept = decision.disposition == AcceptanceDisposition::Accept;
-        if is_accept
-            && (!decision.is_final_acceptance()
+        let is_reject = decision.disposition == AcceptanceDisposition::Reject;
+        let is_terminal_decision = is_accept || is_reject;
+        if is_terminal_decision
+            && (decision.outcome_refs.is_empty()
                 || decision.evidence_refs.is_empty()
                 || decision.acting_role.trim().is_empty()
                 || decision.reason.trim().is_empty())
         {
             return Err(Error::validation(
-                "final acceptance requires linked outcomes, independent reviewer, rationale and evidence",
+                "terminal acceptance/rejection requires linked outcomes, independent reviewer, rationale and evidence",
             ));
         }
         for outcome_id in &decision.outcome_refs {
@@ -1134,9 +1152,9 @@ impl ControlPlaneStore for MornStore {
                     "acceptance must reference outcomes from the same Work and workspace",
                 ));
             }
-            if is_accept && !outcome.is_source_grounded() {
+            if is_terminal_decision && !outcome.is_source_grounded() {
                 return Err(Error::validation(
-                    "final acceptance cannot cite an ungrounded observed outcome",
+                    "terminal acceptance/rejection cannot cite an ungrounded observed outcome",
                 ));
             }
         }
@@ -2007,6 +2025,52 @@ mod control_plane_persistence_scope_tests {
     }
 
     #[test]
+    fn terminal_rejection_requires_the_same_grounded_review_chain_as_acceptance() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+
+        let ungrounded = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "unwitnessed result",
+            OutcomeSourceKind::ExternalSystem,
+            "system://status",
+            json!({"ok": false}),
+        );
+        store.save_observed_outcome(&work, &ungrounded).unwrap();
+
+        let mut reject = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("acceptance"),
+            AcceptanceDisposition::Reject,
+            PrincipalId::generate_with("principal"),
+            "independent-reviewer",
+            "authoritative result does not meet criteria",
+        );
+        reject.outcome_refs.push(ungrounded.id.clone());
+        reject.evidence_refs.push("review://ticket-reject".to_string());
+        assert!(
+            ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).is_err()
+        );
+
+        let mut grounded = ungrounded.clone();
+        grounded.id = morn_kernel::ids::OutcomeRecordId::generate_with("out");
+        grounded
+            .evidence_refs
+            .push("system://status/receipt".to_string());
+        store.save_observed_outcome(&work, &grounded).unwrap();
+
+        reject.outcome_refs = vec![grounded.id.clone()];
+        reject.evidence_refs.clear();
+        assert!(
+            ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).is_err()
+        );
+        reject.evidence_refs.push("review://ticket-reject".to_string());
+        ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).unwrap();
+    }
+
+    #[test]
     fn acceptance_and_customer_value_cannot_claim_unwitnessed_or_unaccepted_outcomes() {
         let store = MornStore::open_in_memory().unwrap();
         let work = fixture_work();
@@ -2124,6 +2188,62 @@ mod control_plane_persistence_scope_tests {
 mod terminal_phase_tests {
     use super::*;
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
+
+    #[test]
+    fn rejection_without_grounded_matching_review_cannot_terminally_close_work() {
+        use morn_kernel::ids::{AcceptanceSpecId, PrincipalId};
+        use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+        use morn_world::{ObservedOutcome, OutcomeSourceKind};
+        use serde_json::json;
+
+        let spec = morn_work::control::WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "review result",
+            "morn.lite@1.0.0",
+        );
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        work.status.phase = WorkPhase::Waiting;
+        let outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "result",
+            OutcomeSourceKind::ExternalSystem,
+            "system://result",
+            json!({"ok": false}),
+        );
+        let mut reject = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("acceptance"),
+            AcceptanceDisposition::Reject,
+            PrincipalId::generate_with("principal"),
+            "reviewer",
+            "does not satisfy criteria",
+        );
+        reject.outcome_refs.push(outcome.id.clone());
+        reject.evidence_refs.push("review://ticket".to_string());
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                outcome: Some(&outcome),
+                acceptance: Some(&reject),
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Waiting);
+
+        let mut grounded = outcome;
+        grounded.evidence_refs.push("system://result/receipt".to_string());
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                outcome: Some(&grounded),
+                acceptance: Some(&reject),
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Rejected);
+    }
 
     #[test]
     fn late_evidence_cannot_silently_reopen_accepted_work() {
