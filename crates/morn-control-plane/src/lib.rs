@@ -372,8 +372,7 @@ impl WorkProgressController {
                 return;
             }
             if receipt.ended_at.is_some() && receipt.outcome != "completed" {
-                let mut known =
-                    WorkCondition::new("ExecutorOutcomeKnown", ConditionStatus::True);
+                let mut known = WorkCondition::new("ExecutorOutcomeKnown", ConditionStatus::True);
                 known.reason = format!(
                     "executor receipt {} settled with failure outcome {}; no business outcome may be inferred",
                     receipt.id, receipt.outcome
@@ -1231,9 +1230,7 @@ impl ControlPlaneStore for MornStore {
         assessment: &ValueAssessment,
     ) -> Result<()> {
         require_canonical_work_workspace(self, work)?;
-        if assessment.work_package_id != work.id
-            || assessment.work_generation != work.generation
-        {
+        if assessment.work_package_id != work.id || assessment.work_generation != work.generation {
             return Err(Error::validation(
                 "value assessment belongs to another Work generation",
             ));
@@ -2088,7 +2085,9 @@ mod control_plane_persistence_scope_tests {
         receipt.outcome = "cleanup-failed".to_string();
         receipt.ended_at = Some(morn_kernel::time::Timestamp::now());
         receipt.event_ids.push("event://cleanup-failed".to_string());
-        receipt.trace_refs.push("event://cleanup-failed".to_string());
+        receipt
+            .trace_refs
+            .push("event://cleanup-failed".to_string());
 
         WorkProgressController.reconcile(
             &mut work,
