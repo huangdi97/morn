@@ -1133,7 +1133,9 @@ async fn v115_work_assess_value(
         .load_record::<WorkResource>("work_resource_v115", work_id)?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
     if work.workspace_id != guard.workspace.id {
-        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
     }
     if work.status.phase != WorkPhase::Accepted {
         return Err(AppError(Error::invalid_state(
@@ -5720,13 +5722,10 @@ mod workspace_boundary_tests {
             );
             acceptance.pin_work_generation(work.generation).unwrap();
             acceptance.outcome_refs.push(outcome.id.clone());
-            acceptance.evidence_refs.push("review://signed/42".to_string());
-            ControlPlaneStore::save_acceptance_decision(
-                &guard.store,
-                &work,
-                &acceptance,
-            )
-            .unwrap();
+            acceptance
+                .evidence_refs
+                .push("review://signed/42".to_string());
+            ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &acceptance).unwrap();
             (work, outcome, acceptance)
         };
 
@@ -5808,7 +5807,9 @@ mod workspace_boundary_tests {
             )
             .unwrap();
         assert_eq!(values.len(), 2);
-        assert!(values.iter().all(|value| value.work_generation == work.generation));
+        assert!(values
+            .iter()
+            .all(|value| value.work_generation == work.generation));
     }
 
     #[tokio::test]

@@ -389,9 +389,7 @@ fn configured_evidence_ledger() -> morn_kernel::Result<EvidenceLedger> {
                 ))
             })?,
         other => vec![serde_json::from_value(other).map_err(|error| {
-            morn_kernel::error::Error::validation(format!(
-                "invalid evidence claim entry: {error}"
-            ))
+            morn_kernel::error::Error::validation(format!("invalid evidence claim entry: {error}"))
         })?],
     };
     for claim in claims {
