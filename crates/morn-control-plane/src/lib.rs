@@ -371,6 +371,30 @@ impl WorkProgressController {
                 work.mark_observed();
                 return;
             }
+            if receipt.ended_at.is_some() && receipt.outcome != "completed" {
+                let mut known =
+                    WorkCondition::new("ExecutorOutcomeKnown", ConditionStatus::True);
+                known.reason = format!(
+                    "executor receipt {} settled with failure outcome {}; no business outcome may be inferred",
+                    receipt.id, receipt.outcome
+                );
+                known.evidence_refs = std::iter::once(receipt.id.to_string())
+                    .chain(receipt.trace_refs.iter().cloned())
+                    .collect();
+                work.set_condition(known);
+
+                let mut succeeded =
+                    WorkCondition::new("ExecutorExecutionSucceeded", ConditionStatus::False);
+                succeeded.reason = format!(
+                    "executor receipt {} did not complete successfully ({})",
+                    receipt.id, receipt.outcome
+                );
+                succeeded.evidence_refs = vec![receipt.id.to_string()];
+                work.set_condition(succeeded);
+                work.status.phase = WorkPhase::Blocked;
+                work.mark_observed();
+                return;
+            }
             if receipt.ended_at.is_some()
                 && receipt.outcome == "completed"
                 && inputs.workflow.is_none()
@@ -2039,6 +2063,48 @@ mod control_plane_persistence_scope_tests {
                 |condition| condition.condition_type == "ExecutorOutcomeKnown"
                     && condition.status == ConditionStatus::False
             ));
+    }
+
+    #[test]
+    fn settled_failed_execution_receipt_blocks_work_instead_of_waiting_for_outcome() {
+        let mut work = fixture_work();
+        work.status.phase = WorkPhase::Ready;
+        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        let mut receipt = morn_harness::ExecutionReceipt::from_runtime_context(
+            &morn_harness::RuntimeContext::new(
+                work.workspace_id.clone(),
+                morn_kernel::ids::ActorInstanceId::generate_with("actor"),
+                work.id.clone(),
+            )
+            .with_work_binding(work.generation, binding.id.clone())
+            .unwrap()
+            .with_scope_id("scope://cleanup-failed")
+            .unwrap(),
+            "provider:a",
+            "session-a",
+        );
+        receipt.outcome = "cleanup-failed".to_string();
+        receipt.ended_at = Some(morn_kernel::time::Timestamp::now());
+        receipt.event_ids.push("event://cleanup-failed".to_string());
+        receipt.trace_refs.push("event://cleanup-failed".to_string());
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                binding: Some(&binding),
+                receipt: Some(&receipt),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(work.status.phase, WorkPhase::Blocked);
+        assert!(work.condition_is_true("ExecutorOutcomeKnown"));
+        assert!(work.status.conditions.iter().any(|condition| {
+            condition.condition_type == "ExecutorExecutionSucceeded"
+                && condition.status == ConditionStatus::False
+        }));
+        assert!(!work.condition_is_true("OutcomeObservation"));
+        assert!(!work.condition_is_true("IndependentAcceptance"));
     }
 
     #[test]

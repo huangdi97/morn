@@ -1590,12 +1590,19 @@ async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value
     })))
 }
 
-fn classify_e0_turn_receipt(success: bool, snapshot_status: &str) -> (&'static str, bool) {
-    if success {
-        return ("completed", true);
-    }
+fn classify_e0_turn_receipt(
+    success: bool,
+    snapshot_status: &str,
+    scope_cleanup_ok: bool,
+) -> (&'static str, bool) {
     if snapshot_status == "outcome-unknown" || snapshot_status.starts_with("outcome-unknown-") {
         return ("outcome-unknown", false);
+    }
+    if !scope_cleanup_ok {
+        return ("cleanup-failed", true);
+    }
+    if success {
+        return ("completed", true);
     }
     ("failed", true)
 }
@@ -1672,11 +1679,27 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
     };
 
     let result = provider.send(&session.id, input);
-    let events = provider.stream_events(&session.id);
+    let mut events = provider.stream_events(&session.id);
     let snapshot_status = provider
         .inspect(&session.id)
         .map(|snapshot| snapshot.status)
         .unwrap_or_else(|_| "unknown".to_string());
+
+    let cleanup_error = provider
+        .unmount(&handle)
+        .err()
+        .map(|error| error.to_string());
+    if let Some(error) = &cleanup_error {
+        let mut event = morn_harness::ExecutionEvent::new(
+            work.workspace_id.clone(),
+            session.id.clone(),
+            morn_harness::ExecutionEventKind::Failed,
+            "E0 execution scope cleanup failed; executor result is not considered fully completed",
+        );
+        event.refs.push(handle.scope_id.clone());
+        event.refs.push(format!("cleanup-error:{error}"));
+        events.push(event);
+    }
 
     let mut receipt = morn_harness::ExecutionReceipt::from_runtime_context(
         &ctx,
@@ -1687,14 +1710,10 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
     receipt.trace_refs = receipt.event_ids.clone();
     receipt.runtime_version = provider.runtime_version();
     let (receipt_outcome, terminally_settled) =
-        classify_e0_turn_receipt(result.is_ok(), &snapshot_status);
+        classify_e0_turn_receipt(result.is_ok(), &snapshot_status, cleanup_error.is_none());
     receipt.outcome = receipt_outcome.to_string();
     receipt.ended_at = terminally_settled.then(morn_kernel::time::Timestamp::now);
 
-    let cleanup_error = provider
-        .unmount(&handle)
-        .err()
-        .map(|error| error.to_string());
     Ok(E0HarnessTurnEvidence {
         output: result.as_ref().ok().cloned(),
         error: result.err().map(|error| error.to_string()),
@@ -4863,20 +4882,28 @@ mod workspace_boundary_tests {
     }
 
     #[test]
-    fn reaped_real_runtime_remains_outcome_unknown_not_false_failure() {
+    fn e0_receipt_classification_fails_closed_on_unknown_outcome_or_scope_cleanup() {
         assert_eq!(
-            classify_e0_turn_receipt(false, "outcome-unknown-runtime-reaped"),
+            classify_e0_turn_receipt(false, "outcome-unknown-runtime-reaped", true),
             ("outcome-unknown", false)
         );
         assert_eq!(
-            classify_e0_turn_receipt(false, "outcome-unknown"),
-            ("outcome-unknown", false)
+            classify_e0_turn_receipt(true, "outcome-unknown", true),
+            ("outcome-unknown", false),
+            "ambiguous provider state must override an optimistic return value"
         );
         assert_eq!(
-            classify_e0_turn_receipt(false, "idle-non-success"),
+            classify_e0_turn_receipt(false, "idle-non-success", true),
             ("failed", true)
         );
-        assert_eq!(classify_e0_turn_receipt(true, "idle"), ("completed", true));
+        assert_eq!(
+            classify_e0_turn_receipt(true, "idle", false),
+            ("cleanup-failed", true)
+        );
+        assert_eq!(
+            classify_e0_turn_receipt(true, "idle", true),
+            ("completed", true)
+        );
     }
 
     #[test]
