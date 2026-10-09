@@ -1312,19 +1312,29 @@ mod dsh_provider_tests {
     #[test]
     fn real_dsh_preflight_refreshes_expired_initialization_by_restarting_owned_runtime() {
         let (mut provider, _ctx, _handle) = real_wire_fixture_provider();
-        assert_eq!(provider.preflight_real_runtime().unwrap(), "fixture-runtime-1");
+        assert_eq!(
+            provider.preflight_real_runtime().unwrap(),
+            "fixture-runtime-1"
+        );
         let first_observed = provider.runtime_health().observed_at;
         provider.runtime_health.health_valid_until = Some(Timestamp::from_millis(
             Timestamp::now().millis().saturating_sub(1),
         ));
-        assert!(!provider.runtime_health().ready_for_new_turn_at(Timestamp::now()));
+        assert!(!provider
+            .runtime_health()
+            .ready_for_new_turn_at(Timestamp::now()));
 
-        assert_eq!(provider.preflight_real_runtime().unwrap(), "fixture-runtime-1");
+        assert_eq!(
+            provider.preflight_real_runtime().unwrap(),
+            "fixture-runtime-1"
+        );
         assert_eq!(
             provider.runtime_health().state,
             HarnessRuntimeHealthState::Initialized
         );
-        assert!(provider.runtime_health().ready_for_new_turn_at(Timestamp::now()));
+        assert!(provider
+            .runtime_health()
+            .ready_for_new_turn_at(Timestamp::now()));
         assert!(provider.runtime_health().observed_at >= first_observed);
         provider.shutdown_real_runtime().unwrap();
     }

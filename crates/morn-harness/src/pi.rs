@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::ExecutionReceiptId;
+use morn_kernel::time::Timestamp;
 
 use crate::context::RuntimeContext;
 use crate::event::{ExecutionEvent, ExecutionEventKind};
@@ -835,9 +836,12 @@ mod tests {
         let (mut provider, _ctx, _handle) = real_pi_wire_fixture_provider();
         assert_eq!(provider.preflight_real_runtime().unwrap(), "1.0.0");
         let first_observed = provider.runtime_health().observed_at;
-        provider.runtime_health.health_valid_until = Some(morn_kernel::time::Timestamp::from_millis(
-            morn_kernel::time::Timestamp::now().millis().saturating_sub(1),
-        ));
+        provider.runtime_health.health_valid_until =
+            Some(morn_kernel::time::Timestamp::from_millis(
+                morn_kernel::time::Timestamp::now()
+                    .millis()
+                    .saturating_sub(1),
+            ));
         assert!(!provider
             .runtime_health()
             .ready_for_new_turn_at(morn_kernel::time::Timestamp::now()));

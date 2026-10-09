@@ -319,13 +319,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             provider.wire_server_version().map(str::to_string),
         )
     };
-    let (
-        pi_health,
-        pi_mode,
-        pi_environment_ref,
-        pi_runtime_version,
-        pi_runtime_digest,
-    ) = {
+    let (pi_health, pi_mode, pi_environment_ref, pi_runtime_version, pi_runtime_digest) = {
         let provider = pi_harness.lock().expect("pi harness poisoned");
         (
             provider.runtime_health().clone(),
