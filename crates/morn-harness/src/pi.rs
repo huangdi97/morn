@@ -286,6 +286,11 @@ impl HarnessProvider for PiHarnessProvider {
                 if self.real_config.is_none() {
                     return Err(self.real_unavailable());
                 }
+                if !ctx.proves_pinned_work_execution() {
+                    return Err(Error::validation(
+                        "real Pi RPC execution requires exact Work generation and ExecutionBinding",
+                    ));
+                }
                 self.require_real_e0_scope(ctx)?;
                 self.require_pinned_real_environment(ctx)?;
                 if let Some(active) = self.active_session.as_ref() {
@@ -607,6 +612,12 @@ impl HarnessProvider for PiHarnessProvider {
         Ok(ExecutionReceipt {
             id: ExecutionReceiptId::generate_with("rcpt"),
             workspace_id: state.ctx.workspace_id.clone(),
+            work_package_id: Some(state.ctx.work_package_id.clone()),
+            work_generation: state.ctx.work_generation,
+            execution_binding_ref: state.ctx.execution_binding_ref.clone(),
+            provider_ref: Some(self.name.clone()),
+            scope_ref: state.ctx.scope_id.clone(),
+            execution_environment_ref: state.ctx.execution_environment_ref.clone(),
             session_id: session_id.to_string(),
             trace_refs: event_ids.clone(),
             started_at: state
@@ -712,6 +723,8 @@ mod tests {
             ActorInstanceId::generate_with("actor"),
             WorkPackageId::generate_with("work"),
         )
+        .with_work_binding(1, morn_kernel::ids::RuntimeBindingId::generate_with("binding"))
+        .unwrap()
         .with_scope_id(handle.scope_id.clone())
         .unwrap()
         .with_execution_environment(

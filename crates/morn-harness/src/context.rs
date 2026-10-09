@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use morn_kernel::ids::{ActorInstanceId, WorkPackageId, WorkspaceId};
+use morn_kernel::ids::{ActorInstanceId, RuntimeBindingId, WorkPackageId, WorkspaceId};
 use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 
 /// The context a harness receives for one execution. Morn retains provenance.
@@ -11,6 +11,10 @@ pub struct RuntimeContext {
     pub workspace_id: WorkspaceId,
     pub actor_id: ActorInstanceId,
     pub work_package_id: WorkPackageId,
+    #[serde(default)]
+    pub work_generation: Option<u64>,
+    #[serde(default)]
+    pub execution_binding_ref: Option<RuntimeBindingId>,
     pub policy_snapshot_version: Option<String>,
     pub provenance_refs: Vec<String>,
     pub scope_id: Option<String>,
@@ -32,6 +36,8 @@ impl RuntimeContext {
             workspace_id,
             actor_id,
             work_package_id,
+            work_generation: None,
+            execution_binding_ref: None,
             policy_snapshot_version: None,
             provenance_refs: Vec::new(),
             scope_id: None,
@@ -39,6 +45,27 @@ impl RuntimeContext {
             execution_class: None,
             execution_guarantees: Vec::new(),
         }
+    }
+
+    pub fn with_work_binding(
+        mut self,
+        work_generation: u64,
+        binding_ref: RuntimeBindingId,
+    ) -> Result<Self, String> {
+        if work_generation == 0 || binding_ref.as_str().trim().is_empty() {
+            return Err("runtime Work generation and binding must be explicit".to_string());
+        }
+        self.work_generation = Some(work_generation);
+        self.execution_binding_ref = Some(binding_ref);
+        Ok(self)
+    }
+
+    pub fn proves_pinned_work_execution(&self) -> bool {
+        self.work_generation.is_some_and(|generation| generation > 0)
+            && self
+                .execution_binding_ref
+                .as_ref()
+                .is_some_and(|binding| !binding.as_str().trim().is_empty())
     }
 
     pub fn with_scope_id(mut self, scope_id: impl Into<String>) -> Result<Self, String> {
@@ -117,6 +144,16 @@ mod tests {
         let base = context();
         assert!(!base.proves_real_harness_environment());
         assert!(context().with_scope_id("   ").is_err());
+        assert!(!context().proves_pinned_work_execution());
+        let pinned = context()
+            .with_work_binding(1, RuntimeBindingId::generate_with("binding"))
+            .unwrap();
+        assert!(pinned.proves_pinned_work_execution());
+        assert!(
+            context()
+                .with_work_binding(0, RuntimeBindingId::generate_with("binding"))
+                .is_err()
+        );
         assert_eq!(
             context()
                 .with_scope_id("scope://one")
