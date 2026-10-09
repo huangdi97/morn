@@ -70,13 +70,39 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
   );
   const outcomeIds = new Set(outcomes.map((row) => textField(row, "id")).filter((id): id is string => !!id));
   const acceptances = control.acceptance_decisions.filter(
-    (row) => textField(row, "work_package_id") === workId &&
+    (row) =>
+      textField(row, "work_package_id") === workId &&
+      row.work_generation === generation &&
       fieldRefs(row, "outcome_refs").some((id) => outcomeIds.has(id)),
   );
+  const acceptanceIds = new Set(
+    acceptances.map((row) => textField(row, "id")).filter((id): id is string => !!id),
+  );
+  const values = control.value_assessments.filter((row) => {
+    const outcomeRef = textField(row, "outcome_ref");
+    const acceptanceRef = textField(row, "acceptance_ref");
+    return (
+      textField(row, "work_package_id") === workId &&
+      row.work_generation === generation &&
+      outcomeRef !== null &&
+      outcomeIds.has(outcomeRef) &&
+      (acceptanceRef === null || acceptanceIds.has(acceptanceRef))
+    );
+  });
   const evidence = control.condition_evidence.filter((row) =>
     textField(row, "work_ref") === workId && row.work_generation === generation,
   );
-  return { resolutions, bindings, receipts, attempts, reconciliations, outcomes, acceptances, evidence };
+  return {
+    resolutions,
+    bindings,
+    receipts,
+    attempts,
+    reconciliations,
+    outcomes,
+    acceptances,
+    values,
+    evidence,
+  };
 }
 
 function WorkEvidenceTrace({
@@ -89,7 +115,7 @@ function WorkEvidenceTrace({
   generation: number;
 }) {
   const trace = workEvidenceTrace(control, workId, generation);
-  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} bindings · ${trace.receipts.length} harness receipts · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions`;
+  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} bindings · ${trace.receipts.length} harness receipts · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions · ${trace.values.length} value assessments`;
   return (
     <details className="work-truth-trace">
       <summary>Execution, reality &amp; independent acceptance — {summary}</summary>
@@ -175,6 +201,33 @@ function WorkEvidenceTrace({
               ))}
             </ul>
           )}
+        </section>
+        <section>
+          <strong>Outcome-linked value evidence</strong>
+          {trace.values.length === 0 ? (
+            <p>No value assessment is pinned to this Work generation and its observed outcomes.</p>
+          ) : (
+            <ul>
+              {trace.values.map((assessment, index) => {
+                const evidenceClass = textField(assessment, "evidence_class") ?? "Unclassified";
+                const acceptanceRef = textField(assessment, "acceptance_ref");
+                return (
+                  <li key={textField(assessment, "id") ?? index}>
+                    <b>{evidenceClass}</b>
+                    <small>Outcome: {textField(assessment, "outcome_ref") ?? "Missing"}</small>
+                    <small>
+                      Acceptance: {acceptanceRef ?? "Not linked — cannot be CustomerValidated"}
+                    </small>
+                    <small>Value evidence refs: {fieldRefs(assessment, "evidence_refs").length}</small>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p>
+            CustomerValidated is a claim class, not a shortcut: it still requires the exact accepted
+            outcome, independent acceptance and real-site evidence.
+          </p>
         </section>
         <section>
           <strong>Generation-scoped readiness witnesses</strong>

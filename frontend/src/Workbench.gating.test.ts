@@ -121,6 +121,11 @@ describe("canonical Work remains a separate product surface", () => {
         { id: "decision-old", work_package_id: "work:canonical-1", work_generation: 0, disposition: "Accept", outcome_refs: ["outcome-old"], acting_role: "reviewer" },
         { id: "decision-spoof", work_package_id: "work:canonical-1", work_generation: 1, disposition: "Accept", outcome_refs: ["outcome-other"] },
       ],
+      value_assessments: [
+        { id: "value-1", work_package_id: "work:canonical-1", work_generation: 1, outcome_ref: "outcome-1", acceptance_ref: "decision-1", evidence_class: "ObservedOperational", evidence_refs: ["metric://one"] },
+        { id: "value-old", work_package_id: "work:canonical-1", work_generation: 0, outcome_ref: "outcome-old", acceptance_ref: "decision-old", evidence_class: "CustomerValidated", evidence_refs: ["customer://old"] },
+        { id: "value-spoof", work_package_id: "work:canonical-1", work_generation: 1, outcome_ref: "outcome-other", acceptance_ref: "decision-spoof", evidence_class: "CustomerValidated", evidence_refs: ["customer://foreign"] },
+      ],
       condition_evidence: [
         { id: "witness-1", work_ref: "work:canonical-1", work_generation: 1, condition_type: "SourceOfTruthBound", satisfied: true, producer_ref: "cmms://plant-a" },
         { id: "witness-old", work_ref: "work:canonical-1", work_generation: 0, condition_type: "SourceOfTruthBound", satisfied: true },
@@ -134,11 +139,15 @@ describe("canonical Work remains a separate product surface", () => {
     expect(trace.reconciliations).toHaveLength(1);
     expect(trace.outcomes).toHaveLength(1);
     expect(trace.acceptances).toHaveLength(1);
+    expect(trace.values).toHaveLength(1);
     expect(trace.evidence).toHaveLength(1);
     const html = render(state, null);
     expect(html).toContain("Validated review");
     expect(html).toContain("OutcomeUnknown");
     expect(html).toContain("Conditional");
+    expect(html).toContain("ObservedOperational");
+    expect(html).toContain("Value evidence refs: 1");
+    expect(html).not.toContain("CustomerValidated");
     expect(html).not.toContain("Foreign review");
     expect(html).not.toContain("Old generation review");
     expect(html).not.toContain("cmms.foreign");
