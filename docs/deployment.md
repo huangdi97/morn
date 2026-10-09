@@ -46,6 +46,10 @@ Example:
 $env:MORN_DSH_MODE = "real"
 $env:MORN_DSH_WORKSPACE = "C:\morn\workspaces\dsh"
 $env:MORN_DSH_HOME = "C:\morn\runtime\dsh-home"
+$env:MORN_DSH_EXECUTION_ENVIRONMENT_REF = "env://container/dsh-runtime-a"
+# MORN_DSH_WORKSPACE and MORN_DSH_HOME must be disjoint directory trees.
+# The environment ref must be issued/pinned by the same execution-environment
+# provisioning path that produced the RuntimeContext/ExecutionBinding.
 # Only when the chosen DSH profile truly requires env-based credentials:
 $env:MORN_DSH_ENV_PASSTHROUGH = "DEEPSEEK_API_KEY,HTTPS_PROXY"
 ```
@@ -57,11 +61,22 @@ $env:MORN_PI_MODE = "real"
 $env:MORN_PI_WORKSPACE = "C:\\morn\\workspaces\\pi"
 $env:MORN_PI_PROVIDER = "<exact-provider>"
 $env:MORN_PI_MODEL = "<exact-model>"
+$env:MORN_PI_EXECUTION_ENVIRONMENT_REF = "env://container/pi-runtime-a"
+# The Pi launch environment ref must match the RuntimeContext/ExecutionBinding.
 # Only when that provider requires environment credentials:
 $env:MORN_PI_ENV_PASSTHROUGH = "<REQUIRED_API_KEY_NAME>"
 ```
 
 This implements ADR-009: credentials are resolved at the execution/provider boundary and do not become general Morn process context.
+
+A real Harness launch is rejected unless the provider configuration's
+`execution_environment_ref` exactly matches the environment identity carried
+by the RuntimeContext/ExecutionBinding and that context proves the required
+container-or-stronger guarantee vector. Merely writing an isolation class into a
+request is not sufficient. The deployment is responsible for ensuring that the
+configured DSH/Pi command actually executes inside that named environment;
+Morn does not infer containment from a binary name or from Docker being
+installed.
 
 ## Migration / upgrade
 

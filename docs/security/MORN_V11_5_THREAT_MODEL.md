@@ -84,6 +84,17 @@ is not equivalent to safely cancelling one Morn Work/Attempt.
 
 DSH session events are execution evidence, not Morn Work truth.
 
+A live Harness launch must also bind to an exact execution-environment identity.
+The DSH/Pi deployment configuration and the RuntimeContext/ExecutionBinding must
+carry the same `execution_environment_ref`. A context that merely asserts
+`Container` plus guarantee labels is rejected when that identity differs.
+DSH's workspace and `DSH_HOME` are additionally required to be disjoint
+directory trees so agent-visible workspace tools cannot reach Harness profiles,
+sessions or provider credential state by simple path traversal. This identity
+check is necessary but not a substitute for a real container/microVM backend:
+the deployment still must prove that the configured command actually runs
+inside the named environment.
+
 ## Sandbox boundary
 
 A same-world process sandbox is not automatically a network/process isolation

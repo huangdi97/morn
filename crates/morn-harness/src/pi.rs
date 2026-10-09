@@ -175,6 +175,30 @@ impl PiHarnessProvider {
             ))
         }
     }
+
+    fn require_pinned_real_environment(&self, ctx: &RuntimeContext) -> Result<()> {
+        if !ctx.proves_real_harness_environment() {
+            return Err(Error::validation(
+                "real Pi RPC requires a bound container-or-stronger execution environment with filesystem-write, network-egress and secret-indirection guarantees",
+            ));
+        }
+        let configured = self
+            .real_config
+            .as_ref()
+            .and_then(|config| config.execution_environment_ref.as_deref())
+            .filter(|reference| !reference.trim().is_empty())
+            .ok_or_else(|| {
+                Error::validation(
+                    "real Pi RPC configuration is missing execution_environment_ref",
+                )
+            })?;
+        if ctx.execution_environment_ref.as_deref() != Some(configured) {
+            return Err(Error::validation(
+                "real Pi RPC RuntimeContext execution environment does not match the pinned launch environment",
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl HarnessProvider for PiHarnessProvider {
@@ -252,11 +276,7 @@ impl HarnessProvider for PiHarnessProvider {
                     return Err(self.real_unavailable());
                 }
                 self.require_real_e0_scope(ctx)?;
-                if !ctx.proves_real_harness_environment() {
-                    return Err(Error::validation(
-                        "real Pi RPC requires a bound container-or-stronger execution environment with filesystem-write, network-egress and secret-indirection guarantees",
-                    ));
-                }
+                self.require_pinned_real_environment(ctx)?;
                 if let Some(active) = self.active_session.as_ref() {
                     if self
                         .sessions
@@ -558,6 +578,40 @@ mod tests {
     use super::*;
     use crate::contract::run_provider_contract;
     use morn_kernel::ids::{ActorInstanceId, WorkPackageId, WorkspaceId};
+
+    #[test]
+    fn real_pi_rejects_context_from_a_different_execution_environment() {
+        use morn_kernel::{ExecutionClass, ExecutionGuarantee};
+
+        let mut config = PiRpcConfig::default();
+        config.cwd = Some(std::env::current_dir().unwrap().to_string_lossy().to_string());
+        config.provider = Some("fixture-provider".to_string());
+        config.model = Some("fixture-model".to_string());
+        config.execution_environment_ref = Some("env://container/pinned".to_string());
+        let provider = PiHarnessProvider::with_real_rpc(config);
+        let ctx = RuntimeContext::new(
+            WorkspaceId::generate(),
+            ActorInstanceId::generate_with("actor"),
+            WorkPackageId::generate_with("work"),
+        )
+        .with_execution_environment(
+            "env://container/forged",
+            ExecutionClass::Container,
+            vec![
+                ExecutionGuarantee::FilesystemWritePolicy,
+                ExecutionGuarantee::NetworkEgressPolicy,
+                ExecutionGuarantee::SecretIndirection,
+            ],
+        )
+        .unwrap();
+        assert!(provider.require_pinned_real_environment(&ctx).is_err());
+
+        let pinned = RuntimeContext {
+            execution_environment_ref: Some("env://container/pinned".to_string()),
+            ..ctx
+        };
+        assert!(provider.require_pinned_real_environment(&pinned).is_ok());
+    }
 
     #[test]
     fn pi_runtime_health_does_not_claim_live_before_transport_evidence() {

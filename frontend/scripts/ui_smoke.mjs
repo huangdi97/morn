@@ -70,8 +70,16 @@ try {
       } else if (await legacy.evaluate((node) => node.open)) {
         errors.push("console: legacy/reference diagnostics should be collapsed by default");
       }
-      const consoleText = await page.locator("body").innerText();
-      if (!consoleText.includes("Harness / Runtime Health") || !consoleText.includes("v11.5 Persisted Control Records")) {
+      try {
+        await page.getByText("Harness / Runtime Health", { exact: true }).waitFor({
+          state: "visible",
+          timeout: 5000,
+        });
+        await page.getByText("v11.5 Persisted Control Records", { exact: true }).waitFor({
+          state: "visible",
+          timeout: 5000,
+        });
+      } catch {
         errors.push("console: canonical v11.5 provider/control health must remain visible");
       }
     }

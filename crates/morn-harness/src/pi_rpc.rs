@@ -34,6 +34,9 @@ pub struct PiRpcConfig {
     pub cwd: Option<String>,
     pub provider: Option<String>,
     pub model: Option<String>,
+    /// Exact execution-environment identity that owns this Pi subprocess.
+    #[serde(default)]
+    pub execution_environment_ref: Option<String>,
     pub request_timeout_ms: u64,
     pub prompt_timeout_ms: u64,
     /// True for production. Test fixtures may disable strictness only to skip
@@ -53,6 +56,7 @@ impl Default for PiRpcConfig {
             cwd: None,
             provider: None,
             model: None,
+            execution_environment_ref: None,
             request_timeout_ms: 30_000,
             prompt_timeout_ms: 60_000,
             strict_jsonl: true,
@@ -82,6 +86,10 @@ impl PiRpcConfig {
             .ok_or_else(|| Error::validation("real Pi RPC requires an explicit workspace"))?;
         if self.command.trim().is_empty()
             || self
+                .execution_environment_ref
+                .as_deref()
+                .is_none_or(|reference| reference.trim().is_empty())
+            || self
                 .provider
                 .as_deref()
                 .is_none_or(|provider| provider.trim().is_empty())
@@ -91,7 +99,7 @@ impl PiRpcConfig {
                 .is_none_or(|model| model.trim().is_empty())
         {
             return Err(Error::validation(
-                "real Pi RPC requires command, provider and model",
+                "real Pi RPC requires command, provider, model and execution_environment_ref",
             ));
         }
         if !Path::new(cwd).is_absolute() {
@@ -120,6 +128,13 @@ impl PiRpcConfig {
             model: Some(
                 std::env::var("MORN_PI_MODEL")
                     .map_err(|_| Error::validation("MORN_PI_MODEL is required for real Pi"))?,
+            ),
+            execution_environment_ref: Some(
+                std::env::var("MORN_PI_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
+                    Error::validation(
+                        "MORN_PI_EXECUTION_ENVIRONMENT_REF is required for real Pi",
+                    )
+                })?,
             ),
             ..Self::default()
         };
@@ -566,6 +581,7 @@ mod tests {
             cwd: Some(cwd.to_string_lossy().to_string()),
             provider: None,
             model: None,
+            execution_environment_ref: None,
             request_timeout_ms: 10_000,
             prompt_timeout_ms: 10_000,
             strict_jsonl: false,
@@ -656,6 +672,8 @@ mod tests {
         config.cwd = Some(cwd.to_string_lossy().to_string());
         config.provider = Some("fixture-provider".to_string());
         config.model = Some("fixture-model".to_string());
+        assert!(config.validate_for_real().is_err());
+        config.execution_environment_ref = Some("env://container/pi".to_string());
         assert!(config.validate_for_real().is_ok());
         config.cwd = Some("relative-workspace".to_string());
         assert!(config.validate_for_real().is_err());

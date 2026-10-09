@@ -41,6 +41,11 @@ pub struct DshSdkConfig {
     /// Isolated Harness home. Live deployments require this explicitly;
     /// protocol fixtures may leave it unset.
     pub dsh_home: Option<String>,
+    /// Exact execution-environment identity that owns this subprocess launch.
+    /// It must match RuntimeContext/ExecutionBinding; a caller-supplied
+    /// isolation label alone is insufficient.
+    #[serde(default)]
+    pub execution_environment_ref: Option<String>,
     pub request_timeout_ms: u64,
     pub turn_timeout_ms: u64,
 }
@@ -60,6 +65,7 @@ impl DshSdkConfig {
             reasoning_effort: None,
             max_tokens: None,
             dsh_home: None,
+            execution_environment_ref: None,
             request_timeout_ms: 30_000,
             turn_timeout_ms: 300_000,
         }
@@ -67,6 +73,11 @@ impl DshSdkConfig {
 
     pub fn with_dsh_home(mut self, path: impl Into<String>) -> Self {
         self.dsh_home = Some(path.into());
+        self
+    }
+
+    pub fn with_execution_environment_ref(mut self, environment_ref: impl Into<String>) -> Self {
+        self.execution_environment_ref = Some(environment_ref.into());
         self
     }
 
@@ -85,6 +96,15 @@ impl DshSdkConfig {
             .as_deref()
             .filter(|home| !home.trim().is_empty())
             .ok_or_else(|| Error::validation("real DSH SDK requires isolated DSH_HOME"))?;
+        if self
+            .execution_environment_ref
+            .as_deref()
+            .is_none_or(|reference| reference.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "real DSH SDK requires a pinned execution_environment_ref",
+            ));
+        }
         let workspace = Path::new(&self.cwd);
         let home_path = Path::new(home);
         if !workspace.is_absolute() || !home_path.is_absolute() {
@@ -122,7 +142,12 @@ impl DshSdkConfig {
             std::env::var("MORN_DSH_PROVIDER").unwrap_or_else(|_| "deepseek-official".to_string());
         let model =
             std::env::var("MORN_DSH_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".to_string());
-        let mut config = Self::profile_sdk(cwd, provider, model).with_dsh_home(home);
+        let environment_ref = std::env::var("MORN_DSH_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
+            Error::validation("MORN_DSH_EXECUTION_ENVIRONMENT_REF is required for real DSH")
+        })?;
+        let mut config = Self::profile_sdk(cwd, provider, model)
+            .with_dsh_home(home)
+            .with_execution_environment_ref(environment_ref);
         if let Ok(command) = std::env::var("MORN_DSH_COMMAND") {
             config.command = command;
         }
@@ -565,7 +590,8 @@ mod tests {
             "deepseek-official",
             "deepseek-v4-flash",
         )
-        .with_dsh_home(nested_home.to_string_lossy());
+        .with_dsh_home(nested_home.to_string_lossy())
+        .with_execution_environment_ref("env://container/dsh");
         assert!(config.validate_for_real().is_err());
 
         config.dsh_home = Some(root.join("dsh-home").to_string_lossy().to_string());
@@ -688,7 +714,14 @@ mod tests {
             "deepseek-v4-flash",
         );
         assert!(config.validate_for_real().is_err());
-        let configured = config.with_dsh_home(cwd.join(".dsh-test").to_string_lossy());
+        let root = std::env::temp_dir().join("morn-dsh-live-config");
+        let configured = DshSdkConfig::profile_sdk(
+            root.join("workspace").to_string_lossy(),
+            "deepseek-official",
+            "deepseek-v4-flash",
+        )
+        .with_dsh_home(root.join("dsh-home").to_string_lossy())
+        .with_execution_environment_ref("env://container/dsh");
         assert!(configured.validate_for_real().is_ok());
     }
 
@@ -710,6 +743,7 @@ mod tests {
             reasoning_effort: None,
             max_tokens: Some(64),
             dsh_home: None,
+            execution_environment_ref: None,
             request_timeout_ms: 10_000,
             turn_timeout_ms: 10_000,
         };

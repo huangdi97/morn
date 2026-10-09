@@ -561,6 +561,30 @@ impl DeepSeekHarnessProvider {
             ))
         }
     }
+
+    fn require_pinned_real_environment(&self, ctx: &RuntimeContext) -> Result<()> {
+        if !ctx.proves_real_harness_environment() {
+            return Err(Error::validation(
+                "real DSH SDK requires a bound container-or-stronger execution environment with filesystem-write, network-egress and secret-indirection guarantees",
+            ));
+        }
+        let configured = self
+            .real_config
+            .as_ref()
+            .and_then(|config| config.execution_environment_ref.as_deref())
+            .filter(|reference| !reference.trim().is_empty())
+            .ok_or_else(|| {
+                Error::validation(
+                    "real DSH SDK configuration is missing execution_environment_ref",
+                )
+            })?;
+        if ctx.execution_environment_ref.as_deref() != Some(configured) {
+            return Err(Error::validation(
+                "real DSH SDK RuntimeContext execution environment does not match the pinned launch environment",
+            ));
+        }
+        Ok(())
+    }
 }
 
 fn normalize_dsh_notifications(
@@ -739,11 +763,7 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     return Err(self.real_unavailable());
                 }
                 self.require_real_e0_scope(ctx)?;
-                if !ctx.proves_real_harness_environment() {
-                    return Err(Error::validation(
-                        "real DSH SDK requires a bound container-or-stronger execution environment with filesystem-write, network-egress and secret-indirection guarantees",
-                    ));
-                }
+                self.require_pinned_real_environment(ctx)?;
                 self.ensure_real_client()?;
                 let session_id = format!("morn-dsh-{}", uuid::Uuid::new_v4());
                 let event = ExecutionEvent::new(
@@ -1019,6 +1039,44 @@ impl HarnessProvider for DeepSeekHarnessProvider {
 mod dsh_provider_tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn real_dsh_rejects_context_from_a_different_execution_environment() {
+        use morn_kernel::{ExecutionClass, ExecutionGuarantee};
+        use morn_kernel::ids::{ActorInstanceId, WorkPackageId};
+
+        let root = std::env::temp_dir().join("morn-provider-env-pin");
+        let config = DshSdkConfig::profile_sdk(
+            root.join("workspace").to_string_lossy(),
+            "deepseek-official",
+            "deepseek-v4-flash",
+        )
+        .with_dsh_home(root.join("dsh-home").to_string_lossy())
+        .with_execution_environment_ref("env://container/pinned");
+        let provider = DeepSeekHarnessProvider::with_real_sdk(config);
+        let ctx = RuntimeContext::new(
+            WorkspaceId::generate(),
+            ActorInstanceId::generate_with("actor"),
+            WorkPackageId::generate_with("work"),
+        )
+        .with_execution_environment(
+            "env://container/forged",
+            ExecutionClass::Container,
+            vec![
+                ExecutionGuarantee::FilesystemWritePolicy,
+                ExecutionGuarantee::NetworkEgressPolicy,
+                ExecutionGuarantee::SecretIndirection,
+            ],
+        )
+        .unwrap();
+        assert!(provider.require_pinned_real_environment(&ctx).is_err());
+
+        let pinned = RuntimeContext {
+            execution_environment_ref: Some("env://container/pinned".to_string()),
+            ..ctx
+        };
+        assert!(provider.require_pinned_real_environment(&pinned).is_ok());
+    }
 
     #[test]
     fn runtime_health_requires_a_fresh_live_turn_before_selection() {
