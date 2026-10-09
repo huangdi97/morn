@@ -570,8 +570,12 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
     for evidence in &additional {
         guard.store.save_condition_evidence(&work, evidence)?;
     }
+    // Readiness evidence is stamped when it is constructed above. Reconcile
+    // after persistence with a fresh clock so newly-created evidence is never
+    // rejected as future-dated merely because provider/catalog checks ran first.
+    let reconcile_at = Timestamp::now();
     let tick = DurableWorkControllerRuntime::new("api-v115-capability-resolver")
-        .reconcile_from_evidence(&guard.store, work.id.as_str(), &profile, now)?;
+        .reconcile_from_evidence(&guard.store, work.id.as_str(), &profile, reconcile_at)?;
     let current = guard
         .store
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work.id.as_str())?
