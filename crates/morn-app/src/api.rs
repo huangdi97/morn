@@ -92,6 +92,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/ui/extensions", get(v115_ui_extensions))
         .route("/api/v115/control-plane", get(v115_control_plane))
         .route("/api/v115/work/reconcile", post(v115_work_reconcile))
+        .route("/api/v115/work/execute-e0", post(v115_work_execute_e0))
         .route("/api/v115/solutions", get(v115_solutions))
         .route("/api/v115/capabilities", get(v115_capabilities))
         .route("/api/v115/discovery", get(v115_discovery))
@@ -393,6 +394,267 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             "real_factory": "external-blocked until lawful site data/authority exists",
             "production_write": "not entered"
         }
+    })))
+}
+
+#[derive(Debug)]
+struct E0HarnessTurnEvidence {
+    output: Option<morn_harness::provider::HarnessOutput>,
+    error: Option<String>,
+    cleanup_error: Option<String>,
+    receipt: morn_harness::ExecutionReceipt,
+    events: Vec<morn_harness::ExecutionEvent>,
+    snapshot_status: String,
+}
+
+fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
+    provider: &mut P,
+    work: &morn_work::control::WorkResource,
+    binding: &morn_runtime::ExecutionBinding,
+    input: &str,
+) -> Result<E0HarnessTurnEvidence, Error> {
+    use morn_harness::{CapabilityScope, RuntimeContext, ScopeKind};
+    use morn_kernel::ids::ActorInstanceId;
+
+    let scope = CapabilityScope::new(
+        ScopeKind::ExecutionRun,
+        None,
+        work.workspace_id.clone(),
+        format!("work:{}:generation:{}:e0", work.id, work.generation),
+    )
+    .with_restriction("morn.effects<=E0");
+    let handle = provider.mount(scope)?;
+
+    let build = (|| -> Result<(morn_harness::provider::HarnessSession, RuntimeContext), Error> {
+        let mut ctx = RuntimeContext::new(
+            work.workspace_id.clone(),
+            ActorInstanceId::generate_with("work-executor"),
+            work.id.clone(),
+        )
+        .with_work_binding(work.generation, binding.id.clone())
+        .map_err(Error::validation)?
+        .with_scope_id(handle.scope_id.clone())
+        .map_err(Error::validation)?;
+        if let (Some(environment_ref), Some(class)) = (
+            binding.execution_environment_ref.clone(),
+            binding.execution_class,
+        ) {
+            ctx = ctx
+                .with_execution_environment(
+                    environment_ref,
+                    class,
+                    binding.execution_guarantees.clone(),
+                )
+                .map_err(Error::validation)?;
+        }
+        ctx.provenance_refs = vec![
+            binding.id.to_string(),
+            binding.capability_manifest_ref.clone(),
+        ];
+        let session = provider.start(&ctx)?;
+        Ok((session, ctx))
+    })();
+
+    let (session, ctx) = match build {
+        Ok(value) => value,
+        Err(error) => {
+            let cleanup = provider.unmount(&handle).err();
+            return Err(match cleanup {
+                Some(cleanup) => Error::external(format!(
+                    "{error}; execution scope cleanup also failed: {cleanup}"
+                )),
+                None => error,
+            });
+        }
+    };
+
+    let result = provider.send(&session.id, input);
+    let events = provider.stream_events(&session.id);
+    let snapshot_status = provider
+        .inspect(&session.id)
+        .map(|snapshot| snapshot.status)
+        .unwrap_or_else(|_| "unknown".to_string());
+
+    let mut receipt = morn_harness::ExecutionReceipt::from_runtime_context(
+        &ctx,
+        provider.provider_name(),
+        session.id.clone(),
+    );
+    receipt.event_ids = events.iter().map(|event| event.id.to_string()).collect();
+    receipt.trace_refs = receipt.event_ids.clone();
+    match (&result, snapshot_status.as_str()) {
+        (Ok(_), _) => {
+            receipt.outcome = "completed".to_string();
+            receipt.ended_at = Some(morn_kernel::time::Timestamp::now());
+        }
+        (Err(_), "outcome-unknown") => {
+            receipt.outcome = "outcome-unknown".to_string();
+            receipt.ended_at = None;
+        }
+        (Err(_), _) => {
+            receipt.outcome = "failed".to_string();
+            receipt.ended_at = Some(morn_kernel::time::Timestamp::now());
+        }
+    }
+
+    let cleanup_error = provider.unmount(&handle).err().map(|error| error.to_string());
+    Ok(E0HarnessTurnEvidence {
+        output: result.as_ref().ok().cloned(),
+        error: result.err().map(|error| error.to_string()),
+        cleanup_error,
+        receipt,
+        events,
+        snapshot_status,
+    })
+}
+
+async fn v115_work_execute_e0(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_capability::EffectClass;
+    use morn_control_plane::{ControlPlaneStore, WorkProgressController, WorkProgressInputs};
+    use morn_work::control::WorkPhase;
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let binding_id = body
+        .get("binding_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("binding_id is required")))?;
+    let input = body
+        .get("input")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("input is required")))?
+        .to_string();
+
+    let (work, binding, native, dsh, pi) = {
+        let guard = state.lock();
+        let work = guard
+            .store
+            .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+            .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+        if work.workspace_id != guard.workspace.id {
+            return Err(AppError(Error::not_found(format!(
+                "WorkResource {work_id}"
+            ))));
+        }
+        let binding = guard
+            .store
+            .load_record::<morn_runtime::ExecutionBinding>("execution_binding_v115", binding_id)?
+            .ok_or_else(|| {
+                AppError(Error::not_found(format!(
+                    "ExecutionBinding {binding_id}"
+                )))
+            })?;
+        (
+            work,
+            binding,
+            guard.native_harness.clone(),
+            guard.dsh_harness.clone(),
+            guard.pi_harness.clone(),
+        )
+    };
+
+    if !matches!(
+        work.status.phase,
+        WorkPhase::Ready | WorkPhase::Running | WorkPhase::Waiting
+    ) || !work.required_conditions_satisfied()
+    {
+        return Err(AppError(Error::invalid_state(format!(
+            "Work {} is not execution-ready in phase {:?}",
+            work.id, work.status.phase
+        ))));
+    }
+    if !binding.matches_work_generation(&work)
+        || binding.profile_ref != work.spec.profile_ref
+        || binding.site_ref != work.spec.site_ref
+        || binding.autonomy_posture != work.spec.autonomy_posture
+    {
+        return Err(AppError(Error::validation(
+            "ExecutionBinding does not match the exact canonical Work generation/profile/site/autonomy",
+        )));
+    }
+    if binding.effect_ceiling != Some(EffectClass::E0LifecycleReversible) {
+        return Err(AppError(Error::not_authorized(
+            "work/execute-e0 only permits an E0 lifecycle-reversible binding; E1/E2/E3 must use ExternalAction",
+        )));
+    }
+
+    let work_for_turn = work.clone();
+    let binding_for_turn = binding.clone();
+    let provider_ref = binding.provider_ref.clone();
+    let turn = match provider_ref.as_str() {
+        "morn-native" => tokio::task::spawn_blocking(move || {
+            let mut provider = native
+                .lock()
+                .map_err(|_| Error::internal("native harness lock poisoned"))?;
+            run_e0_harness_turn(&mut *provider, &work_for_turn, &binding_for_turn, &input)
+        })
+        .await
+        .map_err(|error| AppError(Error::internal(format!("native harness task failed: {error}"))))??,
+        "deepseek-harness" => tokio::task::spawn_blocking(move || {
+            let mut provider = dsh
+                .lock()
+                .map_err(|_| Error::internal("dsh harness lock poisoned"))?;
+            run_e0_harness_turn(&mut *provider, &work_for_turn, &binding_for_turn, &input)
+        })
+        .await
+        .map_err(|error| AppError(Error::internal(format!("DSH harness task failed: {error}"))))??,
+        "pi" => tokio::task::spawn_blocking(move || {
+            let mut provider = pi
+                .lock()
+                .map_err(|_| Error::internal("pi harness lock poisoned"))?;
+            run_e0_harness_turn(&mut *provider, &work_for_turn, &binding_for_turn, &input)
+        })
+        .await
+        .map_err(|error| AppError(Error::internal(format!("Pi harness task failed: {error}"))))??,
+        other => {
+            return Err(AppError(Error::validation(format!(
+                "binding provider {other:?} is not an executable harness provider"
+            ))))
+        }
+    };
+
+    let current = {
+        let guard = state.lock();
+        guard.store.save_execution_receipt(&work, &turn.receipt)?;
+        let mut current = guard
+            .store
+            .load_record::<morn_work::control::WorkResource>("work_resource_v115", work.id.as_str())?
+            .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {}", work.id))))?;
+        if current.generation == work.generation {
+            WorkProgressController.reconcile(
+                &mut current,
+                &WorkProgressInputs {
+                    binding: Some(&binding),
+                    receipt: Some(&turn.receipt),
+                    ..Default::default()
+                },
+            );
+            guard.store.save_work_resource_cas(&mut current)?;
+        }
+        current
+    };
+
+    Ok(Json(json!({
+        "executor_status": if turn.error.is_some() { "failed" } else { "completed" },
+        "provider_ref": provider_ref,
+        "output": turn.output,
+        "executor_error": turn.error,
+        "scope_cleanup_error": turn.cleanup_error,
+        "snapshot_status": turn.snapshot_status,
+        "receipt": turn.receipt,
+        "normalized_events": turn.events,
+        "work": current,
+        "business_outcome_observed": false,
+        "independent_acceptance": false,
+        "note": "E0 Harness execution evidence only. Provider completion never creates ObservedOutcome or AcceptanceDecision."
     })))
 }
 
@@ -2757,6 +3019,86 @@ mod workspace_boundary_tests {
         let works = body["work"].as_array().unwrap();
         assert_eq!(works.len(), 1);
         assert_eq!(works[0]["id"], "visible");
+    }
+
+    #[tokio::test]
+    async fn execute_e0_persists_harness_receipt_without_inventing_outcome_or_acceptance() {
+        use morn_capability::EffectClass;
+        use morn_control_plane::ControlPlaneStore;
+        use morn_runtime::ExecutionBinding;
+        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+
+        let state = AppState::new(":memory:").unwrap();
+        let (work, binding) = {
+            let guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "prepare an evidence-backed draft",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            work.status.phase = WorkPhase::Ready;
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+
+            let mut binding = ExecutionBinding::for_work(
+                &work,
+                "capability://fixture/e0",
+                "deepseek-harness",
+                "fixture",
+            );
+            binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
+            guard.store.save_execution_binding(&work, &binding).unwrap();
+            (work, binding)
+        };
+
+        let Json(response) = v115_work_execute_e0(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "binding_id": binding.id.to_string(),
+                "input": "produce a draft only"
+            })),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response["executor_status"], "completed");
+        assert_eq!(response["business_outcome_observed"], false);
+        assert_eq!(response["independent_acceptance"], false);
+        assert_eq!(response["work"]["status"]["phase"], "Waiting");
+
+        let guard = state.lock();
+        let receipts = guard
+            .store
+            .load_records_in_workspace::<morn_harness::ExecutionReceipt>(
+                "execution_receipt_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap();
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(
+            receipts[0].execution_binding_ref.as_ref(),
+            Some(&binding.id)
+        );
+        assert_eq!(receipts[0].outcome, "completed");
+        assert!(guard
+            .store
+            .load_records_in_workspace::<Value>(
+                "observed_outcome_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap()
+            .is_empty());
+        assert!(guard
+            .store
+            .load_records_in_workspace::<Value>(
+                "acceptance_decision_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]
