@@ -1804,12 +1804,10 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     )));
                 }
                 if provider.mode() == morn_harness::provider::DshMode::Real
-                    && provider.runtime_health().state
-                        != morn_harness::provider::HarnessRuntimeHealthState::Initialized
-                    && !provider.runtime_health().selectable_at(now)
+                    && !provider.runtime_health().ready_for_new_turn_at(now)
                 {
                     return Err(AppError(Error::invalid_state(
-                        "real DSH provider is neither freshly initialized for its first turn nor covered by a fresh healthy runtime lease",
+                        "real DSH provider lacks a fresh initialization/healthy lease for a new turn",
                     )));
                 }
             }
@@ -1834,10 +1832,10 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     )));
                 }
                 if provider.mode() == morn_harness::PiMode::Real
-                    && !provider.runtime_health().selectable_at(now)
+                    && !provider.runtime_health().ready_for_new_turn_at(now)
                 {
                     return Err(AppError(Error::invalid_state(
-                        "real Pi provider has no fresh healthy runtime lease; new execution is blocked",
+                        "real Pi provider lacks a fresh initialization/healthy lease for a new turn",
                     )));
                 }
             }

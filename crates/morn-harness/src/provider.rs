@@ -140,7 +140,11 @@ impl HarnessRuntimeHealth {
         self.reason = reason.into();
         self.evidence_refs = vec![evidence_ref.into()];
         self.observed_at = Timestamp::now();
-        self.health_valid_until = None;
+        self.health_valid_until = Some(Timestamp::from_millis(
+            self.observed_at
+                .millis()
+                .saturating_add(HARNESS_RUNTIME_HEALTH_LEASE_MS),
+        ));
     }
 
     pub fn mark_live_turn(&mut self, reason: impl Into<String>, evidence_ref: impl Into<String>) {
@@ -178,6 +182,16 @@ impl HarnessRuntimeHealth {
     pub fn selectable_at(&self, now: Timestamp) -> bool {
         self.state == HarnessRuntimeHealthState::Healthy
             && self.health_valid_until.is_some_and(|until| now <= until)
+    }
+
+    /// A freshly initialized real transport may perform its first governed
+    /// turn. After that, only a live settled-turn health lease can authorize
+    /// another turn. Both proofs are time-bounded.
+    pub fn ready_for_new_turn_at(&self, now: Timestamp) -> bool {
+        matches!(
+            self.state,
+            HarnessRuntimeHealthState::Initialized | HarnessRuntimeHealthState::Healthy
+        ) && self.health_valid_until.is_some_and(|until| now <= until)
     }
 
     pub fn remaining_lease_ms(&self, now: Timestamp) -> Option<i64> {
@@ -1466,6 +1480,14 @@ mod dsh_provider_tests {
         health.mark_initialized("initialized", "runtime://dsh/init");
         assert_eq!(health.state, HarnessRuntimeHealthState::Initialized);
         assert!(!health.selectable_at(health.observed_at));
+        assert!(health.ready_for_new_turn_at(health.observed_at));
+        let stale_initialization = Timestamp::from_millis(
+            health
+                .observed_at
+                .millis()
+                .saturating_add(HARNESS_RUNTIME_HEALTH_LEASE_MS + 1),
+        );
+        assert!(!health.ready_for_new_turn_at(stale_initialization));
 
         health.mark_live_turn("settled", "runtime://dsh/turn");
         let observed = health.observed_at;
