@@ -817,6 +817,18 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     return Err(Error::validation("DSH prompt must be non-empty"));
                 }
 
+                // Scope/environment admission is renewed for every prompt.
+                // Unmounting/revoking the E0 execution scope must block future
+                // turns before anything reaches the external harness.
+                let ctx = self
+                    .sessions
+                    .get(session_id)
+                    .ok_or_else(|| Error::not_found(format!("session {session_id}")))?
+                    .ctx
+                    .clone();
+                self.require_real_e0_scope(&ctx)?;
+                self.require_pinned_real_environment(&ctx)?;
+
                 // Bootstrap/handshake happens before we mutate the session into
                 // a running state. A configuration or initialize failure means
                 // no prompt was dispatched and must not strand the session as
@@ -1180,6 +1192,13 @@ mod dsh_provider_tests {
         assert!(provider.terminate(&session.id).is_err());
 
         provider.unmount(&handle).unwrap();
+        assert!(
+            provider
+                .send(&session.id, "must not run after scope revocation")
+                .is_err(),
+            "an unmounted E0 scope must revoke later prompt admission"
+        );
+        assert_eq!(provider.inspect(&session.id).unwrap().status, "idle");
         provider.shutdown_real_runtime().unwrap();
         assert_eq!(
             provider.runtime_health().state,

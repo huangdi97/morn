@@ -345,6 +345,23 @@ impl HarnessProvider for PiHarnessProvider {
                         "Pi RPC prompt must target the provider's active ephemeral session",
                     ));
                 }
+
+                // A mounted E0 scope is a renewable execution lease, not a
+                // one-time admission check. Revoking/unmounting it must block
+                // every later prompt before anything reaches Pi.
+                let ctx = self
+                    .sessions
+                    .get(session_id)
+                    .ok_or_else(|| Error::not_found(format!("session {session_id}")))?
+                    .ctx
+                    .clone();
+                self.require_real_e0_scope(&ctx)?;
+                self.require_pinned_real_environment(&ctx)?;
+
+                // Initialize/health-check before marking the session running:
+                // startup failure means no prompt was dispatched.
+                self.ensure_real_client()?;
+
                 {
                     let state = self
                         .sessions
@@ -367,25 +384,46 @@ impl HarnessProvider for PiHarnessProvider {
                     state.last_event = format!("pi_prompt:{}", state.step);
                 }
 
-                let run = self.ensure_real_client()?.prompt_and_wait(input);
-                if let Ok(settled) = &run {
-                    self.runtime_health.mark_live_turn(
-                        format!(
-                            "live Pi RPC turn settled with disposition {}",
-                            settled.disposition
-                        ),
-                        format!("runtime://pi/session/{session_id}/settled-turn"),
-                    );
-                } else if let Err(error) = &run {
-                    self.runtime_health
-                        .mark_degraded(format!("Pi RPC turn failed to settle: {error}"));
-                }
+                let run = self
+                    .real_client
+                    .as_mut()
+                    .ok_or_else(|| Error::internal("Pi RPC client missing after startup"))?
+                    .prompt_and_wait(input);
                 match run {
                     Ok(run) => {
-                        let text = self
-                            .ensure_real_client()?
-                            .get_last_assistant_text()?
-                            .unwrap_or_default();
+                        let text = match self
+                            .real_client
+                            .as_mut()
+                            .ok_or_else(|| Error::internal("Pi RPC client missing after prompt"))?
+                            .get_last_assistant_text()
+                        {
+                            Ok(text) => text.unwrap_or_default(),
+                            Err(error) => {
+                                self.runtime_health.mark_degraded(format!(
+                                    "Pi RPC settled turn but assistant output retrieval failed: {error}"
+                                ));
+                                let state = self
+                                    .sessions
+                                    .get_mut(session_id)
+                                    .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                                state.status = "idle-non-success".to_string();
+                                state.events.push(ExecutionEvent::new(
+                                    state.ctx.workspace_id.clone(),
+                                    session_id.to_string(),
+                                    ExecutionEventKind::Failed,
+                                    "Pi RPC settled but provider output retrieval failed",
+                                ));
+                                state.last_event = "pi_output_unavailable".to_string();
+                                return Err(error);
+                            }
+                        };
+                        self.runtime_health.mark_live_turn(
+                            format!(
+                                "live Pi RPC turn settled with disposition {}",
+                                run.disposition
+                            ),
+                            format!("runtime://pi/session/{session_id}/settled-turn"),
+                        );
                         let state = self
                             .sessions
                             .get_mut(session_id)
@@ -410,6 +448,8 @@ impl HarnessProvider for PiHarnessProvider {
                         })
                     }
                     Err(error) => {
+                        self.runtime_health
+                            .mark_degraded(format!("Pi RPC turn failed to settle: {error}"));
                         let state = self
                             .sessions
                             .get_mut(session_id)
@@ -620,6 +660,88 @@ mod tests {
             ..ctx
         };
         assert!(provider.require_pinned_real_environment(&pinned).is_ok());
+    }
+
+    fn real_pi_wire_fixture_provider() -> (PiHarnessProvider, RuntimeContext, ProviderHandle) {
+        use morn_kernel::{ExecutionClass, ExecutionGuarantee};
+
+        let executable = std::env::current_exe().unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        let environment_ref = "env://container/pi-provider-test";
+        let config = PiRpcConfig {
+            command: executable.to_string_lossy().to_string(),
+            args: vec![
+                "--exact".to_string(),
+                "pi_rpc::tests::fake_pi_rpc_runtime".to_string(),
+                "--ignored".to_string(),
+                "--quiet".to_string(),
+                "--nocapture".to_string(),
+            ],
+            cwd: Some(cwd.to_string_lossy().to_string()),
+            provider: Some("fixture-provider".to_string()),
+            model: Some("fixture-model".to_string()),
+            execution_environment_ref: Some(environment_ref.to_string()),
+            request_timeout_ms: 10_000,
+            prompt_timeout_ms: 10_000,
+            strict_jsonl: false,
+        };
+        let workspace = WorkspaceId::generate();
+        let mut provider = PiHarnessProvider::with_real_rpc(config);
+        let scope = CapabilityScope::new(
+            crate::scope::ScopeKind::ExecutionRun,
+            None,
+            workspace.clone(),
+            "real-pi-wire-fixture",
+        )
+        .with_restriction(PI_REAL_E0_SCOPE_RESTRICTION);
+        let handle = provider.mount(scope).unwrap();
+        let ctx = RuntimeContext::new(
+            workspace,
+            ActorInstanceId::generate_with("actor"),
+            WorkPackageId::generate_with("work"),
+        )
+        .with_execution_environment(
+            environment_ref,
+            ExecutionClass::Container,
+            vec![
+                ExecutionGuarantee::FilesystemReadPolicy,
+                ExecutionGuarantee::FilesystemWritePolicy,
+                ExecutionGuarantee::ProcessBoundary,
+                ExecutionGuarantee::ResourceLimits,
+                ExecutionGuarantee::NetworkEgressPolicy,
+                ExecutionGuarantee::SecretIndirection,
+                ExecutionGuarantee::RuntimeAttestation,
+            ],
+        )
+        .unwrap();
+        (provider, ctx, handle)
+    }
+
+    #[test]
+    fn real_pi_provider_requires_scope_for_every_prompt_and_proves_live_health() {
+        let (mut provider, ctx, handle) = real_pi_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        assert_eq!(
+            provider.runtime_health().state,
+            crate::provider::HarnessRuntimeHealthState::Initialized
+        );
+
+        let output = provider.send(&session.id, "hello").unwrap();
+        assert_eq!(output.text, "hello from fake pi");
+        assert_eq!(
+            provider.runtime_health().state,
+            crate::provider::HarnessRuntimeHealthState::Healthy
+        );
+        assert_eq!(provider.runtime_health().settled_turns, 1);
+        assert_eq!(provider.inspect(&session.id).unwrap().status, "idle");
+
+        provider.unmount(&handle).unwrap();
+        assert!(
+            provider.send(&session.id, "must not run after scope revocation").is_err(),
+            "an unmounted E0 scope must revoke later prompt admission"
+        );
+        assert_eq!(provider.inspect(&session.id).unwrap().status, "idle");
+        provider.shutdown_real_runtime().unwrap();
     }
 
     #[test]
