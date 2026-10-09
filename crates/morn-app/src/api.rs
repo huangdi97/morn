@@ -1709,6 +1709,7 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
     receipt.event_ids = events.iter().map(|event| event.id.to_string()).collect();
     receipt.trace_refs = receipt.event_ids.clone();
     receipt.runtime_version = provider.runtime_version();
+    receipt.runtime_digest = provider.runtime_digest();
     let (receipt_outcome, terminally_settled) =
         classify_e0_turn_receipt(result.is_ok(), &snapshot_status, cleanup_error.is_none());
     receipt.outcome = receipt_outcome.to_string();

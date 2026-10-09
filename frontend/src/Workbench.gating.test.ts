@@ -99,7 +99,7 @@ describe("canonical Work remains a separate product surface", () => {
         { id: "binding-other", work_id: "work:foreign" },
       ],
       execution_receipts: [
-        { id: "receipt-harness-1", execution_binding_ref: "binding-1", work_generation: 1, provider_ref: "deepseek-harness", outcome: "completed", session_id: "session-1" },
+        { id: "receipt-harness-1", execution_binding_ref: "binding-1", work_generation: 1, provider_ref: "deepseek-harness", outcome: "completed", session_id: "session-1", runtime_version: "1.2.3", runtime_digest: "sha256:live-one" },
         { id: "receipt-harness-old", execution_binding_ref: "binding-1", work_generation: 0, provider_ref: "deepseek-harness", outcome: "completed" },
         { id: "receipt-harness-other", execution_binding_ref: "binding-other", work_generation: 1, provider_ref: "pi", outcome: "completed" },
       ],
@@ -146,6 +146,7 @@ describe("canonical Work remains a separate product surface", () => {
     expect(html).toContain("OutcomeUnknown");
     expect(html).toContain("Conditional");
     expect(html).toContain("ObservedOperational");
+    expect(html).toContain("sha256:live-one");
     expect(html).toContain("Value evidence refs: 1");
     expect(html).not.toContain("CustomerValidated");
     expect(html).not.toContain("Foreign review");

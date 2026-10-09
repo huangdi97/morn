@@ -216,6 +216,12 @@ pub trait HarnessProvider: Send + Sync {
         None
     }
 
+    /// Deployment-attested content identity of the exact provider distribution.
+    /// Wire/server versions must never be substituted for this digest.
+    fn runtime_digest(&self) -> Option<String> {
+        None
+    }
+
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle>;
     fn unmount(&mut self, handle: &ProviderHandle) -> Result<()>;
 
@@ -436,6 +442,7 @@ impl HarnessProvider for MornNativeHarness {
             outcome: "completed".to_string(),
             harness_version: None,
             runtime_version: Some("morn-native".to_string()),
+            runtime_digest: None,
             event_ids,
         })
     }
@@ -820,6 +827,13 @@ impl HarnessProvider for DeepSeekHarnessProvider {
         }
     }
 
+    fn runtime_digest(&self) -> Option<String> {
+        match self.mode {
+            DshMode::Fixture => None,
+            DshMode::Real => self.real_runtime_digest.clone(),
+        }
+    }
+
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
         if self.mode == DshMode::Real
             && !scope
@@ -1187,6 +1201,7 @@ impl HarnessProvider for DeepSeekHarnessProvider {
             outcome: "completed".to_string(),
             harness_version: None,
             runtime_version: Some("deepseek-harness-fixture".to_string()),
+            runtime_digest: None,
             event_ids,
         })
     }

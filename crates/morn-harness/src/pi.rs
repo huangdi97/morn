@@ -303,6 +303,16 @@ impl HarnessProvider for PiHarnessProvider {
         }
     }
 
+    fn runtime_digest(&self) -> Option<String> {
+        match self.mode {
+            PiMode::Fixture => None,
+            PiMode::Real => self
+                .real_config
+                .as_ref()
+                .and_then(|config| config.runtime_digest.clone()),
+        }
+    }
+
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
         if self.mode == PiMode::Real
             && !scope
@@ -708,6 +718,7 @@ impl HarnessProvider for PiHarnessProvider {
             outcome: "completed".to_string(),
             harness_version: None,
             runtime_version: Some("pi-fixture".to_string()),
+            runtime_digest: None,
             event_ids,
         })
     }

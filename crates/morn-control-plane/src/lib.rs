@@ -956,9 +956,10 @@ impl ControlPlaneStore for MornStore {
                 .runtime_version
                 .as_deref()
                 .is_some_and(|version| version != binding.provider_version)
+            || binding.provider_digest.as_deref() != receipt.runtime_digest.as_deref()
         {
             return Err(Error::validation(
-                "execution receipt provider/version/environment does not match its persisted Work binding",
+                "execution receipt provider/version/digest/environment does not match its persisted Work binding",
             ));
         }
         if receipt.ended_at.is_some()

@@ -146,6 +146,8 @@ function WorkEvidenceTrace({
                 <li key={textField(receipt, "id") ?? index}>
                   <b>{textField(receipt, "provider_ref") ?? "Unknown provider"}</b> — {textField(receipt, "outcome") ?? "Unsettled"}
                   <small>Session: {textField(receipt, "session_id") ?? "Unknown"}</small>
+                  <small>Runtime version: {textField(receipt, "runtime_version") ?? "Not pinned"}</small>
+                  <small>Runtime digest: {textField(receipt, "runtime_digest") ?? "Fixture / not pinned"}</small>
                   <small>Environment: {textField(receipt, "execution_environment_ref") ?? "Fixture / not pinned"}</small>
                 </li>
               ))}

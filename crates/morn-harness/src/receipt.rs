@@ -31,6 +31,8 @@ pub struct ExecutionReceipt {
     pub outcome: String,
     pub harness_version: Option<Version>,
     pub runtime_version: Option<String>,
+    #[serde(default)]
+    pub runtime_digest: Option<String>,
     pub event_ids: Vec<String>,
 }
 
@@ -52,6 +54,7 @@ impl ExecutionReceipt {
             outcome: "running".to_string(),
             harness_version: None,
             runtime_version: None,
+            runtime_digest: None,
             event_ids: Vec::new(),
         }
     }
