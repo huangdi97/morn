@@ -5675,6 +5675,143 @@ mod workspace_boundary_tests {
     }
 
     #[tokio::test]
+    async fn value_assessment_requires_exact_acceptance_and_real_site_for_customer_claim() {
+        use morn_assurance::{EvidenceClaim, EvidenceClass};
+        use morn_control_plane::ControlPlaneStore;
+        use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+        use morn_world::{ObservedOutcome, OutcomeSourceKind};
+
+        let state = AppState::new(":memory:").unwrap();
+        let (work, outcome, acceptance) = {
+            let guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "measure accepted delivery outcome",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            work.status.phase = WorkPhase::Accepted;
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+
+            let mut outcome = ObservedOutcome::new(
+                guard.workspace.id.clone(),
+                work.id.clone(),
+                "accepted authoritative delivery result",
+                OutcomeSourceKind::ExternalSystem,
+                "erp://delivery/42",
+                json!({"late_minutes":0}),
+            );
+            outcome.pin_work_generation(work.generation).unwrap();
+            outcome
+                .evidence_refs
+                .push("erp://delivery/42/receipt".to_string());
+            guard.store.save_observed_outcome(&work, &outcome).unwrap();
+
+            let mut acceptance = AcceptanceDecision::new(
+                work.id.clone(),
+                morn_kernel::ids::AcceptanceSpecId::generate_with("acceptance"),
+                AcceptanceDisposition::Accept,
+                morn_kernel::ids::PrincipalId::generate_with("reviewer"),
+                "independent-reviewer",
+                "source-grounded outcome accepted",
+            );
+            acceptance.pin_work_generation(work.generation).unwrap();
+            acceptance.outcome_refs.push(outcome.id.clone());
+            acceptance.evidence_refs.push("review://signed/42".to_string());
+            ControlPlaneStore::save_acceptance_decision(
+                &guard.store,
+                &work,
+                &acceptance,
+            )
+            .unwrap();
+            (work, outcome, acceptance)
+        };
+
+        let Json(operational) = v115_work_assess_value(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "outcome_id": outcome.id.to_string(),
+                "acceptance_id": acceptance.id.to_string(),
+                "evidence_class": "observed-operational",
+                "evidence_refs": ["metric://delivery/42"],
+                "kpis": {"late_minutes_delta": -12.0}
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            operational["value_assessment"]["work_generation"],
+            work.generation
+        );
+        assert_eq!(operational["customer_validated"], false);
+
+        let blocked = v115_work_assess_value(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "outcome_id": outcome.id.to_string(),
+                "acceptance_id": acceptance.id.to_string(),
+                "evidence_class": "customer-validated",
+                "evidence_refs": ["metric://customer/42"]
+            })),
+        )
+        .await;
+        assert!(blocked.is_err());
+
+        let subject = value_claim_subject(&work.id, work.generation, &outcome.id);
+        {
+            let mut guard = state.lock();
+            guard
+                .evidence_ledger
+                .append(
+                    EvidenceClaim::proven(
+                        subject.clone(),
+                        EvidenceClass::RealSite,
+                        vec!["customer://site-pilot/42".to_string()],
+                        "customer-site-owner",
+                        "read-only customer pilot validated the KPI",
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+        }
+
+        let Json(customer) = v115_work_assess_value(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "outcome_id": outcome.id.to_string(),
+                "acceptance_id": acceptance.id.to_string(),
+                "evidence_class": "customer-validated",
+                "evidence_refs": ["metric://customer/42"]
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(customer["value_subject"], subject);
+        assert_eq!(customer["customer_validated"], true);
+        assert_eq!(
+            customer["real_site_evidence_refs"],
+            json!(["customer://site-pilot/42"])
+        );
+
+        let guard = state.lock();
+        let values = guard
+            .store
+            .load_records_in_workspace::<morn_work::value::ValueAssessment>(
+                "value_assessment_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap();
+        assert_eq!(values.len(), 2);
+        assert!(values.iter().all(|value| value.work_generation == work.generation));
+    }
+
+    #[tokio::test]
     async fn reconcile_cannot_mutate_work_from_another_workspace() {
         let state = AppState::new(":memory:").unwrap();
         let work = {
