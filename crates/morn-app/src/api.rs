@@ -259,50 +259,45 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         )
     };
     let now = morn_kernel::time::Timestamp::now();
-    let mut project_runtime_health =
-        |provider_id: &str, health: &morn_harness::HarnessRuntimeHealth| -> Result<(), Error> {
-            use morn_harness::HarnessRuntimeHealthState;
-            use morn_runtime::provider_registry::ProviderStatus;
+    let mut project_runtime_health = |provider_id: &str,
+                                      health: &morn_harness::HarnessRuntimeHealth|
+     -> Result<(), Error> {
+        use morn_harness::HarnessRuntimeHealthState;
+        use morn_runtime::provider_registry::ProviderStatus;
 
-            let (status, reason, ttl_ms) = match health.state {
-                HarnessRuntimeHealthState::Fixture | HarnessRuntimeHealthState::Unconfigured => {
-                    return Ok(());
-                }
-                HarnessRuntimeHealthState::Configured | HarnessRuntimeHealthState::Initialized => (
-                    ProviderStatus::Registered,
-                    health.reason.clone(),
-                    None,
-                ),
-                HarnessRuntimeHealthState::Healthy if health.selectable_at(now) => (
-                    ProviderStatus::Healthy,
-                    health.reason.clone(),
-                    health.remaining_lease_ms(now),
-                ),
-                HarnessRuntimeHealthState::Healthy => (
-                    ProviderStatus::Degraded,
-                    "live runtime health lease expired; a fresh settled turn is required".to_string(),
-                    None,
-                ),
-                HarnessRuntimeHealthState::Degraded => (
-                    ProviderStatus::Degraded,
-                    health.reason.clone(),
-                    None,
-                ),
-                HarnessRuntimeHealthState::Closed => (
-                    ProviderStatus::Unavailable,
-                    health.reason.clone(),
-                    None,
-                ),
-            };
-            provider_catalog.observe_status_with_ttl(
-                provider_id,
-                status,
-                reason,
-                health.evidence_refs.clone(),
-                ttl_ms,
-            )?;
-            Ok(())
+        let (status, reason, ttl_ms) = match health.state {
+            HarnessRuntimeHealthState::Fixture | HarnessRuntimeHealthState::Unconfigured => {
+                return Ok(());
+            }
+            HarnessRuntimeHealthState::Configured | HarnessRuntimeHealthState::Initialized => {
+                (ProviderStatus::Registered, health.reason.clone(), None)
+            }
+            HarnessRuntimeHealthState::Healthy if health.selectable_at(now) => (
+                ProviderStatus::Healthy,
+                health.reason.clone(),
+                health.remaining_lease_ms(now),
+            ),
+            HarnessRuntimeHealthState::Healthy => (
+                ProviderStatus::Degraded,
+                "live runtime health lease expired; a fresh settled turn is required".to_string(),
+                None,
+            ),
+            HarnessRuntimeHealthState::Degraded => {
+                (ProviderStatus::Degraded, health.reason.clone(), None)
+            }
+            HarnessRuntimeHealthState::Closed => {
+                (ProviderStatus::Unavailable, health.reason.clone(), None)
+            }
         };
+        provider_catalog.observe_status_with_ttl(
+            provider_id,
+            status,
+            reason,
+            health.evidence_refs.clone(),
+            ttl_ms,
+        )?;
+        Ok(())
+    };
     project_runtime_health("deepseek-harness", &dsh_health)?;
     project_runtime_health("pi", &pi_health)?;
     drop(project_runtime_health);
