@@ -29,6 +29,10 @@ interface HarnessHealth {
     reason: string;
     evidence_refs: string[];
   };
+  runtime_version: string | null;
+  runtime_digest: string | null;
+  wire_server_version?: string | null;
+  execution_environment_ref: string | null;
 }
 
 interface ConsoleData {
@@ -123,6 +127,10 @@ export default function ConsolePage() {
           <KeyValue k="DSH effect ceiling" v={data.harness_health.dsh.effect_ceiling} />
           <KeyValue k="DSH credentials" v={data.harness_health.dsh.credential_boundary} />
           <KeyValue k="DSH runtime health" v={data.harness_health.dsh.runtime_health.state} />
+          <KeyValue k="DSH distribution version" v={data.harness_health.dsh.runtime_version ?? "not live/pinned"} />
+          <KeyValue k="DSH distribution digest" v={data.harness_health.dsh.runtime_digest ?? "not pinned"} />
+          <KeyValue k="DSH SDK wire version" v={data.harness_health.dsh.wire_server_version ?? "not initialized"} />
+          <KeyValue k="DSH execution environment" v={data.harness_health.dsh.execution_environment_ref ?? "fixture / not configured"} />
           <KeyValue k="DSH settled live turns" v={data.harness_health.dsh.runtime_health.settled_turns} />
           <KeyValue k="DSH health reason" v={data.harness_health.dsh.runtime_health.reason} />
           <KeyValue
@@ -146,6 +154,9 @@ export default function ConsolePage() {
           <KeyValue k="Pi effect ceiling" v={data.harness_health.pi.effect_ceiling} />
           <KeyValue k="Pi credentials" v={data.harness_health.pi.credential_boundary} />
           <KeyValue k="Pi runtime health" v={data.harness_health.pi.runtime_health.state} />
+          <KeyValue k="Pi distribution version" v={data.harness_health.pi.runtime_version ?? "not live/pinned"} />
+          <KeyValue k="Pi distribution digest" v={data.harness_health.pi.runtime_digest ?? "not pinned"} />
+          <KeyValue k="Pi execution environment" v={data.harness_health.pi.execution_environment_ref ?? "fixture / not configured"} />
           <KeyValue k="Pi settled live turns" v={data.harness_health.pi.runtime_health.settled_turns} />
           <KeyValue k="Pi health reason" v={data.harness_health.pi.runtime_health.reason} />
           <KeyValue

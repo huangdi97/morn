@@ -296,7 +296,14 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             guard.execution_environments.attestations(),
         )
     };
-    let (dsh_health, dsh_mode, dsh_environment_ref) = {
+    let (
+        dsh_health,
+        dsh_mode,
+        dsh_environment_ref,
+        dsh_runtime_version,
+        dsh_runtime_digest,
+        dsh_wire_server_version,
+    ) = {
         let provider = dsh_harness.lock().expect("dsh harness poisoned");
         (
             provider.runtime_health().clone(),
@@ -307,9 +314,18 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             provider
                 .configured_execution_environment_ref()
                 .map(str::to_string),
+            provider.runtime_version(),
+            provider.configured_runtime_digest().map(str::to_string),
+            provider.wire_server_version().map(str::to_string),
         )
     };
-    let (pi_health, pi_mode, pi_environment_ref) = {
+    let (
+        pi_health,
+        pi_mode,
+        pi_environment_ref,
+        pi_runtime_version,
+        pi_runtime_digest,
+    ) = {
         let provider = pi_harness.lock().expect("pi harness poisoned");
         (
             provider.runtime_health().clone(),
@@ -320,6 +336,8 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             provider
                 .configured_execution_environment_ref()
                 .map(str::to_string),
+            provider.runtime_version(),
+            provider.configured_runtime_digest().map(str::to_string),
         )
     };
     let now = morn_kernel::time::Timestamp::now();
@@ -405,12 +423,17 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             "dsh": {
                 "mode": dsh_mode,
                 "health": dsh_health.state,
-                "configured_execution_environment_ref": dsh_environment_ref
+                "configured_execution_environment_ref": dsh_environment_ref,
+                "runtime_version": dsh_runtime_version,
+                "runtime_digest": dsh_runtime_digest,
+                "wire_server_version": dsh_wire_server_version
             },
             "pi": {
                 "mode": pi_mode,
                 "health": pi_health.state,
-                "configured_execution_environment_ref": pi_environment_ref
+                "configured_execution_environment_ref": pi_environment_ref,
+                "runtime_version": pi_runtime_version,
+                "runtime_digest": pi_runtime_digest
             }
         },
         "execution_environment_attestations": execution_environment_attestations.iter().map(|attestation| json!({
@@ -3365,7 +3388,11 @@ async fn console(State(state): State<AppState>) -> ApiResult {
                     morn_harness::provider::DshMode::Fixture => "no live provider credential",
                     morn_harness::provider::DshMode::Real => "scrubbed child environment; explicit MORN_DSH_ENV_PASSTHROUGH only",
                 },
-                "runtime_health": dsh_harness.runtime_health()
+                "runtime_health": dsh_harness.runtime_health(),
+                "runtime_version": dsh_harness.runtime_version(),
+                "runtime_digest": dsh_harness.configured_runtime_digest(),
+                "wire_server_version": dsh_harness.wire_server_version(),
+                "execution_environment_ref": dsh_harness.configured_execution_environment_ref()
             },
             "pi": {
                 "provider": pi_harness.provider_name(),
@@ -3382,7 +3409,10 @@ async fn console(State(state): State<AppState>) -> ApiResult {
                     morn_harness::PiMode::Fixture => "no live provider credential",
                     morn_harness::PiMode::Real => "scrubbed child environment; explicit MORN_PI_ENV_PASSTHROUGH only",
                 },
-                "runtime_health": pi_harness.runtime_health()
+                "runtime_health": pi_harness.runtime_health(),
+                "runtime_version": pi_harness.runtime_version(),
+                "runtime_digest": pi_harness.configured_runtime_digest(),
+                "execution_environment_ref": pi_harness.configured_execution_environment_ref()
             }
         },
         "approvals_satisfied": approvals,
