@@ -76,7 +76,13 @@ pub fn instantiate_approved_solution(
         ));
     }
 
-    if let Some(policy) = package.policy_v115() {
+    let v115_policy = package.policy_v115();
+    if let Some(policy) = &v115_policy {
+        if policy.acceptance_criteria.is_empty() {
+            return Err(Error::validation(
+                "v11.5 SolutionPackage must preserve at least one reviewed acceptance criterion",
+            ));
+        }
         if let Some(package_profile) = policy.profile_ref.as_deref() {
             if package_profile != request.profile_ref {
                 return Err(Error::validation(format!(
@@ -105,6 +111,19 @@ pub fn instantiate_approved_solution(
     }
 
     let package_ref = solution_package_ref(package);
+    let canonical_acceptance_ref = v115_policy
+        .as_ref()
+        .map(|_| format!("{package_ref}#acceptance"));
+    if let (Some(expected), Some(requested)) = (
+        canonical_acceptance_ref.as_deref(),
+        request.acceptance_ref.as_deref(),
+    ) {
+        if expected != requested {
+            return Err(Error::validation(
+                "v11.5 Work acceptance_ref must remain bound to the reviewed SolutionPackage acceptance contract",
+            ));
+        }
+    }
     let profile_ref = request.profile_ref.clone();
     let mut spec = WorkSpec::new(
         WorkPackageId::generate_with("work"),
@@ -114,7 +133,7 @@ pub fn instantiate_approved_solution(
     spec.source_solution_ref = Some(package_ref.clone());
     spec.site_ref = request.site_ref.clone();
     spec.constraints = request.constraints;
-    spec.acceptance_ref = request.acceptance_ref;
+    spec.acceptance_ref = canonical_acceptance_ref.or(request.acceptance_ref);
 
     // Only pre-execution readiness gates belong here. Binding/receipt/outcome/
     // acceptance conditions are reconciled after Work becomes executable.
@@ -282,6 +301,51 @@ mod tests {
             },
         );
         assert!(widened.is_err());
+    }
+
+    #[test]
+    fn v115_instantiation_pins_acceptance_to_reviewed_package_contract() {
+        let mut pkg = package(true);
+        pkg.manifest = json!({
+            "schema":"morn.solution-package/v11.5",
+            "profile_ref":"morn.lite@1.0.0",
+            "site_ref":null,
+            "acceptance_criteria":["reviewed result exists"],
+            "required_capabilities":["draft.generate"],
+            "harness_policy":"provider-neutral",
+            "production_write_allowed":false
+        });
+        let package_ref = solution_package_ref(&pkg);
+        let request = SolutionInstantiationRequest::new(
+            WorkspaceId::generate(),
+            "produce reviewed result",
+            "morn.lite@1.0.0",
+        );
+        let plan = instantiate_approved_solution(&pkg, request).unwrap();
+        assert_eq!(
+            plan.work.spec.acceptance_ref.as_deref(),
+            Some(format!("{package_ref}#acceptance").as_str())
+        );
+
+        let mut forged = SolutionInstantiationRequest::new(
+            WorkspaceId::generate(),
+            "produce reviewed result",
+            "morn.lite@1.0.0",
+        );
+        forged.acceptance_ref = Some("acceptance://different-contract".to_string());
+        assert!(instantiate_approved_solution(&pkg, forged).is_err());
+
+        let mut missing = pkg.clone();
+        missing.manifest["acceptance_criteria"] = json!([]);
+        assert!(instantiate_approved_solution(
+            &missing,
+            SolutionInstantiationRequest::new(
+                WorkspaceId::generate(),
+                "produce reviewed result",
+                "morn.lite@1.0.0",
+            ),
+        )
+        .is_err());
     }
 
     #[test]
