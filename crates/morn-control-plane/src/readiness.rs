@@ -10,9 +10,9 @@ use morn_integration::SourceOfTruthBinding;
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::Id;
 use morn_kernel::time::Timestamp;
-use serde::{Deserialize, Serialize};
 use morn_runtime::BoundAuthorityDecision;
 use morn_work::control::WorkResource;
+use serde::{Deserialize, Serialize};
 
 use crate::ConditionEvidence;
 
@@ -336,11 +336,13 @@ mod tests {
             status: SiteAdmissionStatus::Admitted,
             created_at: Timestamp::now(),
         };
-        first.admission_refs.push(morn_capability::CapabilityAdmissionRef {
-            admission_ref: admission.id.to_string(),
-            site_ref: "plant-a".to_string(),
-            profile_ref: work.spec.profile_ref.clone(),
-        });
+        first
+            .admission_refs
+            .push(morn_capability::CapabilityAdmissionRef {
+                admission_ref: admission.id.to_string(),
+                site_ref: "plant-a".to_string(),
+                profile_ref: work.spec.profile_ref.clone(),
+            });
         let mut service = AdmissionService::default();
         service.qualifications.push(qualification);
         service.releases.push(release);
@@ -353,13 +355,8 @@ mod tests {
             Timestamp::now()
         )
         .is_err());
-        let evidence = workcell_qualification_evidence(
-            &work,
-            &[first],
-            &service,
-            Timestamp::now(),
-        )
-        .unwrap();
+        let evidence =
+            workcell_qualification_evidence(&work, &[first], &service, Timestamp::now()).unwrap();
         assert_eq!(evidence.condition_type, "CapabilityQualified");
     }
 

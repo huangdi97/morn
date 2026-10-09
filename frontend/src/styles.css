@@ -428,3 +428,18 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 @media (max-width: 760px) {
   .governed-execution-grid { grid-template-columns: 1fr; }
 }
+
+.governed-execution-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+.governed-execution-steps span {
+  border: 1px solid #364962;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #152135;
+  color: #b8c8df;
+  font-size: 11px;
+}

@@ -288,16 +288,29 @@ function GovernedE0Executor({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const candidateWorks = control.work.filter((work) =>
-    ["Ready", "Running", "Waiting"].includes(work.status.phase),
+  const candidateWorks = control.work.filter(
+    (work) => !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase),
+  );
+  const effectiveWorkId = workId || candidateWorks[0]?.id || "";
+  const selectedWork = candidateWorks.find((work) => work.id === effectiveWorkId);
+  const resolvedCapabilityRefs = new Set(
+    control.condition_evidence
+      .filter(
+        (evidence) =>
+          textField(evidence, "work_ref") === effectiveWorkId &&
+          evidence.work_generation === selectedWork?.generation &&
+          textField(evidence, "condition_type") === "CapabilityResolved" &&
+          evidence.satisfied === true,
+      )
+      .flatMap((evidence) => fieldRefs(evidence, "evidence_refs")),
   );
   const eligibleCapabilities = capabilities.filter(
     (capability) =>
       ["Qualified", "Admitted"].includes(capability.stage) &&
       ["morn-native", "deepseek-harness", "pi"].includes(capability.manifest.provider_ref) &&
-      capability.manifest.authority.maximum_effect === "E0LifecycleReversible",
+      capability.manifest.authority.maximum_effect === "E0LifecycleReversible" &&
+      resolvedCapabilityRefs.has(capability.manifest.id),
   );
-  const effectiveWorkId = workId || candidateWorks[0]?.id || "";
   const workBindings = control.execution_bindings.filter(
     (binding) =>
       textField(binding, "work_id") === effectiveWorkId &&
@@ -305,6 +318,29 @@ function GovernedE0Executor({
         candidateWorks.find((work) => work.id === effectiveWorkId)?.generation,
   );
   const effectiveCapabilityId = capabilityId || eligibleCapabilities[0]?.manifest.id || "";
+
+  const resolve = async () => {
+    if (!effectiveWorkId) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await apiPostJson<{
+        resolved: boolean;
+        evidence_blockers: string[];
+        work: { status: { phase: string } };
+      }>("/v115/work/resolve", { work_id: effectiveWorkId });
+      setMessage(
+        response.resolved
+          ? `Resolution recorded. Work phase: ${response.work.status.phase}.${response.evidence_blockers.length ? ` Remaining gates: ${response.evidence_blockers.join("; ")}` : ""}`
+          : `Resolution incomplete: ${response.evidence_blockers.join("; ")}`,
+      );
+      reload();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const bind = async () => {
     if (!effectiveWorkId || !effectiveCapabilityId) return;
@@ -357,10 +393,15 @@ function GovernedE0Executor({
   return (
     <Card title="Governed E0 execution">
       <p>
-        Bind only a current-generation resolved E0 capability, then execute it as executor evidence.
-        Real DSH/Pi bindings fail closed without trusted environment attestation. Harness completion
-        never creates a business outcome or acceptance.
+        Resolve requirements from the approved SolutionPackage, persist an immutable E0 binding, then
+        execute it as executor evidence. Real DSH/Pi bindings fail closed without trusted environment
+        attestation. Harness completion never creates a business outcome or acceptance.
       </p>
+      <div className="governed-execution-steps" aria-label="Governed execution stages">
+        <span>1 · Resolve Workcell</span>
+        <span>2 · Persist binding</span>
+        <span>3 · Execute E0</span>
+      </div>
       <div className="governed-execution-grid">
         <label>
           Work
@@ -392,7 +433,16 @@ function GovernedE0Executor({
         </label>
       </div>
       <div className="page-actions">
-        <button disabled={busy || !effectiveCapabilityId} onClick={bind}>
+        <button
+          disabled={busy || !selectedWork?.spec.source_solution_ref}
+          onClick={resolve}
+        >
+          Resolve approved Solution requirements
+        </button>
+        <button
+          disabled={busy || selectedWork?.status.phase !== "Ready" || !effectiveCapabilityId}
+          onClick={bind}
+        >
           Persist binding
         </button>
         <span className="muted">

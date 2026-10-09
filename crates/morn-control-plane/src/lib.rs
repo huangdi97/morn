@@ -1840,7 +1840,9 @@ mod control_plane_persistence_scope_tests {
             WorkcellPlan {
                 members: vec![WorkcellMember {
                     capability: ResolvedCapability {
-                        manifest_id: morn_capability::CapabilityManifestId::generate_with("manifest"),
+                        manifest_id: morn_capability::CapabilityManifestId::generate_with(
+                            "manifest",
+                        ),
                         provider_ref: "morn-native".to_string(),
                         kind: CapabilityKind::Program,
                         estimated_cost_micros: None,

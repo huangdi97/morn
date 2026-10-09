@@ -64,7 +64,13 @@ export interface V115ControlPlaneData {
   work: Array<{
     id: string;
     generation: number;
-    spec: { goal: string; profile_ref: string; required_conditions: string[] };
+    spec: {
+      goal: string;
+      profile_ref: string;
+      required_conditions: string[];
+      source_solution_ref?: string | null;
+      site_ref?: string | null;
+    };
     status: {
       phase: string;
       observed_generation: number;

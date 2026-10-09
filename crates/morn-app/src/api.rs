@@ -399,10 +399,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
     })))
 }
 
-async fn v115_work_resolve(
-    State(state): State<AppState>,
-    Json(body): Json<Value>,
-) -> ApiResult {
+async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_capability::{CapabilityResolver, EffectClass, WorkcellRequest};
     use morn_control_plane::{
         capability_resolution_evidence, provenance_condition_evidence,
@@ -435,15 +432,11 @@ async fn v115_work_resolve(
         )));
     }
 
-    let solution_ref = work
-        .spec
-        .source_solution_ref
-        .as_deref()
-        .ok_or_else(|| {
-            AppError(Error::invalid_state(
-                "automatic capability resolution requires Work.source_solution_ref",
-            ))
-        })?;
+    let solution_ref = work.spec.source_solution_ref.as_deref().ok_or_else(|| {
+        AppError(Error::invalid_state(
+            "automatic capability resolution requires Work.source_solution_ref",
+        ))
+    })?;
     let package_id = solution_ref
         .strip_prefix("solution://")
         .and_then(|rest| rest.rsplit_once('@').map(|(id, _)| id))
@@ -472,12 +465,13 @@ async fn v115_work_resolve(
             "SolutionPackage declares no required_capabilities to resolve",
         )));
     }
-    let profile = morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
-        AppError(Error::validation(format!(
-            "unsupported Work profile {}",
-            work.spec.profile_ref
-        )))
-    })?;
+    let profile =
+        morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+            AppError(Error::validation(format!(
+                "unsupported Work profile {}",
+                work.spec.profile_ref
+            )))
+        })?;
 
     let mut unavailable_providers = Vec::new();
     {
@@ -514,7 +508,9 @@ async fn v115_work_resolve(
         minimum_isolation: morn_kernel::ExecutionClass::parse(&profile.minimum_isolation),
         maximum_effect,
         required_execution_guarantees: profile.required_execution_guarantees.clone(),
-        site_ref: strict_admission.then(|| work.spec.site_ref.clone()).flatten(),
+        site_ref: strict_admission
+            .then(|| work.spec.site_ref.clone())
+            .flatten(),
         profile_ref: strict_admission.then(|| work.spec.profile_ref.clone()),
         unavailable_providers,
         ..Default::default()
@@ -3420,7 +3416,9 @@ mod workspace_boundary_tests {
             CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass,
         };
         use morn_control_plane::ControlPlaneStore;
-        use morn_kernel::ids::{ApprovedSolutionId, CapabilityId, ProposedSolutionId, SolutionPackageId};
+        use morn_kernel::ids::{
+            ApprovedSolutionId, CapabilityId, ProposedSolutionId, SolutionPackageId,
+        };
         use morn_kernel::version::Version;
         use morn_work::control::WorkPhase;
 
@@ -3481,12 +3479,10 @@ mod workspace_boundary_tests {
             work.id.to_string()
         };
 
-        let Json(response) = v115_work_resolve(
-            State(state.clone()),
-            Json(json!({"work_id": work_id})),
-        )
-        .await
-        .unwrap();
+        let Json(response) =
+            v115_work_resolve(State(state.clone()), Json(json!({"work_id": work_id})))
+                .await
+                .unwrap();
         assert_eq!(response["resolved"], true);
         assert_eq!(response["work"]["status"]["phase"], "Ready");
         assert_eq!(response["plan"]["uncovered"], json!([]));
