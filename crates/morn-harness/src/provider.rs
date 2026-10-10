@@ -723,6 +723,22 @@ impl DeepSeekHarnessProvider {
     }
 }
 
+fn dsh_notification_violates_e0(notification: &DshNotification) -> bool {
+    if matches!(
+        notification.method.as_str(),
+        DSH_NOTIFICATION_SUBAGENT_STARTED | DSH_NOTIFICATION_SUBAGENT_FINISHED
+    ) {
+        return true;
+    }
+    notification.method == DSH_NOTIFICATION_SESSION_EVENT
+        && notification
+            .params
+            .get("event")
+            .and_then(|event| event.get("type"))
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|event_type| event_type.starts_with("tool/"))
+}
+
 fn normalize_dsh_notifications(
     workspace_id: &WorkspaceId,
     session_id: &str,
@@ -800,6 +816,10 @@ fn normalize_dsh_notifications(
                     format!("DSH durable turn/end: {reason}"),
                 )
             }
+            other if other.starts_with("tool/") => (
+                ExecutionEventKind::ToolProposed,
+                format!("DSH tool lifecycle event observed: {other}"),
+            ),
             _ => continue,
         };
         let mut record =
@@ -1037,15 +1057,11 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                         session_id,
                         &run.notifications,
                     );
-                    prohibited_tool_activity = normalized.iter().any(|event| {
-                        matches!(
-                            event.kind,
-                            ExecutionEventKind::ToolProposed
-                                | ExecutionEventKind::ToolStarted
-                                | ExecutionEventKind::ToolCompleted
-                                | ExecutionEventKind::ToolFailed
-                        )
-                    });
+                    prohibited_tool_activity = run
+                        .notifications
+                        .iter()
+                        .any(dsh_notification_violates_e0);
+
                     state.events.extend(normalized);
                 }
                 if prohibited_tool_activity {
@@ -1679,6 +1695,51 @@ mod dsh_provider_tests {
         health.mark_closed("runtime closed");
         assert_eq!(health.state, HarnessRuntimeHealthState::Closed);
         assert!(health.evidence_refs.is_empty());
+    }
+
+    #[test]
+    fn e0_policy_fails_closed_for_unknown_tool_lifecycle_and_subagents() {
+        for notification in [
+            DshNotification {
+                method: DSH_NOTIFICATION_SESSION_EVENT.to_string(),
+                params: json!({
+                    "sessionId":"s1",
+                    "event":{"type":"tool/future-lifecycle","data":{}}
+                }),
+            },
+            DshNotification {
+                method: DSH_NOTIFICATION_SUBAGENT_STARTED.to_string(),
+                params: json!({"parentSessionId":"s1","childSessionId":"child-1"}),
+            },
+            DshNotification {
+                method: DSH_NOTIFICATION_SUBAGENT_FINISHED.to_string(),
+                params: json!({
+                    "provider":"local",
+                    "agentId":"child-1",
+                    "parentSessionId":"s1",
+                    "childSessionId":"child-1",
+                    "status":"ok",
+                    "stopReason":"completed"
+                }),
+            },
+        ] {
+            assert!(
+                dsh_notification_violates_e0(&notification),
+                "new tool/subagent surfaces must fail closed on the E0 provider path"
+            );
+        }
+
+        let workspace = WorkspaceId::generate();
+        let unknown = DshNotification {
+            method: DSH_NOTIFICATION_SESSION_EVENT.to_string(),
+            params: json!({
+                "sessionId":"s1",
+                "event":{"type":"tool/future-lifecycle","data":{}}
+            }),
+        };
+        let normalized = normalize_dsh_notifications(&workspace, "s1", &[unknown]);
+        assert_eq!(normalized.len(), 1);
+        assert_eq!(normalized[0].kind, ExecutionEventKind::ToolProposed);
     }
 
     #[test]
