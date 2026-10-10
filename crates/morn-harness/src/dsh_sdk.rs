@@ -466,6 +466,50 @@ impl DshSdkConfig {
         }))
     }
 
+    fn materialize_managed_runtime_home(&self) -> Result<Option<PathBuf>> {
+        if !self.enforce_morn_e0_tool_policy {
+            return Ok(None);
+        }
+        let configured_root = self
+            .dsh_home
+            .as_deref()
+            .ok_or_else(|| Error::validation("managed DSH runtime requires DSH_HOME root"))?;
+        if fs::symlink_metadata(configured_root)
+            .is_ok_and(|metadata| metadata.file_type().is_symlink())
+        {
+            return Err(Error::validation(
+                "managed DSH_HOME root must not be a symbolic link",
+            ));
+        }
+        fs::create_dir_all(configured_root)
+            .map_err(|error| Error::external(format!("create DSH_HOME root: {error}")))?;
+        let canonical_root = fs::canonicalize(configured_root)
+            .map_err(|error| Error::validation(format!("canonicalize DSH_HOME root: {error}")))?;
+        let runtime_root = canonical_root.join("morn-runtime-home");
+        match fs::symlink_metadata(&runtime_root) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+                return Err(Error::validation(
+                    "Morn DSH managed runtime-home root must be a real directory",
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir(&runtime_root).map_err(|error| {
+                    Error::external(format!("create Morn DSH managed runtime-home root: {error}"))
+                })?;
+            }
+            Err(error) => {
+                return Err(Error::external(format!(
+                    "inspect Morn DSH managed runtime-home root: {error}"
+                )));
+            }
+        }
+        let home = runtime_root.join(uuid::Uuid::new_v4().to_string());
+        fs::create_dir(&home)
+            .map_err(|error| Error::external(format!("create one-shot DSH_HOME: {error}")))?;
+        Ok(Some(home))
+    }
+
     fn launch_args(&self) -> Result<(Vec<String>, Option<PathBuf>)> {
         let mut args = self.args.clone();
         let policy = self.materialize_morn_e0_tool_policy()?;
@@ -591,6 +635,7 @@ pub struct DshSdkStdioClient {
     request_timeout: Duration,
     turn_timeout: Duration,
     owned_policy_dir: Option<PathBuf>,
+    owned_runtime_home: Option<PathBuf>,
     pub notifications: Vec<DshNotification>,
 }
 
@@ -618,6 +663,15 @@ impl DshSdkStdioClient {
         }
         let mut command = Command::new(&config.command);
         let (launch_args, owned_policy_dir) = config.launch_args()?;
+        let owned_runtime_home = match config.materialize_managed_runtime_home() {
+            Ok(home) => home,
+            Err(error) => {
+                if let Some(policy_dir) = &owned_policy_dir {
+                    let _ = fs::remove_dir_all(policy_dir);
+                }
+                return Err(error);
+            }
+        };
         command
             .args(&launch_args)
             .current_dir(&config.cwd)
@@ -631,7 +685,9 @@ impl DshSdkStdioClient {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
-        if let Some(home) = &config.dsh_home {
+        if let Some(home) = &owned_runtime_home {
+            command.env("DSH_HOME", home);
+        } else if let Some(home) = &config.dsh_home {
             command.env("DSH_HOME", home);
         }
         let mut child = match command.spawn() {
@@ -639,6 +695,9 @@ impl DshSdkStdioClient {
             Err(error) => {
                 if let Some(policy_dir) = &owned_policy_dir {
                     let _ = fs::remove_dir_all(policy_dir);
+                }
+                if let Some(runtime_home) = &owned_runtime_home {
+                    let _ = fs::remove_dir_all(runtime_home);
                 }
                 return Err(Error::external(format!(
                     "failed to start DSH SDK runtime {:?}: {error}",
@@ -703,6 +762,7 @@ impl DshSdkStdioClient {
             request_timeout: Duration::from_millis(config.request_timeout_ms),
             turn_timeout: Duration::from_millis(config.turn_timeout_ms),
             owned_policy_dir,
+            owned_runtime_home,
             notifications: Vec::new(),
         })
     }
@@ -960,6 +1020,9 @@ impl Drop for DshSdkStdioClient {
         }
         if let Some(policy_dir) = self.owned_policy_dir.take() {
             let _ = fs::remove_dir_all(policy_dir);
+        }
+        if let Some(runtime_home) = self.owned_runtime_home.take() {
+            let _ = fs::remove_dir_all(runtime_home);
         }
     }
 }
@@ -1413,6 +1476,44 @@ mod tests {
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         );
         assert!(configured.validate_for_real().is_ok());
+    }
+
+    #[test]
+    fn production_runtime_uses_fresh_one_shot_home_not_existing_home_overrides() {
+        let root = std::env::temp_dir().join(format!("morn-dsh-home-{}", uuid::Uuid::new_v4()));
+        let configured_home = root.join("configured-home");
+        let workspace = root.join("workspace");
+        fs::create_dir_all(&configured_home).unwrap();
+        fs::create_dir_all(&workspace).unwrap();
+        fs::write(
+            configured_home.join("cordis.patch.yml"),
+            "- insert: [{ id: forbidden-home-layer, name: forbidden }]
+",
+        )
+        .unwrap();
+        let config = DshSdkConfig::profile_sdk(
+            workspace.to_string_lossy(),
+            "deepseek-official",
+            "deepseek-v4-flash",
+        )
+        .with_dsh_home(configured_home.to_string_lossy())
+        .with_execution_environment_ref("env://container/dsh")
+        .with_profile_configuration_ref(
+            "deepseek-harness-profile@morn-e0-v1#sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        )
+        .with_runtime_identity(
+            "fixture-runtime-1",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        );
+        let runtime_home = config
+            .materialize_managed_runtime_home()
+            .unwrap()
+            .expect("production config owns a one-shot home");
+        assert!(runtime_home.starts_with(configured_home.join("morn-runtime-home")));
+        assert!(!runtime_home.join("cordis.patch.yml").exists());
+        assert!(runtime_home.read_dir().unwrap().next().is_none());
+        fs::remove_dir_all(&runtime_home).unwrap();
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
