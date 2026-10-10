@@ -1,11 +1,67 @@
 import { useEffect, useState } from "react";
-import { apiGet, HubV2Data, HubV3Data } from "../api";
-import { Card, EmptyState, ErrorBox, Loading, StatusPill } from "../components/ui";
+import { apiGet, HubV2Data, HubV3Data, V115DiscoveryData, V115Status } from "../api";
+import { Card, EmptyState, ErrorBox, KeyValue, Loading, StatusPill } from "../components/ui";
+
+
+interface SupplyCapability {
+  manifest: {
+    id: string;
+    name: string;
+    provider_ref: string;
+    version: { major: number; minor: number; patch: number };
+    digest: string | null;
+    provenance: { source_ref: string; source_digest: string | null };
+    authority: { allow: string[]; deny: string[]; maximum_effect: string };
+    economics: { latency_p95_ms: number | null; estimated_cost_micros: number | null };
+  };
+  stage: string;
+  qualification_refs: string[];
+  release_refs: string[];
+  admission_refs: unknown[];
+}
+interface SupplyQualification {
+  id: string;
+  manifest_id: string;
+  status: string;
+  context_of_use: string[];
+  qualification_evidence: { known_failure_modes: string[] };
+}
+interface SupplyRelease {
+  id: string;
+  manifest_id: string;
+  status: string;
+  content_digest: string;
+  signature_ref: string | null;
+  provenance_ref: string | null;
+  supply_chain_verification: {
+    subject_digest: string;
+    verifier_ref: string;
+    signature_verified: boolean;
+    provenance_verified: boolean;
+    evidence_refs: string[];
+  } | null;
+}
+interface SupplyAdmission {
+  id: string;
+  manifest_id: string;
+  status: string;
+  site_ref: string;
+  profile_ref: string;
+}
+interface CapabilitySupplyData {
+  capabilities: SupplyCapability[];
+  qualifications: SupplyQualification[];
+  releases: SupplyRelease[];
+  admissions: SupplyAdmission[];
+  lifecycle_events: Array<{ id: string; manifest_id: string; event_type: string }>;
+}
 
 interface HubData {
   domain_packs: string[];
   actor_templates: Array<{ id: string; name: string; trust: string }>;
   harness_templates: Array<{ id: string; name: string; trust: string }>;
+  composition_runtimes: Array<{ id: string; name: string; trust: string }>;
+  capability_compilers: Array<{ id: string; name: string; trust: string }>;
   work_package_templates: Array<{ id: string; name: string; trust: string }>;
   workcell_blueprints: Array<{ id: string; name: string; trust: string }>;
   evaluation_packs: Array<{ id: string; name: string; trust: string }>;
@@ -48,6 +104,12 @@ export default function Hub() {
   const [v2, setV2] = useState<HubV2Data | null>(null);
   const [v3, setV3] = useState<HubV3Data | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [supply, setSupply] = useState<CapabilitySupplyData | null>(null);
+  const [supplyError, setSupplyError] = useState<string | null>(null);
+  const [providerStatus, setProviderStatus] = useState<V115Status | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [discovery, setDiscovery] = useState<V115DiscoveryData | null>(null);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
 
   useEffect(() => {
     apiGet<HubData>("/hub")
@@ -59,6 +121,15 @@ export default function Hub() {
     apiGet<HubV3Data>("/hub3")
       .then(setV3)
       .catch(() => undefined);
+    apiGet<CapabilitySupplyData>("/v115/capabilities")
+      .then(setSupply)
+      .catch((e: Error) => setSupplyError(e.message));
+    apiGet<V115Status>("/v115/status")
+      .then(setProviderStatus)
+      .catch((e: Error) => setProviderError(e.message));
+    apiGet<V115DiscoveryData>("/v115/discovery")
+      .then(setDiscovery)
+      .catch((e: Error) => setDiscoveryError(e.message));
   }, []);
 
   if (error) return <ErrorBox message={error} />;
@@ -69,7 +140,223 @@ export default function Hub() {
       <header className="page-header">
         <h1>Hub — Registry</h1>
       </header>
+      <section className="hub-provider-fabric" aria-label="Provider fabric registry">
+        <div className="hub-supply-head">
+          <span className="work-focus-eyebrow">PROVIDER FABRIC · V11.5</span>
+          <h2>Provider Fabric</h2>
+          <p>
+            Registered means configured or known, not healthy. Only evidence-backed Healthy providers
+            are selectable, and harness health never grants authority beyond the pinned Work/Profile boundary.
+          </p>
+        </div>
+        {providerError ? (
+          <p role="alert">The provider registry is unavailable: {providerError}.</p>
+        ) : !providerStatus ? (
+          <p role="status">Loading provider registry…</p>
+        ) : (
+          <>
+            <div className="hub-supply-grid">
+              {providerStatus.provider_catalog.map((provider) => (
+                <article className="hub-capability" key={provider.id}>
+                  <header className="hub-capability-header">
+                    <h3>{provider.id}</h3>
+                    <StatusPill value={provider.status} />
+                  </header>
+                  <KeyValue k="Family" v={provider.family} />
+                  <KeyValue k="Version" v={provider.version} />
+                  <KeyValue k="Protocols" v={provider.protocols.join(", ") || "None declared"} />
+                  <KeyValue k="Features" v={provider.features.join(", ") || "None declared"} />
+                  <KeyValue k="Digest" v={provider.digest ?? "Not pinned"} />
+                  <KeyValue
+                    k="Health lease"
+                    v={provider.health_valid_until ? String(provider.health_valid_until) : "No live health lease"}
+                  />
+                  <KeyValue k="Evidence" v={provider.evidence_refs.join(" · ") || "No evidence recorded"} />
+                </article>
+              ))}
+            </div>
+            {providerStatus.provider_observations.length > 0 && (
+              <p className="work-focus-empty">
+                Runtime configuration observations:{" "}
+                {providerStatus.provider_observations
+                  .map((item) => `${item.provider_id}: ${item.current_status} — ${item.reason}`)
+                  .join(" · ")}
+              </p>
+            )}
+          </>
+        )}
+      </section>
+      <section className="hub-supply-chain" aria-label="Governed capability supply chain">
+        <div className="hub-supply-head">
+          <span className="work-focus-eyebrow">GOVERNED ASSETS · V11.5</span>
+          <h2>v11.5 Capability Supply Chain</h2>
+          <p>
+            Declared → Observed → Qualified → Released → Site-admitted are separate
+            decisions. A registry digest or claimed signature URL is not enough: site admission
+            requires deployment-verified signature and provenance evidence for the exact digest.
+          </p>
+        </div>
+        {supplyError ? (
+          <p role="alert">The canonical capability registry is unavailable: {supplyError}.</p>
+        ) : !supply ? (
+          <p role="status">Loading capability lifecycle records…</p>
+        ) : supply.capabilities.length === 0 ? (
+          <div className="work-focus-empty">
+            No canonical capabilities recorded yet. Studio compilation only creates Declared
+            candidates; qualification, release and site admission require separate evidence.
+          </div>
+        ) : (
+          <div className="hub-supply-grid">
+            {supply.capabilities.map((cap) => {
+              const manifestId = cap.manifest.id;
+              const qualifications = supply.qualifications.filter((q) => q.manifest_id === manifestId);
+              const releases = supply.releases.filter((r) => r.manifest_id === manifestId);
+              const admissions = supply.admissions.filter((a) => a.manifest_id === manifestId);
+              const latestRelease = releases[releases.length - 1];
+              const limitations = qualifications.flatMap((q) => q.qualification_evidence.known_failure_modes);
+              return (
+                <article className="hub-capability" key={manifestId}>
+                  <header className="hub-capability-header">
+                    <h3>{cap.manifest.name}</h3>
+                    <StatusPill value={cap.stage} />
+                  </header>
+                  <KeyValue k="Manifest" v={manifestId} />
+                  <KeyValue k="Provider" v={cap.manifest.provider_ref} />
+                  <KeyValue k="Published digest" v={latestRelease?.content_digest ?? "No release"} />
+                  <KeyValue k="Release" v={latestRelease ? <StatusPill value={latestRelease.status} /> : "Not released"} />
+                  <KeyValue k="Signature reference" v={latestRelease?.signature_ref ?? "Not supplied"} />
+                  <KeyValue k="Provenance reference" v={latestRelease?.provenance_ref ?? "Not supplied"} />
+                  <KeyValue
+                    k="Supply-chain trust"
+                    v={
+                      latestRelease?.supply_chain_verification ? (
+                        <StatusPill
+                          value={
+                            latestRelease.supply_chain_verification.signature_verified &&
+                            latestRelease.supply_chain_verification.provenance_verified
+                              ? "Verified"
+                              : "Partial"
+                          }
+                        />
+                      ) : (
+                        <StatusPill value="Unverified" />
+                      )
+                    }
+                  />
+                  <KeyValue
+                    k="Verifier"
+                    v={latestRelease?.supply_chain_verification?.verifier_ref ?? "Deployment verification required"}
+                  />
+                  <KeyValue k="Qualifications" v={qualifications.map((q) => q.status).join(", ") || "None recorded"} />
+                  <KeyValue
+                    k="Site / Profile admission"
+                    v={admissions.length
+                      ? admissions.map((a) => `${a.site_ref} / ${a.profile_ref}: ${a.status}`).join(" · ")
+                      : "Not admitted"}
+                  />
+                  <KeyValue k="Authority ceiling" v={cap.manifest.authority.maximum_effect} />
+                  <KeyValue k="Allowed actions" v={cap.manifest.authority.allow.join(", ") || "None declared"} />
+                  <KeyValue k="Denied actions" v={cap.manifest.authority.deny.join(", ") || "None declared"} />
+                  <KeyValue k="Estimated cost (micros)" v={cap.manifest.economics.estimated_cost_micros ?? "Not measured"} />
+                  <KeyValue k="Latency p95 (ms)" v={cap.manifest.economics.latency_p95_ms ?? "Not measured"} />
+                  <KeyValue k="Known failure modes" v={limitations.join("; ") || "Not provided"} />
+                  <KeyValue k="Source provenance" v={cap.manifest.provenance.source_ref} />
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+      <section className="hub-discovery" aria-label="Registry discovery projections">
+        <div className="hub-supply-head">
+          <span className="work-focus-eyebrow">DISCOVERY PROJECTIONS · DECLARED METADATA</span>
+          <h2>Registry projections</h2>
+          <p>
+            xRegistry, A2A and OASF are discovery views over canonical Morn capabilities.
+            They never carry qualification, site admission, authority or accepted-outcome truth.
+          </p>
+        </div>
+        {discoveryError ? (
+          <p role="alert">Discovery projections are unavailable: {discoveryError}.</p>
+        ) : !discovery ? (
+          <p role="status">Loading registry projections…</p>
+        ) : (
+          <>
+            <div className="hub-supply-grid">
+              <article className="hub-capability">
+                <header className="hub-capability-header">
+                  <h3>xRegistry projection</h3>
+                  <StatusPill value={discovery.metadata_class} />
+                </header>
+                <KeyValue k="Resources" v={discovery.xregistry.length} />
+                <KeyValue
+                  k="Capabilities"
+                  v={discovery.xregistry.map((item) => item.name).join(", ") || "No projected resources"}
+                />
+                <KeyValue
+                  k="Canonical refs"
+                  v={discovery.xregistry
+                    .map((item) => item.provenance.canonical_manifest_ref)
+                    .join(", ") || "None"}
+                />
+              </article>
+              <article className="hub-capability">
+                <header className="hub-capability-header">
+                  <h3>A2A Agent Cards</h3>
+                  <StatusPill value={discovery.metadata_class} />
+                </header>
+                <KeyValue k="Cards" v={discovery.a2a_agent_cards.length} />
+                <KeyValue
+                  k="Agents"
+                  v={discovery.a2a_agent_cards.map((item) => item.name).join(", ") || "No A2A-declared Agent interfaces"}
+                />
+                <KeyValue
+                  k="Skills"
+                  v={discovery.a2a_agent_cards
+                    .flatMap((item) => item.skills.map((skill) => skill.name))
+                    .join(", ") || "None"}
+                />
+              </article>
+              <article className="hub-capability">
+                <header className="hub-capability-header">
+                  <h3>OASF metadata</h3>
+                  <StatusPill value={discovery.metadata_class} />
+                </header>
+                <KeyValue k="Agent projections" v={discovery.oasf.length} />
+                <KeyValue
+                  k="Skills"
+                  v={discovery.oasf.flatMap((item) => item.skills).join(", ") || "None"}
+                />
+                <KeyValue k="Business truth" v={discovery.business_truth ? "yes" : "no"} />
+              </article>
+            </div>
+            <p className="work-focus-empty">{discovery.invariant}</p>
+            {discovery.rejected.length > 0 && (
+              <p className="work-focus-empty">
+                Projection rejects:{" "}
+                {discovery.rejected
+                  .map((item) => `${item.manifest_id} / ${item.projection}: ${item.reason}`)
+                  .join(" · ")}
+              </p>
+            )}
+          </>
+        )}
+      </section>
+
       <div className="grid">
+        <AssetTable
+          title="Enabled Domain Packs"
+          rows={data.domain_packs.map((d) => ({ id: d, name: d, trust: "Enabled" }))}
+        />
+      </div>
+
+      <details className="hub-reference-details">
+        <summary>Reference catalogs &amp; legacy registries</summary>
+        <p className="hub-reference-note">
+          These template and v0.2/v0.3 registries remain available for compatibility.
+          Provider Fabric and the v11.5 Capability Supply Chain above are the governed source of truth.
+        </p>
+        <div className="grid">
         {v2 && (
           <>
             <AssetTable title="Solution Templates (v0.2)" rows={v2.solution_templates} />
@@ -122,17 +409,16 @@ export default function Hub() {
             </Card>
           </>
         )}
-        <AssetTable
-          title="Domain Packs"
-          rows={data.domain_packs.map((d) => ({ id: d, name: d, trust: "Enabled" }))}
-        />
         <AssetTable title="Actor Templates" rows={data.actor_templates} />
         <AssetTable title="Harness Templates" rows={data.harness_templates} />
+        <AssetTable title="Composition Runtimes" rows={data.composition_runtimes} />
+        <AssetTable title="Capability Compilers" rows={data.capability_compilers} />
         <AssetTable title="WorkPackage Templates" rows={data.work_package_templates} />
         <AssetTable title="Workcell Blueprints" rows={data.workcell_blueprints} />
         <AssetTable title="Evaluation Packs" rows={data.evaluation_packs} />
         <AssetTable title="Operational Object Types" rows={data.operational_object_types} />
-      </div>
+        </div>
+      </details>
     </div>
   );
 }

@@ -6,9 +6,11 @@ pub mod diff;
 pub mod event;
 pub mod goal;
 pub mod object;
+pub mod observed_outcome;
 pub mod outcome;
 pub mod relation;
 pub mod service;
 pub mod state;
 
+pub use observed_outcome::{ObservedOutcome, OutcomeSourceKind};
 pub use service::WorldService;

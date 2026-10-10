@@ -114,3 +114,84 @@ pub struct SolutionPackage {
     pub approved_solution_id: Option<ApprovedSolutionId>,
     pub created_at: Timestamp,
 }
+
+/// Typed view over the v11.5 fields embedded in SolutionPackage.manifest.
+///
+/// The persisted SolutionPackage keeps its historical JSON manifest for backward
+/// compatibility. New control-plane code uses this typed view to prevent a
+/// reviewed package from being silently instantiated under a different profile
+/// or site scope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SolutionPackagePolicyV115 {
+    pub schema: String,
+    pub profile_ref: Option<String>,
+    pub site_ref: Option<String>,
+    pub acceptance_criteria: Vec<String>,
+    pub required_capabilities: Vec<String>,
+    pub harness_policy: String,
+    pub production_write_allowed: bool,
+}
+
+impl SolutionPackage {
+    pub fn policy_v115(&self) -> Option<SolutionPackagePolicyV115> {
+        let schema = self.manifest.get("schema")?.as_str()?.to_string();
+        if schema != "morn.solution-package/v11.5" {
+            return None;
+        }
+        let profile_ref = self
+            .manifest
+            .get("profile_ref")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let site_ref = self
+            .manifest
+            .get("site_ref")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let acceptance_criteria = self
+            .manifest
+            .get("acceptance_criteria")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let required_capabilities = self
+            .manifest
+            .get("required_capabilities")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let harness_policy = self
+            .manifest
+            .get("harness_policy")
+            .and_then(Value::as_str)
+            .unwrap_or("provider-neutral")
+            .to_string();
+        let production_write_allowed = self
+            .manifest
+            .get("production_write_allowed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        Some(SolutionPackagePolicyV115 {
+            schema,
+            profile_ref,
+            site_ref,
+            acceptance_criteria,
+            required_capabilities,
+            harness_policy,
+            production_write_allowed,
+        })
+    }
+}

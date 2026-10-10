@@ -23,7 +23,7 @@ fn reference_pack_e2e() {
     {
         let state = AppState::new(&db).unwrap();
         let g = state.lock();
-        assert_eq!(g.store.schema_version().unwrap(), 2);
+        assert_eq!(g.store.schema_version().unwrap(), 6);
         assert!(g.work.work_packages().is_empty());
     }
 
@@ -76,7 +76,7 @@ fn reference_pack_e2e() {
     assert!(reg.declarations_for("biolab", "object_type").is_empty());
     assert!(!reg.is_enabled("biolab"));
     let state = AppState::new(&db).unwrap();
-    assert_eq!(state.lock().store.schema_version().unwrap(), 2);
+    assert_eq!(state.lock().store.schema_version().unwrap(), 6);
 
     // 6) Uninstall -> Core healthy; historical provenance/history preserved.
     lc.uninstall(&pid).unwrap();

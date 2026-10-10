@@ -13,7 +13,46 @@ pub struct MornStore {
     conn: Connection,
 }
 
-const SCHEMA_VERSION: i64 = 2;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutboxEvent {
+    pub event_id: String,
+    pub workspace_id: String,
+    pub event_type: String,
+    pub payload: String,
+    pub created_at: i64,
+    pub dispatched_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ControllerLease {
+    pub lease_name: String,
+    pub holder: String,
+    pub fencing_token: u64,
+    pub expires_at: i64,
+    pub updated_at: i64,
+}
+
+/// A single atomic CAS projection update and its semantically durable event.
+/// Grouping these values keeps the persistence transaction boundary explicit.
+pub struct DurableProjectionCommit<'a, T: serde::Serialize> {
+    pub kind: &'a str,
+    pub id: &'a str,
+    pub workspace_id: &'a str,
+    pub created_at: i64,
+    pub expected_revision: u64,
+    pub record: &'a T,
+    pub envelope: &'a morn_kernel::EventEnvelope,
+    pub semantics: &'a morn_kernel::EventSemanticDescriptor,
+}
+
+/// Lease fence checked in the same transaction as a durable projection commit.
+pub struct ControllerFence<'a> {
+    pub lease_name: &'a str,
+    pub fencing_token: u64,
+    pub fence_at: i64,
+}
+
+const SCHEMA_VERSION: i64 = 6;
 
 impl MornStore {
     /// Open (creating if needed) a store at `path` and run migrations.
@@ -47,6 +86,7 @@ impl MornStore {
                 payload TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 immutable INTEGER NOT NULL DEFAULT 0,
+                revision INTEGER NOT NULL DEFAULT 1,
                 seq INTEGER PRIMARY KEY AUTOINCREMENT,
                 UNIQUE(kind, id)
             );
@@ -64,6 +104,32 @@ impl MornStore {
                 created_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_ledger_workspace ON ledger_entries(workspace_id);
+
+            CREATE TABLE IF NOT EXISTS control_event_inbox (
+                event_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                recorded_at INTEGER NOT NULL,
+                PRIMARY KEY (source, event_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS control_event_outbox (
+                event_id TEXT NOT NULL PRIMARY KEY,
+                workspace_id TEXT NOT NULL DEFAULT '',
+                event_type TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                dispatched_at INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_outbox_pending
+                ON control_event_outbox(dispatched_at, created_at);
+
+            CREATE TABLE IF NOT EXISTS control_controller_leases (
+                lease_name TEXT NOT NULL PRIMARY KEY,
+                holder TEXT NOT NULL,
+                fencing_token INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
             "#,
         )
         .map_err(|e| Error::internal(e.to_string()))?;
@@ -83,16 +149,45 @@ impl MornStore {
                 .map_err(|e| Error::internal(e.to_string()))?;
             }
             Some(v) if v < SCHEMA_VERSION => {
-                // v1 -> v2: add the immutable-history column (idempotent).
-                let _ = conn.execute(
+                // Keep schema and inbox-identity upgrades atomic. A crash
+                // during table reconstruction must not lose claimed events.
+                let tx = conn
+                    .unchecked_transaction()
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                // Legacy v1/v2 records may lack these columns; existing
+                // columns produce a harmless duplicate-column error.
+                let _ = tx.execute(
                     "ALTER TABLE morn_records ADD COLUMN immutable INTEGER NOT NULL DEFAULT 0",
                     [],
                 );
-                conn.execute(
+                let _ = tx.execute(
+                    "ALTER TABLE morn_records ADD COLUMN revision INTEGER NOT NULL DEFAULT 1",
+                    [],
+                );
+                if v < 6 {
+                    // CloudEvents identifies a distinct delivery by (source,
+                    // id), not by id alone. Preserve all previously claimed
+                    // rows while changing the inbox primary key.
+                    tx.execute_batch(
+                        "CREATE TABLE control_event_inbox_v6 (
+                            event_id TEXT NOT NULL,
+                            source TEXT NOT NULL,
+                            recorded_at INTEGER NOT NULL,
+                            PRIMARY KEY (source, event_id)
+                        );
+                        INSERT INTO control_event_inbox_v6 (event_id, source, recorded_at)
+                            SELECT event_id, source, recorded_at FROM control_event_inbox;
+                        DROP TABLE control_event_inbox;
+                        ALTER TABLE control_event_inbox_v6 RENAME TO control_event_inbox;",
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                }
+                tx.execute(
                     "UPDATE schema_version SET version = ?1 WHERE version = ?2",
                     params![SCHEMA_VERSION, v],
                 )
                 .map_err(|e| Error::internal(e.to_string()))?;
+                tx.commit().map_err(|e| Error::internal(e.to_string()))?;
             }
             _ => {}
         }
@@ -107,6 +202,319 @@ impl MornStore {
             .map_err(|e| Error::internal(e.to_string()))
     }
 
+    // ---- durable controller inbox/outbox ----
+
+    /// Atomically claim a CloudEvents (source, id) pair. Returns true only
+    /// once per producer-scoped event; redeliveries are safely ignored without
+    /// discarding distinct events from a different source with the same id.
+    pub fn claim_inbound_event(
+        &self,
+        event_id: &str,
+        source: &str,
+        recorded_at: i64,
+    ) -> Result<bool> {
+        if event_id.trim().is_empty() || source.trim().is_empty() {
+            return Err(Error::validation(
+                "inbound event claim requires non-empty id and source",
+            ));
+        }
+        let inserted = self
+            .conn
+            .execute(
+                "INSERT OR IGNORE INTO control_event_inbox (event_id, source, recorded_at) VALUES (?1, ?2, ?3)",
+                params![event_id, source, recorded_at],
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Ok(inserted == 1)
+    }
+
+    /// Enqueue an outbound event exactly once by event id. The caller commits
+    /// canonical state first, then records a delivery intent; dispatcher retry
+    /// never requires fabricating a new event id.
+    pub fn enqueue_outbox_event(
+        &self,
+        event_id: &str,
+        workspace_id: &str,
+        event_type: &str,
+        payload: &str,
+        created_at: i64,
+    ) -> Result<bool> {
+        if event_id.trim().is_empty() || event_type.trim().is_empty() {
+            return Err(Error::validation(
+                "outbox event requires non-empty event id and type",
+            ));
+        }
+        let inserted = self
+            .conn
+            .execute(
+                "INSERT OR IGNORE INTO control_event_outbox
+                 (event_id, workspace_id, event_type, payload, created_at, dispatched_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, NULL)",
+                params![event_id, workspace_id, event_type, payload, created_at],
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Ok(inserted == 1)
+    }
+
+    /// Durable semantic event helper. Runtime/plugin notifications should use
+    /// their own ephemeral channels and must not be confused with canonical
+    /// business/control facts merely because they share a CloudEvents envelope.
+    pub fn enqueue_durable_semantic_event(
+        &self,
+        workspace_id: &str,
+        envelope: &morn_kernel::EventEnvelope,
+        semantics: &morn_kernel::EventSemanticDescriptor,
+        created_at: i64,
+    ) -> Result<bool> {
+        semantics.validate().map_err(Error::validation)?;
+        if !semantics.class.durable_required() {
+            return Err(Error::validation(
+                "runtime/projection event is not eligible for the durable semantic outbox",
+            ));
+        }
+        let enriched = envelope
+            .clone()
+            .with_semantics(semantics)
+            .map_err(Error::validation)?;
+        let payload =
+            serde_json::to_string(&enriched).map_err(|e| Error::internal(e.to_string()))?;
+        self.enqueue_outbox_event(
+            &enriched.id,
+            workspace_id,
+            &enriched.event_type,
+            &payload,
+            created_at,
+        )
+    }
+
+    pub fn pending_outbox_events(&self, limit: usize) -> Result<Vec<OutboxEvent>> {
+        let limit =
+            i64::try_from(limit).map_err(|_| Error::validation("outbox limit is too large"))?;
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT event_id, workspace_id, event_type, payload, created_at, dispatched_at
+                 FROM control_event_outbox
+                 WHERE dispatched_at IS NULL
+                 ORDER BY created_at, event_id
+                 LIMIT ?1",
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        let rows = stmt
+            .query_map([limit], |row| {
+                Ok(OutboxEvent {
+                    event_id: row.get(0)?,
+                    workspace_id: row.get(1)?,
+                    event_type: row.get(2)?,
+                    payload: row.get(3)?,
+                    created_at: row.get(4)?,
+                    dispatched_at: row.get(5)?,
+                })
+            })
+            .map_err(|e| Error::internal(e.to_string()))?;
+        let mut events = Vec::new();
+        for row in rows {
+            events.push(row.map_err(|e| Error::internal(e.to_string()))?);
+        }
+        Ok(events)
+    }
+
+    pub fn mark_outbox_dispatched(&self, event_id: &str, dispatched_at: i64) -> Result<()> {
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE control_event_outbox
+                 SET dispatched_at = ?2
+                 WHERE event_id = ?1 AND dispatched_at IS NULL",
+                params![event_id, dispatched_at],
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        if updated == 0 {
+            return Err(Error::not_found(format!("pending outbox event {event_id}")));
+        }
+        Ok(())
+    }
+
+    // ---- controller lease / fencing ----
+
+    /// Acquire or renew a controller lease. A takeover after expiry increments
+    /// the fencing token so stale controllers can be rejected by downstream
+    /// durable writes or external dispatch gates.
+    pub fn acquire_controller_lease(
+        &self,
+        lease_name: &str,
+        holder: &str,
+        now: i64,
+        ttl_ms: i64,
+    ) -> Result<Option<ControllerLease>> {
+        if lease_name.trim().is_empty() || holder.trim().is_empty() || ttl_ms <= 0 {
+            return Err(Error::validation(
+                "controller lease requires non-empty name/holder and positive ttl",
+            ));
+        }
+        let expires_at = now.saturating_add(ttl_ms);
+
+        let existing: Option<(String, i64, i64)> = self
+            .conn
+            .query_row(
+                "SELECT holder, fencing_token, expires_at
+                 FROM control_controller_leases
+                 WHERE lease_name = ?1",
+                [lease_name],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        match existing {
+            None => {
+                let inserted = self
+                    .conn
+                    .execute(
+                        "INSERT OR IGNORE INTO control_controller_leases
+                         (lease_name, holder, fencing_token, expires_at, updated_at)
+                         VALUES (?1, ?2, 1, ?3, ?4)",
+                        params![lease_name, holder, expires_at, now],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if inserted == 0 {
+                    return Ok(None);
+                }
+                Ok(Some(ControllerLease {
+                    lease_name: lease_name.to_string(),
+                    holder: holder.to_string(),
+                    fencing_token: 1,
+                    expires_at,
+                    updated_at: now,
+                }))
+            }
+            Some((current_holder, current_token, current_expiry)) => {
+                if current_holder == holder && current_expiry > now {
+                    let updated = self
+                        .conn
+                        .execute(
+                            "UPDATE control_controller_leases
+                             SET expires_at = ?3, updated_at = ?4
+                             WHERE lease_name = ?1
+                               AND holder = ?2
+                               AND fencing_token = ?5
+                               AND expires_at > ?4",
+                            params![lease_name, holder, expires_at, now, current_token],
+                        )
+                        .map_err(|e| Error::internal(e.to_string()))?;
+                    if updated == 0 {
+                        return Ok(None);
+                    }
+                    return Ok(Some(ControllerLease {
+                        lease_name: lease_name.to_string(),
+                        holder: holder.to_string(),
+                        fencing_token: u64::try_from(current_token)
+                            .map_err(|_| Error::internal("negative fencing token"))?,
+                        expires_at,
+                        updated_at: now,
+                    }));
+                }
+
+                if current_expiry > now {
+                    return Ok(None);
+                }
+
+                let next_token = current_token.saturating_add(1);
+                let updated = self
+                    .conn
+                    .execute(
+                        "UPDATE control_controller_leases
+                         SET holder = ?2,
+                             fencing_token = ?3,
+                             expires_at = ?4,
+                             updated_at = ?5
+                         WHERE lease_name = ?1
+                           AND fencing_token = ?6
+                           AND expires_at <= ?5",
+                        params![
+                            lease_name,
+                            holder,
+                            next_token,
+                            expires_at,
+                            now,
+                            current_token
+                        ],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if updated == 0 {
+                    return Ok(None);
+                }
+                Ok(Some(ControllerLease {
+                    lease_name: lease_name.to_string(),
+                    holder: holder.to_string(),
+                    fencing_token: u64::try_from(next_token)
+                        .map_err(|_| Error::internal("negative fencing token"))?,
+                    expires_at,
+                    updated_at: now,
+                }))
+            }
+        }
+    }
+
+    pub fn renew_controller_lease(
+        &self,
+        lease: &ControllerLease,
+        now: i64,
+        ttl_ms: i64,
+    ) -> Result<Option<ControllerLease>> {
+        if ttl_ms <= 0 {
+            return Err(Error::validation("controller lease ttl must be positive"));
+        }
+        let token = i64::try_from(lease.fencing_token)
+            .map_err(|_| Error::validation("fencing token is too large"))?;
+        let expires_at = now.saturating_add(ttl_ms);
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE control_controller_leases
+                 SET expires_at = ?4, updated_at = ?5
+                 WHERE lease_name = ?1
+                   AND holder = ?2
+                   AND fencing_token = ?3
+                   AND expires_at > ?5",
+                params![&lease.lease_name, &lease.holder, token, expires_at, now],
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        if updated == 0 {
+            return Ok(None);
+        }
+        Ok(Some(ControllerLease {
+            lease_name: lease.lease_name.clone(),
+            holder: lease.holder.clone(),
+            fencing_token: lease.fencing_token,
+            expires_at,
+            updated_at: now,
+        }))
+    }
+
+    pub fn controller_fence_is_current(
+        &self,
+        lease_name: &str,
+        fencing_token: u64,
+        now: i64,
+    ) -> Result<bool> {
+        let token = i64::try_from(fencing_token)
+            .map_err(|_| Error::validation("fencing token is too large"))?;
+        let active: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM control_controller_leases
+                 WHERE lease_name = ?1
+                   AND fencing_token = ?2
+                   AND expires_at > ?3",
+                params![lease_name, token, now],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Ok(active.is_some())
+    }
+
     // ---- generic typed records ----
 
     pub fn save_record<T: serde::Serialize>(
@@ -118,14 +526,397 @@ impl MornStore {
         record: &T,
     ) -> Result<()> {
         let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
-        self.conn
+        let changed = self
+            .conn
             .execute(
-                "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at) VALUES (?1, ?2, ?3, ?4, ?5)
-                 ON CONFLICT(kind, id) DO UPDATE SET payload = excluded.payload, workspace_id = excluded.workspace_id",
+                "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at, revision) VALUES (?1, ?2, ?3, ?4, ?5, 1)
+                 ON CONFLICT(kind, id) DO UPDATE
+                 SET payload = excluded.payload,
+                     workspace_id = excluded.workspace_id,
+                     revision = morn_records.revision + 1
+                 WHERE morn_records.immutable = 0",
                 params![kind, id, workspace_id, payload, created_at],
             )
             .map_err(|e| Error::internal(e.to_string()))?;
+        if changed == 0 {
+            return Err(Error::conflict(format!(
+                "record {kind}/{id} is immutable and cannot be overwritten"
+            )));
+        }
         Ok(())
+    }
+
+    /// Read the optimistic-concurrency revision for a mutable record.
+    pub fn record_revision(&self, kind: &str, id: &str) -> Result<Option<u64>> {
+        let revision: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT revision FROM morn_records WHERE kind = ?1 AND id = ?2",
+                params![kind, id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+        revision
+            .map(|value| {
+                u64::try_from(value)
+                    .map_err(|_| Error::internal("record revision must be non-negative"))
+            })
+            .transpose()
+    }
+
+    /// Compare-and-swap save for mutable control-plane projections.
+    ///
+    /// expected_revision = 0 means "create only". Existing immutable records
+    /// or stale revisions fail closed rather than allowing last-writer-wins.
+    pub fn save_record_cas<T: serde::Serialize>(
+        &self,
+        kind: &str,
+        id: &str,
+        workspace_id: &str,
+        created_at: i64,
+        expected_revision: u64,
+        record: &T,
+    ) -> Result<u64> {
+        let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
+        let expected_i64 = i64::try_from(expected_revision)
+            .map_err(|_| Error::validation("expected revision is too large"))?;
+
+        match self.record_revision(kind, id)? {
+            None => {
+                if expected_revision != 0 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} does not exist at expected revision {expected_revision}"
+                    )));
+                }
+                self.conn
+                    .execute(
+                        "INSERT INTO morn_records
+                         (kind, id, workspace_id, payload, created_at, immutable, revision)
+                         VALUES (?1, ?2, ?3, ?4, ?5, 0, 1)",
+                        params![kind, id, workspace_id, payload, created_at],
+                    )
+                    .map_err(|e| {
+                        if e.to_string().contains("UNIQUE") {
+                            Error::conflict(format!("record {kind}/{id} was created concurrently"))
+                        } else {
+                            Error::internal(e.to_string())
+                        }
+                    })?;
+                Ok(1)
+            }
+            Some(actual) => {
+                if actual != expected_revision {
+                    return Err(Error::conflict(format!(
+                        "stale record {kind}/{id}: expected revision {expected_revision}, actual {actual}"
+                    )));
+                }
+                let updated = self
+                    .conn
+                    .execute(
+                        "UPDATE morn_records
+                         SET payload = ?3,
+                             workspace_id = ?4,
+                             revision = revision + 1
+                         WHERE kind = ?1
+                           AND id = ?2
+                           AND immutable = 0
+                           AND revision = ?5",
+                        params![kind, id, payload, workspace_id, expected_i64],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if updated != 1 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} changed concurrently or is immutable"
+                    )));
+                }
+                Ok(actual + 1)
+            }
+        }
+    }
+
+    /// Atomically persist a mutable projection revision and its durable semantic
+    /// delivery intent. This closes the crash window between "state committed"
+    /// and "outbox enqueued" that a non-transactional caller would otherwise
+    /// leave behind.
+    ///
+    /// The event id is stable/idempotent. Runtime-only/projection events are
+    /// rejected because persistence alone must not promote them to business
+    /// facts.
+    pub fn save_record_cas_with_durable_event<T: serde::Serialize>(
+        &self,
+        commit: DurableProjectionCommit<'_, T>,
+    ) -> Result<u64> {
+        let DurableProjectionCommit {
+            kind,
+            id,
+            workspace_id,
+            created_at,
+            expected_revision,
+            record,
+            envelope,
+            semantics,
+        } = commit;
+        semantics.validate().map_err(Error::validation)?;
+        if !semantics.class.durable_required() {
+            return Err(Error::validation(
+                "runtime/projection event cannot be committed through the durable semantic outbox",
+            ));
+        }
+
+        let enriched = envelope
+            .clone()
+            .with_semantics(semantics)
+            .map_err(Error::validation)?;
+        let event_payload =
+            serde_json::to_string(&enriched).map_err(|e| Error::internal(e.to_string()))?;
+        let record_payload =
+            serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
+        let expected_i64 = i64::try_from(expected_revision)
+            .map_err(|_| Error::validation("expected revision is too large"))?;
+
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        let current: Option<i64> = tx
+            .query_row(
+                "SELECT revision FROM morn_records WHERE kind = ?1 AND id = ?2",
+                params![kind, id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        let next_revision = match current {
+            None => {
+                if expected_revision != 0 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} does not exist at expected revision {expected_revision}"
+                    )));
+                }
+                tx.execute(
+                    "INSERT INTO morn_records
+                     (kind, id, workspace_id, payload, created_at, immutable, revision)
+                     VALUES (?1, ?2, ?3, ?4, ?5, 0, 1)",
+                    params![kind, id, workspace_id, record_payload, created_at],
+                )
+                .map_err(|e| {
+                    if e.to_string().contains("UNIQUE") {
+                        Error::conflict(format!("record {kind}/{id} was created concurrently"))
+                    } else {
+                        Error::internal(e.to_string())
+                    }
+                })?;
+                1
+            }
+            Some(actual_i64) => {
+                let actual = u64::try_from(actual_i64)
+                    .map_err(|_| Error::internal("record revision must be non-negative"))?;
+                if actual != expected_revision {
+                    return Err(Error::conflict(format!(
+                        "stale record {kind}/{id}: expected revision {expected_revision}, actual {actual}"
+                    )));
+                }
+                let updated = tx
+                    .execute(
+                        "UPDATE morn_records
+                         SET payload = ?3,
+                             workspace_id = ?4,
+                             revision = revision + 1
+                         WHERE kind = ?1
+                           AND id = ?2
+                           AND immutable = 0
+                           AND revision = ?5",
+                        params![kind, id, record_payload, workspace_id, expected_i64],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if updated != 1 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} changed concurrently or is immutable"
+                    )));
+                }
+                actual + 1
+            }
+        };
+
+        tx.execute(
+            "INSERT INTO control_event_outbox
+             (event_id, workspace_id, event_type, payload, created_at, dispatched_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, NULL)",
+            params![
+                enriched.id,
+                workspace_id,
+                enriched.event_type,
+                event_payload,
+                created_at
+            ],
+        )
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                Error::conflict(format!("durable event {} already committed", enriched.id))
+            } else {
+                Error::internal(e.to_string())
+            }
+        })?;
+
+        tx.commit().map_err(|e| Error::internal(e.to_string()))?;
+        Ok(next_revision)
+    }
+
+    /// Fenced variant used by controller runtimes. The controller lease is
+    /// checked inside the same SQLite transaction as the CAS projection and
+    /// outbox insert, so an expired/taken-over controller cannot commit after a
+    /// preflight fence check races with another holder.
+    pub fn save_record_cas_with_durable_event_fenced<T: serde::Serialize>(
+        &self,
+        commit: DurableProjectionCommit<'_, T>,
+        fence: ControllerFence<'_>,
+    ) -> Result<u64> {
+        let DurableProjectionCommit {
+            kind,
+            id,
+            workspace_id,
+            created_at,
+            expected_revision,
+            record,
+            envelope,
+            semantics,
+        } = commit;
+        let ControllerFence {
+            lease_name,
+            fencing_token,
+            fence_at,
+        } = fence;
+        semantics.validate().map_err(Error::validation)?;
+        if !semantics.class.durable_required() {
+            return Err(Error::validation(
+                "runtime/projection event cannot be committed through the durable semantic outbox",
+            ));
+        }
+        if lease_name.trim().is_empty() {
+            return Err(Error::validation("controller lease name is required"));
+        }
+
+        let token = i64::try_from(fencing_token)
+            .map_err(|_| Error::validation("fencing token is too large"))?;
+        let enriched = envelope
+            .clone()
+            .with_semantics(semantics)
+            .map_err(Error::validation)?;
+        let event_payload =
+            serde_json::to_string(&enriched).map_err(|e| Error::internal(e.to_string()))?;
+        let record_payload =
+            serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
+        let expected_i64 = i64::try_from(expected_revision)
+            .map_err(|_| Error::validation("expected revision is too large"))?;
+
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        let fence_current: Option<i64> = tx
+            .query_row(
+                "SELECT 1 FROM control_controller_leases
+                 WHERE lease_name = ?1
+                   AND fencing_token = ?2
+                   AND expires_at > ?3",
+                params![lease_name, token, fence_at],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+        if fence_current.is_none() {
+            return Err(Error::conflict(format!(
+                "controller fence {lease_name}#{fencing_token} is no longer current"
+            )));
+        }
+
+        let current: Option<i64> = tx
+            .query_row(
+                "SELECT revision FROM morn_records WHERE kind = ?1 AND id = ?2",
+                params![kind, id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        let next_revision = match current {
+            None => {
+                if expected_revision != 0 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} does not exist at expected revision {expected_revision}"
+                    )));
+                }
+                tx.execute(
+                    "INSERT INTO morn_records
+                     (kind, id, workspace_id, payload, created_at, immutable, revision)
+                     VALUES (?1, ?2, ?3, ?4, ?5, 0, 1)",
+                    params![kind, id, workspace_id, record_payload, created_at],
+                )
+                .map_err(|e| {
+                    if e.to_string().contains("UNIQUE") {
+                        Error::conflict(format!("record {kind}/{id} was created concurrently"))
+                    } else {
+                        Error::internal(e.to_string())
+                    }
+                })?;
+                1
+            }
+            Some(actual_i64) => {
+                let actual = u64::try_from(actual_i64)
+                    .map_err(|_| Error::internal("record revision must be non-negative"))?;
+                if actual != expected_revision {
+                    return Err(Error::conflict(format!(
+                        "stale record {kind}/{id}: expected revision {expected_revision}, actual {actual}"
+                    )));
+                }
+                let updated = tx
+                    .execute(
+                        "UPDATE morn_records
+                         SET payload = ?3,
+                             workspace_id = ?4,
+                             revision = revision + 1
+                         WHERE kind = ?1
+                           AND id = ?2
+                           AND immutable = 0
+                           AND revision = ?5",
+                        params![kind, id, record_payload, workspace_id, expected_i64],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if updated != 1 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} changed concurrently or is immutable"
+                    )));
+                }
+                actual + 1
+            }
+        };
+
+        tx.execute(
+            "INSERT INTO control_event_outbox
+             (event_id, workspace_id, event_type, payload, created_at, dispatched_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, NULL)",
+            params![
+                enriched.id,
+                workspace_id,
+                enriched.event_type,
+                event_payload,
+                created_at
+            ],
+        )
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                Error::conflict(format!("durable event {} already committed", enriched.id))
+            } else {
+                Error::internal(e.to_string())
+            }
+        })?;
+
+        tx.commit().map_err(|e| Error::internal(e.to_string()))?;
+        Ok(next_revision)
     }
 
     /// Save an immutable record (receipts, release history, decisions).
@@ -141,7 +932,7 @@ impl MornStore {
         let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
         self.conn
             .execute(
-                "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at, immutable) VALUES (?1, ?2, ?3, ?4, ?5, 1)",
+                "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at, immutable, revision) VALUES (?1, ?2, ?3, ?4, ?5, 1, 1)",
                 params![kind, id, workspace_id, payload, created_at],
             )
             .map_err(|e| {
@@ -948,9 +1739,35 @@ mod tests {
     }
 
     #[test]
+    fn mutable_save_cannot_overwrite_immutable_record() {
+        let store = MornStore::open_in_memory().unwrap();
+        store
+            .save_record_immutable(
+                "receipt",
+                "r-1",
+                "ws-1",
+                1,
+                &serde_json::json!({"status":"original"}),
+            )
+            .unwrap();
+
+        let overwrite = store.save_record(
+            "receipt",
+            "r-1",
+            "ws-1",
+            2,
+            &serde_json::json!({"status":"rewritten"}),
+        );
+        assert!(overwrite.is_err());
+
+        let loaded: serde_json::Value = store.load_record("receipt", "r-1").unwrap().unwrap();
+        assert_eq!(loaded["status"], "original");
+    }
+
+    #[test]
     fn fresh_migration_is_v2() {
         let store = MornStore::open_in_memory().unwrap();
-        assert_eq!(store.schema_version().unwrap(), 2);
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
     }
 
     #[test]
@@ -971,7 +1788,7 @@ mod tests {
             .unwrap();
         }
         let store = MornStore::open(&path).unwrap();
-        assert_eq!(store.schema_version().unwrap(), 2);
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
         let legacy = store
             .load_record::<serde_json::Value>("legacy", "row-1")
             .unwrap();
@@ -979,6 +1796,44 @@ mod tests {
         store
             .save_record_immutable("test_imm", "i1", "ws-1", 1, &serde_json::json!({"x": 1}))
             .unwrap();
+    }
+
+    #[test]
+    fn v5_inbox_upgrade_preserves_claims_and_separates_event_sources() {
+        let path = temp_db("v5_inbox");
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE schema_version (version INTEGER NOT NULL);
+                 INSERT INTO schema_version (version) VALUES (5);
+                 CREATE TABLE control_event_inbox (
+                     event_id TEXT NOT NULL PRIMARY KEY,
+                     source TEXT NOT NULL,
+                     recorded_at INTEGER NOT NULL
+                 );
+                 INSERT INTO control_event_inbox (event_id, source, recorded_at)
+                     VALUES ('shared-id', 'cmms://plant-a', 10);",
+            )
+            .unwrap();
+        }
+        {
+            let store = MornStore::open(&path).unwrap();
+            assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+            assert!(!store
+                .claim_inbound_event("shared-id", "cmms://plant-a", 11)
+                .unwrap());
+            assert!(store
+                .claim_inbound_event("shared-id", "mes://plant-a", 12)
+                .unwrap());
+        }
+        let restarted = MornStore::open(&path).unwrap();
+        assert_eq!(restarted.schema_version().unwrap(), SCHEMA_VERSION);
+        assert!(!restarted
+            .claim_inbound_event("shared-id", "cmms://plant-a", 13)
+            .unwrap());
+        assert!(!restarted
+            .claim_inbound_event("shared-id", "mes://plant-a", 14)
+            .unwrap());
     }
 
     #[test]
@@ -1052,7 +1907,7 @@ mod tests {
         {
             let store = MornStore::open(&path).unwrap();
             store.save_workspace(&w).unwrap();
-            assert_eq!(store.schema_version().unwrap(), 2);
+            assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
         }
         let store = MornStore::open(&path).unwrap();
         let loaded = store.load_workspace(&w.id).unwrap().expect("workspace");
@@ -1262,5 +2117,406 @@ mod tests {
         assert!(objs_a.is_empty());
         assert_eq!(store.list_workspaces().unwrap().len(), 2);
         let _ = ws_b;
+    }
+
+    #[test]
+    fn inbox_deduplicates_and_outbox_retries_keep_event_identity() {
+        let store = MornStore::open_in_memory().unwrap();
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+
+        assert!(store
+            .claim_inbound_event("evt-in-1", "cmms://plant-a", 10)
+            .unwrap());
+        assert!(!store
+            .claim_inbound_event("evt-in-1", "cmms://plant-a", 11)
+            .unwrap());
+        assert!(store
+            .claim_inbound_event("evt-in-1", "mes://plant-a", 12)
+            .unwrap());
+        assert!(!store
+            .claim_inbound_event("evt-in-1", "mes://plant-a", 13)
+            .unwrap());
+
+        assert!(store
+            .enqueue_outbox_event(
+                "evt-out-1",
+                "workspace-1",
+                "io.morn.work.changed.v1",
+                "{\"work\":\"work-1\"}",
+                20,
+            )
+            .unwrap());
+        assert!(!store
+            .enqueue_outbox_event(
+                "evt-out-1",
+                "workspace-1",
+                "io.morn.work.changed.v1",
+                "{\"work\":\"work-1\"}",
+                21,
+            )
+            .unwrap());
+
+        let pending = store.pending_outbox_events(10).unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].event_id, "evt-out-1");
+        assert!(pending[0].dispatched_at.is_none());
+
+        store.mark_outbox_dispatched("evt-out-1", 30).unwrap();
+        assert!(store.pending_outbox_events(10).unwrap().is_empty());
+        assert!(store.mark_outbox_dispatched("evt-out-1", 31).is_err());
+    }
+}
+
+#[cfg(test)]
+mod v115_revision_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn expired_controller_fence_cannot_commit_state_or_event() {
+        use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let lease = store
+            .acquire_controller_lease("work-controller", "node-a", 1_000, 50)
+            .unwrap()
+            .unwrap();
+        let event = EventEnvelope::new(
+            "evt-fenced-stale",
+            "morn://controller/node-a",
+            "io.morn.work.reconciled.v1",
+            json!({"work":"work-1"}),
+        );
+        let semantics = EventSemanticDescriptor {
+            class: EventSemanticClass::DomainFact,
+            subject_ref: Some("work://work-1".to_string()),
+            source_of_truth_ref: None,
+            schema_ref: Some("morn://schemas/work-reconciled/v1".to_string()),
+        };
+
+        assert!(store
+            .save_record_cas_with_durable_event_fenced(
+                DurableProjectionCommit {
+                    kind: "work_resource_v115",
+                    id: "work-1",
+                    workspace_id: "ws-1",
+                    created_at: 1_051,
+                    expected_revision: 0,
+                    record: &json!({"phase":"ready"}),
+                    envelope: &event,
+                    semantics: &semantics,
+                },
+                ControllerFence {
+                    lease_name: "work-controller",
+                    fencing_token: lease.fencing_token,
+                    fence_at: 1_051,
+                },
+            )
+            .is_err());
+        assert!(store
+            .load_record::<serde_json::Value>("work_resource_v115", "work-1")
+            .unwrap()
+            .is_none());
+        assert!(store.pending_outbox_events(10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn atomic_projection_and_outbox_commit_share_one_transaction() {
+        use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let event = EventEnvelope::new(
+            "evt-work-1-v1",
+            "morn://control-plane",
+            "io.morn.work.changed.v1",
+            json!({"work":"work-1","phase":"ready"}),
+        );
+        let semantics = EventSemanticDescriptor {
+            class: EventSemanticClass::DomainFact,
+            subject_ref: Some("work://work-1".to_string()),
+            source_of_truth_ref: None,
+            schema_ref: Some("morn://schemas/work-changed/v1".to_string()),
+        };
+
+        let revision = store
+            .save_record_cas_with_durable_event(DurableProjectionCommit {
+                kind: "work_resource_v115",
+                id: "work-1",
+                workspace_id: "ws-1",
+                created_at: 10,
+                expected_revision: 0,
+                record: &json!({"phase":"ready"}),
+                envelope: &event,
+                semantics: &semantics,
+            })
+            .unwrap();
+        assert_eq!(revision, 1);
+        let pending = store.pending_outbox_events(10).unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].event_id, "evt-work-1-v1");
+
+        // A stale CAS fails before commit; its second event must not leak into
+        // the outbox as a delivery intent for state that never became current.
+        let stale_event = EventEnvelope::new(
+            "evt-work-1-stale",
+            "morn://control-plane",
+            "io.morn.work.changed.v1",
+            json!({"work":"work-1","phase":"blocked"}),
+        );
+        assert!(store
+            .save_record_cas_with_durable_event(DurableProjectionCommit {
+                kind: "work_resource_v115",
+                id: "work-1",
+                workspace_id: "ws-1",
+                created_at: 11,
+                expected_revision: 0,
+                record: &json!({"phase":"blocked"}),
+                envelope: &stale_event,
+                semantics: &semantics,
+            })
+            .is_err());
+        assert_eq!(store.pending_outbox_events(10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn duplicate_event_id_cannot_advance_projection_without_a_new_outbox_event() {
+        use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let event = EventEnvelope::new(
+            "evt-reused",
+            "morn://control-plane",
+            "io.morn.work.changed.v1",
+            json!({"work":"work-1"}),
+        );
+        let semantics = EventSemanticDescriptor {
+            class: EventSemanticClass::DomainFact,
+            subject_ref: Some("work://work-1".to_string()),
+            source_of_truth_ref: None,
+            schema_ref: Some("morn://schemas/work-changed/v1".to_string()),
+        };
+
+        assert_eq!(
+            store
+                .save_record_cas_with_durable_event(DurableProjectionCommit {
+                    kind: "work_resource_v115",
+                    id: "work-1",
+                    workspace_id: "ws-1",
+                    created_at: 10,
+                    expected_revision: 0,
+                    record: &json!({"phase":"ready"}),
+                    envelope: &event,
+                    semantics: &semantics,
+                })
+                .unwrap(),
+            1
+        );
+        let duplicate = store.save_record_cas_with_durable_event(DurableProjectionCommit {
+            kind: "work_resource_v115",
+            id: "work-1",
+            workspace_id: "ws-1",
+            created_at: 11,
+            expected_revision: 1,
+            record: &json!({"phase":"blocked"}),
+            envelope: &event,
+            semantics: &semantics,
+        });
+        assert!(duplicate.is_err());
+        assert_eq!(
+            store
+                .record_revision("work_resource_v115", "work-1")
+                .unwrap(),
+            Some(1)
+        );
+        assert_eq!(
+            store
+                .load_record::<serde_json::Value>("work_resource_v115", "work-1")
+                .unwrap(),
+            Some(json!({"phase":"ready"}))
+        );
+        assert_eq!(store.pending_outbox_events(10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn duplicate_event_id_rolls_back_fenced_cas_in_the_same_transaction() {
+        use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let lease = store
+            .acquire_controller_lease("work-controller", "node-a", 1_000, 500)
+            .unwrap()
+            .unwrap();
+        let event = EventEnvelope::new(
+            "evt-fenced-reused",
+            "morn://controller/node-a",
+            "io.morn.work.reconciled.v1",
+            json!({"work":"work-1"}),
+        );
+        let semantics = EventSemanticDescriptor {
+            class: EventSemanticClass::DomainFact,
+            subject_ref: Some("work://work-1".to_string()),
+            source_of_truth_ref: None,
+            schema_ref: Some("morn://schemas/work-reconciled/v1".to_string()),
+        };
+        assert_eq!(
+            store
+                .save_record_cas_with_durable_event_fenced(
+                    DurableProjectionCommit {
+                        kind: "work_resource_v115",
+                        id: "work-1",
+                        workspace_id: "ws-1",
+                        created_at: 1_001,
+                        expected_revision: 0,
+                        record: &json!({"phase":"ready"}),
+                        envelope: &event,
+                        semantics: &semantics,
+                    },
+                    ControllerFence {
+                        lease_name: "work-controller",
+                        fencing_token: lease.fencing_token,
+                        fence_at: 1_001,
+                    },
+                )
+                .unwrap(),
+            1
+        );
+
+        let duplicate = store.save_record_cas_with_durable_event_fenced(
+            DurableProjectionCommit {
+                kind: "work_resource_v115",
+                id: "work-1",
+                workspace_id: "ws-1",
+                created_at: 1_002,
+                expected_revision: 1,
+                record: &json!({"phase":"blocked"}),
+                envelope: &event,
+                semantics: &semantics,
+            },
+            ControllerFence {
+                lease_name: "work-controller",
+                fencing_token: lease.fencing_token,
+                fence_at: 1_002,
+            },
+        );
+        assert!(duplicate.is_err());
+        assert_eq!(
+            store
+                .record_revision("work_resource_v115", "work-1")
+                .unwrap(),
+            Some(1)
+        );
+        assert_eq!(store.pending_outbox_events(10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn runtime_signal_cannot_enter_durable_semantic_outbox() {
+        use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let event = EventEnvelope::new(
+            "evt-runtime-1",
+            "morn://runtime/cordis",
+            "io.morn.runtime.provider.v1",
+            json!({"status":"reloaded"}),
+        );
+        let semantics = EventSemanticDescriptor {
+            class: EventSemanticClass::RuntimeSignal,
+            subject_ref: Some("provider://dsh".to_string()),
+            source_of_truth_ref: None,
+            schema_ref: None,
+        };
+
+        assert!(store
+            .save_record_cas_with_durable_event(DurableProjectionCommit {
+                kind: "runtime_projection",
+                id: "dsh",
+                workspace_id: "ws-1",
+                created_at: 1,
+                expected_revision: 0,
+                record: &json!({"status":"healthy"}),
+                envelope: &event,
+                semantics: &semantics,
+            })
+            .is_err());
+        assert!(store.pending_outbox_events(10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn compare_and_swap_rejects_stale_control_plane_write() {
+        let store = MornStore::open_in_memory().unwrap();
+        let first = json!({"state":"proposed"});
+        assert_eq!(
+            store
+                .save_record_cas("work_resource_v115", "work-1", "ws-1", 1, 0, &first)
+                .unwrap(),
+            1
+        );
+
+        let second = json!({"state":"ready"});
+        assert_eq!(
+            store
+                .save_record_cas("work_resource_v115", "work-1", "ws-1", 1, 1, &second)
+                .unwrap(),
+            2
+        );
+
+        let stale = json!({"state":"blocked"});
+        assert!(store
+            .save_record_cas("work_resource_v115", "work-1", "ws-1", 1, 1, &stale)
+            .is_err());
+        assert_eq!(
+            store
+                .record_revision("work_resource_v115", "work-1")
+                .unwrap(),
+            Some(2)
+        );
+    }
+}
+
+#[cfg(test)]
+mod v115_controller_lease_tests {
+    use super::*;
+
+    #[test]
+    fn expired_controller_takeover_increments_fence() {
+        let store = MornStore::open_in_memory().unwrap();
+        let first = store
+            .acquire_controller_lease("work-controller", "node-a", 1_000, 100)
+            .unwrap()
+            .unwrap();
+        assert_eq!(first.fencing_token, 1);
+        assert!(store
+            .acquire_controller_lease("work-controller", "node-b", 1_050, 100)
+            .unwrap()
+            .is_none());
+
+        let second = store
+            .acquire_controller_lease("work-controller", "node-b", 1_101, 100)
+            .unwrap()
+            .unwrap();
+        assert_eq!(second.fencing_token, 2);
+        assert!(!store
+            .controller_fence_is_current("work-controller", first.fencing_token, 1_102)
+            .unwrap());
+        assert!(store
+            .controller_fence_is_current("work-controller", second.fencing_token, 1_102)
+            .unwrap());
+    }
+
+    #[test]
+    fn stale_holder_cannot_renew_after_takeover() {
+        let store = MornStore::open_in_memory().unwrap();
+        let first = store
+            .acquire_controller_lease("reconcile", "node-a", 1_000, 50)
+            .unwrap()
+            .unwrap();
+        let _second = store
+            .acquire_controller_lease("reconcile", "node-b", 1_051, 50)
+            .unwrap()
+            .unwrap();
+        assert!(store
+            .renew_controller_lease(&first, 1_052, 50)
+            .unwrap()
+            .is_none());
     }
 }

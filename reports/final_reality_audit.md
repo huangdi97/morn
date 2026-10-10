@@ -1,5 +1,12 @@
 # Final Reality Audit — Morn v1 GA + GitHub Takeover
 
+> **Historical audit snapshot — superseded for current-state decisions.**
+> This report records the 2026-08-16 v1/G6 repository state and is intentionally
+> retained as historical evidence. Current v11.5 implementation status and blockers
+> are authoritative in [../STATUS.md](../STATUS.md) and
+> [../BLOCKERS.md](../BLOCKERS.md). Do not reuse August claims such as “no official
+> DSH distribution”, “DSH Real is a stub”, or old ignored-test counts as current facts.
+
 Goal: `MORN-G6R-V1-GA-REFOUNDATION-GITHUB-TAKEOVER`
 Date: 2026-08-16
 Starting commit: `f9615086b476e929900c77df0f1e7bb9c7f7bc4d`

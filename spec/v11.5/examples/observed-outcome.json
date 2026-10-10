@@ -1,0 +1,18 @@
+{
+  "id": "out-1042",
+  "workspace_id": "ws-plant-a",
+  "work_package_id": "work-1042",
+  "objective": "delivery impact review grounded in source systems",
+  "source_kind": "ExternalSystem",
+  "source_ref": "mes://plant-a/orders",
+  "observed_facts": {
+    "affected_orders": 3,
+    "maintenance_order": "MO-88273"
+  },
+  "evidence_refs": [
+    "mes://plant-a/orders/snapshot-77",
+    "cmms://orders/MO-88273"
+  ],
+  "observed_at": "2026-10-08T05:10:00Z",
+  "recorded_at": "2026-10-08T05:10:01Z"
+}

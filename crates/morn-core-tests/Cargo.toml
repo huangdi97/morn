@@ -16,6 +16,9 @@ morn-domain-sdk = { workspace = true }
 morn-process = { workspace = true }
 morn-runtime = { workspace = true }
 morn-capability = { workspace = true }
+morn-control-plane = { workspace = true }
+morn-assurance = { workspace = true }
+morn-profile = { workspace = true }
 morn-world = { workspace = true }
 morn-work = { workspace = true }
 morn-artifact = { workspace = true }

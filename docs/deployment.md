@@ -30,6 +30,436 @@ and serve `frontend/dist`.
 - Secrets must not be stored in SQLite in plaintext; use the OS secret store
   or a vault and pass references.
 
+## Provider subprocess environment
+
+Real DSH and Pi runtimes are launched with a **scrubbed child environment** rather than inheriting the entire Morn server process.
+
+- DSH receives only the minimal OS/runtime environment. `MORN_DSH_HOME` is an isolated **root**, not the runtime's mutable home: every real E0 launch gets a fresh one-shot child Home under that root, so stale profile/home patches or plugins cannot silently reinterpret a binding. The route also applies a final Morn-owned global deny-tool overlay, forces a read-only DSH sandbox, treats max-token termination as non-success, and disables DSH telemetry.
+- Pi receives the same minimal OS/runtime environment and the official RPC route is launched with `--no-tools --no-mcp`.
+- Provider credentials or proxy variables are **not inherited implicitly**. Add only the names required by a deployment through `MORN_DSH_ENV_PASSTHROUGH` or `MORN_PI_ENV_PASSTHROUGH` (comma/semicolon separated).
+- Prefer provider-managed/OS secret stores over environment credentials. Explicitly passing an API-key environment variable makes that value visible to the provider subprocess and any tools it launches, so it is a deliberate weaker boundary.
+- Never include broad variables such as `GITHUB_TOKEN`, database credentials, cloud-admin secrets, or unrelated application secrets.
+
+Example:
+
+```powershell
+$env:MORN_DSH_MODE = "real"
+$env:MORN_DSH_WORKSPACE = "C:\morn\workspaces\dsh"
+$env:MORN_DSH_HOME = "C:\morn\runtime\dsh-home"
+$env:MORN_DSH_EXECUTION_ENVIRONMENT_REF = "env://container/dsh-runtime-a"
+$env:MORN_DSH_PROFILE_CONFIGURATION_REF = "deepseek-harness-profile@<config-version>#sha256:<64-hex>"
+# This secret-free, attested ref identifies the exact allowed SDK-profile composition.
+# Morn creates a fresh empty child DSH_HOME per runtime; pre-existing patches/plugins
+# under MORN_DSH_HOME are not loaded into that child composition.
+# MORN_DSH_WORKSPACE and MORN_DSH_HOME must be disjoint directory trees.
+# The environment ref must be issued/pinned by the same execution-environment
+# provisioning path that produced the RuntimeContext/ExecutionBinding.
+# Only when the chosen DSH profile truly requires env-based credentials:
+$env:MORN_DSH_ENV_PASSTHROUGH = "DEEPSEEK_API_KEY,HTTPS_PROXY"
+```
+
+Pi uses the same opt-in model:
+
+```powershell
+$env:MORN_PI_MODE = "real"
+$env:MORN_PI_WORKSPACE = "C:\\morn\\workspaces\\pi"
+$env:MORN_PI_PROVIDER = "<exact-provider>"
+$env:MORN_PI_MODEL = "<exact-model>"
+$env:MORN_PI_EXECUTION_ENVIRONMENT_REF = "env://container/pi-runtime-a"
+# The Pi launch environment ref must match the RuntimeContext/ExecutionBinding.
+# Only when that provider requires environment credentials:
+$env:MORN_PI_ENV_PASSTHROUGH = "<REQUIRED_API_KEY_NAME>"
+```
+
+This implements ADR-009: credentials are resolved at the execution/provider boundary and do not become general Morn process context.
+
+A real Harness launch is rejected unless the provider configuration's
+`execution_environment_ref` exactly matches the environment identity carried
+by the RuntimeContext/ExecutionBinding and that context proves the required
+container-or-stronger guarantee vector. Merely writing an isolation class into a
+request is not sufficient. The deployment is responsible for ensuring that the
+configured DSH/Pi command actually executes inside that named environment;
+Morn does not infer containment from a binary name or from Docker being
+installed.
+
+
+
+## Execution-environment runtime identity attestation
+
+A real DSH/Pi provider version or digest is **not trusted merely because an
+environment variable says so**. The same deployment-owned environment
+attestation used for containment must list every exact provider runtime artifact
+allowed to execute there.
+
+Use `runtime_identities` with the canonical form
+`provider@version#sha256:<64-hex>`. For DSH, attest both the runtime artifact
+and the exact Home/Profile composition identity. The Morn real-SDK path does not consume arbitrary persistent Home/Profile overrides:
+each launch starts from a fresh child Home plus the runtime-pinned official SDK profile
+and Morn's final policy overlay. A permitted profile-composition change requires a new
+configuration digest/attestation and therefore a new ExecutionBinding.
+For example:
+
+```json
+{
+  "environment_ref": "env://container/dsh-runtime-a",
+  "provider": "deployment-attestor",
+  "isolation": "container",
+  "attested_spec": {
+    "minimum_isolation": "container",
+    "required_guarantees": [
+      "filesystem-read-policy",
+      "filesystem-write-policy",
+      "process-boundary",
+      "resource-limits",
+      "network-egress-policy",
+      "secret-indirection",
+      "runtime-attestation",
+      "tool-mediation"
+    ],
+    "network_allowlist": ["api.deepseek.com"],
+    "writable_paths": ["C:\\morn\\workspaces\\dsh"],
+    "secret_refs": ["secret://deepseek/provider-credential"],
+    "persistence_scope": "attempt",
+    "side_effect_policy": "profile-governed"
+  },
+  "runtime_identities": [
+    "deepseek-harness@<deployment-attested-version>#sha256:<64-hex>",
+    "deepseek-harness-profile@<config-version>#sha256:<64-hex>"
+  ],
+  "evidence_refs": [
+    "attestation://sandbox-fleet/dsh-runtime-a",
+    "artifact-attestation://deepseek-harness/<digest>"
+  ],
+  "observed_at": "2026-10-09T00:00:00Z",
+  "valid_until": "2026-10-10T00:00:00Z"
+}
+```
+
+For Pi, use `pi@<version>#sha256:<digest>`. The runtime identity must match the
+provider version/digest written into `ExecutionBinding` exactly. Expiry,
+revocation/replacement of the environment attestation, a different digest, or a
+different version blocks both new binding and later execution.
+
+This closes a deliberate trust boundary: SDK/RPC handshakes prove protocol
+behavior and liveness; they do not prove which distribution artifact the
+deployment launched.
+
+## Live provider evidence gate
+
+Morn includes a one-shot deployment gate for proving the **executor transport**
+against the exact configured real provider and deployment-owned execution
+environment:
+
+```powershell
+cargo run -p morn-app --bin provider_smoke
+```
+
+Set `MORN_PROVIDER_SMOKE_PROVIDER` to `deepseek-harness` (or `dsh`) or
+`pi`. The gate loads the normal application deployment configuration, requires
+an active attestation whose `environment_ref` exactly matches the provider's
+configured environment, requires that attestation to bind the exact configured
+provider runtime artifact identity, mounts the provider's required E0 scope,
+runs a no-tool probe, verifies the live health lease, and reaps the owned
+provider runtime.
+Unexpected Harness tool activity makes the gate fail closed. For DSH, a
+single-use Morn overlay installs a global monotonic deny guard **before** the
+model turn; for Pi, `--no-tools --no-mcp` is part of the real RPC command.
+These local controls do not self-attest an arbitrary deployment, so the
+execution-environment attestation must still include `tool-mediation`.
+
+DSH example (values are deployment-specific; never commit secret values):
+
+```powershell
+$env:MORN_PROVIDER_SMOKE_PROVIDER = "deepseek-harness"
+$env:MORN_DSH_MODE = "real"
+$env:MORN_DSH_WORKSPACE = "C:\morn\workspaces\dsh"
+$env:MORN_DSH_HOME = "C:\morn\runtime\dsh-home"
+$env:MORN_DSH_PROVIDER = "deepseek-official"
+$env:MORN_DSH_MODEL = "<exact-model-route>"
+$env:MORN_DSH_EXECUTION_ENVIRONMENT_REF = "env://container/dsh-runtime-a"
+$env:MORN_DSH_PROFILE_CONFIGURATION_REF = "deepseek-harness-profile@<config-version>#sha256:<64-hex>"
+$env:MORN_DSH_RUNTIME_VERSION = "<deployment-attested-version>"
+$env:MORN_DSH_RUNTIME_DIGEST = "sha256:<64-hex>"
+$env:MORN_EXECUTION_ATTESTOR = "<deployment-attestor-name>"
+$env:MORN_EXECUTION_ATTESTATION_FILE = "C:\morn\trust\execution-environments.json"
+# Only if this exact provider route requires an environment credential:
+$env:MORN_DSH_ENV_PASSTHROUGH = "DEEPSEEK_API_KEY"
+cargo run -p morn-app --bin provider_smoke
+```
+
+Pi uses the same gate with `MORN_PROVIDER_SMOKE_PROVIDER=pi`,
+`MORN_PI_MODE=real`, `MORN_PI_WORKSPACE`, `MORN_PI_PROVIDER`,
+`MORN_PI_MODEL`, `MORN_PI_EXECUTION_ENVIRONMENT_REF`,
+`MORN_PI_RUNTIME_VERSION`, `MORN_PI_RUNTIME_DIGEST`, and optionally
+`MORN_PI_COMMAND` / `MORN_PI_ENV_PASSTHROUGH`.
+
+A successful JSON report sets `executor_live_evidence=true`. It **always**
+keeps `canonical_work_outcome=false`, `customer_acceptance=false`, and
+`production_write=false`: a provider/model turn is execution evidence, not
+business truth. Exit code 2 means `NOT_PROVEN` rather than a fabricated pass.
+
+## Capability distribution trust gate
+
+Capability release is split into three independent deployment steps:
+
+1. **Publish** the artifact to an OCI registry and keep the digest-pinned ORAS receipt.
+2. **Verify signature** against the exact digest and expected Sigstore certificate identity/OIDC issuer.
+3. **Verify SLSA provenance** independently for the same digest.
+
+Morn intentionally does not inherit arbitrary registry credentials. The CLI
+requires explicit binary paths and forwards only an optional Docker config
+directory:
+
+~~~powershell
+$env:MORN_ORAS_BIN = "C:\\tools\\oras.exe"
+$env:MORN_COSIGN_BIN = "C:\\tools\\cosign.exe"
+$env:MORN_REGISTRY_DOCKER_CONFIG = "C:\\morn\\registry-auth"
+
+morn package publish `
+  oci://registry.example/morn/capabilities/reviewer `
+  1.2.3 `
+  application/vnd.morn.capability.v1+json `
+  C:\\build\\reviewer.json `
+  application/vnd.morn.capability.layer.v1+json
+~~~
+
+The publish command prints an ORAS-derived JSON receipt containing the
+digest-pinned OCI reference. Verify that subject with the expected workload
+identity:
+
+~~~powershell
+morn package verify-supply-chain `
+  oci://registry.example/morn/capabilities/reviewer@sha256:<64-hex> `
+  sha256:<64-hex> `
+  "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main" `
+  "https://token.actions.githubusercontent.com"
+~~~
+
+The verification command executes both Cosign signature verification and SLSA
+provenance verification. It outputs a merged
+`SupplyChainVerificationEvidence` only when both proofs bind the same subject
+digest. Save one object or an array of objects to a deployment-owned file and
+load it before starting Morn:
+
+~~~powershell
+$env:MORN_SUPPLY_CHAIN_VERIFICATIONS_FILE = "C:\\morn\\trust\\capability-supply-chain.json"
+~~~
+
+The HTTP release endpoint cannot mint this trust. If a caller submits only
+`signature_ref` / `provenance_ref`, Morn may record the content-addressed
+distribution metadata but marks it unverified; the response points to
+`deployment-supply-chain-verification`, and SiteAdmission rejects that
+release. Hub and Console expose the verified/unverified state.
+
+This local adapter/verification flow does **not** prove a real registry or
+builder identity by itself. A production gate still requires the actual
+authorized registry, OIDC certificate identity and provenance generated by the
+deployment build system.
+
+## Authoritative source bindings
+
+Morn does not allow an HTTP/UI caller or a Harness to self-declare a business
+source as authoritative. Deployment-reviewed source bindings are loaded at
+server startup from `MORN_SOURCE_OF_TRUTH_BINDINGS_FILE`.
+
+The file may contain one binding or an array. It contains authority metadata
+and credential/query references, **not secret material**. Example:
+
+```json
+[
+  {
+    "id": "sot:plant-a-cmms-orders",
+    "site_ref": "plant-a",
+    "source_ref": "cmms://plant-a/orders",
+    "authority_kind": "SystemOfRecord",
+    "authoritative_fact_types": ["maintenance.order", "delivery.status"],
+    "key_mapping_ref": "mapping://cmms-order-key@1",
+    "query_capability_ref": "capability://cmms.read-order@1",
+    "freshness_sla_ms": 30000,
+    "conflict_policy": "ReconcileBeforeUse",
+    "version_ref": "binding:v1",
+    "created_at": "2026-10-09T00:00:00Z"
+  }
+]
+```
+
+At runtime the product flow is deliberately split:
+
+1. `GET /api/v115/source-of-truth/catalog` exposes only reviewed deployment metadata.
+2. `POST /api/v115/work/bind-source-of-truth` attaches a unique immutable copy to one exact Work generation and emits `SourceOfTruthBound` evidence.
+3. `POST /api/v115/work/observe-outcome` accepts an observation only when its fact type and source URI are covered by that Work-scoped binding and explicit evidence references are supplied. The server stamps observation time.
+4. The observation may make Work `Delivered`; it **never** makes it `Accepted`. Independent `review-outcome` remains a separate decision.
+
+A Harness receipt, assistant message, arbitrary URL, or caller-provided
+`authority_kind` cannot create this authority. Real connectors may later own
+the read operation itself, but must still terminate at the same
+`SourceOfTruthBinding -> ObservedOutcome` boundary.
+
+## Deployment-owned evidence ledger
+
+Release/production posture is not inferred from a green UI, a provider response,
+or repository history. Operational deployments may load signed/controlled claim
+records through `MORN_EVIDENCE_CLAIMS_FILE`. The server first loads repository
+baseline claims and then appends this deployment file. Repository blockers use a
+historical baseline timestamp, so genuine evidence produced before process
+startup can supersede them without violating append-only claim ordering.
+
+The running deployment must also set an immutable build identity reference, for
+example:
+
+```powershell
+$env:MORN_BUILD_IDENTITY_REF = "git://huangdi97/morn/bdc9e924f962f436a0dd52a4ac43c4ad5a83774c"
+```
+
+A CI claim is current only when one of its `evidence_refs` exactly equals
+`MORN_BUILD_IDENTITY_REF`. A proof for another SHA is reported as
+`identity-mismatch`; omitting the build identity keeps CI readiness
+`missing-evidence` even when a historical CI claim exists.
+
+Example exact-head CI proof:
+
+```json
+[
+  {
+    "id": "evidence-claim:ci-conformance-2026-10-10",
+    "subject": "morn-v11.5-ci-conformance",
+    "class": "ci-conformance",
+    "state": "proven",
+    "evidence_refs": [
+      "github-actions://huangdi97/morn/runs/38064799438",
+      "git://huangdi97/morn/bdc9e924f962f436a0dd52a4ac43c4ad5a83774c"
+    ],
+    "issuer": "deployment-release-controller",
+    "reason": "exact-head configured repository gates passed",
+    "observed_at": "2026-10-10T15:46:00Z"
+  }
+]
+```
+
+Real-runtime, real-site and production-write claims use the same append-only
+ledger but remain separate evidence classes. A later `blocked-external` or
+`revoked` record for the same subject/class invalidates a previous proof until
+a fresh `proven` record is appended. The Console release-readiness projection
+also requires a **fresh Healthy provider lease** in addition to a
+`real-runtime` claim for DSH/Pi.
+
+Canonical subjects used by the top-level readiness projection are:
+
+- `morn-v11.5-architecture` / `design-spec`;
+- `factory-readonly-wedge` / `local-fixture`;
+- `morn-v11.5-ci-conformance` / `ci-conformance`;
+- `deepseek-harness` and `pi-harness` / `real-runtime`;
+- `factory-customer` / `real-site`;
+- `factory-production-write` / `production-write`.
+
+These are evidence statements, **not Authority grants**. In particular, a
+`production-write` evidence claim cannot authorize a Work action. Profile,
+Work generation, ExecutionBinding, AuthorityDecision and ExternalActionPermit
+checks remain mandatory at the action boundary. HTTP clients cannot append
+evidence claims; the file is deployment-owned.
+
+The status API also evaluates server-defined deployment scopes rather than one
+ambiguous global "ready" boolean:
+
+- `local-reference`: architecture + local reference slice + exact-build CI;
+- `deepseek-read-only` / `pi-read-only`: local-reference + the selected live runtime;
+- `customer-read-only-*`: selected live runtime + explicit RealSite evidence;
+- `production-write-*`: customer scope + ProductionWrite evidence **and** an
+  independently permissive Profile/Authority posture.
+
+The current Factory Read-Only Profile fails the final authority condition even
+if a historical production-write evidence claim exists. Clients cannot remove
+required axes from these named scopes.
+
+## Independent acceptance reviewers
+
+An acceptance role is not trusted because a browser submits the string
+`independent-reviewer`. Reviewer principals and allowed roles are deployment
+identity evidence loaded from `MORN_ACCEPTANCE_REVIEWERS_FILE`.
+
+Example:
+
+```json
+[
+  {
+    "principal_id": "prc:quality-reviewer-a",
+    "acting_roles": ["independent-reviewer"],
+    "evidence_refs": ["iam://quality/reviewers/a"],
+    "observed_at": "2026-10-09T00:00:00Z",
+    "valid_until": "2027-01-01T00:00:00Z"
+  }
+]
+```
+
+The Workbench may select one of these reviewers, but cannot invent a principal
+or role. The review API rejects expired/unattested principal-role pairs and
+rejects the workspace owner as the independent acceptance reviewer. Identity
+attestation evidence is copied into the immutable `AcceptanceDecision`
+alongside the review's own evidence.
+
+This is a separation-of-duties control, not proof of customer acceptance by
+itself. Production deployments should source these attestations from the
+customer IAM/governance system and independently audit who was allowed to
+approve which acceptance contract.
+
+## Customer-validated value attestations
+
+A real-site evidence claim proves that a Work episode has deployment-owned
+site evidence. It does **not** prove arbitrary ROI/KPI numbers typed later into
+the Workbench. Values presented as `CustomerValidated` therefore require a
+second, exact deployment artifact loaded through
+`MORN_CUSTOMER_VALUE_ATTESTATIONS_FILE`.
+
+Each attestation binds one workspace, Work generation, source-grounded Outcome
+and final Acceptance decision to the baseline and KPI values that the customer
+or deployment governance process actually reviewed:
+
+```json
+[
+  {
+    "attestation_id": "customer-value-42",
+    "workspace_id": "ws:customer-a",
+    "work_package_id": "work:delivery-review-42",
+    "work_generation": 1,
+    "outcome_id": "out:delivery-review-42",
+    "acceptance_id": "adec:delivery-review-42",
+    "baseline_ref": "baseline://customer-approved/42",
+    "kpis": [
+      { "name": "human_minutes_saved", "value": 12.5 },
+      { "name": "late_minutes_delta", "value": -12.0 }
+    ],
+    "evidence_refs": [
+      "customer://signed/value-review/42"
+    ],
+    "issuer": "customer-value-governance",
+    "observed_at": "2026-10-10T00:00:00Z",
+    "valid_until": "2027-01-01T00:00:00Z"
+  }
+]
+```
+
+The `POST /api/v115/work/assess-value` contract is deliberately asymmetric:
+
+- Fixture/Simulation/Shadow/ObservedOperational assessments may submit their
+  own evidence references and optional baseline/KPI data, and remain labeled as
+  that evidence class.
+- CustomerValidated accepts only the exact
+  `customer_value_attestation_id`; callers may not submit `evidence_refs`,
+  `baseline_ref` or `kpis` for that class.
+- The attestation must match the current Work generation, Outcome and final
+  Acceptance, be time-valid, and the exact value subject must also have a
+  current deployment-owned `RealSite` evidence claim.
+- A customer-value attestation is consumed once. Replay is rejected rather than
+  creating several apparently independent customer validations from one signed
+  review.
+- Historical assessments remain immutable. Current support is shown separately
+  and becomes unsupported when the RealSite evidence is revoked/blocked or the
+  exact customer-value attestation is no longer active.
+
+The Workbench requests the out-of-band attestation ID in CustomerValidated
+mode and renders the signed KPI/baseline copied from deployment evidence. It
+does not offer editable customer KPI fields in that mode.
+
 ## Migration / upgrade
 
 - Migrations are versioned with preflight, dry-run, apply, verify, and

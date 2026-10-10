@@ -5,7 +5,6 @@ use morn_kernel::error::Result;
 use morn_kernel::ids::WorkspaceId;
 
 use crate::context::RuntimeContext;
-use crate::event::ExecutionEventKind;
 use crate::provider::{HarnessProvider, ProviderHandle};
 use crate::scope::{CapabilityScope, ScopeKind};
 use morn_kernel::ids::{ActorInstanceId, WorkPackageId};
@@ -29,9 +28,9 @@ fn check(report: &mut Vec<(String, bool)>, name: &str, ok: bool) {
 
 /// Run the Morn provider contract against any `HarnessProvider`.
 ///
-/// Covers: lifecycle (mount/start/send/inspect/interrupt/resume/terminate),
+/// Covers the baseline lifecycle plus explicitly advertised optional features,
 /// E0 unmount cleanup, scope isolation, and event normalization to Morn
-/// `ExecutionEvent`s.
+/// `ExecutionEvent`s. Unsupported lifecycle operations are not fabricated.
 pub fn run_provider_contract(
     provider: &mut dyn HarnessProvider,
     ctx: &RuntimeContext,
@@ -40,12 +39,16 @@ pub fn run_provider_contract(
     let provider_name = provider.provider_name().to_string();
 
     // lifecycle
-    let mount_result = provider.mount(CapabilityScope::new(
+    let mut contract_scope = CapabilityScope::new(
         ScopeKind::Workcell,
         None,
         ctx.workspace_id.clone(),
         "contract-scope",
-    ));
+    );
+    for restriction in provider.required_scope_restrictions() {
+        contract_scope = contract_scope.with_restriction(*restriction);
+    }
+    let mount_result = provider.mount(contract_scope);
     let handle: ProviderHandle = match mount_result {
         Ok(h) => {
             check(&mut report, "mount", true);
@@ -57,13 +60,21 @@ pub fn run_provider_contract(
         }
     };
 
-    let session = match provider.start(ctx) {
+    let scoped_ctx = match ctx.clone().with_scope_id(handle.scope_id.clone()) {
+        Ok(context) => context,
+        Err(error) => {
+            let _ = provider.unmount(&handle);
+            return Err(morn_kernel::error::Error::validation(error));
+        }
+    };
+    let session = match provider.start(&scoped_ctx) {
         Ok(s) => {
             check(&mut report, "start", true);
             s
         }
         Err(e) => {
             check(&mut report, "start", false);
+            let _ = provider.unmount(&handle);
             return Err(e);
         }
     };
@@ -76,37 +87,52 @@ pub fn run_provider_contract(
         &mut report,
         "event normalization",
         !events.is_empty()
-            && events.iter().all(|e| {
-                matches!(
-                    e.kind,
-                    ExecutionEventKind::SessionStarted
-                        | ExecutionEventKind::ModelResponse
-                        | ExecutionEventKind::ToolCompleted
-                )
+            && events.iter().all(|event| {
+                event.workspace_id == scoped_ctx.workspace_id
+                    && event.session_id == session.id
+                    && !event.summary.trim().is_empty()
             }),
     );
 
     check(
         &mut report,
         "inspect",
-        provider
-            .inspect(&session.id)
-            .is_ok_and(|s| s.status == "running"),
+        provider.inspect(&session.id).is_ok_and(|snapshot| {
+            snapshot.session_id == session.id && !snapshot.status.trim().is_empty()
+        }),
     );
 
-    check(
-        &mut report,
-        "interrupt",
-        provider.interrupt(&session.id).is_ok(),
-    );
-    check(&mut report, "resume", provider.resume(&session.id).is_ok());
+    let features = provider.features();
+    if features.interrupt {
+        check(
+            &mut report,
+            "interrupt",
+            provider.interrupt(&session.id).is_ok(),
+        );
+    } else {
+        check(&mut report, "interrupt unsupported explicitly", true);
+    }
 
-    let receipt = provider.terminate(&session.id);
-    check(
-        &mut report,
-        "terminate -> receipt",
-        receipt.is_ok_and(|r| !r.trace_refs.is_empty()),
-    );
+    if features.resume {
+        if features.interrupt {
+            check(&mut report, "resume", provider.resume(&session.id).is_ok());
+        } else {
+            check(&mut report, "resume requires interrupt capability", false);
+        }
+    } else {
+        check(&mut report, "resume unsupported explicitly", true);
+    }
+
+    if features.session_close {
+        let receipt = provider.terminate(&session.id);
+        check(
+            &mut report,
+            "terminate -> receipt",
+            receipt.is_ok_and(|r| !r.trace_refs.is_empty()),
+        );
+    } else {
+        check(&mut report, "session close unsupported explicitly", true);
+    }
 
     // E0 unmount cleanup: first unmount succeeds, second must fail (already gone).
     let unmount1 = provider.unmount(&handle);

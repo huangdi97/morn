@@ -2,6 +2,9 @@
 //! and governed write path are distinct; every external write goes through an
 //! approved action token (Action Gateway), never direct.
 
+pub mod interoperability;
+pub mod source_truth;
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -10,6 +13,16 @@ use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{ActionProposalId, Id};
 use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
+
+pub use interoperability::{
+    A2aAgentCardRef, A2aTaskEvidence, A2aTaskState, ExternalEndpoint, ExternalTaskObservationId,
+    ExternalTaskSnapshot, GovernedExternalTaskObservation, InteropBinding, InteropProtocol,
+    McpHttpAuthorizationBinding, McpTaskEvidence, McpTaskState, McpToolDescriptor,
+};
+pub use source_truth::{
+    ConflictPolicy, SourceObservationAttestation, SourceOfTruthBinding, SourceOfTruthBindingId,
+    TruthAuthorityKind,
+};
 
 macro_rules! local_id {
     ($tag:ident, $alias:ident) => {

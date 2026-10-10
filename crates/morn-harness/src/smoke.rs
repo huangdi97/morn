@@ -45,21 +45,47 @@ pub fn run_harness_smoke(
     ctx: &RuntimeContext,
 ) -> Result<HarnessSmokeReport> {
     let name = provider.provider_name().to_string();
-    let scope = provider.mount(CapabilityScope::new(
+    let mut smoke_scope = CapabilityScope::new(
         ScopeKind::Workcell,
         None,
         ctx.workspace_id.clone(),
         "smoke-scope",
-    ));
+    );
+    for restriction in provider.required_scope_restrictions() {
+        smoke_scope = smoke_scope.with_restriction(*restriction);
+    }
+    let scope = provider.mount(smoke_scope);
     let handle = scope
         .clone()
         .unwrap_or_else(|_| crate::provider::ProviderHandle {
             provider: name.clone(),
             scope_id: "none".to_string(),
         });
-    let session = provider.start(ctx);
+    let scoped_ctx = match ctx.clone().with_scope_id(handle.scope_id.clone()) {
+        Ok(context) => context,
+        Err(error) => {
+            let cleanup_ok = provider.unmount(&handle).is_ok();
+            return Ok(HarnessSmokeReport {
+                provider: name,
+                connected: false,
+                health: false,
+                scoped_execution: false,
+                action_gateway_mediated: true,
+                events_normalized: false,
+                provenance_preserved: false,
+                teardown_ok: cleanup_ok,
+                detail: format!("cannot bind smoke scope to RuntimeContext: {error}"),
+            });
+        }
+    };
+    let session = provider.start(&scoped_ctx);
     let connected = scope.is_ok() && session.is_ok();
     if !connected {
+        let cleanup_ok = if scope.is_ok() {
+            provider.unmount(&handle).is_ok()
+        } else {
+            true
+        };
         return Ok(HarnessSmokeReport {
             provider: name,
             connected: false,
@@ -68,45 +94,88 @@ pub fn run_harness_smoke(
             action_gateway_mediated: true,
             events_normalized: false,
             provenance_preserved: false,
-            teardown_ok: false,
-            detail: "provider could not mount/start (external blocker)".to_string(),
+            teardown_ok: cleanup_ok,
+            detail: "provider could not mount/start (external blocker); any mounted scope was cleaned up".to_string(),
         });
     }
     let session_id = session.as_ref().ok().map(|s| s.id.clone());
-    let health = match session.as_ref().ok() {
-        Some(s) => provider
-            .inspect(&s.id)
-            .is_ok_and(|snap| snap.status == "running"),
+    let session_visible = match session.as_ref().ok() {
+        Some(session) => provider.inspect(&session.id).is_ok_and(|snapshot| {
+            snapshot.session_id == session.id && !snapshot.status.trim().is_empty()
+        }),
         None => false,
     };
 
+    let governed_external_runtime = !provider.required_scope_restrictions().is_empty();
+    let mut canary_mismatch = false;
     let scoped_execution = session_id
         .as_ref()
-        .map(|id| provider.send(id, "run smoke").is_ok())
-        .unwrap_or(false);
-
-    let events_normalized = session_id
-        .as_ref()
         .map(|id| {
-            let events = provider.stream_events(id);
-            !events.is_empty()
-                && events.iter().all(|e| {
-                    matches!(
-                        e.kind,
-                        ExecutionEventKind::SessionStarted
-                            | ExecutionEventKind::ModelResponse
-                            | ExecutionEventKind::ToolCompleted
-                    )
-                })
+            match provider.send(
+                id,
+                "Return exactly MORN_PROVIDER_SMOKE_OK. Do not call tools, access files, use the network, or modify any external system.",
+            ) {
+                Ok(output) => {
+                    if governed_external_runtime
+                        && output.text.trim() != "MORN_PROVIDER_SMOKE_OK"
+                    {
+                        canary_mismatch = true;
+                        false
+                    } else {
+                        true
+                    }
+                }
+                Err(_) => false,
+            }
         })
         .unwrap_or(false);
 
-    // Providers never mutate canonical state: they only emit events (mediated).
-    let action_gateway_mediated = true;
-    let provenance_preserved = !ctx.provenance_refs.is_empty();
+    let health = if governed_external_runtime {
+        provider
+            .runtime_health_snapshot()
+            .is_some_and(|health| health.selectable_at(morn_kernel::time::Timestamp::now()))
+    } else {
+        session_visible
+    };
 
+    let events = session_id
+        .as_ref()
+        .map(|id| provider.stream_events(id))
+        .unwrap_or_default();
+    let events_normalized = session_id.as_ref().is_some_and(|id| {
+        !events.is_empty()
+            && events.iter().all(|event| {
+                event.workspace_id == scoped_ctx.workspace_id
+                    && event.session_id.as_str() == id.as_str()
+                    && !event.summary.trim().is_empty()
+            })
+    });
+    let tool_activity = events.iter().any(|event| {
+        matches!(
+            event.kind,
+            ExecutionEventKind::ToolProposed
+                | ExecutionEventKind::ToolStarted
+                | ExecutionEventKind::ToolCompleted
+                | ExecutionEventKind::ToolFailed
+        )
+    });
+
+    // Real external harnesses are admitted only as E0 executors. During this
+    // live smoke they receive an explicit no-tool prompt; any tool lifecycle
+    // event therefore proves the provider escaped the intended mediation path.
+    let action_gateway_mediated = !governed_external_runtime || !tool_activity;
+    let provenance_preserved = !scoped_ctx.provenance_refs.is_empty();
+
+    let features = provider.features();
     let teardown_ok = match &session_id {
-        Some(id) => provider.terminate(id).is_ok() && provider.unmount(&handle).is_ok(),
+        Some(id) => {
+            let session_cleanup = if features.session_close {
+                provider.terminate(id).is_ok()
+            } else {
+                true
+            };
+            session_cleanup && provider.unmount(&handle).is_ok()
+        }
         None => false,
     };
 
@@ -119,7 +188,16 @@ pub fn run_harness_smoke(
         events_normalized,
         provenance_preserved,
         teardown_ok,
-        detail: "smoke contract complete".to_string(),
+        detail: if governed_external_runtime && tool_activity {
+            "smoke observed tool activity despite an explicit E0/no-tool probe".to_string()
+        } else if canary_mismatch {
+            "provider settled the E0 smoke turn but did not return the exact canary".to_string()
+        } else if features.session_close {
+            "smoke contract complete".to_string()
+        } else {
+            "smoke contract complete; per-session close is unsupported and was not fabricated"
+                .to_string()
+        },
     })
 }
 

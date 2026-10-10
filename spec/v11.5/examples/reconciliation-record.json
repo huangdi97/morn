@@ -1,0 +1,16 @@
+{
+  "id": "reconcile-1042",
+  "attempt_id": "attempt-1042-cmms",
+  "before": "OutcomeUnknown",
+  "after": "Observed",
+  "observation": {
+    "business_key": "work-1042:maintenance-order",
+    "committed": true,
+    "observed": true,
+    "external_ref": "MO-88273",
+    "evidence_refs": [
+      "cmms://orders/MO-88273"
+    ]
+  },
+  "created_at": "2026-10-08T05:04:00Z"
+}
