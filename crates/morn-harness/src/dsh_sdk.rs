@@ -524,7 +524,7 @@ type DshWireItem = std::result::Result<Value, String>;
 
 pub struct DshSdkStdioClient {
     child: Child,
-    stdin: ChildStdin,
+    stdin: Option<ChildStdin>,
     incoming: Mutex<Receiver<DshWireItem>>,
     reader: Option<JoinHandle<()>>,
     wire_overflowed: Arc<AtomicBool>,
@@ -636,7 +636,7 @@ impl DshSdkStdioClient {
         });
         Ok(Self {
             child,
-            stdin,
+            stdin: Some(stdin),
             incoming: Mutex::new(incoming),
             reader: Some(reader),
             wire_overflowed,
@@ -757,8 +757,45 @@ impl DshSdkStdioClient {
     }
 
     pub fn shutdown(&mut self) -> Result<()> {
-        self.request(DSH_METHOD_SHUTDOWN, None)?;
-        Ok(())
+        let protocol_result = self.request(DSH_METHOD_SHUTDOWN, None);
+        // Match the official SDK client's ownership semantics: after the
+        // shutdown response, close stdin to deliver EOF and allow the runtime
+        // to flush persistence and exit on its own. Kill is only a bounded
+        // containment fallback, never the normal successful path.
+        self.stdin.take();
+
+        if protocol_result.is_ok() {
+            let deadline = Instant::now() + Duration::from_secs(6);
+            loop {
+                match self.child.try_wait() {
+                    Ok(Some(_)) => break,
+                    Ok(None) if Instant::now() < deadline => {
+                        thread::sleep(Duration::from_millis(20));
+                    }
+                    Ok(None) => {
+                        let _ = self.child.kill();
+                        let _ = self.child.wait();
+                        return Err(Error::external(
+                            "DSH SDK acknowledged shutdown but did not exit before the grace deadline; process was force-reaped",
+                        ));
+                    }
+                    Err(error) => {
+                        let _ = self.child.kill();
+                        let _ = self.child.wait();
+                        return Err(Error::external(format!(
+                            "inspect DSH SDK exit after shutdown: {error}"
+                        )));
+                    }
+                }
+            }
+        } else {
+            // A transport that could not acknowledge shutdown is no longer
+            // trusted to remain alive. Reap it immediately and preserve the
+            // original protocol/transport error for the caller.
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+        protocol_result.map(|_| ())
     }
 
     pub fn request(&mut self, method: &str, params: Option<Value>) -> Result<Value> {
@@ -775,11 +812,15 @@ impl DshSdkStdioClient {
                 .expect("request frame is always object")
                 .insert("params".to_string(), params);
         }
-        serde_json::to_writer(&mut self.stdin, &frame)
+        let stdin = self
+            .stdin
+            .as_mut()
+            .ok_or_else(|| Error::external("DSH SDK stdin is closed"))?;
+        serde_json::to_writer(&mut *stdin, &frame)
             .map_err(|error| Error::external(format!("encode DSH JSON-RPC: {error}")))?;
-        self.stdin
+        stdin
             .write_all(b"\n")
-            .and_then(|_| self.stdin.flush())
+            .and_then(|_| stdin.flush())
             .map_err(|error| Error::external(format!("write DSH JSON-RPC: {error}")))?;
 
         let deadline = Instant::now() + self.request_timeout;
@@ -1339,6 +1380,11 @@ mod tests {
                 && session_idle_matches(notification, "session-1")
         }));
         client.shutdown().unwrap();
+        assert!(
+            client.child.try_wait().unwrap().is_some(),
+            "successful shutdown must reap the SDK child before Drop"
+        );
+        assert!(client.stdin.is_none(), "successful shutdown must close stdin");
     }
 
     /// A tiny protocol peer used only by the parent test above. It is ignored
