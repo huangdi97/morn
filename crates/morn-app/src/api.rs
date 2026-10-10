@@ -1530,7 +1530,9 @@ async fn v115_work_bind_attested_e0(
                 )));
             }
             let route_ref = provider.configured_route_ref().ok_or_else(|| {
-                AppError(Error::invalid_state("real DSH execution route is not pinned"))
+                AppError(Error::invalid_state(
+                    "real DSH execution route is not pinned",
+                ))
             })?;
             (version, Some(digest), route_ref)
         }
@@ -1577,7 +1579,9 @@ async fn v115_work_bind_attested_e0(
                 )));
             }
             let route_ref = provider.configured_route_ref().ok_or_else(|| {
-                AppError(Error::invalid_state("real Pi execution route is not pinned"))
+                AppError(Error::invalid_state(
+                    "real Pi execution route is not pinned",
+                ))
             })?;
             (version, Some(digest), route_ref)
         }
