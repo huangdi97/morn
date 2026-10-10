@@ -2658,6 +2658,12 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
             "WorkResource {work_id}"
         ))));
     }
+    if !work_phase_allows_requirement_resolution(work.status.phase) {
+        return Err(AppError(Error::invalid_state(format!(
+            "readiness reconciliation is not valid in Work phase {:?}; execution/outcome reconciliation requires its own evidence path",
+            work.status.phase
+        ))));
+    }
     let profile =
         morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
             AppError(Error::validation(format!(
@@ -5302,6 +5308,41 @@ mod workspace_boundary_tests {
             classify_e0_turn_receipt(true, "idle", true),
             ("completed", true)
         );
+    }
+
+    #[tokio::test]
+    async fn readiness_reconcile_cannot_escape_executor_outcome_reconciliation() {
+        use morn_control_plane::ControlPlaneStore;
+        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+
+        let state = AppState::new(":memory:").unwrap();
+        let work_id = {
+            let guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "ambiguous executor turn",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            work.status.phase = WorkPhase::Reconciling;
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+            work.id.to_string()
+        };
+        let result = v115_work_reconcile(
+            State(state.clone()),
+            Json(json!({ "work_id": work_id })),
+        )
+        .await;
+        assert!(result.is_err());
+        let guard = state.lock();
+        let persisted: WorkResource = guard
+            .store
+            .load_record("work_resource_v115", &work_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status.phase, WorkPhase::Reconciling);
     }
 
     #[tokio::test]

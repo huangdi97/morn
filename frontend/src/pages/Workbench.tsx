@@ -869,9 +869,9 @@ function GovernedE0Executor({
       </label>
       {reconciliationRequired && (
         <p role="alert" className="governed-execution-blocker">
-          Outcome reconciliation is required. Blind retry is blocked for this Work generation until
-          authoritative reconciliation resolves the ambiguous executor effect, or an explicit new
-          Work generation is created.
+          Executor outcome reconciliation is required. Blind retry and readiness re-resolution are
+          blocked for this Work generation until authoritative reconciliation resolves the ambiguous
+          executor effect. A normal readiness controller tick is not outcome reconciliation.
         </p>
       )}
       {!reconciliationRequired && selectedWork && !executionAllowed && (
