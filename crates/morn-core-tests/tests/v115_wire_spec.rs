@@ -80,6 +80,12 @@ fn schema_bundle_is_parseable_and_covers_cross_runtime_resources() {
     ] {
         assert!(defs.contains_key(required), "{required}");
     }
+    let guarantees = defs["ExecutionGuarantee"]["enum"].as_array().unwrap();
+    assert!(
+        guarantees.iter().any(|value| value == "tool-mediation"),
+        "published execution guarantee vocabulary must include provider tool mediation"
+    );
+
     for record in ["ExecutionBinding", "ExecutionManifest"] {
         let properties = defs[record]["properties"].as_object().unwrap();
         for field in [

@@ -23,6 +23,12 @@ records, but when present they are pinned together by the reference
 implementation and cannot be silently migrated across providers. They describe
 execution interpretation/provenance, not a new canonical business-truth slot.
 
+The execution-guarantee vocabulary also includes `tool-mediation`: for an
+external Harness admitted through Morn's E0 seam, embedded tools must be
+disabled or every tool invocation must pass through the governed Morn
+Capability / ExternalAction boundary. Detecting tool activity after execution
+is defense-in-depth, not proof of this guarantee.
+
 ## Compatibility rule
 
 Published artifacts are content-addressable/versioned. A patch may fix

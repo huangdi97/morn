@@ -321,7 +321,8 @@
         "workload-identity",
         "stateful-execution",
         "checkpoint-resume",
-        "runtime-attestation"
+        "runtime-attestation",
+        "tool-mediation"
       ]
     },
     "EffectClass": {
