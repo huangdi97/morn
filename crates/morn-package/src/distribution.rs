@@ -12,6 +12,9 @@ use std::process::{Command, Stdio};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
+
+use crate::supply_chain::SupplyChainVerificationEvidence;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OciLayerInput {
@@ -240,6 +243,113 @@ impl OciArtifactPublisher for OrasCliPublisher {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SigstoreIdentityPolicy {
+    pub certificate_identity: String,
+    pub certificate_oidc_issuer: String,
+}
+
+impl SigstoreIdentityPolicy {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.certificate_identity.trim().is_empty()
+            || self.certificate_oidc_issuer.trim().is_empty()
+        {
+            return Err("Sigstore verification requires certificate identity and OIDC issuer".to_string());
+        }
+        Ok(())
+    }
+}
+
+/// Cosign verification is deliberately separate from ORAS publication. A
+/// registry push does not imply signature trust, and a signature does not prove
+/// SLSA provenance. This verifier only upgrades the signature axis.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CosignCliVerifier {
+    pub command: String,
+    pub env: BTreeMap<String, String>,
+}
+
+impl Default for CosignCliVerifier {
+    fn default() -> Self {
+        Self {
+            command: "cosign".to_string(),
+            env: BTreeMap::new(),
+        }
+    }
+}
+
+impl CosignCliVerifier {
+    pub fn command_spec(
+        &self,
+        receipt: &OciPublishReceipt,
+        policy: &SigstoreIdentityPolicy,
+    ) -> Result<ExternalCommandSpec, String> {
+        receipt.validate()?;
+        policy.validate()?;
+        if self.command.trim().is_empty() {
+            return Err("cosign command required".to_string());
+        }
+        let target = receipt
+            .oci_ref
+            .strip_prefix("oci://")
+            .ok_or_else(|| "cosign subject must use oci://".to_string())?;
+        Ok(ExternalCommandSpec {
+            program: self.command.clone(),
+            args: vec![
+                "verify".to_string(),
+                target.to_string(),
+                "--certificate-identity".to_string(),
+                policy.certificate_identity.clone(),
+                "--certificate-oidc-issuer".to_string(),
+                policy.certificate_oidc_issuer.clone(),
+                "--output".to_string(),
+                "json".to_string(),
+            ],
+            env: self.env.clone(),
+        })
+    }
+
+    pub fn verify_signature(
+        &self,
+        receipt: &OciPublishReceipt,
+        policy: &SigstoreIdentityPolicy,
+    ) -> Result<SupplyChainVerificationEvidence, String> {
+        let spec = self.command_spec(receipt, policy)?;
+        let output = Command::new(&spec.program)
+            .args(&spec.args)
+            .env_clear()
+            .envs(&spec.env)
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|error| format!("failed to start cosign: {error}"))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("cosign verify failed: {}", stderr.trim()));
+        }
+        let stdout = String::from_utf8(output.stdout)
+            .map_err(|error| format!("cosign output was not UTF-8: {error}"))?;
+        if stdout.trim().is_empty() {
+            return Err("cosign verify returned no verification evidence".to_string());
+        }
+        serde_json::from_str::<Value>(&stdout)
+            .map_err(|error| format!("cosign verify output was not JSON: {error}"))?;
+
+        let mut digest = Sha256::new();
+        digest.update(stdout.as_bytes());
+        let proof_digest = format!("sha256:{:x}", digest.finalize());
+        Ok(SupplyChainVerificationEvidence {
+            subject_digest: receipt.content_digest.clone(),
+            verifier_ref: format!(
+                "sigstore://cosign?identity={}&issuer={}",
+                policy.certificate_identity, policy.certificate_oidc_issuer
+            ),
+            signature_verified: true,
+            provenance_verified: false,
+            evidence_refs: vec![format!("cosign-verify-output://{proof_digest}")],
+        })
+    }
+}
+
 fn valid_digest(value: &str) -> bool {
     let Some(hex) = value.strip_prefix("sha256:") else {
         return false;
@@ -305,6 +415,29 @@ mod tests {
         assert!(receipt.oci_ref.starts_with("oci://registry.example/"));
         assert_eq!(receipt.content_digest, digest('a'));
         assert!(receipt.validate().is_ok());
+    }
+
+    #[test]
+    fn cosign_verification_is_digest_pinned_and_identity_scoped() {
+        let digest = digest('c');
+        let receipt = OciPublishReceipt {
+            oci_ref: format!("oci://registry.example/morn/cap@{digest}"),
+            content_digest: digest,
+            manifest_media_type: "application/vnd.oci.image.manifest.v1+json".to_string(),
+            artifact_type: Some("application/vnd.morn.capability.v1+json".to_string()),
+        };
+        let policy = SigstoreIdentityPolicy {
+            certificate_identity: "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main".to_string(),
+            certificate_oidc_issuer: "https://token.actions.githubusercontent.com".to_string(),
+        };
+        let spec = CosignCliVerifier::default()
+            .command_spec(&receipt, &policy)
+            .unwrap();
+        assert_eq!(spec.args[0], "verify");
+        assert!(spec.args[1].contains("@sha256:"));
+        assert!(spec.args.contains(&"--certificate-identity".to_string()));
+        assert!(spec.args.contains(&"--certificate-oidc-issuer".to_string()));
+        assert!(spec.args.windows(2).any(|pair| pair == ["--output", "json"]));
     }
 
     #[test]

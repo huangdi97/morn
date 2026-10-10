@@ -6789,7 +6789,7 @@ mod workspace_boundary_tests {
             ConflictPolicy, SourceOfTruthBinding, SourceOfTruthBindingId, TruthAuthorityKind,
         };
         use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
-        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+        use morn_work::control::{WorkResource, WorkSpec};
         use morn_world::{ObservedOutcome, OutcomeSourceKind};
 
         let state = AppState::new(":memory:").unwrap();

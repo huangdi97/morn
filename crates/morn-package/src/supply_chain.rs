@@ -17,6 +17,47 @@ pub struct ArtifactLayer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SupplyChainVerificationEvidence {
+    /// Exact published OCI manifest digest that was verified.
+    pub subject_digest: String,
+    /// Stable verifier implementation / policy identity, never a human-entered
+    /// free-form "signed" flag.
+    pub verifier_ref: String,
+    pub signature_verified: bool,
+    pub provenance_verified: bool,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+}
+
+impl SupplyChainVerificationEvidence {
+    pub fn validate_for(
+        &self,
+        descriptor: &CapabilityArtifactDescriptor,
+        require_signature: bool,
+        require_provenance: bool,
+    ) -> Result<(), String> {
+        descriptor.validate(require_signature, require_provenance)?;
+        if !valid_digest(&self.subject_digest)
+            || !self
+                .subject_digest
+                .eq_ignore_ascii_case(&descriptor.content_digest)
+        {
+            return Err("verification evidence must bind the exact artifact digest".to_string());
+        }
+        if self.verifier_ref.trim().is_empty() || self.evidence_refs.is_empty() {
+            return Err("verification evidence requires verifier identity and evidence refs".to_string());
+        }
+        if require_signature && !self.signature_verified {
+            return Err("artifact signature has not been independently verified".to_string());
+        }
+        if require_provenance && !self.provenance_verified {
+            return Err("artifact provenance has not been independently verified".to_string());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapabilityArtifactDescriptor {
     pub name: String,
     pub version: Version,
@@ -137,6 +178,39 @@ mod tests {
 
         descriptor.oci_ref = format!("oci://registry.example/cap@{}", digest('a'));
         assert!(descriptor.validate(false, false).is_ok());
+    }
+
+    #[test]
+    fn strict_supply_chain_requires_verified_evidence_for_the_exact_digest() {
+        let descriptor = CapabilityArtifactDescriptor {
+            name: "cap".to_string(),
+            version: Version::v1(),
+            manifest_ref: "cap:1".to_string(),
+            oci_ref: format!("oci://registry.example/cap@{}", digest('d')),
+            content_digest: digest('d'),
+            media_type: "application/vnd.morn.capability.v1+json".to_string(),
+            layers: vec![],
+            sbom_ref: None,
+            slsa_provenance_ref: Some("oci://registry.example/provenance@sha256:fixture".to_string()),
+            signature_ref: Some("sigstore://bundle/ref".to_string()),
+        };
+        let mut evidence = SupplyChainVerificationEvidence {
+            subject_digest: digest('d'),
+            verifier_ref: "cosign://policy/github-oidc".to_string(),
+            signature_verified: true,
+            provenance_verified: true,
+            evidence_refs: vec!["sigstore://bundle/ref".to_string()],
+        };
+        assert!(evidence.validate_for(&descriptor, true, true).is_ok());
+
+        evidence.subject_digest = digest('e');
+        assert!(evidence.validate_for(&descriptor, true, true).is_err());
+        evidence.subject_digest = digest('d');
+        evidence.signature_verified = false;
+        assert!(evidence.validate_for(&descriptor, true, true).is_err());
+        evidence.signature_verified = true;
+        evidence.provenance_verified = false;
+        assert!(evidence.validate_for(&descriptor, true, true).is_err());
     }
 
     #[test]
