@@ -5786,11 +5786,20 @@ mod workspace_boundary_tests {
         assert!(replay.is_err());
 
         // No-effect reconciliation does not itself bypass current readiness.
+        // With no fresh CapabilityResolved witness, a new controller tick must
+        // remain fail-closed instead of turning ExecutorRetrySafe into Ready.
         let Json(readiness) =
             v115_work_reconcile(State(state.clone()), Json(json!({ "work_id": work_id })))
                 .await
                 .unwrap();
-        assert_eq!(readiness["work"]["status"]["phase"], "Ready");
+        assert_eq!(readiness["work"]["status"]["phase"], "Blocked");
+        let guard = state.lock();
+        let work: WorkResource = guard
+            .store
+            .load_record("work_resource_v115", &work_id)
+            .unwrap()
+            .unwrap();
+        assert!(!work.condition_is_true("CapabilityResolved"));
     }
 
     #[tokio::test]
