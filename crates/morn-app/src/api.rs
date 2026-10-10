@@ -3709,8 +3709,10 @@ async fn console(State(state): State<AppState>) -> ApiResult {
                 "runtime_health": dsh_harness.runtime_health(),
                 "runtime_version": dsh_harness.runtime_version(),
                 "runtime_digest": dsh_harness.configured_runtime_digest(),
+                "route_ref": dsh_harness.configured_route_ref(),
                 "wire_server_version": dsh_harness.wire_server_version(),
-                "execution_environment_ref": dsh_harness.configured_execution_environment_ref()
+                "execution_environment_ref": dsh_harness.configured_execution_environment_ref(),
+                "tool_mediation_required": dsh_harness.mode() == morn_harness::provider::DshMode::Real
             },
             "pi": {
                 "provider": pi_harness.provider_name(),
@@ -3730,7 +3732,9 @@ async fn console(State(state): State<AppState>) -> ApiResult {
                 "runtime_health": pi_harness.runtime_health(),
                 "runtime_version": pi_harness.runtime_version(),
                 "runtime_digest": pi_harness.configured_runtime_digest(),
-                "execution_environment_ref": pi_harness.configured_execution_environment_ref()
+                "route_ref": pi_harness.configured_route_ref(),
+                "execution_environment_ref": pi_harness.configured_execution_environment_ref(),
+                "tool_mediation_required": pi_harness.mode() == morn_harness::PiMode::Real
             }
         },
         "approvals_satisfied": approvals,
