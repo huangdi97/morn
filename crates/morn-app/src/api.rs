@@ -2161,7 +2161,6 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
 async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_capability::EffectClass;
     use morn_control_plane::{ControlPlaneStore, WorkProgressController, WorkProgressInputs};
-    use morn_work::control::WorkPhase;
 
     let work_id = body
         .get("work_id")
