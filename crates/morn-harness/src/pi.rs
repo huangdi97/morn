@@ -295,12 +295,12 @@ fn pi_run_has_prohibited_tool_activity(run: &PiPromptRun) -> bool {
     run.events.iter().any(|event| {
         event.event_type.starts_with("tool_")
             || (event.event_type == "message_update"
-            && event
-                .payload
+                && event
+                    .payload
                 .get("assistantMessageEvent")
-                .and_then(|value| value.get("type"))
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|kind| kind.starts_with("toolcall_")))
+                    .and_then(|value| value.get("type"))
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|kind| kind.starts_with("toolcall_")))
             || (event.event_type == "turn_end"
                 && event
                     .payload
