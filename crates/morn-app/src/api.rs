@@ -2765,7 +2765,9 @@ async fn v115_work_reconcile_executor_outcome(
         .load_record::<WorkResource>("work_resource_v115", work_id)?
         .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
     if work.workspace_id != guard.workspace.id {
-        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
     }
     if work.status.phase != WorkPhase::Reconciling {
         return Err(AppError(Error::invalid_state(
@@ -2826,13 +2828,7 @@ async fn v115_work_reconcile_executor_outcome(
                 "executor reconciliation authorization is not present in the deployment trust set",
             ))
         })?;
-    if !authorization.authorizes(
-        &work.id,
-        work.generation,
-        &binding.id,
-        &receipt.id,
-        now,
-    ) {
+    if !authorization.authorizes(&work.id, work.generation, &binding.id, &receipt.id, now) {
         return Err(AppError(Error::not_authorized(
             "executor reconciliation authorization is stale or does not match the exact Work/binding/receipt",
         )));
@@ -5583,13 +5579,21 @@ mod workspace_boundary_tests {
                 disposition: ExecutorOutcomeDisposition::NoEffectConfirmed,
                 evidence_refs: vec!["audit://runtime/no-effect/1".to_string()],
                 issued_at: morn_kernel::time::Timestamp::from_millis(
-                    morn_kernel::time::Timestamp::now().millis().saturating_sub(1),
+                    morn_kernel::time::Timestamp::now()
+                        .millis()
+                        .saturating_sub(1),
                 ),
                 valid_until: None,
             };
             let authorization_id = authorization.authorization_id.clone();
-            guard.executor_reconciliation_authorizations.push(authorization);
-            (work.id.to_string(), receipt.id.to_string(), authorization_id)
+            guard
+                .executor_reconciliation_authorizations
+                .push(authorization);
+            (
+                work.id.to_string(),
+                receipt.id.to_string(),
+                authorization_id,
+            )
         };
 
         let Json(response) = v115_work_reconcile_executor_outcome(
@@ -5635,12 +5639,10 @@ mod workspace_boundary_tests {
         assert!(replay.is_err());
 
         // No-effect reconciliation does not itself bypass current readiness.
-        let Json(readiness) = v115_work_reconcile(
-            State(state.clone()),
-            Json(json!({ "work_id": work_id })),
-        )
-        .await
-        .unwrap();
+        let Json(readiness) =
+            v115_work_reconcile(State(state.clone()), Json(json!({ "work_id": work_id })))
+                .await
+                .unwrap();
         assert_eq!(readiness["work"]["status"]["phase"], "Ready");
     }
 
@@ -5673,8 +5675,7 @@ mod workspace_boundary_tests {
                 );
                 work.status.phase = WorkPhase::Reconciling;
                 guard.store.save_work_resource_cas(&mut work).unwrap();
-                let mut binding =
-                    ExecutionBinding::for_work(&work, "cap:test", "pi", "fixture");
+                let mut binding = ExecutionBinding::for_work(&work, "cap:test", "pi", "fixture");
                 binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
                 guard.store.save_execution_binding(&work, &binding).unwrap();
                 let mut receipt =
@@ -5696,13 +5697,21 @@ mod workspace_boundary_tests {
                     disposition,
                     evidence_refs: vec!["audit://runtime/effect-check".to_string()],
                     issued_at: morn_kernel::time::Timestamp::from_millis(
-                        morn_kernel::time::Timestamp::now().millis().saturating_sub(1),
+                        morn_kernel::time::Timestamp::now()
+                        .millis()
+                        .saturating_sub(1),
                     ),
                     valid_until: None,
                 };
                 let authorization_id = authorization.authorization_id.clone();
-                guard.executor_reconciliation_authorizations.push(authorization);
-                (work.id.to_string(), receipt.id.to_string(), authorization_id)
+                guard
+                    .executor_reconciliation_authorizations
+                    .push(authorization);
+                (
+                    work.id.to_string(),
+                    receipt.id.to_string(),
+                    authorization_id,
+                )
             };
             let Json(response) = v115_work_reconcile_executor_outcome(
                 State(state.clone()),
@@ -5752,11 +5761,8 @@ mod workspace_boundary_tests {
             guard.store.save_work_resource_cas(&mut work).unwrap();
             work.id.to_string()
         };
-        let result = v115_work_reconcile(
-            State(state.clone()),
-            Json(json!({ "work_id": work_id })),
-        )
-        .await;
+        let result =
+            v115_work_reconcile(State(state.clone()), Json(json!({ "work_id": work_id }))).await;
         assert!(result.is_err());
         let guard = state.lock();
         let persisted: WorkResource = guard
@@ -5772,7 +5778,11 @@ mod workspace_boundary_tests {
         use morn_control_plane::ControlPlaneStore;
         use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
 
-        for phase in [WorkPhase::Running, WorkPhase::Waiting, WorkPhase::Reconciling] {
+        for phase in [
+            WorkPhase::Running,
+            WorkPhase::Waiting,
+            WorkPhase::Reconciling,
+        ] {
             let state = AppState::new(":memory:").unwrap();
             let work_id = {
                 let guard = state.lock();
@@ -5788,8 +5798,7 @@ mod workspace_boundary_tests {
                 guard.store.save_work_resource_cas(&mut work).unwrap();
                 work.id.to_string()
             };
-            let result =
-                v115_work_resolve(State(state), Json(json!({ "work_id": work_id }))).await;
+            let result = v115_work_resolve(State(state), Json(json!({ "work_id": work_id }))).await;
             assert!(result.is_err(), "phase {phase:?} must not be re-resolved");
         }
     }

@@ -23,9 +23,7 @@ use morn_foundry::compiler::SolutionCompiler;
 use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
-use morn_harness::{
-    ExecutorOutcomeReconciliationAuthorization, PiHarnessProvider, PiMode,
-};
+use morn_harness::{ExecutorOutcomeReconciliationAuthorization, PiHarnessProvider, PiMode};
 use morn_integration::{SourceObservationAttestation, SourceOfTruthBinding};
 #[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;

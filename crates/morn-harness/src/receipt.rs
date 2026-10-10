@@ -10,7 +10,6 @@ use morn_kernel::version::Version;
 
 use crate::context::RuntimeContext;
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct ExecutorOutcomeReconciliationTag;
 pub type ExecutorOutcomeReconciliationId = Id<ExecutorOutcomeReconciliationTag>;
@@ -45,7 +44,10 @@ impl ExecutorOutcomeReconciliationAuthorization {
         if self.authorization_id.trim().is_empty()
             || self.work_generation == 0
             || self.evidence_refs.is_empty()
-            || self.evidence_refs.iter().any(|reference| reference.trim().is_empty())
+            || self
+                .evidence_refs
+                .iter()
+                .any(|reference| reference.trim().is_empty())
         {
             return Err(morn_kernel::error::Error::validation(
                 "executor reconciliation authorization requires id, generation and deployment evidence",
@@ -229,13 +231,7 @@ mod tests {
             issued_at: Timestamp::from_millis(10),
             valid_until: Some(Timestamp::from_millis(20)),
         };
-        assert!(authorization.authorizes(
-            &work,
-            3,
-            &binding,
-            &receipt,
-            Timestamp::from_millis(15)
-        ));
+        assert!(authorization.authorizes(&work, 3, &binding, &receipt, Timestamp::from_millis(15)));
         assert!(!authorization.authorizes(
             &work,
             4,
@@ -257,7 +253,10 @@ mod tests {
             Timestamp::from_millis(15),
         )
         .unwrap();
-        assert_eq!(record.disposition, ExecutorOutcomeDisposition::NoEffectConfirmed);
+        assert_eq!(
+            record.disposition,
+            ExecutorOutcomeDisposition::NoEffectConfirmed
+        );
         assert_eq!(record.execution_receipt_id, receipt);
     }
 
