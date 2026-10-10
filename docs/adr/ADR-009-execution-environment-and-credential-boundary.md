@@ -42,3 +42,18 @@ disabled, or every tool invocation is routed through the Morn-governed
 Capability / ExternalAction enforcement boundary. Detecting a provider tool
 event after it has run is defense-in-depth only and does not satisfy this
 guarantee by itself.
+
+
+## Provider route pinning
+
+A runtime distribution digest identifies executable code, not the route selected
+inside that executable. Real Harness bindings therefore also pin a secret-free
+`runtime_ref` derived from the configured profile / protocol arguments and
+provider-model route. Before every new turn Morn compares the immutable binding
+with the currently configured route. Restarting the same signed runtime with a
+different model or execution profile requires a new binding; it may not silently
+reinterpret existing Work.
+
+Credentials, homes and raw secret values are deliberately excluded from this
+route reference. Their authorization remains an execution-environment /
+credential-boundary concern.

@@ -1486,7 +1486,7 @@ async fn v115_work_bind_attested_e0(
     }
 
     let provider_ref = capability.manifest.provider_ref.clone();
-    let (provider_version, provider_digest) = match provider_ref.as_str() {
+    let (provider_version, provider_digest, runtime_ref) = match provider_ref.as_str() {
         "deepseek-harness" => {
             let mut provider = guard
                 .dsh_harness
@@ -1529,7 +1529,10 @@ async fn v115_work_bind_attested_e0(
                     "initialized DSH runtime identity differs from the pre-authorized deployment version",
                 )));
             }
-            (version, Some(digest))
+            let route_ref = provider.configured_route_ref().ok_or_else(|| {
+                AppError(Error::invalid_state("real DSH execution route is not pinned"))
+            })?;
+            (version, Some(digest), route_ref)
         }
         "pi" => {
             let mut provider = guard
@@ -1573,7 +1576,10 @@ async fn v115_work_bind_attested_e0(
                     "initialized Pi runtime identity differs from the pre-authorized deployment version",
                 )));
             }
-            (version, Some(digest))
+            let route_ref = provider.configured_route_ref().ok_or_else(|| {
+                AppError(Error::invalid_state("real Pi execution route is not pinned"))
+            })?;
+            (version, Some(digest), route_ref)
         }
         other => {
             return Err(AppError(Error::validation(format!(
@@ -1605,6 +1611,7 @@ async fn v115_work_bind_attested_e0(
         provider_version,
     );
     binding.provider_digest = provider_digest;
+    binding.runtime_ref = Some(runtime_ref);
     binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
     binding.compensation_ref = capability.manifest.compensation_ref.clone();
     binding.idempotency_key_required = capability.manifest.idempotency_key_required;
@@ -2103,6 +2110,13 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     )));
                 }
                 if provider.mode() == morn_harness::provider::DshMode::Real
+                    && binding.runtime_ref != provider.configured_route_ref()
+                {
+                    return Err(AppError(Error::invalid_state(
+                        "bound DSH execution route no longer matches the configured profile/model route",
+                    )));
+                }
+                if provider.mode() == morn_harness::provider::DshMode::Real
                     && !provider.runtime_health().ready_for_new_turn_at(now)
                 {
                     return Err(AppError(Error::invalid_state(
@@ -2135,6 +2149,13 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                 {
                     return Err(AppError(Error::invalid_state(
                         "bound Pi provider digest no longer matches the configured runtime distribution",
+                    )));
+                }
+                if provider.mode() == morn_harness::PiMode::Real
+                    && binding.runtime_ref != provider.configured_route_ref()
+                {
+                    return Err(AppError(Error::invalid_state(
+                        "bound Pi execution route no longer matches the configured provider/model route",
                     )));
                 }
                 if provider.mode() == morn_harness::PiMode::Real
@@ -5220,6 +5241,7 @@ mod workspace_boundary_tests {
         capability.manifest.execution.required_guarantees = vec![
             ExecutionGuarantee::ProcessBoundary,
             ExecutionGuarantee::RuntimeAttestation,
+            ExecutionGuarantee::ToolMediation,
         ];
         let profile = morn_profile::DomainProfile::lite_v1();
 
@@ -5236,6 +5258,7 @@ mod workspace_boundary_tests {
                     required_guarantees: vec![
                         ExecutionGuarantee::ProcessBoundary,
                         ExecutionGuarantee::RuntimeAttestation,
+                        ExecutionGuarantee::ToolMediation,
                     ],
                     ..Default::default()
                 },
@@ -5263,6 +5286,7 @@ mod workspace_boundary_tests {
                 vec![
                     ExecutionGuarantee::ProcessBoundary,
                     ExecutionGuarantee::RuntimeAttestation,
+                    ExecutionGuarantee::ToolMediation,
                 ],
             )
             .unwrap();

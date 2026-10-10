@@ -112,6 +112,12 @@ impl PiHarnessProvider {
             .and_then(|config| config.runtime_digest.as_deref())
     }
 
+    pub fn configured_route_ref(&self) -> Option<String> {
+        self.real_config
+            .as_ref()
+            .and_then(|config| config.route_ref().ok())
+    }
+
     pub fn preflight_real_runtime(&mut self) -> Result<String> {
         if self.mode != PiMode::Real {
             return Err(Error::invalid_state(

@@ -61,6 +61,25 @@ pub struct DshSdkConfig {
 }
 
 impl DshSdkConfig {
+    /// Stable, secret-free identity for the execution route selected inside
+    /// one DSH distribution. Runtime artifact identity alone is insufficient:
+    /// changing profile/model/reasoning can reinterpret the same Work.
+    pub fn route_ref(&self) -> Result<String> {
+        if self.provider.trim().is_empty() || self.model.trim().is_empty() {
+            return Err(Error::validation(
+                "DSH route identity requires provider and model",
+            ));
+        }
+        let route = json!({
+            "args": &self.args,
+            "provider": &self.provider,
+            "model": &self.model,
+            "reasoning_effort": &self.reasoning_effort,
+            "max_tokens": self.max_tokens,
+        });
+        Ok(format!("dsh-sdk-route:{route}"))
+    }
+
     pub fn profile_sdk(
         cwd: impl Into<String>,
         provider: impl Into<String>,
@@ -747,6 +766,18 @@ mod tests {
 
         config.cwd = root.to_string_lossy().to_string();
         assert!(config.validate_for_real().is_err());
+    }
+
+    #[test]
+    fn route_ref_changes_when_execution_route_changes_without_exposing_credentials() {
+        let mut config = DshSdkConfig::profile_sdk("/tmp/work", "deepseek-official", "model-a");
+        config.reasoning_effort = Some("high".to_string());
+        let first = config.route_ref().unwrap();
+        config.model = "model-b".to_string();
+        let second = config.route_ref().unwrap();
+        assert_ne!(first, second);
+        assert!(first.contains("deepseek-official"));
+        assert!(!first.contains("dsh_home"));
     }
 
     #[test]

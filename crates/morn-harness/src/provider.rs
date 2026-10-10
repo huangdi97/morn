@@ -579,6 +579,12 @@ impl DeepSeekHarnessProvider {
         })
     }
 
+    pub fn configured_route_ref(&self) -> Option<String> {
+        self.real_config
+            .as_ref()
+            .and_then(|config| config.route_ref().ok())
+    }
+
     pub fn wire_server_version(&self) -> Option<&str> {
         self.real_wire_server_version.as_deref()
     }

@@ -85,6 +85,28 @@ impl Default for PiRpcConfig {
 }
 
 impl PiRpcConfig {
+    /// Stable, secret-free identity of the Pi RPC route. The executable's
+    /// distribution digest is pinned separately.
+    pub fn route_ref(&self) -> Result<String> {
+        let provider = self
+            .provider
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| Error::validation("Pi route identity requires provider"))?;
+        let model = self
+            .model
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| Error::validation("Pi route identity requires model"))?;
+        let route = serde_json::json!({
+            "args": &self.args,
+            "append_route_args": self.append_route_args,
+            "provider": provider,
+            "model": model,
+        });
+        Ok(format!("pi-rpc-route:{route}"))
+    }
+
     pub fn command_line(&self) -> Vec<String> {
         let mut args = self.args.clone();
         if self.append_route_args {
@@ -635,6 +657,26 @@ fn parse_event(value: Value) -> PiRpcEvent {
 
 fn prompt_disposition(response: &PiRpcResponse) -> Option<&str> {
     response.data.as_ref()?.get("disposition")?.as_str()
+}
+
+#[cfg(test)]
+mod route_identity_tests {
+    use super::*;
+
+    #[test]
+    fn route_ref_changes_with_model_or_protocol_args() {
+        let mut config = PiRpcConfig {
+            provider: Some("provider-a".to_string()),
+            model: Some("model-a".to_string()),
+            ..PiRpcConfig::default()
+        };
+        let first = config.route_ref().unwrap();
+        config.model = Some("model-b".to_string());
+        assert_ne!(first, config.route_ref().unwrap());
+        config.model = Some("model-a".to_string());
+        config.args.push("--extra-mode".to_string());
+        assert_ne!(first, config.route_ref().unwrap());
+    }
 }
 
 #[cfg(test)]
