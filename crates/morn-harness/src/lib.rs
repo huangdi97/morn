@@ -41,7 +41,10 @@ pub use provider::{
     HarnessRuntimeHealthState, HarnessSession, MornNativeHarness, ProviderHandle,
     HARNESS_RUNTIME_HEALTH_LEASE_MS,
 };
-pub use receipt::ExecutionReceipt;
+pub use receipt::{
+    ExecutionReceipt, ExecutorOutcomeDisposition, ExecutorOutcomeReconciliation,
+    ExecutorOutcomeReconciliationAuthorization, ExecutorOutcomeReconciliationId,
+};
 pub use scope::{CapabilityScope, ScopeKind};
 pub use smoke::{run_harness_smoke, HarnessSmokeReport};
 pub use spec::{HarnessSpec, HarnessVersion};

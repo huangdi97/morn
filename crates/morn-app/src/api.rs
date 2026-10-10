@@ -92,6 +92,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/ui/extensions", get(v115_ui_extensions))
         .route("/api/v115/control-plane", get(v115_control_plane))
         .route("/api/v115/work/reconcile", post(v115_work_reconcile))
+        .route(
+            "/api/v115/work/reconcile-executor-outcome",
+            post(v115_work_reconcile_executor_outcome),
+        )
         .route("/api/v115/work/resolve", post(v115_work_resolve))
         .route(
             "/api/v115/source-of-truth/catalog",
@@ -2703,6 +2707,224 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
     })))
 }
 
+async fn v115_work_reconcile_executor_outcome(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_control_plane::ControlPlaneStore;
+    use morn_harness::{
+        ExecutionReceipt, ExecutorOutcomeDisposition, ExecutorOutcomeReconciliation,
+    };
+    use morn_kernel::time::Timestamp;
+    use morn_runtime::ExecutionBinding;
+    use morn_work::control::{ConditionStatus, WorkCondition, WorkPhase, WorkResource};
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let receipt_id = body
+        .get("execution_receipt_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("execution_receipt_id is required")))?;
+    let authorization_id = body
+        .get("reconciliation_authorization_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            AppError(Error::validation(
+                "reconciliation_authorization_id is required; callers cannot self-assert executor settlement",
+            ))
+        })?;
+    let reason = body
+        .get("reason")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("reason is required")))?;
+
+    for forbidden in [
+        "disposition",
+        "evidence_refs",
+        "principal_id",
+        "execution_binding_ref",
+        "work_generation",
+    ] {
+        if body.get(forbidden).is_some() {
+            return Err(AppError(Error::validation(format!(
+                "{forbidden} is deployment-authorized reconciliation data and cannot be asserted by the caller"
+            ))));
+        }
+    }
+
+    let guard = state.lock();
+    let now = Timestamp::now();
+    let mut work = guard
+        .store
+        .load_record::<WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!("WorkResource {work_id}"))));
+    }
+    if work.status.phase != WorkPhase::Reconciling {
+        return Err(AppError(Error::invalid_state(
+            "executor outcome reconciliation requires Work phase Reconciling",
+        )));
+    }
+
+    let receipt = guard
+        .store
+        .load_record::<ExecutionReceipt>("execution_receipt_v115", receipt_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("ExecutionReceipt {receipt_id}"))))?;
+    if receipt.workspace_id != work.workspace_id
+        || receipt.work_package_id.as_ref() != Some(&work.id)
+        || receipt.work_generation != Some(work.generation)
+        || receipt.outcome != "outcome-unknown"
+        || receipt.ended_at.is_some()
+    {
+        return Err(AppError(Error::validation(
+            "executor reconciliation requires the exact unsettled outcome-unknown receipt for this Work generation",
+        )));
+    }
+    let binding_id = receipt.execution_binding_ref.as_ref().ok_or_else(|| {
+        AppError(Error::validation(
+            "outcome-unknown receipt has no pinned ExecutionBinding",
+        ))
+    })?;
+    let binding = guard
+        .store
+        .load_record::<ExecutionBinding>("execution_binding_v115", binding_id.as_str())?
+        .ok_or_else(|| AppError(Error::not_found(format!("ExecutionBinding {binding_id}"))))?;
+    if !binding.matches_work_generation(&work) {
+        return Err(AppError(Error::validation(
+            "executor reconciliation receipt binding does not match the canonical Work generation",
+        )));
+    }
+
+    if guard
+        .store
+        .load_records_in_workspace::<ExecutorOutcomeReconciliation>(
+            "executor_outcome_reconciliation_v115",
+            work.workspace_id.as_str(),
+        )?
+        .iter()
+        .any(|record| record.execution_receipt_id == receipt.id)
+    {
+        return Err(AppError(Error::conflict(
+            "execution receipt already has a durable executor reconciliation",
+        )));
+    }
+
+    let authorization = guard
+        .executor_reconciliation_authorizations
+        .iter()
+        .find(|candidate| candidate.authorization_id == authorization_id)
+        .cloned()
+        .ok_or_else(|| {
+            AppError(Error::not_authorized(
+                "executor reconciliation authorization is not present in the deployment trust set",
+            ))
+        })?;
+    if !authorization.authorizes(
+        &work.id,
+        work.generation,
+        &binding.id,
+        &receipt.id,
+        now,
+    ) {
+        return Err(AppError(Error::not_authorized(
+            "executor reconciliation authorization is stale or does not match the exact Work/binding/receipt",
+        )));
+    }
+
+    let consumed_kind = "executor_reconciliation_authorization_consumed_v115";
+    if guard
+        .store
+        .load_record::<Value>(consumed_kind, authorization_id)?
+        .is_some()
+    {
+        return Err(AppError(Error::conflict(
+            "executor reconciliation authorization was already consumed",
+        )));
+    }
+    let reconciliation =
+        ExecutorOutcomeReconciliation::from_authorization(&authorization, reason, now)?;
+
+    // Consume the deployment authorization first. A later persistence failure
+    // burns it fail-closed rather than making a bearer reconciliation replayable.
+    guard.store.save_record_immutable(
+        consumed_kind,
+        authorization_id,
+        work.workspace_id.as_str(),
+        now.millis(),
+        &json!({
+            "authorization_id": authorization_id,
+            "work_id": work.id,
+            "work_generation": work.generation,
+            "execution_binding_ref": binding.id,
+            "execution_receipt_id": receipt.id,
+            "disposition": authorization.disposition,
+            "consumed_at": now
+        }),
+    )?;
+    guard.store.save_record_immutable(
+        "executor_outcome_reconciliation_v115",
+        reconciliation.id.as_str(),
+        work.workspace_id.as_str(),
+        now.millis(),
+        &reconciliation,
+    )?;
+
+    let (known_status, retry_status, next_phase, known_reason, retry_reason) =
+        match reconciliation.disposition {
+            ExecutorOutcomeDisposition::NoEffectConfirmed => (
+                ConditionStatus::True,
+                ConditionStatus::True,
+                WorkPhase::Blocked,
+                "deployment-authorized reconciliation confirmed the ambiguous executor turn caused no external effect",
+                "retry may proceed only after readiness is re-evaluated from current durable evidence",
+            ),
+            ExecutorOutcomeDisposition::EffectObserved => (
+                ConditionStatus::True,
+                ConditionStatus::False,
+                WorkPhase::Reconciling,
+                "deployment-authorized reconciliation confirmed an executor-side effect occurred",
+                "blind retry remains forbidden; wait for authoritative business outcome observation",
+            ),
+            ExecutorOutcomeDisposition::StillUnknown => (
+                ConditionStatus::False,
+                ConditionStatus::False,
+                WorkPhase::Reconciling,
+                "deployment-authorized reconciliation could not establish definitive executor settlement",
+                "blind retry remains forbidden while executor outcome is unknown",
+            ),
+        };
+    let refs = std::iter::once(reconciliation.id.to_string())
+        .chain(reconciliation.evidence_refs.iter().cloned())
+        .collect::<Vec<_>>();
+    let mut known = WorkCondition::new("ExecutorOutcomeKnown", known_status);
+    known.reason = known_reason.to_string();
+    known.evidence_refs = refs.clone();
+    work.set_condition(known);
+    let mut retry = WorkCondition::new("ExecutorRetrySafe", retry_status);
+    retry.reason = retry_reason.to_string();
+    retry.evidence_refs = refs;
+    work.set_condition(retry);
+    work.status.phase = next_phase;
+    work.mark_observed();
+    guard.store.save_work_resource_cas(&mut work)?;
+
+    Ok(Json(json!({
+        "reconciliation": reconciliation,
+        "work": work,
+        "authorization_consumed": true,
+        "business_outcome_observed": false,
+        "independent_acceptance": false,
+        "note": "Executor reconciliation resolves only ambiguous execution settlement. It cannot create business Outcome or Acceptance."
+    })))
+}
+
 async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
     use morn_assurance::{EvidenceClaimState, EvidenceClass};
     use morn_work::value::{ValueAssessment, ValueEvidenceClass};
@@ -2754,6 +2976,7 @@ async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
         "execution_bindings": load("execution_binding_v115")?,
         "execution_manifests": load("execution_manifest_v115")?,
         "execution_receipts": load("execution_receipt_v115")?,
+        "executor_outcome_reconciliations": load("executor_outcome_reconciliation_v115")?,
         "interop_bindings": load("interop_binding_v115")?,
         "external_task_observations": load("external_task_observation_v115")?,
         "binding_migrations": load("binding_migration_v115")?,
@@ -5308,6 +5531,205 @@ mod workspace_boundary_tests {
             classify_e0_turn_receipt(true, "idle", true),
             ("completed", true)
         );
+    }
+
+    #[tokio::test]
+    async fn trusted_no_effect_reconciliation_burns_authorization_and_requires_fresh_readiness() {
+        use morn_capability::EffectClass;
+        use morn_control_plane::ControlPlaneStore;
+        use morn_harness::{
+            ExecutionReceipt, ExecutorOutcomeDisposition,
+            ExecutorOutcomeReconciliationAuthorization,
+        };
+        use morn_kernel::ids::{PrincipalId, WorkPackageId};
+        use morn_runtime::ExecutionBinding;
+        use morn_work::control::{ConditionStatus, WorkPhase, WorkResource, WorkSpec};
+
+        let state = AppState::new(":memory:").unwrap();
+        let (work_id, receipt_id, authorization_id) = {
+            let mut guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "ambiguous E0 executor turn",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            work.status.phase = WorkPhase::Reconciling;
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+
+            let mut binding =
+                ExecutionBinding::for_work(&work, "cap:test", "deepseek-harness", "fixture");
+            binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
+            guard.store.save_execution_binding(&work, &binding).unwrap();
+
+            let mut receipt = ExecutionReceipt::new(work.workspace_id.clone(), "session-unknown");
+            receipt.work_package_id = Some(work.id.clone());
+            receipt.work_generation = Some(work.generation);
+            receipt.execution_binding_ref = Some(binding.id.clone());
+            receipt.provider_ref = Some(binding.provider_ref.clone());
+            receipt.scope_ref = Some("scope://unknown".to_string());
+            receipt.outcome = "outcome-unknown".to_string();
+            guard.store.save_execution_receipt(&work, &receipt).unwrap();
+
+            let authorization = ExecutorOutcomeReconciliationAuthorization {
+                authorization_id: "exec-reconcile-auth-1".to_string(),
+                principal_id: PrincipalId::generate_with("deployment-operator"),
+                work_package_id: work.id.clone(),
+                work_generation: work.generation,
+                execution_binding_ref: binding.id,
+                execution_receipt_id: receipt.id.clone(),
+                disposition: ExecutorOutcomeDisposition::NoEffectConfirmed,
+                evidence_refs: vec!["audit://runtime/no-effect/1".to_string()],
+                issued_at: morn_kernel::time::Timestamp::from_millis(
+                    morn_kernel::time::Timestamp::now().millis().saturating_sub(1),
+                ),
+                valid_until: None,
+            };
+            let authorization_id = authorization.authorization_id.clone();
+            guard.executor_reconciliation_authorizations.push(authorization);
+            (work.id.to_string(), receipt.id.to_string(), authorization_id)
+        };
+
+        let Json(response) = v115_work_reconcile_executor_outcome(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work_id,
+                "execution_receipt_id": receipt_id,
+                "reconciliation_authorization_id": authorization_id,
+                "reason": "deployment audit confirmed no external effect"
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response["authorization_consumed"], true);
+        assert_eq!(response["work"]["status"]["phase"], "Blocked");
+
+        {
+            let guard = state.lock();
+            let work: WorkResource = guard
+                .store
+                .load_record("work_resource_v115", &work_id)
+                .unwrap()
+                .unwrap();
+            let retry = work
+                .status
+                .conditions
+                .iter()
+                .find(|condition| condition.condition_type == "ExecutorRetrySafe")
+                .unwrap();
+            assert_eq!(retry.status, ConditionStatus::True);
+        }
+
+        let replay = v115_work_reconcile_executor_outcome(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work_id,
+                "execution_receipt_id": receipt_id,
+                "reconciliation_authorization_id": authorization_id,
+                "reason": "replay"
+            })),
+        )
+        .await;
+        assert!(replay.is_err());
+
+        // No-effect reconciliation does not itself bypass current readiness.
+        let Json(readiness) = v115_work_reconcile(
+            State(state.clone()),
+            Json(json!({ "work_id": work_id })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(readiness["work"]["status"]["phase"], "Ready");
+    }
+
+    #[tokio::test]
+    async fn observed_or_still_unknown_executor_reconciliation_never_unlocks_retry() {
+        use morn_capability::EffectClass;
+        use morn_control_plane::ControlPlaneStore;
+        use morn_harness::{
+            ExecutionReceipt, ExecutorOutcomeDisposition,
+            ExecutorOutcomeReconciliationAuthorization,
+        };
+        use morn_kernel::ids::{PrincipalId, WorkPackageId};
+        use morn_runtime::ExecutionBinding;
+        use morn_work::control::{ConditionStatus, WorkPhase, WorkResource, WorkSpec};
+
+        for disposition in [
+            ExecutorOutcomeDisposition::EffectObserved,
+            ExecutorOutcomeDisposition::StillUnknown,
+        ] {
+            let state = AppState::new(":memory:").unwrap();
+            let (work_id, receipt_id, authorization_id) = {
+                let mut guard = state.lock();
+                let mut work = WorkResource::new(
+                    guard.workspace.id.clone(),
+                    WorkSpec::new(
+                        WorkPackageId::generate_with("work"),
+                        "ambiguous executor turn",
+                        morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                    ),
+                );
+                work.status.phase = WorkPhase::Reconciling;
+                guard.store.save_work_resource_cas(&mut work).unwrap();
+                let mut binding =
+                    ExecutionBinding::for_work(&work, "cap:test", "pi", "fixture");
+                binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
+                guard.store.save_execution_binding(&work, &binding).unwrap();
+                let mut receipt =
+                    ExecutionReceipt::new(work.workspace_id.clone(), "session-unknown");
+                receipt.work_package_id = Some(work.id.clone());
+                receipt.work_generation = Some(work.generation);
+                receipt.execution_binding_ref = Some(binding.id.clone());
+                receipt.provider_ref = Some(binding.provider_ref.clone());
+                receipt.scope_ref = Some("scope://unknown".to_string());
+                receipt.outcome = "outcome-unknown".to_string();
+                guard.store.save_execution_receipt(&work, &receipt).unwrap();
+                let authorization = ExecutorOutcomeReconciliationAuthorization {
+                    authorization_id: format!("auth-{:?}", disposition),
+                    principal_id: PrincipalId::generate_with("deployment-operator"),
+                    work_package_id: work.id.clone(),
+                    work_generation: work.generation,
+                    execution_binding_ref: binding.id,
+                    execution_receipt_id: receipt.id.clone(),
+                    disposition,
+                    evidence_refs: vec!["audit://runtime/effect-check".to_string()],
+                    issued_at: morn_kernel::time::Timestamp::from_millis(
+                        morn_kernel::time::Timestamp::now().millis().saturating_sub(1),
+                    ),
+                    valid_until: None,
+                };
+                let authorization_id = authorization.authorization_id.clone();
+                guard.executor_reconciliation_authorizations.push(authorization);
+                (work.id.to_string(), receipt.id.to_string(), authorization_id)
+            };
+            let Json(response) = v115_work_reconcile_executor_outcome(
+                State(state.clone()),
+                Json(json!({
+                    "work_id": work_id,
+                    "execution_receipt_id": receipt_id,
+                    "reconciliation_authorization_id": authorization_id,
+                    "reason": "authoritative executor reconciliation"
+                })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(response["work"]["status"]["phase"], "Reconciling");
+            let guard = state.lock();
+            let work: WorkResource = guard
+                .store
+                .load_record("work_resource_v115", &work_id)
+                .unwrap()
+                .unwrap();
+            let retry = work
+                .status
+                .conditions
+                .iter()
+                .find(|condition| condition.condition_type == "ExecutorRetrySafe")
+                .unwrap();
+            assert_eq!(retry.status, ConditionStatus::False);
+        }
     }
 
     #[tokio::test]

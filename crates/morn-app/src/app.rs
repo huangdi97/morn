@@ -23,7 +23,9 @@ use morn_foundry::compiler::SolutionCompiler;
 use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
-use morn_harness::{PiHarnessProvider, PiMode};
+use morn_harness::{
+    ExecutorOutcomeReconciliationAuthorization, PiHarnessProvider, PiMode,
+};
 use morn_integration::{SourceObservationAttestation, SourceOfTruthBinding};
 #[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;
@@ -69,6 +71,9 @@ pub struct AppInner {
     /// Deployment-issued, exact Work/Outcome/disposition review authorizations.
     /// IDs are bearer references delivered out-of-band and are never listed by the API.
     pub acceptance_review_authorizations: Vec<AcceptanceReviewAuthorization>,
+    /// Deployment-issued exact authorizations for resolving one ambiguous
+    /// executor receipt. Bearer IDs are delivered out-of-band and consumed once.
+    pub executor_reconciliation_authorizations: Vec<ExecutorOutcomeReconciliationAuthorization>,
     /// Deployment-owned evidence claims. Repository/reference claims are loaded
     /// first; external RealSite/ProductionWrite proof may only come from the
     /// explicit deployment file, never from an HTTP self-assertion.
@@ -358,6 +363,54 @@ fn configured_acceptance_review_authorizations(
     Ok(authorizations)
 }
 
+fn configured_executor_reconciliation_authorizations(
+) -> morn_kernel::Result<Vec<ExecutorOutcomeReconciliationAuthorization>> {
+    let Ok(path) = std::env::var("MORN_EXECUTOR_RECONCILIATION_AUTHORIZATIONS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_EXECUTOR_RECONCILIATION_AUTHORIZATIONS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read executor reconciliation authorization file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid executor reconciliation authorization JSON in {path:?}: {error}"
+        ))
+    })?;
+    let authorizations: Vec<ExecutorOutcomeReconciliationAuthorization> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid executor reconciliation authorization entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid executor reconciliation authorization entry: {error}"
+            ))
+        })?],
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    for authorization in &authorizations {
+        authorization.validate()?;
+        if !ids.insert(authorization.authorization_id.clone()) {
+            return Err(morn_kernel::error::Error::validation(
+                "executor reconciliation authorization ids must be unique",
+            ));
+        }
+    }
+    Ok(authorizations)
+}
+
 fn configured_evidence_ledger() -> morn_kernel::Result<EvidenceLedger> {
     let mut ledger = reference_evidence_ledger();
     let Ok(path) = std::env::var("MORN_EVIDENCE_CLAIMS_FILE") else {
@@ -445,6 +498,8 @@ impl AppState {
         let source_observation_attestations = configured_source_observation_attestations()?;
         let acceptance_reviewers = configured_acceptance_reviewers()?;
         let acceptance_review_authorizations = configured_acceptance_review_authorizations()?;
+        let executor_reconciliation_authorizations =
+            configured_executor_reconciliation_authorizations()?;
         let evidence_ledger = configured_evidence_ledger()?;
         let mut inner = AppInner {
             store,
@@ -462,6 +517,7 @@ impl AppState {
             source_observation_attestations,
             acceptance_reviewers,
             acceptance_review_authorizations,
+            executor_reconciliation_authorizations,
             evidence_ledger,
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
