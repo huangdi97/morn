@@ -49,7 +49,6 @@ pub fn run_harness_neutrality(
     })
 }
 
-
 /// Provider-adapter semantic episode that intentionally ignores provider-specific
 /// optional lifecycle controls and model-output equivalence.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,7 +59,10 @@ pub struct HarnessAdapterEpisode {
     pub execution_binding_ref: String,
     pub output_present: bool,
     pub normalized_event_count: usize,
+    pub all_events_normalized: bool,
     pub direct_tool_activity: bool,
+    pub runtime_version_present: bool,
+    pub runtime_digest_present: bool,
     pub runtime_health: HarnessRuntimeHealthState,
     pub settled_turns: u64,
 }
@@ -70,6 +72,7 @@ pub struct HarnessAdapterNeutralityReport {
     pub left: HarnessAdapterEpisode,
     pub right: HarnessAdapterEpisode,
     pub same_work_identity: bool,
+    pub same_execution_environment: bool,
     pub both_pinned: bool,
     pub both_e0_only: bool,
     pub both_settled_adapter_turn: bool,
@@ -78,13 +81,20 @@ pub struct HarnessAdapterNeutralityReport {
 impl HarnessAdapterNeutralityReport {
     pub fn all_passed(&self) -> bool {
         self.same_work_identity
+            && self.same_execution_environment
             && self.both_pinned
             && self.both_e0_only
             && self.both_settled_adapter_turn
             && self.left.output_present
             && self.right.output_present
+            && self.left.all_events_normalized
+            && self.right.all_events_normalized
             && !self.left.direct_tool_activity
             && !self.right.direct_tool_activity
+            && self.left.runtime_version_present
+            && self.right.runtime_version_present
+            && self.left.runtime_digest_present
+            && self.right.runtime_digest_present
     }
 }
 
@@ -97,12 +107,9 @@ fn run_adapter_episode(
             "adapter-neutrality requires exact Work generation and ExecutionBinding",
         ));
     }
-    let scope_id = ctx
-        .scope_id
-        .as_deref()
-        .ok_or_else(|| morn_kernel::error::Error::validation(
-            "adapter-neutrality requires a mounted scope",
-        ))?;
+    let scope_id = ctx.scope_id.as_deref().ok_or_else(|| {
+        morn_kernel::error::Error::validation("adapter-neutrality requires a mounted scope")
+    })?;
     let handle = ProviderHandle {
         provider: provider.provider_name().to_string(),
         scope_id: scope_id.to_string(),
@@ -127,10 +134,15 @@ fn run_adapter_episode(
                 && !event.summary.trim().is_empty()
         })
         .count();
+    let all_events_normalized = !events.is_empty() && normalized_event_count == events.len();
+    let runtime_version_present = provider
+        .runtime_version()
+        .is_some_and(|version| !version.trim().is_empty());
+    let runtime_digest_present = provider
+        .runtime_digest()
+        .is_some_and(|digest| !digest.trim().is_empty());
     let health = provider.runtime_health_snapshot().ok_or_else(|| {
-        morn_kernel::error::Error::validation(
-            "adapter-neutrality requires runtime-health evidence",
-        )
+        morn_kernel::error::Error::validation("adapter-neutrality requires runtime-health evidence")
     })?;
     provider.unmount(&handle)?;
 
@@ -145,7 +157,10 @@ fn run_adapter_episode(
             .unwrap_or_default(),
         output_present: output.session_id == session.id && !output.text.trim().is_empty(),
         normalized_event_count,
+        all_events_normalized,
         direct_tool_activity,
+        runtime_version_present,
+        runtime_digest_present,
         runtime_health: health.state,
         settled_turns: health.settled_turns,
     })
@@ -168,11 +183,18 @@ pub fn run_harness_adapter_neutrality(
         && left_ctx.work_package_id == right_ctx.work_package_id
         && left_ctx.work_generation == right_ctx.work_generation
         && left_ctx.execution_binding_ref == right_ctx.execution_binding_ref;
+    let same_execution_environment = left_ctx.execution_environment_ref
+        == right_ctx.execution_environment_ref
+        && left_ctx.execution_class == right_ctx.execution_class
+        && left_ctx.execution_guarantees == right_ctx.execution_guarantees;
     let both_pinned =
         left_ctx.proves_pinned_work_execution() && right_ctx.proves_pinned_work_execution();
-    let both_e0_only = [left.required_scope_restrictions(), right.required_scope_restrictions()]
-        .iter()
-        .all(|restrictions| restrictions.contains(&"morn.effects<=E0"));
+    let both_e0_only = [
+        left.required_scope_restrictions(),
+        right.required_scope_restrictions(),
+    ]
+    .iter()
+    .all(|restrictions| restrictions.contains(&"morn.effects<=E0"));
 
     let left = run_adapter_episode(left, left_ctx)?;
     let right = run_adapter_episode(right, right_ctx)?;
@@ -186,6 +208,7 @@ pub fn run_harness_adapter_neutrality(
         left,
         right,
         same_work_identity,
+        same_execution_environment,
         both_pinned,
         both_e0_only,
         both_settled_adapter_turn,
@@ -198,13 +221,9 @@ mod tests {
     use crate::dsh_sdk::DshSdkConfig;
     use crate::pi::{PiHarnessProvider, PiMode, PI_REAL_E0_SCOPE_RESTRICTION};
     use crate::pi_rpc::PiRpcConfig;
-    use crate::provider::{
-        DeepSeekHarnessProvider, DshMode, DSH_REAL_E0_SCOPE_RESTRICTION,
-    };
+    use crate::provider::{DeepSeekHarnessProvider, DshMode, DSH_REAL_E0_SCOPE_RESTRICTION};
     use crate::scope::{CapabilityScope, ScopeKind};
-    use morn_kernel::ids::{
-        ActorInstanceId, RuntimeBindingId, WorkPackageId, WorkspaceId,
-    };
+    use morn_kernel::ids::{ActorInstanceId, RuntimeBindingId, WorkPackageId, WorkspaceId};
     use morn_kernel::{ExecutionClass, ExecutionGuarantee};
 
     #[test]
@@ -221,7 +240,6 @@ mod tests {
         assert!(report.all_passed());
         assert_ne!(report.left.provider, report.right.provider);
     }
-
 
     #[test]
     fn dsh_sdk_and_pi_rpc_real_adapter_fixtures_are_semantically_neutral() {
@@ -332,15 +350,10 @@ mod tests {
             .unwrap()
             .with_scope_id(pi_scope.scope_id)
             .unwrap()
-            .with_execution_environment(
-                environment_ref,
-                ExecutionClass::Container,
-                guarantees,
-            )
+            .with_execution_environment(environment_ref, ExecutionClass::Container, guarantees)
             .unwrap();
 
-        let report =
-            run_harness_adapter_neutrality(&mut dsh, &mut pi, &dsh_ctx, &pi_ctx).unwrap();
+        let report = run_harness_adapter_neutrality(&mut dsh, &mut pi, &dsh_ctx, &pi_ctx).unwrap();
         assert!(report.all_passed(), "adapter-neutrality: {report:?}");
         assert_ne!(report.left.provider, report.right.provider);
         assert_eq!(report.left.work_ref, report.right.work_ref);
