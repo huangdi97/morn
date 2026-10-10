@@ -1225,6 +1225,7 @@ async fn v115_work_assess_value(
 
     if evidence_class == ValueEvidenceClass::CustomerValidated {
         let now = morn_kernel::time::Timestamp::now();
+        assessment.assessed_at = now;
         let attestation_id = customer_value_attestation_id
             .as_deref()
             .expect("validated customer value attestation id");
@@ -5727,8 +5728,8 @@ mod workspace_boundary_tests {
                 evidence_refs: vec!["audit://runtime/no-effect/1".to_string()],
                 issued_at: morn_kernel::time::Timestamp::from_millis(
                     morn_kernel::time::Timestamp::now()
-                            .millis()
-                            .saturating_sub(1),
+                        .millis()
+                        .saturating_sub(1),
                 ),
                 valid_until: None,
             };
@@ -5845,8 +5846,8 @@ mod workspace_boundary_tests {
                     evidence_refs: vec!["audit://runtime/effect-check".to_string()],
                     issued_at: morn_kernel::time::Timestamp::from_millis(
                         morn_kernel::time::Timestamp::now()
-                        .millis()
-                        .saturating_sub(1),
+                            .millis()
+                            .saturating_sub(1),
                     ),
                     valid_until: None,
                 };

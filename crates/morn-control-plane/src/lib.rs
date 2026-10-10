@@ -1398,7 +1398,9 @@ impl ControlPlaneStore for MornStore {
             let attestation_ref = assessment
                 .customer_value_attestation_ref
                 .as_deref()
-                .ok_or_else(|| Error::validation("customer value requires attestation reference"))?;
+                .ok_or_else(|| {
+                    Error::validation("customer value requires attestation reference")
+                })?;
             let attestation: CustomerValueAttestation = self
                 .load_record("customer_value_attestation_v115", attestation_ref)?
                 .ok_or_else(|| Error::not_found("customer value deployment attestation"))?;
