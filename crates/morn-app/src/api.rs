@@ -1872,7 +1872,14 @@ fn classify_e0_turn_receipt(
     snapshot_status: &str,
     scope_cleanup_ok: bool,
 ) -> (&'static str, bool) {
-    if snapshot_status == "outcome-unknown" || snapshot_status.starts_with("outcome-unknown-") {
+    if snapshot_status == "outcome-unknown"
+        || snapshot_status.starts_with("outcome-unknown-")
+        || snapshot_status == "policy-violation-runtime-reaped"
+    {
+        // A prohibited executor tool/subagent event means code outside Morn's
+        // governed effect path may have run before containment. Reaping the
+        // runtime stops further activity but cannot prove the world was
+        // unchanged, so blind retry is unsafe.
         return ("outcome-unknown", false);
     }
     if !scope_cleanup_ok {
@@ -5259,6 +5266,11 @@ mod workspace_boundary_tests {
             classify_e0_turn_receipt(true, "outcome-unknown", true),
             ("outcome-unknown", false),
             "ambiguous provider state must override an optimistic return value"
+        );
+        assert_eq!(
+            classify_e0_turn_receipt(false, "policy-violation-runtime-reaped", true),
+            ("outcome-unknown", false),
+            "prohibited executor activity cannot be treated as a definitive no-effect failure"
         );
         assert_eq!(
             classify_e0_turn_receipt(false, "idle-non-success", true),
