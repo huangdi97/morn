@@ -298,6 +298,22 @@ function WorkEvidenceTrace({
                     <small>
                       Durable events: {persistedEvents.length}/{referencedEvents.length} · {durableTraceComplete ? "complete" : "incomplete"}
                     </small>
+                    {persistedEvents.length > 0 && (
+                      <details className="execution-event-trace">
+                        <summary>Normalized execution events</summary>
+                        <ul>
+                          {persistedEvents.map((event, eventIndex) => (
+                            <li key={textField(event, "id") ?? eventIndex}>
+                              <b>{textField(event, "kind") ?? "ExecutionEvent"}</b>
+                              <small>{textField(event, "summary") ?? "No auditable summary"}</small>
+                              <small>
+                                Work generation: {String(event.work_generation ?? "legacy / unknown")}
+                              </small>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                     <small>Runtime version: {textField(receipt, "runtime_version") ?? "Not pinned"}</small>
                     <small>Runtime digest: {textField(receipt, "runtime_digest") ?? "Fixture / not pinned"}</small>
                     <small>Environment: {textField(receipt, "execution_environment_ref") ?? "Fixture / not pinned"}</small>

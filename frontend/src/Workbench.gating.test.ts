@@ -184,7 +184,7 @@ describe("canonical Work remains a separate product surface", () => {
         { id: "binding-other", work_id: "work:foreign" },
       ],
       execution_events: [
-        { id: "event-1", session_id: "session-1", kind: "ModelResponse", summary: "assistant committed" },
+        { id: "event-1", work_package_id: "work:canonical-1", work_generation: 1, session_id: "session-1", kind: "ModelResponse", summary: "assistant committed" },
         { id: "event-other-session", session_id: "session-other", kind: "Checkpoint", summary: "foreign trace" },
       ],
       execution_receipts: [
@@ -253,6 +253,9 @@ describe("canonical Work remains a separate product surface", () => {
     expect(html).toContain("ObservedOperational");
     expect(html).toContain("sha256:live-one");
     expect(html).toContain("Durable events: 1/1 · complete");
+    expect(html).toContain("Normalized execution events");
+    expect(html).toContain("assistant committed");
+    expect(html).toContain("Work generation: 1");
     expect(html).toContain("https://mcp.example.com");
     expect(html).toContain("MCP task observation");
     expect(html).toContain("Value evidence refs: 1");
