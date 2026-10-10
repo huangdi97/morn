@@ -223,6 +223,7 @@ export interface V115Status {
       mode: "fixture" | "real";
       health: string;
       configured_execution_environment_ref: string | null;
+      profile_configuration_ref: string | null;
       runtime_version: string | null;
       runtime_digest: string | null;
       wire_server_version: string | null;
