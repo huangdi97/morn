@@ -13,7 +13,7 @@ use morn_kernel::time::Timestamp;
 
 use crate::context::RuntimeContext;
 use crate::event::{ExecutionEvent, ExecutionEventKind};
-use crate::pi_rpc::{PiPromptRun, PiRpcClient, PiRpcConfig};
+use crate::pi_rpc::{PiRpcClient, PiRpcConfig, PiRpcEvent};
 use crate::provider::{
     HarnessOutput, HarnessProvider, HarnessProviderFeatures, HarnessRuntimeHealth, HarnessSession,
     HarnessSnapshot, ProviderHandle,
@@ -847,7 +847,7 @@ impl HarnessProvider for PiHarnessProvider {
 #[cfg(test)]
 mod tool_policy_tests {
     use super::*;
-    use crate::pi_rpc::PiRpcEvent;
+    use crate::pi_rpc::PiPromptRun;
 
     #[test]
     fn future_pi_tool_events_fail_closed_and_remain_auditable() {
@@ -863,7 +863,7 @@ mod tool_policy_tests {
         let events = normalize_pi_tool_events(
             &morn_kernel::ids::WorkspaceId::generate(),
             "session-1",
-            &run,
+            &run.events,
         );
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, ExecutionEventKind::ToolProposed);

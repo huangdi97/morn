@@ -1051,12 +1051,9 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                 }
 
                 let (run, turn_notifications) = {
-                    let client = self
-                        .real_client
-                        .as_mut()
-                        .ok_or_else(|| {
-                            Error::internal("DSH SDK client missing after initialization")
-                        })?;
+                    let client = self.real_client.as_mut().ok_or_else(|| {
+                        Error::internal("DSH SDK client missing after initialization")
+                    })?;
                     let notification_start = client.notifications.len();
                     let run = client.run_text_prompt(session_id, input);
                     let turn_notifications = client.notifications[notification_start..].to_vec();
