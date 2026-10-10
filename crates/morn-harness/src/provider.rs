@@ -1345,6 +1345,7 @@ mod dsh_provider_tests {
             "--ignored".to_string(),
             "--nocapture".to_string(),
         ];
+        config.allow_protocol_fixture_transport();
         config.request_timeout_ms = 10_000;
         config.turn_timeout_ms = 10_000;
 
@@ -1556,6 +1557,7 @@ mod dsh_provider_tests {
             "--ignored".to_string(),
             "--nocapture".to_string(),
         ];
+        config.allow_protocol_fixture_transport();
         config.request_timeout_ms = 2_000;
         config.turn_timeout_ms = 100;
 

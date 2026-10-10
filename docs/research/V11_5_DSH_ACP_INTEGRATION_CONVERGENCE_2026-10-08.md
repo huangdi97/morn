@@ -94,12 +94,13 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 
 官方 `sdk` Profile 基于完整的 dsh-base，默认包含 Bash/PowerShell、文件系统、Skill、Subagent、Web 等模型可见工具。官方 CLI 的 `--patch` overlay 在 Profile/Home 层之后应用，因此是 Morn 在启动前收紧组合树的正确边界。
 
-Morn 的真实 DSH SDK 路径现在采用双层防线：
+Morn 的真实 DSH SDK 路径现在采用三层防线：
 
-1. **Pre-dispatch**：`DshSdkConfig` 在真实 `--profile sdk` 启动前，向隔离 `DSH_HOME` 写入 Morn 所有的最后层 overlay，并通过 `--patch` 禁用官方 SDK Profile 中的直接模型工具生产者（shell/fs/jobs/skill/subagent/workflow/todo/goal/web/MCP resource 等）。该策略以 `morn.dsh-e0-no-direct-tools/v1` 固定进入 route identity。
-2. **Post-observation**：现有 DSH event normalization 仍检测任何 `tool/call` / `tool/result`。若未知插件、未来 Profile 行或部署污染仍产生工具活动，Morn 拒绝输出、降级 Provider health 并回收进程。
+1. **Global ToolRuntime guard**：Morn 的最后层 `--patch` 插入一个无额外依赖的 Cordis 插件，在全局 `ctx.tools.guard()` 上注册单调拒绝；此前 Profile/Home 层增加的未知、自定义工具也不能因为“不在禁用名单”而执行。
+2. **最小可见面与只读 sandbox**：同一 overlay 隐藏官方 SDK Profile 当前已知的 shell/fs/jobs/skill/subagent/workflow/todo/goal/web/MCP 等工具生产者，并把 sandbox 固定为 `read-only`；子进程环境再设置 `DSH_PERMISSION_MODE=read-only`。overlay 与 guard 的字节内容用 SHA-256 固定进 route identity。
+3. **Post-observation containment**：现有 event normalization 仍检查任何 `tool/call` / `tool/result`。如果被固定的 runtime 仍报告工具活动，Morn 拒绝输出、降级 Provider health 并立即回收 owned process。
 
-第二层不能撤销已经发生的工具副作用，因此它只是异常检测；**第一层 + 外部 tool-mediation attestation 才是执行前控制**。Morn 不把 DSH 自身工具权限当成 Authority，E1/E2/E3 仍必须走 Morn Capability / Authority / ExternalAction。
+第三层不能撤销已经发生的工具副作用，只是异常检测；**前两层 + exact runtime digest + 外部 tool-mediation attestation 才构成执行前控制**。生产配置不能关闭这份策略：仅 Rust `cfg(test)` 的 fake-wire fixture 可旁路，相关字段不暴露给 serde。Morn 不把 DSH 自身工具权限当成 Authority，E1/E2/E3 仍必须走 Morn Capability / Authority / ExternalAction。
 
 该 overlay 针对被 runtime digest/version 固定的官方 `sdk` Profile。若部署改用其他 Profile，`validate_for_real` fail-closed；不能静默把 `web`、`sdk-minimal` 或任意自定义 Profile 当成等价运行路径。
 

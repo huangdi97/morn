@@ -2130,6 +2130,7 @@ dependencies = [
  "morn-world",
  "serde",
  "serde_json",
+ "sha2",
  "uuid",
 ]
 

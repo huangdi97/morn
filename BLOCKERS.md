@@ -164,11 +164,15 @@ Current truth:
 - **OFFICIAL_INSTALL_DISTRIBUTION = AVAILABLE** (the August missing-package
   premise is no longer valid).
 - **MORN_DSH_REAL_SDK_ADAPTER = IMPLEMENTED_CODE_PENDING_EXACT_HEAD_CI**:
-  `crates/morn-harness/src/provider.rs` now accepts an explicit isolated
+  `crates/morn-harness/src/provider.rs` accepts an explicit isolated
   `DshSdkConfig`, initializes the official SDK JSON-RPC wire, owns a
   receipt-to-idle turn, and records executor evidence without promoting it to
-  Work truth. A protocol fixture test exercises the wire without credentials.
-  The unconfigured `DshMode::Real` path still fails closed.
+  Work truth. The production launcher also appends a Morn-owned final overlay
+  containing a global monotonic ToolRuntime deny guard, hides shipped direct
+  tools, forces a read-only DSH sandbox, and pins the policy SHA-256 into the
+  provider route. The protocol-fixture bypass exists only under `cfg(test)`
+  and is not serializable. The unconfigured `DshMode::Real` path still fails
+  closed.
 - **AUTHENTICATED_REAL_DSH_SESSION = NOT_VERIFIED**: official credentials and
   a sandboxed external runtime have not been supplied or exercised.
 - **MORN_WORK_OUTCOME_ACCEPTANCE = NOT_PROVEN_BY_DSH**: no harness status

@@ -70,3 +70,40 @@ A test/wrapper executable may set `append_route_args = false`; that path is
 used by protocol fixtures and still requires the external execution-environment
 attestation. It must not be treated as evidence that a production Pi binary was
 tool-free.
+
+
+## DeepSeek SDK concrete tool suppression
+
+The official DSH `sdk` profile inherits the base tool registry and sandbox
+configuration. Morn therefore does not accept post-facto `tool/call`
+observation as its primary enforcement boundary.
+
+A production DSH Real launch is fixed to exactly `dsh --profile sdk`, followed
+by one Morn-owned **last** `--patch` overlay. Arbitrary launcher/application
+arguments or another profile fail validation before the subprocess starts. The
+overlay:
+
+1. inserts a Morn Cordis plugin whose global monotonic `ctx.tools.guard()`
+   rejects every direct ToolRuntime execution, including tools introduced by
+   earlier Profile/Home layers that Morn does not know by name;
+2. disables the currently shipped model-facing tool producers so forbidden
+   tools are also removed from the model-visible surface; and
+3. sets the DSH sandbox to `read-only`; process launch independently forces
+   `DSH_PERMISSION_MODE=read-only`.
+
+The overlay and guard-plugin bytes are hashed together with SHA-256 and that
+policy identity is part of the secret-free provider route reference. Policy
+drift therefore requires a new ExecutionBinding instead of silently
+reinterpreting existing Work.
+
+Every launch receives a unique policy directory under the isolated `DSH_HOME`;
+the overlay and guard are created exclusively and removed only after the owned
+subprocess is reaped. The workspace and Harness home are canonicalized and must
+remain physically disjoint. A protocol-fixture bypass exists only under Rust
+`cfg(test)`; the toggle is private and skipped by serde, so production callers
+and serialized configuration cannot disable the policy.
+
+This concrete launch policy is defence in depth, not a replacement for the
+provider-neutral `tool-mediation` execution-environment attestation. The
+attestation still binds the exact runtime artifact and containment boundary,
+while the Morn overlay constrains the pinned DSH composition.
