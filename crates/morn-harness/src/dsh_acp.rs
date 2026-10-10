@@ -144,33 +144,36 @@ type AcpWireItem = std::result::Result<Value, String>;
 #[derive(Clone)]
 pub struct DshAcpControlHandle {
     stdin: Arc<Mutex<Option<ChildStdin>>>,
+    session_id: String,
 }
 
 impl std::fmt::Debug for DshAcpControlHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DshAcpControlHandle")
+            .field("session_id", &self.session_id)
             .finish_non_exhaustive()
     }
 }
 
 impl DshAcpControlHandle {
-    /// Cancel is the only ACP lifecycle action intentionally exposed on this
-    /// cloneable handle. It is a notification, so it can be written while the
-    /// owning execution thread is blocked awaiting session/prompt settlement.
-    pub fn cancel_session(&self, session_id: &str) -> Result<()> {
-        if session_id.trim().is_empty() {
-            return Err(Error::validation(
-                "DSH ACP cancel requires a non-empty session id",
-            ));
-        }
+    /// Send an ACP cancel notification for the one session this handle owns.
+    ///
+    /// Success means the notification was written to the live transport; it
+    /// does not by itself prove cancellation. The execution path must still
+    /// observe the prompt stop reason / durable updates before changing Work.
+    pub fn request_cancel(&self) -> Result<()> {
         write_shared_frame(
             &self.stdin,
             json!({
                 "jsonrpc":"2.0",
                 "method":DSH_ACP_METHOD_SESSION_CANCEL,
-                "params":{"sessionId":session_id}
+                "params":{"sessionId":self.session_id}
             }),
         )
+    }
+
+    pub fn session_id(&self) -> &str {
+        &self.session_id
     }
 }
 
@@ -324,10 +327,16 @@ impl DshAcpStdioClient {
         })
     }
 
-    pub fn control_handle(&self) -> DshAcpControlHandle {
-        DshAcpControlHandle {
-            stdin: Arc::clone(&self.stdin),
+    pub fn control_handle(&self, session_id: &str) -> Result<DshAcpControlHandle> {
+        if session_id.trim().is_empty() {
+            return Err(Error::validation(
+                "DSH ACP control handle requires a non-empty session id",
+            ));
         }
+        Ok(DshAcpControlHandle {
+            stdin: Arc::clone(&self.stdin),
+            session_id: session_id.to_string(),
+        })
     }
 
     pub fn initialize(&mut self) -> Result<DshAcpServerInfo> {
@@ -415,7 +424,7 @@ impl DshAcpStdioClient {
     }
 
     pub fn cancel_session(&mut self, session_id: &str) -> Result<()> {
-        self.control_handle().cancel_session(session_id)
+        self.control_handle(session_id)?.request_cancel()
     }
 
     pub fn prompt_text(&mut self, session_id: &str, text: &str) -> Result<DshAcpPromptResult> {
@@ -1036,7 +1045,8 @@ mod tests {
         client.initialize().unwrap();
         client.authenticate_noop().unwrap();
         let session = client.new_session(&config.cwd).unwrap();
-        let control = client.control_handle();
+        let control = client.control_handle(&session).unwrap();
+        assert_eq!(control.session_id(), session);
         let thread_session = session.clone();
         let worker = std::thread::spawn(move || {
             let result = client.prompt_text(&thread_session, "wait-for-out-of-band-cancel");
@@ -1051,7 +1061,7 @@ mod tests {
             ready.exists(),
             "fixture prompt never reached cancellable state"
         );
-        control.cancel_session(&session).unwrap();
+        control.request_cancel().unwrap();
 
         let (mut client, result) = worker.join().unwrap();
         let result = result.unwrap();

@@ -34,7 +34,10 @@ stopped when it was not.
 2. **ACP is implemented first as a lifecycle wire client, not silently promoted
    to HarnessProvider semantics.** The Morn ACP client validates official
    protocol identity, supports new/list/resume/close/cancel/prompt at the wire
-   layer, and exercises those calls against a subprocess protocol fixture.
+   layer, and exercises those calls against a subprocess protocol fixture. A
+   session-scoped `DshAcpControlHandle` owns only that session id and a shared
+   writer, so it can send `session/cancel` while the execution thread is blocked
+   waiting for `session/prompt` settlement.
 
 3. **Permission is never Authority.** ACP `session/request_permission` requests
    receive a fail-closed one-shot rejection/cancellation from the generic
@@ -64,8 +67,15 @@ stopped when it was not.
   feature negotiation.
 - `HarnessProviderFeatures.interrupt/resume/session_close` stay false for the
   current DSH SDK provider.
-- A future provider-control API should use a clonable/thread-safe control handle
-  or command channel, rather than adding more synchronous `&mut self` methods.
+- The ACP client now exposes a clonable/thread-safe **session-scoped** cancel
+  handle rather than a process-global writer. Local fixture tests prove that the
+  handle can write a cancel notification while `session/prompt` is blocked.
+- A successful control-handle write means **cancel requested**, not cancel
+  proven. Execution must observe `stopReason=cancelled` or equivalent durable
+  evidence before projecting interruption.
+- The Work-facing `HarnessProvider` feature bit remains unchanged until a
+  provider implementation actually exposes this independent handle to its
+  orchestrator; wire capability alone is still insufficient.
 - Work/Outcome/Acceptance truth remains independent of both SDK and ACP session
   lifecycle.
 - Live ACP runtime evidence remains a deployment gate even when local protocol
@@ -95,6 +105,7 @@ Repository-local verification must cover:
 
 - ACP protocol/agent identity validation;
 - session new/list/resume/close and cancel wire framing;
+- concurrent, session-scoped out-of-band cancel while prompt settlement blocks;
 - permission rejection;
 - visible assistant message projection without private thought projection;
 - tool-activity fail-closed behavior;

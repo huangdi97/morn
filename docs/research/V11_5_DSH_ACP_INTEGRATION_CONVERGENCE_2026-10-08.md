@@ -38,7 +38,7 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 ```
 
 - **Cordis** 负责 DSH 进程内部插件组合与生命周期；Morn 的 Work 状态不下放。
-- **SDK/ACP session** 都只是执行上下文，不是 Work ID，不因 `session/prompt` 成功而推进 `Accepted`。当前 Morn Work-facing 真实 Provider 路径使用官方 SDK wire；ACP 生命周期 wire 已实现为独立 Rust client，用于验证 `session/list/resume/close/cancel/set_config_option/request_permission` 等协议，但在 out-of-band control handle 落地前**不冒充现有同步 HarnessProvider 的 interrupt 能力**。
+- **SDK/ACP session** 都只是执行上下文，不是 Work ID，不因 `session/prompt` 成功而推进 `Accepted`。当前 Morn Work-facing 真实 Provider 路径使用官方 SDK wire；ACP 生命周期 wire 已实现为独立 Rust client，用于验证 `session/list/resume/close/cancel/set_config_option/request_permission` 等协议，并已提供 session-scoped、clonable 的 out-of-band cancel control handle；但该 handle 尚未作为 Work-facing Provider feature 暴露，因此**不冒充现有同步 HarnessProvider 的 interrupt 能力**。
 - **Permission / tool effects**：将来自 ACP 的授权请求绑定 `Work`、`ExecutionBinding`、Profile、Site、AuthorityDecision 和 `ExternalActionPermit`；没有明确许可一律拒绝。ACP 是可信程序接口，绝非隐含的生产写入授权。
 - **Cancel** 只终止/中断会话活动；若外部写入已派发，不应转成「回滚成功」，必须保留 `OUTCOME_UNKNOWN` 并做 source-of-truth reconciliation。
 - **Resume** 按历史 Work/Binding/Provider 版本恢复，失败或 provider 变化只能执行明确重新绑定/迁移，不能静默替换。
@@ -65,7 +65,7 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 1. **协议兼容测试**：仓库已实现 ACP subprocess fixture 覆盖 initialize/authenticate/new/prompt/update/list/set_config_option/close/resume/cancel/request_permission，并校验 ACP v1 + `deepseek-harness-acp` identity；固定官方发行版的真实 runtime run 仍需部署环境。
 2. **受限 E0 session**：生产 ACP launch 复用 SDK 路径相同的最后层 Morn ToolRuntime deny guard、read-only mode、scrubbed env 与 one-shot DSH_HOME；generic permission request 一律 reject/cancel，工具 activity 仍 fail-closed。真实凭据 session 尚未运行。
 3. **Rust SDK bridge（本地实现与契约已验证）**：专用子进程 + JSON-RPC 请求 ID 关联 + bounded request/turn timeout + bounded wire buffer + durable inbox receipt→idle activity interval + exact SDK server identity 校验；stderr 默认不进入协议/审计面以避免敏感输出泄漏。剩余项是正式、带凭据的 runtime smoke，而不是本地 transport 实现。
-4. **Morn Contract**：SDK Real Provider 已实现；ACP 暂保持独立 lifecycle client。只有引入可并发到达的 out-of-band control handle 后，ACP cancel/resume/close 才能升级为 HarnessProvider feature。provider/control handle 都不能调用 Work canonical writes。
+4. **Morn Contract**：SDK Real Provider 已实现；ACP 暂保持独立 lifecycle client。session-scoped out-of-band cancel handle 已实现并有阻塞 prompt 并发测试；只有 Work-facing Provider 显式持有并暴露这一独立控制面、同时完成 exact Work/Binding resume 校验后，ACP cancel/resume/close 才能升级为 HarnessProvider feature。provider/control handle 都不能调用 Work canonical writes。
 5. **外部动作治理**：action/permission 必须通过 Work/Profile/Authority/Effect/Binding/Permit 检查。遇到 timeout-after-commit 不得第二次 dispatch。
 6. **可复现与升级**：带真实 SDK/runtime 版本的 manifest、签名/安装来源记录；Provider upgrade 先 shadow/conformance，然后创建新 Binding。
 7. **真实验收**：仅在有授权的 site/customer 和真正外部结果时才有资格进入 G12；不能以 SDK prompt 成功替代 outcome acceptance。
@@ -79,7 +79,7 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 | DSH-SDK-LIVE | 固定版本官方 SDK runtime 的 initialize/prompt/receipt/idle/shutdown | `NOT_RUN` |
 | DSH-LOCAL-CI | Rust/fixture/provider contract + full repository exact-head CI | `PASS @ b5f5940 / Actions 38033568210` |
 | DSH-ACP-WIRE | ACP v1 identity + initialize/auth/new/prompt/update/list/config/close/resume/cancel/permission wire | `LOCAL_PROTOCOL_IMPLEMENTED`；官方 live runtime `NOT_RUN` |
-| DSH-SESSION-RECOVERY | close/list/resume/cancel 与真正并发控制 | `LOCAL_WIRE_ONLY`；out-of-band Provider control / live restart `NOT_RUN` |
+| DSH-SESSION-RECOVERY | close/list/resume/cancel 与真正并发控制 | `LOCAL_OUT_OF_BAND_CANCEL_IMPLEMENTED`；Work-facing Provider exposure / live restart `NOT_RUN` |
 | DSH-AUTH | 默认拒绝权限与 E2/E3 side effects，绑定真实许可 | `LOCAL_FAIL_CLOSED`（permission reject + E0 pre-exec guard）；live Authority bridge `NOT_RUN` |
 | DSH-PROVIDER | Morn Rust Real provider adapter + protocol fixture | `LOCAL_VERIFIED` |
 | DSH-SWAP | DSH ↔ Pi 替换后 Work history/Outcome/Acceptance 不变 | `FIXTURE_ONLY` |
@@ -157,4 +157,4 @@ Morn 现将真实 SDK 路径收敛为：
 - subprocess fixture 覆盖 permission rejection 与完整 lifecycle framing；这仍不是官方 runtime live evidence；
 - 当前 `HarnessProvider::send(&mut self,...)` 为同步独占执行 seam。仅仅在 ACP wire 上拥有 `session/cancel` 不足以证明调用方能在阻塞 send 时并发执行 cancel。因此 `HarnessProviderFeatures.interrupt` 不因这个 client 自动变成 true。
 
-这一并发语义冻结在 `docs/adr/ADR-045-provider-lifecycle-out-of-band-control.md`。后续若需要 Work-facing ACP Provider，必须先提供独立、clonable/thread-safe control handle 或 command channel，再把 lifecycle capability 纳入 Provider feature negotiation。
+这一并发语义冻结在 `docs/adr/ADR-045-provider-lifecycle-out-of-band-control.md`。本轮已补充独立、clonable/thread-safe、**session-scoped** 的 `DshAcpControlHandle`，并用阻塞 prompt fixture 证明 cancel 可以在执行等待期间并发写入。句柄只固定一个 session id，不能拿一个 Work 的控制权去取消另一个 session；同时“write success”只代表 cancel request 已发送，必须等待 prompt stop reason / durable event 才能确认取消。下一步若把 ACP 升级为 Work-facing Provider，仍必须将该 handle 明确暴露给 orchestrator，并在 resume/close 前重新验证 Work generation、ExecutionBinding、环境与 scope，之后才允许 Provider feature negotiation 宣告 lifecycle capability。
