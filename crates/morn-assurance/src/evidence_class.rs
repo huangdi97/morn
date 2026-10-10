@@ -301,6 +301,10 @@ impl EvidenceLedger {
 /// evidence actually available without external runtime/site credentials.
 pub fn reference_evidence_ledger() -> EvidenceLedger {
     let mut ledger = EvidenceLedger::default();
+    // These are repository/reference baseline facts, not observations made at
+    // process startup. A startup-time timestamp would incorrectly outrank
+    // deployment evidence that was signed shortly before the server started.
+    let baseline_at = Timestamp::from_millis(0);
     ledger
         .append(
             EvidenceClaim::proven(
@@ -310,6 +314,10 @@ pub fn reference_evidence_ledger() -> EvidenceLedger {
                 "morn-reference-runtime",
                 "versioned architecture and ADR baseline exists",
             )
+            .map(|mut claim| {
+                claim.observed_at = baseline_at;
+                claim
+            })
             .expect("static design claim valid"),
         )
         .expect("static design claim append");
@@ -323,6 +331,10 @@ pub fn reference_evidence_ledger() -> EvidenceLedger {
                 "morn-reference-runtime",
                 "deterministic Factory read-only control-plane slice exists",
             )
+            .map(|mut claim| {
+                claim.observed_at = baseline_at;
+                claim
+            })
             .expect("static fixture claim valid"),
         )
         .expect("static fixture claim append");
@@ -345,6 +357,10 @@ pub fn reference_evidence_ledger() -> EvidenceLedger {
                     "morn-reference-runtime",
                     reason,
                 )
+                .map(|mut claim| {
+                    claim.observed_at = baseline_at;
+                    claim
+                })
                 .expect("static blocker valid"),
             )
             .expect("static blocker append");
@@ -358,6 +374,10 @@ pub fn reference_evidence_ledger() -> EvidenceLedger {
                 "morn-reference-runtime",
                 "lawful customer/site data, system access and authority are not present",
             )
+            .map(|mut claim| {
+                claim.observed_at = baseline_at;
+                claim
+            })
             .expect("static site blocker valid"),
         )
         .expect("static site blocker append");
@@ -370,6 +390,10 @@ pub fn reference_evidence_ledger() -> EvidenceLedger {
                 "morn-reference-runtime",
                 "production write and physical control are explicitly not entered",
             )
+            .map(|mut claim| {
+                claim.observed_at = baseline_at;
+                claim
+            })
             .expect("static write blocker valid"),
         )
         .expect("static write blocker append");
@@ -425,6 +449,30 @@ mod tests {
         assert!(!ledger.satisfies("deepseek-harness", EvidenceClass::RealRuntime));
         assert!(!ledger.satisfies("factory-customer", EvidenceClass::RealSite));
         assert!(!ledger.satisfies("factory-production-write", EvidenceClass::ProductionWrite));
+    }
+
+    #[test]
+    fn deployment_evidence_can_supersede_reference_blocker_created_before_startup() {
+        let mut ledger = reference_evidence_ledger();
+        let mut proof = EvidenceClaim::proven(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec!["deployment://dsh/smoke-1".to_string()],
+            "deployment-attestor",
+            "authenticated official runtime smoke passed",
+        )
+        .unwrap();
+        proof.observed_at = Timestamp::from_millis(10);
+        ledger.append(proof).unwrap();
+
+        assert!(ledger.satisfies("deepseek-harness", EvidenceClass::RealRuntime));
+        assert_eq!(
+            ledger
+                .current_claim("deepseek-harness", EvidenceClass::RealRuntime)
+                .unwrap()
+                .state,
+            EvidenceClaimState::Proven
+        );
     }
 
     #[test]
