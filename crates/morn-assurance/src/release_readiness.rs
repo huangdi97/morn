@@ -115,9 +115,8 @@ fn ci_axis(ledger: &EvidenceLedger, build_identity_ref: Option<&str>) -> Release
         .any(|reference| reference == build_identity_ref)
     {
         axis.state = ReadinessState::IdentityMismatch;
-        axis.reason = format!(
-            "CI proof does not reference the running build identity {build_identity_ref}"
-        );
+        axis.reason =
+            format!("CI proof does not reference the running build identity {build_identity_ref}");
     }
     axis
 }
