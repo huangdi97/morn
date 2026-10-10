@@ -325,11 +325,7 @@ impl DshAcpStdioClient {
         self.list_sessions_page(cwd, None)
     }
 
-    pub fn list_sessions_page(
-        &mut self,
-        cwd: Option<&str>,
-        cursor: Option<&str>,
-    ) -> Result<Value> {
+    pub fn list_sessions_page(&mut self, cwd: Option<&str>, cursor: Option<&str>) -> Result<Value> {
         let mut params = serde_json::Map::new();
         if let Some(cwd) = cwd {
             params.insert("cwd".to_string(), json!(cwd));
@@ -667,9 +663,9 @@ fn permission_denial_result(params: &Value) -> Value {
         .get("options")
         .and_then(Value::as_array)
         .and_then(|options| {
-            options.iter().find(|option| {
-                option.get("kind").and_then(Value::as_str) == Some("reject_once")
-            })
+            options
+                .iter()
+                .find(|option| option.get("kind").and_then(Value::as_str) == Some("reject_once"))
         })
         .and_then(|option| option.get("optionId"))
         .and_then(Value::as_str);
@@ -701,13 +697,11 @@ pub fn assistant_text_from_acp_updates(
         .iter()
         .filter(|notification| {
             notification.method == DSH_ACP_METHOD_SESSION_UPDATE
-                && notification.params.get("sessionId").and_then(Value::as_str)
-                    == Some(session_id)
+                && notification.params.get("sessionId").and_then(Value::as_str) == Some(session_id)
         })
         .filter_map(|notification| notification.params.get("update"))
         .filter(|update| {
-            update.get("sessionUpdate").and_then(Value::as_str)
-                == Some("agent_message_chunk")
+            update.get("sessionUpdate").and_then(Value::as_str) == Some("agent_message_chunk")
         })
         .filter_map(|update| update.get("content"))
         .filter(|content| content.get("type").and_then(Value::as_str) == Some("text"))
@@ -769,7 +763,10 @@ mod tests {
                 }),
             },
         ];
-        assert_eq!(assistant_text_from_acp_updates(&updates, "a"), "hello world");
+        assert_eq!(
+            assistant_text_from_acp_updates(&updates, "a"),
+            "hello world"
+        );
     }
 
     #[test]
@@ -807,14 +804,15 @@ mod tests {
         let home = root.join("home");
         std::fs::create_dir_all(&workspace).unwrap();
         std::fs::create_dir_all(&home).unwrap();
-        let config =
-            DshAcpConfig::profile_acp(workspace.to_string_lossy(), home.to_string_lossy());
+        let config = DshAcpConfig::profile_acp(workspace.to_string_lossy(), home.to_string_lossy());
         assert!(config.validate().is_ok());
         let mut wrong_profile = config.clone();
         wrong_profile.args = vec!["--profile".to_string(), "web".to_string()];
         assert!(wrong_profile.validate().is_err());
-        let nested =
-            DshAcpConfig::profile_acp(workspace.to_string_lossy(), workspace.join(".dsh").to_string_lossy());
+        let nested = DshAcpConfig::profile_acp(
+            workspace.to_string_lossy(),
+            workspace.join(".dsh").to_string_lossy(),
+        );
         assert!(nested.validate().is_err());
         let _ = std::fs::remove_dir_all(root);
     }
@@ -891,9 +889,14 @@ mod tests {
                             "update":{"sessionUpdate":"agent_message_chunk","messageId":"m1","content":{"type":"text","text":"hello ACP"}}
                         }
                     })).unwrap();
-                    writeln!(output, "{}", json!({
-                        "jsonrpc":"2.0","id":id,"result":{"stopReason":"end_turn"}
-                    })).unwrap();
+                    writeln!(
+                        output,
+                        "{}",
+                        json!({
+                            "jsonrpc":"2.0","id":id,"result":{"stopReason":"end_turn"}
+                        })
+                    )
+                    .unwrap();
                     output.flush().unwrap();
                 }
                 (DSH_ACP_METHOD_SESSION_LIST, Some(id)) => {
@@ -984,7 +987,9 @@ mod tests {
         client.close_session(&session).unwrap();
         let listed = client.list_sessions(Some(&config.cwd)).unwrap();
         assert_eq!(
-            listed.pointer("/sessions/0/sessionId").and_then(Value::as_str),
+            listed
+                .pointer("/sessions/0/sessionId")
+                .and_then(Value::as_str),
             Some("acp-fixture-1")
         );
         client.resume_session(&session, &config.cwd).unwrap();
