@@ -2,7 +2,7 @@
 
 只记录 **无法通过继续编码/测试在当前环境解决** 的真实阻塞。
 
-## Current blocker index — 2026-10-09
+## Current blocker index — 2026-10-10
 
 This section is authoritative for the current v11.5 convergence branch. Older
 entries below are retained as historical evidence and must not be read as the
@@ -33,9 +33,12 @@ current implementation state.
 - **Production/physical write — NOT AUTHORIZED.** No local fixture, Harness
   success, Provider health lease, or CI run upgrades this state.
 
-Current code therefore may reach **ALL_LOCAL_GATES_PASS** while these gates stay
-external. It must not claim authenticated provider, real-site, customer-value,
-production-write or physical-control evidence without those sources.
+Repository-local engineering gates are now verified at checkpoint
+`b5f5940d942437c8e159a09d8ee2a2e23441002c` by exact-head Actions run
+`38033568210` (**5/5 SUCCESS**). This establishes **ALL_LOCAL_GATES_PASS**
+for that exact checkpoint while every blocker above remains external. It must
+not claim authenticated provider, real-site, customer-value, production-write
+or physical-control evidence without those sources.
 
 ## Historical evidence retained below
 
@@ -163,7 +166,7 @@ source code and an official npm launcher:
 Current truth:
 - **OFFICIAL_INSTALL_DISTRIBUTION = AVAILABLE** (the August missing-package
   premise is no longer valid).
-- **MORN_DSH_REAL_SDK_ADAPTER = IMPLEMENTED_CODE_PENDING_EXACT_HEAD_CI**:
+- **MORN_DSH_REAL_SDK_ADAPTER = IMPLEMENTED_AND_LOCAL_CONTRACT_VERIFIED**:
   `crates/morn-harness/src/provider.rs` accepts an explicit isolated
   `DshSdkConfig`, initializes the official SDK JSON-RPC wire, owns a
   receipt-to-idle turn, and records executor evidence without promoting it to
@@ -188,7 +191,9 @@ HarnessProvider contract or as production authorization.
 
 ### 2026-10-10 DSH real-adapter convergence update
 
-- **MORN_DSH_REAL_SDK_ADAPTER = IMPLEMENTED_CODE_PENDING_EXACT_HEAD_CI**.
+- **MORN_DSH_REAL_SDK_ADAPTER = IMPLEMENTED_AND_LOCAL_CONTRACT_VERIFIED**.
+- Exact local verification checkpoint: `b5f5940d942437c8e159a09d8ee2a2e23441002c`, Actions `38033568210` (**5/5 SUCCESS**).
+- The live gate now requires the exact smoke canary and a fresh post-turn Healthy lease; initialization/transport success alone cannot prove live provider health.
 - The real SDK path now pins runtime artifact, execution-environment identity,
   provider/model route, Morn E0 policy digest, and an attested
   `deepseek-harness-profile@<version>#sha256:<digest>` composition identity.

@@ -64,7 +64,7 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 
 1. **协议兼容测试**：使用官方版本固定的 ACP server，以独立工作目录启动；记录精确包版本、commit/digest、配置与 `initialize` 协商结果。
 2. **受限 read-only session**：在 no production credentials 的隔离 workspace `session/new` → `session/prompt` → 收取 `session/update` → `session/close`；测试异常退出、取消、重启后 resume。
-3. **Rust SDK bridge（本轮代码已落地）**：专用子进程 + JSON-RPC 请求 ID 关联 + durable inbox receipt→idle activity interval + exact SDK server identity 校验；仍需继续补齐 bounded timeout、stderr 隔离/诊断上限和正式 runtime smoke。
+3. **Rust SDK bridge（本地实现与契约已验证）**：专用子进程 + JSON-RPC 请求 ID 关联 + bounded request/turn timeout + bounded wire buffer + durable inbox receipt→idle activity interval + exact SDK server identity 校验；stderr 默认不进入协议/审计面以避免敏感输出泄漏。剩余项是正式、带凭据的 runtime smoke，而不是本地 transport 实现。
 4. **Morn Contract**：实现 `HarnessProvider`，将 fixture 与真实 ACP 适配走同一接口测试；provider 自身不能调用 Work canonical writes。
 5. **外部动作治理**：action/permission 必须通过 Work/Profile/Authority/Effect/Binding/Permit 检查。遇到 timeout-after-commit 不得第二次 dispatch。
 6. **可复现与升级**：带真实 SDK/runtime 版本的 manifest、签名/安装来源记录；Provider upgrade 先 shadow/conformance，然后创建新 Binding。
@@ -75,12 +75,13 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 | Gate | 通过条件 | 本次状态 |
 |---|---|---|
 | DSH-DIST | 官方可安装包与源码可核验 | `EVIDENCED_BY_PUBLIC_SOURCE`（**非本地安装验收**） |
-| DSH-SDK-ADAPTER | Morn Rust Real provider 能驱动官方 SDK wire，并保持 Work truth 隔离 | `IMPLEMENTED_CODE_PENDING_EXACT_HEAD_CI` |
+| DSH-SDK-ADAPTER | Morn Rust Real provider 能驱动官方 SDK wire，并保持 Work truth 隔离 | `LOCAL_VERIFIED` |
 | DSH-SDK-LIVE | 固定版本官方 SDK runtime 的 initialize/prompt/receipt/idle/shutdown | `NOT_RUN` |
+| DSH-LOCAL-CI | Rust/fixture/provider contract + full repository exact-head CI | `PASS @ b5f5940 / Actions 38033568210` |
 | DSH-ACP-WIRE | 固定版本 ACP 进程的 initialize/new/prompt/update/close | `NOT_RUN` |
 | DSH-SESSION-RECOVERY | 取消、重启、resume、并发隔离 | `NOT_RUN` |
 | DSH-AUTH | 默认拒绝权限与 E2/E3 side effects，绑定真实许可 | `NOT_RUN` |
-| DSH-PROVIDER | Morn Rust Real provider adapter + protocol fixture | `IMPLEMENTED_CODE_PENDING_EXACT_HEAD_CI` |
+| DSH-PROVIDER | Morn Rust Real provider adapter + protocol fixture | `LOCAL_VERIFIED` |
 | DSH-SWAP | DSH ↔ Pi 替换后 Work history/Outcome/Acceptance 不变 | `FIXTURE_ONLY` |
 | CUSTOMER-G12 | 授权数据、权威系统观察与独立验收 | `EXTERNAL_BLOCKED` |
 
@@ -132,3 +133,13 @@ Morn 现将真实 SDK 路径收敛为：
 8. graceful shutdown 采用 shutdown → stdin EOF → 有界自然退出 → force-reap fallback，避免正常路径直接 kill 导致持久化未刷盘。
 
 这仍然不把 SDK executor output 提升为 Morn Outcome/Acceptance，也不把仓库 fake-wire 测试升级为 LIVE_DSH。
+
+## 9. 2026-10-10 本地门禁最终收口
+
+- Verified checkpoint: `b5f5940d942437c8e159a09d8ee2a2e23441002c`.
+- Exact-head Actions run `38033568210`: **5/5 SUCCESS**.
+- Governed live smoke requires both:
+  1. exact response canary `MORN_PROVIDER_SMOKE_OK`;
+  2. provider runtime health = fresh `Healthy` lease produced only after a successfully settled live turn.
+- Session/process initialization, a non-empty output, fixture-wire success, or screenshots cannot satisfy `LIVE_DSH`.
+- No further repository-local DSH SDK stub/TODO remains in the current adapter path. `LIVE_DSH` is still independently `EXTERNAL_BLOCKED` until an authorized official runtime/model credential path runs inside a deployment-attested execution environment.
