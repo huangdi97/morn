@@ -1253,6 +1253,9 @@ fn execution_spec_for_capability_and_profile(
     };
     let mut required_guarantees = capability.manifest.execution.required_guarantees.clone();
     required_guarantees.extend(profile.required_execution_guarantees.iter().copied());
+    if matches!(capability.manifest.provider_ref.as_str(), "deepseek-harness" | "pi") {
+        required_guarantees.push(morn_kernel::ExecutionGuarantee::ToolMediation);
+    }
     required_guarantees.sort();
     required_guarantees.dedup();
 

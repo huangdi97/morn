@@ -74,6 +74,9 @@ pub enum ExecutionGuarantee {
     StatefulExecution,
     CheckpointResume,
     RuntimeAttestation,
+    /// External provider tools are disabled or every tool invocation is routed
+    /// through the Morn-governed capability / action mediation boundary.
+    ToolMediation,
 }
 
 impl ExecutionGuarantee {
@@ -90,6 +93,7 @@ impl ExecutionGuarantee {
             "stateful-execution" => Some(Self::StatefulExecution),
             "checkpoint-resume" => Some(Self::CheckpointResume),
             "runtime-attestation" => Some(Self::RuntimeAttestation),
+            "tool-mediation" => Some(Self::ToolMediation),
             _ => None,
         }
     }
@@ -107,6 +111,7 @@ impl ExecutionGuarantee {
             Self::StatefulExecution => "stateful-execution",
             Self::CheckpointResume => "checkpoint-resume",
             Self::RuntimeAttestation => "runtime-attestation",
+            Self::ToolMediation => "tool-mediation",
         }
     }
 }
@@ -140,5 +145,10 @@ mod tests {
             ExecutionGuarantee::RuntimeAttestation.key(),
             "runtime-attestation"
         );
+        assert_eq!(
+            ExecutionGuarantee::parse("tool-mediation"),
+            Some(ExecutionGuarantee::ToolMediation)
+        );
+        assert_eq!(ExecutionGuarantee::ToolMediation.key(), "tool-mediation");
     }
 }

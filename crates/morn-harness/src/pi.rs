@@ -878,6 +878,7 @@ mod tests {
                 ExecutionGuarantee::NetworkEgressPolicy,
                 ExecutionGuarantee::SecretIndirection,
                 ExecutionGuarantee::RuntimeAttestation,
+                ExecutionGuarantee::ToolMediation,
             ],
         )
         .unwrap();
@@ -949,6 +950,7 @@ mod tests {
                 ExecutionGuarantee::NetworkEgressPolicy,
                 ExecutionGuarantee::SecretIndirection,
                 ExecutionGuarantee::RuntimeAttestation,
+                ExecutionGuarantee::ToolMediation,
             ],
         )
         .unwrap();

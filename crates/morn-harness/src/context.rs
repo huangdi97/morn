@@ -123,6 +123,7 @@ impl RuntimeContext {
                 ExecutionGuarantee::NetworkEgressPolicy,
                 ExecutionGuarantee::SecretIndirection,
                 ExecutionGuarantee::RuntimeAttestation,
+                ExecutionGuarantee::ToolMediation,
             ],
         )
     }
@@ -203,6 +204,23 @@ mod tests {
             .unwrap();
         assert!(!policy_labels_without_attestation.proves_real_harness_environment());
 
+        let no_tool_mediation = context()
+            .with_execution_environment(
+                "env://container/no-tool-mediation",
+                ExecutionClass::Container,
+                vec![
+                    ExecutionGuarantee::FilesystemReadPolicy,
+                    ExecutionGuarantee::FilesystemWritePolicy,
+                    ExecutionGuarantee::ProcessBoundary,
+                    ExecutionGuarantee::ResourceLimits,
+                    ExecutionGuarantee::NetworkEgressPolicy,
+                    ExecutionGuarantee::SecretIndirection,
+                    ExecutionGuarantee::RuntimeAttestation,
+                ],
+            )
+            .unwrap();
+        assert!(!no_tool_mediation.proves_real_harness_environment());
+
         let isolated = context()
             .with_execution_environment(
                 "env://container/a",
@@ -215,6 +233,7 @@ mod tests {
                     ExecutionGuarantee::NetworkEgressPolicy,
                     ExecutionGuarantee::SecretIndirection,
                     ExecutionGuarantee::RuntimeAttestation,
+                    ExecutionGuarantee::ToolMediation,
                 ],
             )
             .unwrap();

@@ -1302,6 +1302,7 @@ mod dsh_provider_tests {
                 ExecutionGuarantee::NetworkEgressPolicy,
                 ExecutionGuarantee::SecretIndirection,
                 ExecutionGuarantee::RuntimeAttestation,
+                ExecutionGuarantee::ToolMediation,
             ],
         )
         .unwrap();
@@ -1374,6 +1375,7 @@ mod dsh_provider_tests {
                 ExecutionGuarantee::NetworkEgressPolicy,
                 ExecutionGuarantee::SecretIndirection,
                 ExecutionGuarantee::RuntimeAttestation,
+                ExecutionGuarantee::ToolMediation,
             ],
         )
         .unwrap();
@@ -1584,6 +1586,7 @@ mod dsh_provider_tests {
                 ExecutionGuarantee::NetworkEgressPolicy,
                 ExecutionGuarantee::SecretIndirection,
                 ExecutionGuarantee::RuntimeAttestation,
+                ExecutionGuarantee::ToolMediation,
             ],
         )
         .unwrap();

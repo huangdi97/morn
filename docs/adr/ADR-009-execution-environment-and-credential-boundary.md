@@ -31,3 +31,14 @@ A DSH/Pi local sandbox cannot satisfy stronger isolation by declaration alone.
 Provider replacement clears provider-bound runtime/environment/authority state
 and requires a freshly resolved environment identity. Credentials do not become
 prompt or agent-memory data.
+
+
+## Tool mediation addendum
+
+For external Harness providers admitted through the E0 execution seam, isolation
+alone is insufficient. The attested execution environment must also carry the
+provider-neutral `tool-mediation` guarantee: embedded provider tools are
+disabled, or every tool invocation is routed through the Morn-governed
+Capability / ExternalAction enforcement boundary. Detecting a provider tool
+event after it has run is defense-in-depth only and does not satisfy this
+guarantee by itself.
