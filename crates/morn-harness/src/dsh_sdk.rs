@@ -473,7 +473,7 @@ impl DshSdkConfig {
         }))
     }
 
-    fn materialize_managed_runtime_home(&self) -> Result<Option<PathBuf>> {
+    pub(crate) fn materialize_managed_runtime_home(&self) -> Result<Option<PathBuf>> {
         if !self.enforce_morn_e0_tool_policy {
             return Ok(None);
         }
@@ -519,7 +519,7 @@ impl DshSdkConfig {
         Ok(Some(home))
     }
 
-    fn launch_args(&self) -> Result<(Vec<String>, Option<PathBuf>)> {
+    pub(crate) fn launch_args(&self) -> Result<(Vec<String>, Option<PathBuf>)> {
         let mut args = self.args.clone();
         let policy = self.materialize_morn_e0_tool_policy()?;
         if let Some(policy) = &policy {

@@ -4,6 +4,7 @@
 pub mod binding;
 pub mod context;
 pub mod contract;
+pub mod dsh_acp;
 pub mod dsh_sdk;
 pub mod event;
 pub mod intelligence;
@@ -21,6 +22,15 @@ mod subprocess_wire;
 pub use binding::{HarnessBinding, RuntimeBinding};
 pub use context::RuntimeContext;
 pub use contract::run_provider_contract;
+pub use dsh_acp::{
+    assistant_text_from_acp_updates, DshAcpConfig, DshAcpNotification, DshAcpPromptResult,
+    DshAcpServerInfo, DshAcpStdioClient, DSH_ACP_AGENT_NAME, DSH_ACP_METHOD_AUTHENTICATE,
+    DSH_ACP_METHOD_INITIALIZE, DSH_ACP_METHOD_REQUEST_PERMISSION, DSH_ACP_METHOD_SESSION_CANCEL,
+    DSH_ACP_METHOD_SESSION_CLOSE, DSH_ACP_METHOD_SESSION_LIST, DSH_ACP_METHOD_SESSION_NEW,
+    DSH_ACP_METHOD_SESSION_PROMPT, DSH_ACP_METHOD_SESSION_RESUME,
+    DSH_ACP_METHOD_SESSION_SET_CONFIG_OPTION, DSH_ACP_METHOD_SESSION_UPDATE,
+    DSH_ACP_PROTOCOL_VERSION,
+};
 pub use dsh_sdk::{
     assistant_text_from_session_event, DshNotification, DshSdkConfig, DshSdkRunResult,
     DshSdkStdioClient, DSH_METHOD_INITIALIZE, DSH_METHOD_SESSION_PROMPT, DSH_METHOD_SHUTDOWN,
