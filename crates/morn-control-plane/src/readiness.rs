@@ -321,6 +321,7 @@ mod tests {
             content_digest: format!("sha256:{}", "a".repeat(64)),
             signature_ref: None,
             provenance_ref: Some("build://first".to_string()),
+            supply_chain_verification: None,
             status: CapabilityDistributionReleaseStatus::Released,
             created_at: Timestamp::now(),
         };
