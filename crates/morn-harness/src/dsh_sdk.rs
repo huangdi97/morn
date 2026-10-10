@@ -42,7 +42,6 @@ pub const DSH_NOTIFICATION_SUBAGENT_FINISHED: &str = "subagent.finished";
 /// shipped direct tool producers before a model turn. Runtime event checks
 /// remain a second line of defence against added/unknown tool plugins.
 pub const DSH_MORN_E0_TOOL_POLICY_REF: &str = "morn.dsh-e0-no-direct-tools/v1";
-const DSH_MORN_E0_TOOL_POLICY_FILE: &str = "morn-e0-no-direct-tools.patch.yml";
 const DSH_MORN_E0_TOOL_POLICY_PATCH: &str = r#"# Generated/owned by Morn. Applied LAST to the official DSH SDK profile.
 # Direct Harness tools are disabled; governed effects belong to Morn Capability /
 # Authority / ExternalAction. Keep the tools registry itself mounted so the Agent
@@ -94,6 +93,18 @@ const DSH_MORN_E0_TOOL_POLICY_PATCH: &str = r#"# Generated/owned by Morn. Applie
 - id: skill-office
   disabled: true
 "#;
+
+/// Stable non-secret semantic fingerprint. This is a drift detector for the
+/// Morn-owned launch overlay; the provider distribution itself remains pinned
+/// by a deployment-attested SHA-256 digest.
+fn dsh_morn_e0_tool_policy_identity() -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in DSH_MORN_E0_TOOL_POLICY_PATCH.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{DSH_MORN_E0_TOOL_POLICY_REF}#fnv1a64:{hash:016x}")
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DshSdkConfig {
@@ -148,7 +159,7 @@ impl DshSdkConfig {
             "reasoning_effort": &self.reasoning_effort,
             "max_tokens": self.max_tokens,
             "tool_policy": if self.enforce_morn_e0_tool_policy {
-                Some(DSH_MORN_E0_TOOL_POLICY_REF)
+                Some(dsh_morn_e0_tool_policy_identity())
             } else {
                 None
             },
@@ -296,21 +307,31 @@ impl DshSdkConfig {
         fs::create_dir_all(&policy_dir).map_err(|error| {
             Error::external(format!("create Morn DSH policy directory: {error}"))
         })?;
-        let policy_path = policy_dir.join(DSH_MORN_E0_TOOL_POLICY_FILE);
-        if fs::symlink_metadata(&policy_path)
-            .is_ok_and(|metadata| metadata.file_type().is_symlink())
+        // A fresh create-new file removes the deterministic-path symlink/replace
+        // window. The child receives this exact immutable launch path and the
+        // owner removes it only when the subprocess is reaped.
+        let policy_path = policy_dir.join(format!(
+            "morn-e0-no-direct-tools-{}.patch.yml",
+            uuid::Uuid::new_v4()
+        ));
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
         {
-            return Err(Error::validation(
-                "Morn DSH E0 tool policy path must not be a symbolic link",
-            ));
+            use std::os::unix::fs::OpenOptionsExt as _;
+            options.mode(0o600);
         }
-        fs::write(&policy_path, DSH_MORN_E0_TOOL_POLICY_PATCH).map_err(|error| {
-            Error::external(format!("write Morn DSH E0 tool policy: {error}"))
+        let mut file = options.open(&policy_path).map_err(|error| {
+            Error::external(format!("create Morn DSH E0 tool policy: {error}"))
         })?;
+        file.write_all(DSH_MORN_E0_TOOL_POLICY_PATCH.as_bytes())
+            .and_then(|_| file.sync_all())
+            .map_err(|error| Error::external(format!("write Morn DSH E0 tool policy: {error}")))?;
         let verified = fs::read_to_string(&policy_path).map_err(|error| {
             Error::external(format!("verify Morn DSH E0 tool policy: {error}"))
         })?;
         if verified != DSH_MORN_E0_TOOL_POLICY_PATCH {
+            let _ = fs::remove_file(&policy_path);
             return Err(Error::external(
                 "Morn DSH E0 tool policy changed while being materialized",
             ));
@@ -318,13 +339,14 @@ impl DshSdkConfig {
         Ok(Some(policy_path))
     }
 
-    fn launch_args(&self) -> Result<Vec<String>> {
+    fn launch_args(&self) -> Result<(Vec<String>, Option<PathBuf>)> {
         let mut args = self.args.clone();
-        if let Some(policy_path) = self.materialize_morn_e0_tool_policy()? {
+        let policy_path = self.materialize_morn_e0_tool_policy()?;
+        if let Some(policy_path) = &policy_path {
             args.push("--patch".to_string());
             args.push(policy_path.to_string_lossy().to_string());
         }
-        Ok(args)
+        Ok((args, policy_path))
     }
 
     pub fn from_env() -> Result<Self> {
@@ -418,6 +440,7 @@ pub struct DshSdkStdioClient {
     next_id: u64,
     request_timeout: Duration,
     turn_timeout: Duration,
+    owned_policy_path: Option<PathBuf>,
     pub notifications: Vec<DshNotification>,
 }
 
@@ -444,7 +467,7 @@ impl DshSdkStdioClient {
             ));
         }
         let mut command = Command::new(&config.command);
-        let launch_args = config.launch_args()?;
+        let (launch_args, owned_policy_path) = config.launch_args()?;
         command
             .args(&launch_args)
             .current_dir(&config.cwd)
@@ -458,12 +481,18 @@ impl DshSdkStdioClient {
         if let Some(home) = &config.dsh_home {
             command.env("DSH_HOME", home);
         }
-        let mut child = command.spawn().map_err(|error| {
-            Error::external(format!(
-                "failed to start DSH SDK runtime {:?}: {error}",
-                config.command
-            ))
-        })?;
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                if let Some(policy_path) = &owned_policy_path {
+                    let _ = fs::remove_file(policy_path);
+                }
+                return Err(Error::external(format!(
+                    "failed to start DSH SDK runtime {:?}: {error}",
+                    config.command
+                )));
+            }
+        };
         let stdin = child
             .stdin
             .take()
@@ -520,6 +549,7 @@ impl DshSdkStdioClient {
             next_id: 1,
             request_timeout: Duration::from_millis(config.request_timeout_ms),
             turn_timeout: Duration::from_millis(config.turn_timeout_ms),
+            owned_policy_path,
             notifications: Vec::new(),
         })
     }
@@ -734,6 +764,9 @@ impl Drop for DshSdkStdioClient {
         if let Some(reader) = self.reader.take() {
             let _ = reader.join();
         }
+        if let Some(policy_path) = self.owned_policy_path.take() {
+            let _ = fs::remove_file(policy_path);
+        }
     }
 }
 
@@ -926,9 +959,10 @@ mod tests {
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         );
         assert!(config.validate_for_real().is_ok());
-        let args = config.launch_args().unwrap();
+        let (args, owned_policy_path) = config.launch_args().unwrap();
         let patch_position = args.iter().position(|arg| arg == "--patch").unwrap();
         let policy_path = PathBuf::from(&args[patch_position + 1]);
+        assert_eq!(owned_policy_path.as_ref(), Some(&policy_path));
         let policy = fs::read_to_string(&policy_path).unwrap();
         for required in [
             "id: tool-bash",
@@ -938,15 +972,22 @@ mod tests {
             "id: tool-web",
             "id: mcp-resources",
         ] {
-            assert!(policy.contains(required), "{required} must be disabled before launch");
+            assert!(
+                policy.contains(required),
+                "{required} must be disabled before launch"
+            );
         }
-        assert!(config
-            .route_ref()
-            .unwrap()
-            .contains(DSH_MORN_E0_TOOL_POLICY_REF));
+        let route = config.route_ref().unwrap();
+        assert!(route.contains(DSH_MORN_E0_TOOL_POLICY_REF));
+        assert!(route.contains("fnv1a64:"));
+        assert_eq!(
+            dsh_morn_e0_tool_policy_identity(),
+            "morn.dsh-e0-no-direct-tools/v1#fnv1a64:16df88fc0e48a422"
+        );
 
         config.args = vec!["--profile".to_string(), "web".to_string()];
         assert!(config.validate_for_real().is_err());
+        let _ = fs::remove_file(policy_path);
         let _ = fs::remove_dir_all(root);
     }
 
