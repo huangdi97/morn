@@ -48,6 +48,12 @@ try {
     if (route === "/console" && !(await page.getByRole("heading", { name: "Release readiness" }).isVisible())) {
       errors.push("console: evidence-aware release readiness summary is not visible");
     }
+    if (route === "/console") {
+      const productionWrite = page.locator(".readiness-item", { hasText: "Production write" });
+      if (!(await productionWrite.count()) || !(await productionWrite.first().evaluate((node) => node.classList.contains("readiness-blocked")))) {
+        errors.push("console: production write must remain visibly blocked when it is not authorized");
+      }
+    }
     if (route === "/hub" && !(await page.getByRole("heading", { name: "v11.5 Capability Supply Chain" }).isVisible())) {
       errors.push("hub: governed capability supply-chain section is not visible");
     }

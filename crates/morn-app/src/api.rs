@@ -521,10 +521,10 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         },
         "claims": {
             "local_engineering": "reference implementation + fixture/conformance tests",
-            "real_dsh": "SDK wire adapter implemented; real mode is E0-only with scrubbed child environment; authenticated runtime/model smoke remains external-blocked",
+            "real_dsh": "SDK wire adapter plus ACP lifecycle/control are locally implemented; real mode remains E0-only; authenticated runtime/model smoke remains external-blocked",
             "real_pi": "JSONL RPC adapter implemented; real mode is E0-only with scrubbed child environment; installed Pi binary/model/credential smoke remains external-blocked",
             "real_factory": "external-blocked until lawful site data/authority exists",
-            "production_write": "not entered"
+            "production_write": "not authorized; not entered"
         }
     })))
 }
