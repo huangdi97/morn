@@ -77,12 +77,12 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 | DSH-DIST | 官方可安装包与源码可核验 | `EVIDENCED_BY_PUBLIC_SOURCE`（**非本地安装验收**） |
 | DSH-SDK-ADAPTER | Morn Rust Real provider 能驱动官方 SDK wire，并保持 Work truth 隔离 | `LOCAL_VERIFIED` |
 | DSH-SDK-LIVE | 固定版本官方 SDK runtime 的 initialize/prompt/receipt/idle/shutdown | `NOT_RUN` |
-| DSH-LOCAL-CI | Rust/fixture/provider contract + full repository exact-head CI | `PASS @ b5f5940 / Actions 38033568210` |
+| DSH-LOCAL-CI | Rust/fixture/provider contract + full repository exact-head CI | `PASS @ 152fd22 / Actions 38060442988` |
 | DSH-ACP-WIRE | ACP v1 identity + initialize/auth/new/prompt/update/list/config/close/resume/cancel/permission wire | `LOCAL_PROTOCOL_IMPLEMENTED`；官方 live runtime `NOT_RUN` |
 | DSH-SESSION-RECOVERY | close/list/resume/cancel 与真正并发控制 | `LOCAL_OUT_OF_BAND_CANCEL_IMPLEMENTED`；Work-facing Provider exposure / live restart `NOT_RUN` |
 | DSH-AUTH | 默认拒绝权限与 E2/E3 side effects，绑定真实许可 | `LOCAL_FAIL_CLOSED`（permission reject + E0 pre-exec guard）；live Authority bridge `NOT_RUN` |
 | DSH-PROVIDER | Morn Rust Real provider adapter + protocol fixture | `LOCAL_VERIFIED` |
-| DSH-SWAP | DSH ↔ Pi 替换后 Work history/Outcome/Acceptance 不变 | `FIXTURE_ONLY` |
+| DSH-SWAP | DSH ↔ Pi 替换后 Work identity / Binding / E0 evidence semantics 不因适配器变化而漂移 | `LOCAL_ADAPTER_WIRE_CONFORMANCE`；真实模型/凭据 provider swap `EXTERNAL_BLOCKED` |
 | CUSTOMER-G12 | 授权数据、权威系统观察与独立验收 | `EXTERNAL_BLOCKED` |
 
 ## 6. 运行说明（不能假装已执行）
@@ -158,3 +158,29 @@ Morn 现将真实 SDK 路径收敛为：
 - 当前 `HarnessProvider::send(&mut self,...)` 为同步独占执行 seam。仅仅在 ACP wire 上拥有 `session/cancel` 不足以证明调用方能在阻塞 send 时并发执行 cancel。因此 `HarnessProviderFeatures.interrupt` 不因这个 client 自动变成 true。
 
 这一并发语义冻结在 `docs/adr/ADR-045-provider-lifecycle-out-of-band-control.md`。本轮已补充独立、clonable/thread-safe、**session-scoped** 的 `DshAcpControlHandle`，并用阻塞 prompt fixture 证明 cancel 可以在执行等待期间并发写入。句柄只固定一个 session id，不能拿一个 Work 的控制权去取消另一个 session；同时“write success”只代表 cancel request 已发送，必须等待 prompt stop reason / durable event 才能确认取消。下一步若把 ACP 升级为 Work-facing Provider，仍必须将该 handle 明确暴露给 orchestrator，并在 resume/close 前重新验证 Work generation、ExecutionBinding、环境与 scope，之后才允许 Provider feature negotiation 宣告 lifecycle capability。
+
+
+## 11. 2026-10-10 DSH SDK ↔ Pi RPC adapter-wire 中立性
+
+仓库新增 `run_harness_adapter_neutrality`，区别于早期只比较 Fixture provider 的
+`run_harness_neutrality`。它驱动两条**真实协议适配器代码路径的本地 wire fixture**：
+
+- DeepSeek Harness：`DshSdkStdioClient` / Real Provider 路径；
+- Pi：`PiRpcClient` / Real Provider 路径。
+
+两侧使用同一个 Workspace、Work ID、generation、ExecutionBinding 和 attested execution
+environment，但各自保留不同的 provider/runtime artifact identity。门禁要求：
+
+1. Work/generation/ExecutionBinding 完全一致；
+2. execution environment ref/class/guarantees 完全一致；
+3. 两个 provider 都声明 `morn.effects<=E0`；
+4. 所有执行事件都能归一化到正确 workspace + session，且不存在直接 tool activity；
+5. runtime version 与 digest 都被明确固定；
+6. adapter turn 完整结算并产生 fresh `Healthy` runtime-health evidence；
+7. **不比较 DSH 与 Pi 的模型文本**，也不把 fixture wire 结果升级为真实模型、客户 Outcome 或 Acceptance。
+
+Exact-head `152fd22bacc68c3b9e8b480370a3b665509da23a` 的 Actions
+`38060442988` 五项全部通过，包括 workspace/all-features tests 和 zero-domain gates。
+因此 `DSH-SWAP` 可以从 `FIXTURE_ONLY` 提升到
+`LOCAL_ADAPTER_WIRE_CONFORMANCE`。真实 DSH/Pi credentialed provider replacement
+仍是外部部署证据，不得由该本地门禁代替。

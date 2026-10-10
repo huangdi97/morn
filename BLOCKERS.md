@@ -41,16 +41,20 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are now verified at checkpoint
-`b5f5940d942437c8e159a09d8ee2a2e23441002c` by exact-head Actions run
-`38033568210` (**5/5 SUCCESS**). This establishes **ALL_LOCAL_GATES_PASS**
-for that exact checkpoint while every blocker above remains external. It must
-not claim authenticated provider, real-site, customer-value, production-write
-or physical-control evidence without those sources.
+`152fd22bacc68c3b9e8b480370a3b665509da23a` by exact-head Actions run
+`38060442988` (**5/5 SUCCESS**). This checkpoint also exercises the
+DSH-SDK ↔ Pi-RPC **local adapter-wire semantic-neutrality gate** against the same
+pinned Work/generation/ExecutionBinding/execution environment without comparing
+model text or fabricating provider credentials. This establishes
+**ALL_LOCAL_GATES_PASS** for that exact checkpoint while every blocker above
+remains external. It must not claim authenticated provider, real-site,
+customer-value, production-write or physical-control evidence without those
+sources.
 
 ## Historical evidence retained below
 
 > **Superseded:** the August B-001 record below captures what was observed in that older environment.
-> It is not the current blocker definition. The authoritative 2026-10-09 blocker index above and
+> It is not the current blocker definition. The authoritative 2026-10-10 blocker index above and
 > the 2026-10-08 revalidation section below supersede claims such as “no official DSH distribution”
 > or “DshMode::Real is only a stub.” Do not use the historical reproduction as current product truth.
 

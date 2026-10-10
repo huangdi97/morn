@@ -182,9 +182,20 @@ Required Morn-side semantics include:
 - explicit runtime context;
 - no direct mutation of canonical Work state.
 
-The repository includes a DSH-vs-Pi neutrality test using deterministic fixtures.
-This proves contract neutrality only. It does not claim model-output parity or a
-successful real DSH/Pi deployment.
+The repository has two provider-neutrality layers:
+
+- deterministic Fixture providers prove the shared baseline `HarnessProvider`
+  contract independently of any external runtime;
+- DSH SDK and Pi RPC **real-adapter wire fixtures** drive the actual subprocess
+  adapters with the same pinned Workspace/Work generation/ExecutionBinding and
+  execution-environment guarantees. This second gate requires exact runtime
+  version/digest identity, E0-only admission, fully normalized execution events,
+  no direct tool activity, and a settled healthy adapter turn.
+
+Neither layer compares model text. The adapter-wire gate proves Morn-side
+transport/semantic neutrality only; it does not claim authenticated model
+parity, live credentials, customer Outcome/Acceptance, or a successful
+production DSH/Pi deployment.
 
 ## Capability supply chain
 
