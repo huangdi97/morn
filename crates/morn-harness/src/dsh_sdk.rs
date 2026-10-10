@@ -162,11 +162,7 @@ pub struct DshSdkConfig {
     /// Production DSH SDK launches apply a Morn-owned last-layer patch that
     /// disables shipped direct tools before the first model request. Protocol
     /// fixtures may opt out because they are not DSH compositions.
-    #[serde(
-        skip_serializing,
-        skip_deserializing,
-        default = "default_true"
-    )]
+    #[serde(skip_serializing, skip_deserializing, default = "default_true")]
     enforce_morn_e0_tool_policy: bool,
 }
 
@@ -349,10 +345,10 @@ impl DshSdkConfig {
             .ok_or_else(|| Error::validation("Morn DSH tool policy requires DSH_HOME"))?;
         let workspace = fs::canonicalize(&self.cwd)
             .map_err(|error| Error::validation(format!("canonicalize DSH workspace: {error}")))?;
-        if fs::symlink_metadata(home)
-            .is_ok_and(|metadata| metadata.file_type().is_symlink())
-        {
-            return Err(Error::validation("real DSH_HOME must not be a symbolic link"));
+        if fs::symlink_metadata(home).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+            return Err(Error::validation(
+                "real DSH_HOME must not be a symbolic link",
+            ));
         }
         fs::create_dir_all(home)
             .map_err(|error| Error::external(format!("create isolated DSH_HOME: {error}")))?;
@@ -389,7 +385,9 @@ impl DshSdkConfig {
 
         let directory = policy_root.join(uuid::Uuid::new_v4().to_string());
         fs::create_dir(&directory).map_err(|error| {
-            Error::external(format!("create one-shot Morn DSH policy directory: {error}"))
+            Error::external(format!(
+                "create one-shot Morn DSH policy directory: {error}"
+            ))
         })?;
         let patch_path = directory.join(DSH_MORN_E0_TOOL_POLICY_FILE);
         let guard_path = directory.join(DSH_MORN_E0_TOOL_GUARD_FILE);
@@ -492,7 +490,6 @@ fn create_exclusive_policy_file(path: &Path, bytes: &[u8], label: &str) -> Resul
         .map_err(|error| Error::external(format!("write Morn DSH {label}: {error}")))?;
     Ok(())
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DshSdkServerInfo {
