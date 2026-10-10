@@ -1,0 +1,290 @@
+//! Evidence-driven release/readiness projection.
+//!
+//! This module does not create evidence. It only projects the current
+//! deployment-owned EvidenceLedger together with ephemeral live-runtime health.
+//! Historical CI/fixture success can therefore never promote RealRuntime,
+//! RealSite or ProductionWrite readiness.
+
+use serde::{Deserialize, Serialize};
+
+use crate::evidence_class::{EvidenceClaimState, EvidenceClass, EvidenceLedger};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReadinessState {
+    Proven,
+    BlockedExternal,
+    Revoked,
+    MissingEvidence,
+    RuntimeUnhealthy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeReadinessEvidence {
+    pub fresh_healthy: bool,
+    pub evidence_refs: Vec<String>,
+    pub reason: String,
+}
+
+impl RuntimeReadinessEvidence {
+    pub fn healthy(evidence_refs: Vec<String>, reason: impl Into<String>) -> Self {
+        Self {
+            fresh_healthy: true,
+            evidence_refs,
+            reason: reason.into(),
+        }
+    }
+
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self {
+            fresh_healthy: false,
+            evidence_refs: Vec::new(),
+            reason: reason.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseReadinessAxis {
+    pub id: String,
+    pub subject: String,
+    pub evidence_class: EvidenceClass,
+    pub state: ReadinessState,
+    pub reason: String,
+    pub evidence_refs: Vec<String>,
+}
+
+fn claim_state(claim: Option<&crate::evidence_class::EvidenceClaim>) -> ReadinessState {
+    match claim.map(|claim| claim.state) {
+        Some(EvidenceClaimState::Proven) => ReadinessState::Proven,
+        Some(EvidenceClaimState::BlockedExternal) => ReadinessState::BlockedExternal,
+        Some(EvidenceClaimState::Revoked) => ReadinessState::Revoked,
+        None => ReadinessState::MissingEvidence,
+    }
+}
+
+fn evidence_axis(
+    ledger: &EvidenceLedger,
+    id: &str,
+    subject: &str,
+    class: EvidenceClass,
+    missing_reason: &str,
+) -> ReleaseReadinessAxis {
+    let claim = ledger.current_claim(subject, class);
+    ReleaseReadinessAxis {
+        id: id.to_string(),
+        subject: subject.to_string(),
+        evidence_class: class,
+        state: claim_state(claim),
+        reason: claim
+            .map(|claim| claim.reason.clone())
+            .unwrap_or_else(|| missing_reason.to_string()),
+        evidence_refs: claim
+            .map(|claim| claim.evidence_refs.clone())
+            .unwrap_or_default(),
+    }
+}
+
+fn runtime_axis(
+    ledger: &EvidenceLedger,
+    id: &str,
+    subject: &str,
+    runtime: RuntimeReadinessEvidence,
+) -> ReleaseReadinessAxis {
+    let mut axis = evidence_axis(
+        ledger,
+        id,
+        subject,
+        EvidenceClass::RealRuntime,
+        "no deployment-owned real-runtime evidence claim exists",
+    );
+
+    // Real runtime readiness is conjunctive: a deployment proof without a
+    // current health lease is stale, while a healthy process without explicit
+    // RealRuntime evidence remains unproven.
+    if axis.state == ReadinessState::Proven {
+        if runtime.fresh_healthy {
+            axis.evidence_refs.extend(runtime.evidence_refs);
+            axis.evidence_refs.sort();
+            axis.evidence_refs.dedup();
+            if !runtime.reason.trim().is_empty() {
+                axis.reason = format!("{}; {}", axis.reason, runtime.reason);
+            }
+        } else {
+            axis.state = ReadinessState::RuntimeUnhealthy;
+            axis.reason = format!(
+                "deployment evidence exists but current runtime is not fresh Healthy: {}",
+                runtime.reason
+            );
+            axis.evidence_refs.clear();
+        }
+    }
+    axis
+}
+
+/// Current independent readiness axes. This intentionally has no aggregate
+/// "production ready" boolean because a deployment chooses which providers and
+/// effect classes are in scope. Callers must inspect the exact required axes.
+pub fn release_readiness_axes(
+    ledger: &EvidenceLedger,
+    dsh_runtime: RuntimeReadinessEvidence,
+    pi_runtime: RuntimeReadinessEvidence,
+) -> Vec<ReleaseReadinessAxis> {
+    vec![
+        evidence_axis(
+            ledger,
+            "architecture-baseline",
+            "morn-v11.5-architecture",
+            EvidenceClass::DesignSpec,
+            "v11.5 architecture baseline is not proven",
+        ),
+        evidence_axis(
+            ledger,
+            "local-reference-slice",
+            "factory-readonly-wedge",
+            EvidenceClass::LocalFixture,
+            "local reference slice is not proven",
+        ),
+        runtime_axis(ledger, "deepseek-live-runtime", "deepseek-harness", dsh_runtime),
+        runtime_axis(ledger, "pi-live-runtime", "pi-harness", pi_runtime),
+        evidence_axis(
+            ledger,
+            "customer-real-site",
+            "factory-customer",
+            EvidenceClass::RealSite,
+            "no authorized real-site evidence exists",
+        ),
+        evidence_axis(
+            ledger,
+            "production-write",
+            "factory-production-write",
+            EvidenceClass::ProductionWrite,
+            "no explicit production-write evidence exists",
+        ),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::evidence_class::{reference_evidence_ledger, EvidenceClaim};
+
+    #[test]
+    fn reference_evidence_never_promotes_external_axes() {
+        let ledger = reference_evidence_ledger();
+        let axes = release_readiness_axes(
+            &ledger,
+            RuntimeReadinessEvidence::healthy(
+                vec!["runtime://dsh/healthy".to_string()],
+                "healthy process",
+            ),
+            RuntimeReadinessEvidence::healthy(
+                vec!["runtime://pi/healthy".to_string()],
+                "healthy process",
+            ),
+        );
+        assert_eq!(axes[0].state, ReadinessState::Proven);
+        assert_eq!(axes[1].state, ReadinessState::Proven);
+        assert_eq!(axes[2].state, ReadinessState::BlockedExternal);
+        assert_eq!(axes[3].state, ReadinessState::BlockedExternal);
+        assert_eq!(axes[4].state, ReadinessState::BlockedExternal);
+        assert_eq!(axes[5].state, ReadinessState::BlockedExternal);
+    }
+
+    #[test]
+    fn runtime_proof_alone_is_not_enough_without_fresh_health() {
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "deepseek-harness",
+                    EvidenceClass::RealRuntime,
+                    vec!["attestation://dsh/live-1".to_string()],
+                    "deployment-attestor",
+                    "authenticated official runtime observed",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let axes = release_readiness_axes(
+            &ledger,
+            RuntimeReadinessEvidence::unavailable("health lease expired"),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+        );
+        assert_eq!(axes[2].state, ReadinessState::RuntimeUnhealthy);
+        assert!(axes[2].evidence_refs.is_empty());
+    }
+
+    #[test]
+    fn real_runtime_requires_both_current_claim_and_live_health() {
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "deepseek-harness",
+                    EvidenceClass::RealRuntime,
+                    vec!["attestation://dsh/live-2".to_string()],
+                    "deployment-attestor",
+                    "authenticated official runtime observed",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let axes = release_readiness_axes(
+            &ledger,
+            RuntimeReadinessEvidence::healthy(
+                vec!["health://dsh/lease-2".to_string()],
+                "fresh settled-turn lease",
+            ),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+        );
+        assert_eq!(axes[2].state, ReadinessState::Proven);
+        assert!(axes[2]
+            .evidence_refs
+            .contains(&"attestation://dsh/live-2".to_string()));
+        assert!(axes[2]
+            .evidence_refs
+            .contains(&"health://dsh/lease-2".to_string()));
+    }
+
+    #[test]
+    fn revocation_beats_a_healthy_process() {
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "pi-harness",
+                    EvidenceClass::RealRuntime,
+                    vec!["attestation://pi/live".to_string()],
+                    "deployment-attestor",
+                    "live runtime observed",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        ledger
+            .append(
+                EvidenceClaim::revoked(
+                    "pi-harness",
+                    EvidenceClass::RealRuntime,
+                    vec!["incident://pi/credential-revoked".to_string()],
+                    "deployment-attestor",
+                    "credential withdrawn",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let axes = release_readiness_axes(
+            &ledger,
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            RuntimeReadinessEvidence::healthy(
+                vec!["health://pi/live".to_string()],
+                "process is healthy",
+            ),
+        );
+        assert_eq!(axes[3].state, ReadinessState::Revoked);
+    }
+}

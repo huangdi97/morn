@@ -9,6 +9,7 @@ pub mod evidence_class;
 pub mod managed_work;
 pub mod profile_conformance;
 pub mod replacement;
+pub mod release_readiness;
 pub mod replay;
 pub mod rollback;
 pub mod shadow;
@@ -25,6 +26,9 @@ pub use customer_value::{CustomerValueAttestation, CustomerValueMetric};
 pub use evidence_class::{
     reference_evidence_ledger, EvidenceClaim, EvidenceClaimId, EvidenceClaimState, EvidenceClass,
     EvidenceLedger,
+};
+pub use release_readiness::{
+    release_readiness_axes, ReadinessState, ReleaseReadinessAxis, RuntimeReadinessEvidence,
 };
 
 pub use replay::{ReplayReport, ReplayRunner, ReplayScenario};

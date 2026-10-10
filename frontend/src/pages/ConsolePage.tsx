@@ -63,9 +63,36 @@ function fmtVersion(v: unknown): string {
 
 function readinessTone(value: string): "ready" | "blocked" | "neutral" {
   const normalized = value.toLowerCase();
-  if (normalized.includes("proven") || normalized.includes("pass")) return "ready";
-  if (normalized.includes("blocked") || normalized.includes("not authorized")) return "blocked";
+  if (normalized === "proven" || normalized.includes("pass")) return "ready";
+  if (
+    normalized.includes("blocked") ||
+    normalized.includes("revoked") ||
+    normalized.includes("missing") ||
+    normalized.includes("unhealthy") ||
+    normalized.includes("not authorized")
+  ) {
+    return "blocked";
+  }
   return "neutral";
+}
+
+function readinessLabel(id: string): string {
+  switch (id) {
+    case "architecture-baseline":
+      return "Architecture baseline";
+    case "local-reference-slice":
+      return "Local reference slice";
+    case "deepseek-live-runtime":
+      return "DeepSeek live runtime";
+    case "pi-live-runtime":
+      return "Pi live runtime";
+    case "customer-real-site":
+      return "Customer / factory site";
+    case "production-write":
+      return "Production write";
+    default:
+      return id;
+  }
 }
 
 export default function ConsolePage() {
@@ -131,27 +158,37 @@ export default function ConsolePage() {
             </p>
           </div>
           <div className="release-readiness-grid">
-            {[
-              ["Local engineering", v115.claims.local_engineering],
-              ["DeepSeek live runtime", v115.claims.real_dsh],
-              ["Pi live runtime", v115.claims.real_pi],
-              ["Customer / factory site", v115.claims.real_factory],
-              ["Production write", v115.claims.production_write],
-            ].map(([label, value]) => (
-              <article className={`readiness-item readiness-${readinessTone(value)}`} key={label}>
-                <span>{label}</span>
-                <strong>{value}</strong>
+            {v115.release_readiness.axes.map((axis) => (
+              <article
+                className={`readiness-item readiness-${readinessTone(axis.state)}`}
+                key={axis.id}
+              >
+                <span>{readinessLabel(axis.id)}</span>
+                <strong>{axis.state}</strong>
+                <small className="readiness-reason">{axis.reason}</small>
+                <small className="readiness-evidence">
+                  {axis.evidence_refs.length
+                    ? `Evidence: ${axis.evidence_refs.join(" · ")}`
+                    : "No active evidence references"}
+                </small>
               </article>
             ))}
             <article className="readiness-item readiness-neutral">
               <span>Attested environments</span>
               <strong>{v115.execution_environment_attestations.filter((item) => item.active).length}</strong>
+              <small className="readiness-reason">
+                Environment attestation does not itself prove a live provider, customer outcome or production authorization.
+              </small>
             </article>
             <article className="readiness-item readiness-neutral">
               <span>Verified supply-chain digests</span>
               <strong>{v115.capability_supply_chain.verification_evidence.length}</strong>
+              <small className="readiness-reason">
+                Supply-chain verification proves artifact provenance/signature only; it does not grant execution authority.
+              </small>
             </article>
           </div>
+          <p className="release-readiness-footnote">{v115.release_readiness.semantics.reason}</p>
         </section>
       )}
       <div className="grid">

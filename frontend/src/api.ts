@@ -304,6 +304,20 @@ export interface V115Status {
       observed_at: number | string | Record<string, unknown>;
     }>;
   };
+  release_readiness: {
+    axes: Array<{
+      id: string;
+      subject: string;
+      evidence_class: string;
+      state: "proven" | "blocked-external" | "revoked" | "missing-evidence" | "runtime-unhealthy";
+      reason: string;
+      evidence_refs: string[];
+    }>;
+    semantics: {
+      aggregate_ready: false;
+      reason: string;
+    };
+  };
   claims: {
     local_engineering: string;
     real_dsh: string;

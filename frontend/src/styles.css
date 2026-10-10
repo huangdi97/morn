@@ -595,6 +595,24 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+.readiness-reason,
+.readiness-evidence {
+  display: block;
+  margin-top: 7px;
+  color: #9fb0ca;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.readiness-evidence {
+  color: #7f93b2;
+}
+.release-readiness-footnote {
+  margin: 12px 2px 0;
+  color: #93a7c5;
+  font-size: 11px;
+  line-height: 1.55;
+}
 .readiness-ready { border-color: #365b51; }
 .readiness-ready strong { color: #b9e4d2; }
 .readiness-blocked { border-color: #66523b; }

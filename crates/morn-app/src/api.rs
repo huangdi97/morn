@@ -411,6 +411,32 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
     drop(project_runtime_health);
     let providers = provider_catalog.list();
     let provider_observations = provider_catalog.observations();
+
+    let dsh_readiness = if dsh_mode == "real" && dsh_health.selectable_at(now) {
+        morn_assurance::RuntimeReadinessEvidence::healthy(
+            dsh_health.evidence_refs.clone(),
+            dsh_health.reason.clone(),
+        )
+    } else {
+        morn_assurance::RuntimeReadinessEvidence::unavailable(format!(
+            "mode={dsh_mode}; health={:?}; {}",
+            dsh_health.state, dsh_health.reason
+        ))
+    };
+    let pi_readiness = if pi_mode == "real" && pi_health.selectable_at(now) {
+        morn_assurance::RuntimeReadinessEvidence::healthy(
+            pi_health.evidence_refs.clone(),
+            pi_health.reason.clone(),
+        )
+    } else {
+        morn_assurance::RuntimeReadinessEvidence::unavailable(format!(
+            "mode={pi_mode}; health={:?}; {}",
+            pi_health.state, pi_health.reason
+        ))
+    };
+    let release_readiness =
+        morn_assurance::release_readiness_axes(&evidence_ledger, dsh_readiness, pi_readiness);
+
     let required_guarantees: Vec<String> = profile
         .requirements
         .iter()
@@ -518,6 +544,13 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             "classes_are_categorical": true,
             "no_implicit_promotion": true,
             "claims": evidence_ledger.claims()
+        },
+        "release_readiness": {
+            "axes": release_readiness,
+            "semantics": {
+                "aggregate_ready": false,
+                "reason": "readiness axes are independent; deployments must choose exact provider/effect scope and cannot infer production authorization from local engineering"
+            }
         },
         "claims": {
             "local_engineering": "reference implementation + fixture/conformance tests",
