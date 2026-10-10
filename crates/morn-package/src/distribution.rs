@@ -124,6 +124,26 @@ impl OciPublishReceipt {
         }
         Ok(())
     }
+
+    pub fn validate_for_request(&self, request: &OciPublishRequest) -> Result<(), String> {
+        self.validate()?;
+        request.validate()?;
+        let expected_repository = request.repository_ref.trim_end_matches('/');
+        let actual_repository = self
+            .oci_ref
+            .rsplit_once('@')
+            .map(|(repository, _)| repository)
+            .ok_or_else(|| "publish receipt must be digest pinned".to_string())?;
+        if actual_repository != expected_repository {
+            return Err("ORAS receipt repository does not match requested repository".to_string());
+        }
+        if let Some(artifact_type) = &self.artifact_type {
+            if artifact_type != &request.artifact_type {
+                return Err("ORAS receipt artifact type does not match publish request".to_string());
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -239,7 +259,9 @@ impl OciArtifactPublisher for OrasCliPublisher {
         }
         let stdout = String::from_utf8(output.stdout)
             .map_err(|error| format!("ORAS output was not UTF-8: {error}"))?;
-        Self::parse_receipt(&stdout)
+        let receipt = Self::parse_receipt(&stdout)?;
+        receipt.validate_for_request(request)?;
+        Ok(receipt)
     }
 }
 
@@ -543,6 +565,34 @@ mod tests {
         assert!(spec
             .args
             .contains(&"--certificate-oidc-issuer".to_string()));
+    }
+
+    #[test]
+    fn publication_receipt_must_match_requested_repository_and_artifact_type() {
+        let request = request();
+        let digest = digest('a');
+        let mut receipt = OciPublishReceipt {
+            oci_ref: format!(
+                "oci://registry.example/morn/capabilities/reviewer@{digest}"
+            ),
+            content_digest: digest,
+            manifest_media_type: "application/vnd.oci.image.manifest.v1+json".to_string(),
+            artifact_type: Some(request.artifact_type.clone()),
+        };
+        assert!(receipt.validate_for_request(&request).is_ok());
+
+        receipt.oci_ref = format!(
+            "oci://registry.example/other/repository@{}",
+            receipt.content_digest
+        );
+        assert!(receipt.validate_for_request(&request).is_err());
+
+        receipt.oci_ref = format!(
+            "{}@{}",
+            request.repository_ref, receipt.content_digest
+        );
+        receipt.artifact_type = Some("application/vnd.other+json".to_string());
+        assert!(receipt.validate_for_request(&request).is_err());
     }
 
     #[test]

@@ -417,6 +417,19 @@ impl AdmissionService {
                 "verified release requires signature and provenance references",
             ));
         }
+        let embedded_digest = package_ref
+            .strip_prefix("oci://")
+            .and_then(|reference| reference.rsplit_once('@').map(|(_, digest)| digest))
+            .ok_or_else(|| {
+                Error::validation(
+                    "verified release requires a digest-pinned oci:// package reference",
+                )
+            })?;
+        if !embedded_digest.eq_ignore_ascii_case(&content_digest) {
+            return Err(Error::validation(
+                "verified release OCI reference must pin the verified content digest",
+            ));
+        }
         verification
             .validate_subject_digest(&content_digest, true, true)
             .map_err(Error::validation)?;
