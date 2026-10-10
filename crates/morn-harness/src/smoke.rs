@@ -99,7 +99,7 @@ pub fn run_harness_smoke(
         });
     }
     let session_id = session.as_ref().ok().map(|s| s.id.clone());
-    let health = match session.as_ref().ok() {
+    let session_visible = match session.as_ref().ok() {
         Some(session) => provider.inspect(&session.id).is_ok_and(|snapshot| {
             snapshot.session_id == session.id && !snapshot.status.trim().is_empty()
         }),
@@ -129,6 +129,14 @@ pub fn run_harness_smoke(
             }
         })
         .unwrap_or(false);
+
+    let health = if governed_external_runtime {
+        provider
+            .runtime_health_snapshot()
+            .is_some_and(|health| health.selectable_at(morn_kernel::time::Timestamp::now()))
+    } else {
+        session_visible
+    };
 
     let events = session_id
         .as_ref()

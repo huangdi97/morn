@@ -232,6 +232,12 @@ pub trait HarnessProvider: Send + Sync {
         None
     }
 
+    /// Current runtime-health projection. Governed external provider smoke
+    /// must prove a live settled-turn lease, not merely a started session.
+    fn runtime_health_snapshot(&self) -> Option<HarnessRuntimeHealth> {
+        None
+    }
+
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle>;
     fn unmount(&mut self, handle: &ProviderHandle) -> Result<()>;
 
@@ -887,6 +893,10 @@ impl HarnessProvider for DeepSeekHarnessProvider {
             DshMode::Fixture => None,
             DshMode::Real => self.real_runtime_digest.clone(),
         }
+    }
+
+    fn runtime_health_snapshot(&self) -> Option<HarnessRuntimeHealth> {
+        Some(self.runtime_health.clone())
     }
 
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {

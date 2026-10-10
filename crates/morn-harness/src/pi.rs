@@ -401,6 +401,10 @@ impl HarnessProvider for PiHarnessProvider {
         }
     }
 
+    fn runtime_health_snapshot(&self) -> Option<crate::provider::HarnessRuntimeHealth> {
+        Some(self.runtime_health.clone())
+    }
+
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
         if self.mode == PiMode::Real
             && !scope
