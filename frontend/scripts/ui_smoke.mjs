@@ -45,6 +45,9 @@ try {
     }
     const bodyText = await page.locator("body").innerText();
     if (!bodyText.includes("Morn")) errors.push(`route ${route}: missing Morn shell`);
+    if (route === "/console" && !(await page.getByRole("heading", { name: "Release readiness" }).isVisible())) {
+      errors.push("console: evidence-aware release readiness summary is not visible");
+    }
     if (route === "/hub" && !(await page.getByRole("heading", { name: "v11.5 Capability Supply Chain" }).isVisible())) {
       errors.push("hub: governed capability supply-chain section is not visible");
     }

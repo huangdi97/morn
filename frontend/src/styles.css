@@ -540,3 +540,75 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   font-size: 12px;
   line-height: 1.5;
 }
+
+
+/* Console release posture: separate local engineering from deployment evidence. */
+.release-readiness {
+  margin: 0 0 18px;
+  padding: 18px;
+  border: 1px solid #344660;
+  border-radius: 16px;
+  background: #111b2a;
+}
+.release-readiness-heading {
+  display: flex;
+  gap: 24px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.release-readiness-heading h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+}
+.release-readiness-heading p {
+  max-width: 610px;
+  margin: 0;
+  color: #aebed6;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.release-readiness-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+.readiness-item {
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid #30415a;
+  border-radius: 12px;
+  background: #162235;
+}
+.readiness-item span {
+  display: block;
+  margin-bottom: 7px;
+  color: #91a4c1;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+}
+.readiness-item strong {
+  display: block;
+  color: #e6edf8;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.readiness-ready { border-color: #365b51; }
+.readiness-ready strong { color: #b9e4d2; }
+.readiness-blocked { border-color: #66523b; }
+.readiness-blocked strong { color: #ead2a9; }
+.readiness-neutral { border-color: #344660; }
+@media (max-width: 760px) {
+  .release-readiness { padding: 14px; }
+  .release-readiness-heading {
+    display: block;
+  }
+  .release-readiness-heading p {
+    margin-top: 10px;
+  }
+  .release-readiness-grid {
+    grid-template-columns: 1fr;
+  }
+}

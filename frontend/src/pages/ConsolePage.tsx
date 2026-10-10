@@ -61,6 +61,13 @@ function fmtVersion(v: unknown): string {
   return String(v);
 }
 
+function readinessTone(value: string): "ready" | "blocked" | "neutral" {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("proven") || normalized.includes("pass")) return "ready";
+  if (normalized.includes("blocked") || normalized.includes("not authorized")) return "blocked";
+  return "neutral";
+}
+
 export default function ConsolePage() {
   const [data, setData] = useState<ConsoleData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +118,42 @@ export default function ConsolePage() {
       <header className="page-header">
         <h1>Console</h1>
       </header>
+      {v115 && (
+        <section className="release-readiness" data-testid="release-readiness" aria-label="Release readiness">
+          <div className="release-readiness-heading">
+            <div>
+              <span className="eyebrow">Morn v11.5 · evidence-aware release posture</span>
+              <h2>Release readiness</h2>
+            </div>
+            <p>
+              Local engineering can be green while live providers, site evidence, customer acceptance
+              or production write remain independently blocked.
+            </p>
+          </div>
+          <div className="release-readiness-grid">
+            {[
+              ["Local engineering", v115.claims.local_engineering],
+              ["DeepSeek live runtime", v115.claims.real_dsh],
+              ["Pi live runtime", v115.claims.real_pi],
+              ["Customer / factory site", v115.claims.real_factory],
+              ["Production write", v115.claims.production_write],
+            ].map(([label, value]) => (
+              <article className={`readiness-item readiness-${readinessTone(value)}`} key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </article>
+            ))}
+            <article className="readiness-item readiness-neutral">
+              <span>Attested environments</span>
+              <strong>{v115.execution_environment_attestations.filter((item) => item.active).length}</strong>
+            </article>
+            <article className="readiness-item readiness-neutral">
+              <span>Verified supply-chain digests</span>
+              <strong>{v115.capability_supply_chain.verification_evidence.length}</strong>
+            </article>
+          </div>
+        </section>
+      )}
       <div className="grid">
         <Card title="Identity / Registry">
           <KeyValue k="Workspace" v={data.identity.workspace} />
