@@ -1593,6 +1593,14 @@ export default function Workbench() {
     useState<SourceObservationCatalog | null>(null);
   const [reviewerCatalog, setReviewerCatalog] = useState<AcceptanceReviewerCatalog | null>(null);
 
+  const loadCanonical = useCallback(() => {
+    setV115ControlError(null);
+    apiGet<V115ControlPlaneData>("/v115/control-plane")
+      .then(setV115Control)
+      .catch((e: Error) => setV115ControlError(e.message))
+      .finally(() => setV115ControlLoading(false));
+  }, []);
+
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
@@ -1603,13 +1611,7 @@ export default function Workbench() {
     apiGet<V115Status>("/v115/status")
       .then(setV115)
       .catch(() => undefined);
-    setV115Control(null);
-    setV115ControlError(null);
-    setV115ControlLoading(true);
-    apiGet<V115ControlPlaneData>("/v115/control-plane")
-      .then(setV115Control)
-      .catch((e: Error) => setV115ControlError(e.message))
-      .finally(() => setV115ControlLoading(false));
+    loadCanonical();
     apiGet<UiExtensionRegistry>("/v115/ui/extensions")
       .then(setUiExtensions)
       .catch(() => undefined);
@@ -1625,9 +1627,22 @@ export default function Workbench() {
     apiGet<AcceptanceReviewerCatalog>("/v115/acceptance/reviewers")
       .then(setReviewerCatalog)
       .catch(() => setReviewerCatalog(null));
-  }, []);
+  }, [loadCanonical]);
 
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    const refreshCanonical = () => {
+      if (document.visibilityState === "visible") loadCanonical();
+    };
+    const interval = window.setInterval(loadCanonical, 2000);
+    window.addEventListener("focus", loadCanonical);
+    document.addEventListener("visibilitychange", refreshCanonical);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", loadCanonical);
+      document.removeEventListener("visibilitychange", refreshCanonical);
+    };
+  }, [load, loadCanonical]);
 
   const runUiExtensionAction = async (method: "GET" | "POST", endpoint: string) => {
     setError(null);

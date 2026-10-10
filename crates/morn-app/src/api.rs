@@ -2591,11 +2591,46 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
 }
 
 async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
+    use morn_assurance::{EvidenceClaimState, EvidenceClass};
+    use morn_work::value::{ValueAssessment, ValueEvidenceClass};
+
     let guard = state.lock();
     let store = &guard.store;
     let load = |kind: &str| -> Result<Vec<Value>, Error> {
         store.load_records_in_workspace::<Value>(kind, guard.workspace.id.as_str())
     };
+    let value_assessments = store.load_records_in_workspace::<ValueAssessment>(
+        "value_assessment_v115",
+        guard.workspace.id.as_str(),
+    )?;
+    let value_assessment_support: Vec<Value> = value_assessments
+        .iter()
+        .filter(|assessment| assessment.evidence_class == ValueEvidenceClass::CustomerValidated)
+        .map(|assessment| {
+            let subject = value_claim_subject(
+                &assessment.work_package_id,
+                assessment.work_generation,
+                &assessment.outcome_ref,
+            );
+            let current = guard
+                .evidence_ledger
+                .current_claim(&subject, EvidenceClass::RealSite);
+            let current_state = current.map(|claim| match claim.state {
+                EvidenceClaimState::Proven => "proven",
+                EvidenceClaimState::BlockedExternal => "blocked-external",
+                EvidenceClaimState::Revoked => "revoked",
+            });
+            json!({
+                "assessment_id": assessment.id,
+                "subject": subject,
+                "requires_real_site": true,
+                "currently_supported": current.is_some_and(|claim| claim.state == EvidenceClaimState::Proven),
+                "current_real_site_state": current_state,
+                "current_real_site_claim_id": current.map(|claim| claim.id.to_string()),
+                "current_real_site_evidence_refs": current.map(|claim| claim.evidence_refs.clone()).unwrap_or_default()
+            })
+        })
+        .collect();
 
     Ok(Json(json!({
         "work": load("work_resource_v115")?,
@@ -2614,8 +2649,9 @@ async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
         "reconciliations": load("reconciliation_v115")?,
         "outcomes": load("observed_outcome_v115")?,
         "acceptance_decisions": load("acceptance_decision_v115")?,
-        "value_assessments": load("value_assessment_v115")?,
-        "note": "canonical persisted v11.5 records; empty arrays mean no persisted v11.5 Work, not a synthetic success"
+        "value_assessments": value_assessments,
+        "value_assessment_support": value_assessment_support,
+        "note": "canonical persisted v11.5 records; CustomerValidated support is re-evaluated from the latest RealSite evidence claim without rewriting historical assessments"
     })))
 }
 
