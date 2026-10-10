@@ -302,6 +302,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         dsh_health,
         dsh_mode,
         dsh_environment_ref,
+        dsh_profile_configuration_ref,
         dsh_runtime_version,
         dsh_runtime_digest,
         dsh_wire_server_version,
@@ -315,6 +316,9 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             },
             provider
                 .configured_execution_environment_ref()
+                .map(str::to_string),
+            provider
+                .configured_profile_configuration_ref()
                 .map(str::to_string),
             provider.configured_runtime_version().map(str::to_string),
             provider.configured_runtime_digest().map(str::to_string),
@@ -419,6 +423,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
                 "mode": dsh_mode,
                 "health": dsh_health.state,
                 "configured_execution_environment_ref": dsh_environment_ref,
+                "profile_configuration_ref": dsh_profile_configuration_ref,
                 "runtime_version": dsh_runtime_version,
                 "runtime_digest": dsh_runtime_digest,
                 "wire_server_version": dsh_wire_server_version
@@ -3713,6 +3718,7 @@ async fn console(State(state): State<AppState>) -> ApiResult {
                 "runtime_health": dsh_harness.runtime_health(),
                 "runtime_version": dsh_harness.runtime_version(),
                 "runtime_digest": dsh_harness.configured_runtime_digest(),
+                "profile_configuration_ref": dsh_harness.configured_profile_configuration_ref(),
                 "route_ref": dsh_harness.configured_route_ref(),
                 "wire_server_version": dsh_harness.wire_server_version(),
                 "execution_environment_ref": dsh_harness.configured_execution_environment_ref(),
