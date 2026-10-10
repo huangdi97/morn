@@ -1066,10 +1066,8 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                         session_id,
                         &run.notifications,
                     );
-                    prohibited_tool_activity = run
-                        .notifications
-                        .iter()
-                        .any(dsh_notification_violates_e0);
+                    prohibited_tool_activity =
+                        run.notifications.iter().any(dsh_notification_violates_e0);
 
                     state.events.extend(normalized);
                 }

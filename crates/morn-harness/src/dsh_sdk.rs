@@ -219,10 +219,10 @@ impl DshSdkConfig {
                 "DSH route identity requires provider and model",
             ));
         }
-        let profile_configuration_ref = self
-            .profile_configuration_ref
-            .as_deref()
-            .ok_or_else(|| Error::validation("DSH route identity requires profile configuration"))?;
+        let profile_configuration_ref =
+            self.profile_configuration_ref.as_deref().ok_or_else(|| {
+                Error::validation("DSH route identity requires profile configuration")
+            })?;
         validate_profile_configuration_ref(profile_configuration_ref)?;
         let route = json!({
             "args": &self.args,
@@ -502,7 +502,9 @@ impl DshSdkConfig {
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 fs::create_dir(&runtime_root).map_err(|error| {
-                    Error::external(format!("create Morn DSH managed runtime-home root: {error}"))
+                    Error::external(format!(
+                        "create Morn DSH managed runtime-home root: {error}"
+                    ))
                 })?;
             }
             Err(error) => {
@@ -540,11 +542,9 @@ impl DshSdkConfig {
             std::env::var("MORN_DSH_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
                 Error::validation("MORN_DSH_EXECUTION_ENVIRONMENT_REF is required for real DSH")
             })?;
-        let profile_configuration_ref =
-            std::env::var("MORN_DSH_PROFILE_CONFIGURATION_REF").map_err(|_| {
-                Error::validation(
-                    "MORN_DSH_PROFILE_CONFIGURATION_REF is required for real DSH",
-                )
+        let profile_configuration_ref = std::env::var("MORN_DSH_PROFILE_CONFIGURATION_REF")
+            .map_err(|_| {
+                Error::validation("MORN_DSH_PROFILE_CONFIGURATION_REF is required for real DSH")
             })?;
         let runtime_version = std::env::var("MORN_DSH_RUNTIME_VERSION")
             .map_err(|_| Error::validation("MORN_DSH_RUNTIME_VERSION is required for real DSH"))?;
@@ -1569,7 +1569,10 @@ mod tests {
             client.child.try_wait().unwrap().is_some(),
             "successful shutdown must reap the SDK child before Drop"
         );
-        assert!(client.stdin.is_none(), "successful shutdown must close stdin");
+        assert!(
+            client.stdin.is_none(),
+            "successful shutdown must close stdin"
+        );
     }
 
     /// A tiny protocol peer used only by the parent test above. It is ignored

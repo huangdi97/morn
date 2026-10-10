@@ -2120,14 +2120,15 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                         &guard.execution_environments,
                         now,
                     )?;
-                    let environment_ref = binding
-                        .execution_environment_ref
-                        .as_deref()
-                        .ok_or_else(|| {
-                            AppError(Error::invalid_state(
-                                "bound DSH execution has no environment identity",
-                            ))
-                        })?;
+                    let environment_ref =
+                        binding
+                            .execution_environment_ref
+                            .as_deref()
+                            .ok_or_else(|| {
+                                AppError(Error::invalid_state(
+                                    "bound DSH execution has no environment identity",
+                                ))
+                            })?;
                     let attestation = guard
                         .execution_environments
                         .attestation(environment_ref)
