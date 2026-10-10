@@ -23,8 +23,8 @@ pub use binding::{HarnessBinding, RuntimeBinding};
 pub use context::RuntimeContext;
 pub use contract::run_provider_contract;
 pub use dsh_acp::{
-    assistant_text_from_acp_updates, DshAcpConfig, DshAcpNotification, DshAcpPromptResult,
-    DshAcpServerInfo, DshAcpStdioClient, DSH_ACP_AGENT_NAME, DSH_ACP_METHOD_AUTHENTICATE,
+    assistant_text_from_acp_updates, DshAcpConfig, DshAcpControlHandle, DshAcpNotification,
+    DshAcpPromptResult, DshAcpServerInfo, DshAcpStdioClient, DSH_ACP_AGENT_NAME, DSH_ACP_METHOD_AUTHENTICATE,
     DSH_ACP_METHOD_INITIALIZE, DSH_ACP_METHOD_REQUEST_PERMISSION, DSH_ACP_METHOD_SESSION_CANCEL,
     DSH_ACP_METHOD_SESSION_CLOSE, DSH_ACP_METHOD_SESSION_LIST, DSH_ACP_METHOD_SESSION_NEW,
     DSH_ACP_METHOD_SESSION_PROMPT, DSH_ACP_METHOD_SESSION_RESUME,

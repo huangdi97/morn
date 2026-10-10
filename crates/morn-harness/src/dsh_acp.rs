@@ -141,9 +141,41 @@ pub struct DshAcpPromptResult {
 
 type AcpWireItem = std::result::Result<Value, String>;
 
+#[derive(Clone)]
+pub struct DshAcpControlHandle {
+    stdin: Arc<Mutex<Option<ChildStdin>>>,
+}
+
+impl std::fmt::Debug for DshAcpControlHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DshAcpControlHandle").finish_non_exhaustive()
+    }
+}
+
+impl DshAcpControlHandle {
+    /// Cancel is the only ACP lifecycle action intentionally exposed on this
+    /// cloneable handle. It is a notification, so it can be written while the
+    /// owning execution thread is blocked awaiting session/prompt settlement.
+    pub fn cancel_session(&self, session_id: &str) -> Result<()> {
+        if session_id.trim().is_empty() {
+            return Err(Error::validation(
+                "DSH ACP cancel requires a non-empty session id",
+            ));
+        }
+        write_shared_frame(
+            &self.stdin,
+            json!({
+                "jsonrpc":"2.0",
+                "method":DSH_ACP_METHOD_SESSION_CANCEL,
+                "params":{"sessionId":session_id}
+            }),
+        )
+    }
+}
+
 pub struct DshAcpStdioClient {
     child: Child,
-    stdin: Option<ChildStdin>,
+    stdin: Arc<Mutex<Option<ChildStdin>>>,
     incoming: Mutex<Receiver<AcpWireItem>>,
     reader: Option<JoinHandle<()>>,
     wire_overflowed: Arc<AtomicBool>,
@@ -278,7 +310,7 @@ impl DshAcpStdioClient {
 
         Ok(Self {
             child,
-            stdin: Some(stdin),
+            stdin: Arc::new(Mutex::new(Some(stdin))),
             incoming: Mutex::new(incoming),
             reader: Some(reader),
             wire_overflowed,
@@ -289,6 +321,12 @@ impl DshAcpStdioClient {
             owned_runtime_home,
             notifications: Vec::new(),
         })
+    }
+
+    pub fn control_handle(&self) -> DshAcpControlHandle {
+        DshAcpControlHandle {
+            stdin: Arc::clone(&self.stdin),
+        }
     }
 
     pub fn initialize(&mut self) -> Result<DshAcpServerInfo> {
@@ -376,10 +414,7 @@ impl DshAcpStdioClient {
     }
 
     pub fn cancel_session(&mut self, session_id: &str) -> Result<()> {
-        self.notify(
-            DSH_ACP_METHOD_SESSION_CANCEL,
-            Some(json!({"sessionId":session_id})),
-        )
+        self.control_handle().cancel_session(session_id)
     }
 
     pub fn prompt_text(&mut self, session_id: &str, text: &str) -> Result<DshAcpPromptResult> {
@@ -412,7 +447,10 @@ impl DshAcpStdioClient {
     }
 
     pub fn shutdown_process(&mut self) -> Result<()> {
-        self.stdin.take();
+        self.stdin
+            .lock()
+            .map_err(|_| Error::internal("DSH ACP stdin lock poisoned"))?
+            .take();
         let deadline = Instant::now() + Duration::from_secs(6);
         loop {
             match self.child.try_wait() {
@@ -473,18 +511,7 @@ impl DshAcpStdioClient {
         }
     }
 
-    fn notify(&mut self, method: &str, params: Option<Value>) -> Result<()> {
-        let mut frame = json!({"jsonrpc":"2.0","method":method});
-        if let Some(params) = params {
-            frame
-                .as_object_mut()
-                .expect("ACP notification frame is always an object")
-                .insert("params".to_string(), params);
-        }
-        self.write_frame(frame)
-    }
-
-    fn answer_server_request(&mut self, request: &Value) -> Result<()> {
+     fn answer_server_request(&mut self, request: &Value) -> Result<()> {
         let id = request
             .get("id")
             .cloned()
@@ -511,17 +538,8 @@ impl DshAcpStdioClient {
         self.write_frame(response)
     }
 
-    fn write_frame(&mut self, frame: Value) -> Result<()> {
-        let stdin = self
-            .stdin
-            .as_mut()
-            .ok_or_else(|| Error::external("DSH ACP stdin is closed"))?;
-        serde_json::to_writer(&mut *stdin, &frame)
-            .map_err(|error| Error::external(format!("encode DSH ACP JSON-RPC: {error}")))?;
-        stdin
-            .write_all(b"\n")
-            .and_then(|_| stdin.flush())
-            .map_err(|error| Error::external(format!("write DSH ACP JSON-RPC: {error}")))
+    fn write_frame(&self, frame: Value) -> Result<()> {
+        write_shared_frame(&self.stdin, frame)
     }
 
     fn read_frame_until(&mut self, deadline: Instant, operation: &str) -> Result<Value> {
@@ -559,6 +577,9 @@ impl DshAcpStdioClient {
 
 impl Drop for DshAcpStdioClient {
     fn drop(&mut self) {
+        if let Ok(mut stdin) = self.stdin.lock() {
+            stdin.take();
+        }
         let _ = self.child.kill();
         let _ = self.child.wait();
         if let Some(reader) = self.reader.take() {
@@ -571,6 +592,24 @@ impl Drop for DshAcpStdioClient {
             let _ = std::fs::remove_dir_all(runtime_home);
         }
     }
+}
+
+fn write_shared_frame(
+    stdin: &Arc<Mutex<Option<ChildStdin>>>,
+    frame: Value,
+) -> Result<()> {
+    let mut guard = stdin
+        .lock()
+        .map_err(|_| Error::internal("DSH ACP stdin lock poisoned"))?;
+    let stream = guard
+        .as_mut()
+        .ok_or_else(|| Error::external("DSH ACP stdin is closed"))?;
+    serde_json::to_writer(&mut *stream, &frame)
+        .map_err(|error| Error::external(format!("encode DSH ACP JSON-RPC: {error}")))?;
+    stream
+        .write_all(b"\n")
+        .and_then(|_| stream.flush())
+        .map_err(|error| Error::external(format!("write DSH ACP JSON-RPC: {error}")))
 }
 
 fn request_frame(id: u64, method: &str, params: Option<Value>) -> Value {
@@ -860,6 +899,37 @@ mod tests {
                     output.flush().unwrap();
                 }
                 (DSH_ACP_METHOD_SESSION_PROMPT, Some(id)) => {
+                    let prompt = frame
+                        .pointer("/params/prompt/0/text")
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+                    if prompt == "wait-for-out-of-band-cancel" {
+                        if let Ok(path) = std::env::var("MORN_ACP_CANCEL_READY_FILE") {
+                            std::fs::write(path, b"ready").unwrap();
+                        }
+                        let mut cancel = String::new();
+                        input.read_line(&mut cancel).unwrap();
+                        let cancel: Value = serde_json::from_str(cancel.trim()).unwrap();
+                        assert_eq!(
+                            cancel.get("method").and_then(Value::as_str),
+                            Some(DSH_ACP_METHOD_SESSION_CANCEL)
+                        );
+                        assert_eq!(
+                            cancel.pointer("/params/sessionId").and_then(Value::as_str),
+                            Some("acp-fixture-1")
+                        );
+                        writeln!(
+                            output,
+                            "{}",
+                            json!({
+                                "jsonrpc":"2.0","id":id,"result":{"stopReason":"cancelled"}
+                            })
+                        )
+                        .unwrap();
+                        output.flush().unwrap();
+                        continue;
+                    }
+
                     writeln!(output, "{}", json!({
                         "jsonrpc":"2.0","id":900,"method":"session/request_permission","params":{
                             "sessionId":"acp-fixture-1",
@@ -933,6 +1003,62 @@ mod tests {
             }
         }
         std::process::exit(0);
+    }
+
+    #[test]
+    fn cloneable_control_handle_cancels_a_prompt_while_execution_waits_for_settlement() {
+        if std::env::var("MORN_ACP_FIXTURE_SERVER").ok().as_deref() == Some("1") {
+            return;
+        }
+        let root =
+            std::env::temp_dir().join(format!("morn-acp-cancel-{}", uuid::Uuid::new_v4()));
+        let workspace = root.join("workspace");
+        let home = root.join("home");
+        let ready = root.join("prompt-ready");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+
+        let mut config =
+            DshAcpConfig::profile_acp(workspace.to_string_lossy(), home.to_string_lossy())
+                .with_test_env("MORN_ACP_FIXTURE_SERVER", "1")
+                .with_test_env("MORN_ACP_CANCEL_READY_FILE", ready.to_string_lossy());
+        config.allow_protocol_fixture_transport();
+        config.command = std::env::current_exe()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        config.args = vec![
+            "--exact".to_string(),
+            "dsh_acp::tests::fixture_acp_server_process".to_string(),
+            "--nocapture".to_string(),
+        ];
+        config.request_timeout_ms = 5_000;
+        config.prompt_timeout_ms = 5_000;
+
+        let mut client = DshAcpStdioClient::spawn(&config).unwrap();
+        client.initialize().unwrap();
+        client.authenticate_noop().unwrap();
+        let session = client.new_session(&config.cwd).unwrap();
+        let control = client.control_handle();
+        let thread_session = session.clone();
+        let worker = std::thread::spawn(move || {
+            let result = client.prompt_text(&thread_session, "wait-for-out-of-band-cancel");
+            (client, result)
+        });
+
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !ready.exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready.exists(), "fixture prompt never reached cancellable state");
+        control.cancel_session(&session).unwrap();
+
+        let (mut client, result) = worker.join().unwrap();
+        let result = result.unwrap();
+        assert_eq!(result.stop_reason, "cancelled");
+        assert_eq!(result.assistant_text, "");
+        client.shutdown_process().unwrap();
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
