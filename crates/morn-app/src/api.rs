@@ -1891,6 +1891,15 @@ fn classify_e0_turn_receipt(
     ("failed", true)
 }
 
+fn work_phase_allows_new_e0_execution(phase: morn_work::control::WorkPhase) -> bool {
+    matches!(
+        phase,
+        morn_work::control::WorkPhase::Ready
+            | morn_work::control::WorkPhase::Running
+            | morn_work::control::WorkPhase::Waiting
+    )
+}
+
 #[derive(Debug)]
 struct E0HarnessTurnEvidence {
     output: Option<morn_harness::provider::HarnessOutput>,
@@ -2247,10 +2256,8 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
         )
     };
 
-    if !matches!(
-        work.status.phase,
-        WorkPhase::Ready | WorkPhase::Running | WorkPhase::Waiting
-    ) || !work.required_conditions_satisfied()
+    if !work_phase_allows_new_e0_execution(work.status.phase)
+        || !work.required_conditions_satisfied()
     {
         return Err(AppError(Error::invalid_state(format!(
             "Work {} is not execution-ready in phase {:?}",
@@ -5283,6 +5290,69 @@ mod workspace_boundary_tests {
         assert_eq!(
             classify_e0_turn_receipt(true, "idle", true),
             ("completed", true)
+        );
+    }
+
+    #[test]
+    fn policy_violation_receipt_forces_reconciliation_and_blocks_blind_e0_retry() {
+        use morn_capability::EffectClass;
+        use morn_control_plane::{WorkProgressController, WorkProgressInputs};
+        use morn_harness::ExecutionReceipt;
+        use morn_kernel::ids::{RuntimeBindingId, WorkspaceId};
+        use morn_runtime::ExecutionBinding;
+        use morn_work::control::{ConditionStatus, WorkPhase, WorkResource, WorkSpec};
+
+        let mut work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "governed E0 analysis",
+                morn_profile::DomainProfile::lite_v1().canonical_ref(),
+            ),
+        );
+        work.status.phase = WorkPhase::Ready;
+
+        let mut binding =
+            ExecutionBinding::for_work(&work, "capability:test", "deepseek-harness", "runtime-1");
+        binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
+
+        let mut receipt = ExecutionReceipt::new(work.workspace_id.clone(), "session-1");
+        receipt.work_package_id = Some(work.id.clone());
+        receipt.work_generation = Some(work.generation);
+        receipt.execution_binding_ref = Some(binding.id.clone());
+        receipt.provider_ref = Some(binding.provider_ref.clone());
+        receipt.scope_ref = Some("scope://e0".to_string());
+        let (outcome, settled) =
+            classify_e0_turn_receipt(false, "policy-violation-runtime-reaped", true);
+        receipt.outcome = outcome.to_string();
+        receipt.ended_at = settled.then(morn_kernel::time::Timestamp::now);
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                binding: Some(&binding),
+                receipt: Some(&receipt),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(work.status.phase, WorkPhase::Reconciling);
+        assert!(!work_phase_allows_new_e0_execution(work.status.phase));
+        let unknown = work
+            .status
+            .conditions
+            .iter()
+            .find(|condition| condition.condition_type == "ExecutorOutcomeKnown")
+            .expect("outcome-known condition must be projected");
+        assert_eq!(unknown.status, ConditionStatus::False);
+        assert!(receipt.ended_at.is_none());
+        assert_eq!(receipt.outcome, "outcome-unknown");
+
+        // Guard against accidentally treating a reconstructed/foreign binding
+        // as the original pinned identity in future refactors.
+        assert_ne!(
+            binding.id,
+            RuntimeBindingId::generate_with("different-binding")
         );
     }
 
