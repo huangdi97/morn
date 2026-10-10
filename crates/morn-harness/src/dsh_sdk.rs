@@ -174,6 +174,34 @@ const fn default_true() -> bool {
     true
 }
 
+fn validate_profile_configuration_ref(reference: &str) -> Result<()> {
+    let (provider_version, digest) = reference.rsplit_once('#').ok_or_else(|| {
+        Error::validation(
+            "DSH profile_configuration_ref must use deepseek-harness-profile@<version>#sha256:<64-hex>",
+        )
+    })?;
+    let (provider, version) = provider_version.rsplit_once('@').ok_or_else(|| {
+        Error::validation(
+            "DSH profile_configuration_ref must use deepseek-harness-profile@<version>#sha256:<64-hex>",
+        )
+    })?;
+    let Some(hex) = digest.strip_prefix("sha256:") else {
+        return Err(Error::validation(
+            "DSH profile_configuration_ref digest must use sha256:<64-hex>",
+        ));
+    };
+    if provider != "deepseek-harness-profile"
+        || version.trim().is_empty()
+        || hex.len() != 64
+        || !hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err(Error::validation(
+            "DSH profile_configuration_ref must use deepseek-harness-profile@<version>#sha256:<64-hex>",
+        ));
+    }
+    Ok(())
+}
+
 impl DshSdkConfig {
     /// Stable, secret-free identity for the execution route selected inside
     /// one DSH distribution. Runtime artifact identity alone is insufficient:
@@ -184,13 +212,18 @@ impl DshSdkConfig {
                 "DSH route identity requires provider and model",
             ));
         }
+        let profile_configuration_ref = self
+            .profile_configuration_ref
+            .as_deref()
+            .ok_or_else(|| Error::validation("DSH route identity requires profile configuration"))?;
+        validate_profile_configuration_ref(profile_configuration_ref)?;
         let route = json!({
             "args": &self.args,
             "provider": &self.provider,
             "model": &self.model,
             "reasoning_effort": &self.reasoning_effort,
             "max_tokens": self.max_tokens,
-            "profile_configuration_ref": &self.profile_configuration_ref,
+            "profile_configuration_ref": profile_configuration_ref,
             "tool_policy": if self.enforce_morn_e0_tool_policy {
                 Some(dsh_morn_e0_tool_policy_identity())
             } else {
@@ -291,15 +324,11 @@ impl DshSdkConfig {
                 "real DSH SDK requires a pinned execution_environment_ref",
             ));
         }
-        if self
+        let profile_configuration_ref = self
             .profile_configuration_ref
             .as_deref()
-            .is_none_or(|reference| reference.trim().is_empty())
-        {
-            return Err(Error::validation(
-                "real DSH SDK requires a pinned profile_configuration_ref",
-            ));
-        }
+            .ok_or_else(|| Error::validation("real DSH SDK requires profile_configuration_ref"))?;
+        validate_profile_configuration_ref(profile_configuration_ref)?;
         if self
             .runtime_version
             .as_deref()
@@ -1084,7 +1113,7 @@ mod tests {
         )
         .with_dsh_home(nested_home.to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
-        .with_profile_configuration_ref("dsh-profile://sdk/morn-e0/v1")
+        .with_profile_configuration_ref("deepseek-harness-profile@morn-e0-v1#sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
         .with_runtime_identity(
             "fixture-runtime-1",
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1101,7 +1130,7 @@ mod tests {
     #[test]
     fn route_ref_changes_when_execution_route_changes_without_exposing_credentials() {
         let mut config = DshSdkConfig::profile_sdk("/tmp/work", "deepseek-official", "model-a")
-            .with_profile_configuration_ref("dsh-profile://sdk/a");
+            .with_profile_configuration_ref("deepseek-harness-profile@a#sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         config.reasoning_effort = Some("high".to_string());
         let first = config.route_ref().unwrap();
 
@@ -1110,7 +1139,7 @@ mod tests {
         assert_ne!(first, second);
 
         config.model = "model-a".to_string();
-        config.profile_configuration_ref = Some("dsh-profile://sdk/b".to_string());
+        config.profile_configuration_ref = Some("deepseek-harness-profile@b#sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string());
         let third = config.route_ref().unwrap();
         assert_ne!(
             first, third,
@@ -1118,7 +1147,7 @@ mod tests {
         );
 
         assert!(first.contains("deepseek-official"));
-        assert!(first.contains("dsh-profile://sdk/a"));
+        assert!(first.contains("deepseek-harness-profile@a#sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         assert!(!first.contains("dsh_home"));
     }
 
@@ -1133,7 +1162,7 @@ mod tests {
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
-        .with_profile_configuration_ref("dsh-profile://sdk/morn-e0/v1")
+        .with_profile_configuration_ref("deepseek-harness-profile@morn-e0-v1#sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
         .with_runtime_identity(
             "fixture-runtime-1",
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1378,7 +1407,7 @@ mod tests {
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
-        .with_profile_configuration_ref("dsh-profile://sdk/morn-e0/v1")
+        .with_profile_configuration_ref("deepseek-harness-profile@morn-e0-v1#sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
         .with_runtime_identity(
             "fixture-runtime-1",
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
