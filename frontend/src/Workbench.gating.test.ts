@@ -213,7 +213,7 @@ describe("canonical Work remains a separate product surface", () => {
         { id: "reconcile-other", attempt_id: "attempt-other" },
       ],
       outcomes: [
-        { id: "outcome-1", work_package_id: "work:canonical-1", work_generation: 1, objective: "Validated review", source_ref: "cmms://plant-a", evidence_refs: ["receipt-1"] },
+        { id: "outcome-1", work_package_id: "work:canonical-1", work_generation: 1, objective: "Validated review", source_ref: "cmms://plant-a", source_binding_ref: "source-binding-1", source_attestation_ref: "source-attestation-1", fact_type: "maintenance.status", evidence_refs: ["receipt-1"] },
         { id: "outcome-old", work_package_id: "work:canonical-1", work_generation: 0, objective: "Old generation review", source_ref: "cmms://plant-a", evidence_refs: ["receipt-old"] },
         { id: "outcome-other", work_package_id: "work:foreign", work_generation: 1, objective: "Foreign review" },
       ],
@@ -248,6 +248,9 @@ describe("canonical Work remains a separate product surface", () => {
     expect(trace.evidence).toHaveLength(1);
     const html = render(state, null);
     expect(html).toContain("Validated review");
+    expect(html).toContain("source-binding-1");
+    expect(html).toContain("source-attestation-1");
+    expect(html).toContain("maintenance.status");
     expect(html).toContain("OutcomeUnknown");
     expect(html).toContain("Conditional");
     expect(html).toContain("ObservedOperational");

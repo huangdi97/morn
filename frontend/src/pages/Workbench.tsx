@@ -404,6 +404,13 @@ function WorkEvidenceTrace({
                 <li key={textField(outcome, "id") ?? index}>
                   {textField(outcome, "objective") ?? "Observed outcome"}
                   <small>Source: {textField(outcome, "source_ref") ?? "Not bound"}</small>
+                  <small>
+                    Source binding: {textField(outcome, "source_binding_ref") ?? "Legacy / not pinned"}
+                  </small>
+                  <small>
+                    Observation attestation: {textField(outcome, "source_attestation_ref") ?? "Legacy / not pinned"}
+                  </small>
+                  <small>Fact type: {textField(outcome, "fact_type") ?? "Legacy / not pinned"}</small>
                   <small>Witness references: {fieldRefs(outcome, "evidence_refs").length}</small>
                 </li>
               ))}
