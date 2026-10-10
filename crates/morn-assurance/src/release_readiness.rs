@@ -215,10 +215,242 @@ pub fn release_readiness_axes_for_build(
     ]
 }
 
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DeploymentReadinessScope {
+    LocalReference,
+    DeepSeekReadOnly,
+    PiReadOnly,
+    CustomerReadOnlyDeepSeek,
+    CustomerReadOnlyPi,
+    ProductionWriteDeepSeek,
+    ProductionWritePi,
+}
+
+impl DeploymentReadinessScope {
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::LocalReference => "local-reference",
+            Self::DeepSeekReadOnly => "deepseek-read-only",
+            Self::PiReadOnly => "pi-read-only",
+            Self::CustomerReadOnlyDeepSeek => "customer-read-only-deepseek",
+            Self::CustomerReadOnlyPi => "customer-read-only-pi",
+            Self::ProductionWriteDeepSeek => "production-write-deepseek",
+            Self::ProductionWritePi => "production-write-pi",
+        }
+    }
+
+    fn required_axes(self) -> &'static [&'static str] {
+        const LOCAL: &[&str] = &[
+            "architecture-baseline",
+            "local-reference-slice",
+            "ci-conformance",
+        ];
+        const DSH: &[&str] = &[
+            "architecture-baseline",
+            "local-reference-slice",
+            "ci-conformance",
+            "deepseek-live-runtime",
+        ];
+        const PI: &[&str] = &[
+            "architecture-baseline",
+            "local-reference-slice",
+            "ci-conformance",
+            "pi-live-runtime",
+        ];
+        const CUSTOMER_DSH: &[&str] = &[
+            "architecture-baseline",
+            "local-reference-slice",
+            "ci-conformance",
+            "deepseek-live-runtime",
+            "customer-real-site",
+        ];
+        const CUSTOMER_PI: &[&str] = &[
+            "architecture-baseline",
+            "local-reference-slice",
+            "ci-conformance",
+            "pi-live-runtime",
+            "customer-real-site",
+        ];
+        const WRITE_DSH: &[&str] = &[
+            "architecture-baseline",
+            "local-reference-slice",
+            "ci-conformance",
+            "deepseek-live-runtime",
+            "customer-real-site",
+            "production-write",
+        ];
+        const WRITE_PI: &[&str] = &[
+            "architecture-baseline",
+            "local-reference-slice",
+            "ci-conformance",
+            "pi-live-runtime",
+            "customer-real-site",
+            "production-write",
+        ];
+        match self {
+            Self::LocalReference => LOCAL,
+            Self::DeepSeekReadOnly => DSH,
+            Self::PiReadOnly => PI,
+            Self::CustomerReadOnlyDeepSeek => CUSTOMER_DSH,
+            Self::CustomerReadOnlyPi => CUSTOMER_PI,
+            Self::ProductionWriteDeepSeek => WRITE_DSH,
+            Self::ProductionWritePi => WRITE_PI,
+        }
+    }
+
+    const fn requires_production_write_authority(self) -> bool {
+        matches!(
+            self,
+            Self::ProductionWriteDeepSeek | Self::ProductionWritePi
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeploymentReadinessDecision {
+    pub scope: DeploymentReadinessScope,
+    pub ready: bool,
+    pub required_axes: Vec<String>,
+    pub blockers: Vec<String>,
+}
+
+/// Evaluate one explicit deployment target. This consumes readiness evidence
+/// only; it never creates Authority. Production-write scopes additionally
+/// require the caller to supply the independently evaluated Profile/Authority
+/// posture.
+pub fn evaluate_deployment_readiness(
+    axes: &[ReleaseReadinessAxis],
+    scope: DeploymentReadinessScope,
+    production_write_authority: bool,
+) -> DeploymentReadinessDecision {
+    let mut blockers = Vec::new();
+    for required in scope.required_axes() {
+        match axes.iter().find(|axis| axis.id == *required) {
+            Some(axis) if axis.state == ReadinessState::Proven => {}
+            Some(axis) => blockers.push(format!(
+                "{}={:?}: {}",
+                required, axis.state, axis.reason
+            )),
+            None => blockers.push(format!("{required}=missing-axis")),
+        }
+    }
+    if scope.requires_production_write_authority() && !production_write_authority {
+        blockers.push(
+            "production-write-authority=forbidden: evidence cannot grant Profile/Authority permission"
+                .to_string(),
+        );
+    }
+
+    DeploymentReadinessDecision {
+        scope,
+        ready: blockers.is_empty(),
+        required_axes: scope
+            .required_axes()
+            .iter()
+            .map(|axis| (*axis).to_string())
+            .collect(),
+        blockers,
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::evidence_class::{reference_evidence_ledger, EvidenceClaim};
+
+    #[test]
+    fn deployment_scope_never_collapses_evidence_into_write_authority() {
+        let mut axes = vec![
+            ReleaseReadinessAxis {
+                id: "architecture-baseline".to_string(),
+                subject: "architecture".to_string(),
+                evidence_class: EvidenceClass::DesignSpec,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["design://1".to_string()],
+            },
+            ReleaseReadinessAxis {
+                id: "local-reference-slice".to_string(),
+                subject: "fixture".to_string(),
+                evidence_class: EvidenceClass::LocalFixture,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["fixture://1".to_string()],
+            },
+            ReleaseReadinessAxis {
+                id: "ci-conformance".to_string(),
+                subject: "ci".to_string(),
+                evidence_class: EvidenceClass::CiConformance,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["ci://1".to_string()],
+            },
+            ReleaseReadinessAxis {
+                id: "deepseek-live-runtime".to_string(),
+                subject: "dsh".to_string(),
+                evidence_class: EvidenceClass::RealRuntime,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["runtime://1".to_string()],
+            },
+            ReleaseReadinessAxis {
+                id: "customer-real-site".to_string(),
+                subject: "site".to_string(),
+                evidence_class: EvidenceClass::RealSite,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["site://1".to_string()],
+            },
+            ReleaseReadinessAxis {
+                id: "production-write".to_string(),
+                subject: "write".to_string(),
+                evidence_class: EvidenceClass::ProductionWrite,
+                state: ReadinessState::Proven,
+                reason: "historical production evidence".to_string(),
+                evidence_refs: vec!["write://1".to_string()],
+            },
+        ];
+
+        let customer = evaluate_deployment_readiness(
+            &axes,
+            DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
+            false,
+        );
+        assert!(customer.ready);
+
+        let write_without_authority = evaluate_deployment_readiness(
+            &axes,
+            DeploymentReadinessScope::ProductionWriteDeepSeek,
+            false,
+        );
+        assert!(!write_without_authority.ready);
+        assert!(write_without_authority
+            .blockers
+            .iter()
+            .any(|blocker| blocker.contains("production-write-authority=forbidden")));
+
+        let write_with_authority = evaluate_deployment_readiness(
+            &axes,
+            DeploymentReadinessScope::ProductionWriteDeepSeek,
+            true,
+        );
+        assert!(write_with_authority.ready);
+
+        axes
+            .iter_mut()
+            .find(|axis| axis.id == "deepseek-live-runtime")
+            .unwrap()
+            .state = ReadinessState::RuntimeUnhealthy;
+        let customer = evaluate_deployment_readiness(
+            &axes,
+            DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
+            false,
+        );
+        assert!(!customer.ready);
+    }
 
     #[test]
     fn reference_evidence_never_promotes_external_axes() {

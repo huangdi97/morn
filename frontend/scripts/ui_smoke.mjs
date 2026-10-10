@@ -53,7 +53,7 @@ try {
       if (!(await productionWrite.count()) || !(await productionWrite.first().evaluate((node) => node.classList.contains("readiness-blocked")))) {
         errors.push("console: production-write evidence must remain visibly blocked without deployment proof");
       }
-      const factoryWriteAuthority = page.locator(".readiness-item", { hasText: "Factory profile write authority" });
+      const factoryWriteAuthority = page.locator(".readiness-item", { hasText: "Factory profile write ceiling" });
       if (
         !(await factoryWriteAuthority.count()) ||
         !(await factoryWriteAuthority.first().evaluate((node) => node.classList.contains("readiness-blocked")))
@@ -73,6 +73,25 @@ try {
         !(await dshLive.first().evaluate((node) => node.classList.contains("readiness-blocked")))
       ) {
         errors.push("console: fixture/default DSH must not appear as real-runtime ready");
+      }
+      const deploymentScopes = page.locator('[data-testid="deployment-readiness-scopes"]');
+      if (!(await deploymentScopes.count())) {
+        errors.push("console: named deployment readiness gates are missing");
+      } else {
+        const localRelease = deploymentScopes.locator(".readiness-item", { hasText: "Local reference release" });
+        if (
+          !(await localRelease.count()) ||
+          !(await localRelease.first().evaluate((node) => node.classList.contains("readiness-blocked")))
+        ) {
+          errors.push("console: local reference release must remain blocked without exact build-bound CI evidence");
+        }
+        const production = deploymentScopes.locator(".readiness-item", { hasText: "Production write · DSH" });
+        if (
+          !(await production.count()) ||
+          !(await production.first().evaluate((node) => node.classList.contains("readiness-blocked")))
+        ) {
+          errors.push("console: production-write deployment gate must remain blocked under factory read-only profile");
+        }
       }
     }
     if (route === "/hub" && !(await page.getByRole("heading", { name: "v11.5 Capability Supply Chain" }).isVisible())) {

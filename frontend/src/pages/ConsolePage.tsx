@@ -77,6 +77,27 @@ function readinessTone(value: string): "ready" | "blocked" | "neutral" {
   return "neutral";
 }
 
+function deploymentScopeLabel(scope: string): string {
+  switch (scope) {
+    case "local-reference":
+      return "Local reference release";
+    case "deepseek-read-only":
+      return "DSH real-runtime read-only";
+    case "pi-read-only":
+      return "Pi real-runtime read-only";
+    case "customer-read-only-deepseek":
+      return "Customer read-only · DSH";
+    case "customer-read-only-pi":
+      return "Customer read-only · Pi";
+    case "production-write-deepseek":
+      return "Production write · DSH";
+    case "production-write-pi":
+      return "Production write · Pi";
+    default:
+      return scope;
+  }
+}
+
 function readinessLabel(id: string): string {
   switch (id) {
     case "architecture-baseline":
@@ -179,7 +200,7 @@ export default function ConsolePage() {
             <article
               className={`readiness-item ${v115.factory_profile.production_write ? "readiness-neutral" : "readiness-blocked"}`}
             >
-              <span>Factory profile write authority</span>
+              <span>Factory profile write ceiling</span>
               <strong>{v115.factory_profile.production_write ? "profile permits evaluation" : "forbidden"}</strong>
               <small className="readiness-reason">
                 Evidence never grants write authority. Every effect still requires Work/Profile/Authority/Permit checks.
@@ -204,6 +225,27 @@ export default function ConsolePage() {
             Running build identity: {v115.release_readiness.build_identity_ref ?? "not configured — CI axis cannot be proven"}.
             {" "}{v115.release_readiness.semantics.reason}
           </p>
+          <div className="release-readiness-subheading">
+            <strong>Named deployment gates</strong>
+            <span>Each scope has a fixed server-side requirement set; clients cannot omit hard gates.</span>
+          </div>
+          <div className="release-readiness-grid" data-testid="deployment-readiness-scopes">
+            {v115.release_readiness.deployment_scopes.map((decision) => (
+              <article
+                className={`readiness-item ${decision.ready ? "readiness-ready" : "readiness-blocked"}`}
+                key={decision.scope}
+              >
+                <span>{deploymentScopeLabel(decision.scope)}</span>
+                <strong>{decision.ready ? "ready" : "blocked"}</strong>
+                <small className="readiness-reason">
+                  Required: {decision.required_axes.join(" · ")}
+                </small>
+                <small className="readiness-evidence">
+                  {decision.blockers.length ? decision.blockers.join(" · ") : "All required axes proven"}
+                </small>
+              </article>
+            ))}
+          </div>
         </section>
       )}
       <div className="grid">

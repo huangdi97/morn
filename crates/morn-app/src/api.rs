@@ -442,6 +442,27 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         pi_readiness,
         build_identity_ref.as_deref(),
     );
+    // Global release status has no exact Work/action AuthorityDecision.
+    // Even a profile that permits writes cannot mint action-level authority here.
+    let production_write_authority = false;
+    let deployment_readiness = [
+        morn_assurance::DeploymentReadinessScope::LocalReference,
+        morn_assurance::DeploymentReadinessScope::DeepSeekReadOnly,
+        morn_assurance::DeploymentReadinessScope::PiReadOnly,
+        morn_assurance::DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
+        morn_assurance::DeploymentReadinessScope::CustomerReadOnlyPi,
+        morn_assurance::DeploymentReadinessScope::ProductionWriteDeepSeek,
+        morn_assurance::DeploymentReadinessScope::ProductionWritePi,
+    ]
+    .into_iter()
+    .map(|scope| {
+        morn_assurance::evaluate_deployment_readiness(
+            &release_readiness,
+            scope,
+            production_write_authority,
+        )
+    })
+    .collect::<Vec<_>>();
 
     let required_guarantees: Vec<String> = profile
         .requirements
@@ -554,6 +575,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         "release_readiness": {
             "build_identity_ref": build_identity_ref,
             "axes": release_readiness,
+            "deployment_scopes": deployment_readiness,
             "semantics": {
                 "aggregate_ready": false,
                 "reason": "readiness axes are independent; deployments must choose exact provider/effect scope and cannot infer production authorization from local engineering"

@@ -28,7 +28,8 @@ pub use evidence_class::{
     EvidenceLedger,
 };
 pub use release_readiness::{
-    release_readiness_axes, release_readiness_axes_for_build, ReadinessState, ReleaseReadinessAxis,
+    evaluate_deployment_readiness, release_readiness_axes, release_readiness_axes_for_build,
+    DeploymentReadinessDecision, DeploymentReadinessScope, ReadinessState, ReleaseReadinessAxis,
     RuntimeReadinessEvidence,
 };
 

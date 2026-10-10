@@ -320,6 +320,19 @@ export interface V115Status {
       reason: string;
       evidence_refs: string[];
     }>;
+    deployment_scopes: Array<{
+      scope:
+        | "local-reference"
+        | "deepseek-read-only"
+        | "pi-read-only"
+        | "customer-read-only-deepseek"
+        | "customer-read-only-pi"
+        | "production-write-deepseek"
+        | "production-write-pi";
+      ready: boolean;
+      required_axes: string[];
+      blockers: string[];
+    }>;
     semantics: {
       aggregate_ready: false;
       reason: string;

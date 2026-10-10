@@ -358,6 +358,19 @@ Work generation, ExecutionBinding, AuthorityDecision and ExternalActionPermit
 checks remain mandatory at the action boundary. HTTP clients cannot append
 evidence claims; the file is deployment-owned.
 
+The status API also evaluates server-defined deployment scopes rather than one
+ambiguous global "ready" boolean:
+
+- `local-reference`: architecture + local reference slice + exact-build CI;
+- `deepseek-read-only` / `pi-read-only`: local-reference + the selected live runtime;
+- `customer-read-only-*`: selected live runtime + explicit RealSite evidence;
+- `production-write-*`: customer scope + ProductionWrite evidence **and** an
+  independently permissive Profile/Authority posture.
+
+The current Factory Read-Only Profile fails the final authority condition even
+if a historical production-write evidence claim exists. Clients cannot remove
+required axes from these named scopes.
+
 ## Independent acceptance reviewers
 
 An acceptance role is not trusted because a browser submits the string

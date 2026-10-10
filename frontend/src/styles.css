@@ -613,6 +613,33 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   font-size: 11px;
   line-height: 1.55;
 }
+.release-readiness-subheading {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 18px 2px 10px;
+}
+.release-readiness-subheading strong {
+  color: #dbe6f5;
+  font-size: 13px;
+}
+.release-readiness-subheading span {
+  color: #8fa3c0;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: right;
+}
+@media (max-width: 760px) {
+  .release-readiness-subheading {
+    display: block;
+  }
+  .release-readiness-subheading span {
+    display: block;
+    margin-top: 5px;
+    text-align: left;
+  }
+}
 .readiness-ready { border-color: #365b51; }
 .readiness-ready strong { color: #b9e4d2; }
 .readiness-blocked { border-color: #66523b; }
