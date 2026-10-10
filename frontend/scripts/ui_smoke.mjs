@@ -254,16 +254,26 @@ try {
       if (!t.includes("no — explicit gates remain")) {
         errors.push("Studio: Work instantiation skipped execution readiness gates");
       }
+      const instantiatedWork = await page.evaluate(async (expectedGoal) => {
+        const response = await fetch("/api/v115/control-plane");
+        if (!response.ok) throw new Error(`control-plane fetch failed: ${response.status}`);
+        const control = await response.json();
+        const work = control.work.find((item) => item?.spec?.goal === expectedGoal);
+        return work ? { id: work.id, phase: work.status?.phase, goal: work.spec?.goal } : null;
+      }, "Deliver a reviewed report");
+      if (!instantiatedWork) {
+        throw new Error("Studio instantiate returned, but canonical store has no matching Work");
+      }
+      if (instantiatedWork.phase !== "Proposed") {
+        errors.push(`Studio: new canonical Work phase is ${instantiatedWork.phase}, expected Proposed`);
+      }
       await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
-      await page.waitForTimeout(500);
       const canonicalWork = page.locator('section[aria-label="Canonical Work overview"]');
-      await canonicalWork.getByText("Deliver a reviewed report", { exact: false }).first().waitFor({
-        state: "visible",
-        timeout: 10000,
-      });
-      const focusText = await canonicalWork.innerText();
-      if (!focusText.includes("Deliver a reviewed report") || !focusText.includes("Proposed")) {
-        errors.push("Workbench: Studio-instantiated Work is not shown as canonical state");
+      const workCard = canonicalWork.locator(`[data-work-id="${instantiatedWork.id}"]`);
+      await workCard.waitFor({ state: "visible", timeout: 10000 });
+      const focusText = await workCard.innerText();
+      if (!focusText.includes(instantiatedWork.goal) || !focusText.includes("Proposed")) {
+        errors.push("Workbench: exact Studio-instantiated Work is not shown as canonical state");
       }
       if (screenshotsDir) {
         await page.screenshot({ path: join(screenshotsDir, "workbench-after-studio-instantiation.png"), fullPage: true });

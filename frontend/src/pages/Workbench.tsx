@@ -463,7 +463,7 @@ export function CanonicalWorkOverview({
         ) : (
           <div className="work-focus-grid">
             {control.work.map((work) => (
-              <article className="work-focus-item" key={work.id}>
+              <article className="work-focus-item" key={work.id} data-work-id={work.id}>
                 <div className="work-focus-item-header">
                   <h3>{work.spec.goal}</h3>
                   <StatusPill value={work.status.phase} />

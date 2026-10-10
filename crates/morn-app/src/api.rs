@@ -1512,12 +1512,7 @@ async fn v115_work_bind_attested_e0(
                         "real DSH runtime distribution digest is not pinned",
                     ))
                 })?;
-            if !attestation.attests_runtime_identity(
-                "deepseek-harness",
-                &version,
-                &digest,
-                now,
-            ) {
+            if !attestation.attests_runtime_identity("deepseek-harness", &version, &digest, now) {
                 return Err(AppError(Error::invalid_state(
                     "execution-environment attestation does not authorize the configured DSH runtime artifact",
                 )));
