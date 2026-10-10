@@ -151,6 +151,10 @@ pub struct DshSdkConfig {
     /// isolation label alone is insufficient.
     #[serde(default)]
     pub execution_environment_ref: Option<String>,
+    /// Secret-free identity for the exact DSH Home/Profile composition.
+    /// Runtime artifact identity alone cannot prove the Cordis composition.
+    #[serde(default)]
+    pub profile_configuration_ref: Option<String>,
     /// Deployment-attested DSH distribution identity. The SDK serverInfo
     /// version is a wire identity and must never be substituted for these.
     #[serde(default)]
@@ -186,6 +190,7 @@ impl DshSdkConfig {
             "model": &self.model,
             "reasoning_effort": &self.reasoning_effort,
             "max_tokens": self.max_tokens,
+            "profile_configuration_ref": &self.profile_configuration_ref,
             "tool_policy": if self.enforce_morn_e0_tool_policy {
                 Some(dsh_morn_e0_tool_policy_identity())
             } else {
@@ -220,6 +225,7 @@ impl DshSdkConfig {
             max_tokens: None,
             dsh_home: None,
             execution_environment_ref: None,
+            profile_configuration_ref: None,
             runtime_version: None,
             runtime_digest: None,
             request_timeout_ms: 30_000,
@@ -235,6 +241,14 @@ impl DshSdkConfig {
 
     pub fn with_execution_environment_ref(mut self, environment_ref: impl Into<String>) -> Self {
         self.execution_environment_ref = Some(environment_ref.into());
+        self
+    }
+
+    pub fn with_profile_configuration_ref(
+        mut self,
+        profile_configuration_ref: impl Into<String>,
+    ) -> Self {
+        self.profile_configuration_ref = Some(profile_configuration_ref.into());
         self
     }
 
@@ -275,6 +289,15 @@ impl DshSdkConfig {
         {
             return Err(Error::validation(
                 "real DSH SDK requires a pinned execution_environment_ref",
+            ));
+        }
+        if self
+            .profile_configuration_ref
+            .as_deref()
+            .is_none_or(|reference| reference.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "real DSH SDK requires a pinned profile_configuration_ref",
             ));
         }
         if self
@@ -437,6 +460,12 @@ impl DshSdkConfig {
             std::env::var("MORN_DSH_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
                 Error::validation("MORN_DSH_EXECUTION_ENVIRONMENT_REF is required for real DSH")
             })?;
+        let profile_configuration_ref =
+            std::env::var("MORN_DSH_PROFILE_CONFIGURATION_REF").map_err(|_| {
+                Error::validation(
+                    "MORN_DSH_PROFILE_CONFIGURATION_REF is required for real DSH",
+                )
+            })?;
         let runtime_version = std::env::var("MORN_DSH_RUNTIME_VERSION")
             .map_err(|_| Error::validation("MORN_DSH_RUNTIME_VERSION is required for real DSH"))?;
         let runtime_digest = std::env::var("MORN_DSH_RUNTIME_DIGEST")
@@ -444,6 +473,7 @@ impl DshSdkConfig {
         let mut config = Self::profile_sdk(cwd, provider, model)
             .with_dsh_home(home)
             .with_execution_environment_ref(environment_ref)
+            .with_profile_configuration_ref(profile_configuration_ref)
             .with_runtime_identity(runtime_version, runtime_digest);
         if let Ok(command) = std::env::var("MORN_DSH_COMMAND") {
             config.command = command;
