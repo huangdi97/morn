@@ -143,6 +143,21 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
     const id = textField(row, "execution_binding_ref");
     return id !== null && bindingIds.has(id) && row.work_generation === generation;
   });
+  const receiptIds = new Set(
+    receipts.map((row) => textField(row, "id")).filter((id): id is string => !!id),
+  );
+  const executorReconciliations = control.executor_outcome_reconciliations.filter((row) => {
+    const bindingRef = textField(row, "execution_binding_ref");
+    const receiptRef = textField(row, "execution_receipt_id");
+    return (
+      textField(row, "work_package_id") === workId &&
+      row.work_generation === generation &&
+      bindingRef !== null &&
+      bindingIds.has(bindingRef) &&
+      receiptRef !== null &&
+      receiptIds.has(receiptRef)
+    );
+  });
   const interopBindings = control.interop_bindings.filter((row) => {
     const ref = textField(row, "execution_binding_ref");
     return ref !== null && bindingIds.has(ref) && textField(row, "work_ref") === workId;
@@ -210,6 +225,7 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
     resolutions,
     bindings,
     receipts,
+    executorReconciliations,
     interopBindings,
     externalTasks,
     attempts,
@@ -232,7 +248,7 @@ function WorkEvidenceTrace({
   generation: number;
 }) {
   const trace = workEvidenceTrace(control, workId, generation);
-  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} execution bindings · ${trace.interopBindings.length} interop bindings · ${trace.receipts.length} harness receipts · ${trace.externalTasks.length} external tasks · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions · ${trace.values.length} value assessments`;
+  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} execution bindings · ${trace.interopBindings.length} interop bindings · ${trace.receipts.length} harness receipts · ${trace.executorReconciliations.length} executor reconciliations · ${trace.externalTasks.length} external tasks · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions · ${trace.values.length} value assessments`;
   return (
     <details className="work-truth-trace">
       <summary>Execution, reality &amp; independent acceptance — {summary}</summary>
@@ -271,6 +287,20 @@ function WorkEvidenceTrace({
             </ul>
           )}
           <p>Harness receipts are executor evidence only; they never establish a business outcome or acceptance.</p>
+          {trace.executorReconciliations.length > 0 && (
+            <>
+              <strong>Executor outcome reconciliation</strong>
+              <ul className="work-evidence-list">
+                {trace.executorReconciliations.map((record, index) => (
+                  <li key={textField(record, "id") ?? index}>
+                    <b>{textField(record, "disposition") ?? "Unknown disposition"}</b>
+                    <small>Receipt: {textField(record, "execution_receipt_id") ?? "Not pinned"}</small>
+                    <small>{textField(record, "reason") ?? "No reason recorded"}</small>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
         <section>
           <strong>Governed interoperability bindings</strong>
@@ -563,6 +593,9 @@ function GovernedE0Executor({
   const [capabilityId, setCapabilityId] = useState("");
   const [bindingId, setBindingId] = useState("");
   const [environmentRef, setEnvironmentRef] = useState("");
+  const [reconciliationReceiptId, setReconciliationReceiptId] = useState("");
+  const [reconciliationAuthorizationId, setReconciliationAuthorizationId] = useState("");
+  const [reconciliationReason, setReconciliationReason] = useState("");
   const [prompt, setPrompt] = useState("Execute the bound E0 capability and return executor evidence only.");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -599,6 +632,18 @@ function GovernedE0Executor({
       binding.work_generation ===
         candidateWorks.find((work) => work.id === effectiveWorkId)?.generation,
   );
+  const workBindingIds = new Set(
+    workBindings.map((binding) => textField(binding, "id")).filter((id): id is string => !!id),
+  );
+  const unknownReceipts = control.execution_receipts.filter(
+    (receipt) =>
+      receipt.work_generation === selectedWork?.generation &&
+      textField(receipt, "outcome") === "outcome-unknown" &&
+      workBindingIds.has(textField(receipt, "execution_binding_ref") ?? ""),
+  );
+  const effectiveReconciliationReceiptId =
+    reconciliationReceiptId ||
+    (unknownReceipts.length === 1 ? textField(unknownReceipts[0], "id") ?? "" : "");
   const effectiveCapabilityId = capabilityId || eligibleCapabilities[0]?.manifest.id || "";
   const selectedCapability = eligibleCapabilities.find(
     (capability) => capability.manifest.id === effectiveCapabilityId,
@@ -683,6 +728,39 @@ function GovernedE0Executor({
     }
   };
 
+  const reconcileExecutorOutcome = async () => {
+    if (
+      !effectiveWorkId ||
+      !effectiveReconciliationReceiptId ||
+      !reconciliationAuthorizationId.trim() ||
+      !reconciliationReason.trim() ||
+      selectedWork?.status.phase !== "Reconciling"
+    ) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await apiPostJson<{
+        reconciliation: { disposition: string };
+        work: { status: { phase: string } };
+      }>("/v115/work/reconcile-executor-outcome", {
+        work_id: effectiveWorkId,
+        execution_receipt_id: effectiveReconciliationReceiptId,
+        reconciliation_authorization_id: reconciliationAuthorizationId.trim(),
+        reason: reconciliationReason.trim(),
+      });
+      setMessage(
+        `Executor reconciliation: ${response.reconciliation.disposition}. Work phase: ${response.work.status.phase}.`,
+      );
+      setReconciliationAuthorizationId("");
+      setReconciliationReason("");
+      reload();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const execute = async () => {
     if (!effectiveWorkId || !effectiveBindingId || !prompt.trim() || !executionAllowed) return;
     setBusy(true);
@@ -734,6 +812,9 @@ function GovernedE0Executor({
               setCapabilityId("");
               setBindingId("");
               setEnvironmentRef("");
+              setReconciliationReceiptId("");
+              setReconciliationAuthorizationId("");
+              setReconciliationReason("");
             }}
           >
             {candidateWorks.map((work) => (
@@ -868,11 +949,69 @@ function GovernedE0Executor({
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
       </label>
       {reconciliationRequired && (
-        <p role="alert" className="governed-execution-blocker">
-          Executor outcome reconciliation is required. Blind retry and readiness re-resolution are
-          blocked for this Work generation until authoritative reconciliation resolves the ambiguous
-          executor effect. A normal readiness controller tick is not outcome reconciliation.
-        </p>
+        <div className="governed-execution-blocker" role="alert">
+          <strong>Executor outcome reconciliation required</strong>
+          <p>
+            Blind retry and readiness re-resolution are blocked. Use only a deployment-issued
+            one-shot authorization tied to this exact Work generation, binding and unknown receipt.
+          </p>
+          <label>
+            Outcome-unknown receipt
+            <select
+              value={effectiveReconciliationReceiptId}
+              onChange={(event) => setReconciliationReceiptId(event.target.value)}
+              disabled={unknownReceipts.length === 0}
+            >
+              {unknownReceipts.length === 0 ? (
+                <option value="">No outcome-unknown receipt found</option>
+              ) : unknownReceipts.length > 1 && !reconciliationReceiptId ? (
+                <>
+                  <option value="">Select exact receipt</option>
+                  {unknownReceipts.map((receipt, index) => {
+                    const id = textField(receipt, "id") ?? "";
+                    return <option key={id || index} value={id}>{id || "Unknown receipt"}</option>;
+                  })}
+                </>
+              ) : (
+                unknownReceipts.map((receipt, index) => {
+                  const id = textField(receipt, "id") ?? "";
+                  return <option key={id || index} value={id}>{id || "Unknown receipt"}</option>;
+                })
+              )}
+            </select>
+          </label>
+          <label>
+            Out-of-band reconciliation authorization
+            <input
+              value={reconciliationAuthorizationId}
+              onChange={(event) => setReconciliationAuthorizationId(event.target.value)}
+              placeholder="deployment-issued bearer reference"
+            />
+          </label>
+          <label>
+            Operator reason
+            <input
+              value={reconciliationReason}
+              onChange={(event) => setReconciliationReason(event.target.value)}
+              placeholder="why this authorization is being consumed"
+            />
+          </label>
+          <button
+            disabled={
+              busy ||
+              !effectiveReconciliationReceiptId ||
+              !reconciliationAuthorizationId.trim() ||
+              !reconciliationReason.trim()
+            }
+            onClick={reconcileExecutorOutcome}
+          >
+            Consume trusted reconciliation
+          </button>
+          <small>
+            No-effect confirmation returns Work to Blocked for fresh readiness evaluation.
+            Effect-observed or still-unknown keeps retry blocked and never creates business Outcome.
+          </small>
+        </div>
       )}
       {!reconciliationRequired && selectedWork && !executionAllowed && (
         <p role="status" className="governed-execution-blocker">

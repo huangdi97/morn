@@ -73,6 +73,7 @@ describe("canonical Work remains a separate product surface", () => {
     execution_bindings: [],
     execution_manifests: [],
     execution_receipts: [],
+    executor_outcome_reconciliations: [],
     interop_bindings: [],
     external_task_observations: [],
     binding_migrations: [],
@@ -184,6 +185,10 @@ describe("canonical Work remains a separate product surface", () => {
         { id: "receipt-harness-old", execution_binding_ref: "binding-1", work_generation: 0, provider_ref: "deepseek-harness", outcome: "completed" },
         { id: "receipt-harness-other", execution_binding_ref: "binding-other", work_generation: 1, provider_ref: "pi", outcome: "completed" },
       ],
+      executor_outcome_reconciliations: [
+        { id: "exec-reconcile-1", work_package_id: "work:canonical-1", work_generation: 1, execution_binding_ref: "binding-1", execution_receipt_id: "receipt-harness-1", disposition: "no-effect-confirmed", reason: "audited" },
+        { id: "exec-reconcile-other", work_package_id: "work:foreign", work_generation: 1, execution_binding_ref: "binding-other", execution_receipt_id: "receipt-harness-other", disposition: "effect-observed" },
+      ],
       interop_bindings: [
         { work_ref: "work:canonical-1", execution_binding_ref: "binding-1", capability_ref: "cap:mcp", endpoint: { protocol: "Mcp", endpoint_ref: "https://mcp.example.com" } },
         { work_ref: "work:foreign", execution_binding_ref: "binding-other", capability_ref: "cap:foreign", endpoint: { protocol: "A2a", endpoint_ref: "https://agent.example/a2a" } },
@@ -224,6 +229,7 @@ describe("canonical Work remains a separate product surface", () => {
     expect(trace.resolutions).toHaveLength(1);
     expect(trace.bindings).toHaveLength(1);
     expect(trace.receipts).toHaveLength(1);
+    expect(trace.executorReconciliations).toHaveLength(1);
     expect(trace.interopBindings).toHaveLength(1);
     expect(trace.externalTasks).toHaveLength(1);
     expect(trace.attempts).toHaveLength(1);
@@ -265,6 +271,7 @@ describe("accepted outcome value UI", () => {
       execution_bindings: [],
       execution_manifests: [],
       execution_receipts: [],
+    executor_outcome_reconciliations: [],
     interop_bindings: [],
     external_task_observations: [],
       binding_migrations: [],

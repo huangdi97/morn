@@ -436,6 +436,36 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   min-height: 82px;
   resize: vertical;
 }
+.governed-execution-blocker {
+  display: grid;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 13px 14px;
+  border: 1px solid #8b633b;
+  border-radius: 10px;
+  background: #2a2017;
+  color: #f1d6b6;
+  line-height: 1.5;
+}
+.governed-execution-blocker p,
+.governed-execution-blocker small {
+  margin: 0;
+}
+.governed-execution-blocker label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+.governed-execution-blocker input,
+.governed-execution-blocker select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #705b45;
+  border-radius: 8px;
+  background: #15120f;
+  color: #f4e7d8;
+  padding: 8px 9px;
+}
 @media (max-width: 760px) {
   .governed-execution-grid { grid-template-columns: 1fr; }
 }
