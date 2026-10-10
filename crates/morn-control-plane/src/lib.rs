@@ -2721,7 +2721,7 @@ mod control_plane_persistence_scope_tests {
         assert!(store.save_work_resource_cas(&mut tampered).is_err());
         assert!(store.save_work_resource(&tampered).is_err());
 
-        canonical.status.phase = WorkPhase::Accepted;
+        canonical.status.phase = WorkPhase::Cancelled;
         store.save_work_resource_cas(&mut canonical).unwrap();
         let mut rollback = canonical.clone();
         rollback.status.phase = WorkPhase::Ready;
