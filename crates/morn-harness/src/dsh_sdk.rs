@@ -1707,6 +1707,11 @@ mod tests {
                         );
                         continue;
                     }
+                    let assistant_text = if prompt_text.contains("MORN_PROVIDER_SMOKE_OK") {
+                        "MORN_PROVIDER_SMOKE_OK"
+                    } else {
+                        "hello from fake sdk"
+                    };
                     write(
                         &mut stdout,
                         json!({
@@ -1717,7 +1722,7 @@ mod tests {
                                 "event":{
                                     "type":"assistant/message",
                                     "data":{"message":{"content":[
-                                        {"type":"text","text":"hello from fake sdk"}
+                                        {"type":"text","text":assistant_text}
                                     ]}}
                                 }
                             }

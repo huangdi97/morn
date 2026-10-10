@@ -107,15 +107,26 @@ pub fn run_harness_smoke(
     };
 
     let governed_external_runtime = !provider.required_scope_restrictions().is_empty();
+    let mut canary_mismatch = false;
     let scoped_execution = session_id
         .as_ref()
         .map(|id| {
-            provider
-                .send(
-                    id,
-                    "Return exactly MORN_PROVIDER_SMOKE_OK. Do not call tools, access files, use the network, or modify any external system.",
-                )
-                .is_ok()
+            match provider.send(
+                id,
+                "Return exactly MORN_PROVIDER_SMOKE_OK. Do not call tools, access files, use the network, or modify any external system.",
+            ) {
+                Ok(output) => {
+                    if governed_external_runtime
+                        && output.text.trim() != "MORN_PROVIDER_SMOKE_OK"
+                    {
+                        canary_mismatch = true;
+                        false
+                    } else {
+                        true
+                    }
+                }
+                Err(_) => false,
+            }
         })
         .unwrap_or(false);
 
@@ -171,6 +182,8 @@ pub fn run_harness_smoke(
         teardown_ok,
         detail: if governed_external_runtime && tool_activity {
             "smoke observed tool activity despite an explicit E0/no-tool probe".to_string()
+        } else if canary_mismatch {
+            "provider settled the E0 smoke turn but did not return the exact canary".to_string()
         } else if features.session_close {
             "smoke contract complete".to_string()
         } else {
