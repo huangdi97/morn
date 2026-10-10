@@ -145,7 +145,12 @@ pub fn release_readiness_axes(
             EvidenceClass::LocalFixture,
             "local reference slice is not proven",
         ),
-        runtime_axis(ledger, "deepseek-live-runtime", "deepseek-harness", dsh_runtime),
+        runtime_axis(
+            ledger,
+            "deepseek-live-runtime",
+            "deepseek-harness",
+            dsh_runtime,
+        ),
         runtime_axis(ledger, "pi-live-runtime", "pi-harness", pi_runtime),
         evidence_axis(
             ledger,
