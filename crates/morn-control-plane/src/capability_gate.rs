@@ -90,7 +90,9 @@ impl CapabilityEligibilityGate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use morn_assurance::{QualificationEvidence, StrictQualificationRequest, VerifiedReleaseRequest};
+    use morn_assurance::{
+        QualificationEvidence, StrictQualificationRequest, VerifiedReleaseRequest,
+    };
     use morn_capability::{CapabilityKind, CapabilityManifest, CapabilityRecord, EffectClass};
     use morn_kernel::ids::CapabilityId;
     use morn_package::SupplyChainVerificationEvidence;

@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use morn_assurance::evaluation::EvalStep;
+use morn_assurance::VerifiedReleaseRequest;
 use morn_assurance::simulation::{FaultInjection, FaultKind};
 #[cfg(feature = "domain-biolab")]
 use morn_biolab_reference::dream_factory::LiteratureSource;
