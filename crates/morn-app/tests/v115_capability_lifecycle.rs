@@ -8,6 +8,7 @@ use morn_assurance::{
     StrictQualificationRequest,
 };
 use morn_foundry::{ArtifactCompiler, ArtifactKind, ArtifactSource, OpenApiJsonCompiler};
+use morn_package::SupplyChainVerificationEvidence;
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 
 fn temp_db(name: &str) -> String {
@@ -111,18 +112,23 @@ fn capability_lifecycle_survives_restart_and_revocation_keeps_history() {
 
         let release = {
             let inner = &mut *guard;
+            let digest = format!("sha256:{}", "c".repeat(64));
             inner
                 .v115_admission
-                .record_release(
+                .record_verified_release(
                     &mut inner.v115_capabilities[index],
                     &qualification,
-                    format!(
-                        "oci://registry.example/morn/cmms-read@sha256:{}",
-                        "c".repeat(64)
-                    ),
-                    format!("sha256:{}", "c".repeat(64)),
-                    Some("sigstore://rekor/cmms-read".to_string()),
-                    Some("slsa://provenance/cmms-read".to_string()),
+                    format!("oci://registry.example/morn/cmms-read@{digest}"),
+                    digest.clone(),
+                    "sigstore://rekor/cmms-read",
+                    "slsa://provenance/cmms-read",
+                    SupplyChainVerificationEvidence {
+                        subject_digest: digest,
+                        verifier_ref: "fixture://release-verifier".to_string(),
+                        signature_verified: true,
+                        provenance_verified: true,
+                        evidence_refs: vec!["fixture://release-verifier/proof".to_string()],
+                    },
                 )
                 .unwrap()
         };

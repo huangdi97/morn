@@ -94,6 +94,7 @@ mod tests {
     use morn_capability::{CapabilityKind, CapabilityManifest, CapabilityRecord, EffectClass};
     use morn_kernel::ids::CapabilityId;
     use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
+    use morn_package::SupplyChainVerificationEvidence;
     use morn_runtime::{ProviderDescriptor, ProviderFamily, ProviderStatus};
     use std::collections::BTreeSet;
 
@@ -163,14 +164,22 @@ mod tests {
                 },
             )
             .unwrap();
+        let release_digest = format!("sha256:{}", "a".repeat(64));
         service
-            .record_release(
+            .record_verified_release(
                 &mut capability,
                 &qualification,
-                format!("oci://fixture/cap@sha256:{}", "a".repeat(64)),
-                format!("sha256:{}", "a".repeat(64)),
-                Some("sigstore://fixture".to_string()),
-                Some("slsa://fixture".to_string()),
+                format!("oci://fixture/cap@{release_digest}"),
+                release_digest.clone(),
+                "sigstore://fixture",
+                "slsa://fixture",
+                SupplyChainVerificationEvidence {
+                    subject_digest: release_digest,
+                    verifier_ref: "fixture://supply-chain".to_string(),
+                    signature_verified: true,
+                    provenance_verified: true,
+                    evidence_refs: vec!["fixture://supply-chain/proof".to_string()],
+                },
             )
             .unwrap();
         service

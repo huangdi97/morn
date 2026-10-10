@@ -11,6 +11,7 @@ morn-work = { workspace = true }
 morn-world = { workspace = true }
 morn-runtime = { workspace = true }
 morn-profile = { workspace = true }
+morn-package = { workspace = true }
 morn-store = { workspace = true }
 morn-assurance = { workspace = true }
 morn-harness = { workspace = true }

@@ -30,22 +30,22 @@ pub struct SupplyChainVerificationEvidence {
 }
 
 impl SupplyChainVerificationEvidence {
-    pub fn validate_for(
+    pub fn validate_subject_digest(
         &self,
-        descriptor: &CapabilityArtifactDescriptor,
+        subject_digest: &str,
         require_signature: bool,
         require_provenance: bool,
     ) -> Result<(), String> {
-        descriptor.validate(require_signature, require_provenance)?;
-        if !valid_digest(&self.subject_digest)
-            || !self
-                .subject_digest
-                .eq_ignore_ascii_case(&descriptor.content_digest)
+        if !valid_digest(subject_digest)
+            || !valid_digest(&self.subject_digest)
+            || !self.subject_digest.eq_ignore_ascii_case(subject_digest)
         {
             return Err("verification evidence must bind the exact artifact digest".to_string());
         }
         if self.verifier_ref.trim().is_empty() || self.evidence_refs.is_empty() {
-            return Err("verification evidence requires verifier identity and evidence refs".to_string());
+            return Err(
+                "verification evidence requires verifier identity and evidence refs".to_string(),
+            );
         }
         if require_signature && !self.signature_verified {
             return Err("artifact signature has not been independently verified".to_string());
@@ -54,6 +54,20 @@ impl SupplyChainVerificationEvidence {
             return Err("artifact provenance has not been independently verified".to_string());
         }
         Ok(())
+    }
+
+    pub fn validate_for(
+        &self,
+        descriptor: &CapabilityArtifactDescriptor,
+        require_signature: bool,
+        require_provenance: bool,
+    ) -> Result<(), String> {
+        descriptor.validate(require_signature, require_provenance)?;
+        self.validate_subject_digest(
+            &descriptor.content_digest,
+            require_signature,
+            require_provenance,
+        )
     }
 
     pub fn merge(&self, other: &Self) -> Result<Self, String> {

@@ -14,6 +14,7 @@ use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::Id;
 use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
+use morn_package::SupplyChainVerificationEvidence;
 use morn_profile::ConformanceReport;
 
 use crate::profile_conformance::ProfileConformanceAttestation;
@@ -73,6 +74,10 @@ pub struct CapabilityDistributionRelease {
     pub content_digest: String,
     pub signature_ref: Option<String>,
     pub provenance_ref: Option<String>,
+    /// Independent verification bound to this exact manifest digest. Merely
+    /// storing signature/provenance URLs never authorizes site admission.
+    #[serde(default)]
+    pub supply_chain_verification: Option<SupplyChainVerificationEvidence>,
     pub status: CapabilityDistributionReleaseStatus,
     pub created_at: Timestamp,
 }
@@ -382,6 +387,60 @@ impl AdmissionService {
         signature_ref: Option<String>,
         provenance_ref: Option<String>,
     ) -> Result<CapabilityDistributionRelease> {
+        self.record_release_internal(
+            capability,
+            qualification,
+            package_ref.into(),
+            content_digest.into(),
+            signature_ref,
+            provenance_ref,
+            None,
+        )
+    }
+
+    pub fn record_verified_release(
+        &mut self,
+        capability: &mut CapabilityRecord,
+        qualification: &QualificationRecord,
+        package_ref: impl Into<String>,
+        content_digest: impl Into<String>,
+        signature_ref: impl Into<String>,
+        provenance_ref: impl Into<String>,
+        verification: SupplyChainVerificationEvidence,
+    ) -> Result<CapabilityDistributionRelease> {
+        let package_ref = package_ref.into();
+        let content_digest = content_digest.into();
+        let signature_ref = signature_ref.into();
+        let provenance_ref = provenance_ref.into();
+        if signature_ref.trim().is_empty() || provenance_ref.trim().is_empty() {
+            return Err(Error::validation(
+                "verified release requires signature and provenance references",
+            ));
+        }
+        verification
+            .validate_subject_digest(&content_digest, true, true)
+            .map_err(Error::validation)?;
+        self.record_release_internal(
+            capability,
+            qualification,
+            package_ref,
+            content_digest,
+            Some(signature_ref),
+            Some(provenance_ref),
+            Some(verification),
+        )
+    }
+
+    fn record_release_internal(
+        &mut self,
+        capability: &mut CapabilityRecord,
+        qualification: &QualificationRecord,
+        package_ref: String,
+        content_digest: String,
+        signature_ref: Option<String>,
+        provenance_ref: Option<String>,
+        supply_chain_verification: Option<SupplyChainVerificationEvidence>,
+    ) -> Result<CapabilityDistributionRelease> {
         if !qualification.is_active_at(Timestamp::now()) {
             return Err(Error::invalid_state(
                 "cannot release from inactive qualification",
@@ -435,6 +494,7 @@ impl AdmissionService {
             content_digest,
             signature_ref,
             provenance_ref,
+            supply_chain_verification,
             status: CapabilityDistributionReleaseStatus::Released,
             created_at: Timestamp::now(),
         };
@@ -452,6 +512,7 @@ impl AdmissionService {
                 .unwrap_or_else(|| "release-service".to_string()),
         );
         Ok(release)
+
     }
 
     pub fn admit_with_attestation(
@@ -528,6 +589,17 @@ impl AdmissionService {
                     "site admission requires an active content-addressed release after qualification",
                 )
             })?;
+        let verification = release
+            .supply_chain_verification
+            .as_ref()
+            .ok_or_else(|| {
+                Error::invalid_state(
+                    "site admission requires independently verified signature and provenance for the active release",
+                )
+            })?;
+        verification
+            .validate_subject_digest(&release.content_digest, true, true)
+            .map_err(Error::validation)?;
         if capability.stage != CapabilityStage::Qualified
             && capability.stage != CapabilityStage::Admitted
         {
@@ -784,14 +856,22 @@ mod tests {
         capability: &mut CapabilityRecord,
         qualification: &QualificationRecord,
     ) -> CapabilityDistributionRelease {
+        let digest = format!("sha256:{}", "a".repeat(64));
         service
-            .record_release(
+            .record_verified_release(
                 capability,
                 qualification,
-                format!("oci://fixture/morn/capability@sha256:{}", "a".repeat(64)),
-                format!("sha256:{}", "a".repeat(64)),
-                Some("sigstore://fixture/signature".to_string()),
-                Some("slsa://fixture/provenance".to_string()),
+                format!("oci://fixture/morn/capability@{digest}"),
+                digest.clone(),
+                "sigstore://fixture/signature",
+                "slsa://fixture/provenance",
+                SupplyChainVerificationEvidence {
+                    subject_digest: digest,
+                    verifier_ref: "fixture://supply-chain-verifier".to_string(),
+                    signature_verified: true,
+                    provenance_verified: true,
+                    evidence_refs: vec!["fixture://supply-chain-proof".to_string()],
+                },
             )
             .unwrap()
     }
@@ -1028,6 +1108,58 @@ mod tests {
                 "site-owner",
             )
             .is_err());
+    }
+
+    #[test]
+    fn unverified_distribution_metadata_cannot_be_site_admitted() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        observe_candidate(&mut service, &mut capability);
+        let qualification = service
+            .qualify_with_evidence(
+                &mut capability,
+                StrictQualificationRequest {
+                    candidate_ref: "candidate:strict".to_string(),
+                    decision_ref: "decision:strict".to_string(),
+                    evidence_refs: vec!["eval:strict".to_string()],
+                    qualification_evidence: QualificationEvidence {
+                        test_suite_refs: vec!["suite:strict".to_string()],
+                        environment_digest: Some("sha256:env".to_string()),
+                        expected_properties: vec!["read-only".to_string()],
+                        evaluator_identity: Some("evaluator:independent".to_string()),
+                        ..Default::default()
+                    },
+                    context_of_use: vec!["factory-readonly".to_string()],
+                    valid_until: None,
+                },
+            )
+            .unwrap();
+
+        service
+            .record_release(
+                &mut capability,
+                &qualification,
+                format!("oci://fixture/unverified@sha256:{}", "a".repeat(64)),
+                format!("sha256:{}", "a".repeat(64)),
+                Some("sigstore://claimed".to_string()),
+                Some("slsa://claimed".to_string()),
+            )
+            .unwrap();
+
+        let profile = DomainProfile::factory_readonly_v1();
+        let report = passing_conformance(&profile);
+        let error = service
+            .admit(
+                &mut capability,
+                &qualification,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .unwrap_err();
+        assert!(format!("{error}").contains("independently verified"));
+        assert!(capability.admission_refs.is_empty());
     }
 
     #[test]
