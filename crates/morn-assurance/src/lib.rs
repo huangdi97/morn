@@ -2,6 +2,7 @@
 
 pub mod admission;
 pub mod certification;
+pub mod customer_value;
 pub mod evaluation;
 
 pub mod evidence_class;
@@ -20,6 +21,7 @@ pub use admission::{
     QualificationRecordId, QualificationStatus, SiteAdmission, SiteAdmissionId,
     SiteAdmissionStatus, StrictQualificationRequest,
 };
+pub use customer_value::{CustomerValueAttestation, CustomerValueMetric};
 pub use evidence_class::{
     reference_evidence_ledger, EvidenceClaim, EvidenceClaimId, EvidenceClaimState, EvidenceClass,
     EvidenceLedger,

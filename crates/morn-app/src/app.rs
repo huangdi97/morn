@@ -10,7 +10,10 @@ use morn_assurance::replacement::ReplacementPilot;
 use morn_assurance::replay::ReplayRunner;
 use morn_assurance::rollback::RollbackService;
 use morn_assurance::shadow::ShadowRunner;
-use morn_assurance::{reference_evidence_ledger, AdmissionService, EvidenceClaim, EvidenceLedger};
+use morn_assurance::{
+    reference_evidence_ledger, AdmissionService, CustomerValueAttestation, EvidenceClaim,
+    EvidenceLedger,
+};
 #[cfg(feature = "domain-biolab")]
 use morn_biolab_reference::dream_factory::{LoopAResult, LoopCResult};
 #[cfg(feature = "domain-biolab")]
@@ -69,6 +72,9 @@ pub struct AppInner {
     /// Deployment-issued, exact Work/Outcome/disposition review authorizations.
     /// IDs are bearer references delivered out-of-band and are never listed by the API.
     pub acceptance_review_authorizations: Vec<AcceptanceReviewAuthorization>,
+    /// Deployment-issued proof for exact customer-validated baselines/KPIs.
+    /// Bearer IDs are supplied out-of-band; callers cannot mint KPI truth.
+    pub customer_value_attestations: Vec<CustomerValueAttestation>,
     /// Deployment-issued exact authorizations for resolving one ambiguous
     /// executor receipt. Bearer IDs are delivered out-of-band and consumed once.
     pub executor_reconciliation_authorizations: Vec<ExecutorOutcomeReconciliationAuthorization>,
@@ -361,6 +367,54 @@ fn configured_acceptance_review_authorizations(
     Ok(authorizations)
 }
 
+fn configured_customer_value_attestations(
+) -> morn_kernel::Result<Vec<CustomerValueAttestation>> {
+    let Ok(path) = std::env::var("MORN_CUSTOMER_VALUE_ATTESTATIONS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_CUSTOMER_VALUE_ATTESTATIONS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read customer value attestation file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid customer value attestation JSON in {path:?}: {error}"
+        ))
+    })?;
+    let attestations: Vec<CustomerValueAttestation> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid customer value attestation entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid customer value attestation entry: {error}"
+            ))
+        })?],
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    for attestation in &attestations {
+        attestation.validate()?;
+        if !ids.insert(attestation.attestation_id.clone()) {
+            return Err(morn_kernel::error::Error::validation(
+                "customer value attestation ids must be unique",
+            ));
+        }
+    }
+    Ok(attestations)
+}
+
 fn configured_executor_reconciliation_authorizations(
 ) -> morn_kernel::Result<Vec<ExecutorOutcomeReconciliationAuthorization>> {
     let Ok(path) = std::env::var("MORN_EXECUTOR_RECONCILIATION_AUTHORIZATIONS_FILE") else {
@@ -496,6 +550,7 @@ impl AppState {
         let source_observation_attestations = configured_source_observation_attestations()?;
         let acceptance_reviewers = configured_acceptance_reviewers()?;
         let acceptance_review_authorizations = configured_acceptance_review_authorizations()?;
+        let customer_value_attestations = configured_customer_value_attestations()?;
         let executor_reconciliation_authorizations =
             configured_executor_reconciliation_authorizations()?;
         let evidence_ledger = configured_evidence_ledger()?;
@@ -515,6 +570,7 @@ impl AppState {
             source_observation_attestations,
             acceptance_reviewers,
             acceptance_review_authorizations,
+            customer_value_attestations,
             executor_reconciliation_authorizations,
             evidence_ledger,
             evolution: EvolutionEngine::new(),

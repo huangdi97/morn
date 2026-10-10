@@ -268,6 +268,64 @@ itself. Production deployments should source these attestations from the
 customer IAM/governance system and independently audit who was allowed to
 approve which acceptance contract.
 
+## Customer-validated value attestations
+
+A real-site evidence claim proves that a Work episode has deployment-owned
+site evidence. It does **not** prove arbitrary ROI/KPI numbers typed later into
+the Workbench. Values presented as `CustomerValidated` therefore require a
+second, exact deployment artifact loaded through
+`MORN_CUSTOMER_VALUE_ATTESTATIONS_FILE`.
+
+Each attestation binds one workspace, Work generation, source-grounded Outcome
+and final Acceptance decision to the baseline and KPI values that the customer
+or deployment governance process actually reviewed:
+
+```json
+[
+  {
+    "attestation_id": "customer-value-42",
+    "workspace_id": "ws:customer-a",
+    "work_package_id": "work:delivery-review-42",
+    "work_generation": 1,
+    "outcome_id": "out:delivery-review-42",
+    "acceptance_id": "adec:delivery-review-42",
+    "baseline_ref": "baseline://customer-approved/42",
+    "kpis": [
+      { "name": "human_minutes_saved", "value": 12.5 },
+      { "name": "late_minutes_delta", "value": -12.0 }
+    ],
+    "evidence_refs": [
+      "customer://signed/value-review/42"
+    ],
+    "issuer": "customer-value-governance",
+    "observed_at": "2026-10-10T00:00:00Z",
+    "valid_until": "2027-01-01T00:00:00Z"
+  }
+]
+```
+
+The `POST /api/v115/work/assess-value` contract is deliberately asymmetric:
+
+- Fixture/Simulation/Shadow/ObservedOperational assessments may submit their
+  own evidence references and optional baseline/KPI data, and remain labeled as
+  that evidence class.
+- CustomerValidated accepts only the exact
+  `customer_value_attestation_id`; callers may not submit `evidence_refs`,
+  `baseline_ref` or `kpis` for that class.
+- The attestation must match the current Work generation, Outcome and final
+  Acceptance, be time-valid, and the exact value subject must also have a
+  current deployment-owned `RealSite` evidence claim.
+- A customer-value attestation is consumed once. Replay is rejected rather than
+  creating several apparently independent customer validations from one signed
+  review.
+- Historical assessments remain immutable. Current support is shown separately
+  and becomes unsupported when the RealSite evidence is revoked/blocked or the
+  exact customer-value attestation is no longer active.
+
+The Workbench requests the out-of-band attestation ID in CustomerValidated
+mode and renders the signed KPI/baseline copied from deployment evidence. It
+does not offer editable customer KPI fields in that mode.
+
 ## Migration / upgrade
 
 - Migrations are versioned with preflight, dry-run, apply, verify, and

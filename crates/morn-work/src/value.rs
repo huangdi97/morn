@@ -31,6 +31,10 @@ pub struct ValueAssessment {
     pub work_generation: u64,
     pub outcome_ref: OutcomeRecordId,
     pub acceptance_ref: Option<AcceptanceDecisionId>,
+    /// Deployment-issued attestation that owns CustomerValidated KPI/baseline
+    /// data. Ordinary fixture/operational assessments leave this empty.
+    #[serde(default)]
+    pub customer_value_attestation_ref: Option<String>,
     pub evidence_class: ValueEvidenceClass,
     pub total_duration_ms: Option<u64>,
     pub human_minutes: Option<f64>,
@@ -55,6 +59,7 @@ impl ValueAssessment {
             work_generation: 1,
             outcome_ref,
             acceptance_ref: None,
+            customer_value_attestation_ref: None,
             evidence_class,
             total_duration_ms: None,
             human_minutes: None,
@@ -82,6 +87,11 @@ impl ValueAssessment {
         self.work_generation > 0
             && self.evidence_class == ValueEvidenceClass::CustomerValidated
             && self.acceptance_ref.is_some()
+            && self
+                .customer_value_attestation_ref
+                .as_deref()
+                .is_some_and(|reference| !reference.trim().is_empty())
+            && !self.kpis.is_empty()
             && !self.evidence_refs.is_empty()
     }
 }
@@ -101,6 +111,23 @@ mod tests {
         assessment.pin_work_generation(3).unwrap();
         assert_eq!(assessment.work_generation, 3);
         assert!(assessment.pin_work_generation(0).is_err());
+    }
+
+    #[test]
+    fn customer_value_claim_requires_exact_deployment_attestation_reference() {
+        let mut assessment = ValueAssessment::new(
+            WorkPackageId::generate_with("work"),
+            OutcomeRecordId::generate_with("out"),
+            ValueEvidenceClass::CustomerValidated,
+        );
+        assessment.acceptance_ref = Some(AcceptanceDecisionId::generate_with("acceptance"));
+        assessment.evidence_refs.push("customer://signed/value".to_string());
+        assessment.kpis.push(("human_minutes_saved".to_string(), 12.5));
+        assert!(!assessment.is_customer_value_claim());
+
+        assessment.customer_value_attestation_ref =
+            Some("customer-value-attestation:review-1".to_string());
+        assert!(assessment.is_customer_value_claim());
     }
 
     #[test]

@@ -416,12 +416,20 @@ function WorkEvidenceTrace({
                     </small>
                     <small>Value evidence refs: {fieldRefs(assessment, "evidence_refs").length}</small>
                     {customerValidated && (
-                      <small>
-                        Current RealSite support: {currentTrust}
-                        {support?.current_real_site_claim_id
-                          ? ` · ${support.current_real_site_claim_id}`
-                          : ""}
-                      </small>
+                      <>
+                        <small>
+                          Customer-value attestation: {support?.customer_value_attestation_ref ?? "Missing"}
+                          {support
+                            ? ` · ${support.customer_value_attestation_active ? "active" : "inactive"}`
+                            : ""}
+                        </small>
+                        <small>
+                          Current RealSite support: {currentTrust}
+                          {support?.current_real_site_claim_id
+                            ? ` · ${support.current_real_site_claim_id}`
+                            : ""}
+                        </small>
+                      </>
                     )}
                   </li>
                 );
@@ -1516,6 +1524,7 @@ export function ValueAssessmentPanel({
   const [acceptanceId, setAcceptanceId] = useState("");
   const [evidenceClass, setEvidenceClass] = useState("observed-operational");
   const [evidenceRef, setEvidenceRef] = useState("");
+  const [customerValueAttestationId, setCustomerValueAttestationId] = useState("");
   const [baselineRef, setBaselineRef] = useState("");
   const [kpisText, setKpisText] = useState("{}");
   const [busy, setBusy] = useState(false);
@@ -1556,26 +1565,52 @@ export function ValueAssessmentPanel({
     acceptanceId || textField(compatibleAcceptances[0] ?? {}, "id") || "";
 
   const assess = async () => {
-    if (!effectiveWorkId || !effectiveOutcomeId || !effectiveAcceptanceId || !evidenceRef.trim()) {
+    const customerValidated = evidenceClass === "customer-validated";
+    if (
+      !effectiveWorkId ||
+      !effectiveOutcomeId ||
+      !effectiveAcceptanceId ||
+      (customerValidated ? !customerValueAttestationId.trim() : !evidenceRef.trim())
+    ) {
       return;
     }
-    let kpis: Record<string, number>;
-    try {
-      const parsed = JSON.parse(kpisText) as unknown;
-      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-        throw new Error("KPI JSON must be an object");
+
+    let payload: Record<string, unknown> = {
+      work_id: effectiveWorkId,
+      outcome_id: effectiveOutcomeId,
+      acceptance_id: effectiveAcceptanceId,
+      evidence_class: evidenceClass,
+    };
+    if (customerValidated) {
+      payload = {
+        ...payload,
+        customer_value_attestation_id: customerValueAttestationId.trim(),
+      };
+    } else {
+      let kpis: Record<string, number>;
+      try {
+        const parsed = JSON.parse(kpisText) as unknown;
+        if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+          throw new Error("KPI JSON must be an object");
+        }
+        kpis = Object.fromEntries(
+          Object.entries(parsed as Record<string, unknown>).map(([key, value]) => {
+            if (typeof value !== "number" || !Number.isFinite(value)) {
+              throw new Error(`KPI ${key} must be a finite number`);
+            }
+            return [key, value];
+          }),
+        );
+      } catch (e) {
+        setMessage((e as Error).message);
+        return;
       }
-      kpis = Object.fromEntries(
-        Object.entries(parsed as Record<string, unknown>).map(([key, value]) => {
-          if (typeof value !== "number" || !Number.isFinite(value)) {
-            throw new Error(`KPI ${key} must be a finite number`);
-          }
-          return [key, value];
-        }),
-      );
-    } catch (e) {
-      setMessage((e as Error).message);
-      return;
+      payload = {
+        ...payload,
+        evidence_refs: [evidenceRef.trim()],
+        baseline_ref: baselineRef.trim() || undefined,
+        kpis,
+      };
     }
 
     setBusy(true);
@@ -1585,15 +1620,8 @@ export function ValueAssessmentPanel({
         value_assessment: { id: string; evidence_class: string };
         value_subject: string;
         customer_validated: boolean;
-      }>("/v115/work/assess-value", {
-        work_id: effectiveWorkId,
-        outcome_id: effectiveOutcomeId,
-        acceptance_id: effectiveAcceptanceId,
-        evidence_class: evidenceClass,
-        evidence_refs: [evidenceRef.trim()],
-        baseline_ref: baselineRef.trim() || undefined,
-        kpis,
-      });
+        customer_value_attestation_id: string | null;
+      }>("/v115/work/assess-value", payload);
       setMessage(
         `Value assessment persisted: ${response.value_assessment.evidence_class}. Subject: ${response.value_subject}.`,
       );
@@ -1619,8 +1647,9 @@ export function ValueAssessmentPanel({
   return (
     <Card title="Accepted outcome value">
       <p>
-        Measure value only against an exact accepted Outcome. CustomerValidated additionally
-        requires a deployment-owned RealSite evidence claim; this form cannot self-assert one.
+        Measure value only against an exact accepted Outcome. CustomerValidated requires current
+        RealSite support plus a deployment-issued attestation that owns the exact baseline and KPI
+        values; this form cannot self-assert customer metrics.
       </p>
       <div className="governed-execution-grid">
         <label>
@@ -1673,7 +1702,13 @@ export function ValueAssessmentPanel({
         </label>
         <label>
           Value evidence class
-          <select value={evidenceClass} onChange={(event) => setEvidenceClass(event.target.value)}>
+          <select
+            value={evidenceClass}
+            onChange={(event) => {
+              setEvidenceClass(event.target.value);
+              setMessage(null);
+            }}
+          >
             <option value="fixture">Fixture</option>
             <option value="simulation">Simulation</option>
             <option value="shadow">Shadow</option>
@@ -1682,35 +1717,49 @@ export function ValueAssessmentPanel({
           </select>
         </label>
       </div>
-      <label className="governed-execution-prompt">
-        Value evidence reference
-        <input
-          value={evidenceRef}
-          onChange={(event) => setEvidenceRef(event.target.value)}
-          placeholder="metric://report-or-signed-analysis"
-        />
-      </label>
-      <label className="governed-execution-prompt">
-        Baseline reference (optional)
-        <input
-          value={baselineRef}
-          onChange={(event) => setBaselineRef(event.target.value)}
-          placeholder="baseline://approved-reference"
-        />
-      </label>
-      <label className="governed-execution-prompt">
-        KPI JSON (optional)
-        <textarea
-          value={kpisText}
-          onChange={(event) => setKpisText(event.target.value)}
-          placeholder='{"human_minutes_saved": 12.5}'
-        />
-      </label>
-      {evidenceClass === "customer-validated" && (
-        <p className="work-focus-empty">
-          CustomerValidated will be rejected unless deployment evidence contains a Proven real-site
-          claim for this exact Work generation and Outcome.
-        </p>
+      {evidenceClass === "customer-validated" ? (
+        <>
+          <label className="governed-execution-prompt">
+            Deployment customer-value attestation ID
+            <input
+              value={customerValueAttestationId}
+              onChange={(event) => setCustomerValueAttestationId(event.target.value)}
+              placeholder="customer-value-attestation-…"
+            />
+          </label>
+          <p className="work-focus-empty">
+            The referenced deployment attestation is single-use and must bind this exact Work
+            generation, Outcome and Acceptance. Its signed baseline, KPI values and evidence are
+            copied into the immutable assessment; browser-entered metrics are not accepted.
+          </p>
+        </>
+      ) : (
+        <>
+          <label className="governed-execution-prompt">
+            Value evidence reference
+            <input
+              value={evidenceRef}
+              onChange={(event) => setEvidenceRef(event.target.value)}
+              placeholder="metric://report-or-signed-analysis"
+            />
+          </label>
+          <label className="governed-execution-prompt">
+            Baseline reference (optional)
+            <input
+              value={baselineRef}
+              onChange={(event) => setBaselineRef(event.target.value)}
+              placeholder="baseline://approved-reference"
+            />
+          </label>
+          <label className="governed-execution-prompt">
+            KPI JSON (optional)
+            <textarea
+              value={kpisText}
+              onChange={(event) => setKpisText(event.target.value)}
+              placeholder='{"human_minutes_saved": 12.5}'
+            />
+          </label>
+        </>
       )}
       <div className="page-actions">
         <button
@@ -1719,7 +1768,9 @@ export function ValueAssessmentPanel({
             !effectiveWorkId ||
             !effectiveOutcomeId ||
             !effectiveAcceptanceId ||
-            !evidenceRef.trim()
+            (evidenceClass === "customer-validated"
+              ? !customerValueAttestationId.trim()
+              : !evidenceRef.trim())
           }
           onClick={assess}
         >

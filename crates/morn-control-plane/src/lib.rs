@@ -2736,6 +2736,11 @@ mod control_plane_persistence_scope_tests {
             ValueEvidenceClass::CustomerValidated,
         );
         fake_value.acceptance_ref = Some(decision.id.clone());
+        fake_value.customer_value_attestation_ref =
+            Some("customer-value-attestation:test".to_string());
+        fake_value
+            .kpis
+            .push(("delivery_minutes_saved".to_string(), 12.0));
         fake_value
             .evidence_refs
             .push("fixture://not-customer".to_string());

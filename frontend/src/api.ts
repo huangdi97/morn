@@ -96,6 +96,8 @@ export interface V115ControlPlaneData {
     assessment_id: string;
     subject: string;
     requires_real_site: boolean;
+    customer_value_attestation_ref: string | null;
+    customer_value_attestation_active: boolean;
     currently_supported: boolean;
     current_real_site_state: "proven" | "blocked-external" | "revoked" | null;
     current_real_site_claim_id: string | null;

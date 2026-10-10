@@ -1122,20 +1122,50 @@ async fn v115_work_assess_value(
             ))))
         }
     };
-    let evidence_refs: Vec<String> = body
-        .get("evidence_refs")
-        .and_then(Value::as_array)
-        .ok_or_else(|| AppError(Error::validation("evidence_refs array is required")))?
-        .iter()
-        .filter_map(Value::as_str)
+    let customer_value_attestation_id = body
+        .get("customer_value_attestation_id")
+        .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .map(str::to_string)
-        .collect();
-    if evidence_refs.is_empty() {
-        return Err(AppError(Error::validation(
-            "value assessment requires explicit evidence references",
-        )));
+        .map(str::to_string);
+    let caller_evidence_refs: Vec<String> = body
+        .get("evidence_refs")
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if evidence_class == ValueEvidenceClass::CustomerValidated {
+        if customer_value_attestation_id.is_none() {
+            return Err(AppError(Error::validation(
+                "CustomerValidated requires customer_value_attestation_id",
+            )));
+        }
+        for forbidden in ["evidence_refs", "baseline_ref", "kpis"] {
+            if body.get(forbidden).is_some() {
+                return Err(AppError(Error::validation(format!(
+                    "{forbidden} is deployment-attested for CustomerValidated and cannot be asserted by the caller"
+                ))));
+            }
+        }
+    } else {
+        if customer_value_attestation_id.is_some() {
+            return Err(AppError(Error::validation(
+                "customer_value_attestation_id is only valid for CustomerValidated",
+            )));
+        }
+        if caller_evidence_refs.is_empty() {
+            return Err(AppError(Error::validation(
+                "value assessment requires explicit evidence references",
+            )));
+        }
     }
 
     let guard = state.lock();
@@ -1189,30 +1219,46 @@ async fn v115_work_assess_value(
     let mut assessment = ValueAssessment::new(work.id.clone(), outcome.id.clone(), evidence_class);
     assessment.pin_work_generation(work.generation)?;
     assessment.acceptance_ref = Some(acceptance.id.clone());
-    assessment.evidence_refs = evidence_refs;
-    assessment.baseline_ref = body
-        .get("baseline_ref")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string);
-    if let Some(kpis) = body.get("kpis").and_then(Value::as_object) {
-        for (name, value) in kpis {
-            if name.trim().is_empty() {
-                return Err(AppError(Error::validation("KPI name must not be empty")));
-            }
-            let value = value
-                .as_f64()
-                .ok_or_else(|| AppError(Error::validation("KPI values must be numeric")))?;
-            if !value.is_finite() {
-                return Err(AppError(Error::validation("KPI values must be finite")));
-            }
-            assessment.kpis.push((name.clone(), value));
-        }
-    }
 
     let mut real_site_evidence = Vec::new();
+    let mut attestation_evidence = Vec::new();
+
     if evidence_class == ValueEvidenceClass::CustomerValidated {
+        let now = morn_kernel::time::Timestamp::now();
+        let attestation_id = customer_value_attestation_id
+            .as_deref()
+            .expect("validated customer value attestation id");
+        let attestation = guard
+            .customer_value_attestations
+            .iter()
+            .find(|candidate| candidate.attestation_id == attestation_id)
+            .filter(|candidate| {
+                candidate.active_for(
+                    &work.workspace_id,
+                    (&work.id, work.generation),
+                    &outcome.id,
+                    &acceptance.id,
+                    now,
+                )
+            })
+            .cloned()
+            .ok_or_else(|| {
+                AppError(Error::not_authorized(
+                    "customer value attestation is missing, expired or does not match the exact Work, Outcome and Acceptance",
+                ))
+            })?;
+
+        let consumed_kind = "customer_value_attestation_consumed_v115";
+        if guard
+            .store
+            .load_record::<Value>(consumed_kind, attestation_id)?
+            .is_some()
+        {
+            return Err(AppError(Error::conflict(
+                "customer value attestation was already consumed",
+            )));
+        }
+
         let claims: Vec<_> = guard
             .evidence_ledger
             .proven_for(&subject)
@@ -1227,9 +1273,62 @@ async fn v115_work_assess_value(
         for claim in claims {
             real_site_evidence.extend(claim.evidence_refs.iter().cloned());
         }
+
+        assessment.customer_value_attestation_ref = Some(attestation.attestation_id.clone());
+        assessment.baseline_ref = attestation.baseline_ref.clone();
+        assessment.kpis = attestation
+            .kpis
+            .iter()
+            .map(|metric| (metric.name.clone(), metric.value))
+            .collect();
+        assessment.evidence_refs = attestation.evidence_refs.clone();
+        attestation_evidence = attestation.evidence_refs.clone();
         assessment.evidence_refs.extend(real_site_evidence.clone());
+        assessment
+            .evidence_refs
+            .push(format!("customer-value-attestation:{}", attestation.attestation_id));
         assessment.evidence_refs.sort();
         assessment.evidence_refs.dedup();
+
+        guard.store.save_record_immutable(
+            consumed_kind,
+            attestation_id,
+            work.workspace_id.as_str(),
+            now.millis(),
+            &json!({
+                "attestation_id": attestation.attestation_id,
+                "workspace_id": work.workspace_id,
+                "work_id": work.id,
+                "work_generation": work.generation,
+                "outcome_id": outcome.id,
+                "acceptance_id": acceptance.id,
+                "assessment_id": assessment.id,
+                "issuer": attestation.issuer,
+                "consumed_at": now
+            }),
+        )?;
+    } else {
+        assessment.evidence_refs = caller_evidence_refs;
+        assessment.baseline_ref = body
+            .get("baseline_ref")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        if let Some(kpis) = body.get("kpis").and_then(Value::as_object) {
+            for (name, value) in kpis {
+                if name.trim().is_empty() {
+                    return Err(AppError(Error::validation("KPI name must not be empty")));
+                }
+                let value = value
+                    .as_f64()
+                    .ok_or_else(|| AppError(Error::validation("KPI values must be numeric")))?;
+                if !value.is_finite() {
+                    return Err(AppError(Error::validation("KPI values must be finite")));
+                }
+                assessment.kpis.push((name.clone(), value));
+            }
+        }
     }
 
     guard.store.save_value_assessment(&work, &assessment)?;
@@ -1237,9 +1336,11 @@ async fn v115_work_assess_value(
     Ok(Json(json!({
         "value_assessment": assessment,
         "value_subject": subject,
+        "customer_value_attestation_id": customer_value_attestation_id,
+        "customer_value_attestation_evidence_refs": attestation_evidence,
         "real_site_evidence_refs": real_site_evidence,
         "customer_validated": evidence_class == ValueEvidenceClass::CustomerValidated,
-        "note": "Value is attached to an exact accepted, source-grounded Work outcome. CustomerValidated additionally requires deployment-owned RealSite evidence."
+        "note": "CustomerValidated KPI/baseline data comes only from a single-use deployment attestation and also requires current RealSite evidence."
     })))
 }
 
@@ -2951,11 +3052,34 @@ async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
                 EvidenceClaimState::BlockedExternal => "blocked-external",
                 EvidenceClaimState::Revoked => "revoked",
             });
+            let attestation = assessment
+                .customer_value_attestation_ref
+                .as_deref()
+                .and_then(|attestation_id| {
+                    guard
+                        .customer_value_attestations
+                        .iter()
+                        .find(|candidate| candidate.attestation_id == attestation_id)
+                });
+            let attestation_active = assessment.acceptance_ref.as_ref().is_some_and(|acceptance_id| {
+                attestation.is_some_and(|attestation| {
+                    attestation.active_for(
+                        &guard.workspace.id,
+                        (&assessment.work_package_id, assessment.work_generation),
+                        &assessment.outcome_ref,
+                        acceptance_id,
+                        morn_kernel::time::Timestamp::now(),
+                    )
+                })
+            });
             json!({
                 "assessment_id": assessment.id,
                 "subject": subject,
                 "requires_real_site": true,
-                "currently_supported": current.is_some_and(|claim| claim.state == EvidenceClaimState::Proven),
+                "customer_value_attestation_ref": assessment.customer_value_attestation_ref.clone(),
+                "customer_value_attestation_active": attestation_active,
+                "currently_supported": current.is_some_and(|claim| claim.state == EvidenceClaimState::Proven)
+                    && attestation_active,
                 "current_real_site_state": current_state,
                 "current_real_site_claim_id": current.map(|claim| claim.id.to_string()),
                 "current_real_site_evidence_refs": current.map(|claim| claim.evidence_refs.clone()).unwrap_or_default()
@@ -6473,7 +6597,9 @@ mod workspace_boundary_tests {
 
     #[tokio::test]
     async fn value_assessment_requires_exact_acceptance_and_real_site_for_customer_claim() {
-        use morn_assurance::{EvidenceClaim, EvidenceClass};
+        use morn_assurance::{
+            CustomerValueAttestation, CustomerValueMetric, EvidenceClaim, EvidenceClass,
+        };
         use morn_control_plane::ControlPlaneStore;
         use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
         use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
@@ -6543,6 +6669,44 @@ mod workspace_boundary_tests {
         );
         assert_eq!(operational["customer_validated"], false);
 
+        let subject = value_claim_subject(&work.id, work.generation, &outcome.id);
+        let value_attestation_id = "customer-value-attestation-42";
+        {
+            let mut guard = state.lock();
+            let workspace_id = guard.workspace.id.clone();
+            guard.customer_value_attestations.push(CustomerValueAttestation {
+                attestation_id: value_attestation_id.to_string(),
+                workspace_id,
+                work_package_id: work.id.clone(),
+                work_generation: work.generation,
+                outcome_id: outcome.id.clone(),
+                acceptance_id: acceptance.id.clone(),
+                baseline_ref: Some("baseline://customer/42".to_string()),
+                kpis: vec![CustomerValueMetric {
+                    name: "late_minutes_delta".to_string(),
+                    value: -12.0,
+                }],
+                evidence_refs: vec!["metric://customer/42/signed".to_string()],
+                issuer: "customer-site-owner".to_string(),
+                observed_at: morn_kernel::time::Timestamp::now(),
+                valid_until: None,
+            });
+        }
+
+        let caller_kpi_override = v115_work_assess_value(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "outcome_id": outcome.id.to_string(),
+                "acceptance_id": acceptance.id.to_string(),
+                "evidence_class": "customer-validated",
+                "customer_value_attestation_id": value_attestation_id,
+                "kpis": {"late_minutes_delta": -999.0}
+            })),
+        )
+        .await;
+        assert!(caller_kpi_override.is_err());
+
         let blocked = v115_work_assess_value(
             State(state.clone()),
             Json(json!({
@@ -6550,13 +6714,12 @@ mod workspace_boundary_tests {
                 "outcome_id": outcome.id.to_string(),
                 "acceptance_id": acceptance.id.to_string(),
                 "evidence_class": "customer-validated",
-                "evidence_refs": ["metric://customer/42"]
+                "customer_value_attestation_id": value_attestation_id
             })),
         )
         .await;
         assert!(blocked.is_err());
 
-        let subject = value_claim_subject(&work.id, work.generation, &outcome.id);
         {
             let mut guard = state.lock();
             guard
@@ -6581,17 +6744,44 @@ mod workspace_boundary_tests {
                 "outcome_id": outcome.id.to_string(),
                 "acceptance_id": acceptance.id.to_string(),
                 "evidence_class": "customer-validated",
-                "evidence_refs": ["metric://customer/42"]
+                "customer_value_attestation_id": value_attestation_id
             })),
         )
         .await
         .unwrap();
         assert_eq!(customer["value_subject"], subject);
         assert_eq!(customer["customer_validated"], true);
+        assert_eq!(customer["customer_value_attestation_id"], value_attestation_id);
+        assert_eq!(
+            customer["value_assessment"]["customer_value_attestation_ref"],
+            value_attestation_id
+        );
+        assert_eq!(
+            customer["value_assessment"]["baseline_ref"],
+            "baseline://customer/42"
+        );
+        assert_eq!(
+            customer["value_assessment"]["kpis"][0],
+            json!(["late_minutes_delta", -12.0])
+        );
         assert_eq!(
             customer["real_site_evidence_refs"],
             json!(["customer://site-pilot/42"])
         );
+
+        let replay = v115_work_assess_value(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "outcome_id": outcome.id.to_string(),
+                "acceptance_id": acceptance.id.to_string(),
+                "evidence_class": "customer-validated",
+                "customer_value_attestation_id": value_attestation_id
+            })),
+        )
+        .await;
+        assert!(replay.is_err());
+
         let customer_assessment_id = customer["value_assessment"]["id"]
             .as_str()
             .unwrap()
