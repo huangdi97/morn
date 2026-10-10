@@ -59,6 +59,13 @@ const DSH_MORN_E0_TOOL_POLICY_PATCH: &str = r#"# Generated/owned by Morn. Applie
     - id: morn-e0-tool-guard-v1
       name: ./morn-e0-tool-guard.mjs
 
+# DeepSeek's official SDK profile mounts canonical session-log upload
+# separately from ordinary OTel telemetry. Morn does not permit executor
+# conversation/session history to leave through that side channel.
+- id: session-log-deepseek
+  config:
+    enabled: false
+
 # Independent containment: a DSH sandbox remains read-only even though direct
 # model-facing tools are denied by the guard.
 - id: sandbox-policy
@@ -1253,6 +1260,8 @@ mod tests {
         )
         .unwrap();
         assert!(policy.contains("name: ./morn-e0-tool-guard.mjs"));
+        assert!(policy.contains("id: session-log-deepseek"));
+        assert!(policy.contains("enabled: false"));
         assert!(policy.contains("mode: read-only"));
         assert!(guard.contains("ctx.tools.guard"));
         for required in [
