@@ -634,7 +634,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         work_package_id.clone(),
         "delivery impact reviewed with reconciled maintenance reference",
         OutcomeSourceKind::ExternalSystem,
-        "cmms://orders/MO-88273",
+        "cmms://plant-a/orders/MO-88273",
         serde_json::json!({
             "maintenance_order": "MO-88273",
             "delivery_impact_review": "produced"
@@ -642,7 +642,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     );
     outcome
         .evidence_refs
-        .push("cmms://orders/MO-88273/receipt".to_string());
+        .push("cmms://plant-a/orders/MO-88273/receipt".to_string());
     outcome
         .evidence_refs
         .push("artifact://delivery-impact-review".to_string());
