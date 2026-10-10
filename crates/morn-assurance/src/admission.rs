@@ -464,8 +464,6 @@ impl AdmissionService {
                 "release qualification does not match capability manifest",
             ));
         }
-        let package_ref = package_ref.into();
-        let content_digest = content_digest.into();
         if package_ref.trim().is_empty() {
             return Err(Error::validation("release requires package reference"));
         }
