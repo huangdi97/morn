@@ -31,6 +31,7 @@ interface HarnessHealth {
   };
   runtime_version: string | null;
   runtime_digest: string | null;
+  profile_configuration_ref?: string | null;
   route_ref: string | null;
   wire_server_version?: string | null;
   execution_environment_ref: string | null;
@@ -131,6 +132,10 @@ export default function ConsolePage() {
           <KeyValue k="DSH runtime health" v={data.harness_health.dsh.runtime_health.state} />
           <KeyValue k="DSH distribution version" v={data.harness_health.dsh.runtime_version ?? "not live/pinned"} />
           <KeyValue k="DSH distribution digest" v={data.harness_health.dsh.runtime_digest ?? "not pinned"} />
+          <KeyValue
+            k="DSH profile configuration"
+            v={data.harness_health.dsh.profile_configuration_ref ?? "fixture / not pinned"}
+          />
           <KeyValue k="DSH bound route" v={data.harness_health.dsh.route_ref ?? "fixture / not pinned"} />
           <KeyValue k="DSH SDK wire version" v={data.harness_health.dsh.wire_server_version ?? "not initialized"} />
           <KeyValue k="DSH execution environment" v={data.harness_health.dsh.execution_environment_ref ?? "fixture / not configured"} />
