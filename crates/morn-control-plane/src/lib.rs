@@ -803,10 +803,7 @@ fn require_attested_outcome_provenance(
         .get("attestation_id")
         .and_then(serde_json::Value::as_str)
         == Some(attestation_ref)
-        && consumed
-            .get("work_id")
-            .and_then(serde_json::Value::as_str)
-            == Some(work.id.as_str())
+        && consumed.get("work_id").and_then(serde_json::Value::as_str) == Some(work.id.as_str())
         && consumed
             .get("source_binding_id")
             .and_then(serde_json::Value::as_str)
@@ -2235,11 +2232,7 @@ mod control_plane_persistence_scope_tests {
         WorkResource::new(WorkspaceId::generate(), spec)
     }
 
-    fn attest_test_outcome(
-        store: &MornStore,
-        work: &WorkResource,
-        outcome: &mut ObservedOutcome,
-    ) {
+    fn attest_test_outcome(store: &MornStore, work: &WorkResource, outcome: &mut ObservedOutcome) {
         let binding = morn_integration::SourceOfTruthBinding {
             id: morn_integration::SourceOfTruthBindingId::generate_with("sot"),
             site_ref: work.spec.site_ref.clone(),
