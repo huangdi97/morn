@@ -15,7 +15,9 @@ pub use distribution::{
     CosignCliVerifier, ExternalCommandSpec, OciArtifactPublisher, OciLayerInput,
     OciPublishReceipt, OciPublishRequest, OrasCliPublisher, SigstoreIdentityPolicy,
 };
-pub use supply_chain::{ArtifactLayer, CapabilityArtifactDescriptor};
+pub use supply_chain::{
+    ArtifactLayer, CapabilityArtifactDescriptor, SupplyChainVerificationEvidence,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct PackIdTag;
