@@ -747,6 +747,97 @@ fn require_canonical_work_workspace(store: &MornStore, work: &WorkResource) -> R
     Ok(())
 }
 
+/// Work status is a projection of durable evidence. Persisting the projection
+/// must never create Delivered/Accepted/Rejected truth ahead of its evidence.
+fn require_persisted_work_projection_evidence(
+    store: &MornStore,
+    work: &WorkResource,
+) -> Result<()> {
+    let receipt_required = work.condition_is_true("ExecutionReceiptObserved");
+    if receipt_required {
+        let receipts = store.load_records_in_workspace::<ExecutionReceipt>(
+            "execution_receipt_v115",
+            work.workspace_id.as_str(),
+        )?;
+        let has_receipt = receipts.iter().any(|receipt| {
+            receipt.work_package_id.as_ref() == Some(&work.id)
+                && receipt.work_generation == Some(work.generation)
+                && receipt.workspace_id == work.workspace_id
+        });
+        if !has_receipt {
+            return Err(Error::invalid_state(
+                "Work projection cannot claim ExecutionReceiptObserved without a persisted receipt for this generation",
+            ));
+        }
+    }
+
+    let acceptance_required = work.condition_is_true("IndependentAcceptance")
+        || work.condition_is_true("AcceptedOutcomeSemantics")
+        || matches!(work.status.phase, WorkPhase::Accepted | WorkPhase::Rejected);
+    let outcome_required = work.condition_is_true("OutcomeObservation")
+        || matches!(
+            work.status.phase,
+            WorkPhase::Delivered | WorkPhase::Accepted | WorkPhase::Rejected
+        )
+        || acceptance_required;
+
+    if !outcome_required {
+        return Ok(());
+    }
+
+    let outcomes = store
+        .load_records_in_workspace::<ObservedOutcome>(
+            "observed_outcome_v115",
+            work.workspace_id.as_str(),
+        )?
+        .into_iter()
+        .filter(|outcome| {
+            outcome.work_package_id == work.id
+                && outcome.work_generation == work.generation
+                && outcome.workspace_id == work.workspace_id
+                && outcome.is_source_grounded()
+        })
+        .collect::<Vec<_>>();
+    if outcomes.is_empty() {
+        return Err(Error::invalid_state(
+            "Work projection cannot claim observed/delivered outcome without persisted source-grounded outcome evidence",
+        ));
+    }
+    if !acceptance_required {
+        return Ok(());
+    }
+
+    let decisions = store.load_records_in_workspace::<AcceptanceDecision>(
+        "acceptance_decision_v115",
+        work.workspace_id.as_str(),
+    )?;
+    let decision_matches = decisions.iter().any(|decision| {
+        if decision.work_package_id != work.id
+            || decision.work_generation != work.generation
+            || decision.evidence_refs.is_empty()
+            || decision.acting_role.trim().is_empty()
+            || decision.reason.trim().is_empty()
+            || !decision
+                .outcome_refs
+                .iter()
+                .any(|id| outcomes.iter().any(|outcome| &outcome.id == id))
+        {
+            return false;
+        }
+        match work.status.phase {
+            WorkPhase::Accepted => decision.is_final_acceptance(),
+            WorkPhase::Rejected => decision.disposition == AcceptanceDisposition::Reject,
+            _ => true,
+        }
+    });
+    if !decision_matches {
+        return Err(Error::invalid_state(
+            "Work acceptance projection requires a persisted independently witnessed decision over a grounded outcome",
+        ));
+    }
+    Ok(())
+}
+
 /// A persisted action snapshot may skip intermediate in-memory transitions,
 /// but must never regress to an earlier, redispatchable state.
 fn persisted_attempt_state_reachable(from: AttemptState, target: AttemptState) -> bool {
@@ -844,6 +935,7 @@ impl ControlPlaneStore for MornStore {
                 ));
             }
         }
+        require_persisted_work_projection_evidence(self, work)?;
         let mut next = work.clone();
         next.resource_version = expected.saturating_add(1);
         let revision = self.save_record_cas(
@@ -1038,9 +1130,9 @@ impl ControlPlaneStore for MornStore {
                     "execution receipt trace references must include every durable event id",
                 ));
             }
-            let durable: WorkExecutionEvent = self
-                .load_record("execution_event_v115", event_id)?
-                .ok_or_else(|| Error::not_found("execution receipt event"))?;
+            let durable: WorkExecutionEvent =
+                self.load_record("execution_event_v115", event_id)?
+                    .ok_or_else(|| Error::not_found("execution receipt event"))?;
             if durable.work_package_id != work.id
                 || durable.work_generation != work.generation
                 || durable.event.workspace_id != work.workspace_id
@@ -2642,6 +2734,84 @@ mod control_plane_persistence_scope_tests {
         });
         store.save_work_resource_cas(&mut canonical).unwrap();
         assert_eq!(canonical.generation, 2);
+    }
+
+    #[test]
+    fn work_projection_cannot_outrun_persisted_outcome_or_acceptance_evidence() {
+        let store = MornStore::open_in_memory().unwrap();
+        let mut work = fixture_work();
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let mut delivered_without_evidence = work.clone();
+        delivered_without_evidence.status.phase = WorkPhase::Delivered;
+        delivered_without_evidence.set_condition(WorkCondition::new(
+            "OutcomeObservation",
+            ConditionStatus::True,
+        ));
+        assert!(store
+            .save_work_resource_cas(&mut delivered_without_evidence)
+            .is_err());
+
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "authoritative delivery result",
+            OutcomeSourceKind::ExternalSystem,
+            "system://delivery/42",
+            json!({"status":"complete"}),
+        );
+        outcome.pin_work_generation(work.generation).unwrap();
+        outcome
+            .evidence_refs
+            .push("system://delivery/42/receipt".to_string());
+        store.save_observed_outcome(&work, &outcome).unwrap();
+
+        work.status.phase = WorkPhase::Delivered;
+        work.set_condition(WorkCondition::new(
+            "OutcomeObservation",
+            ConditionStatus::True,
+        ));
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let mut accepted_without_decision = work.clone();
+        accepted_without_decision.status.phase = WorkPhase::Accepted;
+        accepted_without_decision.set_condition(WorkCondition::new(
+            "IndependentAcceptance",
+            ConditionStatus::True,
+        ));
+        accepted_without_decision.set_condition(WorkCondition::new(
+            "AcceptedOutcomeSemantics",
+            ConditionStatus::True,
+        ));
+        assert!(store
+            .save_work_resource_cas(&mut accepted_without_decision)
+            .is_err());
+
+        let mut decision = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("acceptance"),
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("reviewer"),
+            "independent-reviewer",
+            "grounded outcome independently accepted",
+        );
+        decision.pin_work_generation(work.generation).unwrap();
+        decision.outcome_refs.push(outcome.id.clone());
+        decision
+            .evidence_refs
+            .push("review://signed/42".to_string());
+        ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
+
+        work.status.phase = WorkPhase::Accepted;
+        work.set_condition(WorkCondition::new(
+            "IndependentAcceptance",
+            ConditionStatus::True,
+        ));
+        work.set_condition(WorkCondition::new(
+            "AcceptedOutcomeSemantics",
+            ConditionStatus::True,
+        ));
+        store.save_work_resource_cas(&mut work).unwrap();
     }
 
     #[test]
