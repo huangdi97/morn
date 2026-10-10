@@ -466,17 +466,24 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             },
         )
         .unwrap();
+    let cmms_release_digest = format!("sha256:{}", "b".repeat(64));
     admission
-        .record_release(
+        .record_verified_release(
             &mut cmms_capability,
             &cmms_qualification,
-            format!(
-                "oci://fixture/morn/cmms-sandbox-create-order@sha256:{}",
-                "b".repeat(64)
+            VerifiedReleaseRequest::new(
+                format!("oci://fixture/morn/cmms-sandbox-create-order@{cmms_release_digest}"),
+                cmms_release_digest.clone(),
+                "sigstore://fixture/cmms",
+                "slsa://fixture/cmms",
+                SupplyChainVerificationEvidence {
+                    subject_digest: cmms_release_digest,
+                    verifier_ref: "fixture://cmms-supply-chain-verifier".to_string(),
+                    signature_verified: true,
+                    provenance_verified: true,
+                    evidence_refs: vec!["fixture://cmms-supply-chain-verifier/proof".to_string()],
+                },
             ),
-            format!("sha256:{}", "b".repeat(64)),
-            Some("sigstore://fixture/cmms".to_string()),
-            Some("slsa://fixture/cmms".to_string()),
         )
         .unwrap();
     admission
