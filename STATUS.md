@@ -62,7 +62,7 @@ Canonical invariants:
 ### Product surfaces
 - Workbench: canonical Work/Conditions/bindings/attempts/outcomes/acceptance first; legacy fixture diagnostics collapsed.
 - Studio: goal + acceptance -> compile/approve Solution -> instantiate canonical Work; raw artifact import is advanced/optional.
-- Console: provider/runtime/profile/authority/conformance and blocker visibility.
+- Console: evidence-aware release readiness plus provider/runtime/profile/authority/conformance and blocker visibility.
 - Hub: capability supply chain, providers, packages and reusable assets.
 - Four-surface Playwright smoke and Windows desktop reference build are in CI.
 
@@ -89,23 +89,27 @@ Authoritative details live in `BLOCKERS.md`.
 - B-001: authenticated live official DSH runtime/model/credential smoke.
 - B-002: installed/authenticated live Pi runtime/model/credential smoke.
 - B-003: live deployment execution-environment attestation from a real container/microVM/Kubernetes/customer sandbox.
+- B-004: authorized OCI registry publication plus deployment-owned Sigstore/OIDC signature and SLSA provenance evidence.
 - G4-B-002: lawful provenance-bearing real BioLab dataset.
 - G12: real customer/site source systems, IAM/policy, independent acceptance and customer evidence.
 - Production/physical write: not authorized.
+- ACP Work-facing lifecycle exposure is an optional provider enhancement, not a hidden release blocker: the session-scoped out-of-band cancel handle exists locally, while authenticated ACP resume/close evidence remains deployment-dependent.
 
 These are not converted to PASS by fixtures, protocol fakes, screenshots or documentation.
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `b5f5940d942437c8e159a09d8ee2a2e23441002c`.
-- Exact-head GitHub Actions: `38033568210` — **5/5 SUCCESS**.
+- Verified implementation checkpoint: `152fd22bacc68c3b9e8b480370a3b665509da23a`.
+- Exact-head GitHub Actions: `38060442988` — **5/5 SUCCESS**.
 - Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; zero-domain Core; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows; Cordis reference runtime; Windows desktop reference build.
 - Governed live-provider smoke additionally requires an exact `MORN_PROVIDER_SMOKE_OK` canary and a fresh post-turn `Healthy` lease. Process/session initialization alone is not provider-health evidence.
+- DSH SDK ↔ Pi RPC adapter-wire semantic-neutrality now runs through the actual subprocess adapter code with the same pinned Work/generation/ExecutionBinding/execution environment; model output is deliberately not compared.
+- ACP v1 lifecycle transport includes session-scoped out-of-band cancel that is reachable while prompt settlement blocks; a cancel write is only a request, not proof of cancellation or rollback.
 - A code-level unfinished-marker audit across control-plane, harness, runtime, store, Work/World/Capability, Foundry/Assurance/OpInt and the four product surfaces found no repository-local TODO/FIXME/unimplemented/stub gap requiring further implementation.
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified checkpoint `b5f5940d942437c8e159a09d8ee2a2e23441002c` only.**
+- **ALL_LOCAL_GATES_PASS = YES for verified checkpoint `152fd22bacc68c3b9e8b480370a3b665509da23a` only.**
 - PR #1 remains draft because local engineering evidence is not production/customer evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.
 - A later code SHA must obtain its own full exact-head CI before inheriting `ALL_LOCAL_GATES_PASS`.

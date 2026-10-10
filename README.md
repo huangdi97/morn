@@ -73,7 +73,7 @@ The repository contains a shared `HarnessProvider` contract with:
 - DeepSeek Harness deterministic fixture boundary **and** governed real SDK
   stdio/JSON-RPC adapter;
 - Pi deterministic fixture boundary **and** governed real JSONL-RPC adapter;
-- DSH/Pi neutrality conformance benchmark;
+- DSH/Pi fixture-contract neutrality plus real-adapter wire semantic-neutrality benchmark;
 - runtime-health leases, exact provider version/digest pins, bounded wire
   readers and runtime-attested execution-environment requirements.
 
