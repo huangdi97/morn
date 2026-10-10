@@ -1296,7 +1296,11 @@ mod tests {
 
     #[test]
     fn production_policy_cannot_be_disabled_through_serialized_config() {
-        let config = DshSdkConfig::profile_sdk("/tmp/work", "deepseek-official", "model-a");
+        let config = DshSdkConfig::profile_sdk("/tmp/work", "deepseek-official", "model-a")
+            .with_profile_configuration_ref(format!(
+                "deepseek-harness-profile@test#sha256:{}",
+                "a".repeat(64)
+            ));
         let mut encoded = serde_json::to_value(&config).unwrap();
         assert!(
             encoded.get("enforce_morn_e0_tool_policy").is_none(),
