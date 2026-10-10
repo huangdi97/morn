@@ -3529,23 +3529,61 @@ async fn v115_capability_release(
                 "CapabilityManifest {manifest_id}"
             )))
         })?;
+    let verification = guard
+        .supply_chain_verifications
+        .iter()
+        .find(|evidence| {
+            evidence
+                .validate_subject_digest(content_digest, true, true)
+                .is_ok()
+        })
+        .cloned();
     let release = {
         let inner = &mut *guard;
         let capability = &mut inner.v115_capabilities[index];
-        inner.v115_admission.record_release(
-            capability,
-            &qualification,
-            package_ref,
-            content_digest,
-            signature_ref,
-            provenance_ref,
-        )?
+        match verification {
+            Some(verification) => {
+                let signature_ref = signature_ref.ok_or_else(|| {
+                    AppError(Error::validation(
+                        "verified release requires signature_ref from the publication record",
+                    ))
+                })?;
+                let provenance_ref = provenance_ref.ok_or_else(|| {
+                    AppError(Error::validation(
+                        "verified release requires provenance_ref from the publication record",
+                    ))
+                })?;
+                inner.v115_admission.record_verified_release(
+                    capability,
+                    &qualification,
+                    package_ref,
+                    content_digest,
+                    signature_ref,
+                    provenance_ref,
+                    verification,
+                )?
+            }
+            None => inner.v115_admission.record_release(
+                capability,
+                &qualification,
+                package_ref,
+                content_digest,
+                signature_ref,
+                provenance_ref,
+            )?,
+        }
     };
     guard.persist_all()?;
+    let verified = release.supply_chain_verification.is_some();
     Ok(Json(json!({
         "release": release,
+        "verified": verified,
         "stage": guard.v115_capabilities[index].stage,
-        "next": ["profile-conformance", "site-admission"]
+        "next": if verified {
+            vec!["profile-conformance", "site-admission"]
+        } else {
+            vec!["deployment-supply-chain-verification"]
+        }
     })))
 }
 

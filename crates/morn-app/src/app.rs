@@ -34,6 +34,7 @@ use morn_kernel::workspace::{Workspace, WorkspaceKind};
 use morn_opint::dataset::OutcomeDataset;
 use morn_opint::episode::EpisodeAssembler;
 use morn_opint::predictor::PredictorRegistry;
+use morn_package::SupplyChainVerificationEvidence;
 use morn_runtime::{AttestedExecutionEnvironmentProvider, ExecutionEnvironmentAttestation};
 use morn_store::store::MornStore;
 use morn_work::acceptance::{AcceptanceReviewAuthorization, AcceptanceReviewerAttestation};
@@ -82,6 +83,9 @@ pub struct AppInner {
     /// first; external RealSite/ProductionWrite proof may only come from the
     /// explicit deployment file, never from an HTTP self-assertion.
     pub evidence_ledger: EvidenceLedger,
+    /// Deployment-generated signature/provenance verification evidence. HTTP
+    /// callers may reference package digests but cannot self-assert these axes.
+    pub supply_chain_verifications: Vec<SupplyChainVerificationEvidence>,
     pub evolution: EvolutionEngine,
     pub durable: DurableWorkService,
     pub durable_v2: DurableRuntime,
@@ -502,6 +506,68 @@ fn configured_evidence_ledger() -> morn_kernel::Result<EvidenceLedger> {
     Ok(ledger)
 }
 
+fn configured_supply_chain_verifications(
+) -> morn_kernel::Result<Vec<SupplyChainVerificationEvidence>> {
+    let Ok(path) = std::env::var("MORN_SUPPLY_CHAIN_VERIFICATIONS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_SUPPLY_CHAIN_VERIFICATIONS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read supply-chain verification file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid supply-chain verification JSON in {path:?}: {error}"
+        ))
+    })?;
+    let items: Vec<SupplyChainVerificationEvidence> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid supply-chain verification entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid supply-chain verification entry: {error}"
+            ))
+        })?],
+    };
+
+    let mut merged: Vec<SupplyChainVerificationEvidence> = Vec::new();
+    for evidence in items {
+        evidence
+            .validate_subject_digest(&evidence.subject_digest, false, false)
+            .map_err(morn_kernel::error::Error::validation)?;
+        if !evidence.signature_verified && !evidence.provenance_verified {
+            return Err(morn_kernel::error::Error::validation(
+                "supply-chain verification entry must prove signature or provenance",
+            ));
+        }
+        if let Some(existing) = merged.iter_mut().find(|current| {
+            current
+                .subject_digest
+                .eq_ignore_ascii_case(&evidence.subject_digest)
+        }) {
+            *existing = existing
+                .merge(&evidence)
+                .map_err(morn_kernel::error::Error::validation)?;
+        } else {
+            merged.push(evidence);
+        }
+    }
+    Ok(merged)
+}
+
 fn configured_pi_harness() -> morn_kernel::Result<PiHarnessProvider> {
     match std::env::var("MORN_PI_MODE") {
         Err(std::env::VarError::NotPresent) => Ok(PiHarnessProvider::new(PiMode::Fixture)),
@@ -553,6 +619,7 @@ impl AppState {
         let executor_reconciliation_authorizations =
             configured_executor_reconciliation_authorizations()?;
         let evidence_ledger = configured_evidence_ledger()?;
+        let supply_chain_verifications = configured_supply_chain_verifications()?;
         let mut inner = AppInner {
             store,
             workspace,
@@ -572,6 +639,7 @@ impl AppState {
             customer_value_attestations,
             executor_reconciliation_authorizations,
             evidence_ledger,
+            supply_chain_verifications,
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
             durable_v2: DurableRuntime::new(),
