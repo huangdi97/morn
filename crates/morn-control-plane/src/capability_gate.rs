@@ -93,8 +93,8 @@ mod tests {
     use morn_assurance::{QualificationEvidence, StrictQualificationRequest};
     use morn_capability::{CapabilityKind, CapabilityManifest, CapabilityRecord, EffectClass};
     use morn_kernel::ids::CapabilityId;
-    use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
     use morn_package::SupplyChainVerificationEvidence;
+    use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
     use morn_runtime::{ProviderDescriptor, ProviderFamily, ProviderStatus};
     use std::collections::BTreeSet;
 

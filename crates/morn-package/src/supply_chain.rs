@@ -255,7 +255,9 @@ mod tests {
             media_type: "application/vnd.morn.capability.v1+json".to_string(),
             layers: vec![],
             sbom_ref: None,
-            slsa_provenance_ref: Some("oci://registry.example/provenance@sha256:fixture".to_string()),
+            slsa_provenance_ref: Some(
+                "oci://registry.example/provenance@sha256:fixture".to_string(),
+            ),
             signature_ref: Some("sigstore://bundle/ref".to_string()),
         };
         let mut evidence = SupplyChainVerificationEvidence {

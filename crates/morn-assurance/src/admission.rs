@@ -523,7 +523,6 @@ impl AdmissionService {
                 .unwrap_or_else(|| "release-service".to_string()),
         );
         Ok(release)
-
     }
 
     pub fn admit_with_attestation(

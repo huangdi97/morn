@@ -66,8 +66,7 @@ impl OciPublishRequest {
         {
             return Err("OCI publish tag must be a simple non-empty tag".to_string());
         }
-        if self.artifact_type.trim().is_empty()
-            || self.artifact_type.contains(char::is_whitespace)
+        if self.artifact_type.trim().is_empty() || self.artifact_type.contains(char::is_whitespace)
         {
             return Err("artifact_type must be a non-empty media type token".to_string());
         }
@@ -78,8 +77,14 @@ impl OciPublishRequest {
             layer.validate()?;
         }
         for (key, value) in &self.annotations {
-            if key.trim().is_empty() || key.contains('=') || value.contains('\n') || value.contains('\r') {
-                return Err("OCI annotations require a non-empty key and single-line value".to_string());
+            if key.trim().is_empty()
+                || key.contains('=')
+                || value.contains('\n')
+                || value.contains('\r')
+            {
+                return Err(
+                    "OCI annotations require a non-empty key and single-line value".to_string(),
+                );
             }
         }
         Ok(())
@@ -196,7 +201,11 @@ impl OrasCliPublisher {
         }
         args.push(request.oras_target()?);
         for layer in &request.layers {
-            args.push(format!("{}:{}", layer.path.to_string_lossy(), layer.media_type));
+            args.push(format!(
+                "{}:{}",
+                layer.path.to_string_lossy(),
+                layer.media_type
+            ));
         }
 
         Ok(ExternalCommandSpec {
@@ -276,7 +285,9 @@ impl SigstoreIdentityPolicy {
         if self.certificate_identity.trim().is_empty()
             || self.certificate_oidc_issuer.trim().is_empty()
         {
-            return Err("Sigstore verification requires certificate identity and OIDC issuer".to_string());
+            return Err(
+                "Sigstore verification requires certificate identity and OIDC issuer".to_string(),
+            );
         }
         Ok(())
     }
@@ -483,19 +494,25 @@ mod tests {
     fn oras_command_is_argument_safe_and_does_not_inherit_environment() {
         let publisher = OrasCliPublisher {
             command: "oras".to_string(),
-            env: BTreeMap::from([("DOCKER_CONFIG".to_string(), "/run/registry-auth".to_string())]),
+            env: BTreeMap::from([(
+                "DOCKER_CONFIG".to_string(),
+                "/run/registry-auth".to_string(),
+            )]),
         };
         let spec = publisher.command_spec(&request()).unwrap();
         assert_eq!(spec.program, "oras");
         assert_eq!(spec.env.len(), 1);
         assert_eq!(spec.args[0], "push");
-        assert!(spec.args.windows(2).any(|pair| pair == ["--format", "json"]));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|pair| pair == ["--format", "json"]));
         assert!(spec
             .args
             .contains(&"registry.example/morn/capabilities/reviewer:1.2.3".to_string()));
-        assert!(spec
-            .args
-            .contains(&"dist/reviewer.json:application/vnd.morn.capability.layer.v1+json".to_string()));
+        assert!(spec.args.contains(
+            &"dist/reviewer.json:application/vnd.morn.capability.layer.v1+json".to_string()
+        ));
     }
 
     #[test]
@@ -524,7 +541,9 @@ mod tests {
             artifact_type: Some("application/vnd.morn.capability.v1+json".to_string()),
         };
         let policy = SigstoreIdentityPolicy {
-            certificate_identity: "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main".to_string(),
+            certificate_identity:
+                "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main"
+                    .to_string(),
             certificate_oidc_issuer: "https://token.actions.githubusercontent.com".to_string(),
         };
         let spec = CosignCliVerifier::default()
@@ -534,7 +553,10 @@ mod tests {
         assert!(spec.args[1].contains("@sha256:"));
         assert!(spec.args.contains(&"--certificate-identity".to_string()));
         assert!(spec.args.contains(&"--certificate-oidc-issuer".to_string()));
-        assert!(spec.args.windows(2).any(|pair| pair == ["--output", "json"]));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|pair| pair == ["--output", "json"]));
     }
 
     #[test]
@@ -547,7 +569,9 @@ mod tests {
             artifact_type: Some("application/vnd.morn.capability.v1+json".to_string()),
         };
         let policy = SigstoreIdentityPolicy {
-            certificate_identity: "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main".to_string(),
+            certificate_identity:
+                "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main"
+                    .to_string(),
             certificate_oidc_issuer: "https://token.actions.githubusercontent.com".to_string(),
         };
         let spec = CosignCliVerifier::default()
@@ -559,12 +583,8 @@ mod tests {
             .args
             .windows(2)
             .any(|pair| pair == ["--type", "slsaprovenance"]));
-        assert!(spec
-            .args
-            .contains(&"--certificate-identity".to_string()));
-        assert!(spec
-            .args
-            .contains(&"--certificate-oidc-issuer".to_string()));
+        assert!(spec.args.contains(&"--certificate-identity".to_string()));
+        assert!(spec.args.contains(&"--certificate-oidc-issuer".to_string()));
     }
 
     #[test]
@@ -572,9 +592,7 @@ mod tests {
         let request = request();
         let digest = digest('a');
         let mut receipt = OciPublishReceipt {
-            oci_ref: format!(
-                "oci://registry.example/morn/capabilities/reviewer@{digest}"
-            ),
+            oci_ref: format!("oci://registry.example/morn/capabilities/reviewer@{digest}"),
             content_digest: digest,
             manifest_media_type: "application/vnd.oci.image.manifest.v1+json".to_string(),
             artifact_type: Some(request.artifact_type.clone()),
@@ -587,10 +605,7 @@ mod tests {
         );
         assert!(receipt.validate_for_request(&request).is_err());
 
-        receipt.oci_ref = format!(
-            "{}@{}",
-            request.repository_ref, receipt.content_digest
-        );
+        receipt.oci_ref = format!("{}@{}", request.repository_ref, receipt.content_digest);
         receipt.artifact_type = Some("application/vnd.other+json".to_string());
         assert!(receipt.validate_for_request(&request).is_err());
     }

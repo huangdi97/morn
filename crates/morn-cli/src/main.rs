@@ -347,9 +347,7 @@ fn package(args: &[String]) -> ExitCode {
             }
         }
         _ => {
-            eprintln!(
-                "package subcommand: inspect|init|publish|verify-supply-chain"
-            );
+            eprintln!("package subcommand: inspect|init|publish|verify-supply-chain");
             ExitCode::FAILURE
         }
     }
