@@ -195,6 +195,16 @@ impl DshSdkConfig {
             } else {
                 None
             },
+            "max_tokens_as_success": if self.enforce_morn_e0_tool_policy {
+                Some(false)
+            } else {
+                None
+            },
+            "telemetry": if self.enforce_morn_e0_tool_policy {
+                Some("disabled")
+            } else {
+                None
+            },
         });
         Ok(format!("dsh-sdk-route:{route}"))
     }
@@ -560,6 +570,8 @@ impl DshSdkStdioClient {
                 "MORN_DSH_ENV_PASSTHROUGH",
             ))
             .env("DSH_PERMISSION_MODE", "read-only")
+            .env("DSH_MAX_TOKENS_AS_SUCCESS", "false")
+            .env("DSH_TELEMETRY_DISABLED", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
@@ -1085,6 +1097,8 @@ mod tests {
         let route = config.route_ref().unwrap();
         assert!(route.contains(DSH_MORN_E0_TOOL_POLICY_REF));
         assert!(route.contains("#sha256:"));
+        assert!(route.contains(r#""max_tokens_as_success":false"#));
+        assert!(route.contains(r#""telemetry":"disabled""#));
 
         config.args = vec!["--profile".to_string(), "web".to_string()];
         assert!(config.validate_for_real().is_err());

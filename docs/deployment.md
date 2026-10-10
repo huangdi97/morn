@@ -34,8 +34,8 @@ and serve `frontend/dist`.
 
 Real DSH and Pi runtimes are launched with a **scrubbed child environment** rather than inheriting the entire Morn server process.
 
-- DSH receives only the minimal OS/runtime environment plus the explicit `DSH_HOME` selected by Morn.
-- Pi receives the same minimal OS/runtime environment.
+- DSH receives only the minimal OS/runtime environment plus the explicit `DSH_HOME` selected by Morn. The real E0 route also applies a final Morn-owned global deny-tool overlay, forces a read-only DSH sandbox, treats max-token termination as non-success, and disables DSH telemetry.
+- Pi receives the same minimal OS/runtime environment and the official RPC route is launched with `--no-tools --no-mcp`.
 - Provider credentials or proxy variables are **not inherited implicitly**. Add only the names required by a deployment through `MORN_DSH_ENV_PASSTHROUGH` or `MORN_PI_ENV_PASSTHROUGH` (comma/semicolon separated).
 - Prefer provider-managed/OS secret stores over environment credentials. Explicitly passing an API-key environment variable makes that value visible to the provider subprocess and any tools it launches, so it is a deliberate weaker boundary.
 - Never include broad variables such as `GITHUB_TOKEN`, database credentials, cloud-admin secrets, or unrelated application secrets.
@@ -104,7 +104,8 @@ Use `runtime_identities` with the canonical form
       "resource-limits",
       "network-egress-policy",
       "secret-indirection",
-      "runtime-attestation"
+      "runtime-attestation",
+      "tool-mediation"
     ],
     "network_allowlist": ["api.deepseek.com"],
     "writable_paths": ["C:\\morn\\workspaces\\dsh"],
@@ -150,7 +151,11 @@ configured environment, requires that attestation to bind the exact configured
 provider runtime artifact identity, mounts the provider's required E0 scope,
 runs a no-tool probe, verifies the live health lease, and reaps the owned
 provider runtime.
-Unexpected Harness tool activity makes the gate fail closed.
+Unexpected Harness tool activity makes the gate fail closed. For DSH, a
+single-use Morn overlay installs a global monotonic deny guard **before** the
+model turn; for Pi, `--no-tools --no-mcp` is part of the real RPC command.
+These local controls do not self-attest an arbitrary deployment, so the
+execution-environment attestation must still include `tool-mediation`.
 
 DSH example (values are deployment-specific; never commit secret values):
 
