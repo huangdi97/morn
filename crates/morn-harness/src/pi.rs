@@ -291,8 +291,8 @@ impl PiHarnessProvider {
     }
 }
 
-fn pi_run_has_prohibited_tool_activity(run: &PiPromptRun) -> bool {
-    run.events.iter().any(|event| {
+fn pi_events_have_prohibited_tool_activity(events: &[PiRpcEvent]) -> bool {
+    events.iter().any(|event| {
         event.event_type.starts_with("tool_")
             || (event.event_type == "message_update"
                 && event
@@ -313,10 +313,10 @@ fn pi_run_has_prohibited_tool_activity(run: &PiPromptRun) -> bool {
 fn normalize_pi_tool_events(
     workspace_id: &morn_kernel::ids::WorkspaceId,
     session_id: &str,
-    run: &PiPromptRun,
+    provider_events: &[PiRpcEvent],
 ) -> Vec<ExecutionEvent> {
     let mut events = Vec::new();
-    for event in &run.events {
+    for event in provider_events {
         let kind = match event.event_type.as_str() {
             "tool_execution_start" => Some(ExecutionEventKind::ToolProposed),
             "tool_execution_end" => {
@@ -579,43 +579,45 @@ impl HarnessProvider for PiHarnessProvider {
                     state.last_event = format!("pi_prompt:{}", state.step);
                 }
 
-                let run = self
-                    .real_client
-                    .as_mut()
-                    .ok_or_else(|| Error::internal("Pi RPC client missing after startup"))?
-                    .prompt_and_wait(input);
+                let (run, turn_events) = {
+                    let client = self
+                        .real_client
+                        .as_mut()
+                        .ok_or_else(|| Error::internal("Pi RPC client missing after startup"))?;
+                    let event_start = client.buffered_events.len();
+                    let run = client.prompt_and_wait(input);
+                    let turn_events = client.buffered_events[event_start..].to_vec();
+                    (run, turn_events)
+                };
+                if pi_events_have_prohibited_tool_activity(&turn_events) {
+                    let normalized =
+                        normalize_pi_tool_events(&ctx.workspace_id, session_id, &turn_events);
+                    // Policy evidence dominates any later transport/correlation
+                    // error. Reap the external runtime and preserve the events.
+                    let _owned_runtime = self.real_client.take();
+                    self.active_session = None;
+                    self.runtime_health.mark_degraded(
+                        "Pi RPC emitted tool activity on an E0-only provider path; owned runtime reaped",
+                    );
+                    let state = self
+                        .sessions
+                        .get_mut(session_id)
+                        .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                    state.events.extend(normalized);
+                    state.status = "policy-violation-runtime-reaped".to_string();
+                    state.events.push(ExecutionEvent::new(
+                        state.ctx.workspace_id.clone(),
+                        session_id.to_string(),
+                        ExecutionEventKind::Failed,
+                        "Pi E0 provider observed prohibited tool activity; output rejected and runtime reaped",
+                    ));
+                    state.last_event = "pi_e0_tool_policy_violation".to_string();
+                    return Err(Error::external(
+                        "Pi E0 provider observed tool activity; executor output was rejected",
+                    ));
+                }
                 match run {
                     Ok(run) => {
-                        if pi_run_has_prohibited_tool_activity(&run) {
-                            let normalized =
-                                normalize_pi_tool_events(&ctx.workspace_id, session_id, &run);
-                            // Pi's tool lifecycle is executable activity. A real Pi
-                            // provider admitted through Morn's E0 seam must never
-                            // promote a turn that used those tools. Reap the owned
-                            // runtime so no follow-up activity can continue after
-                            // Morn has rejected the turn.
-                            let _owned_runtime = self.real_client.take();
-                            self.active_session = None;
-                            self.runtime_health.mark_degraded(
-                                "Pi RPC emitted tool activity on an E0-only provider path; owned runtime reaped",
-                            );
-                            let state = self
-                                .sessions
-                                .get_mut(session_id)
-                                .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
-                            state.events.extend(normalized);
-                            state.status = "policy-violation-runtime-reaped".to_string();
-                            state.events.push(ExecutionEvent::new(
-                                state.ctx.workspace_id.clone(),
-                                session_id.to_string(),
-                                ExecutionEventKind::Failed,
-                                "Pi E0 provider observed prohibited tool activity; output rejected and runtime reaped",
-                            ));
-                            state.last_event = "pi_e0_tool_policy_violation".to_string();
-                            return Err(Error::external(
-                                "Pi E0 provider observed tool activity; executor output was rejected",
-                            ));
-                        }
                         let text = match self
                             .real_client
                             .as_mut()
@@ -857,7 +859,7 @@ mod tool_policy_tests {
                 payload: serde_json::json!({"toolName":"future-tool","toolCallId":"call-1"}),
             }],
         };
-        assert!(pi_run_has_prohibited_tool_activity(&run));
+        assert!(pi_events_have_prohibited_tool_activity(&run.events));
         let events = normalize_pi_tool_events(
             &morn_kernel::ids::WorkspaceId::generate(),
             "session-1",
@@ -1040,6 +1042,28 @@ mod tests {
             )
         }));
         assert!(provider.send(&session.id, "blind retry forbidden").is_err());
+    }
+
+    #[test]
+    fn real_pi_e0_policy_violation_survives_prompt_protocol_error() {
+        let (mut provider, ctx, _handle) = real_pi_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        let error = provider
+            .send(&session.id, "__tool_then_bad_response__")
+            .unwrap_err();
+        assert!(
+            format!("{error}").contains("tool activity"),
+            "policy violation must dominate the later correlation error"
+        );
+        assert!(provider.real_client.is_none());
+        assert!(provider.active_session.is_none());
+        let snapshot = provider.inspect(&session.id).unwrap();
+        assert_eq!(snapshot.status, "policy-violation-runtime-reaped");
+        assert_eq!(snapshot.last_event, "pi_e0_tool_policy_violation");
+        assert!(provider
+            .stream_events(&session.id)
+            .iter()
+            .any(|event| event.kind == ExecutionEventKind::ToolProposed));
     }
 
     #[test]

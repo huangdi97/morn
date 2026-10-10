@@ -472,6 +472,10 @@ impl PiRpcClient {
             if event.event_type == PI_EVENT_AGENT_SETTLED {
                 settled = true;
             }
+            // Durable local audit buffering is independent of whether the
+            // correlated prompt later settles successfully. A tool event
+            // followed by a protocol error must not disappear.
+            self.buffered_events.push(event.clone());
             events.push(event);
             if settled && response.is_some() {
                 break;
@@ -484,8 +488,6 @@ impl PiRpcClient {
         let disposition = prompt_disposition(&response)
             .unwrap_or("unknown")
             .to_string();
-        self.buffered_events.extend(events.iter().cloned());
-
         Ok(PiPromptRun {
             request_id: id,
             disposition,
@@ -805,7 +807,10 @@ mod tests {
                         &mut stdout,
                         response("prompt", json!({"disposition":"started"})),
                     );
-                    if prompt_text == "__tool_activity__" {
+                    if matches!(
+                        prompt_text,
+                        "__tool_activity__" | "__tool_then_bad_response__"
+                    ) {
                         write(
                             &mut stdout,
                             json!({
@@ -826,6 +831,19 @@ mod tests {
                                 "durationMs":1
                             }),
                         );
+                    }
+                    if prompt_text == "__tool_then_bad_response__" {
+                        write(
+                            &mut stdout,
+                            json!({
+                                "id":"wrong-correlation",
+                                "type":"response",
+                                "command":"prompt",
+                                "success":true,
+                                "data":{"disposition":"started"}
+                            }),
+                        );
+                        continue;
                     }
                     write(&mut stdout, json!({"type":"agent_settled"}));
                 }
