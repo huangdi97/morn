@@ -55,6 +55,30 @@ impl SupplyChainVerificationEvidence {
         }
         Ok(())
     }
+
+    pub fn merge(&self, other: &Self) -> Result<Self, String> {
+        if !self
+            .subject_digest
+            .eq_ignore_ascii_case(&other.subject_digest)
+        {
+            return Err(
+                "cannot merge supply-chain evidence for different artifact digests".to_string(),
+            );
+        }
+        let mut evidence_refs = self.evidence_refs.clone();
+        for reference in &other.evidence_refs {
+            if !evidence_refs.contains(reference) {
+                evidence_refs.push(reference.clone());
+            }
+        }
+        Ok(Self {
+            subject_digest: self.subject_digest.clone(),
+            verifier_ref: format!("{} + {}", self.verifier_ref, other.verifier_ref),
+            signature_verified: self.signature_verified || other.signature_verified,
+            provenance_verified: self.provenance_verified || other.provenance_verified,
+            evidence_refs,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -178,6 +202,32 @@ mod tests {
 
         descriptor.oci_ref = format!("oci://registry.example/cap@{}", digest('a'));
         assert!(descriptor.validate(false, false).is_ok());
+    }
+
+    #[test]
+    fn verification_axes_merge_only_for_the_same_subject_digest() {
+        let signature = SupplyChainVerificationEvidence {
+            subject_digest: digest('f'),
+            verifier_ref: "cosign://signature".to_string(),
+            signature_verified: true,
+            provenance_verified: false,
+            evidence_refs: vec!["proof://signature".to_string()],
+        };
+        let provenance = SupplyChainVerificationEvidence {
+            subject_digest: digest('f'),
+            verifier_ref: "cosign://slsa".to_string(),
+            signature_verified: false,
+            provenance_verified: true,
+            evidence_refs: vec!["proof://provenance".to_string()],
+        };
+        let merged = signature.merge(&provenance).unwrap();
+        assert!(merged.signature_verified);
+        assert!(merged.provenance_verified);
+        assert_eq!(merged.evidence_refs.len(), 2);
+
+        let mut wrong = provenance;
+        wrong.subject_digest = digest('e');
+        assert!(signature.merge(&wrong).is_err());
     }
 
     #[test]

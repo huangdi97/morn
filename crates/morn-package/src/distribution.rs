@@ -348,6 +348,81 @@ impl CosignCliVerifier {
             evidence_refs: vec![format!("cosign-verify-output://{proof_digest}")],
         })
     }
+
+    pub fn provenance_command_spec(
+        &self,
+        receipt: &OciPublishReceipt,
+        policy: &SigstoreIdentityPolicy,
+    ) -> Result<ExternalCommandSpec, String> {
+        receipt.validate()?;
+        policy.validate()?;
+        if self.command.trim().is_empty() {
+            return Err("cosign command required".to_string());
+        }
+        let target = receipt
+            .oci_ref
+            .strip_prefix("oci://")
+            .ok_or_else(|| "cosign subject must use oci://".to_string())?;
+        Ok(ExternalCommandSpec {
+            program: self.command.clone(),
+            args: vec![
+                "verify-attestation".to_string(),
+                target.to_string(),
+                "--type".to_string(),
+                "slsaprovenance".to_string(),
+                "--certificate-identity".to_string(),
+                policy.certificate_identity.clone(),
+                "--certificate-oidc-issuer".to_string(),
+                policy.certificate_oidc_issuer.clone(),
+                "--output".to_string(),
+                "json".to_string(),
+            ],
+            env: self.env.clone(),
+        })
+    }
+
+    pub fn verify_slsa_provenance(
+        &self,
+        receipt: &OciPublishReceipt,
+        policy: &SigstoreIdentityPolicy,
+    ) -> Result<SupplyChainVerificationEvidence, String> {
+        let spec = self.provenance_command_spec(receipt, policy)?;
+        let output = Command::new(&spec.program)
+            .args(&spec.args)
+            .env_clear()
+            .envs(&spec.env)
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|error| format!("failed to start cosign: {error}"))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!(
+                "cosign verify-attestation failed: {}",
+                stderr.trim()
+            ));
+        }
+        let stdout = String::from_utf8(output.stdout)
+            .map_err(|error| format!("cosign attestation output was not UTF-8: {error}"))?;
+        if stdout.trim().is_empty() {
+            return Err("cosign verify-attestation returned no evidence".to_string());
+        }
+        serde_json::from_str::<Value>(&stdout)
+            .map_err(|error| format!("cosign attestation output was not JSON: {error}"))?;
+
+        let mut digest = Sha256::new();
+        digest.update(stdout.as_bytes());
+        let proof_digest = format!("sha256:{:x}", digest.finalize());
+        Ok(SupplyChainVerificationEvidence {
+            subject_digest: receipt.content_digest.clone(),
+            verifier_ref: format!(
+                "slsa://cosign?identity={}&issuer={}",
+                policy.certificate_identity, policy.certificate_oidc_issuer
+            ),
+            signature_verified: false,
+            provenance_verified: true,
+            evidence_refs: vec![format!("cosign-attestation-output://{proof_digest}")],
+        })
+    }
 }
 
 fn valid_digest(value: &str) -> bool {
@@ -438,6 +513,36 @@ mod tests {
         assert!(spec.args.contains(&"--certificate-identity".to_string()));
         assert!(spec.args.contains(&"--certificate-oidc-issuer".to_string()));
         assert!(spec.args.windows(2).any(|pair| pair == ["--output", "json"]));
+    }
+
+    #[test]
+    fn slsa_verification_is_digest_pinned_and_identity_scoped() {
+        let digest = digest('d');
+        let receipt = OciPublishReceipt {
+            oci_ref: format!("oci://registry.example/morn/cap@{digest}"),
+            content_digest: digest,
+            manifest_media_type: "application/vnd.oci.image.manifest.v1+json".to_string(),
+            artifact_type: Some("application/vnd.morn.capability.v1+json".to_string()),
+        };
+        let policy = SigstoreIdentityPolicy {
+            certificate_identity: "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main".to_string(),
+            certificate_oidc_issuer: "https://token.actions.githubusercontent.com".to_string(),
+        };
+        let spec = CosignCliVerifier::default()
+            .provenance_command_spec(&receipt, &policy)
+            .unwrap();
+        assert_eq!(spec.args[0], "verify-attestation");
+        assert!(spec.args[1].contains("@sha256:"));
+        assert!(spec
+            .args
+            .windows(2)
+            .any(|pair| pair == ["--type", "slsaprovenance"]));
+        assert!(spec
+            .args
+            .contains(&"--certificate-identity".to_string()));
+        assert!(spec
+            .args
+            .contains(&"--certificate-oidc-issuer".to_string()));
     }
 
     #[test]
