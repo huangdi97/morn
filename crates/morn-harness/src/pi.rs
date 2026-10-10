@@ -845,6 +845,7 @@ impl HarnessProvider for PiHarnessProvider {
 #[cfg(test)]
 mod tool_policy_tests {
     use super::*;
+    use crate::pi_rpc::PiRpcEvent;
 
     #[test]
     fn future_pi_tool_events_fail_closed_and_remain_auditable() {
