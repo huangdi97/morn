@@ -184,3 +184,20 @@ specified in
 `docs/research/V11_5_DSH_ACP_INTEGRATION_CONVERGENCE_2026-10-08.md`.
 Never treat a successful `dsh web` launch as completion of the Morn
 HarnessProvider contract or as production authorization.
+
+
+### 2026-10-10 DSH real-adapter convergence update
+
+- **MORN_DSH_REAL_SDK_ADAPTER = IMPLEMENTED_CODE_PENDING_EXACT_HEAD_CI**.
+- The real SDK path now pins runtime artifact, execution-environment identity,
+  provider/model route, Morn E0 policy digest, and an attested
+  `deepseek-harness-profile@<version>#sha256:<digest>` composition identity.
+- Each real launch uses a fresh Morn-owned one-shot child `DSH_HOME`; persistent
+  profile/home overrides under the configured root are not loaded into that run.
+- DSH tool/subagent activity fails closed on the E0 seam, including future
+  `tool/*` event names; Pi symmetrically rejects future `tool_*` events.
+- DSH graceful teardown now requests protocol shutdown, closes stdin, waits
+  boundedly for a clean exit, and only then force-reaps as containment fallback.
+- **LIVE_DSH remains NOT_PROVEN** until an authenticated official runtime/model
+  smoke executes inside a deployment-attested environment. Customer Outcome,
+  independent Acceptance, ProductionWrite, and G12 remain separate external gates.

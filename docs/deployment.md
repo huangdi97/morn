@@ -34,7 +34,7 @@ and serve `frontend/dist`.
 
 Real DSH and Pi runtimes are launched with a **scrubbed child environment** rather than inheriting the entire Morn server process.
 
-- DSH receives only the minimal OS/runtime environment plus the explicit `DSH_HOME` selected by Morn. The real E0 route also applies a final Morn-owned global deny-tool overlay, forces a read-only DSH sandbox, treats max-token termination as non-success, and disables DSH telemetry.
+- DSH receives only the minimal OS/runtime environment. `MORN_DSH_HOME` is an isolated **root**, not the runtime's mutable home: every real E0 launch gets a fresh one-shot child Home under that root, so stale profile/home patches or plugins cannot silently reinterpret a binding. The route also applies a final Morn-owned global deny-tool overlay, forces a read-only DSH sandbox, treats max-token termination as non-success, and disables DSH telemetry.
 - Pi receives the same minimal OS/runtime environment and the official RPC route is launched with `--no-tools --no-mcp`.
 - Provider credentials or proxy variables are **not inherited implicitly**. Add only the names required by a deployment through `MORN_DSH_ENV_PASSTHROUGH` or `MORN_PI_ENV_PASSTHROUGH` (comma/semicolon separated).
 - Prefer provider-managed/OS secret stores over environment credentials. Explicitly passing an API-key environment variable makes that value visible to the provider subprocess and any tools it launches, so it is a deliberate weaker boundary.
@@ -48,8 +48,9 @@ $env:MORN_DSH_WORKSPACE = "C:\morn\workspaces\dsh"
 $env:MORN_DSH_HOME = "C:\morn\runtime\dsh-home"
 $env:MORN_DSH_EXECUTION_ENVIRONMENT_REF = "env://container/dsh-runtime-a"
 $env:MORN_DSH_PROFILE_CONFIGURATION_REF = "deepseek-harness-profile@<config-version>#sha256:<64-hex>"
-# This secret-free ref identifies the exact DSH Home/Profile composition.
-# Changing Home patches/plugins requires a new ref and therefore a new ExecutionBinding.
+# This secret-free, attested ref identifies the exact allowed SDK-profile composition.
+# Morn creates a fresh empty child DSH_HOME per runtime; pre-existing patches/plugins
+# under MORN_DSH_HOME are not loaded into that child composition.
 # MORN_DSH_WORKSPACE and MORN_DSH_HOME must be disjoint directory trees.
 # The environment ref must be issued/pinned by the same execution-environment
 # provisioning path that produced the RuntimeContext/ExecutionBinding.
@@ -92,8 +93,10 @@ allowed to execute there.
 
 Use `runtime_identities` with the canonical form
 `provider@version#sha256:<64-hex>`. For DSH, attest both the runtime artifact
-and the exact Home/Profile composition identity. Any profile/home patch or plugin
-change requires a new configuration digest and therefore a new ExecutionBinding.
+and the exact Home/Profile composition identity. The Morn real-SDK path does not consume arbitrary persistent Home/Profile overrides:
+each launch starts from a fresh child Home plus the runtime-pinned official SDK profile
+and Morn's final policy overlay. A permitted profile-composition change requires a new
+configuration digest/attestation and therefore a new ExecutionBinding.
 For example:
 
 ```json

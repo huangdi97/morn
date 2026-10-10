@@ -113,3 +113,22 @@ Morn 的真实 DSH SDK 路径现在采用三层防线：
 - DSH official ACP package：https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/acp/acp/README.md
 - DeepSeek Python SDK warning/example：https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/python-sdk.md
 - Pi SDK：https://pi.dev/docs/latest/sdk
+
+
+## 8. 2026-10-10 真实 SDK Home/Profile 不漂移收口
+
+再次对照 DeepSeek Harness 当前官方 CLI/Profile layering：bundle layers → profile `cordis.patch.yml` → `$DSH_HOME/cordis.patch.yml` → `--patch`。因此只固定 runtime digest 和最后一层 Morn policy，仍不足以证明实际 Cordis 组合不被旧 Home 改写。
+
+Morn 现将真实 SDK 路径收敛为：
+
+1. `MORN_DSH_HOME` 只作为隔离根目录；
+2. 每次启动在其下创建全新、空的 one-shot runtime Home；
+3. 子进程只看到该 child Home，旧 profile/home patch、插件和 session state 不参与新运行；
+4. 继续用最后一层 Morn E0 deny-tool guard + read-only sandbox 做执行前工具控制；
+5. `MORN_DSH_PROFILE_CONFIGURATION_REF` 使用
+   `deepseek-harness-profile@<config-version>#sha256:<64-hex>`，进入 route identity；
+6. 同一 ExecutionEnvironmentAttestation 的 `runtime_identities` 必须同时授权 DSH runtime artifact 和该 profile-composition artifact；
+7. 创建 Binding 与实际执行前均重新校验 attestation；live provider smoke 同样校验；
+8. graceful shutdown 采用 shutdown → stdin EOF → 有界自然退出 → force-reap fallback，避免正常路径直接 kill 导致持久化未刷盘。
+
+这仍然不把 SDK executor output 提升为 Morn Outcome/Acceptance，也不把仓库 fake-wire 测试升级为 LIVE_DSH。
