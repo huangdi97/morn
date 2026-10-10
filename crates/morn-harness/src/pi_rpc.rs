@@ -771,6 +771,7 @@ mod tests {
 
         let stdin = std::io::stdin();
         let mut stdout = std::io::stdout().lock();
+        let mut last_assistant_text = "hello from fake pi".to_string();
         for line in stdin.lock().lines() {
             let line = line.unwrap();
             let request: Value = match serde_json::from_str(&line) {
@@ -803,6 +804,11 @@ mod tests {
                 ),
                 "prompt" => {
                     let prompt_text = request.get("message").and_then(Value::as_str).unwrap_or("");
+                    last_assistant_text = if prompt_text.contains("MORN_PROVIDER_SMOKE_OK") {
+                        "MORN_PROVIDER_SMOKE_OK".to_string()
+                    } else {
+                        "hello from fake pi".to_string()
+                    };
                     write(
                         &mut stdout,
                         response("prompt", json!({"disposition":"started"})),
@@ -851,7 +857,7 @@ mod tests {
                     &mut stdout,
                     response(
                         "get_last_assistant_text",
-                        json!({"text":"hello from fake pi"}),
+                        json!({"text":last_assistant_text}),
                     ),
                 ),
                 "abort" => write(&mut stdout, response("abort", Value::Null)),
