@@ -6472,7 +6472,10 @@ mod workspace_boundary_tests {
         assert_eq!(observed["caller_supplied_world_facts"], false);
         assert_eq!(observed["observation_attestation_id"], "obs-grounded");
         assert_eq!(observed["outcome"]["source_binding_ref"], work_binding_id);
-        assert_eq!(observed["outcome"]["source_attestation_ref"], "obs-grounded");
+        assert_eq!(
+            observed["outcome"]["source_attestation_ref"],
+            "obs-grounded"
+        );
         assert_eq!(observed["outcome"]["fact_type"], "delivery.status");
 
         let guard = state.lock();
