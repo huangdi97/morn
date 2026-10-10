@@ -798,6 +798,16 @@ impl ControlPlaneStore for MornStore {
                     "desired Work spec must change through an explicit next generation",
                 ));
             }
+            if work.generation == persisted.generation.saturating_add(1)
+                && persisted.status.conditions.iter().any(|condition| {
+                    condition.condition_type == "ExecutorOutcomeKnown"
+                        && condition.status == ConditionStatus::False
+                })
+            {
+                return Err(Error::invalid_state(
+                    "cannot create a new Work generation while the previous executor outcome is unknown; reconcile it first",
+                ));
+            }
             if work.generation == persisted.generation
                 && persisted.status.phase.is_terminal()
                 && work.status.phase != persisted.status.phase
@@ -2432,6 +2442,41 @@ mod control_plane_persistence_scope_tests {
         }));
         assert!(!work.condition_is_true("OutcomeObservation"));
         assert!(!work.condition_is_true("IndependentAcceptance"));
+    }
+
+    #[test]
+    fn unknown_executor_outcome_cannot_be_erased_by_creating_a_new_generation() {
+        let store = MornStore::open_in_memory().unwrap();
+        let mut work = fixture_work();
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let mut unknown = WorkCondition::new("ExecutorOutcomeKnown", ConditionStatus::False);
+        unknown.reason = "ambiguous external executor activity".to_string();
+        unknown.evidence_refs = vec!["receipt://unknown".to_string()];
+        work.set_condition(unknown);
+        work.status.phase = WorkPhase::Reconciling;
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let mut next = work.clone();
+        let mut spec = next.spec.clone();
+        spec.goal = "attempt to bypass unknown outcome".to_string();
+        next.replace_spec(spec);
+        assert!(store.save_work_resource_cas(&mut next).is_err());
+
+        let mut known = work.clone();
+        let mut resolved = WorkCondition::new("ExecutorOutcomeKnown", ConditionStatus::True);
+        resolved.reason = "trusted reconciliation resolved executor settlement".to_string();
+        resolved.evidence_refs = vec!["exec-reconcile://1".to_string()];
+        known.set_condition(resolved);
+        known.status.phase = WorkPhase::Blocked;
+        store.save_work_resource_cas(&mut known).unwrap();
+
+        let mut permitted = known.clone();
+        let mut spec = permitted.spec.clone();
+        spec.goal = "explicit next generation after reconciliation".to_string();
+        permitted.replace_spec(spec);
+        store.save_work_resource_cas(&mut permitted).unwrap();
+        assert_eq!(permitted.generation, 2);
     }
 
     #[test]
