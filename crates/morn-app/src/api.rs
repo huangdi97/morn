@@ -93,6 +93,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v115/control-plane", get(v115_control_plane))
         .route("/api/v115/work/reconcile", post(v115_work_reconcile))
         .route(
+            "/api/v115/work/reconcile-business-evidence",
+            post(v115_work_reconcile_business_evidence),
+        )
+        .route(
             "/api/v115/work/reconcile-executor-outcome",
             post(v115_work_reconcile_executor_outcome),
         )
@@ -1063,7 +1067,19 @@ async fn v115_work_observe_outcome(
             ..Default::default()
         },
     );
-    guard.store.save_work_resource_cas(&mut work)?;
+    if let Err(cas_error) = guard.store.save_work_resource_cas(&mut work) {
+        let recovery = morn_control_plane::DurableBusinessEvidenceControllerRuntime::new(
+            "morn-app-outcome-projection-recovery",
+        )
+        .reconcile_from_persisted_business_evidence(&guard.store, work_id, now);
+        if recovery.is_err() {
+            return Err(AppError(cas_error));
+        }
+        work = guard
+            .store
+            .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+            .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    }
 
     Ok(Json(json!({
         "outcome": outcome,
@@ -2768,7 +2784,19 @@ async fn v115_work_review_outcome(
             ..Default::default()
         },
     );
-    guard.store.save_work_resource_cas(&mut work)?;
+    if let Err(cas_error) = guard.store.save_work_resource_cas(&mut work) {
+        let recovery = morn_control_plane::DurableBusinessEvidenceControllerRuntime::new(
+            "morn-app-acceptance-projection-recovery",
+        )
+        .reconcile_from_persisted_business_evidence(&guard.store, work_id, now);
+        if recovery.is_err() {
+            return Err(AppError(cas_error));
+        }
+        work = guard
+            .store
+            .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+            .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    }
 
     Ok(Json(json!({
         "decision": decision,
@@ -2844,6 +2872,67 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
         "tick": tick,
         "work": current,
         "note": "controller tick derived readiness from durable generation-scoped evidence, then used lease/fencing + CAS + atomic durable semantic outbox"
+    })))
+}
+
+async fn v115_work_reconcile_business_evidence(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_control_plane::DurableBusinessEvidenceControllerRuntime;
+    use morn_kernel::time::Timestamp;
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    for forbidden in [
+        "outcome_id",
+        "acceptance_id",
+        "disposition",
+        "source_ref",
+        "evidence_refs",
+    ] {
+        if body.get(forbidden).is_some() {
+            return Err(AppError(Error::validation(format!(
+                "{forbidden} is derived from durable business evidence and cannot be asserted by the recovery caller"
+            ))));
+        }
+    }
+
+    let guard = state.lock();
+    let work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
+    }
+    let holder = body
+        .get("controller_holder")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("morn-app-business-evidence-recovery");
+    let runtime = DurableBusinessEvidenceControllerRuntime::new(holder);
+    let tick = runtime.reconcile_from_persisted_business_evidence(
+        &guard.store,
+        work_id,
+        Timestamp::now(),
+    )?;
+    let current = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+
+    Ok(Json(json!({
+        "tick": tick,
+        "work": current,
+        "replayed_external_execution": false,
+        "reconsumed_authorization": false,
+        "note": "Recovered only the mutable Work projection from already-persisted Outcome/Acceptance evidence."
     })))
 }
 
@@ -6690,6 +6779,127 @@ mod workspace_boundary_tests {
             )
             .unwrap()
             .is_some());
+    }
+
+    #[tokio::test]
+    async fn business_evidence_recovery_projects_persisted_acceptance_without_replaying_execution() {
+        use morn_control_plane::ControlPlaneStore;
+        use morn_integration::{
+            ConflictPolicy, SourceOfTruthBinding, SourceOfTruthBindingId, TruthAuthorityKind,
+        };
+        use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+        use morn_world::{ObservedOutcome, OutcomeSourceKind};
+
+        let state = AppState::new(":memory:").unwrap();
+        let work_id = {
+            let guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "recover accepted delivery projection",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+
+            let binding = SourceOfTruthBinding {
+                id: SourceOfTruthBindingId::generate_with("sot"),
+                site_ref: work.spec.site_ref.clone(),
+                source_ref: "erp://delivery".to_string(),
+                authority_kind: TruthAuthorityKind::SystemOfRecord,
+                authoritative_fact_types: vec!["delivery.status".to_string()],
+                key_mapping_ref: "mapping://delivery@1".to_string(),
+                query_capability_ref: "capability://delivery.read@1".to_string(),
+                freshness_sla_ms: None,
+                conflict_policy: ConflictPolicy::ReconcileBeforeUse,
+                version_ref: "binding:test-v1".to_string(),
+                created_at: morn_kernel::time::Timestamp::now(),
+            };
+            guard
+                .store
+                .save_source_of_truth_binding(&work, &binding)
+                .unwrap();
+
+            let mut outcome = ObservedOutcome::new(
+                work.workspace_id.clone(),
+                work.id.clone(),
+                "authoritative delivery completed",
+                OutcomeSourceKind::ExternalSystem,
+                "erp://delivery/42",
+                json!({"status":"delivered"}),
+            );
+            outcome.pin_work_generation(work.generation).unwrap();
+            outcome
+                .evidence_refs
+                .push("erp://delivery/42/receipt".to_string());
+            let observation_attestation_id = "observation-attestation://recovery-42";
+            outcome
+                .pin_source_provenance(
+                    binding.id.to_string(),
+                    observation_attestation_id,
+                    "delivery.status",
+                )
+                .unwrap();
+            guard
+                .store
+                .save_record_immutable(
+                    "source_observation_attestation_consumed_v115",
+                    observation_attestation_id,
+                    work.workspace_id.as_str(),
+                    outcome.observed_at.millis(),
+                    &json!({
+                        "attestation_id": observation_attestation_id,
+                        "work_id": work.id,
+                        "source_binding_id": binding.id,
+                        "fact_type": "delivery.status",
+                        "outcome_id": outcome.id,
+                        "consumed_at": outcome.observed_at
+                    }),
+                )
+                .unwrap();
+            guard.store.save_observed_outcome(&work, &outcome).unwrap();
+
+            let mut acceptance = AcceptanceDecision::new(
+                work.id.clone(),
+                morn_kernel::ids::AcceptanceSpecId::generate_with("acceptance"),
+                AcceptanceDisposition::Accept,
+                morn_kernel::ids::PrincipalId::generate_with("reviewer"),
+                "independent-reviewer",
+                "deployment-attested result accepted",
+            );
+            acceptance.pin_work_generation(work.generation).unwrap();
+            acceptance.outcome_refs.push(outcome.id.clone());
+            acceptance
+                .evidence_refs
+                .push("review://signed/recovery-42".to_string());
+            ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &acceptance).unwrap();
+
+            // Intentionally do not mutate Work: this models the post-evidence,
+            // pre-projection crash/CAS window.
+            work.id.to_string()
+        };
+
+        let Json(response) = v115_work_reconcile_business_evidence(
+            State(state.clone()),
+            Json(json!({"work_id": work_id})),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response["work"]["status"]["phase"], "Accepted");
+        assert_eq!(response["replayed_external_execution"], false);
+        assert_eq!(response["reconsumed_authorization"], false);
+
+        let forbidden = v115_work_reconcile_business_evidence(
+            State(state),
+            Json(json!({
+                "work_id": work_id,
+                "outcome_id": "caller-selected-outcome"
+            })),
+        )
+        .await;
+        assert!(forbidden.is_err());
     }
 
     #[tokio::test]
