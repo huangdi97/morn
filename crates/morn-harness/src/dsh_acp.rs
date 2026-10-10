@@ -148,7 +148,8 @@ pub struct DshAcpControlHandle {
 
 impl std::fmt::Debug for DshAcpControlHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DshAcpControlHandle").finish_non_exhaustive()
+        f.debug_struct("DshAcpControlHandle")
+            .finish_non_exhaustive()
     }
 }
 
@@ -511,7 +512,7 @@ impl DshAcpStdioClient {
         }
     }
 
-     fn answer_server_request(&mut self, request: &Value) -> Result<()> {
+    fn answer_server_request(&mut self, request: &Value) -> Result<()> {
         let id = request
             .get("id")
             .cloned()
@@ -594,10 +595,7 @@ impl Drop for DshAcpStdioClient {
     }
 }
 
-fn write_shared_frame(
-    stdin: &Arc<Mutex<Option<ChildStdin>>>,
-    frame: Value,
-) -> Result<()> {
+fn write_shared_frame(stdin: &Arc<Mutex<Option<ChildStdin>>>, frame: Value) -> Result<()> {
     let mut guard = stdin
         .lock()
         .map_err(|_| Error::internal("DSH ACP stdin lock poisoned"))?;
@@ -1010,8 +1008,7 @@ mod tests {
         if std::env::var("MORN_ACP_FIXTURE_SERVER").ok().as_deref() == Some("1") {
             return;
         }
-        let root =
-            std::env::temp_dir().join(format!("morn-acp-cancel-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("morn-acp-cancel-{}", uuid::Uuid::new_v4()));
         let workspace = root.join("workspace");
         let home = root.join("home");
         let ready = root.join("prompt-ready");
@@ -1050,7 +1047,10 @@ mod tests {
         while !ready.exists() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(10));
         }
-        assert!(ready.exists(), "fixture prompt never reached cancellable state");
+        assert!(
+            ready.exists(),
+            "fixture prompt never reached cancellable state"
+        );
         control.cancel_session(&session).unwrap();
 
         let (mut client, result) = worker.join().unwrap();
