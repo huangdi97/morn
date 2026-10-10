@@ -651,6 +651,24 @@ impl ReconciliationController {
 /// Persistence boundary for v11.5 control-plane resources. Work/status and
 /// attempt state are mutable projections. Bindings and reconciliation records
 /// are immutable historical facts once written.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkExecutionEvent {
+    pub work_package_id: morn_kernel::ids::WorkPackageId,
+    pub work_generation: u64,
+    #[serde(flatten)]
+    pub event: ExecutionEvent,
+}
+
+impl WorkExecutionEvent {
+    fn from_work(work: &WorkResource, event: &ExecutionEvent) -> Self {
+        Self {
+            work_package_id: work.id.clone(),
+            work_generation: work.generation,
+            event: event.clone(),
+        }
+    }
+}
+
 pub trait ControlPlaneStore {
     /// Legacy projection save retained for v1 compatibility paths.
     fn save_work_resource(&self, work: &WorkResource) -> Result<()>;
@@ -953,12 +971,13 @@ impl ControlPlaneStore for MornStore {
                 "execution event must be a current, non-empty event in the canonical Work workspace",
             ));
         }
+        let durable = WorkExecutionEvent::from_work(work, event);
         self.save_record_immutable(
             "execution_event_v115",
             event.id.as_str(),
             work.workspace_id.as_str(),
             event.created_at.millis(),
-            event,
+            &durable,
         )
     }
 
@@ -1010,20 +1029,26 @@ impl ControlPlaneStore for MornStore {
             ));
         }
         for event_id in &receipt.event_ids {
-            if !receipt.trace_refs.iter().any(|reference| reference == event_id) {
+            if !receipt
+                .trace_refs
+                .iter()
+                .any(|reference| reference == event_id)
+            {
                 return Err(Error::validation(
                     "execution receipt trace references must include every durable event id",
                 ));
             }
-            let event: ExecutionEvent = self
+            let durable: WorkExecutionEvent = self
                 .load_record("execution_event_v115", event_id)?
                 .ok_or_else(|| Error::not_found("execution receipt event"))?;
-            if event.workspace_id != work.workspace_id
-                || event.session_id != receipt.session_id
-                || event.created_at < receipt.started_at
+            if durable.work_package_id != work.id
+                || durable.work_generation != work.generation
+                || durable.event.workspace_id != work.workspace_id
+                || durable.event.session_id != receipt.session_id
+                || durable.event.created_at < receipt.started_at
                 || receipt
                     .ended_at
-                    .is_some_and(|ended_at| event.created_at > ended_at)
+                    .is_some_and(|ended_at| durable.event.created_at > ended_at)
             {
                 return Err(Error::validation(
                     "execution receipt references an event outside its workspace/session/time boundary",
@@ -2101,6 +2126,13 @@ mod control_plane_persistence_scope_tests {
         assert!(store.save_execution_receipt(&work, &dangling).is_err());
 
         store.save_execution_event(&work, &event).unwrap();
+        let durable: WorkExecutionEvent = store
+            .load_record("execution_event_v115", event.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(durable.work_package_id, work.id);
+        assert_eq!(durable.work_generation, work.generation);
+        assert_eq!(durable.event.session_id, "session-a");
         store.save_execution_receipt(&work, &receipt).unwrap();
 
         WorkProgressController.reconcile(
@@ -2135,9 +2167,7 @@ mod control_plane_persistence_scope_tests {
         cross_session.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
         cross_session.event_ids = vec![other_session_event.id.to_string()];
         cross_session.trace_refs = cross_session.event_ids.clone();
-        assert!(store
-            .save_execution_receipt(&work, &cross_session)
-            .is_err());
+        assert!(store.save_execution_receipt(&work, &cross_session).is_err());
     }
 
     #[test]
