@@ -2461,6 +2461,9 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
 
     let current = {
         let guard = state.lock();
+        for event in &turn.events {
+            guard.store.save_execution_event(&work, event)?;
+        }
         guard.store.save_execution_receipt(&work, &turn.receipt)?;
         let mut current = guard
             .store

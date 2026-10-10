@@ -40,7 +40,7 @@ pub use profile_guard::{
 };
 
 use morn_assurance::CustomerValueAttestation;
-use morn_harness::ExecutionReceipt;
+use morn_harness::{ExecutionEvent, ExecutionReceipt};
 use morn_integration::{GovernedExternalTaskObservation, InteropBinding, SourceOfTruthBinding};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::protocol::{
@@ -674,6 +674,7 @@ pub trait ControlPlaneStore {
         work: &WorkResource,
         manifest: &ExecutionManifest,
     ) -> Result<()>;
+    fn save_execution_event(&self, work: &WorkResource, event: &ExecutionEvent) -> Result<()>;
     fn save_execution_receipt(&self, work: &WorkResource, receipt: &ExecutionReceipt)
         -> Result<()>;
     fn save_interop_binding(&self, work: &WorkResource, binding: &InteropBinding) -> Result<()>;
@@ -939,6 +940,28 @@ impl ControlPlaneStore for MornStore {
         )
     }
 
+    fn save_execution_event(&self, work: &WorkResource, event: &ExecutionEvent) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
+        let now = morn_kernel::time::Timestamp::now();
+        if event.workspace_id != work.workspace_id
+            || event.session_id.trim().is_empty()
+            || event.summary.trim().is_empty()
+            || event.created_at < work.created_at
+            || event.created_at > now
+        {
+            return Err(Error::validation(
+                "execution event must be a current, non-empty event in the canonical Work workspace",
+            ));
+        }
+        self.save_record_immutable(
+            "execution_event_v115",
+            event.id.as_str(),
+            work.workspace_id.as_str(),
+            event.created_at.millis(),
+            event,
+        )
+    }
+
     fn save_execution_receipt(
         &self,
         work: &WorkResource,
@@ -985,6 +1008,27 @@ impl ControlPlaneStore for MornStore {
             return Err(Error::validation(
                 "settled execution receipt requires durable event and trace references",
             ));
+        }
+        for event_id in &receipt.event_ids {
+            if !receipt.trace_refs.iter().any(|reference| reference == event_id) {
+                return Err(Error::validation(
+                    "execution receipt trace references must include every durable event id",
+                ));
+            }
+            let event: ExecutionEvent = self
+                .load_record("execution_event_v115", event_id)?
+                .ok_or_else(|| Error::not_found("execution receipt event"))?;
+            if event.workspace_id != work.workspace_id
+                || event.session_id != receipt.session_id
+                || event.created_at < receipt.started_at
+                || receipt
+                    .ended_at
+                    .is_some_and(|ended_at| event.created_at > ended_at)
+            {
+                return Err(Error::validation(
+                    "execution receipt references an event outside its workspace/session/time boundary",
+                ));
+            }
         }
         self.save_record_immutable(
             "execution_receipt_v115",
@@ -2041,10 +2085,22 @@ mod control_plane_persistence_scope_tests {
         .with_scope_id("scope://run")
         .unwrap();
         let mut receipt = ExecutionReceipt::from_runtime_context(&ctx, "provider:a", "session-a");
+        let event = ExecutionEvent::new(
+            work.workspace_id.clone(),
+            "session-a",
+            morn_harness::ExecutionEventKind::Checkpoint,
+            "executor settled",
+        );
         receipt.outcome = "completed".to_string();
         receipt.ended_at = Some(morn_kernel::time::Timestamp::now());
-        receipt.event_ids.push("event://1".to_string());
-        receipt.trace_refs.push("event://1".to_string());
+        receipt.event_ids.push(event.id.to_string());
+        receipt.trace_refs.push(event.id.to_string());
+
+        let mut dangling = receipt.clone();
+        dangling.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
+        assert!(store.save_execution_receipt(&work, &dangling).is_err());
+
+        store.save_execution_event(&work, &event).unwrap();
         store.save_execution_receipt(&work, &receipt).unwrap();
 
         WorkProgressController.reconcile(
@@ -2064,6 +2120,24 @@ mod control_plane_persistence_scope_tests {
         forged.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
         forged.provider_ref = Some("provider:b".to_string());
         assert!(store.save_execution_receipt(&work, &forged).is_err());
+
+        let mut other_session_event = ExecutionEvent::new(
+            work.workspace_id.clone(),
+            "session-b",
+            morn_harness::ExecutionEventKind::Checkpoint,
+            "wrong session",
+        );
+        other_session_event.created_at = receipt.started_at;
+        store
+            .save_execution_event(&work, &other_session_event)
+            .unwrap();
+        let mut cross_session = receipt.clone();
+        cross_session.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
+        cross_session.event_ids = vec![other_session_event.id.to_string()];
+        cross_session.trace_refs = cross_session.event_ids.clone();
+        assert!(store
+            .save_execution_receipt(&work, &cross_session)
+            .is_err());
     }
 
     #[test]
