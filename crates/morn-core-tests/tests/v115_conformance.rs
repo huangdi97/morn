@@ -2,7 +2,9 @@
 
 use std::collections::BTreeSet;
 
-use morn_assurance::{AdmissionService, QualificationEvidence, StrictQualificationRequest};
+use morn_assurance::{
+    AdmissionService, QualificationEvidence, StrictQualificationRequest, VerifiedReleaseRequest,
+};
 use morn_capability::{
     CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityResolver, CapabilityStage,
     EffectClass, IsolationLevel, WorkcellRequest,
@@ -11,6 +13,7 @@ use morn_kernel::history::{HistoricalFact, HistoricalFactLog, HistoricalFactStat
 use morn_kernel::ids::{CapabilityId, RuntimeBindingId, WorkPackageId, WorkspaceId};
 use morn_kernel::protocol::{HistoryMutation, HistoryMutationKind, ProtocolSnapshot};
 use morn_kernel::time::Timestamp;
+use morn_package::SupplyChainVerificationEvidence;
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
     ActionAttempt, AttemptState, BindingMigrationReason, BindingMigrationRequest,
@@ -257,14 +260,24 @@ fn site_admission_requires_strict_nonexpired_qualification() {
             },
         )
         .unwrap();
+    let release_digest = format!("sha256:{}", "b".repeat(64));
     service
-        .record_release(
+        .record_verified_release(
             &mut capability,
             &qualification,
-            format!("oci://fixture/morn/investigator@sha256:{}", "b".repeat(64)),
-            format!("sha256:{}", "b".repeat(64)),
-            Some("sigstore://fixture/investigator".to_string()),
-            Some("slsa://fixture/investigator".to_string()),
+            VerifiedReleaseRequest::new(
+                format!("oci://fixture/morn/investigator@{release_digest}"),
+                release_digest.clone(),
+                "sigstore://fixture/investigator",
+                "slsa://fixture/investigator",
+                SupplyChainVerificationEvidence {
+                    subject_digest: release_digest,
+                    verifier_ref: "fixture://core-conformance-supply-chain".to_string(),
+                    signature_verified: true,
+                    provenance_verified: true,
+                    evidence_refs: vec!["fixture://core-conformance-supply-chain/proof".to_string()],
+                },
+            ),
         )
         .unwrap();
 
