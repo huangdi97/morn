@@ -82,6 +82,8 @@ function readinessLabel(id: string): string {
       return "Architecture baseline";
     case "local-reference-slice":
       return "Local reference slice";
+    case "ci-conformance":
+      return "CI conformance";
     case "deepseek-live-runtime":
       return "DeepSeek live runtime";
     case "pi-live-runtime":

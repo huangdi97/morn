@@ -145,6 +145,13 @@ pub fn release_readiness_axes(
             EvidenceClass::LocalFixture,
             "local reference slice is not proven",
         ),
+        evidence_axis(
+            ledger,
+            "ci-conformance",
+            "morn-v11.5-ci-conformance",
+            EvidenceClass::CiConformance,
+            "this deployment has not loaded an explicit CI conformance proof",
+        ),
         runtime_axis(
             ledger,
             "deepseek-live-runtime",
@@ -190,10 +197,11 @@ mod tests {
         );
         assert_eq!(axes[0].state, ReadinessState::Proven);
         assert_eq!(axes[1].state, ReadinessState::Proven);
-        assert_eq!(axes[2].state, ReadinessState::BlockedExternal);
+        assert_eq!(axes[2].state, ReadinessState::MissingEvidence);
         assert_eq!(axes[3].state, ReadinessState::BlockedExternal);
         assert_eq!(axes[4].state, ReadinessState::BlockedExternal);
         assert_eq!(axes[5].state, ReadinessState::BlockedExternal);
+        assert_eq!(axes[6].state, ReadinessState::BlockedExternal);
     }
 
     #[test]
@@ -217,8 +225,8 @@ mod tests {
             RuntimeReadinessEvidence::unavailable("health lease expired"),
             RuntimeReadinessEvidence::unavailable("not configured"),
         );
-        assert_eq!(axes[2].state, ReadinessState::RuntimeUnhealthy);
-        assert!(axes[2].evidence_refs.is_empty());
+        assert_eq!(axes[3].state, ReadinessState::RuntimeUnhealthy);
+        assert!(axes[3].evidence_refs.is_empty());
     }
 
     #[test]
@@ -245,11 +253,11 @@ mod tests {
             ),
             RuntimeReadinessEvidence::unavailable("not configured"),
         );
-        assert_eq!(axes[2].state, ReadinessState::Proven);
-        assert!(axes[2]
+        assert_eq!(axes[3].state, ReadinessState::Proven);
+        assert!(axes[3]
             .evidence_refs
             .contains(&"attestation://dsh/live-2".to_string()));
-        assert!(axes[2]
+        assert!(axes[3]
             .evidence_refs
             .contains(&"health://dsh/lease-2".to_string()));
     }
@@ -290,6 +298,6 @@ mod tests {
                 "process is healthy",
             ),
         );
-        assert_eq!(axes[3].state, ReadinessState::Revoked);
+        assert_eq!(axes[4].state, ReadinessState::Revoked);
     }
 }

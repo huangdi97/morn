@@ -53,6 +53,20 @@ try {
       if (!(await productionWrite.count()) || !(await productionWrite.first().evaluate((node) => node.classList.contains("readiness-blocked")))) {
         errors.push("console: production write must remain visibly blocked when it is not authorized");
       }
+      const ciConformance = page.locator(".readiness-item", { hasText: "CI conformance" });
+      if (
+        !(await ciConformance.count()) ||
+        !(await ciConformance.first().evaluate((node) => node.classList.contains("readiness-blocked")))
+      ) {
+        errors.push("console: current deployment CI must not be inferred from historical repository success");
+      }
+      const dshLive = page.locator(".readiness-item", { hasText: "DeepSeek live runtime" });
+      if (
+        !(await dshLive.count()) ||
+        !(await dshLive.first().evaluate((node) => node.classList.contains("readiness-blocked")))
+      ) {
+        errors.push("console: fixture/default DSH must not appear as real-runtime ready");
+      }
     }
     if (route === "/hub" && !(await page.getByRole("heading", { name: "v11.5 Capability Supply Chain" }).isVisible())) {
       errors.push("hub: governed capability supply-chain section is not visible");

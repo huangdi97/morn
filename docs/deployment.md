@@ -295,6 +295,57 @@ A Harness receipt, assistant message, arbitrary URL, or caller-provided
 the read operation itself, but must still terminate at the same
 `SourceOfTruthBinding -> ObservedOutcome` boundary.
 
+## Deployment-owned evidence ledger
+
+Release/production posture is not inferred from a green UI, a provider response,
+or repository history. Operational deployments may load signed/controlled claim
+records through `MORN_EVIDENCE_CLAIMS_FILE`. The server first loads repository
+baseline claims and then appends this deployment file. Repository blockers use a
+historical baseline timestamp, so genuine evidence produced before process
+startup can supersede them without violating append-only claim ordering.
+
+Example exact-head CI proof:
+
+```json
+[
+  {
+    "id": "evidence-claim:ci-conformance-2026-10-10",
+    "subject": "morn-v11.5-ci-conformance",
+    "class": "ci-conformance",
+    "state": "proven",
+    "evidence_refs": [
+      "github-actions://huangdi97/morn/runs/38064799438",
+      "git://huangdi97/morn/bdc9e924f962f436a0dd52a4ac43c4ad5a83774c"
+    ],
+    "issuer": "deployment-release-controller",
+    "reason": "exact-head configured repository gates passed",
+    "observed_at": "2026-10-10T15:46:00Z"
+  }
+]
+```
+
+Real-runtime, real-site and production-write claims use the same append-only
+ledger but remain separate evidence classes. A later `blocked-external` or
+`revoked` record for the same subject/class invalidates a previous proof until
+a fresh `proven` record is appended. The Console release-readiness projection
+also requires a **fresh Healthy provider lease** in addition to a
+`real-runtime` claim for DSH/Pi.
+
+Canonical subjects used by the top-level readiness projection are:
+
+- `morn-v11.5-architecture` / `design-spec`;
+- `factory-readonly-wedge` / `local-fixture`;
+- `morn-v11.5-ci-conformance` / `ci-conformance`;
+- `deepseek-harness` and `pi-harness` / `real-runtime`;
+- `factory-customer` / `real-site`;
+- `factory-production-write` / `production-write`.
+
+These are evidence statements, **not Authority grants**. In particular, a
+`production-write` evidence claim cannot authorize a Work action. Profile,
+Work generation, ExecutionBinding, AuthorityDecision and ExternalActionPermit
+checks remain mandatory at the action boundary. HTTP clients cannot append
+evidence claims; the file is deployment-owned.
+
 ## Independent acceptance reviewers
 
 An acceptance role is not trusted because a browser submits the string
