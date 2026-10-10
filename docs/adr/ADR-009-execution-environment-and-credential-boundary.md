@@ -57,3 +57,16 @@ reinterpret existing Work.
 Credentials, homes and raw secret values are deliberately excluded from this
 route reference. Their authorization remains an execution-environment /
 credential-boundary concern.
+
+
+## Pi RPC concrete tool suppression
+
+For the official Pi CLI path, Morn can enforce part of `tool-mediation` at
+process launch rather than relying only on post-run event inspection. The real
+RPC default includes `--no-tools --no-mcp`, and real configurations using the
+ordinary Pi route arguments fail validation if either flag is removed.
+
+A test/wrapper executable may set `append_route_args = false`; that path is
+used by protocol fixtures and still requires the external execution-environment
+attestation. It must not be treated as evidence that a production Pi binary was
+tool-free.

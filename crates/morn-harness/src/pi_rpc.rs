@@ -69,6 +69,8 @@ impl Default for PiRpcConfig {
                 "--mode".to_string(),
                 "rpc".to_string(),
                 "--no-session".to_string(),
+                "--no-tools".to_string(),
+                "--no-mcp".to_string(),
             ],
             cwd: None,
             provider: None,
@@ -177,6 +179,14 @@ impl PiRpcConfig {
         if self.request_timeout_ms == 0 || self.prompt_timeout_ms == 0 {
             return Err(Error::validation(
                 "Pi request and prompt timeouts must be positive",
+            ));
+        }
+        if self.append_route_args
+            && (!self.args.iter().any(|arg| arg == "--no-tools")
+                || !self.args.iter().any(|arg| arg == "--no-mcp"))
+        {
+            return Err(Error::validation(
+                "real Pi RPC must disable built-in/extension/custom and MCP tools; external effects belong to Morn",
             ));
         }
         Ok(())
@@ -662,6 +672,26 @@ fn prompt_disposition(response: &PiRpcResponse) -> Option<&str> {
 #[cfg(test)]
 mod route_identity_tests {
     use super::*;
+
+    #[test]
+    fn production_default_disables_all_pi_tool_surfaces() {
+        let config = PiRpcConfig {
+            cwd: Some("/tmp/work".to_string()),
+            provider: Some("provider-a".to_string()),
+            model: Some("model-a".to_string()),
+            execution_environment_ref: Some("env://container/pi".to_string()),
+            runtime_version: Some("1.0.0".to_string()),
+            runtime_digest: Some(format!("sha256:{}", "a".repeat(64))),
+            ..PiRpcConfig::default()
+        };
+        assert!(config.args.iter().any(|arg| arg == "--no-tools"));
+        assert!(config.args.iter().any(|arg| arg == "--no-mcp"));
+        config.validate_for_real().unwrap();
+
+        let mut unsafe_config = config;
+        unsafe_config.args.retain(|arg| arg != "--no-tools");
+        assert!(unsafe_config.validate_for_real().is_err());
+    }
 
     #[test]
     fn route_ref_changes_with_model_or_protocol_args() {
