@@ -111,6 +111,20 @@ fn run_gate() -> Result<Value> {
                     "execution-environment attestation does not bind the exact DSH runtime artifact",
                 ));
             }
+            let profile_configuration_ref = provider
+                .configured_profile_configuration_ref()
+                .ok_or_else(|| {
+                    Error::validation("real DSH has no pinned Home/Profile composition identity")
+                })?;
+            if !attestation
+                .runtime_identities
+                .iter()
+                .any(|identity| identity == profile_configuration_ref)
+            {
+                return Err(Error::external(
+                    "execution-environment attestation does not bind the exact DSH Home/Profile composition",
+                ));
+            }
             let initialized_version = provider.preflight_real_runtime()?;
             if initialized_version != pinned_version {
                 return Err(Error::external(

@@ -47,7 +47,7 @@ $env:MORN_DSH_MODE = "real"
 $env:MORN_DSH_WORKSPACE = "C:\morn\workspaces\dsh"
 $env:MORN_DSH_HOME = "C:\morn\runtime\dsh-home"
 $env:MORN_DSH_EXECUTION_ENVIRONMENT_REF = "env://container/dsh-runtime-a"
-$env:MORN_DSH_PROFILE_CONFIGURATION_REF = "dsh-profile://sdk/<attested-config-id>"
+$env:MORN_DSH_PROFILE_CONFIGURATION_REF = "deepseek-harness-profile@<config-version>#sha256:<64-hex>"
 # This secret-free ref identifies the exact DSH Home/Profile composition.
 # Changing Home patches/plugins requires a new ref and therefore a new ExecutionBinding.
 # MORN_DSH_WORKSPACE and MORN_DSH_HOME must be disjoint directory trees.
@@ -91,7 +91,10 @@ attestation used for containment must list every exact provider runtime artifact
 allowed to execute there.
 
 Use `runtime_identities` with the canonical form
-`provider@version#sha256:<64-hex>`. For example:
+`provider@version#sha256:<64-hex>`. For DSH, attest both the runtime artifact
+and the exact Home/Profile composition identity. Any profile/home patch or plugin
+change requires a new configuration digest and therefore a new ExecutionBinding.
+For example:
 
 ```json
 {
@@ -117,7 +120,8 @@ Use `runtime_identities` with the canonical form
     "side_effect_policy": "profile-governed"
   },
   "runtime_identities": [
-    "deepseek-harness@<deployment-attested-version>#sha256:<64-hex>"
+    "deepseek-harness@<deployment-attested-version>#sha256:<64-hex>",
+    "deepseek-harness-profile@<config-version>#sha256:<64-hex>"
   ],
   "evidence_refs": [
     "attestation://sandbox-fleet/dsh-runtime-a",
@@ -170,7 +174,7 @@ $env:MORN_DSH_HOME = "C:\morn\runtime\dsh-home"
 $env:MORN_DSH_PROVIDER = "deepseek-official"
 $env:MORN_DSH_MODEL = "<exact-model-route>"
 $env:MORN_DSH_EXECUTION_ENVIRONMENT_REF = "env://container/dsh-runtime-a"
-$env:MORN_DSH_PROFILE_CONFIGURATION_REF = "dsh-profile://sdk/<attested-config-id>"
+$env:MORN_DSH_PROFILE_CONFIGURATION_REF = "deepseek-harness-profile@<config-version>#sha256:<64-hex>"
 $env:MORN_DSH_RUNTIME_VERSION = "<deployment-attested-version>"
 $env:MORN_DSH_RUNTIME_DIGEST = "sha256:<64-hex>"
 $env:MORN_EXECUTION_ATTESTOR = "<deployment-attestor-name>"

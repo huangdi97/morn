@@ -1312,7 +1312,7 @@ mod dsh_provider_tests {
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/pinned")
-        .with_profile_configuration_ref("dsh-profile://sdk/provider-test")
+        .with_profile_configuration_ref("deepseek-harness-profile@provider-test#sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
         .with_runtime_identity(
             "fixture-runtime-1",
             "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -1360,7 +1360,7 @@ mod dsh_provider_tests {
             DshSdkConfig::profile_sdk(cwd.to_string_lossy(), "fixture-provider", "fixture-model")
                 .with_dsh_home(home.to_string_lossy())
                 .with_execution_environment_ref(environment_ref)
-                .with_profile_configuration_ref("dsh-profile://sdk/provider-test")
+                .with_profile_configuration_ref("deepseek-harness-profile@provider-test#sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
                 .with_runtime_identity(
                     "fixture-runtime-1",
                     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -1573,7 +1573,7 @@ mod dsh_provider_tests {
             DshSdkConfig::profile_sdk(cwd.to_string_lossy(), "fixture-provider", "fixture-model")
                 .with_dsh_home(home.to_string_lossy())
                 .with_execution_environment_ref(environment_ref)
-                .with_profile_configuration_ref("dsh-profile://sdk/provider-test")
+                .with_profile_configuration_ref("deepseek-harness-profile@provider-test#sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
                 .with_runtime_identity(
                     "fixture-runtime-1",
                     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",

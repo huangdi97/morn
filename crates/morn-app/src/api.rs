@@ -1528,6 +1528,22 @@ async fn v115_work_bind_attested_e0(
                     "execution-environment attestation does not authorize the configured DSH runtime artifact",
                 )));
             }
+            let profile_configuration_ref = provider
+                .configured_profile_configuration_ref()
+                .ok_or_else(|| {
+                    AppError(Error::invalid_state(
+                        "real DSH Home/Profile composition identity is not pinned",
+                    ))
+                })?;
+            if !attestation
+                .runtime_identities
+                .iter()
+                .any(|identity| identity == profile_configuration_ref)
+            {
+                return Err(AppError(Error::invalid_state(
+                    "execution-environment attestation does not authorize the configured DSH Home/Profile composition",
+                )));
+            }
             let initialized = provider.preflight_real_runtime()?;
             if initialized != version {
                 return Err(AppError(Error::invalid_state(
@@ -2104,6 +2120,38 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                         &guard.execution_environments,
                         now,
                     )?;
+                    let environment_ref = binding
+                        .execution_environment_ref
+                        .as_deref()
+                        .ok_or_else(|| {
+                            AppError(Error::invalid_state(
+                                "bound DSH execution has no environment identity",
+                            ))
+                        })?;
+                    let attestation = guard
+                        .execution_environments
+                        .attestation(environment_ref)
+                        .ok_or_else(|| {
+                            AppError(Error::invalid_state(
+                                "bound DSH execution environment attestation no longer exists",
+                            ))
+                        })?;
+                    let profile_configuration_ref = provider
+                        .configured_profile_configuration_ref()
+                        .ok_or_else(|| {
+                            AppError(Error::invalid_state(
+                                "configured DSH Home/Profile composition identity is missing",
+                            ))
+                        })?;
+                    if !attestation
+                        .runtime_identities
+                        .iter()
+                        .any(|identity| identity == profile_configuration_ref)
+                    {
+                        return Err(AppError(Error::invalid_state(
+                            "execution environment no longer attests the DSH Home/Profile composition pinned by the active route",
+                        )));
+                    }
                 }
                 if provider.runtime_version().as_deref() != Some(binding.provider_version.as_str())
                 {
