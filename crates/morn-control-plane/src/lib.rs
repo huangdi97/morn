@@ -491,12 +491,15 @@ impl WorkProgressController {
                         && outcome.is_source_grounded()
                         && acceptance.outcome_refs.iter().any(|id| id == &outcome.id)
                 });
+                let attested_outcome = grounded_outcome.filter(|outcome| {
+                    outcome.is_attested_source_grounded()
+                });
                 let independently_witnessed = !acceptance.evidence_refs.is_empty()
                     && !acceptance.acting_role.trim().is_empty()
                     && !acceptance.reason.trim().is_empty();
                 let final_acceptance = acceptance.is_final_acceptance()
                     && spec_matches
-                    && grounded_outcome.is_some()
+                    && attested_outcome.is_some()
                     && independently_witnessed;
                 let final_rejection = acceptance.disposition == AcceptanceDisposition::Reject
                     && spec_matches
@@ -527,9 +530,10 @@ impl WorkProgressController {
                     },
                 );
                 semantics.reason = if final_acceptance {
-                    "acceptance spec and source-grounded outcome reference match".to_string()
+                    "acceptance spec and deployment-attested source-grounded outcome reference match"
+                        .to_string()
                 } else {
-                    "acceptance cannot close Work until its spec and a source-grounded outcome are explicitly linked"
+                    "acceptance cannot close Work until its spec and a deployment-attested source-grounded outcome are explicitly linked"
                         .to_string()
                 };
                 semantics.evidence_refs = grounded_outcome
@@ -896,15 +900,20 @@ fn require_persisted_work_projection_evidence(
             || decision.evidence_refs.is_empty()
             || decision.acting_role.trim().is_empty()
             || decision.reason.trim().is_empty()
-            || !decision
-                .outcome_refs
-                .iter()
-                .any(|id| outcomes.iter().any(|outcome| &outcome.id == id))
         {
             return false;
         }
+        let linked = outcomes
+            .iter()
+            .find(|outcome| decision.outcome_refs.contains(&outcome.id));
+        let Some(linked) = linked else {
+            return false;
+        };
         match work.status.phase {
-            WorkPhase::Accepted => decision.is_final_acceptance(),
+            WorkPhase::Accepted => {
+                decision.is_final_acceptance()
+                    && require_attested_outcome_provenance(store, work, linked).is_ok()
+            }
             WorkPhase::Rejected => decision.disposition == AcceptanceDisposition::Reject,
             _ => true,
         }
@@ -1831,6 +1840,13 @@ mod tests {
             json!({"restored":true}),
         );
         outcome.evidence_refs.push("system://receipt".to_string());
+        outcome
+            .pin_source_provenance(
+                "source-binding://unit",
+                "observation-attestation://unit",
+                "service.status",
+            )
+            .unwrap();
         WorkProgressController.reconcile(
             &mut work,
             &WorkProgressInputs {
