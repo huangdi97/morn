@@ -1104,10 +1104,21 @@ mod tests {
             .with_profile_configuration_ref("dsh-profile://sdk/a");
         config.reasoning_effort = Some("high".to_string());
         let first = config.route_ref().unwrap();
+
         config.model = "model-b".to_string();
         let second = config.route_ref().unwrap();
         assert_ne!(first, second);
+
+        config.model = "model-a".to_string();
+        config.profile_configuration_ref = Some("dsh-profile://sdk/b".to_string());
+        let third = config.route_ref().unwrap();
+        assert_ne!(
+            first, third,
+            "a different DSH Home/Profile composition must require a new route identity"
+        );
+
         assert!(first.contains("deepseek-official"));
+        assert!(first.contains("dsh-profile://sdk/a"));
         assert!(!first.contains("dsh_home"));
     }
 
