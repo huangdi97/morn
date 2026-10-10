@@ -131,6 +131,16 @@ function fieldRefs(record: Record<string, unknown>, field: string): string[] {
   return Array.isArray(refs) ? refs.filter((value): value is string => typeof value === "string") : [];
 }
 
+export function outcomeHasAttestedSourceProvenance(outcome: Record<string, unknown>): boolean {
+  return Boolean(
+    textField(outcome, "source_ref") &&
+    textField(outcome, "source_binding_ref") &&
+    textField(outcome, "source_attestation_ref") &&
+    textField(outcome, "fact_type") &&
+    fieldRefs(outcome, "evidence_refs").length > 0,
+  );
+}
+
 /** Correlate only persisted records explicitly linked to the same Work.
  *  A provider result, unlinked receipt or fixture must never count as accepted outcome. */
 export function workEvidenceTrace(control: V115ControlPlaneData, workId: string, generation: number) {
@@ -1359,6 +1369,9 @@ function OutcomeReviewPanel({
   const selectedOutcome = selected?.outcomes.find(
     (outcome) => textField(outcome, "id") === effectiveOutcomeId,
   );
+  const selectedOutcomeAttested = selectedOutcome
+    ? outcomeHasAttestedSourceProvenance(selectedOutcome)
+    : false;
   const availableReviewers = reviewers?.reviewers ?? [];
   const effectiveReviewerPrincipalId =
     reviewerPrincipalId || (availableReviewers.length === 1 ? availableReviewers[0].principal_id : "");
@@ -1458,7 +1471,7 @@ function OutcomeReviewPanel({
         <label>
           Decision
           <select value={disposition} onChange={(event) => setDisposition(event.target.value)}>
-            <option value="accept">Accept</option>
+            <option value="accept">Accept · requires deployment-attested source provenance</option>
             <option value="reject">Reject</option>
             <option value="conditional">Conditional</option>
             <option value="request-more-evidence">Request more evidence</option>
@@ -1501,10 +1514,23 @@ function OutcomeReviewPanel({
         </label>
       </div>
       {selectedOutcome && (
-        <p className="work-focus-empty">
-          Source: {textField(selectedOutcome, "source_ref")} · witness refs:{" "}
-          {fieldRefs(selectedOutcome, "evidence_refs").length}
-        </p>
+        <div className="work-focus-empty">
+          <div>
+            Source: {textField(selectedOutcome, "source_ref")} · witness refs:{" "}
+            {fieldRefs(selectedOutcome, "evidence_refs").length}
+          </div>
+          <div>
+            Binding: {textField(selectedOutcome, "source_binding_ref") ?? "legacy / not pinned"} ·
+            attestation: {textField(selectedOutcome, "source_attestation_ref") ?? "legacy / not pinned"} ·
+            fact: {textField(selectedOutcome, "fact_type") ?? "legacy / not pinned"}
+          </div>
+          {!selectedOutcomeAttested && disposition === "accept" && (
+            <strong role="status">
+              Accept is blocked: this Outcome is source-grounded but lacks deployment-attested
+              provenance. Reject, Conditional, or Request more evidence remain available.
+            </strong>
+          )}
+        </div>
       )}
       <label className="governed-execution-prompt">
         Out-of-band review authorization ID
@@ -1542,6 +1568,7 @@ function OutcomeReviewPanel({
             !effectiveReviewerPrincipalId ||
             !effectiveActingRole ||
             !reviewAuthorizationId.trim() ||
+            (disposition === "accept" && !selectedOutcomeAttested) ||
             !reason.trim() ||
             !evidenceRef.trim()
           }

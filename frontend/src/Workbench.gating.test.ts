@@ -11,6 +11,7 @@ import {
   governedRealHarnessRuntimeIdentity,
   governedRequirementResolutionAllowed,
   governedE0ExecutionAllowed,
+  outcomeHasAttestedSourceProvenance,
   ValueAssessmentPanel,
   workEvidenceTrace,
 } from "./pages/Workbench";
@@ -42,6 +43,26 @@ describe("declarative UI extension profile gate", () => {
       ),
     ).toBe(false);
     expect(uiExtensionEnabledForProfiles("morn.enterprise@1.0.0", [])).toBe(false);
+  });
+});
+
+describe("authoritative outcome acceptance gate", () => {
+  it("distinguishes legacy/source-grounded evidence from deployment-attested business truth", () => {
+    expect(
+      outcomeHasAttestedSourceProvenance({
+        source_ref: "erp://delivery/42",
+        evidence_refs: ["erp://delivery/42/receipt"],
+      }),
+    ).toBe(false);
+    expect(
+      outcomeHasAttestedSourceProvenance({
+        source_ref: "erp://delivery/42",
+        source_binding_ref: "source-binding-1",
+        source_attestation_ref: "observation-attestation-1",
+        fact_type: "delivery.status",
+        evidence_refs: ["erp://delivery/42/receipt"],
+      }),
+    ).toBe(true);
   });
 });
 
