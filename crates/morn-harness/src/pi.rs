@@ -293,10 +293,8 @@ impl PiHarnessProvider {
 
 fn pi_run_has_prohibited_tool_activity(run: &PiPromptRun) -> bool {
     run.events.iter().any(|event| {
-        matches!(
-            event.event_type.as_str(),
-            "tool_execution_start" | "tool_execution_update" | "tool_execution_end"
-        ) || (event.event_type == "message_update"
+        event.event_type.starts_with("tool_")
+            || (event.event_type == "message_update"
             && event
                 .payload
                 .get("assistantMessageEvent")
@@ -333,6 +331,7 @@ fn normalize_pi_tool_events(
                     Some(ExecutionEventKind::ToolCompleted)
                 }
             }
+            other if other.starts_with("tool_") => Some(ExecutionEventKind::ToolProposed),
             _ => None,
         };
         let Some(kind) = kind else {
@@ -840,6 +839,32 @@ impl HarnessProvider for PiHarnessProvider {
             runtime_digest: None,
             event_ids,
         })
+    }
+}
+
+#[cfg(test)]
+mod tool_policy_tests {
+    use super::*;
+
+    #[test]
+    fn future_pi_tool_events_fail_closed_and_remain_auditable() {
+        let run = PiPromptRun {
+            request_id: "prompt-1".to_string(),
+            disposition: "handled".to_string(),
+            events: vec![PiRpcEvent {
+                event_type: "tool_future_extension".to_string(),
+                payload: serde_json::json!({"toolName":"future-tool","toolCallId":"call-1"}),
+            }],
+        };
+        assert!(pi_run_has_prohibited_tool_activity(&run));
+        let events = normalize_pi_tool_events(
+            &morn_kernel::ids::WorkspaceId::generate(),
+            "session-1",
+            &run,
+        );
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, ExecutionEventKind::ToolProposed);
+        assert!(events[0].refs.contains(&"pi-tool-call:call-1".to_string()));
     }
 }
 
