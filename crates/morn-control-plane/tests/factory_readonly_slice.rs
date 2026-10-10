@@ -696,8 +696,8 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     value.evidence_refs = vec!["fixture://factory-readonly-slice".to_string()];
     assert!(!value.is_customer_value_claim());
 
-    // Durable control-plane state survives serialization independently of harness sessions.
-    store.save_work_resource_cas(&mut work).unwrap();
+    // Durable evidence lands before the terminal Work projection. The Work
+    // status may summarize accepted truth, but it can never create that truth.
     store
         .save_source_of_truth_binding(&work, &source_binding)
         .unwrap();
@@ -713,6 +713,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     store.save_reconciliation(&work, &reconciliation).unwrap();
     store.save_observed_outcome(&work, &outcome).unwrap();
     ControlPlaneStore::save_acceptance_decision(&store, &work, &acceptance_decision).unwrap();
+    store.save_work_resource_cas(&mut work).unwrap();
     store.save_value_assessment(&work, &value).unwrap();
     let restored: WorkResource = store
         .load_record("work_resource_v115", work.id.as_str())

@@ -6652,7 +6652,8 @@ mod workspace_boundary_tests {
                     morn_profile::DomainProfile::lite_v1().canonical_ref(),
                 ),
             );
-            work.status.phase = WorkPhase::Accepted;
+            // Persist the initial Work before evidence. Accepted is a
+            // projection derived only after the outcome and decision exist.
             guard.store.save_work_resource_cas(&mut work).unwrap();
 
             let mut outcome = ObservedOutcome::new(
@@ -6683,6 +6684,8 @@ mod workspace_boundary_tests {
                 .evidence_refs
                 .push("review://signed/42".to_string());
             ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &acceptance).unwrap();
+            work.status.phase = WorkPhase::Accepted;
+            guard.store.save_work_resource_cas(&mut work).unwrap();
             (work, outcome, acceptance)
         };
 
