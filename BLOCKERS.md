@@ -25,6 +25,13 @@ current implementation state.
   attestation, with exact environment identity and required guarantee vector,
   must come from the deployment platform. Morn does not infer containment from
   a Docker binary or a caller-supplied label.
+- **B-004 / OCI + Sigstore + SLSA live evidence — EXTERNAL_BLOCKED.** Morn
+  now has an ORAS publication adapter, digest-pinned publication receipt,
+  identity-scoped Cosign signature verification, independent SLSA provenance
+  verification, deployment-owned verification loading and a SiteAdmission gate
+  that rejects caller-claimed signature/provenance URLs. Remaining proof needs
+  an authorized real registry plus deployment OIDC/signing/build provenance;
+  CI/unit command-contract tests cannot manufacture those external identities.
 - **G4-B-002 / real BioLab dataset — EXTERNAL_BLOCKED.** A lawful,
   provenance-bearing real dataset is still required.
 - **G12 / customer-site acceptance — EXTERNAL_BLOCKED.** Real source-system

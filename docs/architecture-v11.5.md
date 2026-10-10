@@ -274,8 +274,10 @@ memory.
 Integration events use a CloudEvents-compatible core envelope with Morn
 extension attributes such as work, attempt, binding, profile and trace ids.
 
-Capability distribution is modeled as content-addressed OCI-style artifacts.
-The package descriptor can carry:
+Capability distribution is modeled as content-addressed OCI artifacts. Morn's
+distribution boundary invokes ORAS as an explicit subprocess with an empty
+inherited environment, parses its JSON receipt and records only a digest-pinned
+subject reference. The package descriptor can carry:
 
 - content digest;
 - layers/media types;
@@ -283,8 +285,15 @@ The package descriptor can carry:
 - SLSA provenance reference;
 - signature reference.
 
+Signature and provenance are independent trust axes. The reference verifier
+uses Cosign against the exact digest and an explicit certificate identity/OIDC
+issuer; SLSA provenance is verified separately and may be merged only when both
+proofs bind the same subject digest. Deployment-generated verification evidence
+is loaded out-of-band and HTTP callers cannot self-assert it. Site admission
+requires both verified axes.
+
 Morn does not implement its own signature transparency log or build-provenance
-standard.
+standard and does not mint Sigstore/OIDC identity itself.
 
 ## Factory Profile as a guarantee profile
 
@@ -364,6 +373,11 @@ Implemented locally on the v11.5 branch:
   ReviewedPaper2Capability candidate compilers;
 - CloudEvents-compatible event envelope;
 - OCI/Sigstore/SLSA-oriented capability package descriptor;
+- ORAS publication adapter with explicit environment isolation and digest-pinned
+  publication receipts;
+- independent Cosign signature and SLSA-provenance verification bound to the
+  exact OCI digest, deployment-owned verification catalog, and SiteAdmission
+  enforcement;
 - simple Creator draft -> existing solution pipeline;
 - approved SolutionPackage -> persisted Work instantiation;
 - Factory read-only vertical-slice integration test;
@@ -378,7 +392,9 @@ Not claimed complete without external evidence:
   is not a production sandbox);
 - real factory/customer data;
 - real site IAM/OPA/Cedar deployment;
-- real OCI registry publishing/signing;
+- authorized live OCI registry publication plus real Sigstore/OIDC signature
+  and SLSA provenance verification evidence (the adapters/gates exist locally,
+  but no registry identity or deployment credentials are fabricated in CI);
 - real microVM/DSec-class execution backend;
 - any production write or physical control.
 
