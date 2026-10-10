@@ -540,6 +540,14 @@ export function governedRealHarnessRuntimeIdentity(
   return null;
 }
 
+export function governedRequirementResolutionAllowed(phase: string | null | undefined): boolean {
+  return ["Proposed", "Resolving", "Blocked", "Ready"].includes(phase ?? "");
+}
+
+export function governedE0ExecutionAllowed(phase: string | null | undefined): boolean {
+  return ["Ready", "Running", "Waiting"].includes(phase ?? "");
+}
+
 function GovernedE0Executor({
   control,
   capabilities,
@@ -564,6 +572,9 @@ function GovernedE0Executor({
   );
   const effectiveWorkId = workId || candidateWorks[0]?.id || "";
   const selectedWork = candidateWorks.find((work) => work.id === effectiveWorkId);
+  const resolutionAllowed = governedRequirementResolutionAllowed(selectedWork?.status.phase);
+  const executionAllowed = governedE0ExecutionAllowed(selectedWork?.status.phase);
+  const reconciliationRequired = selectedWork?.status.phase === "Reconciling";
   const resolvedCapabilityRefs = new Set(
     control.condition_evidence
       .filter(
@@ -625,7 +636,7 @@ function GovernedE0Executor({
     (activeBindingMatches ? activeBindingId : workBindings.length === 1 ? textField(workBindings[0], "id") ?? "" : "");
 
   const resolve = async () => {
-    if (!effectiveWorkId) return;
+    if (!effectiveWorkId || !resolutionAllowed) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -673,7 +684,7 @@ function GovernedE0Executor({
   };
 
   const execute = async () => {
-    if (!effectiveWorkId || !effectiveBindingId || !prompt.trim()) return;
+    if (!effectiveWorkId || !effectiveBindingId || !prompt.trim() || !executionAllowed) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -790,7 +801,7 @@ function GovernedE0Executor({
       )}
       <div className="page-actions">
         <button
-          disabled={busy || !selectedWork?.spec.source_solution_ref}
+          disabled={busy || !selectedWork?.spec.source_solution_ref || !resolutionAllowed}
           onClick={resolve}
         >
           Resolve approved Solution requirements
@@ -856,8 +867,23 @@ function GovernedE0Executor({
         Executor input
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
       </label>
+      {reconciliationRequired && (
+        <p role="alert" className="governed-execution-blocker">
+          Outcome reconciliation is required. Blind retry is blocked for this Work generation until
+          authoritative reconciliation resolves the ambiguous executor effect, or an explicit new
+          Work generation is created.
+        </p>
+      )}
+      {!reconciliationRequired && selectedWork && !executionAllowed && (
+        <p role="status" className="governed-execution-blocker">
+          New E0 execution is not allowed while Work is in {selectedWork.status.phase}.
+        </p>
+      )}
       <div className="page-actions">
-        <button disabled={busy || !effectiveBindingId || !prompt.trim()} onClick={execute}>
+        <button
+          disabled={busy || !effectiveBindingId || !prompt.trim() || !executionAllowed}
+          onClick={execute}
+        >
           Execute bound E0 capability
         </button>
       </div>

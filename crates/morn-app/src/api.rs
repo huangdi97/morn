@@ -531,10 +531,11 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
             "WorkResource {work_id}"
         ))));
     }
-    if work.status.phase.is_terminal() {
-        return Err(AppError(Error::invalid_state(
-            "terminal Work cannot be re-resolved without an explicit new generation",
-        )));
+    if !work_phase_allows_requirement_resolution(work.status.phase) {
+        return Err(AppError(Error::invalid_state(format!(
+            "Work in phase {:?} cannot rerun requirement resolution; preserve current execution/outcome reconciliation state or create an explicit new generation",
+            work.status.phase
+        ))));
     }
 
     let solution_ref = work.spec.source_solution_ref.as_deref().ok_or_else(|| {
@@ -1889,6 +1890,16 @@ fn classify_e0_turn_receipt(
         return ("completed", true);
     }
     ("failed", true)
+}
+
+fn work_phase_allows_requirement_resolution(phase: morn_work::control::WorkPhase) -> bool {
+    matches!(
+        phase,
+        morn_work::control::WorkPhase::Proposed
+            | morn_work::control::WorkPhase::Resolving
+            | morn_work::control::WorkPhase::Blocked
+            | morn_work::control::WorkPhase::Ready
+    )
 }
 
 fn work_phase_allows_new_e0_execution(phase: morn_work::control::WorkPhase) -> bool {
@@ -5291,6 +5302,33 @@ mod workspace_boundary_tests {
             classify_e0_turn_receipt(true, "idle", true),
             ("completed", true)
         );
+    }
+
+    #[tokio::test]
+    async fn requirement_resolution_cannot_escape_running_waiting_or_reconciling_work() {
+        use morn_control_plane::ControlPlaneStore;
+        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+
+        for phase in [WorkPhase::Running, WorkPhase::Waiting, WorkPhase::Reconciling] {
+            let state = AppState::new(":memory:").unwrap();
+            let work_id = {
+                let guard = state.lock();
+                let mut work = WorkResource::new(
+                    guard.workspace.id.clone(),
+                    WorkSpec::new(
+                        WorkPackageId::generate_with("work"),
+                        "preserve execution state",
+                        morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                    ),
+                );
+                work.status.phase = phase;
+                guard.store.save_work_resource_cas(&mut work).unwrap();
+                work.id.to_string()
+            };
+            let result =
+                v115_work_resolve(State(state), Json(json!({ "work_id": work_id }))).await;
+            assert!(result.is_err(), "phase {phase:?} must not be re-resolved");
+        }
     }
 
     #[test]

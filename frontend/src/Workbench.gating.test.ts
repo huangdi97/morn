@@ -9,6 +9,8 @@ import {
   uiExtensionEnabledForProfiles,
   governedRealHarnessEnvironment,
   governedRealHarnessRuntimeIdentity,
+  governedRequirementResolutionAllowed,
+  governedE0ExecutionAllowed,
   ValueAssessmentPanel,
   workEvidenceTrace,
 } from "./pages/Workbench";
@@ -299,6 +301,26 @@ describe("accepted outcome value UI", () => {
     expect(html).toContain("Delivery improved");
     expect(html).toContain("Customer validated (requires RealSite)");
     expect(html).toContain("Persist value assessment");
+  });
+});
+
+describe("governed Work execution phase gates", () => {
+  it("cannot use requirement resolution to escape an in-flight/outcome reconciliation phase", () => {
+    expect(governedRequirementResolutionAllowed("Proposed")).toBe(true);
+    expect(governedRequirementResolutionAllowed("Blocked")).toBe(true);
+    expect(governedRequirementResolutionAllowed("Ready")).toBe(true);
+    expect(governedRequirementResolutionAllowed("Running")).toBe(false);
+    expect(governedRequirementResolutionAllowed("Waiting")).toBe(false);
+    expect(governedRequirementResolutionAllowed("Reconciling")).toBe(false);
+  });
+
+  it("blocks blind E0 retry while outcome reconciliation is required", () => {
+    expect(governedE0ExecutionAllowed("Ready")).toBe(true);
+    expect(governedE0ExecutionAllowed("Running")).toBe(true);
+    expect(governedE0ExecutionAllowed("Waiting")).toBe(true);
+    expect(governedE0ExecutionAllowed("Reconciling")).toBe(false);
+    expect(governedE0ExecutionAllowed("Blocked")).toBe(false);
+    expect(governedE0ExecutionAllowed("Accepted")).toBe(false);
   });
 });
 
