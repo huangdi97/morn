@@ -7,8 +7,9 @@
 //! `subagent.finished`. The current wire has no cancel/session-close method,
 //! so Morn must not fabricate those semantics.
 
+use std::fs;
 use std::io::{BufReader, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TrySendError};
@@ -32,6 +33,67 @@ pub const DSH_NOTIFICATION_SESSION_EVENT: &str = "session.event";
 pub const DSH_NOTIFICATION_SESSION_STATUS: &str = "session.status";
 pub const DSH_NOTIFICATION_SUBAGENT_STARTED: &str = "subagent.started";
 pub const DSH_NOTIFICATION_SUBAGENT_FINISHED: &str = "subagent.finished";
+
+/// Morn-owned final DSH overlay for the real E0 provider path.
+///
+/// DSH's stock SDK profile intentionally ships useful model-facing tools.
+/// Morn's HarnessProvider contract is stricter: direct Harness tools are not
+/// the Authority/ExternalAction boundary. This final overlay disables the
+/// shipped direct tool producers before a model turn. Runtime event checks
+/// remain a second line of defence against added/unknown tool plugins.
+pub const DSH_MORN_E0_TOOL_POLICY_REF: &str = "morn.dsh-e0-no-direct-tools/v1";
+const DSH_MORN_E0_TOOL_POLICY_FILE: &str = "morn-e0-no-direct-tools.patch.yml";
+const DSH_MORN_E0_TOOL_POLICY_PATCH: &str = r#"# Generated/owned by Morn. Applied LAST to the official DSH SDK profile.
+# Direct Harness tools are disabled; governed effects belong to Morn Capability /
+# Authority / ExternalAction. Keep the tools registry itself mounted so the Agent
+# loop has a valid empty registry.
+- id: tool-plugin-manager
+  disabled: true
+- id: tool-working-directory
+  disabled: true
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: user-questions
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: plan-mode
+  disabled: true
+- id: goal-round-driver
+  disabled: true
+- id: command-goal
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: tool-web
+  disabled: true
+- id: mcp-resources
+  disabled: true
+- id: workspace-dependencies
+  disabled: true
+- id: skill-office
+  disabled: true
+"#;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DshSdkConfig {
@@ -58,6 +120,15 @@ pub struct DshSdkConfig {
     pub runtime_digest: Option<String>,
     pub request_timeout_ms: u64,
     pub turn_timeout_ms: u64,
+    /// Production DSH SDK launches apply a Morn-owned last-layer patch that
+    /// disables shipped direct tools before the first model request. Protocol
+    /// fixtures may opt out because they are not DSH compositions.
+    #[serde(default = "default_true")]
+    pub enforce_morn_e0_tool_policy: bool,
+}
+
+const fn default_true() -> bool {
+    true
 }
 
 impl DshSdkConfig {
@@ -76,6 +147,11 @@ impl DshSdkConfig {
             "model": &self.model,
             "reasoning_effort": &self.reasoning_effort,
             "max_tokens": self.max_tokens,
+            "tool_policy": if self.enforce_morn_e0_tool_policy {
+                Some(DSH_MORN_E0_TOOL_POLICY_REF)
+            } else {
+                None
+            },
         });
         Ok(format!("dsh-sdk-route:{route}"))
     }
@@ -99,6 +175,7 @@ impl DshSdkConfig {
             runtime_digest: None,
             request_timeout_ms: 30_000,
             turn_timeout_ms: 300_000,
+            enforce_morn_e0_tool_policy: true,
         }
     }
 
@@ -194,7 +271,60 @@ impl DshSdkConfig {
                 "DSH max_tokens must be positive when set",
             ));
         }
+        if self.enforce_morn_e0_tool_policy
+            && !self
+                .args
+                .windows(2)
+                .any(|args| args[0] == "--profile" && args[1] == "sdk")
+        {
+            return Err(Error::validation(
+                "Morn E0 tool policy is defined for the official DSH sdk profile",
+            ));
+        }
         Ok(())
+    }
+
+    fn materialize_morn_e0_tool_policy(&self) -> Result<Option<PathBuf>> {
+        if !self.enforce_morn_e0_tool_policy {
+            return Ok(None);
+        }
+        let home = self
+            .dsh_home
+            .as_deref()
+            .ok_or_else(|| Error::validation("Morn DSH tool policy requires DSH_HOME"))?;
+        let policy_dir = Path::new(home).join("morn-policy");
+        fs::create_dir_all(&policy_dir).map_err(|error| {
+            Error::external(format!("create Morn DSH policy directory: {error}"))
+        })?;
+        let policy_path = policy_dir.join(DSH_MORN_E0_TOOL_POLICY_FILE);
+        if fs::symlink_metadata(&policy_path)
+            .is_ok_and(|metadata| metadata.file_type().is_symlink())
+        {
+            return Err(Error::validation(
+                "Morn DSH E0 tool policy path must not be a symbolic link",
+            ));
+        }
+        fs::write(&policy_path, DSH_MORN_E0_TOOL_POLICY_PATCH).map_err(|error| {
+            Error::external(format!("write Morn DSH E0 tool policy: {error}"))
+        })?;
+        let verified = fs::read_to_string(&policy_path).map_err(|error| {
+            Error::external(format!("verify Morn DSH E0 tool policy: {error}"))
+        })?;
+        if verified != DSH_MORN_E0_TOOL_POLICY_PATCH {
+            return Err(Error::external(
+                "Morn DSH E0 tool policy changed while being materialized",
+            ));
+        }
+        Ok(Some(policy_path))
+    }
+
+    fn launch_args(&self) -> Result<Vec<String>> {
+        let mut args = self.args.clone();
+        if let Some(policy_path) = self.materialize_morn_e0_tool_policy()? {
+            args.push("--patch".to_string());
+            args.push(policy_path.to_string_lossy().to_string());
+        }
+        Ok(args)
     }
 
     pub fn from_env() -> Result<Self> {
@@ -314,8 +444,9 @@ impl DshSdkStdioClient {
             ));
         }
         let mut command = Command::new(&config.command);
+        let launch_args = config.launch_args()?;
         command
-            .args(&config.args)
+            .args(&launch_args)
             .current_dir(&config.cwd)
             .env_clear()
             .envs(crate::subprocess_env::scrubbed_environment(
@@ -781,6 +912,45 @@ mod tests {
     }
 
     #[test]
+    fn real_sdk_materializes_last_layer_no_direct_tools_policy_and_pins_it_in_route() {
+        let root = std::env::temp_dir().join(format!("morn-dsh-policy-{}", uuid::Uuid::new_v4()));
+        let mut config = DshSdkConfig::profile_sdk(
+            root.join("workspace").to_string_lossy(),
+            "deepseek-official",
+            "deepseek-v4-flash",
+        )
+        .with_dsh_home(root.join("dsh-home").to_string_lossy())
+        .with_execution_environment_ref("env://container/dsh")
+        .with_runtime_identity(
+            "fixture-runtime-1",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        );
+        assert!(config.validate_for_real().is_ok());
+        let args = config.launch_args().unwrap();
+        let patch_position = args.iter().position(|arg| arg == "--patch").unwrap();
+        let policy_path = PathBuf::from(&args[patch_position + 1]);
+        let policy = fs::read_to_string(&policy_path).unwrap();
+        for required in [
+            "id: tool-bash",
+            "id: tool-pwsh",
+            "id: tool-fs",
+            "id: tool-subagent",
+            "id: tool-web",
+            "id: mcp-resources",
+        ] {
+            assert!(policy.contains(required), "{required} must be disabled before launch");
+        }
+        assert!(config
+            .route_ref()
+            .unwrap()
+            .contains(DSH_MORN_E0_TOOL_POLICY_REF));
+
+        config.args = vec!["--profile".to_string(), "web".to_string()];
+        assert!(config.validate_for_real().is_err());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn sdk_method_set_matches_current_upstream_boundary() {
         assert_eq!(DSH_METHOD_INITIALIZE, "initialize");
         assert_eq!(DSH_METHOD_SESSION_PROMPT, "session/prompt");
@@ -975,6 +1145,7 @@ mod tests {
             runtime_digest: None,
             request_timeout_ms: 10_000,
             turn_timeout_ms: 10_000,
+            enforce_morn_e0_tool_policy: false,
         };
         let mut client = DshSdkStdioClient::spawn(&config).unwrap();
         let initialized = client.initialize(&config).unwrap();

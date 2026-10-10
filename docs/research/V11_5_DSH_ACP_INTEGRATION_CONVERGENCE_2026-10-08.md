@@ -90,6 +90,19 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 
 要做当前 Morn Provider 的真实自动化，请在隔离环境准备官方 `dsh --profile sdk`（或 Python SDK bundled runtime）、显式 `DSH_HOME`、workspace、凭据与模型，然后运行真实 smoke。需要持久 session lifecycle / permission request 时，再实现 ACP transport。仓库内 fake-wire PASS 只能证明 Morn-side protocol handling，不得列为 live DSH PASS。
 
+## 6.1 2026-10-10：DSH 直接工具的执行前封锁
+
+官方 `sdk` Profile 基于完整的 dsh-base，默认包含 Bash/PowerShell、文件系统、Skill、Subagent、Web 等模型可见工具。官方 CLI 的 `--patch` overlay 在 Profile/Home 层之后应用，因此是 Morn 在启动前收紧组合树的正确边界。
+
+Morn 的真实 DSH SDK 路径现在采用双层防线：
+
+1. **Pre-dispatch**：`DshSdkConfig` 在真实 `--profile sdk` 启动前，向隔离 `DSH_HOME` 写入 Morn 所有的最后层 overlay，并通过 `--patch` 禁用官方 SDK Profile 中的直接模型工具生产者（shell/fs/jobs/skill/subagent/workflow/todo/goal/web/MCP resource 等）。该策略以 `morn.dsh-e0-no-direct-tools/v1` 固定进入 route identity。
+2. **Post-observation**：现有 DSH event normalization 仍检测任何 `tool/call` / `tool/result`。若未知插件、未来 Profile 行或部署污染仍产生工具活动，Morn 拒绝输出、降级 Provider health 并回收进程。
+
+第二层不能撤销已经发生的工具副作用，因此它只是异常检测；**第一层 + 外部 tool-mediation attestation 才是执行前控制**。Morn 不把 DSH 自身工具权限当成 Authority，E1/E2/E3 仍必须走 Morn Capability / Authority / ExternalAction。
+
+该 overlay 针对被 runtime digest/version 固定的官方 `sdk` Profile。若部署改用其他 Profile，`validate_for_real` fail-closed；不能静默把 `web`、`sdk-minimal` 或任意自定义 Profile 当成等价运行路径。
+
 ## 7. 参考来源
 
 - DeepSeek 官方：https://www.deepseek.com/harness/en/

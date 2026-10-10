@@ -717,7 +717,10 @@ mod tests {
     fn default_process_boundary_matches_current_pi_rpc_mode() {
         let config = PiRpcConfig::default();
         assert_eq!(config.command, "pi");
-        assert_eq!(config.command_line(), vec!["--mode", "rpc", "--no-session"]);
+        assert_eq!(
+            config.command_line(),
+            vec!["--mode", "rpc", "--no-session", "--no-tools", "--no-mcp"]
+        );
     }
 
     #[test]
