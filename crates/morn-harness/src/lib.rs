@@ -40,7 +40,10 @@ pub use intelligence::{
     run_intelligence_conformance, IntelligenceProvider, IntelligenceRequest, IntelligenceResult,
     RuleIntelligence, SolverIntelligence,
 };
-pub use neutrality::{run_harness_neutrality, HarnessNeutralityReport};
+pub use neutrality::{
+    run_harness_adapter_neutrality, run_harness_neutrality, HarnessAdapterEpisode,
+    HarnessAdapterNeutralityReport, HarnessNeutralityReport,
+};
 pub use pi::{PiHarnessProvider, PiMode};
 pub use pi_rpc::{
     PiPromptRun, PiRpcClient, PiRpcConfig, PiRpcEvent, PiRpcResponse, PI_COMMAND_ABORT,
