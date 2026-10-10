@@ -708,6 +708,22 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     store
         .save_source_of_truth_binding(&work, &source_binding)
         .unwrap();
+    store
+        .save_record_immutable(
+            "source_observation_attestation_consumed_v115",
+            "fixture://factory-observation-attestation",
+            work.workspace_id.as_str(),
+            outcome.observed_at.millis(),
+            &serde_json::json!({
+                "attestation_id": "fixture://factory-observation-attestation",
+                "work_id": work.id,
+                "source_binding_id": source_binding.id,
+                "fact_type": "maintenance.order",
+                "outcome_id": outcome.id,
+                "consumed_at": outcome.observed_at
+            }),
+        )
+        .unwrap();
     store.save_execution_binding(&work, &binding).unwrap();
     store
         .save_execution_manifest(&work, &execution_manifest)

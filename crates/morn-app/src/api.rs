@@ -6554,11 +6554,46 @@ mod workspace_boundary_tests {
             grounded
                 .evidence_refs
                 .push("system://authoritative/result-1/receipt".to_string());
+            let source_binding = morn_integration::SourceOfTruthBinding {
+                id: morn_integration::SourceOfTruthBindingId::generate_with("sot"),
+                site_ref: work.spec.site_ref.clone(),
+                source_ref: "system://authoritative".to_string(),
+                authority_kind: morn_integration::TruthAuthorityKind::SystemOfRecord,
+                authoritative_fact_types: vec!["delivery.status".to_string()],
+                key_mapping_ref: "mapping://authoritative@1".to_string(),
+                query_capability_ref: "capability://authoritative.read@1".to_string(),
+                freshness_sla_ms: None,
+                conflict_policy: morn_integration::ConflictPolicy::ReconcileBeforeUse,
+                version_ref: "binding:test-v1".to_string(),
+                created_at: morn_kernel::time::Timestamp::now(),
+            };
+            guard
+                .store
+                .save_source_of_truth_binding(&work, &source_binding)
+                .unwrap();
+            let observation_attestation_id = "observation-attestation://result-1";
             grounded
                 .pin_source_provenance(
-                    "source-binding://authoritative-system",
-                    "observation-attestation://result-1",
+                    source_binding.id.to_string(),
+                    observation_attestation_id,
                     "delivery.status",
+                )
+                .unwrap();
+            guard
+                .store
+                .save_record_immutable(
+                    "source_observation_attestation_consumed_v115",
+                    observation_attestation_id,
+                    work.workspace_id.as_str(),
+                    grounded.observed_at.millis(),
+                    &json!({
+                        "attestation_id": observation_attestation_id,
+                        "work_id": work.id,
+                        "source_binding_id": source_binding.id,
+                        "fact_type": "delivery.status",
+                        "outcome_id": grounded.id,
+                        "consumed_at": grounded.observed_at
+                    }),
                 )
                 .unwrap();
             guard.store.save_observed_outcome(&work, &grounded).unwrap();
@@ -6694,6 +6729,48 @@ mod workspace_boundary_tests {
             outcome
                 .evidence_refs
                 .push("erp://delivery/42/receipt".to_string());
+            let source_binding = morn_integration::SourceOfTruthBinding {
+                id: morn_integration::SourceOfTruthBindingId::generate_with("sot"),
+                site_ref: work.spec.site_ref.clone(),
+                source_ref: "erp://delivery".to_string(),
+                authority_kind: morn_integration::TruthAuthorityKind::SystemOfRecord,
+                authoritative_fact_types: vec!["delivery.metrics".to_string()],
+                key_mapping_ref: "mapping://delivery@1".to_string(),
+                query_capability_ref: "capability://delivery.read@1".to_string(),
+                freshness_sla_ms: None,
+                conflict_policy: morn_integration::ConflictPolicy::ReconcileBeforeUse,
+                version_ref: "binding:test-v1".to_string(),
+                created_at: morn_kernel::time::Timestamp::now(),
+            };
+            guard
+                .store
+                .save_source_of_truth_binding(&work, &source_binding)
+                .unwrap();
+            let observation_attestation_id = "observation-attestation://delivery-42";
+            outcome
+                .pin_source_provenance(
+                    source_binding.id.to_string(),
+                    observation_attestation_id,
+                    "delivery.metrics",
+                )
+                .unwrap();
+            guard
+                .store
+                .save_record_immutable(
+                    "source_observation_attestation_consumed_v115",
+                    observation_attestation_id,
+                    work.workspace_id.as_str(),
+                    outcome.observed_at.millis(),
+                    &json!({
+                        "attestation_id": observation_attestation_id,
+                        "work_id": work.id,
+                        "source_binding_id": source_binding.id,
+                        "fact_type": "delivery.metrics",
+                        "outcome_id": outcome.id,
+                        "consumed_at": outcome.observed_at
+                    }),
+                )
+                .unwrap();
             guard.store.save_observed_outcome(&work, &outcome).unwrap();
 
             let mut acceptance = AcceptanceDecision::new(

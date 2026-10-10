@@ -747,6 +747,86 @@ fn require_canonical_work_workspace(store: &MornStore, work: &WorkResource) -> R
     Ok(())
 }
 
+fn source_ref_within_authority(binding_root: &str, observed_ref: &str) -> bool {
+    let root = binding_root.trim_end_matches('/');
+    observed_ref == root
+        || observed_ref.strip_prefix(root).is_some_and(|suffix| {
+            suffix.starts_with('/') || suffix.starts_with('#') || suffix.starts_with('?')
+        })
+}
+
+/// Verify that attested source provenance is not merely syntactically present
+/// but points back to the exact durable authority and one-shot observation
+/// consumption record that created this Outcome.
+fn require_attested_outcome_provenance(
+    store: &MornStore,
+    work: &WorkResource,
+    outcome: &ObservedOutcome,
+) -> Result<()> {
+    if !outcome.is_attested_source_grounded() {
+        return Err(Error::validation(
+            "observed outcome lacks deployment-attested source provenance",
+        ));
+    }
+    let binding_ref = outcome
+        .source_binding_ref
+        .as_deref()
+        .ok_or_else(|| Error::validation("attested outcome missing source binding"))?;
+    let binding: SourceOfTruthBinding = store
+        .load_record("source_of_truth_binding_v115", binding_ref)?
+        .ok_or_else(|| Error::not_found("attested outcome source binding"))?;
+    binding.validate()?;
+    let fact_type = outcome
+        .fact_type
+        .as_deref()
+        .ok_or_else(|| Error::validation("attested outcome missing fact type"))?;
+    if binding.site_ref != work.spec.site_ref
+        || !binding.authoritative_for(fact_type)
+        || !source_ref_within_authority(&binding.source_ref, &outcome.source_ref)
+    {
+        return Err(Error::validation(
+            "attested outcome is outside its persisted source-of-truth authority",
+        ));
+    }
+
+    let attestation_ref = outcome
+        .source_attestation_ref
+        .as_deref()
+        .ok_or_else(|| Error::validation("attested outcome missing observation attestation"))?;
+    let consumed: serde_json::Value = store
+        .load_record(
+            "source_observation_attestation_consumed_v115",
+            attestation_ref,
+        )?
+        .ok_or_else(|| Error::not_found("consumed source observation attestation"))?;
+    let exact = consumed
+        .get("attestation_id")
+        .and_then(serde_json::Value::as_str)
+        == Some(attestation_ref)
+        && consumed
+            .get("work_id")
+            .and_then(serde_json::Value::as_str)
+            == Some(work.id.as_str())
+        && consumed
+            .get("source_binding_id")
+            .and_then(serde_json::Value::as_str)
+            == Some(binding.id.as_str())
+        && consumed
+            .get("fact_type")
+            .and_then(serde_json::Value::as_str)
+            == Some(fact_type)
+        && consumed
+            .get("outcome_id")
+            .and_then(serde_json::Value::as_str)
+            == Some(outcome.id.as_str());
+    if !exact {
+        return Err(Error::validation(
+            "attested outcome provenance does not match its consumed observation record",
+        ));
+    }
+    Ok(())
+}
+
 /// Work status is a projection of durable evidence. Persisting the projection
 /// must never create Delivered/Accepted/Rejected truth ahead of its evidence.
 fn require_persisted_work_projection_evidence(
@@ -1440,6 +1520,9 @@ impl ControlPlaneStore for MornStore {
                 "observed outcome must belong to the exact Work, workspace and generation",
             ));
         }
+        if outcome.has_source_provenance() {
+            require_attested_outcome_provenance(self, work, outcome)?;
+        }
         self.save_record_immutable(
             "observed_outcome_v115",
             outcome.id.as_str(),
@@ -1501,10 +1584,8 @@ impl ControlPlaneStore for MornStore {
                     "terminal acceptance/rejection cannot cite an ungrounded observed outcome",
                 ));
             }
-            if is_accept && !outcome.is_attested_source_grounded() {
-                return Err(Error::validation(
-                    "final acceptance requires deployment-attested source provenance for the observed outcome",
-                ));
+            if is_accept {
+                require_attested_outcome_provenance(self, work, &outcome)?;
             }
         }
         self.save_record_immutable(
@@ -1539,7 +1620,8 @@ impl ControlPlaneStore for MornStore {
             ));
         }
         if assessment.evidence_class == ValueEvidenceClass::CustomerValidated {
-            if !outcome.is_attested_source_grounded() || !assessment.is_customer_value_claim() {
+            require_attested_outcome_provenance(self, work, &outcome)?;
+            if !assessment.is_customer_value_claim() {
                 return Err(Error::validation(
                     "customer-validated value requires an attested source-grounded outcome, acceptance and evidence",
                 ));
@@ -2151,6 +2233,47 @@ mod control_plane_persistence_scope_tests {
         );
         spec.site_ref = Some("plant-a".to_string());
         WorkResource::new(WorkspaceId::generate(), spec)
+    }
+
+    fn attest_test_outcome(
+        store: &MornStore,
+        work: &WorkResource,
+        outcome: &mut ObservedOutcome,
+    ) {
+        let binding = morn_integration::SourceOfTruthBinding {
+            id: morn_integration::SourceOfTruthBindingId::generate_with("sot"),
+            site_ref: work.spec.site_ref.clone(),
+            source_ref: outcome.source_ref.clone(),
+            authority_kind: morn_integration::TruthAuthorityKind::SystemOfRecord,
+            authoritative_fact_types: vec!["test.fact".to_string()],
+            key_mapping_ref: "mapping://test@1".to_string(),
+            query_capability_ref: "capability://test.read@1".to_string(),
+            freshness_sla_ms: None,
+            conflict_policy: morn_integration::ConflictPolicy::ReconcileBeforeUse,
+            version_ref: "binding:test-v1".to_string(),
+            created_at: morn_kernel::time::Timestamp::now(),
+        };
+        store.save_source_of_truth_binding(work, &binding).unwrap();
+        let attestation_id = format!("observation-attestation:{}", outcome.id);
+        outcome
+            .pin_source_provenance(binding.id.to_string(), attestation_id.clone(), "test.fact")
+            .unwrap();
+        store
+            .save_record_immutable(
+                "source_observation_attestation_consumed_v115",
+                &attestation_id,
+                work.workspace_id.as_str(),
+                outcome.observed_at.millis(),
+                &json!({
+                    "attestation_id": attestation_id,
+                    "work_id": work.id,
+                    "source_binding_id": binding.id,
+                    "fact_type": "test.fact",
+                    "outcome_id": outcome.id,
+                    "consumed_at": outcome.observed_at
+                }),
+            )
+            .unwrap();
     }
 
     #[test]
@@ -2769,13 +2892,7 @@ mod control_plane_persistence_scope_tests {
         outcome
             .evidence_refs
             .push("system://delivery/42/receipt".to_string());
-        outcome
-            .pin_source_provenance(
-                "source-binding://test-authority",
-                "observation-attestation://test-witness",
-                "test.fact",
-            )
-            .unwrap();
+        attest_test_outcome(&store, &work, &mut outcome);
         store.save_observed_outcome(&work, &outcome).unwrap();
 
         work.status.phase = WorkPhase::Delivered;
@@ -2937,13 +3054,7 @@ mod control_plane_persistence_scope_tests {
         outcome
             .evidence_refs
             .push("system://result/1/receipt".to_string());
-        outcome
-            .pin_source_provenance(
-                "source-binding://test-authority",
-                "observation-attestation://test-witness",
-                "test.fact",
-            )
-            .unwrap();
+        attest_test_outcome(&store, &work, &mut outcome);
         store.save_observed_outcome(&work, &outcome).unwrap();
 
         let mut decision = AcceptanceDecision::new(
@@ -3000,13 +3111,7 @@ mod control_plane_persistence_scope_tests {
         outcome
             .evidence_refs
             .push("cmms://plant-a/status/receipt".to_string());
-        outcome
-            .pin_source_provenance(
-                "source-binding://test-authority",
-                "observation-attestation://test-witness",
-                "test.fact",
-            )
-            .unwrap();
+        attest_test_outcome(&store, &work, &mut outcome);
         store.save_observed_outcome(&work, &outcome).unwrap();
 
         let mut wrong = AcceptanceDecision::new(
@@ -3073,13 +3178,7 @@ mod control_plane_persistence_scope_tests {
 
         let mut attested = outcome.clone();
         attested.id = morn_kernel::ids::OutcomeRecordId::generate_with("out");
-        attested
-            .pin_source_provenance(
-                "source-binding://erp",
-                "observation-attestation://delivery-42",
-                "delivery.status",
-            )
-            .unwrap();
+        attest_test_outcome(&store, &work, &mut attested);
         store.save_observed_outcome(&work, &attested).unwrap();
         decision.outcome_refs = vec![attested.id.clone()];
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
@@ -3132,13 +3231,7 @@ mod control_plane_persistence_scope_tests {
         outcome
             .evidence_refs
             .push("cmms://plant-a/status/receipt".to_string());
-        outcome
-            .pin_source_provenance(
-                "source-binding://test-authority",
-                "observation-attestation://test-witness",
-                "test.fact",
-            )
-            .unwrap();
+        attest_test_outcome(&store, &work, &mut outcome);
         store.save_observed_outcome(&work, &outcome).unwrap();
         decision.outcome_refs = vec![outcome.id.clone()];
         decision.evidence_refs.clear();
@@ -3198,13 +3291,7 @@ mod control_plane_persistence_scope_tests {
             .evidence_refs
             .push("cmms://plant-a/orders/123/receipt".to_string());
         assert!(store.save_observed_outcome(&other, &outcome).is_err());
-        outcome
-            .pin_source_provenance(
-                "source-binding://test-authority",
-                "observation-attestation://test-witness",
-                "test.fact",
-            )
-            .unwrap();
+        attest_test_outcome(&store, &work, &mut outcome);
         store.save_observed_outcome(&work, &outcome).unwrap();
 
         let mut decision = AcceptanceDecision::new(
