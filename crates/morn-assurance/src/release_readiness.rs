@@ -8,7 +8,6 @@
 use serde::{Deserialize, Serialize};
 
 use crate::evidence_class::{EvidenceClaimState, EvidenceClass, EvidenceLedger};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ReadinessState {
@@ -220,10 +219,13 @@ pub fn release_readiness_axes_for_build(
 #[serde(rename_all = "kebab-case")]
 pub enum DeploymentReadinessScope {
     LocalReference,
+    #[serde(rename = "deepseek-read-only")]
     DeepSeekReadOnly,
     PiReadOnly,
+    #[serde(rename = "customer-read-only-deepseek")]
     CustomerReadOnlyDeepSeek,
     CustomerReadOnlyPi,
+    #[serde(rename = "production-write-deepseek")]
     ProductionWriteDeepSeek,
     ProductionWritePi,
 }
@@ -329,10 +331,7 @@ pub fn evaluate_deployment_readiness(
     for required in scope.required_axes() {
         match axes.iter().find(|axis| axis.id == *required) {
             Some(axis) if axis.state == ReadinessState::Proven => {}
-            Some(axis) => blockers.push(format!(
-                "{}={:?}: {}",
-                required, axis.state, axis.reason
-            )),
+            Some(axis) => blockers.push(format!("{}={:?}: {}", required, axis.state, axis.reason)),
             None => blockers.push(format!("{required}=missing-axis")),
         }
     }
@@ -360,6 +359,22 @@ pub fn evaluate_deployment_readiness(
 mod tests {
     use super::*;
     use crate::evidence_class::{reference_evidence_ledger, EvidenceClaim};
+
+    #[test]
+    fn deployment_scope_wire_names_keep_deepseek_as_one_provider_token() {
+        assert_eq!(
+            serde_json::to_string(&DeploymentReadinessScope::DeepSeekReadOnly).unwrap(),
+            "\"deepseek-read-only\""
+        );
+        assert_eq!(
+            serde_json::to_string(&DeploymentReadinessScope::CustomerReadOnlyDeepSeek).unwrap(),
+            "\"customer-read-only-deepseek\""
+        );
+        assert_eq!(
+            serde_json::to_string(&DeploymentReadinessScope::ProductionWriteDeepSeek).unwrap(),
+            "\"production-write-deepseek\""
+        );
+    }
 
     #[test]
     fn deployment_scope_never_collapses_evidence_into_write_authority() {
@@ -439,8 +454,7 @@ mod tests {
         );
         assert!(write_with_authority.ready);
 
-        axes
-            .iter_mut()
+        axes.iter_mut()
             .find(|axis| axis.id == "deepseek-live-runtime")
             .unwrap()
             .state = ReadinessState::RuntimeUnhealthy;
