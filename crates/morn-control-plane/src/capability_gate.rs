@@ -90,7 +90,7 @@ impl CapabilityEligibilityGate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use morn_assurance::{QualificationEvidence, StrictQualificationRequest};
+    use morn_assurance::{QualificationEvidence, StrictQualificationRequest, VerifiedReleaseRequest};
     use morn_capability::{CapabilityKind, CapabilityManifest, CapabilityRecord, EffectClass};
     use morn_kernel::ids::CapabilityId;
     use morn_package::SupplyChainVerificationEvidence;
@@ -169,17 +169,19 @@ mod tests {
             .record_verified_release(
                 &mut capability,
                 &qualification,
-                format!("oci://fixture/cap@{release_digest}"),
-                release_digest.clone(),
-                "sigstore://fixture",
-                "slsa://fixture",
-                SupplyChainVerificationEvidence {
-                    subject_digest: release_digest,
-                    verifier_ref: "fixture://supply-chain".to_string(),
-                    signature_verified: true,
-                    provenance_verified: true,
-                    evidence_refs: vec!["fixture://supply-chain/proof".to_string()],
-                },
+                VerifiedReleaseRequest::new(
+                    format!("oci://fixture/cap@{release_digest}"),
+                    release_digest.clone(),
+                    "sigstore://fixture",
+                    "slsa://fixture",
+                    SupplyChainVerificationEvidence {
+                        subject_digest: release_digest,
+                        verifier_ref: "fixture://supply-chain".to_string(),
+                        signature_verified: true,
+                        provenance_verified: true,
+                        evidence_refs: vec!["fixture://supply-chain/proof".to_string()],
+                    },
+                ),
             )
             .unwrap();
         service

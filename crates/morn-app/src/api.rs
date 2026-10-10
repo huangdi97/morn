@@ -3572,11 +3572,13 @@ async fn v115_capability_release(
                 inner.v115_admission.record_verified_release(
                     capability,
                     &qualification,
-                    package_ref,
-                    content_digest,
-                    signature_ref,
-                    provenance_ref,
-                    verification,
+                    VerifiedReleaseRequest::new(
+                        package_ref,
+                        content_digest,
+                        signature_ref,
+                        provenance_ref,
+                        verification,
+                    ),
                 )?
             }
             None => inner.v115_admission.record_release(

@@ -517,11 +517,11 @@ mod tests {
 
     #[test]
     fn parses_digest_pinned_oras_json_receipt() {
-        let digest = digest('a');
+        let content_digest = digest('a');
         let stdout = serde_json::json!({
-            "reference": format!("registry.example/morn/capabilities/reviewer@{digest}"),
+            "reference": format!("registry.example/morn/capabilities/reviewer@{content_digest}"),
             "mediaType": "application/vnd.oci.image.manifest.v1+json",
-            "digest": digest,
+            "digest": content_digest,
             "artifactType": "application/vnd.morn.capability.v1+json"
         })
         .to_string();

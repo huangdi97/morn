@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use morn_app::AppState;
 use morn_assurance::{
     CapabilityDistributionReleaseStatus, QualificationEvidence, SiteAdmissionStatus,
-    StrictQualificationRequest,
+    StrictQualificationRequest, VerifiedReleaseRequest,
 };
 use morn_foundry::{ArtifactCompiler, ArtifactKind, ArtifactSource, OpenApiJsonCompiler};
 use morn_package::SupplyChainVerificationEvidence;
@@ -118,17 +118,19 @@ fn capability_lifecycle_survives_restart_and_revocation_keeps_history() {
                 .record_verified_release(
                     &mut inner.v115_capabilities[index],
                     &qualification,
-                    format!("oci://registry.example/morn/cmms-read@{digest}"),
-                    digest.clone(),
-                    "sigstore://rekor/cmms-read",
-                    "slsa://provenance/cmms-read",
-                    SupplyChainVerificationEvidence {
-                        subject_digest: digest,
-                        verifier_ref: "fixture://release-verifier".to_string(),
-                        signature_verified: true,
-                        provenance_verified: true,
-                        evidence_refs: vec!["fixture://release-verifier/proof".to_string()],
-                    },
+                    VerifiedReleaseRequest::new(
+                        format!("oci://registry.example/morn/cmms-read@{digest}"),
+                        digest.clone(),
+                        "sigstore://rekor/cmms-read",
+                        "slsa://provenance/cmms-read",
+                        SupplyChainVerificationEvidence {
+                            subject_digest: digest,
+                            verifier_ref: "fixture://release-verifier".to_string(),
+                            signature_verified: true,
+                            provenance_verified: true,
+                            evidence_refs: vec!["fixture://release-verifier/proof".to_string()],
+                        },
+                    ),
                 )
                 .unwrap()
         };

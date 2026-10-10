@@ -19,7 +19,7 @@ pub use admission::{
     CapabilityDistributionReleaseStatus, CapabilityLifecycleEvent, CapabilityLifecycleEventId,
     CapabilityObservation, CapabilityObservationId, QualificationEvidence, QualificationRecord,
     QualificationRecordId, QualificationStatus, SiteAdmission, SiteAdmissionId,
-    SiteAdmissionStatus, StrictQualificationRequest,
+    SiteAdmissionStatus, StrictQualificationRequest, VerifiedReleaseRequest,
 };
 pub use customer_value::{CustomerValueAttestation, CustomerValueMetric};
 pub use evidence_class::{

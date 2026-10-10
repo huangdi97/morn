@@ -88,6 +88,42 @@ impl CapabilityDistributionRelease {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerifiedReleaseRequest {
+    pub package_ref: String,
+    pub content_digest: String,
+    pub signature_ref: String,
+    pub provenance_ref: String,
+    pub verification: SupplyChainVerificationEvidence,
+}
+
+impl VerifiedReleaseRequest {
+    pub fn new(
+        package_ref: impl Into<String>,
+        content_digest: impl Into<String>,
+        signature_ref: impl Into<String>,
+        provenance_ref: impl Into<String>,
+        verification: SupplyChainVerificationEvidence,
+    ) -> Self {
+        Self {
+            package_ref: package_ref.into(),
+            content_digest: content_digest.into(),
+            signature_ref: signature_ref.into(),
+            provenance_ref: provenance_ref.into(),
+            verification,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ReleaseMaterial {
+    package_ref: String,
+    content_digest: String,
+    signature_ref: Option<String>,
+    provenance_ref: Option<String>,
+    supply_chain_verification: Option<SupplyChainVerificationEvidence>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum QualificationStatus {
     Qualified,
@@ -390,11 +426,13 @@ impl AdmissionService {
         self.record_release_internal(
             capability,
             qualification,
-            package_ref.into(),
-            content_digest.into(),
-            signature_ref,
-            provenance_ref,
-            None,
+            ReleaseMaterial {
+                package_ref: package_ref.into(),
+                content_digest: content_digest.into(),
+                signature_ref,
+                provenance_ref,
+                supply_chain_verification: None,
+            },
         )
     }
 
@@ -402,16 +440,15 @@ impl AdmissionService {
         &mut self,
         capability: &mut CapabilityRecord,
         qualification: &QualificationRecord,
-        package_ref: impl Into<String>,
-        content_digest: impl Into<String>,
-        signature_ref: impl Into<String>,
-        provenance_ref: impl Into<String>,
-        verification: SupplyChainVerificationEvidence,
+        request: VerifiedReleaseRequest,
     ) -> Result<CapabilityDistributionRelease> {
-        let package_ref = package_ref.into();
-        let content_digest = content_digest.into();
-        let signature_ref = signature_ref.into();
-        let provenance_ref = provenance_ref.into();
+        let VerifiedReleaseRequest {
+            package_ref,
+            content_digest,
+            signature_ref,
+            provenance_ref,
+            verification,
+        } = request;
         if signature_ref.trim().is_empty() || provenance_ref.trim().is_empty() {
             return Err(Error::validation(
                 "verified release requires signature and provenance references",
@@ -436,11 +473,13 @@ impl AdmissionService {
         self.record_release_internal(
             capability,
             qualification,
-            package_ref,
-            content_digest,
-            Some(signature_ref),
-            Some(provenance_ref),
-            Some(verification),
+            ReleaseMaterial {
+                package_ref,
+                content_digest,
+                signature_ref: Some(signature_ref),
+                provenance_ref: Some(provenance_ref),
+                supply_chain_verification: Some(verification),
+            },
         )
     }
 
@@ -448,12 +487,15 @@ impl AdmissionService {
         &mut self,
         capability: &mut CapabilityRecord,
         qualification: &QualificationRecord,
-        package_ref: String,
-        content_digest: String,
-        signature_ref: Option<String>,
-        provenance_ref: Option<String>,
-        supply_chain_verification: Option<SupplyChainVerificationEvidence>,
+        material: ReleaseMaterial,
     ) -> Result<CapabilityDistributionRelease> {
+        let ReleaseMaterial {
+            package_ref,
+            content_digest,
+            signature_ref,
+            provenance_ref,
+            supply_chain_verification,
+        } = material;
         if !qualification.is_active_at(Timestamp::now()) {
             return Err(Error::invalid_state(
                 "cannot release from inactive qualification",
@@ -871,17 +913,19 @@ mod tests {
             .record_verified_release(
                 capability,
                 qualification,
-                format!("oci://fixture/morn/capability@{digest}"),
-                digest.clone(),
-                "sigstore://fixture/signature",
-                "slsa://fixture/provenance",
-                SupplyChainVerificationEvidence {
-                    subject_digest: digest,
-                    verifier_ref: "fixture://supply-chain-verifier".to_string(),
-                    signature_verified: true,
-                    provenance_verified: true,
-                    evidence_refs: vec!["fixture://supply-chain-proof".to_string()],
-                },
+                VerifiedReleaseRequest::new(
+                    format!("oci://fixture/morn/capability@{digest}"),
+                    digest.clone(),
+                    "sigstore://fixture/signature",
+                    "slsa://fixture/provenance",
+                    SupplyChainVerificationEvidence {
+                        subject_digest: digest,
+                        verifier_ref: "fixture://supply-chain-verifier".to_string(),
+                        signature_verified: true,
+                        provenance_verified: true,
+                        evidence_refs: vec!["fixture://supply-chain-proof".to_string()],
+                    },
+                ),
             )
             .unwrap()
     }
