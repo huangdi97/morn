@@ -208,7 +208,6 @@ impl DurableWorkControllerRuntime {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct DurableBusinessEvidenceControllerRuntime {
     pub holder: String,
@@ -392,8 +391,8 @@ impl DurableBusinessEvidenceControllerRuntime {
 
             let mut semantics =
                 WorkCondition::new("AcceptedOutcomeSemantics", ConditionStatus::False);
-            semantics.reason = "persisted independent review rejected the observed outcome"
-                .to_string();
+            semantics.reason =
+                "persisted independent review rejected the observed outcome".to_string();
             semantics.evidence_refs = vec![outcome.id.to_string(), decision.id.to_string()];
             work.set_condition(semantics);
             work.status.phase = WorkPhase::Rejected;
@@ -473,9 +472,7 @@ impl DurableBusinessEvidenceControllerRuntime {
             class: EventSemanticClass::DomainFact,
             subject_ref: Some(format!("work://{}", work.id)),
             source_of_truth_ref,
-            schema_ref: Some(
-                "morn://schemas/work-business-evidence-reconciled/v1".to_string(),
-            ),
+            schema_ref: Some("morn://schemas/work-business-evidence-reconciled/v1".to_string()),
         };
 
         let mut persisted = work.clone();
@@ -699,11 +696,7 @@ mod tests {
             .push("erp://delivery/42/receipt".to_string());
         let attestation_id = "observation-attestation://delivery-42";
         outcome
-            .pin_source_provenance(
-                binding.id.to_string(),
-                attestation_id,
-                "delivery.status",
-            )
+            .pin_source_provenance(binding.id.to_string(), attestation_id, "delivery.status")
             .unwrap();
         store
             .save_record_immutable(
@@ -870,11 +863,7 @@ mod tests {
 
         let runtime = DurableBusinessEvidenceControllerRuntime::new("business-node-conflict");
         let error = runtime
-            .reconcile_from_persisted_business_evidence(
-                &store,
-                work.id.as_str(),
-                Timestamp::now(),
-            )
+            .reconcile_from_persisted_business_evidence(&store, work.id.as_str(), Timestamp::now())
             .unwrap_err();
         assert!(format!("{error}").contains("conflicting final Accept and Reject"));
         let persisted: WorkResource = store

@@ -6782,7 +6782,8 @@ mod workspace_boundary_tests {
     }
 
     #[tokio::test]
-    async fn business_evidence_recovery_projects_persisted_acceptance_without_replaying_execution() {
+    async fn business_evidence_recovery_projects_persisted_acceptance_without_replaying_execution()
+    {
         use morn_control_plane::ControlPlaneStore;
         use morn_integration::{
             ConflictPolicy, SourceOfTruthBinding, SourceOfTruthBindingId, TruthAuthorityKind,
