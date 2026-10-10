@@ -775,7 +775,7 @@ mod tests {
         let outbox = store.pending_outbox_events(10).unwrap();
         assert_eq!(outbox.len(), 1);
         assert_eq!(
-            outbox[0].envelope.event_type,
+            outbox[0].event_type,
             "io.morn.work.business-evidence-reconciled.v1"
         );
     }
