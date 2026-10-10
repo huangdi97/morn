@@ -1501,6 +1501,11 @@ impl ControlPlaneStore for MornStore {
                     "terminal acceptance/rejection cannot cite an ungrounded observed outcome",
                 ));
             }
+            if is_accept && !outcome.is_attested_source_grounded() {
+                return Err(Error::validation(
+                    "final acceptance requires deployment-attested source provenance for the observed outcome",
+                ));
+            }
         }
         self.save_record_immutable(
             "acceptance_decision_v115",
@@ -1534,9 +1539,9 @@ impl ControlPlaneStore for MornStore {
             ));
         }
         if assessment.evidence_class == ValueEvidenceClass::CustomerValidated {
-            if !outcome.is_source_grounded() || !assessment.is_customer_value_claim() {
+            if !outcome.is_attested_source_grounded() || !assessment.is_customer_value_claim() {
                 return Err(Error::validation(
-                    "customer-validated value requires a grounded outcome, acceptance and evidence",
+                    "customer-validated value requires an attested source-grounded outcome, acceptance and evidence",
                 ));
             }
             let acceptance_id = assessment
@@ -2764,6 +2769,13 @@ mod control_plane_persistence_scope_tests {
         outcome
             .evidence_refs
             .push("system://delivery/42/receipt".to_string());
+        outcome
+            .pin_source_provenance(
+                "source-binding://test-authority",
+                "observation-attestation://test-witness",
+                "test.fact",
+            )
+            .unwrap();
         store.save_observed_outcome(&work, &outcome).unwrap();
 
         work.status.phase = WorkPhase::Delivered;
@@ -2925,6 +2937,13 @@ mod control_plane_persistence_scope_tests {
         outcome
             .evidence_refs
             .push("system://result/1/receipt".to_string());
+        outcome
+            .pin_source_provenance(
+                "source-binding://test-authority",
+                "observation-attestation://test-witness",
+                "test.fact",
+            )
+            .unwrap();
         store.save_observed_outcome(&work, &outcome).unwrap();
 
         let mut decision = AcceptanceDecision::new(
@@ -2981,6 +3000,13 @@ mod control_plane_persistence_scope_tests {
         outcome
             .evidence_refs
             .push("cmms://plant-a/status/receipt".to_string());
+        outcome
+            .pin_source_provenance(
+                "source-binding://test-authority",
+                "observation-attestation://test-witness",
+                "test.fact",
+            )
+            .unwrap();
         store.save_observed_outcome(&work, &outcome).unwrap();
 
         let mut wrong = AcceptanceDecision::new(
@@ -3010,6 +3036,53 @@ mod control_plane_persistence_scope_tests {
             .evidence_refs
             .push("review://ticket-correct".to_string());
         ControlPlaneStore::save_acceptance_decision(&store, &work, &correct).unwrap();
+    }
+
+    #[test]
+    fn final_acceptance_requires_deployment_attested_source_provenance() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "source-grounded but not deployment-attested",
+            OutcomeSourceKind::ExternalSystem,
+            "erp://delivery/42",
+            json!({"status":"delivered"}),
+        );
+        outcome
+            .evidence_refs
+            .push("erp://delivery/42/receipt".to_string());
+        store.save_observed_outcome(&work, &outcome).unwrap();
+
+        let mut decision = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("acceptance"),
+            AcceptanceDisposition::Accept,
+            PrincipalId::generate_with("reviewer"),
+            "independent-reviewer",
+            "reviewed authoritative evidence",
+        );
+        decision.outcome_refs.push(outcome.id.clone());
+        decision
+            .evidence_refs
+            .push("review://signed/42".to_string());
+        assert!(ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).is_err());
+
+        let mut attested = outcome.clone();
+        attested.id = morn_kernel::ids::OutcomeRecordId::generate_with("out");
+        attested
+            .pin_source_provenance(
+                "source-binding://erp",
+                "observation-attestation://delivery-42",
+                "delivery.status",
+            )
+            .unwrap();
+        store.save_observed_outcome(&work, &attested).unwrap();
+        decision.outcome_refs = vec![attested.id.clone()];
+        ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
     }
 
     #[test]
@@ -3059,6 +3132,13 @@ mod control_plane_persistence_scope_tests {
         outcome
             .evidence_refs
             .push("cmms://plant-a/status/receipt".to_string());
+        outcome
+            .pin_source_provenance(
+                "source-binding://test-authority",
+                "observation-attestation://test-witness",
+                "test.fact",
+            )
+            .unwrap();
         store.save_observed_outcome(&work, &outcome).unwrap();
         decision.outcome_refs = vec![outcome.id.clone()];
         decision.evidence_refs.clear();
@@ -3118,6 +3198,13 @@ mod control_plane_persistence_scope_tests {
             .evidence_refs
             .push("cmms://plant-a/orders/123/receipt".to_string());
         assert!(store.save_observed_outcome(&other, &outcome).is_err());
+        outcome
+            .pin_source_provenance(
+                "source-binding://test-authority",
+                "observation-attestation://test-witness",
+                "test.fact",
+            )
+            .unwrap();
         store.save_observed_outcome(&work, &outcome).unwrap();
 
         let mut decision = AcceptanceDecision::new(

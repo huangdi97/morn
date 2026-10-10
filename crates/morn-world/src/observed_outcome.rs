@@ -131,6 +131,16 @@ impl ObservedOutcome {
             && !self.source_ref.trim().is_empty()
             && !self.evidence_refs.is_empty()
     }
+
+    /// Stronger predicate for decisions that create durable business truth.
+    ///
+    /// A source reference plus an evidence URI is enough to represent an
+    /// observed fact, including imported/legacy evidence. Final acceptance and
+    /// customer-value claims additionally require the deployment-attested
+    /// SourceOfTruthBinding + one-shot observation attestation + fact type.
+    pub fn is_attested_source_grounded(&self) -> bool {
+        self.is_source_grounded() && self.has_source_provenance()
+    }
 }
 
 #[cfg(test)]
@@ -177,6 +187,32 @@ mod tests {
         assert!(outcome
             .pin_source_provenance("", "attestation", "delivery.status")
             .is_err());
+    }
+
+    #[test]
+    fn business_truth_requires_attested_source_provenance_in_addition_to_evidence() {
+        let mut outcome = ObservedOutcome::new(
+            WorkspaceId::generate(),
+            WorkPackageId::generate_with("work"),
+            "delivered",
+            OutcomeSourceKind::ExternalSystem,
+            "erp://deliveries/42",
+            json!({"status":"delivered"}),
+        );
+        outcome
+            .evidence_refs
+            .push("erp://deliveries/42/receipt".to_string());
+        assert!(outcome.is_source_grounded());
+        assert!(!outcome.is_attested_source_grounded());
+
+        outcome
+            .pin_source_provenance(
+                "source-binding://erp-deliveries",
+                "observation-attestation://42",
+                "delivery.status",
+            )
+            .unwrap();
+        assert!(outcome.is_attested_source_grounded());
     }
 
     #[test]

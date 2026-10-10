@@ -646,7 +646,14 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     outcome
         .evidence_refs
         .push("artifact://delivery-impact-review".to_string());
-    assert!(outcome.is_source_grounded());
+    outcome
+        .pin_source_provenance(
+            source_binding.id.to_string(),
+            "fixture://factory-observation-attestation",
+            "maintenance.order",
+        )
+        .unwrap();
+    assert!(outcome.is_attested_source_grounded());
     WorkProgressController.reconcile(
         &mut work,
         &WorkProgressInputs {
