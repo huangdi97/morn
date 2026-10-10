@@ -121,8 +121,12 @@ mod tests {
             ValueEvidenceClass::CustomerValidated,
         );
         assessment.acceptance_ref = Some(AcceptanceDecisionId::generate_with("acceptance"));
-        assessment.evidence_refs.push("customer://signed/value".to_string());
-        assessment.kpis.push(("human_minutes_saved".to_string(), 12.5));
+        assessment
+            .evidence_refs
+            .push("customer://signed/value".to_string());
+        assessment
+            .kpis
+            .push(("human_minutes_saved".to_string(), 12.5));
         assert!(!assessment.is_customer_value_claim());
 
         assessment.customer_value_attestation_ref =

@@ -39,6 +39,7 @@ pub use profile_guard::{
     ExternalActionPermit, ExternalActionPermitId, ProfileActionDecision,
 };
 
+use morn_assurance::CustomerValueAttestation;
 use morn_harness::ExecutionReceipt;
 use morn_integration::{GovernedExternalTaskObservation, InteropBinding, SourceOfTruthBinding};
 use morn_kernel::error::{Error, Result};
@@ -1391,6 +1392,38 @@ impl ControlPlaneStore for MornStore {
             {
                 return Err(Error::validation(
                     "customer-validated value requires final acceptance of that exact outcome",
+                ));
+            }
+
+            let attestation_ref = assessment
+                .customer_value_attestation_ref
+                .as_deref()
+                .ok_or_else(|| Error::validation("customer value requires attestation reference"))?;
+            let attestation: CustomerValueAttestation = self
+                .load_record("customer_value_attestation_v115", attestation_ref)?
+                .ok_or_else(|| Error::not_found("customer value deployment attestation"))?;
+            let attested_kpis: Vec<(String, f64)> = attestation
+                .kpis
+                .iter()
+                .map(|metric| (metric.name.clone(), metric.value))
+                .collect();
+            if attestation.attestation_id != attestation_ref
+                || !attestation.active_for(
+                    &work.workspace_id,
+                    (&work.id, work.generation),
+                    &assessment.outcome_ref,
+                    acceptance_id,
+                    assessment.assessed_at,
+                )
+                || assessment.baseline_ref != attestation.baseline_ref
+                || assessment.kpis != attested_kpis
+                || !attestation
+                    .evidence_refs
+                    .iter()
+                    .all(|reference| assessment.evidence_refs.contains(reference))
+            {
+                return Err(Error::validation(
+                    "customer-validated value must exactly match a persisted deployment attestation",
                 ));
             }
         }
@@ -2758,6 +2791,33 @@ mod control_plane_persistence_scope_tests {
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
 
         fake_value.outcome_ref = outcome.id.clone();
+        fake_value.evidence_refs = vec!["customer://signed/value-a".to_string()];
+        let attestation = morn_assurance::CustomerValueAttestation {
+            attestation_id: "customer-value-attestation:test".to_string(),
+            workspace_id: work.workspace_id.clone(),
+            work_package_id: work.id.clone(),
+            work_generation: work.generation,
+            outcome_id: outcome.id.clone(),
+            acceptance_id: decision.id.clone(),
+            baseline_ref: None,
+            kpis: vec![morn_assurance::CustomerValueMetric {
+                name: "delivery_minutes_saved".to_string(),
+                value: 12.0,
+            }],
+            evidence_refs: vec!["customer://signed/value-a".to_string()],
+            issuer: "customer-governance".to_string(),
+            observed_at: morn_kernel::time::Timestamp::from_millis(1),
+            valid_until: None,
+        };
+        store
+            .save_record_immutable(
+                "customer_value_attestation_v115",
+                &attestation.attestation_id,
+                work.workspace_id.as_str(),
+                attestation.observed_at.millis(),
+                &attestation,
+            )
+            .unwrap();
         store.save_value_assessment(&work, &fake_value).unwrap();
         assert!(fake_value.is_customer_value_claim());
     }

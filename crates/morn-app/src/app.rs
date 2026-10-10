@@ -367,8 +367,7 @@ fn configured_acceptance_review_authorizations(
     Ok(authorizations)
 }
 
-fn configured_customer_value_attestations(
-) -> morn_kernel::Result<Vec<CustomerValueAttestation>> {
+fn configured_customer_value_attestations() -> morn_kernel::Result<Vec<CustomerValueAttestation>> {
     let Ok(path) = std::env::var("MORN_CUSTOMER_VALUE_ATTESTATIONS_FILE") else {
         return Ok(Vec::new());
     };

@@ -1284,11 +1284,34 @@ async fn v115_work_assess_value(
         assessment.evidence_refs = attestation.evidence_refs.clone();
         attestation_evidence = attestation.evidence_refs.clone();
         assessment.evidence_refs.extend(real_site_evidence.clone());
-        assessment
-            .evidence_refs
-            .push(format!("customer-value-attestation:{}", attestation.attestation_id));
+        assessment.evidence_refs.push(format!(
+            "customer-value-attestation:{}",
+            attestation.attestation_id
+        ));
         assessment.evidence_refs.sort();
         assessment.evidence_refs.dedup();
+
+        let attestation_kind = "customer_value_attestation_v115";
+        match guard
+            .store
+            .load_record::<morn_assurance::CustomerValueAttestation>(
+                attestation_kind,
+                attestation_id,
+            )? {
+            Some(persisted) if persisted != attestation => {
+                return Err(AppError(Error::conflict(
+                    "persisted customer value attestation differs from deployment trust input",
+                )));
+            }
+            Some(_) => {}
+            None => guard.store.save_record_immutable(
+                attestation_kind,
+                attestation_id,
+                work.workspace_id.as_str(),
+                attestation.observed_at.millis(),
+                &attestation,
+            )?,
+        }
 
         guard.store.save_record_immutable(
             consumed_kind,
@@ -5704,8 +5727,8 @@ mod workspace_boundary_tests {
                 evidence_refs: vec!["audit://runtime/no-effect/1".to_string()],
                 issued_at: morn_kernel::time::Timestamp::from_millis(
                     morn_kernel::time::Timestamp::now()
-                        .millis()
-                        .saturating_sub(1),
+                            .millis()
+                            .saturating_sub(1),
                 ),
                 valid_until: None,
             };
@@ -6674,23 +6697,25 @@ mod workspace_boundary_tests {
         {
             let mut guard = state.lock();
             let workspace_id = guard.workspace.id.clone();
-            guard.customer_value_attestations.push(CustomerValueAttestation {
-                attestation_id: value_attestation_id.to_string(),
-                workspace_id,
-                work_package_id: work.id.clone(),
-                work_generation: work.generation,
-                outcome_id: outcome.id.clone(),
-                acceptance_id: acceptance.id.clone(),
-                baseline_ref: Some("baseline://customer/42".to_string()),
-                kpis: vec![CustomerValueMetric {
-                    name: "late_minutes_delta".to_string(),
-                    value: -12.0,
-                }],
-                evidence_refs: vec!["metric://customer/42/signed".to_string()],
-                issuer: "customer-site-owner".to_string(),
-                observed_at: morn_kernel::time::Timestamp::now(),
-                valid_until: None,
-            });
+            guard
+                .customer_value_attestations
+                .push(CustomerValueAttestation {
+                    attestation_id: value_attestation_id.to_string(),
+                    workspace_id,
+                    work_package_id: work.id.clone(),
+                    work_generation: work.generation,
+                    outcome_id: outcome.id.clone(),
+                    acceptance_id: acceptance.id.clone(),
+                    baseline_ref: Some("baseline://customer/42".to_string()),
+                    kpis: vec![CustomerValueMetric {
+                        name: "late_minutes_delta".to_string(),
+                        value: -12.0,
+                    }],
+                    evidence_refs: vec!["metric://customer/42/signed".to_string()],
+                    issuer: "customer-site-owner".to_string(),
+                    observed_at: morn_kernel::time::Timestamp::now(),
+                    valid_until: None,
+                });
         }
 
         let caller_kpi_override = v115_work_assess_value(
@@ -6751,7 +6776,10 @@ mod workspace_boundary_tests {
         .unwrap();
         assert_eq!(customer["value_subject"], subject);
         assert_eq!(customer["customer_validated"], true);
-        assert_eq!(customer["customer_value_attestation_id"], value_attestation_id);
+        assert_eq!(
+            customer["customer_value_attestation_id"],
+            value_attestation_id
+        );
         assert_eq!(
             customer["value_assessment"]["customer_value_attestation_ref"],
             value_attestation_id

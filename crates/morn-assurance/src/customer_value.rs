@@ -10,9 +10,7 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::error::{Error, Result};
-use morn_kernel::ids::{
-    AcceptanceDecisionId, OutcomeRecordId, WorkPackageId, WorkspaceId,
-};
+use morn_kernel::ids::{AcceptanceDecisionId, OutcomeRecordId, WorkPackageId, WorkspaceId};
 use morn_kernel::time::Timestamp;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
