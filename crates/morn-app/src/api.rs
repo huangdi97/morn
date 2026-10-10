@@ -3121,6 +3121,7 @@ async fn v115_control_plane(State(state): State<AppState>) -> ApiResult {
         "source_of_truth_bindings": load("source_of_truth_binding_v115")?,
         "execution_bindings": load("execution_binding_v115")?,
         "execution_manifests": load("execution_manifest_v115")?,
+        "execution_events": load("execution_event_v115")?,
         "execution_receipts": load("execution_receipt_v115")?,
         "executor_outcome_reconciliations": load("executor_outcome_reconciliation_v115")?,
         "interop_bindings": load("interop_binding_v115")?,

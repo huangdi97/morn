@@ -146,6 +146,11 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
   const receiptIds = new Set(
     receipts.map((row) => textField(row, "id")).filter((id): id is string => !!id),
   );
+  const receiptEventIds = new Set(receipts.flatMap((row) => fieldRefs(row, "event_ids")));
+  const executionEvents = (control.execution_events ?? []).filter((row) => {
+    const id = textField(row, "id");
+    return id !== null && receiptEventIds.has(id);
+  });
   const executorReconciliations = control.executor_outcome_reconciliations.filter((row) => {
     const bindingRef = textField(row, "execution_binding_ref");
     const receiptRef = textField(row, "execution_receipt_id");
@@ -225,6 +230,7 @@ export function workEvidenceTrace(control: V115ControlPlaneData, workId: string,
     resolutions,
     bindings,
     receipts,
+    executionEvents,
     executorReconciliations,
     interopBindings,
     externalTasks,
@@ -248,7 +254,7 @@ function WorkEvidenceTrace({
   generation: number;
 }) {
   const trace = workEvidenceTrace(control, workId, generation);
-  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} execution bindings · ${trace.interopBindings.length} interop bindings · ${trace.receipts.length} harness receipts · ${trace.executorReconciliations.length} executor reconciliations · ${trace.externalTasks.length} external tasks · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions · ${trace.values.length} value assessments`;
+  const summary = `${trace.resolutions.length} resolution decisions · ${trace.bindings.length} execution bindings · ${trace.executionEvents.length} durable execution events · ${trace.receipts.length} harness receipts · ${trace.interopBindings.length} interop bindings · ${trace.executorReconciliations.length} executor reconciliations · ${trace.externalTasks.length} external tasks · ${trace.outcomes.length} outcomes · ${trace.acceptances.length} linked decisions · ${trace.values.length} value assessments`;
   return (
     <details className="work-truth-trace">
       <summary>Execution, reality &amp; independent acceptance — {summary}</summary>
@@ -275,18 +281,32 @@ function WorkEvidenceTrace({
             <p>No pinned harness execution receipt; provider completion is not implied.</p>
           ) : (
             <ul>
-              {trace.receipts.map((receipt, index) => (
-                <li key={textField(receipt, "id") ?? index}>
-                  <b>{textField(receipt, "provider_ref") ?? "Unknown provider"}</b> — {textField(receipt, "outcome") ?? "Unsettled"}
-                  <small>Session: {textField(receipt, "session_id") ?? "Unknown"}</small>
-                  <small>Runtime version: {textField(receipt, "runtime_version") ?? "Not pinned"}</small>
-                  <small>Runtime digest: {textField(receipt, "runtime_digest") ?? "Fixture / not pinned"}</small>
-                  <small>Environment: {textField(receipt, "execution_environment_ref") ?? "Fixture / not pinned"}</small>
-                </li>
-              ))}
+              {trace.receipts.map((receipt, index) => {
+                const referencedEvents = fieldRefs(receipt, "event_ids");
+                const sessionId = textField(receipt, "session_id");
+                const persistedEvents = trace.executionEvents.filter(
+                  (event) =>
+                    referencedEvents.includes(textField(event, "id") ?? "") &&
+                    textField(event, "session_id") === sessionId,
+                );
+                const durableTraceComplete =
+                  referencedEvents.length > 0 && persistedEvents.length === referencedEvents.length;
+                return (
+                  <li key={textField(receipt, "id") ?? index}>
+                    <b>{textField(receipt, "provider_ref") ?? "Unknown provider"}</b> — {textField(receipt, "outcome") ?? "Unsettled"}
+                    <small>Session: {sessionId ?? "Unknown"}</small>
+                    <small>
+                      Durable events: {persistedEvents.length}/{referencedEvents.length} · {durableTraceComplete ? "complete" : "incomplete"}
+                    </small>
+                    <small>Runtime version: {textField(receipt, "runtime_version") ?? "Not pinned"}</small>
+                    <small>Runtime digest: {textField(receipt, "runtime_digest") ?? "Fixture / not pinned"}</small>
+                    <small>Environment: {textField(receipt, "execution_environment_ref") ?? "Fixture / not pinned"}</small>
+                  </li>
+                );
+              })}
             </ul>
           )}
-          <p>Harness receipts are executor evidence only; they never establish a business outcome or acceptance.</p>
+          <p>Harness receipts are executor evidence only; they never establish a business outcome or acceptance. A settled receipt is trustworthy only when every referenced normalized event is durably present in the same session.</p>
           {trace.executorReconciliations.length > 0 && (
             <>
               <strong>Executor outcome reconciliation</strong>

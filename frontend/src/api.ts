@@ -81,6 +81,7 @@ export interface V115ControlPlaneData {
   source_of_truth_bindings: Array<Record<string, unknown>>;
   execution_bindings: Array<Record<string, unknown>>;
   execution_manifests: Array<Record<string, unknown>>;
+  execution_events?: Array<Record<string, unknown>>;
   execution_receipts: Array<Record<string, unknown>>;
   executor_outcome_reconciliations: Array<Record<string, unknown>>;
   interop_bindings: Array<Record<string, unknown>>;

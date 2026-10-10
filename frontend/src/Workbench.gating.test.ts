@@ -183,8 +183,12 @@ describe("canonical Work remains a separate product surface", () => {
         { id: "binding-1", work_id: "work:canonical-1" },
         { id: "binding-other", work_id: "work:foreign" },
       ],
+      execution_events: [
+        { id: "event-1", session_id: "session-1", kind: "ModelResponse", summary: "assistant committed" },
+        { id: "event-other-session", session_id: "session-other", kind: "Checkpoint", summary: "foreign trace" },
+      ],
       execution_receipts: [
-        { id: "receipt-harness-1", execution_binding_ref: "binding-1", work_generation: 1, provider_ref: "deepseek-harness", outcome: "completed", session_id: "session-1", runtime_version: "1.2.3", runtime_digest: "sha256:live-one" },
+        { id: "receipt-harness-1", execution_binding_ref: "binding-1", work_generation: 1, provider_ref: "deepseek-harness", outcome: "completed", session_id: "session-1", runtime_version: "1.2.3", runtime_digest: "sha256:live-one", event_ids: ["event-1"] },
         { id: "receipt-harness-old", execution_binding_ref: "binding-1", work_generation: 0, provider_ref: "deepseek-harness", outcome: "completed" },
         { id: "receipt-harness-other", execution_binding_ref: "binding-other", work_generation: 1, provider_ref: "pi", outcome: "completed" },
       ],
@@ -232,6 +236,7 @@ describe("canonical Work remains a separate product surface", () => {
     expect(trace.resolutions).toHaveLength(1);
     expect(trace.bindings).toHaveLength(1);
     expect(trace.receipts).toHaveLength(1);
+    expect(trace.executionEvents).toHaveLength(1);
     expect(trace.executorReconciliations).toHaveLength(1);
     expect(trace.interopBindings).toHaveLength(1);
     expect(trace.externalTasks).toHaveLength(1);
@@ -247,6 +252,7 @@ describe("canonical Work remains a separate product surface", () => {
     expect(html).toContain("Conditional");
     expect(html).toContain("ObservedOperational");
     expect(html).toContain("sha256:live-one");
+    expect(html).toContain("Durable events: 1/1 · complete");
     expect(html).toContain("https://mcp.example.com");
     expect(html).toContain("MCP task observation");
     expect(html).toContain("Value evidence refs: 1");
