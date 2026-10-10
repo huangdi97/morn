@@ -47,6 +47,9 @@ $env:MORN_DSH_MODE = "real"
 $env:MORN_DSH_WORKSPACE = "C:\morn\workspaces\dsh"
 $env:MORN_DSH_HOME = "C:\morn\runtime\dsh-home"
 $env:MORN_DSH_EXECUTION_ENVIRONMENT_REF = "env://container/dsh-runtime-a"
+$env:MORN_DSH_PROFILE_CONFIGURATION_REF = "dsh-profile://sdk/<attested-config-id>"
+# This secret-free ref identifies the exact DSH Home/Profile composition.
+# Changing Home patches/plugins requires a new ref and therefore a new ExecutionBinding.
 # MORN_DSH_WORKSPACE and MORN_DSH_HOME must be disjoint directory trees.
 # The environment ref must be issued/pinned by the same execution-environment
 # provisioning path that produced the RuntimeContext/ExecutionBinding.
@@ -167,6 +170,7 @@ $env:MORN_DSH_HOME = "C:\morn\runtime\dsh-home"
 $env:MORN_DSH_PROVIDER = "deepseek-official"
 $env:MORN_DSH_MODEL = "<exact-model-route>"
 $env:MORN_DSH_EXECUTION_ENVIRONMENT_REF = "env://container/dsh-runtime-a"
+$env:MORN_DSH_PROFILE_CONFIGURATION_REF = "dsh-profile://sdk/<attested-config-id>"
 $env:MORN_DSH_RUNTIME_VERSION = "<deployment-attested-version>"
 $env:MORN_DSH_RUNTIME_DIGEST = "sha256:<64-hex>"
 $env:MORN_EXECUTION_ATTESTOR = "<deployment-attestor-name>"
