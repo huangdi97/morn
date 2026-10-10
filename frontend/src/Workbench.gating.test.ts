@@ -145,6 +145,8 @@ describe("canonical Work remains a separate product surface", () => {
           assessment_id: "value-1",
           subject: "value:work:canonical-1:g1:outcome-1",
           requires_real_site: true,
+          customer_value_attestation_ref: "customer-value-attestation:42",
+          customer_value_attestation_active: true,
           currently_supported: false,
           current_real_site_state: "revoked",
           current_real_site_claim_id: "evidence-claim:revocation-1",
@@ -154,6 +156,7 @@ describe("canonical Work remains a separate product surface", () => {
     };
     const html = render(state, null);
     expect(html).toContain("CustomerValidated");
+    expect(html).toContain("Customer-value attestation: customer-value-attestation:42 · active");
     expect(html).toContain("Current RealSite support: revoked");
     expect(html).toContain("evidence-claim:revocation-1");
     expect(html).toContain("historical evidence, not a permanent entitlement");
