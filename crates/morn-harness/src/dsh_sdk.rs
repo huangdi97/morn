@@ -1084,6 +1084,7 @@ mod tests {
         )
         .with_dsh_home(nested_home.to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
+        .with_profile_configuration_ref("dsh-profile://sdk/morn-e0/v1")
         .with_runtime_identity(
             "fixture-runtime-1",
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1099,7 +1100,8 @@ mod tests {
 
     #[test]
     fn route_ref_changes_when_execution_route_changes_without_exposing_credentials() {
-        let mut config = DshSdkConfig::profile_sdk("/tmp/work", "deepseek-official", "model-a");
+        let mut config = DshSdkConfig::profile_sdk("/tmp/work", "deepseek-official", "model-a")
+            .with_profile_configuration_ref("dsh-profile://sdk/a");
         config.reasoning_effort = Some("high".to_string());
         let first = config.route_ref().unwrap();
         config.model = "model-b".to_string();
@@ -1120,6 +1122,7 @@ mod tests {
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
+        .with_profile_configuration_ref("dsh-profile://sdk/morn-e0/v1")
         .with_runtime_identity(
             "fixture-runtime-1",
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1364,6 +1367,7 @@ mod tests {
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
+        .with_profile_configuration_ref("dsh-profile://sdk/morn-e0/v1")
         .with_runtime_identity(
             "fixture-runtime-1",
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1390,6 +1394,7 @@ mod tests {
             max_tokens: Some(64),
             dsh_home: None,
             execution_environment_ref: None,
+            profile_configuration_ref: None,
             runtime_version: None,
             runtime_digest: None,
             request_timeout_ms: 10_000,
