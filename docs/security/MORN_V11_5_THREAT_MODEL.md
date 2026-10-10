@@ -84,6 +84,23 @@ is not equivalent to safely cancelling one Morn Work/Attempt.
 
 DSH session events are execution evidence, not Morn Work truth.
 
+For the real E0 DSH SDK route, direct provider tools are denied **before**
+execution. Morn appends a final SDK-profile overlay that installs a global
+monotonic `ctx.tools.guard()` denial, hides the currently shipped tool
+producers, and fixes the sandbox to read-only. The child environment separately
+sets `DSH_PERMISSION_MODE=read-only`. The overlay and guard bytes are hashed
+into the immutable provider route. Unknown tools contributed by earlier
+Profile/Home layers remain subject to the global guard. Any observed tool event
+after these controls is treated as a containment violation: output is rejected
+and the owned runtime is reaped.
+
+The Morn policy is not a user-switchable production option. Only in-process
+Rust protocol fixtures compiled under `cfg(test)` can bypass it; serde does
+not expose the bypass. A real execution still requires the independent
+`tool-mediation` environment attestation and exact runtime artifact digest,
+because a compromised or incompatible external runtime is outside the policy
+plugin's trust boundary.
+
 A live Harness launch must also bind to an exact execution-environment identity.
 The DSH/Pi deployment configuration and the RuntimeContext/ExecutionBinding must
 carry the same `execution_environment_ref`. A context that merely asserts
