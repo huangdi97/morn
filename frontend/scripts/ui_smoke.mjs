@@ -49,9 +49,16 @@ try {
       errors.push("console: evidence-aware release readiness summary is not visible");
     }
     if (route === "/console") {
-      const productionWrite = page.locator(".readiness-item", { hasText: "Production write" });
+      const productionWrite = page.locator(".readiness-item", { hasText: "Production-write evidence" });
       if (!(await productionWrite.count()) || !(await productionWrite.first().evaluate((node) => node.classList.contains("readiness-blocked")))) {
-        errors.push("console: production write must remain visibly blocked when it is not authorized");
+        errors.push("console: production-write evidence must remain visibly blocked without deployment proof");
+      }
+      const factoryWriteAuthority = page.locator(".readiness-item", { hasText: "Factory profile write authority" });
+      if (
+        !(await factoryWriteAuthority.count()) ||
+        !(await factoryWriteAuthority.first().evaluate((node) => node.classList.contains("readiness-blocked")))
+      ) {
+        errors.push("console: factory read-only profile must keep write authority visibly forbidden");
       }
       const ciConformance = page.locator(".readiness-item", { hasText: "CI conformance" });
       if (

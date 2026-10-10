@@ -16,6 +16,7 @@ pub enum ReadinessState {
     BlockedExternal,
     Revoked,
     MissingEvidence,
+    IdentityMismatch,
     RuntimeUnhealthy,
 }
 
@@ -85,6 +86,42 @@ fn evidence_axis(
     }
 }
 
+fn ci_axis(ledger: &EvidenceLedger, build_identity_ref: Option<&str>) -> ReleaseReadinessAxis {
+    let mut axis = evidence_axis(
+        ledger,
+        "ci-conformance",
+        "morn-v11.5-ci-conformance",
+        EvidenceClass::CiConformance,
+        "this deployment has not loaded an explicit CI conformance proof",
+    );
+    if axis.state != ReadinessState::Proven {
+        return axis;
+    }
+
+    let Some(build_identity_ref) = build_identity_ref
+        .map(str::trim)
+        .filter(|reference| !reference.is_empty())
+    else {
+        axis.state = ReadinessState::MissingEvidence;
+        axis.reason =
+            "CI proof exists, but the running deployment has no exact build identity configured"
+                .to_string();
+        return axis;
+    };
+
+    if !axis
+        .evidence_refs
+        .iter()
+        .any(|reference| reference == build_identity_ref)
+    {
+        axis.state = ReadinessState::IdentityMismatch;
+        axis.reason = format!(
+            "CI proof does not reference the running build identity {build_identity_ref}"
+        );
+    }
+    axis
+}
+
 fn runtime_axis(
     ledger: &EvidenceLedger,
     id: &str,
@@ -130,6 +167,15 @@ pub fn release_readiness_axes(
     dsh_runtime: RuntimeReadinessEvidence,
     pi_runtime: RuntimeReadinessEvidence,
 ) -> Vec<ReleaseReadinessAxis> {
+    release_readiness_axes_for_build(ledger, dsh_runtime, pi_runtime, None)
+}
+
+pub fn release_readiness_axes_for_build(
+    ledger: &EvidenceLedger,
+    dsh_runtime: RuntimeReadinessEvidence,
+    pi_runtime: RuntimeReadinessEvidence,
+    build_identity_ref: Option<&str>,
+) -> Vec<ReleaseReadinessAxis> {
     vec![
         evidence_axis(
             ledger,
@@ -145,13 +191,7 @@ pub fn release_readiness_axes(
             EvidenceClass::LocalFixture,
             "local reference slice is not proven",
         ),
-        evidence_axis(
-            ledger,
-            "ci-conformance",
-            "morn-v11.5-ci-conformance",
-            EvidenceClass::CiConformance,
-            "this deployment has not loaded an explicit CI conformance proof",
-        ),
+        ci_axis(ledger, build_identity_ref),
         runtime_axis(
             ledger,
             "deepseek-live-runtime",
@@ -202,6 +242,50 @@ mod tests {
         assert_eq!(axes[4].state, ReadinessState::BlockedExternal);
         assert_eq!(axes[5].state, ReadinessState::BlockedExternal);
         assert_eq!(axes[6].state, ReadinessState::BlockedExternal);
+    }
+
+    #[test]
+    fn ci_proof_must_name_the_exact_running_build_identity() {
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "morn-v11.5-ci-conformance",
+                    EvidenceClass::CiConformance,
+                    vec![
+                        "github-actions://run/42".to_string(),
+                        "git://huangdi97/morn/abc123".to_string(),
+                    ],
+                    "release-controller",
+                    "configured CI gates passed",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let no_identity = release_readiness_axes_for_build(
+            &ledger,
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            None,
+        );
+        assert_eq!(no_identity[2].state, ReadinessState::MissingEvidence);
+
+        let wrong_identity = release_readiness_axes_for_build(
+            &ledger,
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            Some("git://huangdi97/morn/other"),
+        );
+        assert_eq!(wrong_identity[2].state, ReadinessState::IdentityMismatch);
+
+        let exact_identity = release_readiness_axes_for_build(
+            &ledger,
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            Some("git://huangdi97/morn/abc123"),
+        );
+        assert_eq!(exact_identity[2].state, ReadinessState::Proven);
     }
 
     #[test]

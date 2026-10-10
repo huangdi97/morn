@@ -302,6 +302,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         dsh_harness,
         pi_harness,
         execution_environment_attestations,
+        build_identity_ref,
         evidence_ledger,
         supply_chain_verifications,
     ) = {
@@ -310,6 +311,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             guard.dsh_harness.clone(),
             guard.pi_harness.clone(),
             guard.execution_environments.attestations(),
+            guard.build_identity_ref.clone(),
             guard.evidence_ledger.clone(),
             guard.supply_chain_verifications.clone(),
         )
@@ -434,8 +436,12 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             pi_health.state, pi_health.reason
         ))
     };
-    let release_readiness =
-        morn_assurance::release_readiness_axes(&evidence_ledger, dsh_readiness, pi_readiness);
+    let release_readiness = morn_assurance::release_readiness_axes_for_build(
+        &evidence_ledger,
+        dsh_readiness,
+        pi_readiness,
+        build_identity_ref.as_deref(),
+    );
 
     let required_guarantees: Vec<String> = profile
         .requirements
@@ -546,6 +552,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             "claims": evidence_ledger.claims()
         },
         "release_readiness": {
+            "build_identity_ref": build_identity_ref,
             "axes": release_readiness,
             "semantics": {
                 "aggregate_ready": false,

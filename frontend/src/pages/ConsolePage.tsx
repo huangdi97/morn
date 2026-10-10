@@ -68,6 +68,7 @@ function readinessTone(value: string): "ready" | "blocked" | "neutral" {
     normalized.includes("blocked") ||
     normalized.includes("revoked") ||
     normalized.includes("missing") ||
+    normalized.includes("mismatch") ||
     normalized.includes("unhealthy") ||
     normalized.includes("not authorized")
   ) {
@@ -89,9 +90,9 @@ function readinessLabel(id: string): string {
     case "pi-live-runtime":
       return "Pi live runtime";
     case "customer-real-site":
-      return "Customer / factory site";
+      return "Real-site evidence";
     case "production-write":
-      return "Production write";
+      return "Production-write evidence";
     default:
       return id;
   }
@@ -175,6 +176,15 @@ export default function ConsolePage() {
                 </small>
               </article>
             ))}
+            <article
+              className={`readiness-item ${v115.factory_profile.production_write ? "readiness-neutral" : "readiness-blocked"}`}
+            >
+              <span>Factory profile write authority</span>
+              <strong>{v115.factory_profile.production_write ? "profile permits evaluation" : "forbidden"}</strong>
+              <small className="readiness-reason">
+                Evidence never grants write authority. Every effect still requires Work/Profile/Authority/Permit checks.
+              </small>
+            </article>
             <article className="readiness-item readiness-neutral">
               <span>Attested environments</span>
               <strong>{v115.execution_environment_attestations.filter((item) => item.active).length}</strong>
@@ -190,7 +200,10 @@ export default function ConsolePage() {
               </small>
             </article>
           </div>
-          <p className="release-readiness-footnote">{v115.release_readiness.semantics.reason}</p>
+          <p className="release-readiness-footnote">
+            Running build identity: {v115.release_readiness.build_identity_ref ?? "not configured — CI axis cannot be proven"}.
+            {" "}{v115.release_readiness.semantics.reason}
+          </p>
         </section>
       )}
       <div className="grid">

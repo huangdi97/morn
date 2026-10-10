@@ -79,6 +79,10 @@ pub struct AppInner {
     /// Deployment-issued exact authorizations for resolving one ambiguous
     /// executor receipt. Bearer IDs are delivered out-of-band and consumed once.
     pub executor_reconciliation_authorizations: Vec<ExecutorOutcomeReconciliationAuthorization>,
+    /// Exact identity of the running build/artifact. Release-readiness CI
+    /// evidence must cite this same reference; historical CI cannot be reused
+    /// for a different binary/commit.
+    pub build_identity_ref: Option<String>,
     /// Deployment-owned evidence claims. Repository/reference claims are loaded
     /// first; external RealSite/ProductionWrite proof may only come from the
     /// explicit deployment file, never from an HTTP self-assertion.
@@ -466,6 +470,29 @@ fn configured_executor_reconciliation_authorizations(
     Ok(authorizations)
 }
 
+fn configured_build_identity_ref() -> morn_kernel::Result<Option<String>> {
+    match std::env::var("MORN_BUILD_IDENTITY_REF") {
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Ok(value) => {
+            let value = value.trim();
+            if value.is_empty() {
+                return Err(morn_kernel::error::Error::validation(
+                    "MORN_BUILD_IDENTITY_REF must not be empty when set",
+                ));
+            }
+            if !value.contains("://") {
+                return Err(morn_kernel::error::Error::validation(
+                    "MORN_BUILD_IDENTITY_REF must be an explicit evidence URI",
+                ));
+            }
+            Ok(Some(value.to_string()))
+        }
+        Err(error) => Err(morn_kernel::error::Error::validation(format!(
+            "cannot read MORN_BUILD_IDENTITY_REF: {error}"
+        ))),
+    }
+}
+
 fn configured_evidence_ledger() -> morn_kernel::Result<EvidenceLedger> {
     let mut ledger = reference_evidence_ledger();
     let Ok(path) = std::env::var("MORN_EVIDENCE_CLAIMS_FILE") else {
@@ -618,6 +645,7 @@ impl AppState {
         let customer_value_attestations = configured_customer_value_attestations()?;
         let executor_reconciliation_authorizations =
             configured_executor_reconciliation_authorizations()?;
+        let build_identity_ref = configured_build_identity_ref()?;
         let evidence_ledger = configured_evidence_ledger()?;
         let supply_chain_verifications = configured_supply_chain_verifications()?;
         let mut inner = AppInner {
@@ -638,6 +666,7 @@ impl AppState {
             acceptance_review_authorizations,
             customer_value_attestations,
             executor_reconciliation_authorizations,
+            build_identity_ref,
             evidence_ledger,
             supply_chain_verifications,
             evolution: EvolutionEngine::new(),

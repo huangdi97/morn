@@ -304,6 +304,18 @@ baseline claims and then appends this deployment file. Repository blockers use a
 historical baseline timestamp, so genuine evidence produced before process
 startup can supersede them without violating append-only claim ordering.
 
+The running deployment must also set an immutable build identity reference, for
+example:
+
+```powershell
+$env:MORN_BUILD_IDENTITY_REF = "git://huangdi97/morn/bdc9e924f962f436a0dd52a4ac43c4ad5a83774c"
+```
+
+A CI claim is current only when one of its `evidence_refs` exactly equals
+`MORN_BUILD_IDENTITY_REF`. A proof for another SHA is reported as
+`identity-mismatch`; omitting the build identity keeps CI readiness
+`missing-evidence` even when a historical CI claim exists.
+
 Example exact-head CI proof:
 
 ```json

@@ -305,11 +305,18 @@ export interface V115Status {
     }>;
   };
   release_readiness: {
+    build_identity_ref: string | null;
     axes: Array<{
       id: string;
       subject: string;
       evidence_class: string;
-      state: "proven" | "blocked-external" | "revoked" | "missing-evidence" | "runtime-unhealthy";
+      state:
+        | "proven"
+        | "blocked-external"
+        | "revoked"
+        | "missing-evidence"
+        | "identity-mismatch"
+        | "runtime-unhealthy";
       reason: string;
       evidence_refs: string[];
     }>;
