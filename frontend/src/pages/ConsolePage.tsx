@@ -224,6 +224,34 @@ export default function ConsolePage() {
               <KeyValue k="Real Pi" v={v115.claims.real_pi} />
               <KeyValue k="Real factory" v={v115.claims.real_factory} />
             </Card>
+            <Card title="Capability Supply-Chain Trust">
+              <KeyValue
+                k="Site admission policy"
+                v={
+                  v115.capability_supply_chain.site_admission_requires_verified_signature_and_provenance
+                    ? "verified signature + provenance required"
+                    : "not enforced"
+                }
+              />
+              <KeyValue
+                k="Caller self-assertion"
+                v={v115.capability_supply_chain.caller_can_self_assert_verification ? "allowed" : "forbidden"}
+              />
+              <KeyValue
+                k="Deployment-verified digests"
+                v={v115.capability_supply_chain.verification_evidence.length}
+              />
+              {v115.capability_supply_chain.verification_evidence.map((evidence) => (
+                <div key={evidence.subject_digest} className="kv">
+                  <span className="kv-key">{evidence.subject_digest}</span>
+                  <span className="kv-value">
+                    signature={evidence.signature_verified ? "verified" : "missing"} ·
+                    provenance={evidence.provenance_verified ? "verified" : "missing"} ·
+                    {evidence.verifier_ref}
+                  </span>
+                </div>
+              ))}
+            </Card>
             <Card title="Evidence Class / Non-Claim Discipline">
               <KeyValue k="Evidence classes (categorical)" v={v115.evidence_policy.classes.join(", ")} />
               <KeyValue

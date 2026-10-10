@@ -270,6 +270,15 @@ export interface V115Status {
     stages: string[];
     artifact_compilers: string[];
     qualification_is_not_admission: boolean;
+    site_admission_requires_verified_signature_and_provenance: boolean;
+    caller_can_self_assert_verification: boolean;
+    verification_evidence: Array<{
+      subject_digest: string;
+      verifier_ref: string;
+      signature_verified: boolean;
+      provenance_verified: boolean;
+      evidence_refs: string[];
+    }>;
   };
   factory_profile: {
     id: string;

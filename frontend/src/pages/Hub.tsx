@@ -32,6 +32,14 @@ interface SupplyRelease {
   status: string;
   content_digest: string;
   signature_ref: string | null;
+  provenance_ref: string | null;
+  supply_chain_verification: {
+    subject_digest: string;
+    verifier_ref: string;
+    signature_verified: boolean;
+    provenance_verified: boolean;
+    evidence_refs: string[];
+  } | null;
 }
 interface SupplyAdmission {
   id: string;
@@ -184,7 +192,8 @@ export default function Hub() {
           <h2>v11.5 Capability Supply Chain</h2>
           <p>
             Declared → Observed → Qualified → Released → Site-admitted are separate
-            decisions. A digest or harness registration alone does not authorize execution.
+            decisions. A registry digest or claimed signature URL is not enough: site admission
+            requires deployment-verified signature and provenance evidence for the exact digest.
           </p>
         </div>
         {supplyError ? (
@@ -215,7 +224,29 @@ export default function Hub() {
                   <KeyValue k="Provider" v={cap.manifest.provider_ref} />
                   <KeyValue k="Published digest" v={latestRelease?.content_digest ?? "No release"} />
                   <KeyValue k="Release" v={latestRelease ? <StatusPill value={latestRelease.status} /> : "Not released"} />
-                  <KeyValue k="Signature reference" v={latestRelease?.signature_ref ?? "Not supplied / unverified"} />
+                  <KeyValue k="Signature reference" v={latestRelease?.signature_ref ?? "Not supplied"} />
+                  <KeyValue k="Provenance reference" v={latestRelease?.provenance_ref ?? "Not supplied"} />
+                  <KeyValue
+                    k="Supply-chain trust"
+                    v={
+                      latestRelease?.supply_chain_verification ? (
+                        <StatusPill
+                          value={
+                            latestRelease.supply_chain_verification.signature_verified &&
+                            latestRelease.supply_chain_verification.provenance_verified
+                              ? "Verified"
+                              : "Partial"
+                          }
+                        />
+                      ) : (
+                        <StatusPill value="Unverified" />
+                      )
+                    }
+                  />
+                  <KeyValue
+                    k="Verifier"
+                    v={latestRelease?.supply_chain_verification?.verifier_ref ?? "Deployment verification required"}
+                  />
                   <KeyValue k="Qualifications" v={qualifications.map((q) => q.status).join(", ") || "None recorded"} />
                   <KeyValue
                     k="Site / Profile admission"

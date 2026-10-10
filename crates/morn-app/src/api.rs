@@ -297,13 +297,20 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         .map(|item| json!({ "id": item.id, "version": item.version }))
         .collect();
     let mut provider_catalog = morn_runtime::reference_provider_catalog();
-    let (dsh_harness, pi_harness, execution_environment_attestations, evidence_ledger) = {
+    let (
+        dsh_harness,
+        pi_harness,
+        execution_environment_attestations,
+        evidence_ledger,
+        supply_chain_verifications,
+    ) = {
         let guard = state.lock();
         (
             guard.dsh_harness.clone(),
             guard.pi_harness.clone(),
             guard.execution_environments.attestations(),
             guard.evidence_ledger.clone(),
+            guard.supply_chain_verifications.clone(),
         )
     };
     let (
@@ -482,9 +489,18 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             "authority": "provider-neutral; native policy reference, OPA/Cedar/customer IAM compatible by contract"
         },
         "capability_supply_chain": {
-            "stages": ["Declared", "Observed", "Qualified", "Admitted", "Suspended", "Retired"],
+            "stages": ["Declared", "Observed", "Qualified", "Released", "Admitted", "Suspended", "Retired"],
             "artifact_compilers": ["OpenAPI2Capability", "SOP2ProcedureCapability", "Repo2Capability", "ReviewedPaper2Capability", "Model2Capability", "Workflow2Capability"],
-            "qualification_is_not_admission": true
+            "qualification_is_not_admission": true,
+            "site_admission_requires_verified_signature_and_provenance": true,
+            "caller_can_self_assert_verification": false,
+            "verification_evidence": supply_chain_verifications.iter().map(|evidence| json!({
+                "subject_digest": evidence.subject_digest,
+                "verifier_ref": evidence.verifier_ref,
+                "signature_verified": evidence.signature_verified,
+                "provenance_verified": evidence.provenance_verified,
+                "evidence_refs": evidence.evidence_refs
+            })).collect::<Vec<_>>()
         },
         "profiles": profiles,
         "factory_profile": {
