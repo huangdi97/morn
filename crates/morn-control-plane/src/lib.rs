@@ -22,7 +22,9 @@ pub use capability_gate::{
     CapabilityEligibilityBlock, CapabilityEligibilityGate, CapabilityEligibilityReport,
 };
 pub use condition_evidence::{derive_controller_inputs, ConditionEvidence, ConditionEvidenceId};
-pub use controller_runtime::{ControllerTickResult, DurableWorkControllerRuntime};
+pub use controller_runtime::{
+    ControllerTickResult, DurableBusinessEvidenceControllerRuntime, DurableWorkControllerRuntime,
+};
 pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
 
 pub use provider_gate::{ProviderGate, ProviderGateBlock, ProviderGatePolicy, ProviderGateReport};
@@ -758,7 +760,7 @@ fn source_ref_within_authority(binding_root: &str, observed_ref: &str) -> bool {
 /// Verify that attested source provenance is not merely syntactically present
 /// but points back to the exact durable authority and one-shot observation
 /// consumption record that created this Outcome.
-fn require_attested_outcome_provenance(
+pub(crate) fn require_attested_outcome_provenance(
     store: &MornStore,
     work: &WorkResource,
     outcome: &ObservedOutcome,
