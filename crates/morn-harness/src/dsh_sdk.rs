@@ -1660,7 +1660,10 @@ mod tests {
                         std::thread::sleep(std::time::Duration::from_secs(30));
                         continue;
                     }
-                    if prompt_text == "__tool_activity__" {
+                    if matches!(
+                        prompt_text,
+                        "__tool_activity__" | "__tool_then_idle_without_turn_end__"
+                    ) {
                         write(
                             &mut stdout,
                             json!({
@@ -1692,6 +1695,17 @@ mod tests {
                                 }
                             }),
                         );
+                    }
+                    if prompt_text == "__tool_then_idle_without_turn_end__" {
+                        write(
+                            &mut stdout,
+                            json!({
+                                "jsonrpc":"2.0",
+                                "method":"session.status",
+                                "params":{"sessionId":session_id,"status":"idle"}
+                            }),
+                        );
+                        continue;
                     }
                     write(
                         &mut stdout,

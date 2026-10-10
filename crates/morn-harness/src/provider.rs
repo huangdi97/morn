@@ -1050,27 +1050,34 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     state.last_event = format!("dsh_prompt:{}", state.step);
                 }
 
-                let run = self
-                    .real_client
-                    .as_mut()
-                    .ok_or_else(|| Error::internal("DSH SDK client missing after initialization"))?
-                    .run_text_prompt(session_id, input);
+                let (run, turn_notifications) = {
+                    let client = self
+                        .real_client
+                        .as_mut()
+                        .ok_or_else(|| {
+                            Error::internal("DSH SDK client missing after initialization")
+                        })?;
+                    let notification_start = client.notifications.len();
+                    let run = client.run_text_prompt(session_id, input);
+                    let turn_notifications = client.notifications[notification_start..].to_vec();
+                    (run, turn_notifications)
+                };
                 let state = self
                     .sessions
                     .get_mut(session_id)
                     .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
-                let mut prohibited_tool_activity = false;
-                if let Ok(run) = &run {
-                    let normalized = normalize_dsh_notifications(
-                        &state.ctx.workspace_id,
-                        session_id,
-                        &run.notifications,
-                    );
-                    prohibited_tool_activity =
-                        run.notifications.iter().any(dsh_notification_violates_e0);
-
-                    state.events.extend(normalized);
-                }
+                // Inspect executor activity even when the SDK turn itself
+                // returns an error. A policy violation followed by timeout,
+                // malformed settlement or transport failure is still a policy
+                // violation and must remain visible in the audit trail.
+                let normalized = normalize_dsh_notifications(
+                    &state.ctx.workspace_id,
+                    session_id,
+                    &turn_notifications,
+                );
+                let prohibited_tool_activity =
+                    turn_notifications.iter().any(dsh_notification_violates_e0);
+                state.events.extend(normalized);
                 if prohibited_tool_activity {
                     // Real DSH is admitted only through Morn's E0 harness seam.
                     // Tool execution belongs behind governed Capability /
@@ -1454,6 +1461,27 @@ mod dsh_provider_tests {
             )
         }));
         assert!(provider.send(&session.id, "blind retry forbidden").is_err());
+    }
+
+    #[test]
+    fn real_dsh_e0_policy_violation_survives_turn_settlement_error() {
+        let (mut provider, ctx, _handle) = real_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        let error = provider
+            .send(&session.id, "__tool_then_idle_without_turn_end__")
+            .unwrap_err();
+        assert!(
+            format!("{error}").contains("tool activity"),
+            "policy violation must dominate the later settlement error"
+        );
+        assert!(provider.real_client.is_none());
+        let snapshot = provider.inspect(&session.id).unwrap();
+        assert_eq!(snapshot.status, "policy-violation-runtime-reaped");
+        assert_eq!(snapshot.last_event, "dsh_e0_tool_policy_violation");
+        let events = provider.stream_events(&session.id);
+        assert!(events
+            .iter()
+            .any(|event| event.kind == ExecutionEventKind::ToolProposed));
     }
 
     #[test]
