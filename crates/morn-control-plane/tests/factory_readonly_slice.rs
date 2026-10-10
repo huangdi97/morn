@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 
 use morn_assurance::{
     AdmissionService, ProfileConformanceAttestation, QualificationEvidence,
-    StrictQualificationRequest,
+    StrictQualificationRequest, VerifiedReleaseRequest,
 };
 use morn_capability::effect::EffectContract;
 use morn_capability::{
@@ -32,6 +32,7 @@ use morn_integration::{
 use morn_kernel::error::Result;
 use morn_kernel::ids::{ActorInstanceId, CapabilityId, PrincipalId, WorkspaceId};
 use morn_kernel::policy::{Policy, PolicyRule};
+use morn_package::SupplyChainVerificationEvidence;
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
     decide_bound, enforce_authority, ActionAttempt, AttemptState, AuthorityProvider,
@@ -188,17 +189,24 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             },
         )
         .unwrap();
+    let release_digest = format!("sha256:{}", "a".repeat(64));
     let release = admission
-        .record_release(
+        .record_verified_release(
             &mut capability,
             &qualification,
-            format!(
-                "oci://fixture/morn/equipment-investigator@sha256:{}",
-                "a".repeat(64)
+            VerifiedReleaseRequest::new(
+                format!("oci://fixture/morn/equipment-investigator@{release_digest}"),
+                release_digest.clone(),
+                "sigstore://fixture/equipment-investigator",
+                "slsa://fixture/equipment-investigator",
+                SupplyChainVerificationEvidence {
+                    subject_digest: release_digest,
+                    verifier_ref: "fixture://supply-chain-verifier".to_string(),
+                    signature_verified: true,
+                    provenance_verified: true,
+                    evidence_refs: vec!["fixture://supply-chain-verifier/proof".to_string()],
+                },
             ),
-            format!("sha256:{}", "a".repeat(64)),
-            Some("sigstore://fixture/equipment-investigator".to_string()),
-            Some("slsa://fixture/equipment-investigator".to_string()),
         )
         .unwrap();
     assert!(capability
