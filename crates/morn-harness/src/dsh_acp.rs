@@ -24,6 +24,7 @@ use serde_json::{json, Value};
 
 use morn_kernel::error::{Error, Result};
 
+use crate::dsh_sdk::{dsh_morn_e0_tool_policy_identity, validate_profile_configuration_ref};
 use crate::subprocess_wire::{read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_FRAMES};
 
 pub const DSH_ACP_PROTOCOL_VERSION: u64 = 1;
@@ -47,6 +48,14 @@ pub struct DshAcpConfig {
     pub args: Vec<String>,
     pub cwd: String,
     pub dsh_home: String,
+    /// Exact execution-environment identity that owns this ACP subprocess.
+    pub execution_environment_ref: Option<String>,
+    /// Secret-free identity for the exact DSH profile/home composition.
+    pub profile_configuration_ref: Option<String>,
+    /// Deployment-attested DSH distribution identity. ACP agentInfo.version
+    /// is wire identity only and must never substitute for these fields.
+    pub runtime_version: Option<String>,
+    pub runtime_digest: Option<String>,
     pub request_timeout_ms: u64,
     pub prompt_timeout_ms: u64,
     /// Production ACP launches reuse Morn's final E0 DSH tool-deny policy and
@@ -63,12 +72,104 @@ impl DshAcpConfig {
             args: vec!["--profile".to_string(), "acp".to_string()],
             cwd: cwd.into(),
             dsh_home: dsh_home.into(),
+            execution_environment_ref: None,
+            profile_configuration_ref: None,
+            runtime_version: None,
+            runtime_digest: None,
             request_timeout_ms: 30_000,
             prompt_timeout_ms: 300_000,
             enforce_morn_e0_tool_policy: true,
             #[cfg(test)]
             test_env: BTreeMap::new(),
         }
+    }
+
+    pub fn with_execution_environment_ref(
+        mut self,
+        environment_ref: impl Into<String>,
+    ) -> Self {
+        self.execution_environment_ref = Some(environment_ref.into());
+        self
+    }
+
+    pub fn with_profile_configuration_ref(
+        mut self,
+        profile_configuration_ref: impl Into<String>,
+    ) -> Self {
+        self.profile_configuration_ref = Some(profile_configuration_ref.into());
+        self
+    }
+
+    pub fn with_runtime_identity(
+        mut self,
+        version: impl Into<String>,
+        digest: impl Into<String>,
+    ) -> Self {
+        self.runtime_version = Some(version.into());
+        self.runtime_digest = Some(digest.into());
+        self
+    }
+
+    pub fn route_ref(&self) -> Result<String> {
+        let profile_configuration_ref = self
+            .profile_configuration_ref
+            .as_deref()
+            .ok_or_else(|| Error::validation("DSH ACP route requires profile configuration"))?;
+        validate_profile_configuration_ref(profile_configuration_ref)?;
+        let route = json!({
+            "args": &self.args,
+            "profile_configuration_ref": profile_configuration_ref,
+            "tool_policy": if self.enforce_morn_e0_tool_policy {
+                Some(dsh_morn_e0_tool_policy_identity())
+            } else {
+                None
+            },
+            "permission_policy": "reject-all",
+            "transport": "acp-v1",
+        });
+        Ok(format!("dsh-acp-route:{route}"))
+    }
+
+    pub fn validate_for_real(&self) -> Result<()> {
+        self.validate()?;
+        if self
+            .execution_environment_ref
+            .as_deref()
+            .is_none_or(|reference| reference.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "real DSH ACP requires a pinned execution_environment_ref",
+            ));
+        }
+        let profile_configuration_ref = self
+            .profile_configuration_ref
+            .as_deref()
+            .ok_or_else(|| Error::validation("real DSH ACP requires profile_configuration_ref"))?;
+        validate_profile_configuration_ref(profile_configuration_ref)?;
+        if self
+            .runtime_version
+            .as_deref()
+            .is_none_or(|version| version.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "real DSH ACP requires a deployment-attested runtime version",
+            ));
+        }
+        let digest = self
+            .runtime_digest
+            .as_deref()
+            .ok_or_else(|| Error::validation("real DSH ACP requires a runtime SHA-256 digest"))?;
+        let Some(hex) = digest.strip_prefix("sha256:") else {
+            return Err(Error::validation(
+                "real DSH ACP runtime digest must use sha256:<64-hex>",
+            ));
+        };
+        if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(Error::validation(
+                "real DSH ACP runtime digest must use sha256:<64-hex>",
+            ));
+        }
+        Ok(())
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -860,6 +961,37 @@ mod tests {
             workspace.join(".dsh").to_string_lossy(),
         );
         assert!(nested.validate().is_err());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn real_acp_config_requires_deployment_identity_and_pins_route() {
+        let root = std::env::temp_dir().join(format!("morn-acp-real-{}", uuid::Uuid::new_v4()));
+        let workspace = root.join("workspace");
+        let home = root.join("home");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        let base = DshAcpConfig::profile_acp(workspace.to_string_lossy(), home.to_string_lossy());
+        assert!(base.validate().is_ok());
+        assert!(base.validate_for_real().is_err());
+
+        let configured = base
+            .with_execution_environment_ref("env://container/acp")
+            .with_profile_configuration_ref(format!(
+                "deepseek-harness-profile@1.0.0#sha256:{}",
+                "a".repeat(64)
+            ))
+            .with_runtime_identity("1.0.0", format!("sha256:{}", "b".repeat(64)));
+        assert!(configured.validate_for_real().is_ok());
+        let route = configured.route_ref().unwrap();
+        assert!(route.contains("dsh-acp-route:"));
+        assert!(route.contains("permission_policy"));
+        assert!(!route.contains("env://container/acp"));
+        assert!(!route.contains(&"b".repeat(64)));
+
+        let mut bad_digest = configured.clone();
+        bad_digest.runtime_digest = Some("sha256:short".to_string());
+        assert!(bad_digest.validate_for_real().is_err());
         let _ = std::fs::remove_dir_all(root);
     }
 

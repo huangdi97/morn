@@ -124,7 +124,7 @@ const DSH_MORN_E0_TOOL_POLICY_PATCH: &str = r#"# Generated/owned by Morn. Applie
 "#;
 
 /// Secret-free cryptographic identity for the exact Morn policy composition.
-fn dsh_morn_e0_tool_policy_identity() -> String {
+pub(crate) fn dsh_morn_e0_tool_policy_identity() -> String {
     let mut digest = Sha256::new();
     digest.update(DSH_MORN_E0_TOOL_POLICY_PATCH.as_bytes());
     digest.update([0]);
@@ -181,7 +181,7 @@ const fn default_true() -> bool {
     true
 }
 
-fn validate_profile_configuration_ref(reference: &str) -> Result<()> {
+pub(crate) fn validate_profile_configuration_ref(reference: &str) -> Result<()> {
     let (provider_version, digest) = reference.rsplit_once('#').ok_or_else(|| {
         Error::validation(
             "DSH profile_configuration_ref must use deepseek-harness-profile@<version>#sha256:<64-hex>",
