@@ -1,6 +1,6 @@
 # STATUS — Morn v11.5 Control Plane Convergence
 
-Updated: 2026-10-10  
+Updated: 2026-10-11  
 Branch: `feat/v11.5-control-plane-convergence`  
 PR: #1 (draft)
 
@@ -52,6 +52,10 @@ Canonical invariants:
 - Independent reviewer identity/authorization is attested and generation-scoped.
 - Accepted outcome/value records cannot borrow evidence from another Work/generation/workspace.
 - Harness output and assistant text never directly create ObservedOutcome or AcceptanceDecision.
+- Deployment evidence files require a deployment-pinned issuer identity; payloads cannot self-select a trusted issuer.
+- Customer RealSite and ProductionWrite readiness is bound to the exact `MORN_DEPLOYMENT_SITE_REF`; evidence from one site cannot make another site ready.
+- RealRuntime proof must cite the exact active DSH/Pi runtime version+digest in addition to a fresh Healthy lease.
+- Evidence history is time-aware: equal-time conflicting subject/class claims are rejected, and future-dated claims are not current proof for readiness or CustomerValidated value.
 
 ### Capability supply chain
 - Artifact -> candidate Capability compilers for OpenAPI, SOP/procedure, repository, reviewed paper, model and workflow manifests.
@@ -99,17 +103,19 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `152fd22bacc68c3b9e8b480370a3b665509da23a`.
-- Exact-head GitHub Actions: `38060442988` — **5/5 SUCCESS**.
+- Verified implementation checkpoint: `93742873b3f1f946d03328ae57b6e5b9eb608fdb`.
+- Exact-head GitHub Actions: `38146244435` — **5/5 SUCCESS**.
 - Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; zero-domain Core; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows; Cordis reference runtime; Windows desktop reference build.
-- Governed live-provider smoke additionally requires an exact `MORN_PROVIDER_SMOKE_OK` canary and a fresh post-turn `Healthy` lease. Process/session initialization alone is not provider-health evidence.
-- DSH SDK ↔ Pi RPC adapter-wire semantic-neutrality now runs through the actual subprocess adapter code with the same pinned Work/generation/ExecutionBinding/execution environment; model output is deliberately not compared.
+- Release-readiness trust hardening at this checkpoint binds exact build identity, exact active provider runtime artifact, deployment-pinned evidence issuer and exact deployment site; evidence time ambiguity/future claims fail closed.
+- Governed live-provider smoke still additionally requires an exact `MORN_PROVIDER_SMOKE_OK` canary and a fresh post-turn `Healthy` lease. Process/session initialization alone is not provider-health evidence.
+- DSH SDK ↔ Pi RPC adapter-wire semantic-neutrality runs through the actual subprocess adapter code with the same pinned Work/generation/ExecutionBinding/execution environment; model output is deliberately not compared.
 - ACP v1 lifecycle transport includes session-scoped out-of-band cancel that is reachable while prompt settlement blocks; a cancel write is only a request, not proof of cancellation or rollback.
-- A code-level unfinished-marker audit across control-plane, harness, runtime, store, Work/World/Capability, Foundry/Assurance/OpInt and the four product surfaces found no repository-local TODO/FIXME/unimplemented/stub gap requiring further implementation.
+- Current repository-local gap audit found no remaining TODO/FIXME/unimplemented/stub item required to satisfy the v11.5 reference design. Remaining blocker classes below require external deployment/customer evidence.
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified checkpoint `152fd22bacc68c3b9e8b480370a3b665509da23a` only.**
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `93742873b3f1f946d03328ae57b6e5b9eb608fdb` and Actions `38146244435`.**
+- This STATUS update is documentation-only and must obtain its own exact-head CI before it becomes the next verified repository HEAD.
 - PR #1 remains draft because local engineering evidence is not production/customer evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.
 - A later code SHA must obtain its own full exact-head CI before inheriting `ALL_LOCAL_GATES_PASS`.

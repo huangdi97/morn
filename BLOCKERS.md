@@ -2,7 +2,7 @@
 
 只记录 **无法通过继续编码/测试在当前环境解决** 的真实阻塞。
 
-## Current blocker index — 2026-10-10
+## Current blocker index — 2026-10-11
 
 This section is authoritative for the current v11.5 convergence branch. Older
 entries below are retained as historical evidence and must not be read as the
@@ -40,16 +40,25 @@ current implementation state.
 - **Production/physical write — NOT AUTHORIZED.** No local fixture, Harness
   success, Provider health lease, or CI run upgrades this state.
 
-Repository-local engineering gates are now verified at checkpoint
-`152fd22bacc68c3b9e8b480370a3b665509da23a` by exact-head Actions run
-`38060442988` (**5/5 SUCCESS**). This checkpoint also exercises the
-DSH-SDK ↔ Pi-RPC **local adapter-wire semantic-neutrality gate** against the same
-pinned Work/generation/ExecutionBinding/execution environment without comparing
-model text or fabricating provider credentials. This establishes
-**ALL_LOCAL_GATES_PASS** for that exact checkpoint while every blocker above
-remains external. It must not claim authenticated provider, real-site,
-customer-value, production-write or physical-control evidence without those
-sources.
+Repository-local engineering gates are now verified at implementation checkpoint
+`93742873b3f1f946d03328ae57b6e5b9eb608fdb` by exact-head Actions run
+`38146244435` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
+local adapter-wire semantic-neutrality gate and the release-readiness trust
+hardening: exact build identity, exact provider runtime artifact identity,
+deployment-pinned evidence issuer, exact deployment site, and fail-closed
+evidence time semantics. None of those controls manufactures external evidence.
+Every blocker above remains external and must not be promoted by fixture/CI
+results. This documentation-only update requires its own exact-head CI before
+becoming the next verified repository HEAD.
+
+## 2026-10-11 local-design convergence
+
+- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** under the current v11.5 reference scope after the exact-head 9374287 gate.
+- Release readiness no longer trusts a deployment claim merely because its payload names an issuer; `MORN_EVIDENCE_ISSUER` pins the deployment-owned issuer.
+- RealSite and ProductionWrite readiness are exact-site scoped through `MORN_DEPLOYMENT_SITE_REF`.
+- RealRuntime readiness requires the current provider version/digest identity and a fresh Healthy lease; an old smoke claim cannot be combined with a replacement runtime.
+- Equal-time conflicting evidence is rejected and future-dated evidence cannot satisfy readiness or customer-value support.
+- These are local trust/control-plane completions only. They do **not** change B-001/B-002/B-003/B-004/G4-B-002/G12 or authorize production/physical write.
 
 ## Historical evidence retained below
 
