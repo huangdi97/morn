@@ -84,10 +84,7 @@ impl DshAcpConfig {
         }
     }
 
-    pub fn with_execution_environment_ref(
-        mut self,
-        environment_ref: impl Into<String>,
-    ) -> Self {
+    pub fn with_execution_environment_ref(mut self, environment_ref: impl Into<String>) -> Self {
         self.execution_environment_ref = Some(environment_ref.into());
         self
     }
