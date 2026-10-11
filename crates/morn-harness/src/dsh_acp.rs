@@ -169,6 +169,50 @@ impl DshAcpConfig {
         Ok(())
     }
 
+    pub fn from_env() -> Result<Self> {
+        let cwd = std::env::var("MORN_DSH_ACP_WORKSPACE")
+            .map_err(|_| Error::validation("MORN_DSH_ACP_WORKSPACE is required for real ACP"))?;
+        let home = std::env::var("MORN_DSH_ACP_HOME")
+            .map_err(|_| Error::validation("MORN_DSH_ACP_HOME is required for real ACP"))?;
+        let environment_ref = std::env::var("MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF")
+            .map_err(|_| {
+                Error::validation(
+                    "MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF is required for real ACP",
+                )
+            })?;
+        let profile_configuration_ref =
+            std::env::var("MORN_DSH_ACP_PROFILE_CONFIGURATION_REF").map_err(|_| {
+                Error::validation(
+                    "MORN_DSH_ACP_PROFILE_CONFIGURATION_REF is required for real ACP",
+                )
+            })?;
+        let runtime_version = std::env::var("MORN_DSH_ACP_RUNTIME_VERSION").map_err(|_| {
+            Error::validation("MORN_DSH_ACP_RUNTIME_VERSION is required for real ACP")
+        })?;
+        let runtime_digest = std::env::var("MORN_DSH_ACP_RUNTIME_DIGEST").map_err(|_| {
+            Error::validation("MORN_DSH_ACP_RUNTIME_DIGEST is required for real ACP")
+        })?;
+        let mut config = Self::profile_acp(cwd, home)
+            .with_execution_environment_ref(environment_ref)
+            .with_profile_configuration_ref(profile_configuration_ref)
+            .with_runtime_identity(runtime_version, runtime_digest);
+        if let Ok(command) = std::env::var("MORN_DSH_ACP_COMMAND") {
+            config.command = command;
+        }
+        if let Ok(timeout) = std::env::var("MORN_DSH_ACP_REQUEST_TIMEOUT_MS") {
+            config.request_timeout_ms = timeout.parse().map_err(|_| {
+                Error::validation("MORN_DSH_ACP_REQUEST_TIMEOUT_MS must be an integer")
+            })?;
+        }
+        if let Ok(timeout) = std::env::var("MORN_DSH_ACP_PROMPT_TIMEOUT_MS") {
+            config.prompt_timeout_ms = timeout.parse().map_err(|_| {
+                Error::validation("MORN_DSH_ACP_PROMPT_TIMEOUT_MS must be an integer")
+            })?;
+        }
+        config.validate_for_real()?;
+        Ok(config)
+    }
+
     pub fn validate(&self) -> Result<()> {
         if self.command.trim().is_empty()
             || self.cwd.trim().is_empty()
@@ -235,6 +279,28 @@ pub struct DshAcpPromptResult {
     pub session_id: String,
     pub stop_reason: String,
     pub assistant_text: String,
+}
+
+impl DshAcpPromptResult {
+    /// ACP proves that the automation interval reached a protocol settlement,
+    /// not that the underlying DSH turn succeeded. Upstream maps completed,
+    /// blocked/error and some aborted turn endings to the same `end_turn`
+    /// stop reason, so Morn must never promote this result to Healthy or Work
+    /// truth without a stronger execution-evidence channel.
+    pub const fn proves_executor_success(&self) -> bool {
+        false
+    }
+
+    pub fn was_cancelled(&self) -> bool {
+        self.stop_reason == "cancelled"
+    }
+
+    pub fn reached_protocol_settlement(&self) -> bool {
+        matches!(
+            self.stop_reason.as_str(),
+            "end_turn" | "cancelled" | "max_tokens" | "refusal"
+        )
+    }
 }
 
 type AcpWireItem = std::result::Result<Value, String>;
@@ -927,6 +993,26 @@ mod tests {
             "agentInfo":{"name":"other","version":"0.0.1"}
         }))
         .is_err());
+    }
+
+    #[test]
+    fn acp_end_turn_is_settlement_not_executor_success_proof() {
+        let result = DshAcpPromptResult {
+            session_id: "acp-1".to_string(),
+            stop_reason: "end_turn".to_string(),
+            assistant_text: "candidate response".to_string(),
+        };
+        assert!(result.reached_protocol_settlement());
+        assert!(!result.proves_executor_success());
+        assert!(!result.was_cancelled());
+
+        let cancelled = DshAcpPromptResult {
+            stop_reason: "cancelled".to_string(),
+            ..result
+        };
+        assert!(cancelled.reached_protocol_settlement());
+        assert!(cancelled.was_cancelled());
+        assert!(!cancelled.proves_executor_success());
     }
 
     #[test]
