@@ -494,8 +494,7 @@ impl DshAcpLifecycleController {
         if session.public.workspace_id != context.workspace_id
             || session.public.work_package_id != context.work_package_id
             || Some(session.public.work_generation) != context.work_generation
-            || context.execution_binding_ref.as_ref()
-                != Some(&session.public.execution_binding_ref)
+            || context.execution_binding_ref.as_ref() != Some(&session.public.execution_binding_ref)
             || context.execution_environment_ref.as_deref()
                 != Some(session.public.execution_environment_ref.as_str())
             || context.scope_id.as_deref() != Some(session.public.scope_ref.as_str())

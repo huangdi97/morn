@@ -8,9 +8,7 @@ use std::process::ExitCode;
 
 use morn_app::AppState;
 use morn_harness::provider::DSH_REAL_E0_SCOPE_RESTRICTION;
-use morn_harness::{
-    CapabilityScope, DshAcpLifecycleController, RuntimeContext, ScopeKind,
-};
+use morn_harness::{CapabilityScope, DshAcpLifecycleController, RuntimeContext, ScopeKind};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{ActorInstanceId, RuntimeBindingId, WorkPackageId};
 use morn_kernel::time::Timestamp;
@@ -68,8 +66,7 @@ fn live_context(
 }
 
 fn run_gate() -> Result<Value> {
-    let db_path =
-        std::env::var("MORN_DSH_ACP_SMOKE_DB").unwrap_or_else(|_| ":memory:".to_string());
+    let db_path = std::env::var("MORN_DSH_ACP_SMOKE_DB").unwrap_or_else(|_| ":memory:".to_string());
     let state = AppState::new(&db_path)?;
     let (workspace_id, attestations) = {
         let guard = state.lock();
@@ -176,12 +173,8 @@ fn run_gate() -> Result<Value> {
             && observed.runtime_digest == runtime_digest
     });
 
-    let pass = prompt_settled
-        && canary_match
-        && identity_ok
-        && close_ok
-        && unmount_ok
-        && shutdown_ok;
+    let pass =
+        prompt_settled && canary_match && identity_ok && close_ok && unmount_ok && shutdown_ok;
 
     Ok(json!({
         "gate": "MORN_LIVE_DSH_ACP_LIFECYCLE_SMOKE",
