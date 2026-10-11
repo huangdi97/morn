@@ -214,7 +214,6 @@ pub fn release_readiness_axes_for_build(
     ]
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DeploymentReadinessScope {
@@ -353,7 +352,6 @@ pub fn evaluate_deployment_readiness(
         blockers,
     }
 }
-
 
 #[cfg(test)]
 mod tests {
