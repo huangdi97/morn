@@ -120,9 +120,7 @@ impl DshAcpLifecycleController {
     /// cancellation/close paths needed to quiesce an already-created session.
     pub fn unmount_scope(&mut self, scope_id: &str) -> Result<()> {
         if self.scopes.remove(scope_id).is_none() {
-            return Err(Error::not_found(format!(
-                "ACP lifecycle scope {scope_id}"
-            )));
+            return Err(Error::not_found(format!("ACP lifecycle scope {scope_id}")));
         }
         Ok(())
     }
@@ -207,24 +205,25 @@ impl DshAcpLifecycleController {
         Ok(())
     }
 
-    pub fn resume_session(
-        &mut self,
-        session_id: &str,
-        context: &RuntimeContext,
-    ) -> Result<()> {
+    pub fn resume_session(&mut self, session_id: &str, context: &RuntimeContext) -> Result<()> {
         self.validate_admission(context)?;
         let existing = self
             .sessions
             .get(session_id)
             .ok_or_else(|| Error::not_found(format!("ACP session {session_id}")))?
             .clone();
-        if !matches!(
-            existing.public.state,
-            DshAcpLifecycleState::Closed | DshAcpLifecycleState::TransportClosed
-        ) {
-            return Err(Error::invalid_state(format!(
-                "ACP session {session_id} must be inactive before resume"
-            )));
+        match existing.public.state {
+            DshAcpLifecycleState::Closed => {}
+            DshAcpLifecycleState::TransportClosed => {
+                return Err(Error::invalid_state(
+                    "ACP transport restart uses a fresh one-shot DSH_HOME; cross-process resume is unavailable without a deployment-owned integrity-pinned durable session store",
+                ));
+            }
+            DshAcpLifecycleState::Active => {
+                return Err(Error::invalid_state(format!(
+                    "ACP session {session_id} must be closed before resume"
+                )));
+            }
         }
         self.ensure_same_binding(&existing.public, context)?;
         let cwd = self.config.cwd.clone();
@@ -243,10 +242,12 @@ impl DshAcpLifecycleController {
             Some(mut client) => client.shutdown_process(),
             None => Ok(()),
         };
+        // The managed production ACP transport uses a fresh one-shot
+        // DSH_HOME. Once that process is gone, even an explicitly closed
+        // session cannot be truthfully advertised as resumable by a new
+        // process because the persisted session store was intentionally reaped.
         for session in self.sessions.values_mut() {
-            if session.public.state == DshAcpLifecycleState::Active {
-                session.public.state = DshAcpLifecycleState::TransportClosed;
-            }
+            session.public.state = DshAcpLifecycleState::TransportClosed;
         }
         result
     }
@@ -535,6 +536,26 @@ mod tests {
             .is_err());
         controller.close_session(&session.session_id).unwrap();
         controller.shutdown_transport().unwrap();
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn transport_restart_does_not_fake_cross_process_resume_with_one_shot_home() {
+        if std::env::var("MORN_ACP_FIXTURE_SERVER").ok().as_deref() == Some("1") {
+            return;
+        }
+        let (mut controller, context, scope, root) = fixture();
+        controller.mount_scope(scope).unwrap();
+        let session = controller.open_session(&context).unwrap();
+        controller.close_session(&session.session_id).unwrap();
+        controller.shutdown_transport().unwrap();
+        assert_eq!(
+            controller.session(&session.session_id).unwrap().state,
+            DshAcpLifecycleState::TransportClosed
+        );
+        assert!(controller
+            .resume_session(&session.session_id, &context)
+            .is_err());
         let _ = std::fs::remove_dir_all(root);
     }
 
