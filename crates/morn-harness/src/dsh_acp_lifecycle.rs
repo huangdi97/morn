@@ -36,6 +36,9 @@ pub struct DshAcpLifecycleSession {
     pub execution_binding_ref: RuntimeBindingId,
     pub execution_environment_ref: String,
     pub route_ref: String,
+    pub model_provider: String,
+    pub model: String,
+    pub reasoning_effort: Option<String>,
     pub runtime_version: String,
     pub runtime_digest: String,
     pub wire_agent_version: String,
@@ -131,7 +134,28 @@ impl DshAcpLifecycleController {
     pub fn open_session(&mut self, context: &RuntimeContext) -> Result<DshAcpLifecycleSession> {
         self.validate_admission(context)?;
         let cwd = self.config.cwd.clone();
-        let session_id = self.ensure_client()?.new_session(&cwd)?;
+        let provider = self
+            .config
+            .provider
+            .clone()
+            .ok_or_else(|| Error::validation("ACP lifecycle config has no model provider"))?;
+        let model = self
+            .config
+            .model
+            .clone()
+            .ok_or_else(|| Error::validation("ACP lifecycle config has no model"))?;
+        let reasoning_effort = self.config.reasoning_effort.clone();
+        let client = self.ensure_client()?;
+        let session_id = client.new_session(&cwd)?;
+        if let Err(error) = client.pin_model_route(
+            &session_id,
+            &provider,
+            &model,
+            reasoning_effort.as_deref(),
+        ) {
+            let _ = client.close_session(&session_id);
+            return Err(error);
+        }
         let session = self.bound_session(session_id.clone(), context)?;
         self.sessions.insert(session_id, session.clone());
         Ok(session.public)
@@ -309,6 +333,17 @@ impl DshAcpLifecycleController {
             .execution_environment_ref
             .clone()
             .ok_or_else(|| Error::validation("ACP session requires execution environment"))?;
+        let model_provider = self
+            .config
+            .provider
+            .clone()
+            .ok_or_else(|| Error::validation("ACP session requires model provider"))?;
+        let model = self
+            .config
+            .model
+            .clone()
+            .ok_or_else(|| Error::validation("ACP session requires model"))?;
+        let reasoning_effort = self.config.reasoning_effort.clone();
         let runtime_version = self
             .config
             .runtime_version
@@ -332,6 +367,9 @@ impl DshAcpLifecycleController {
                 execution_binding_ref,
                 execution_environment_ref,
                 route_ref: self.config.route_ref()?,
+                model_provider,
+                model,
+                reasoning_effort,
                 runtime_version,
                 runtime_digest,
                 wire_agent_version,
@@ -450,6 +488,8 @@ mod tests {
 
         let mut config =
             DshAcpConfig::profile_acp(workspace.to_string_lossy(), home.to_string_lossy())
+                .with_model_route("fixture-provider", "fixture-model")
+                .with_reasoning_effort("high")
                 .with_execution_environment_ref("env://container/acp")
                 .with_profile_configuration_ref(format!(
                     "deepseek-harness-profile@1.0.0#sha256:{}",
@@ -519,6 +559,9 @@ mod tests {
         controller.mount_scope(scope.clone()).unwrap();
         let session = controller.open_session(&context).unwrap();
         assert_eq!(session.work_generation, 1);
+        assert_eq!(session.model_provider, "fixture-provider");
+        assert_eq!(session.model, "fixture-model");
+        assert_eq!(session.reasoning_effort.as_deref(), Some("high"));
         assert_eq!(
             session.execution_binding_ref,
             context.execution_binding_ref.clone().unwrap()

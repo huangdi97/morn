@@ -48,6 +48,10 @@ pub struct DshAcpConfig {
     pub args: Vec<String>,
     pub cwd: String,
     pub dsh_home: String,
+    /// Exact provider/model selection pinned through ACP session config.
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
     /// Exact execution-environment identity that owns this ACP subprocess.
     pub execution_environment_ref: Option<String>,
     /// Secret-free identity for the exact DSH profile/home composition.
@@ -72,6 +76,9 @@ impl DshAcpConfig {
             args: vec!["--profile".to_string(), "acp".to_string()],
             cwd: cwd.into(),
             dsh_home: dsh_home.into(),
+            provider: None,
+            model: None,
+            reasoning_effort: None,
             execution_environment_ref: None,
             profile_configuration_ref: None,
             runtime_version: None,
@@ -82,6 +89,21 @@ impl DshAcpConfig {
             #[cfg(test)]
             test_env: BTreeMap::new(),
         }
+    }
+
+    pub fn with_model_route(
+        mut self,
+        provider: impl Into<String>,
+        model: impl Into<String>,
+    ) -> Self {
+        self.provider = Some(provider.into());
+        self.model = Some(model.into());
+        self
+    }
+
+    pub fn with_reasoning_effort(mut self, reasoning_effort: impl Into<String>) -> Self {
+        self.reasoning_effort = Some(reasoning_effort.into());
+        self
     }
 
     pub fn with_execution_environment_ref(mut self, environment_ref: impl Into<String>) -> Self {
@@ -113,8 +135,21 @@ impl DshAcpConfig {
             .as_deref()
             .ok_or_else(|| Error::validation("DSH ACP route requires profile configuration"))?;
         validate_profile_configuration_ref(profile_configuration_ref)?;
+        let provider = self
+            .provider
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| Error::validation("DSH ACP route requires provider"))?;
+        let model = self
+            .model
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| Error::validation("DSH ACP route requires model"))?;
         let route = json!({
             "args": &self.args,
+            "provider": provider,
+            "model": model,
+            "reasoning_effort": &self.reasoning_effort,
             "profile_configuration_ref": profile_configuration_ref,
             "tool_policy": if self.enforce_morn_e0_tool_policy {
                 Some(dsh_morn_e0_tool_policy_identity())
@@ -129,6 +164,28 @@ impl DshAcpConfig {
 
     pub fn validate_for_real(&self) -> Result<()> {
         self.validate()?;
+        if self
+            .provider
+            .as_deref()
+            .is_none_or(|provider| provider.trim().is_empty())
+            || self
+                .model
+                .as_deref()
+                .is_none_or(|model| model.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "real DSH ACP requires an exact provider/model route",
+            ));
+        }
+        if self
+            .reasoning_effort
+            .as_deref()
+            .is_some_and(|effort| effort.trim().is_empty())
+        {
+            return Err(Error::validation(
+                "real DSH ACP reasoning effort must be non-empty when configured",
+            ));
+        }
         if self
             .execution_environment_ref
             .as_deref()
@@ -188,12 +245,22 @@ impl DshAcpConfig {
         let runtime_digest = std::env::var("MORN_DSH_ACP_RUNTIME_DIGEST").map_err(|_| {
             Error::validation("MORN_DSH_ACP_RUNTIME_DIGEST is required for real ACP")
         })?;
+        let provider = std::env::var("MORN_DSH_ACP_PROVIDER")
+            .unwrap_or_else(|_| "deepseek-official".to_string());
+        let model = std::env::var("MORN_DSH_ACP_MODEL")
+            .unwrap_or_else(|_| "deepseek-v4-flash".to_string());
         let mut config = Self::profile_acp(cwd, home)
+            .with_model_route(provider, model)
             .with_execution_environment_ref(environment_ref)
             .with_profile_configuration_ref(profile_configuration_ref)
             .with_runtime_identity(runtime_version, runtime_digest);
         if let Ok(command) = std::env::var("MORN_DSH_ACP_COMMAND") {
             config.command = command;
+        }
+        if let Ok(reasoning) = std::env::var("MORN_DSH_ACP_REASONING_EFFORT") {
+            if !reasoning.trim().is_empty() {
+                config = config.with_reasoning_effort(reasoning);
+            }
         }
         if let Ok(timeout) = std::env::var("MORN_DSH_ACP_REQUEST_TIMEOUT_MS") {
             config.request_timeout_ms = timeout.parse().map_err(|_| {
@@ -587,6 +654,41 @@ impl DshAcpStdioClient {
         )
     }
 
+    /// Pin the exact model route before any prompt is admitted and verify the
+    /// ACP server reports the same resulting currentValue.
+    pub fn pin_model_route(
+        &mut self,
+        session_id: &str,
+        provider: &str,
+        model: &str,
+        reasoning_effort: Option<&str>,
+    ) -> Result<()> {
+        if provider.trim().is_empty() || model.trim().is_empty() {
+            return Err(Error::validation(
+                "DSH ACP model route requires non-empty provider and model",
+            ));
+        }
+        let model_value = serde_json::to_string(&[provider, model])
+            .map_err(|error| Error::internal(format!("encode ACP model route: {error}")))?;
+        let result = self.set_session_config_option(session_id, "model", json!(model_value))?;
+        require_config_option_value(&result, "model", &json!(model_value))?;
+
+        if let Some(reasoning) = reasoning_effort {
+            if reasoning.trim().is_empty() {
+                return Err(Error::validation(
+                    "DSH ACP reasoning effort must be non-empty when configured",
+                ));
+            }
+            let result = self.set_session_config_option(
+                session_id,
+                "reasoning_effort",
+                json!(reasoning),
+            )?;
+            require_config_option_value(&result, "reasoning_effort", &json!(reasoning))?;
+        }
+        Ok(())
+    }
+
     pub fn cancel_session(&mut self, session_id: &str) -> Result<()> {
         self.control_handle(session_id)?.request_cancel()
     }
@@ -859,6 +961,33 @@ fn parse_acp_server_info(result: &Value) -> Result<DshAcpServerInfo> {
     })
 }
 
+fn require_config_option_value(
+    result: &Value,
+    config_id: &str,
+    expected: &Value,
+) -> Result<()> {
+    let current = result
+        .get("configOptions")
+        .and_then(Value::as_array)
+        .and_then(|options| {
+            options.iter().find(|option| {
+                option.get("id").and_then(Value::as_str) == Some(config_id)
+            })
+        })
+        .and_then(|option| option.get("currentValue"))
+        .ok_or_else(|| {
+            Error::external(format!(
+                "DSH ACP set_config_option did not report currentValue for {config_id}"
+            ))
+        })?;
+    if current != expected {
+        return Err(Error::external(format!(
+            "DSH ACP config option {config_id} drifted: expected {expected}, received {current}"
+        )));
+    }
+    Ok(())
+}
+
 fn required_string(value: &Value, key: &str, context: &str) -> Result<String> {
     value
         .get(key)
@@ -1059,6 +1188,8 @@ mod tests {
         assert!(base.validate_for_real().is_err());
 
         let configured = base
+            .with_model_route("fixture-provider", "fixture-model")
+            .with_reasoning_effort("high")
             .with_execution_environment_ref("env://container/acp")
             .with_profile_configuration_ref(format!(
                 "deepseek-harness-profile@1.0.0#sha256:{}",
@@ -1069,6 +1200,8 @@ mod tests {
         let route = configured.route_ref().unwrap();
         assert!(route.contains("dsh-acp-route:"));
         assert!(route.contains("permission_policy"));
+        assert!(route.contains("fixture-provider"));
+        assert!(route.contains("fixture-model"));
         assert!(!route.contains("env://container/acp"));
         assert!(!route.contains(&"b".repeat(64)));
 
@@ -1210,13 +1343,21 @@ mod tests {
                     output.flush().unwrap();
                 }
                 (DSH_ACP_METHOD_SESSION_SET_CONFIG_OPTION, Some(id)) => {
+                    let config_id = frame
+                        .pointer("/params/configId")
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+                    let value = frame
+                        .pointer("/params/value")
+                        .cloned()
+                        .unwrap_or(Value::Null);
                     writeln!(
                         output,
                         "{}",
                         json!({
                             "jsonrpc":"2.0",
                             "id":id,
-                            "result":{"configOptions":[{"id":"reasoning_effort","currentValue":"high"}]}
+                            "result":{"configOptions":[{"id":config_id,"currentValue":value}]}
                         })
                     )
                     .unwrap();
@@ -1330,6 +1471,9 @@ mod tests {
         assert_eq!(info.name, DSH_ACP_AGENT_NAME);
         client.authenticate_noop().unwrap();
         let session = client.new_session(&config.cwd).unwrap();
+        client
+            .pin_model_route(&session, "fixture-provider", "fixture-model", Some("high"))
+            .unwrap();
         let result = client.prompt_text(&session, "hello").unwrap();
         assert_eq!(result.stop_reason, "end_turn");
         assert_eq!(result.assistant_text, "hello ACP");
