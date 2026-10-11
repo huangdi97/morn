@@ -55,11 +55,15 @@ stopped when it was not.
    external effect remains `OUTCOME_UNKNOWN` until source-of-truth
    reconciliation.
 
-6. **Resume is exact-history continuation.** A future Work-facing ACP resume
-   must revalidate Work id/generation, ExecutionBinding, provider/runtime
-   identity, execution environment and scope before the session is allowed to
-   continue. Provider replacement creates a new binding; it never edits the
-   historical session's binding.
+6. **Resume is exact-history continuation.** The Work-bound ACP lifecycle
+   controller revalidates Work id/generation, ExecutionBinding, exact
+   provider/model/reasoning route, runtime/profile identity, execution
+   environment and the complete mounted ExecutionRun scope snapshot before a
+   session may continue. Same-process close/resume re-pins the route.
+   Cross-process resume is fail-closed under the one-shot DSH_HOME deployment
+   model because that persistent session store has been intentionally reaped.
+   Provider replacement creates a new binding; it never edits the historical
+   session's binding.
 
 ## Consequences
 
@@ -73,9 +77,12 @@ stopped when it was not.
 - A successful control-handle write means **cancel requested**, not cancel
   proven. Execution must observe `stopReason=cancelled` or equivalent durable
   evidence before projecting interruption.
-- The Work-facing `HarnessProvider` feature bit remains unchanged until a
-  provider implementation actually exposes this independent handle to its
-  orchestrator; wire capability alone is still insufficient.
+- The SDK `HarnessProvider` feature bits remain unchanged. ACP lifecycle is
+  exposed through a separate Work-bound `DshAcpLifecycleController`, because
+  lifecycle settlement cannot truthfully be collapsed into SDK
+  executor-success semantics. The controller owns a concurrently reachable
+  session-scoped control handle, exact Work/binding/scope/route identity and
+  fail-closed cleanup behavior.
 - Work/Outcome/Acceptance truth remains independent of both SDK and ACP session
   lifecycle.
 - Live ACP runtime evidence remains a deployment gate even when local protocol
@@ -110,7 +117,15 @@ Repository-local verification must cover:
 - visible assistant message projection without private thought projection;
 - tool-activity fail-closed behavior;
 - bounded wire/process teardown;
-- production launch policy isolation.
+- production launch policy isolation;
+- exact provider/model/reasoning pin via ACP config options;
+- Work/generation/ExecutionBinding and exact scope-snapshot revalidation;
+- scope revocation that blocks new work while preserving cleanup;
+- ambiguous settlement faulting with no blind retry;
+- same-process resume and explicit rejection of fake cross-process resume under
+  one-shot DSH_HOME;
+- the deployment-facing ACP lifecycle smoke gate with claims that remain
+  separate from executor health and Work truth.
 
 These tests prove the Morn-side transport only. They do not establish
 authenticated LIVE_DSH, production writes, customer Outcome, Acceptance or G12.

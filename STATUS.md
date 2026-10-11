@@ -97,24 +97,26 @@ Authoritative details live in `BLOCKERS.md`.
 - G4-B-002: lawful provenance-bearing real BioLab dataset.
 - G12: real customer/site source systems, IAM/policy, independent acceptance and customer evidence.
 - Production/physical write: not authorized.
-- ACP Work-facing lifecycle exposure is an optional provider enhancement, not a hidden release blocker: the session-scoped out-of-band cancel handle exists locally, while authenticated ACP resume/close evidence remains deployment-dependent.
+- ACP Work-facing lifecycle control is implemented locally as a separate Work-bound controller, not as a fake SDK Provider feature. Authenticated official ACP lifecycle evidence remains deployment-dependent and does not count as executor-health, Outcome or Acceptance evidence.
 
 These are not converted to PASS by fixtures, protocol fakes, screenshots or documentation.
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `93742873b3f1f946d03328ae57b6e5b9eb608fdb`.
-- Exact-head GitHub Actions: `38146244435` — **5/5 SUCCESS**.
+- Verified implementation checkpoint: `18f2116aef5a3997fe5d8ed9c7f19fe0b1891a25`.
+- Exact-head GitHub Actions: `38153959959` — **5/5 SUCCESS**.
 - Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; zero-domain Core; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows; Cordis reference runtime; Windows desktop reference build.
 - Release-readiness trust hardening at this checkpoint binds exact build identity, exact active provider runtime artifact, deployment-pinned evidence issuer and exact deployment site; evidence time ambiguity/future claims fail closed.
 - Governed live-provider smoke still additionally requires an exact `MORN_PROVIDER_SMOKE_OK` canary and a fresh post-turn `Healthy` lease. Process/session initialization alone is not provider-health evidence.
 - DSH SDK ↔ Pi RPC adapter-wire semantic-neutrality runs through the actual subprocess adapter code with the same pinned Work/generation/ExecutionBinding/execution environment; model output is deliberately not compared.
-- ACP v1 lifecycle transport includes session-scoped out-of-band cancel that is reachable while prompt settlement blocks; a cancel write is only a request, not proof of cancellation or rollback.
+- ACP v1 lifecycle control is Work/generation/ExecutionBinding/environment/scope/route bound. It pins exact provider/model/reasoning through official session config, re-pins on same-runtime resume, faults ambiguous settlements to prevent blind retry, and preserves out-of-band cancel/cleanup without converting lifecycle settlement into executor success.
+- ACP scope ownership is revocable and snapshot-pinned: broader scopes are rejected, recreated/mutated scope state cannot take over a historical session, and one-shot DSH_HOME means cross-process resume is explicitly unavailable.
+- `dsh_acp_lifecycle_smoke` is a deployment-facing gate for authenticated ACP lifecycle evidence; its PASS still reports executor/runtime-health/Outcome/Acceptance/production-write claims as false.
 - Current repository-local gap audit found no remaining TODO/FIXME/unimplemented/stub item required to satisfy the v11.5 reference design. Remaining blocker classes below require external deployment/customer evidence.
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `93742873b3f1f946d03328ae57b6e5b9eb608fdb` and Actions `38146244435`.**
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `18f2116aef5a3997fe5d8ed9c7f19fe0b1891a25` and Actions `38153959959`.**
 - This STATUS update is documentation-only and must obtain its own exact-head CI before it becomes the next verified repository HEAD.
 - PR #1 remains draft because local engineering evidence is not production/customer evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.

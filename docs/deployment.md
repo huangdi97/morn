@@ -536,3 +536,70 @@ powershell -ExecutionPolicy Bypass -File scripts/run_all.ps1
 
 Exit 0 = fmt/check/clippy/tests + frontend + Tauri + UI smoke + demo smoke all
 pass. CI runs the same gates on GitHub Actions.
+
+
+## DeepSeek ACP lifecycle control gate
+
+Morn keeps the official DSH SDK execution provider and the ACP lifecycle/control
+transport as separate evidence channels. SDK settled turns may contribute to
+provider runtime-health evidence when all SDK gates pass. ACP never does:
+upstream ACP intentionally maps several underlying Harness endings to the same
+`end_turn` stop reason, so an ACP prompt result cannot prove executor success,
+ObservedOutcome, Acceptance or production authorization.
+
+The Work-bound ACP controller requires all of the following before it creates a
+session:
+
+- exact Work id/generation and `ExecutionBinding` in `RuntimeContext`;
+- a currently mounted **ExecutionRun** scope with `morn.effects<=E0`;
+- deployment-attested container-or-stronger execution guarantees;
+- exact execution-environment identity;
+- exact DSH runtime version + SHA-256 digest;
+- exact Home/Profile configuration identity;
+- exact provider/model route and optional reasoning effort.
+
+After `session/new`, Morn immediately applies official ACP
+`session/set_config_option` for the configured model route and verifies the
+server-reported `currentValue` before the first prompt. Resume repeats this
+route pin. A revoked/recreated scope with a changed snapshot cannot take over an
+existing session. Ambiguous/unknown prompt settlement faults the session and
+forbids blind prompt retry; cancellation/close/shutdown remain available for
+quiescent cleanup.
+
+Configure a live ACP lifecycle probe independently from the SDK provider:
+
+~~~powershell
+$env:MORN_DSH_ACP_WORKSPACE = "C:\morn\workspaces\dsh-acp"
+$env:MORN_DSH_ACP_HOME = "C:\morn\runtime\dsh-acp-home-root"
+$env:MORN_DSH_ACP_PROVIDER = "deepseek-official"
+$env:MORN_DSH_ACP_MODEL = "<exact-model-route>"
+# Optional, only when the exact route declares this effort:
+$env:MORN_DSH_ACP_REASONING_EFFORT = "<exact-effort>"
+$env:MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF = "env://container/dsh-runtime-a"
+$env:MORN_DSH_ACP_PROFILE_CONFIGURATION_REF = "deepseek-harness-profile@<config-version>#sha256:<64-hex>"
+$env:MORN_DSH_ACP_RUNTIME_VERSION = "<deployment-attested-version>"
+$env:MORN_DSH_ACP_RUNTIME_DIGEST = "sha256:<64-hex>"
+$env:MORN_EXECUTION_ATTESTOR = "<deployment-attestor-name>"
+$env:MORN_EXECUTION_ATTESTATION_FILE = "C:\morn\trust\execution-environments.json"
+# Only if the exact provider route needs environment credentials:
+$env:MORN_DSH_ACP_ENV_PASSTHROUGH = "DEEPSEEK_API_KEY"
+cargo run -p morn-app --bin dsh_acp_lifecycle_smoke
+~~~
+
+Optional controls are `MORN_DSH_ACP_COMMAND`,
+`MORN_DSH_ACP_REQUEST_TIMEOUT_MS`, `MORN_DSH_ACP_PROMPT_TIMEOUT_MS` and
+`MORN_DSH_ACP_SMOKE_DB`.
+
+A `MORN_LIVE_DSH_ACP_LIFECYCLE_SMOKE = PASS` result proves only that the
+deployment-attested ACP runtime could create a Work-bound E0 session, pin the
+exact route, reach protocol settlement, return the lifecycle canary, close the
+session, revoke its scope and clean up the transport. The report deliberately
+keeps `executor_success=false`, `provider_runtime_health=false`,
+`canonical_work_outcome=false`, `customer_acceptance=false` and
+`production_write=false`.
+
+Production ACP still uses a one-shot DSH_HOME. Therefore same-process
+`session/close -> session/resume` is supported and revalidated, while
+cross-process resume is intentionally fail-closed: the session store was
+reaped with the one-shot Home. Cross-process recovery would require a separate
+deployment-owned, integrity-pinned durable session store design and evidence.

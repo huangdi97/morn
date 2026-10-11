@@ -10,10 +10,13 @@ current implementation state.
 
 - **B-001 / DSH live evidence — EXTERNAL_BLOCKED.** The official DSH
   distribution and Morn real SDK/JSON-RPC adapter now exist, and the repository
-  includes the one-shot `provider_smoke` live gate. Remaining evidence requires
-  an authorized runtime, exact model route/credentials and a real
-  runtime-attested execution environment. Fixture/wire tests do not satisfy
-  this gate; only a successful deployment-run live gate does.
+  includes the one-shot `provider_smoke` executor gate and a separate
+  `dsh_acp_lifecycle_smoke` control-plane gate. The ACP gate proves only
+  Work-bound lifecycle/control semantics and cannot promote provider health.
+  Remaining executor evidence requires an authorized runtime, exact model
+  route/credentials and a real runtime-attested execution environment.
+  Fixture/wire tests do not satisfy this gate; only a successful
+  deployment-run live gate does.
 - **B-002 / Pi live evidence — EXTERNAL_BLOCKED.** Morn has a real Pi JSONL RPC
   adapter and the same `provider_smoke` live gate; a live installed Pi
   runtime/model/credential path and an authorized runtime-attested execution
@@ -41,8 +44,8 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are now verified at implementation checkpoint
-`93742873b3f1f946d03328ae57b6e5b9eb608fdb` by exact-head Actions run
-`38146244435` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
+`18f2116aef5a3997fe5d8ed9c7f19fe0b1891a25` by exact-head Actions run
+`38153959959` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
 local adapter-wire semantic-neutrality gate and the release-readiness trust
 hardening: exact build identity, exact provider runtime artifact identity,
 deployment-pinned evidence issuer, exact deployment site, and fail-closed
@@ -53,7 +56,7 @@ becoming the next verified repository HEAD.
 
 ## 2026-10-11 local-design convergence
 
-- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** under the current v11.5 reference scope after the exact-head 9374287 gate.
+- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** under the current v11.5 reference scope after the exact-head 18f2116 gate, including the Work-bound ACP lifecycle/controller path.
 - Release readiness no longer trusts a deployment claim merely because its payload names an issuer; `MORN_EVIDENCE_ISSUER` pins the deployment-owned issuer.
 - RealSite and ProductionWrite readiness are exact-site scoped through `MORN_DEPLOYMENT_SITE_REF`.
 - RealRuntime readiness requires the current provider version/digest identity and a fresh Healthy lease; an old smoke claim cannot be combined with a replacement runtime.

@@ -184,3 +184,53 @@ Exact-head `152fd22bacc68c3b9e8b480370a3b665509da23a` 的 Actions
 因此 `DSH-SWAP` 可以从 `FIXTURE_ONLY` 提升到
 `LOCAL_ADAPTER_WIRE_CONFORMANCE`。真实 DSH/Pi credentialed provider replacement
 仍是外部部署证据，不得由该本地门禁代替。
+
+
+## 12. 2026-10-11 Work-bound ACP lifecycle controller convergence
+
+ACP is no longer only a low-level Rust wire client. Morn now has a separate
+`DshAcpLifecycleController` whose purpose is lifecycle/control, **not**
+executor-health projection.
+
+Local implementation invariants:
+
+1. each ACP session is pinned to Workspace, Work id, Work generation,
+   ExecutionBinding, execution-environment ref, exact DSH runtime
+   version/digest, exact Home/Profile configuration identity and exact
+   provider/model/reasoning route;
+2. only an actively mounted `ExecutionRun` scope carrying
+   `morn.effects<=E0` may open/prompt/resume the session;
+3. the complete scope snapshot is retained. Unmounting and recreating the same
+   scope id with different scope data cannot take over the historical session;
+4. `session/new` is followed by official `session/set_config_option` model
+   pinning, and Morn verifies the returned `currentValue` before prompting;
+   same-runtime resume repeats that pin;
+5. ACP `end_turn` is explicitly typed as **protocol settlement, not executor
+   success**, because official DSH maps completed, blocked/error and some
+   aborted turn endings into that same ACP stop reason;
+6. unknown/ambiguous stop reasons or prompt transport/policy failures prohibit
+   blind retry. Cleanup control remains available;
+7. scope revocation blocks future prompt/resume immediately, while
+   cancellation/close/shutdown remain usable to quiesce existing activity;
+8. same-process close/resume is supported. Process restart changes every
+   session to `transport-closed`; cross-process resume is intentionally
+   unavailable because production uses a fresh one-shot DSH_HOME;
+9. the one-shot `dsh_acp_lifecycle_smoke` deployment gate validates the
+   attested runtime/profile/environment and exact route without promoting its
+   result to SDK provider health, Work Outcome or Acceptance.
+
+Therefore the correct architecture is a dual channel:
+
+```text
+Work / ExecutionBinding
+      |
+      +-- DSH SDK Provider --------> settled executor evidence -> runtime health lease
+      |
+      +-- ACP Lifecycle Controller -> cancel/close/resume/session control evidence
+                                      (never executor success / Work truth)
+```
+
+This removes the previous local lifecycle exposure gap without changing the
+external evidence posture. Authenticated official ACP execution inside the
+deployment-attested environment remains a live deployment gate; customer/site
+outcome and G12 remain independent.
