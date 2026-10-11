@@ -288,9 +288,7 @@ impl EvidenceLedger {
         }
         current
             .into_values()
-            .filter(|claim| {
-                claim.state == EvidenceClaimState::Proven && claim.observed_at <= now
-            })
+            .filter(|claim| claim.state == EvidenceClaimState::Proven && claim.observed_at <= now)
             .collect()
     }
 
@@ -301,12 +299,7 @@ impl EvidenceLedger {
         self.satisfies_at(subject, required, Timestamp::now())
     }
 
-    pub fn satisfies_at(
-        &self,
-        subject: &str,
-        required: EvidenceClass,
-        now: Timestamp,
-    ) -> bool {
+    pub fn satisfies_at(&self, subject: &str, required: EvidenceClass, now: Timestamp) -> bool {
         self.current_claim(subject, required).is_some_and(|claim| {
             claim.state == EvidenceClaimState::Proven && claim.observed_at <= now
         })

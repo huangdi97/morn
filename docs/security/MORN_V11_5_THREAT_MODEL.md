@@ -42,6 +42,10 @@ not "make the model safe"; it is:
 | Tool injection | malicious MCP/tool schema requests dangerous action | capability qualification, allowlisted interfaces, action gateway |
 | Malicious capability package | package exfiltrates secrets | content digest, provenance/signature refs, site admission, isolated environment |
 | Provider impersonation | fake DSH/Pi endpoint | provider identity/version/digest pinned in ExecutionBinding |
+| Stale runtime proof | old DSH/Pi smoke proof reused after binary replacement | RealRuntime readiness proof must reference the exact active runtime version/digest identity plus a fresh Healthy lease |
+| Evidence issuer spoofing | deployment JSON claims to be a trusted attestor | evidence issuer is pinned by deployment configuration; payload-selected issuer is rejected |
+| Cross-site readiness reuse | plant-A RealSite/write proof presented for plant-B | readiness subjects and named customer/production gates bind the exact deployment site |
+| Ambiguous/future readiness evidence | equal-time conflicting rows or future clock value changes readiness | strict per-subject/class timestamp ordering; equal-time conflict rejected; future proof is not currently satisfiable |
 | Credential leakage | token appears in prompt/log | opaque credential handle; resolve secret only at execution boundary; redaction tests |
 | Credential over-scope | read task receives write token | credential request scoped to Work/site/resource/action/scopes/TTL |
 | Stale authority | approval used after expiry | time-bounded AuthorityRequest; fail closed |
