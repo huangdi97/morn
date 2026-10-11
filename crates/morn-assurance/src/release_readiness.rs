@@ -23,6 +23,9 @@ pub enum ReadinessState {
 pub struct RuntimeReadinessEvidence {
     pub fresh_healthy: bool,
     pub evidence_refs: Vec<String>,
+    /// Exact deployment-attested provider artifact currently running.
+    /// When present, the RealRuntime claim must cite this same identity.
+    pub runtime_identity_ref: Option<String>,
     pub reason: String,
 }
 
@@ -31,6 +34,20 @@ impl RuntimeReadinessEvidence {
         Self {
             fresh_healthy: true,
             evidence_refs,
+            runtime_identity_ref: None,
+            reason: reason.into(),
+        }
+    }
+
+    pub fn healthy_for_identity(
+        evidence_refs: Vec<String>,
+        runtime_identity_ref: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self {
+            fresh_healthy: true,
+            evidence_refs,
+            runtime_identity_ref: Some(runtime_identity_ref.into()),
             reason: reason.into(),
         }
     }
@@ -39,6 +56,7 @@ impl RuntimeReadinessEvidence {
         Self {
             fresh_healthy: false,
             evidence_refs: Vec::new(),
+            runtime_identity_ref: None,
             reason: reason.into(),
         }
     }
@@ -139,6 +157,24 @@ fn runtime_axis(
     // RealRuntime evidence remains unproven.
     if axis.state == ReadinessState::Proven {
         if runtime.fresh_healthy {
+            if let Some(identity_ref) = runtime
+                .runtime_identity_ref
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                if !axis
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference == identity_ref)
+                {
+                    axis.state = ReadinessState::IdentityMismatch;
+                    axis.reason = format!(
+                        "real-runtime proof does not reference the active runtime identity {identity_ref}"
+                    );
+                    return axis;
+                }
+            }
             axis.evidence_refs.extend(runtime.evidence_refs);
             axis.evidence_refs.sort();
             axis.evidence_refs.dedup();
@@ -174,13 +210,7 @@ pub fn release_readiness_axes_for_build(
     pi_runtime: RuntimeReadinessEvidence,
     build_identity_ref: Option<&str>,
 ) -> Vec<ReleaseReadinessAxis> {
-    release_readiness_axes_for_deployment(
-        ledger,
-        dsh_runtime,
-        pi_runtime,
-        build_identity_ref,
-        None,
-    )
+    release_readiness_axes_for_deployment(ledger, dsh_runtime, pi_runtime, build_identity_ref, None)
 }
 
 /// Project readiness for one explicit deployment site. RealSite and
@@ -363,12 +393,7 @@ pub fn evaluate_deployment_readiness(
     scope: DeploymentReadinessScope,
     production_write_authority: bool,
 ) -> DeploymentReadinessDecision {
-    evaluate_deployment_readiness_for_target(
-        axes,
-        scope,
-        production_write_authority,
-        None,
-    )
+    evaluate_deployment_readiness_for_target(axes, scope, production_write_authority, None)
 }
 
 pub fn evaluate_deployment_readiness_for_target(
@@ -686,6 +711,42 @@ mod tests {
             Some("git://huangdi97/morn/abc123"),
         );
         assert_eq!(exact_identity[2].state, ReadinessState::Proven);
+    }
+
+    #[test]
+    fn runtime_proof_must_bind_the_exact_active_provider_artifact() {
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "deepseek-harness",
+                    EvidenceClass::RealRuntime,
+                    vec![
+                        "runtime://deepseek-harness/v1#sha256:old".to_string(),
+                        "attestation://dsh/live-old".to_string(),
+                    ],
+                    "deployment-attestor",
+                    "old authenticated runtime smoke",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let axes = release_readiness_axes(
+            &ledger,
+            RuntimeReadinessEvidence::healthy_for_identity(
+                vec!["runtime://deepseek-harness/session/new/settled-turn".to_string()],
+                "runtime://deepseek-harness/v2#sha256:new",
+                "fresh health on replacement runtime",
+            ),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+        );
+        let dsh = axes
+            .iter()
+            .find(|axis| axis.id == "deepseek-live-runtime")
+            .unwrap();
+        assert_eq!(dsh.state, ReadinessState::IdentityMismatch);
+        assert!(dsh.reason.contains("active runtime identity"));
     }
 
     #[test]

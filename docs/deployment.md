@@ -363,16 +363,20 @@ ledger but remain separate evidence classes. A later `blocked-external` or
 `revoked` record for the same subject/class invalidates a previous proof until
 a fresh `proven` record is appended. The Console release-readiness projection
 also requires a **fresh Healthy provider lease** in addition to a
-`real-runtime` claim for DSH/Pi.
+`real-runtime` claim for DSH/Pi. That claim must cite the exact active
+provider artifact identity — `runtime://deepseek-harness/<version>#<digest>`
+or `runtime://pi/<version>#<digest>`. A smoke proof for an older runtime
+cannot be combined with health from a replacement binary.
 
 Canonical subjects used by the top-level readiness projection are:
 
 - `morn-v11.5-architecture` / `design-spec`;
 - `factory-readonly-wedge` / `local-fixture`;
 - `morn-v11.5-ci-conformance` / `ci-conformance`;
-- `deepseek-harness` and `pi-harness` / `real-runtime`;
-- `factory-customer` / `real-site`;
-- `factory-production-write` / `production-write`.
+- `deepseek-harness` and `pi-harness` / `real-runtime`, with evidence
+  referencing the exact active runtime artifact identity;
+- `factory-customer:<MORN_DEPLOYMENT_SITE_REF>` / `real-site`;
+- `factory-production-write:<MORN_DEPLOYMENT_SITE_REF>` / `production-write`.
 
 These are evidence statements, **not Authority grants**. In particular, a
 `production-write` evidence claim cannot authorize a Work action. Profile,

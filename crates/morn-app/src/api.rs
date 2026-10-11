@@ -417,10 +417,18 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
     let provider_observations = provider_catalog.observations();
 
     let dsh_readiness = if dsh_mode == "real" && dsh_health.selectable_at(now) {
-        morn_assurance::RuntimeReadinessEvidence::healthy(
-            dsh_health.evidence_refs.clone(),
-            dsh_health.reason.clone(),
-        )
+        match (dsh_runtime_version.as_deref(), dsh_runtime_digest.as_deref()) {
+            (Some(version), Some(digest)) => {
+                morn_assurance::RuntimeReadinessEvidence::healthy_for_identity(
+                    dsh_health.evidence_refs.clone(),
+                    format!("runtime://deepseek-harness/{version}#{digest}"),
+                    dsh_health.reason.clone(),
+                )
+            }
+            _ => morn_assurance::RuntimeReadinessEvidence::unavailable(
+                "real DSH health is fresh but exact runtime version/digest is not pinned",
+            ),
+        }
     } else {
         morn_assurance::RuntimeReadinessEvidence::unavailable(format!(
             "mode={dsh_mode}; health={:?}; {}",
@@ -428,10 +436,18 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         ))
     };
     let pi_readiness = if pi_mode == "real" && pi_health.selectable_at(now) {
-        morn_assurance::RuntimeReadinessEvidence::healthy(
-            pi_health.evidence_refs.clone(),
-            pi_health.reason.clone(),
-        )
+        match (pi_runtime_version.as_deref(), pi_runtime_digest.as_deref()) {
+            (Some(version), Some(digest)) => {
+                morn_assurance::RuntimeReadinessEvidence::healthy_for_identity(
+                    pi_health.evidence_refs.clone(),
+                    format!("runtime://pi/{version}#{digest}"),
+                    pi_health.reason.clone(),
+                )
+            }
+            _ => morn_assurance::RuntimeReadinessEvidence::unavailable(
+                "real Pi health is fresh but exact runtime version/digest is not pinned",
+            ),
+        }
     } else {
         morn_assurance::RuntimeReadinessEvidence::unavailable(format!(
             "mode={pi_mode}; health={:?}; {}",
