@@ -20,6 +20,9 @@ use crate::scope::CapabilityScope;
 #[serde(rename_all = "kebab-case")]
 pub enum DshAcpLifecycleState {
     Active,
+    /// Prompt settlement was lost or policy validation failed. No further work
+    /// may be dispatched through this session; only quiescent cleanup remains.
+    Faulted,
     Closed,
     TransportClosed,
 }
@@ -143,9 +146,12 @@ impl DshAcpLifecycleController {
             .sessions
             .get(session_id)
             .ok_or_else(|| Error::not_found(format!("ACP session {session_id}")))?;
-        if session.public.state != DshAcpLifecycleState::Active {
+        if !matches!(
+            session.public.state,
+            DshAcpLifecycleState::Active | DshAcpLifecycleState::Faulted
+        ) {
             return Err(Error::invalid_state(format!(
-                "ACP session {session_id} is not active"
+                "ACP session {session_id} is not open for cancellation"
             )));
         }
         self.client
@@ -169,16 +175,38 @@ impl DshAcpLifecycleController {
             .client
             .as_mut()
             .ok_or_else(|| Error::invalid_state("ACP transport is not running"))?
-            .prompt_text(session_id, input)?;
+            .prompt_text(session_id, input);
         let session = self
             .sessions
             .get_mut(session_id)
             .ok_or_else(|| Error::not_found(format!("ACP session {session_id}")))?;
         session.public.prompt_count = session.public.prompt_count.saturating_add(1);
-        session.public.last_stop_reason = Some(result.stop_reason.clone());
-        // Deliberately do not create runtime-health or Work outcome state here.
-        debug_assert!(!result.proves_executor_success());
-        Ok(result)
+        match result {
+            Ok(result) => {
+                if !result.reached_protocol_settlement() {
+                    session.public.state = DshAcpLifecycleState::Faulted;
+                    return Err(Error::external(format!(
+                        "ACP prompt returned unknown stop reason {:?}; session faulted and blind retry forbidden",
+                        result.stop_reason
+                    )));
+                }
+                session.public.last_stop_reason = Some(result.stop_reason.clone());
+                // Deliberately do not create runtime-health or Work outcome state here.
+                debug_assert!(!result.proves_executor_success());
+                Ok(result)
+            }
+            Err(error) => {
+                // A timeout/transport/policy error may leave activity in flight.
+                // Request cancellation best-effort before returning, but never
+                // interpret that write as proof of cancellation.
+                if let Some(client) = self.client.as_mut() {
+                    let _ = client.cancel_session(session_id);
+                }
+                session.public.state = DshAcpLifecycleState::Faulted;
+                session.public.last_stop_reason = None;
+                Err(error)
+            }
+        }
     }
 
     pub fn close_session(&mut self, session_id: &str) -> Result<()> {
@@ -188,9 +216,12 @@ impl DshAcpLifecycleController {
             .ok_or_else(|| Error::not_found(format!("ACP session {session_id}")))?
             .public
             .state;
-        if state != DshAcpLifecycleState::Active {
+        if !matches!(
+            state,
+            DshAcpLifecycleState::Active | DshAcpLifecycleState::Faulted
+        ) {
             return Err(Error::invalid_state(format!(
-                "ACP session {session_id} is not active"
+                "ACP session {session_id} is not open for cleanup"
             )));
         }
         self.client
@@ -219,9 +250,9 @@ impl DshAcpLifecycleController {
                     "ACP transport restart uses a fresh one-shot DSH_HOME; cross-process resume is unavailable without a deployment-owned integrity-pinned durable session store",
                 ));
             }
-            DshAcpLifecycleState::Active => {
+            DshAcpLifecycleState::Active | DshAcpLifecycleState::Faulted => {
                 return Err(Error::invalid_state(format!(
-                    "ACP session {session_id} must be closed before resume"
+                    "ACP session {session_id} must be cleanly closed before resume"
                 )));
             }
         }
@@ -534,6 +565,32 @@ mod tests {
         assert!(controller
             .prompt_text(&session.session_id, &context, "must-not-run")
             .is_err());
+        controller.close_session(&session.session_id).unwrap();
+        controller.shutdown_transport().unwrap();
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn unknown_prompt_settlement_faults_session_and_forbids_blind_retry() {
+        if std::env::var("MORN_ACP_FIXTURE_SERVER").ok().as_deref() == Some("1") {
+            return;
+        }
+        let (mut controller, context, scope, root) = fixture();
+        controller.mount_scope(scope).unwrap();
+        let session = controller.open_session(&context).unwrap();
+
+        assert!(controller
+            .prompt_text(&session.session_id, &context, "unknown-stop-reason")
+            .is_err());
+        assert_eq!(
+            controller.session(&session.session_id).unwrap().state,
+            DshAcpLifecycleState::Faulted
+        );
+        assert!(controller
+            .prompt_text(&session.session_id, &context, "blind-retry")
+            .is_err());
+
+        assert!(controller.control_handle(&session.session_id).is_ok());
         controller.close_session(&session.session_id).unwrap();
         controller.shutdown_transport().unwrap();
         let _ = std::fs::remove_dir_all(root);

@@ -1125,6 +1125,18 @@ mod tests {
                         .pointer("/params/prompt/0/text")
                         .and_then(Value::as_str)
                         .unwrap_or("");
+                    if prompt == "unknown-stop-reason" {
+                        writeln!(
+                            output,
+                            "{}",
+                            json!({
+                                "jsonrpc":"2.0","id":id,"result":{"stopReason":"future-unknown-reason"}
+                            })
+                        )
+                        .unwrap();
+                        output.flush().unwrap();
+                        continue;
+                    }
                     if prompt == "wait-for-out-of-band-cancel" {
                         if let Ok(path) = std::env::var("MORN_ACP_CANCEL_READY_FILE") {
                             std::fs::write(path, b"ready").unwrap();
