@@ -174,17 +174,13 @@ impl DshAcpConfig {
             .map_err(|_| Error::validation("MORN_DSH_ACP_WORKSPACE is required for real ACP"))?;
         let home = std::env::var("MORN_DSH_ACP_HOME")
             .map_err(|_| Error::validation("MORN_DSH_ACP_HOME is required for real ACP"))?;
-        let environment_ref = std::env::var("MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF")
-            .map_err(|_| {
-                Error::validation(
-                    "MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF is required for real ACP",
-                )
+        let environment_ref =
+            std::env::var("MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
+                Error::validation("MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF is required for real ACP")
             })?;
-        let profile_configuration_ref =
-            std::env::var("MORN_DSH_ACP_PROFILE_CONFIGURATION_REF").map_err(|_| {
-                Error::validation(
-                    "MORN_DSH_ACP_PROFILE_CONFIGURATION_REF is required for real ACP",
-                )
+        let profile_configuration_ref = std::env::var("MORN_DSH_ACP_PROFILE_CONFIGURATION_REF")
+            .map_err(|_| {
+                Error::validation("MORN_DSH_ACP_PROFILE_CONFIGURATION_REF is required for real ACP")
             })?;
         let runtime_version = std::env::var("MORN_DSH_ACP_RUNTIME_VERSION").map_err(|_| {
             Error::validation("MORN_DSH_ACP_RUNTIME_VERSION is required for real ACP")
@@ -255,7 +251,11 @@ impl DshAcpConfig {
     }
 
     #[cfg(test)]
-    pub(crate) fn with_test_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+    pub(crate) fn with_test_env(
+        mut self,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
         self.test_env.insert(key.into(), value.into());
         self
     }

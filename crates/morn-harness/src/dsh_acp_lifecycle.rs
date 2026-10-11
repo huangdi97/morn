@@ -12,9 +12,7 @@ use morn_kernel::ids::{RuntimeBindingId, WorkPackageId, WorkspaceId};
 use morn_kernel::time::Timestamp;
 
 use crate::context::RuntimeContext;
-use crate::dsh_acp::{
-    DshAcpConfig, DshAcpControlHandle, DshAcpPromptResult, DshAcpStdioClient,
-};
+use crate::dsh_acp::{DshAcpConfig, DshAcpControlHandle, DshAcpPromptResult, DshAcpStdioClient};
 use crate::provider::DSH_REAL_E0_SCOPE_RESTRICTION;
 use crate::scope::CapabilityScope;
 
@@ -54,6 +52,7 @@ pub struct DshAcpLifecycleController {
     config: DshAcpConfig,
     client: Option<DshAcpStdioClient>,
     sessions: HashMap<String, BoundSession>,
+    scopes: HashMap<String, CapabilityScope>,
     wire_agent_version: Option<String>,
 }
 
@@ -63,6 +62,7 @@ impl std::fmt::Debug for DshAcpLifecycleController {
             .field("configured", &true)
             .field("client_started", &self.client.is_some())
             .field("sessions", &self.sessions.len())
+            .field("scopes", &self.scopes.len())
             .field("wire_agent_version", &self.wire_agent_version)
             .finish()
     }
@@ -75,6 +75,7 @@ impl DshAcpLifecycleController {
             config,
             client: None,
             sessions: HashMap::new(),
+            scopes: HashMap::new(),
             wire_agent_version: None,
         })
     }
@@ -95,12 +96,39 @@ impl DshAcpLifecycleController {
         self.sessions.get(session_id).map(|session| &session.public)
     }
 
-    pub fn open_session(
-        &mut self,
-        context: &RuntimeContext,
-        scope: &CapabilityScope,
-    ) -> Result<DshAcpLifecycleSession> {
-        self.validate_admission(context, scope)?;
+    pub fn mount_scope(&mut self, scope: CapabilityScope) -> Result<String> {
+        if !scope
+            .restrictions
+            .iter()
+            .any(|restriction| restriction == DSH_REAL_E0_SCOPE_RESTRICTION)
+        {
+            return Err(Error::validation(
+                "ACP lifecycle scope must explicitly declare morn.effects<=E0",
+            ));
+        }
+        let id = scope.id.to_string();
+        if self.scopes.contains_key(&id) {
+            return Err(Error::conflict(format!(
+                "ACP lifecycle scope {id} is already mounted"
+            )));
+        }
+        self.scopes.insert(id.clone(), scope);
+        Ok(id)
+    }
+
+    /// Revoke future prompt/resume admission immediately while preserving
+    /// cancellation/close paths needed to quiesce an already-created session.
+    pub fn unmount_scope(&mut self, scope_id: &str) -> Result<()> {
+        if self.scopes.remove(scope_id).is_none() {
+            return Err(Error::not_found(format!(
+                "ACP lifecycle scope {scope_id}"
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn open_session(&mut self, context: &RuntimeContext) -> Result<DshAcpLifecycleSession> {
+        self.validate_admission(context)?;
         let cwd = self.config.cwd.clone();
         let session_id = self.ensure_client()?.new_session(&cwd)?;
         let session = self.bound_session(session_id.clone(), context)?;
@@ -128,17 +156,17 @@ impl DshAcpLifecycleController {
             .control_handle(session_id)
     }
 
-    pub fn prompt_text(&mut self, session_id: &str, input: &str) -> Result<DshAcpPromptResult> {
+    pub fn prompt_text(
+        &mut self,
+        session_id: &str,
+        context: &RuntimeContext,
+        input: &str,
+    ) -> Result<DshAcpPromptResult> {
         if input.trim().is_empty() {
             return Err(Error::validation("ACP prompt must be non-empty"));
         }
-        let context = self
-            .sessions
-            .get(session_id)
-            .ok_or_else(|| Error::not_found(format!("ACP session {session_id}")))?
-            .context
-            .clone();
-        self.validate_bound_session(session_id, &context)?;
+        self.validate_admission(context)?;
+        self.validate_bound_session(session_id, context)?;
         let result = self
             .client
             .as_mut()
@@ -183,9 +211,8 @@ impl DshAcpLifecycleController {
         &mut self,
         session_id: &str,
         context: &RuntimeContext,
-        scope: &CapabilityScope,
     ) -> Result<()> {
-        self.validate_admission(context, scope)?;
+        self.validate_admission(context)?;
         let existing = self
             .sessions
             .get(session_id)
@@ -285,7 +312,7 @@ impl DshAcpLifecycleController {
         })
     }
 
-    fn validate_admission(&self, context: &RuntimeContext, scope: &CapabilityScope) -> Result<()> {
+    fn validate_admission(&self, context: &RuntimeContext) -> Result<()> {
         if !context.proves_pinned_work_execution() {
             return Err(Error::validation(
                 "ACP lifecycle session requires exact Work generation and ExecutionBinding",
@@ -306,8 +333,15 @@ impl DshAcpLifecycleController {
                 "ACP RuntimeContext environment does not match the pinned launch environment",
             ));
         }
+        let scope_id = context
+            .scope_id
+            .as_deref()
+            .ok_or_else(|| Error::validation("ACP RuntimeContext has no mounted scope id"))?;
+        let scope = self
+            .scopes
+            .get(scope_id)
+            .ok_or_else(|| Error::validation("ACP E0 scope is not currently mounted"))?;
         if scope.workspace_id != context.workspace_id
-            || context.scope_id.as_deref() != Some(scope.id.as_str())
             || !scope
                 .restrictions
                 .iter()
@@ -450,17 +484,23 @@ mod tests {
             return;
         }
         let (mut controller, context, scope, root) = fixture();
-        let session = controller.open_session(&context, &scope).unwrap();
+        controller.mount_scope(scope.clone()).unwrap();
+        let session = controller.open_session(&context).unwrap();
         assert_eq!(session.work_generation, 1);
         assert_eq!(
             session.execution_binding_ref,
             context.execution_binding_ref.clone().unwrap()
         );
-        let result = controller.prompt_text(&session.session_id, "hello").unwrap();
+        let result = controller
+            .prompt_text(&session.session_id, &context, "hello")
+            .unwrap();
         assert_eq!(result.assistant_text, "hello ACP");
         assert!(!result.proves_executor_success());
         assert_eq!(
-            controller.session(&session.session_id).unwrap().prompt_count,
+            controller
+                .session(&session.session_id)
+                .unwrap()
+                .prompt_count,
             1
         );
 
@@ -470,7 +510,7 @@ mod tests {
             DshAcpLifecycleState::Closed
         );
         controller
-            .resume_session(&session.session_id, &context, &scope)
+            .resume_session(&session.session_id, &context)
             .unwrap();
         assert_eq!(
             controller.session(&session.session_id).unwrap().state,
@@ -481,18 +521,37 @@ mod tests {
     }
 
     #[test]
+    fn scope_revocation_blocks_new_prompts_but_not_session_cleanup() {
+        if std::env::var("MORN_ACP_FIXTURE_SERVER").ok().as_deref() == Some("1") {
+            return;
+        }
+        let (mut controller, context, scope, root) = fixture();
+        controller.mount_scope(scope.clone()).unwrap();
+        let session = controller.open_session(&context).unwrap();
+        controller.unmount_scope(scope.id.as_str()).unwrap();
+
+        assert!(controller
+            .prompt_text(&session.session_id, &context, "must-not-run")
+            .is_err());
+        controller.close_session(&session.session_id).unwrap();
+        controller.shutdown_transport().unwrap();
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn lifecycle_session_rejects_context_rebinding() {
         if std::env::var("MORN_ACP_FIXTURE_SERVER").ok().as_deref() == Some("1") {
             return;
         }
         let (mut controller, context, scope, root) = fixture();
-        let session = controller.open_session(&context, &scope).unwrap();
+        controller.mount_scope(scope.clone()).unwrap();
+        let session = controller.open_session(&context).unwrap();
         controller.close_session(&session.session_id).unwrap();
 
         let mut forged = context.clone();
         forged.work_package_id = WorkPackageId::generate();
         assert!(controller
-            .resume_session(&session.session_id, &forged, &scope)
+            .resume_session(&session.session_id, &forged)
             .is_err());
         controller.shutdown_transport().unwrap();
         let _ = std::fs::remove_dir_all(root);
