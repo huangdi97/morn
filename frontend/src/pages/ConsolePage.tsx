@@ -70,6 +70,7 @@ function readinessTone(value: string): "ready" | "blocked" | "neutral" {
     normalized.includes("missing") ||
     normalized.includes("mismatch") ||
     normalized.includes("unhealthy") ||
+    normalized.includes("not-yet") ||
     normalized.includes("not authorized")
   ) {
     return "blocked";

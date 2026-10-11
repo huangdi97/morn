@@ -221,6 +221,11 @@ impl EvidenceLedger {
                     "evidence history must be appended in non-decreasing observed_at order per subject/class",
                 ));
             }
+            if claim.observed_at == previous.observed_at {
+                return Err(Error::validation(
+                    "evidence history requires a unique observed_at per subject/class; equal-time claims are ambiguous",
+                ));
+            }
         }
         if self.claims.iter().any(|existing| existing.id == claim.id) {
             return Err(Error::conflict(format!(
@@ -647,6 +652,32 @@ mod tests {
                 .state,
             EvidenceClaimState::Proven
         );
+    }
+
+    #[test]
+    fn equal_time_conflicting_claims_fail_closed_instead_of_using_file_order() {
+        let mut ledger = EvidenceLedger::default();
+        let mut proof = EvidenceClaim::proven(
+            "factory-customer:plant-a",
+            EvidenceClass::RealSite,
+            vec!["site://plant-a/proof".to_string()],
+            "deployment-attestor",
+            "site proof",
+        )
+        .unwrap();
+        proof.observed_at = Timestamp::from_millis(100);
+        ledger.append(proof).unwrap();
+
+        let mut revoked = EvidenceClaim::revoked(
+            "factory-customer:plant-a",
+            EvidenceClass::RealSite,
+            vec!["site://plant-a/revocation".to_string()],
+            "deployment-attestor",
+            "same-clock revocation",
+        )
+        .unwrap();
+        revoked.observed_at = Timestamp::from_millis(100);
+        assert!(ledger.append(revoked).is_err());
     }
 
     #[test]

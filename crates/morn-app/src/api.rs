@@ -417,7 +417,10 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
     let provider_observations = provider_catalog.observations();
 
     let dsh_readiness = if dsh_mode == "real" && dsh_health.selectable_at(now) {
-        match (dsh_runtime_version.as_deref(), dsh_runtime_digest.as_deref()) {
+        match (
+            dsh_runtime_version.as_deref(),
+            dsh_runtime_digest.as_deref(),
+        ) {
             (Some(version), Some(digest)) => {
                 morn_assurance::RuntimeReadinessEvidence::healthy_for_identity(
                     dsh_health.evidence_refs.clone(),

@@ -317,7 +317,8 @@ export interface V115Status {
         | "revoked"
         | "missing-evidence"
         | "identity-mismatch"
-        | "runtime-unhealthy";
+        | "runtime-unhealthy"
+        | "not-yet-valid";
       reason: string;
       evidence_refs: string[];
     }>;

@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use morn_kernel::time::Timestamp;
+
 use crate::evidence_class::{EvidenceClaimState, EvidenceClass, EvidenceLedger};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -17,6 +19,7 @@ pub enum ReadinessState {
     MissingEvidence,
     IdentityMismatch,
     RuntimeUnhealthy,
+    NotYetValid,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,11 +75,17 @@ pub struct ReleaseReadinessAxis {
     pub evidence_refs: Vec<String>,
 }
 
-fn claim_state(claim: Option<&crate::evidence_class::EvidenceClaim>) -> ReadinessState {
-    match claim.map(|claim| claim.state) {
-        Some(EvidenceClaimState::Proven) => ReadinessState::Proven,
-        Some(EvidenceClaimState::BlockedExternal) => ReadinessState::BlockedExternal,
-        Some(EvidenceClaimState::Revoked) => ReadinessState::Revoked,
+fn claim_state(
+    claim: Option<&crate::evidence_class::EvidenceClaim>,
+    now: Timestamp,
+) -> ReadinessState {
+    match claim {
+        Some(claim) if claim.observed_at > now => ReadinessState::NotYetValid,
+        Some(claim) => match claim.state {
+            EvidenceClaimState::Proven => ReadinessState::Proven,
+            EvidenceClaimState::BlockedExternal => ReadinessState::BlockedExternal,
+            EvidenceClaimState::Revoked => ReadinessState::Revoked,
+        },
         None => ReadinessState::MissingEvidence,
     }
 }
@@ -93,7 +102,7 @@ fn evidence_axis(
         id: id.to_string(),
         subject: subject.to_string(),
         evidence_class: class,
-        state: claim_state(claim),
+        state: claim_state(claim, Timestamp::now()),
         reason: claim
             .map(|claim| claim.reason.clone())
             .unwrap_or_else(|| missing_reason.to_string()),
@@ -570,6 +579,33 @@ mod tests {
             false,
         );
         assert!(!customer.ready);
+    }
+
+    #[test]
+    fn future_dated_proof_cannot_make_a_release_axis_ready() {
+        let mut ledger = reference_evidence_ledger();
+        let mut proof = EvidenceClaim::proven(
+            "morn-v11.5-ci-conformance",
+            EvidenceClass::CiConformance,
+            vec!["git://huangdi97/morn/future".to_string()],
+            "deployment-attestor",
+            "clock-skewed CI claim",
+        )
+        .unwrap();
+        proof.observed_at = Timestamp::from_millis(Timestamp::now().millis() + 60_000);
+        ledger.append(proof).unwrap();
+
+        let axes = release_readiness_axes_for_build(
+            &ledger,
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            Some("git://huangdi97/morn/future"),
+        );
+        let ci = axes
+            .iter()
+            .find(|axis| axis.id == "ci-conformance")
+            .unwrap();
+        assert_eq!(ci.state, ReadinessState::NotYetValid);
     }
 
     #[test]

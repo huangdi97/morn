@@ -361,7 +361,10 @@ Example exact-head CI proof:
 Real-runtime, real-site and production-write claims use the same append-only
 ledger but remain separate evidence classes. A later `blocked-external` or
 `revoked` record for the same subject/class invalidates a previous proof until
-a fresh `proven` record is appended. The Console release-readiness projection
+a fresh `proven` record is appended. Claims for the same subject/class must
+have strictly increasing `observed_at` values; equal-time contradictory claims
+are rejected so JSON/file order cannot choose readiness. A future-dated current
+claim is projected as `not-yet-valid` rather than proof. The Console release-readiness projection
 also requires a **fresh Healthy provider lease** in addition to a
 `real-runtime` claim for DSH/Pi. That claim must cite the exact active
 provider artifact identity — `runtime://deepseek-harness/<version>#<digest>`
