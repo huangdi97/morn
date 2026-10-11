@@ -276,6 +276,10 @@ impl EvidenceLedger {
     /// for the same subject/class makes them inactive until a fresh Proven claim
     /// is explicitly appended.
     pub fn proven_for(&self, subject: &str) -> Vec<&EvidenceClaim> {
+        self.proven_for_at(subject, Timestamp::now())
+    }
+
+    pub fn proven_for_at(&self, subject: &str, now: Timestamp) -> Vec<&EvidenceClaim> {
         use std::collections::BTreeMap;
 
         let mut current = BTreeMap::new();
@@ -284,7 +288,9 @@ impl EvidenceLedger {
         }
         current
             .into_values()
-            .filter(|claim| claim.state == EvidenceClaimState::Proven)
+            .filter(|claim| {
+                claim.state == EvidenceClaimState::Proven && claim.observed_at <= now
+            })
             .collect()
     }
 
@@ -292,8 +298,18 @@ impl EvidenceLedger {
     /// not semantically include local-fixture evidence, and real-site evidence
     /// does not silently include a production-write claim.
     pub fn satisfies(&self, subject: &str, required: EvidenceClass) -> bool {
-        self.current_claim(subject, required)
-            .is_some_and(|claim| claim.state == EvidenceClaimState::Proven)
+        self.satisfies_at(subject, required, Timestamp::now())
+    }
+
+    pub fn satisfies_at(
+        &self,
+        subject: &str,
+        required: EvidenceClass,
+        now: Timestamp,
+    ) -> bool {
+        self.current_claim(subject, required).is_some_and(|claim| {
+            claim.state == EvidenceClaimState::Proven && claim.observed_at <= now
+        })
     }
 
     pub fn proven_classes(&self, subject: &str) -> std::collections::BTreeSet<EvidenceClass> {
@@ -582,6 +598,35 @@ mod tests {
         assert!(ledger
             .require("deepseek-harness", EvidenceClass::RealRuntime)
             .is_err());
+    }
+
+    #[test]
+    fn future_claim_is_not_current_proof_for_any_ledger_consumer() {
+        let mut ledger = EvidenceLedger::default();
+        let mut claim = EvidenceClaim::proven(
+            "value:work:g1:outcome",
+            EvidenceClass::RealSite,
+            vec!["site://future".to_string()],
+            "deployment-attestor",
+            "future-dated site proof",
+        )
+        .unwrap();
+        claim.observed_at = Timestamp::from_millis(200);
+        ledger.append(claim).unwrap();
+
+        assert!(!ledger.satisfies_at(
+            "value:work:g1:outcome",
+            EvidenceClass::RealSite,
+            Timestamp::from_millis(199)
+        ));
+        assert!(ledger
+            .proven_for_at("value:work:g1:outcome", Timestamp::from_millis(199))
+            .is_empty());
+        assert!(ledger.satisfies_at(
+            "value:work:g1:outcome",
+            EvidenceClass::RealSite,
+            Timestamp::from_millis(200)
+        ));
     }
 
     #[test]

@@ -1386,7 +1386,7 @@ async fn v115_work_assess_value(
 
         let claims: Vec<_> = guard
             .evidence_ledger
-            .proven_for(&subject)
+            .proven_for_at(&subject, now)
             .into_iter()
             .filter(|claim| claim.class == EvidenceClass::RealSite)
             .collect();

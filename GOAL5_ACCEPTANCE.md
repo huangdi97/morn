@@ -1,5 +1,12 @@
 # GOAL5_ACCEPTANCE.md
 
+> **Historical v1 acceptance snapshot — not current v11.5 release truth.**
+> This file records the August 2026 v1/Goal acceptance state. Current v11.5
+> engineering truth lives in [STATUS.md](STATUS.md) and external blockers in
+> [BLOCKERS.md](BLOCKERS.md). A checked item here must not be interpreted as
+> LIVE_DSH/LIVE_PI, customer G12, real-site, production-write, or current-SHA CI evidence.
+
+
 > 状态：2026-08-16 逐条核对。`[x]` = 通过（代码 + 测试 + 命令）。全量验证
 > `scripts/run_all.ps1` exit 0：Rust 64 suites / 218 passed / 0 failed / 0 ignored；
 > frontend typecheck/lint/test(4)/build；CLI smoke 12 commands；Tauri build；UI smoke 全 OK。

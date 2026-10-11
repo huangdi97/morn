@@ -1,5 +1,12 @@
 # ACCEPTANCE.md — 今晚验收门
 
+> **Historical v1 acceptance snapshot — not current v11.5 release truth.**
+> This file records the August 2026 v1/Goal acceptance state. Current v11.5
+> engineering truth lives in [STATUS.md](STATUS.md) and external blockers in
+> [BLOCKERS.md](BLOCKERS.md). A checked item here must not be interpreted as
+> LIVE_DSH/LIVE_PI, customer G12, real-site, production-write, or current-SHA CI evidence.
+
+
 > 状态：2026-08-15 逐条核对。`[x]` = 通过（代码+测试）；`[~]` = 部分/有说明；`[ ]` = 未通过。
 > 全量验证：`scripts/run_all.ps1` exit 0；41 Rust 测试 + 2 前端测试全绿。
 

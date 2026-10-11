@@ -528,7 +528,7 @@ mod tests {
             },
             ReleaseReadinessAxis {
                 id: "customer-real-site".to_string(),
-                subject: "site".to_string(),
+                subject: "factory-customer:plant-a".to_string(),
                 evidence_class: EvidenceClass::RealSite,
                 state: ReadinessState::Proven,
                 reason: "ok".to_string(),
@@ -536,7 +536,7 @@ mod tests {
             },
             ReleaseReadinessAxis {
                 id: "production-write".to_string(),
-                subject: "write".to_string(),
+                subject: "factory-production-write:plant-a".to_string(),
                 evidence_class: EvidenceClass::ProductionWrite,
                 state: ReadinessState::Proven,
                 reason: "historical production evidence".to_string(),
@@ -544,17 +544,19 @@ mod tests {
             },
         ];
 
-        let customer = evaluate_deployment_readiness(
+        let customer = evaluate_deployment_readiness_for_target(
             &axes,
             DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
             false,
+            Some("plant-a"),
         );
         assert!(customer.ready);
 
-        let write_without_authority = evaluate_deployment_readiness(
+        let write_without_authority = evaluate_deployment_readiness_for_target(
             &axes,
             DeploymentReadinessScope::ProductionWriteDeepSeek,
             false,
+            Some("plant-a"),
         );
         assert!(!write_without_authority.ready);
         assert!(write_without_authority
@@ -562,10 +564,11 @@ mod tests {
             .iter()
             .any(|blocker| blocker.contains("production-write-authority=forbidden")));
 
-        let write_with_authority = evaluate_deployment_readiness(
+        let write_with_authority = evaluate_deployment_readiness_for_target(
             &axes,
             DeploymentReadinessScope::ProductionWriteDeepSeek,
             true,
+            Some("plant-a"),
         );
         assert!(write_with_authority.ready);
 
@@ -573,10 +576,11 @@ mod tests {
             .find(|axis| axis.id == "deepseek-live-runtime")
             .unwrap()
             .state = ReadinessState::RuntimeUnhealthy;
-        let customer = evaluate_deployment_readiness(
+        let customer = evaluate_deployment_readiness_for_target(
             &axes,
             DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
             false,
+            Some("plant-a"),
         );
         assert!(!customer.ready);
     }

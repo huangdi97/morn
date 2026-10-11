@@ -351,11 +351,30 @@ Example exact-head CI proof:
       "github-actions://huangdi97/morn/runs/38064799438",
       "git://huangdi97/morn/bdc9e924f962f436a0dd52a4ac43c4ad5a83774c"
     ],
-    "issuer": "deployment-release-controller",
+    "issuer": "deployment-attestor-prod-a",
     "reason": "exact-head configured repository gates passed",
     "observed_at": "2026-10-10T15:46:00Z"
   }
 ]
+```
+
+A RealRuntime proof for the configured DSH artifact must cite that exact
+runtime identity in addition to the external smoke/attestation reference:
+
+```json
+{
+  "id": "evidence-claim:dsh-live-2026-10-11",
+  "subject": "deepseek-harness",
+  "class": "real-runtime",
+  "state": "proven",
+  "evidence_refs": [
+    "runtime://deepseek-harness/<version>#sha256:<64-hex>",
+    "attestation://provider-smoke/dsh-2026-10-11"
+  ],
+  "issuer": "deployment-attestor-prod-a",
+  "reason": "authenticated official runtime smoke passed for the pinned artifact",
+  "observed_at": "2026-10-11T12:00:00Z"
+}
 ```
 
 Real-runtime, real-site and production-write claims use the same append-only
