@@ -306,6 +306,7 @@ export interface V115Status {
   };
   release_readiness: {
     build_identity_ref: string | null;
+    deployment_site_ref: string | null;
     axes: Array<{
       id: string;
       subject: string;
@@ -329,6 +330,7 @@ export interface V115Status {
         | "customer-read-only-pi"
         | "production-write-deepseek"
         | "production-write-pi";
+      site_ref: string | null;
       ready: boolean;
       required_axes: string[];
       blockers: string[];

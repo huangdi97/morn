@@ -303,6 +303,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         pi_harness,
         execution_environment_attestations,
         build_identity_ref,
+        deployment_site_ref,
         evidence_ledger,
         supply_chain_verifications,
     ) = {
@@ -312,6 +313,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             guard.pi_harness.clone(),
             guard.execution_environments.attestations(),
             guard.build_identity_ref.clone(),
+            guard.deployment_site_ref.clone(),
             guard.evidence_ledger.clone(),
             guard.supply_chain_verifications.clone(),
         )
@@ -436,11 +438,12 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
             pi_health.state, pi_health.reason
         ))
     };
-    let release_readiness = morn_assurance::release_readiness_axes_for_build(
+    let release_readiness = morn_assurance::release_readiness_axes_for_deployment(
         &evidence_ledger,
         dsh_readiness,
         pi_readiness,
         build_identity_ref.as_deref(),
+        deployment_site_ref.as_deref(),
     );
     // Global release status has no exact Work/action AuthorityDecision.
     // Even a profile that permits writes cannot mint action-level authority here.
@@ -456,10 +459,11 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
     ]
     .into_iter()
     .map(|scope| {
-        morn_assurance::evaluate_deployment_readiness(
+        morn_assurance::evaluate_deployment_readiness_for_target(
             &release_readiness,
             scope,
             production_write_authority,
+            deployment_site_ref.as_deref(),
         )
     })
     .collect::<Vec<_>>();
@@ -574,6 +578,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         },
         "release_readiness": {
             "build_identity_ref": build_identity_ref,
+            "deployment_site_ref": deployment_site_ref,
             "axes": release_readiness,
             "deployment_scopes": deployment_readiness,
             "semantics": {

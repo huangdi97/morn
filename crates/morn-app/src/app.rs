@@ -83,6 +83,9 @@ pub struct AppInner {
     /// evidence must cite this same reference; historical CI cannot be reused
     /// for a different binary/commit.
     pub build_identity_ref: Option<String>,
+    /// Exact customer/site target for deployment readiness. Real-site and
+    /// production-write evidence is never reusable across different sites.
+    pub deployment_site_ref: Option<String>,
     /// Deployment-owned evidence claims. Repository/reference claims are loaded
     /// first; external RealSite/ProductionWrite proof may only come from the
     /// explicit deployment file, never from an HTTP self-assertion.
@@ -493,6 +496,29 @@ fn configured_build_identity_ref() -> morn_kernel::Result<Option<String>> {
     }
 }
 
+fn configured_deployment_site_ref() -> morn_kernel::Result<Option<String>> {
+    match std::env::var("MORN_DEPLOYMENT_SITE_REF") {
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Ok(value) => {
+            let value = value.trim();
+            if value.is_empty() {
+                return Err(morn_kernel::error::Error::validation(
+                    "MORN_DEPLOYMENT_SITE_REF must not be empty when set",
+                ));
+            }
+            if value.chars().any(char::is_control) {
+                return Err(morn_kernel::error::Error::validation(
+                    "MORN_DEPLOYMENT_SITE_REF must not contain control characters",
+                ));
+            }
+            Ok(Some(value.to_string()))
+        }
+        Err(error) => Err(morn_kernel::error::Error::validation(format!(
+            "cannot read MORN_DEPLOYMENT_SITE_REF: {error}"
+        ))),
+    }
+}
+
 fn configured_evidence_ledger() -> morn_kernel::Result<EvidenceLedger> {
     let mut ledger = reference_evidence_ledger();
     let Ok(path) = std::env::var("MORN_EVIDENCE_CLAIMS_FILE") else {
@@ -501,6 +527,17 @@ fn configured_evidence_ledger() -> morn_kernel::Result<EvidenceLedger> {
     if path.trim().is_empty() {
         return Err(morn_kernel::error::Error::validation(
             "MORN_EVIDENCE_CLAIMS_FILE must not be empty when set",
+        ));
+    }
+    let trusted_issuer = std::env::var("MORN_EVIDENCE_ISSUER").map_err(|_| {
+        morn_kernel::error::Error::validation(
+            "MORN_EVIDENCE_ISSUER is required when MORN_EVIDENCE_CLAIMS_FILE is configured",
+        )
+    })?;
+    let trusted_issuer = trusted_issuer.trim();
+    if trusted_issuer.is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_EVIDENCE_ISSUER must not be empty",
         ));
     }
     let raw = std::fs::read_to_string(&path).map_err(|error| {
@@ -528,7 +565,7 @@ fn configured_evidence_ledger() -> morn_kernel::Result<EvidenceLedger> {
         })?],
     };
     for claim in claims {
-        ledger.append(claim)?;
+        ledger.append_from_trusted_issuer(claim, trusted_issuer)?;
     }
     Ok(ledger)
 }
@@ -646,6 +683,7 @@ impl AppState {
         let executor_reconciliation_authorizations =
             configured_executor_reconciliation_authorizations()?;
         let build_identity_ref = configured_build_identity_ref()?;
+        let deployment_site_ref = configured_deployment_site_ref()?;
         let evidence_ledger = configured_evidence_ledger()?;
         let supply_chain_verifications = configured_supply_chain_verifications()?;
         let mut inner = AppInner {
@@ -667,6 +705,7 @@ impl AppState {
             customer_value_attestations,
             executor_reconciliation_authorizations,
             build_identity_ref,
+            deployment_site_ref,
             evidence_ledger,
             supply_chain_verifications,
             evolution: EvolutionEngine::new(),

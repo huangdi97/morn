@@ -74,6 +74,10 @@ try {
       ) {
         errors.push("console: fixture/default DSH must not appear as real-runtime ready");
       }
+      const readinessText = await page.locator('[data-testid="release-readiness"]').innerText();
+      if (!readinessText.includes("Deployment site: not configured")) {
+        errors.push("console: missing deployment site must remain explicit in release readiness");
+      }
       const deploymentScopes = page.locator('[data-testid="deployment-readiness-scopes"]');
       if (!(await deploymentScopes.count())) {
         errors.push("console: named deployment readiness gates are missing");

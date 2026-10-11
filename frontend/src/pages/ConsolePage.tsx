@@ -223,6 +223,7 @@ export default function ConsolePage() {
           </div>
           <p className="release-readiness-footnote">
             Running build identity: {v115.release_readiness.build_identity_ref ?? "not configured — CI axis cannot be proven"}.
+            {" "}Deployment site: {v115.release_readiness.deployment_site_ref ?? "not configured — customer/production gates remain blocked"}.
             {" "}{v115.release_readiness.semantics.reason}
           </p>
           <div className="release-readiness-subheading">
@@ -239,6 +240,7 @@ export default function ConsolePage() {
                 <strong>{decision.ready ? "ready" : "blocked"}</strong>
                 <small className="readiness-reason">
                   Required: {decision.required_axes.join(" · ")}
+                  {decision.site_ref ? ` · Site: ${decision.site_ref}` : ""}
                 </small>
                 <small className="readiness-evidence">
                   {decision.blockers.length ? decision.blockers.join(" · ") : "All required axes proven"}

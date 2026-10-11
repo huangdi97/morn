@@ -298,11 +298,33 @@ the read operation itself, but must still terminate at the same
 ## Deployment-owned evidence ledger
 
 Release/production posture is not inferred from a green UI, a provider response,
-or repository history. Operational deployments may load signed/controlled claim
-records through `MORN_EVIDENCE_CLAIMS_FILE`. The server first loads repository
-baseline claims and then appends this deployment file. Repository blockers use a
-historical baseline timestamp, so genuine evidence produced before process
-startup can supersede them without violating append-only claim ordering.
+or repository history. Operational deployments may load controlled claim
+records through `MORN_EVIDENCE_CLAIMS_FILE`. When this file is configured,
+`MORN_EVIDENCE_ISSUER` is mandatory and every claim's `issuer` must exactly
+match that deployment-pinned identity; the payload cannot select its own trusted
+issuer. File ownership/signature/provenance enforcement remains a deployment
+responsibility and should be backed by the same protected configuration channel
+used for execution attestations.
+
+Customer/production readiness is also site-bound. Set
+`MORN_DEPLOYMENT_SITE_REF` to the exact deployment/site identity. RealSite and
+ProductionWrite claims for that deployment must use the subjects
+`factory-customer:<site-ref>` and `factory-production-write:<site-ref>`.
+Evidence for one site cannot make another site ready. Omitting the site keeps all
+customer-read-only and production-write named gates blocked.
+
+The server first loads repository baseline claims and then appends the
+deployment file. Repository blockers use a historical baseline timestamp, so
+genuine evidence produced before process startup can supersede them without
+violating append-only claim ordering.
+
+Example deployment trust pins:
+
+```powershell
+$env:MORN_EVIDENCE_CLAIMS_FILE = "C:\morn\trust\release-evidence.json"
+$env:MORN_EVIDENCE_ISSUER = "deployment-attestor-prod-a"
+$env:MORN_DEPLOYMENT_SITE_REF = "plant-a"
+```
 
 The running deployment must also set an immutable build identity reference, for
 example:

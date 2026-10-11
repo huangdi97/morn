@@ -232,6 +232,29 @@ impl EvidenceLedger {
         Ok(())
     }
 
+    /// Append a deployment claim only when its payload issuer matches the
+    /// deployment-pinned issuer identity. The issuer is therefore not trusted
+    /// merely because a JSON file says so.
+    pub fn append_from_trusted_issuer(
+        &mut self,
+        claim: EvidenceClaim,
+        trusted_issuer: &str,
+    ) -> Result<()> {
+        let trusted_issuer = trusted_issuer.trim();
+        if trusted_issuer.is_empty() {
+            return Err(Error::validation(
+                "trusted evidence issuer must be configured explicitly",
+            ));
+        }
+        if claim.issuer != trusted_issuer {
+            return Err(Error::validation(format!(
+                "evidence claim issuer {:?} does not match deployment-trusted issuer {:?}",
+                claim.issuer, trusted_issuer
+            )));
+        }
+        self.append(claim)
+    }
+
     pub fn claims(&self) -> &[EvidenceClaim] {
         &self.claims
     }
@@ -440,6 +463,30 @@ mod tests {
         .unwrap();
         let mut ledger = EvidenceLedger::default();
         assert!(ledger.append(claim).is_err());
+    }
+
+    #[test]
+    fn deployment_claim_payload_cannot_self_select_a_trusted_issuer() {
+        let claim = EvidenceClaim::proven(
+            "factory-customer:plant-a",
+            EvidenceClass::RealSite,
+            vec!["site://plant-a/review-1".to_string()],
+            "payload-controlled-issuer",
+            "real site review",
+        )
+        .unwrap();
+        let mut ledger = EvidenceLedger::default();
+        assert!(ledger
+            .append_from_trusted_issuer(claim.clone(), "deployment-attestor")
+            .is_err());
+        assert!(ledger.claims().is_empty());
+
+        let mut trusted = claim;
+        trusted.issuer = "deployment-attestor".to_string();
+        ledger
+            .append_from_trusted_issuer(trusted, "deployment-attestor")
+            .unwrap();
+        assert!(ledger.satisfies("factory-customer:plant-a", EvidenceClass::RealSite));
     }
 
     #[test]

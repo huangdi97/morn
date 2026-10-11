@@ -174,6 +174,32 @@ pub fn release_readiness_axes_for_build(
     pi_runtime: RuntimeReadinessEvidence,
     build_identity_ref: Option<&str>,
 ) -> Vec<ReleaseReadinessAxis> {
+    release_readiness_axes_for_deployment(
+        ledger,
+        dsh_runtime,
+        pi_runtime,
+        build_identity_ref,
+        None,
+    )
+}
+
+/// Project readiness for one explicit deployment site. RealSite and
+/// ProductionWrite evidence is site-scoped so proof from plant-a can never make
+/// plant-b ready.
+pub fn release_readiness_axes_for_deployment(
+    ledger: &EvidenceLedger,
+    dsh_runtime: RuntimeReadinessEvidence,
+    pi_runtime: RuntimeReadinessEvidence,
+    build_identity_ref: Option<&str>,
+    site_ref: Option<&str>,
+) -> Vec<ReleaseReadinessAxis> {
+    let site_ref = site_ref.map(str::trim).filter(|value| !value.is_empty());
+    let customer_subject = site_ref
+        .map(|site| format!("factory-customer:{site}"))
+        .unwrap_or_else(|| "factory-customer".to_string());
+    let write_subject = site_ref
+        .map(|site| format!("factory-production-write:{site}"))
+        .unwrap_or_else(|| "factory-production-write".to_string());
     vec![
         evidence_axis(
             ledger,
@@ -200,14 +226,14 @@ pub fn release_readiness_axes_for_build(
         evidence_axis(
             ledger,
             "customer-real-site",
-            "factory-customer",
+            &customer_subject,
             EvidenceClass::RealSite,
             "no authorized real-site evidence exists",
         ),
         evidence_axis(
             ledger,
             "production-write",
-            "factory-production-write",
+            &write_subject,
             EvidenceClass::ProductionWrite,
             "no explicit production-write evidence exists",
         ),
@@ -307,11 +333,22 @@ impl DeploymentReadinessScope {
             Self::ProductionWriteDeepSeek | Self::ProductionWritePi
         )
     }
+
+    const fn requires_site_target(self) -> bool {
+        matches!(
+            self,
+            Self::CustomerReadOnlyDeepSeek
+                | Self::CustomerReadOnlyPi
+                | Self::ProductionWriteDeepSeek
+                | Self::ProductionWritePi
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeploymentReadinessDecision {
     pub scope: DeploymentReadinessScope,
+    pub site_ref: Option<String>,
     pub ready: bool,
     pub required_axes: Vec<String>,
     pub blockers: Vec<String>,
@@ -326,12 +363,57 @@ pub fn evaluate_deployment_readiness(
     scope: DeploymentReadinessScope,
     production_write_authority: bool,
 ) -> DeploymentReadinessDecision {
+    evaluate_deployment_readiness_for_target(
+        axes,
+        scope,
+        production_write_authority,
+        None,
+    )
+}
+
+pub fn evaluate_deployment_readiness_for_target(
+    axes: &[ReleaseReadinessAxis],
+    scope: DeploymentReadinessScope,
+    production_write_authority: bool,
+    site_ref: Option<&str>,
+) -> DeploymentReadinessDecision {
+    let site_ref = site_ref.map(str::trim).filter(|value| !value.is_empty());
     let mut blockers = Vec::new();
+    if scope.requires_site_target() && site_ref.is_none() {
+        blockers.push(
+            "deployment-target-site=missing: customer/production readiness must name an exact site"
+                .to_string(),
+        );
+    }
     for required in scope.required_axes() {
         match axes.iter().find(|axis| axis.id == *required) {
             Some(axis) if axis.state == ReadinessState::Proven => {}
             Some(axis) => blockers.push(format!("{}={:?}: {}", required, axis.state, axis.reason)),
             None => blockers.push(format!("{required}=missing-axis")),
+        }
+    }
+    if let Some(site) = site_ref {
+        if scope.requires_site_target() {
+            let expected_customer = format!("factory-customer:{site}");
+            match axes.iter().find(|axis| axis.id == "customer-real-site") {
+                Some(axis) if axis.subject == expected_customer => {}
+                Some(axis) => blockers.push(format!(
+                    "customer-real-site=identity-mismatch: expected subject {expected_customer}, got {}",
+                    axis.subject
+                )),
+                None => {}
+            }
+        }
+        if scope.requires_production_write_authority() {
+            let expected_write = format!("factory-production-write:{site}");
+            match axes.iter().find(|axis| axis.id == "production-write") {
+                Some(axis) if axis.subject == expected_write => {}
+                Some(axis) => blockers.push(format!(
+                    "production-write=identity-mismatch: expected subject {expected_write}, got {}",
+                    axis.subject
+                )),
+                None => {}
+            }
         }
     }
     if scope.requires_production_write_authority() && !production_write_authority {
@@ -343,6 +425,7 @@ pub fn evaluate_deployment_readiness(
 
     DeploymentReadinessDecision {
         scope,
+        site_ref: site_ref.map(str::to_string),
         ready: blockers.is_empty(),
         required_axes: scope
             .required_axes()
@@ -462,6 +545,80 @@ mod tests {
             false,
         );
         assert!(!customer.ready);
+    }
+
+    #[test]
+    fn customer_and_write_readiness_are_bound_to_exact_site_identity() {
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "factory-customer:plant-a",
+                    EvidenceClass::RealSite,
+                    vec!["site://plant-a/review".to_string()],
+                    "deployment-attestor",
+                    "plant-a read-only evidence",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "factory-production-write:plant-a",
+                    EvidenceClass::ProductionWrite,
+                    vec!["write://plant-a/change-1".to_string()],
+                    "deployment-attestor",
+                    "plant-a production-write evidence",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let axes = release_readiness_axes_for_deployment(
+            &ledger,
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            None,
+            Some("plant-a"),
+        );
+        assert_eq!(
+            axes.iter()
+                .find(|axis| axis.id == "customer-real-site")
+                .unwrap()
+                .subject,
+            "factory-customer:plant-a"
+        );
+        assert_eq!(
+            axes.iter()
+                .find(|axis| axis.id == "production-write")
+                .unwrap()
+                .subject,
+            "factory-production-write:plant-a"
+        );
+
+        let no_target = evaluate_deployment_readiness(
+            &axes,
+            DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
+            false,
+        );
+        assert!(!no_target.ready);
+        assert!(no_target
+            .blockers
+            .iter()
+            .any(|blocker| blocker.contains("deployment-target-site=missing")));
+
+        let wrong_target = evaluate_deployment_readiness_for_target(
+            &axes,
+            DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
+            false,
+            Some("plant-b"),
+        );
+        assert!(!wrong_target.ready);
+        assert!(wrong_target
+            .blockers
+            .iter()
+            .any(|blocker| blocker.contains("identity-mismatch")));
     }
 
     #[test]
