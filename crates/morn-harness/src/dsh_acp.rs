@@ -247,8 +247,8 @@ impl DshAcpConfig {
         })?;
         let provider = std::env::var("MORN_DSH_ACP_PROVIDER")
             .unwrap_or_else(|_| "deepseek-official".to_string());
-        let model = std::env::var("MORN_DSH_ACP_MODEL")
-            .unwrap_or_else(|_| "deepseek-v4-flash".to_string());
+        let model =
+            std::env::var("MORN_DSH_ACP_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".to_string());
         let mut config = Self::profile_acp(cwd, home)
             .with_model_route(provider, model)
             .with_execution_environment_ref(environment_ref)
@@ -679,11 +679,8 @@ impl DshAcpStdioClient {
                     "DSH ACP reasoning effort must be non-empty when configured",
                 ));
             }
-            let result = self.set_session_config_option(
-                session_id,
-                "reasoning_effort",
-                json!(reasoning),
-            )?;
+            let result =
+                self.set_session_config_option(session_id, "reasoning_effort", json!(reasoning))?;
             require_config_option_value(&result, "reasoning_effort", &json!(reasoning))?;
         }
         Ok(())
@@ -961,18 +958,14 @@ fn parse_acp_server_info(result: &Value) -> Result<DshAcpServerInfo> {
     })
 }
 
-fn require_config_option_value(
-    result: &Value,
-    config_id: &str,
-    expected: &Value,
-) -> Result<()> {
+fn require_config_option_value(result: &Value, config_id: &str, expected: &Value) -> Result<()> {
     let current = result
         .get("configOptions")
         .and_then(Value::as_array)
         .and_then(|options| {
-            options.iter().find(|option| {
-                option.get("id").and_then(Value::as_str) == Some(config_id)
-            })
+            options
+                .iter()
+                .find(|option| option.get("id").and_then(Value::as_str) == Some(config_id))
         })
         .and_then(|option| option.get("currentValue"))
         .ok_or_else(|| {

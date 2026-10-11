@@ -147,12 +147,9 @@ impl DshAcpLifecycleController {
         let reasoning_effort = self.config.reasoning_effort.clone();
         let client = self.ensure_client()?;
         let session_id = client.new_session(&cwd)?;
-        if let Err(error) = client.pin_model_route(
-            &session_id,
-            &provider,
-            &model,
-            reasoning_effort.as_deref(),
-        ) {
+        if let Err(error) =
+            client.pin_model_route(&session_id, &provider, &model, reasoning_effort.as_deref())
+        {
             let _ = client.close_session(&session_id);
             return Err(error);
         }
