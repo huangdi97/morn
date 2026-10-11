@@ -14,7 +14,7 @@ use morn_kernel::time::Timestamp;
 use crate::context::RuntimeContext;
 use crate::dsh_acp::{DshAcpConfig, DshAcpControlHandle, DshAcpPromptResult, DshAcpStdioClient};
 use crate::provider::DSH_REAL_E0_SCOPE_RESTRICTION;
-use crate::scope::CapabilityScope;
+use crate::scope::{CapabilityScope, ScopeKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -35,6 +35,7 @@ pub struct DshAcpLifecycleSession {
     pub work_generation: u64,
     pub execution_binding_ref: RuntimeBindingId,
     pub execution_environment_ref: String,
+    pub scope_ref: String,
     pub route_ref: String,
     pub model_provider: String,
     pub model: String,
@@ -52,6 +53,7 @@ pub struct DshAcpLifecycleSession {
 struct BoundSession {
     public: DshAcpLifecycleSession,
     context: RuntimeContext,
+    scope: CapabilityScope,
 }
 
 pub struct DshAcpLifecycleController {
@@ -94,6 +96,22 @@ impl DshAcpLifecycleController {
         self.config.route_ref()
     }
 
+    pub fn configured_execution_environment_ref(&self) -> Option<&str> {
+        self.config.execution_environment_ref.as_deref()
+    }
+
+    pub fn configured_profile_configuration_ref(&self) -> Option<&str> {
+        self.config.profile_configuration_ref.as_deref()
+    }
+
+    pub fn configured_runtime_version(&self) -> Option<&str> {
+        self.config.runtime_version.as_deref()
+    }
+
+    pub fn configured_runtime_digest(&self) -> Option<&str> {
+        self.config.runtime_digest.as_deref()
+    }
+
     pub fn wire_agent_version(&self) -> Option<&str> {
         self.wire_agent_version.as_deref()
     }
@@ -103,6 +121,11 @@ impl DshAcpLifecycleController {
     }
 
     pub fn mount_scope(&mut self, scope: CapabilityScope) -> Result<String> {
+        if scope.kind != ScopeKind::ExecutionRun {
+            return Err(Error::validation(
+                "ACP lifecycle requires an ExecutionRun scope, not a broader reusable scope",
+            ));
+        }
         if !scope
             .restrictions
             .iter()
@@ -277,9 +300,27 @@ impl DshAcpLifecycleController {
                 )));
             }
         }
-        self.ensure_same_binding(&existing.public, context)?;
+        self.ensure_same_binding(&existing, context)?;
         let cwd = self.config.cwd.clone();
-        self.ensure_client()?.resume_session(session_id, &cwd)?;
+        let provider = self
+            .config
+            .provider
+            .clone()
+            .ok_or_else(|| Error::validation("ACP lifecycle config has no model provider"))?;
+        let model = self
+            .config
+            .model
+            .clone()
+            .ok_or_else(|| Error::validation("ACP lifecycle config has no model"))?;
+        let reasoning_effort = self.config.reasoning_effort.clone();
+        let client = self.ensure_client()?;
+        client.resume_session(session_id, &cwd)?;
+        if let Err(error) =
+            client.pin_model_route(session_id, &provider, &model, reasoning_effort.as_deref())
+        {
+            let _ = client.close_session(session_id);
+            return Err(error);
+        }
         let resumed = self
             .sessions
             .get_mut(session_id)
@@ -319,6 +360,15 @@ impl DshAcpLifecycleController {
     }
 
     fn bound_session(&self, session_id: String, context: &RuntimeContext) -> Result<BoundSession> {
+        let scope_ref = context
+            .scope_id
+            .clone()
+            .ok_or_else(|| Error::validation("ACP session requires mounted scope"))?;
+        let scope = self
+            .scopes
+            .get(&scope_ref)
+            .cloned()
+            .ok_or_else(|| Error::validation("ACP session scope is not mounted"))?;
         let work_generation = context
             .work_generation
             .ok_or_else(|| Error::validation("ACP session requires Work generation"))?;
@@ -363,6 +413,7 @@ impl DshAcpLifecycleController {
                 work_generation,
                 execution_binding_ref,
                 execution_environment_ref,
+                scope_ref,
                 route_ref: self.config.route_ref()?,
                 model_provider,
                 model,
@@ -376,6 +427,7 @@ impl DshAcpLifecycleController {
                 opened_at: Timestamp::now(),
             },
             context: context.clone(),
+            scope,
         })
     }
 
@@ -431,24 +483,27 @@ impl DshAcpLifecycleController {
                 "ACP session {session_id} is not active"
             )));
         }
-        self.ensure_same_binding(&session.public, context)
+        self.ensure_same_binding(session, context)
     }
 
-    fn ensure_same_binding(
-        &self,
-        session: &DshAcpLifecycleSession,
-        context: &RuntimeContext,
-    ) -> Result<()> {
-        if session.workspace_id != context.workspace_id
-            || session.work_package_id != context.work_package_id
-            || Some(session.work_generation) != context.work_generation
-            || context.execution_binding_ref.as_ref() != Some(&session.execution_binding_ref)
+    fn ensure_same_binding(&self, session: &BoundSession, context: &RuntimeContext) -> Result<()> {
+        let current_scope = context
+            .scope_id
+            .as_deref()
+            .and_then(|scope_id| self.scopes.get(scope_id));
+        if session.public.workspace_id != context.workspace_id
+            || session.public.work_package_id != context.work_package_id
+            || Some(session.public.work_generation) != context.work_generation
+            || context.execution_binding_ref.as_ref()
+                != Some(&session.public.execution_binding_ref)
             || context.execution_environment_ref.as_deref()
-                != Some(session.execution_environment_ref.as_str())
-            || session.route_ref != self.config.route_ref()?
+                != Some(session.public.execution_environment_ref.as_str())
+            || context.scope_id.as_deref() != Some(session.public.scope_ref.as_str())
+            || current_scope != Some(&session.scope)
+            || session.public.route_ref != self.config.route_ref()?
         {
             return Err(Error::validation(
-                "ACP session cannot be rebound to another Work, generation, binding, environment or route",
+                "ACP session cannot be rebound to another Work, generation, binding, environment, scope snapshot or model route",
             ));
         }
         Ok(())
@@ -556,6 +611,7 @@ mod tests {
         controller.mount_scope(scope.clone()).unwrap();
         let session = controller.open_session(&context).unwrap();
         assert_eq!(session.work_generation, 1);
+        assert_eq!(session.scope_ref, scope.id.to_string());
         assert_eq!(session.model_provider, "fixture-provider");
         assert_eq!(session.model, "fixture-model");
         assert_eq!(session.reasoning_effort.as_deref(), Some("high"));
@@ -653,6 +709,40 @@ mod tests {
         assert!(controller
             .resume_session(&session.session_id, &context)
             .is_err());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn broader_or_recreated_scope_cannot_take_over_existing_session() {
+        if std::env::var("MORN_ACP_FIXTURE_SERVER").ok().as_deref() == Some("1") {
+            return;
+        }
+        let (mut controller, context, scope, root) = fixture();
+
+        let broad = CapabilityScope::new(
+            ScopeKind::Workspace,
+            None,
+            context.workspace_id.clone(),
+            "too-broad",
+        )
+        .with_restriction(DSH_REAL_E0_SCOPE_RESTRICTION);
+        assert!(controller.mount_scope(broad).is_err());
+
+        controller.mount_scope(scope.clone()).unwrap();
+        let session = controller.open_session(&context).unwrap();
+        controller.close_session(&session.session_id).unwrap();
+        controller.unmount_scope(scope.id.as_str()).unwrap();
+
+        let mut changed = scope.clone();
+        changed
+            .restrictions
+            .push("morn.extra-restriction".to_string());
+        controller.mount_scope(changed).unwrap();
+        assert!(controller
+            .resume_session(&session.session_id, &context)
+            .is_err());
+
+        controller.shutdown_transport().unwrap();
         let _ = std::fs::remove_dir_all(root);
     }
 
