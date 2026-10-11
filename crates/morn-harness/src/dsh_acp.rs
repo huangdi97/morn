@@ -250,12 +250,12 @@ impl DshAcpConfig {
     }
 
     #[cfg(test)]
-    fn allow_protocol_fixture_transport(&mut self) {
+    pub(crate) fn allow_protocol_fixture_transport(&mut self) {
         self.enforce_morn_e0_tool_policy = false;
     }
 
     #[cfg(test)]
-    fn with_test_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+    pub(crate) fn with_test_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.test_env.insert(key.into(), value.into());
         self
     }

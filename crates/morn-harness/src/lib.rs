@@ -5,6 +5,7 @@ pub mod binding;
 pub mod context;
 pub mod contract;
 pub mod dsh_acp;
+pub mod dsh_acp_lifecycle;
 pub mod dsh_sdk;
 pub mod event;
 pub mod intelligence;
@@ -30,6 +31,9 @@ pub use dsh_acp::{
     DSH_ACP_METHOD_SESSION_NEW, DSH_ACP_METHOD_SESSION_PROMPT, DSH_ACP_METHOD_SESSION_RESUME,
     DSH_ACP_METHOD_SESSION_SET_CONFIG_OPTION, DSH_ACP_METHOD_SESSION_UPDATE,
     DSH_ACP_PROTOCOL_VERSION,
+};
+pub use dsh_acp_lifecycle::{
+    DshAcpLifecycleController, DshAcpLifecycleSession, DshAcpLifecycleState,
 };
 pub use dsh_sdk::{
     assistant_text_from_session_event, DshNotification, DshSdkConfig, DshSdkRunResult,
