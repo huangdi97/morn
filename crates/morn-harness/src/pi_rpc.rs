@@ -239,7 +239,7 @@ impl PiRpcConfig {
             ];
             if let Some(missing) = required_containment
                 .iter()
-                .find(|required| !self.args.iter().any(|arg| arg == **required))
+                .find(|required| !self.args.iter().any(|arg| arg.as_str() == **required))
             {
                 return Err(Error::validation(format!(
                     "real Pi RPC containment is missing required launcher flag {missing}"
