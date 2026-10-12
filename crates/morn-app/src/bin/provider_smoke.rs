@@ -116,13 +116,19 @@ fn run_gate() -> Result<Value> {
                 .ok_or_else(|| {
                     Error::validation("real DSH has no pinned Home/Profile composition identity")
                 })?;
-            if !attestation
-                .runtime_identities
-                .iter()
-                .any(|identity| identity == profile_configuration_ref)
-            {
+            if !attestation.attests_identity_ref(profile_configuration_ref, Timestamp::now()) {
                 return Err(Error::external(
                     "execution-environment attestation does not bind the exact DSH Home/Profile composition",
+                ));
+            }
+            let route_attestation_ref = provider
+                .configured_route_attestation_ref()
+                .ok_or_else(|| {
+                    Error::validation("real DSH has no attested semantic route identity")
+                })?;
+            if !attestation.attests_identity_ref(&route_attestation_ref, Timestamp::now()) {
+                return Err(Error::external(
+                    "execution-environment attestation does not bind the exact DSH semantic route",
                 ));
             }
             let initialized_version = provider.preflight_real_runtime()?;
@@ -153,6 +159,7 @@ fn run_gate() -> Result<Value> {
                 "runtime_version": runtime_version,
                 "runtime_digest": runtime_digest,
                 "wire_server_version": wire_server_version,
+                "route_attestation_ref": route_attestation_ref,
                 "execution_environment_ref": attestation.environment_ref,
                 "execution_environment_runtime_identities": attestation.runtime_identities,
                 "execution_environment_evidence_refs": attestation.evidence_refs,
@@ -198,6 +205,16 @@ fn run_gate() -> Result<Value> {
                     "execution-environment attestation does not bind the exact Pi runtime artifact",
                 ));
             }
+            let route_attestation_ref = provider
+                .configured_route_attestation_ref()
+                .ok_or_else(|| {
+                    Error::validation("real Pi has no attested semantic route identity")
+                })?;
+            if !attestation.attests_identity_ref(&route_attestation_ref, Timestamp::now()) {
+                return Err(Error::external(
+                    "execution-environment attestation does not bind the exact Pi semantic route",
+                ));
+            }
             let initialized_version = provider.preflight_real_runtime()?;
             if initialized_version != pinned_version {
                 return Err(Error::external(
@@ -224,6 +241,7 @@ fn run_gate() -> Result<Value> {
                 "runtime_health_before_shutdown": health,
                 "runtime_version": runtime_version,
                 "runtime_digest": runtime_digest,
+                "route_attestation_ref": route_attestation_ref,
                 "execution_environment_ref": attestation.environment_ref,
                 "execution_environment_runtime_identities": attestation.runtime_identities,
                 "execution_environment_evidence_refs": attestation.evidence_refs,

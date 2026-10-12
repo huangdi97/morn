@@ -191,9 +191,10 @@ pub struct ExecutionEnvironmentAttestation {
     /// Attested capabilities/limits of this exact environment. Its
     /// minimum_isolation must equal `isolation`.
     pub attested_spec: ExecutionEnvironmentSpec,
-    /// Exact provider runtime artifacts independently attested as present in
-    /// this environment. These are distribution identities, not generic
-    /// runtime kinds: `provider@version#sha256:<64-hex>`.
+    /// Exact deployment identities independently attested as authorized in
+    /// this environment. This includes provider runtime artifacts and bounded
+    /// configuration/semantic-route identities. Every entry uses the same
+    /// auditable `provider@version#sha256:<64-hex>` grammar.
     #[serde(default)]
     pub runtime_identities: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -236,6 +237,15 @@ impl ExecutionEnvironmentAttestation {
     /// A live provider may be selected only when the deployment attestation
     /// independently binds this exact environment to the exact distribution
     /// identity that will be pinned into ExecutionBinding.
+    /// Require one already-derived deployment identity (runtime artifact,
+    /// profile composition, semantic provider route, etc.) to be both
+    /// well-formed and present on a currently-active attestation.
+    pub fn attests_identity_ref(&self, identity: &str, now: Timestamp) -> bool {
+        validate_runtime_identity(identity).is_ok()
+            && self.active_at(now)
+            && self.runtime_identities.iter().any(|item| item == identity)
+    }
+
     pub fn attests_runtime_identity(
         &self,
         provider: &str,
@@ -246,7 +256,7 @@ impl ExecutionEnvironmentAttestation {
         let Ok(identity) = exact_runtime_identity(provider, version, digest) else {
             return false;
         };
-        self.active_at(now) && self.runtime_identities.iter().any(|item| item == &identity)
+        self.attests_identity_ref(&identity, now)
     }
 
     pub fn satisfies(&self, requested: &ExecutionEnvironmentSpec, now: Timestamp) -> bool {
@@ -618,6 +628,31 @@ mod tests {
             observed_at: now,
             valid_until: Timestamp::from_millis(now.millis() + 60_000),
         }
+    }
+
+    #[test]
+    fn route_or_profile_identity_must_be_explicitly_attested() {
+        let now = Timestamp::from_millis(100);
+        let route = format!("deepseek-harness-route@v1#sha256:{}", "a".repeat(64));
+        let mut attestation = ExecutionEnvironmentAttestation {
+            environment_ref: "env://container/a".to_string(),
+            provider: "deployment".to_string(),
+            isolation: IsolationClass::Container,
+            attested_spec: ExecutionEnvironmentSpec {
+                minimum_isolation: IsolationClass::Container,
+                ..ExecutionEnvironmentSpec::default()
+            },
+            runtime_identities: vec![route.clone()],
+            evidence_refs: vec!["evidence://attestor/a".to_string()],
+            observed_at: Timestamp::from_millis(50),
+            valid_until: Timestamp::from_millis(150),
+        };
+        assert!(attestation.attests_identity_ref(&route, now));
+        let other = format!("deepseek-harness-route@v1#sha256:{}", "b".repeat(64));
+        assert!(!attestation.attests_identity_ref(&other, now));
+        assert!(!attestation.attests_identity_ref("not-an-attested-identity", now));
+        attestation.valid_until = Timestamp::from_millis(99);
+        assert!(!attestation.attests_identity_ref(&route, now));
     }
 
     #[test]

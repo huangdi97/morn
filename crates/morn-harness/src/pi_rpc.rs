@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 use morn_kernel::error::{Error, Result};
 
@@ -149,8 +150,18 @@ impl PiRpcConfig {
             "agent_dir": "one-shot-empty",
             "telemetry": "disabled",
             "version_check": "disabled",
+            "startup_network": "offline",
         });
         Ok(format!("pi-rpc-route:{route}"))
+    }
+
+    /// Deployment-attestable identity for the exact Pi semantic route and
+    /// containment posture. No credential values or workspace paths enter this
+    /// identity.
+    pub fn route_attestation_ref(&self) -> Result<String> {
+        let route = self.route_ref()?;
+        let digest = Sha256::digest(route.as_bytes());
+        Ok(format!("pi-rpc-route@v1#sha256:{digest:x}"))
     }
 
     pub fn command_line(&self) -> Vec<String> {
@@ -371,6 +382,7 @@ impl PiRpcClient {
             .env("PI_CODING_AGENT_DIR", &owned_agent_dir)
             .env("PI_SKIP_VERSION_CHECK", "1")
             .env("PI_TELEMETRY", "0")
+            .env("PI_OFFLINE", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
@@ -794,6 +806,24 @@ mod route_identity_tests {
     }
 
     #[test]
+    fn route_attestation_changes_with_semantic_pi_route() {
+        let mut config = PiRpcConfig {
+            provider: Some("provider-a".to_string()),
+            model: Some("model-a".to_string()),
+            ..PiRpcConfig::default()
+        };
+        let base = config.route_attestation_ref().unwrap();
+        assert!(base.starts_with("pi-rpc-route@v1#sha256:"));
+        assert_eq!(base.rsplit_once(':').unwrap().1.len(), 64);
+
+        config.model = Some("model-b".to_string());
+        assert_ne!(base, config.route_attestation_ref().unwrap());
+        config.model = Some("model-a".to_string());
+        config.args.push("--extra-mode".to_string());
+        assert_ne!(base, config.route_attestation_ref().unwrap());
+    }
+
+    #[test]
     fn route_ref_changes_with_model_or_protocol_args() {
         let mut config = PiRpcConfig {
             provider: Some("provider-a".to_string()),
@@ -872,6 +902,7 @@ mod tests {
         );
         assert_eq!(state["fixtureEnvironment"]["skipVersionCheck"], "1");
         assert_eq!(state["fixtureEnvironment"]["telemetry"], "0");
+        assert_eq!(state["fixtureEnvironment"]["offline"], "1");
 
         let run = client.prompt_and_wait("hello").unwrap();
         assert!(run.settled());
@@ -932,7 +963,8 @@ mod tests {
                             "fixtureEnvironment":{
                                 "agentDir":std::env::var("PI_CODING_AGENT_DIR").ok(),
                                 "skipVersionCheck":std::env::var("PI_SKIP_VERSION_CHECK").ok(),
-                                "telemetry":std::env::var("PI_TELEMETRY").ok()
+                                "telemetry":std::env::var("PI_TELEMETRY").ok(),
+                                "offline":std::env::var("PI_OFFLINE").ok()
                             }
                         }),
                     ),

@@ -274,6 +274,17 @@ impl DshSdkConfig {
         Ok(format!("dsh-sdk-route:{route}"))
     }
 
+    /// Deployment-attestable identity for this exact semantic execution route.
+    /// The unhashed route remains useful for diagnostics, while attestations
+    /// carry only this bounded secret-free identity.
+    pub fn route_attestation_ref(&self) -> Result<String> {
+        let route = self.route_ref()?;
+        let digest = Sha256::digest(route.as_bytes());
+        Ok(format!(
+            "deepseek-harness-route@v1#sha256:{digest:x}"
+        ))
+    }
+
     pub fn profile_sdk(
         cwd: impl Into<String>,
         provider: impl Into<String>,
@@ -1383,6 +1394,29 @@ mod tests {
         ];
         assert!(config.validate_for_real().is_err());
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn dsh_route_attestation_changes_when_semantic_route_changes() {
+        let mut config = DshSdkConfig::profile_sdk(
+            "/tmp/work",
+            "deepseek-official",
+            "model-a",
+        )
+        .with_profile_configuration_ref(format!(
+            "deepseek-harness-profile@test#sha256:{}",
+            "a".repeat(64)
+        ));
+        let base = config.route_attestation_ref().unwrap();
+        assert!(base.starts_with("deepseek-harness-route@v1#sha256:"));
+        assert_eq!(base.rsplit_once(':').unwrap().1.len(), 64);
+
+        config.model = "model-b".to_string();
+        assert_ne!(base, config.route_attestation_ref().unwrap());
+
+        config.model = "model-a".to_string();
+        config.max_tokens = Some(4096);
+        assert_ne!(base, config.route_attestation_ref().unwrap());
     }
 
     #[test]
