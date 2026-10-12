@@ -1,11 +1,14 @@
 //! DeepSeek Harness SDK stdio boundary.
 //!
 //! DSH currently exposes newline-delimited JSON-RPC 2.0 over stdio. The
-//! stable request methods at the researched upstream boundary are
-//! `initialize`, `session/prompt`, and `shutdown`; notifications are
-//! `session.event`, `session.status`, `subagent.started`, and
-//! `subagent.finished`. The current wire has no cancel/session-close method,
-//! so Morn must not fabricate those semantics.
+//! current request methods at the researched upstream boundary are
+//! `initialize`, `session/prompt`, `session/wait`,
+//! `session/working-directory/get`, `session/working-directory/set`, and
+//! `shutdown`; notifications are `session.event`, `session.status`,
+//! `subagent.started`, and `subagent.finished`. The SDK wire still has no
+//! cancel/session-close method, so Morn must not fabricate those semantics.
+//! Morn observes but never uses the working-directory setter: Work execution
+//! stays pinned to the deployment-attested workspace.
 
 use std::fs;
 use std::io::{BufReader, Write};
@@ -27,6 +30,9 @@ use crate::subprocess_wire::{read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_
 
 pub const DSH_METHOD_INITIALIZE: &str = "initialize";
 pub const DSH_METHOD_SESSION_PROMPT: &str = "session/prompt";
+pub const DSH_METHOD_SESSION_WAIT: &str = "session/wait";
+pub const DSH_METHOD_SESSION_WORKING_DIRECTORY_GET: &str = "session/working-directory/get";
+pub const DSH_METHOD_SESSION_WORKING_DIRECTORY_SET: &str = "session/working-directory/set";
 pub const DSH_METHOD_SHUTDOWN: &str = "shutdown";
 pub const DSH_SDK_SERVER_NAME: &str = "deepseek-harness-sdk-runtime";
 
@@ -641,6 +647,7 @@ pub struct DshSdkStdioClient {
     next_id: u64,
     request_timeout: Duration,
     turn_timeout: Duration,
+    expected_cwd: PathBuf,
     owned_policy_dir: Option<PathBuf>,
     owned_runtime_home: Option<PathBuf>,
     pub notifications: Vec<DshNotification>,
@@ -668,6 +675,8 @@ impl DshSdkStdioClient {
                 "DSH SDK requires cwd/provider/model and positive timeouts",
             ));
         }
+        let expected_cwd = fs::canonicalize(&config.cwd)
+            .map_err(|error| Error::validation(format!("canonicalize DSH SDK workspace: {error}")))?;
         let mut command = Command::new(&config.command);
         let (launch_args, owned_policy_dir) = config.launch_args()?;
         let owned_runtime_home = match config.materialize_managed_runtime_home() {
@@ -768,6 +777,7 @@ impl DshSdkStdioClient {
             next_id: 1,
             request_timeout: Duration::from_millis(config.request_timeout_ms),
             turn_timeout: Duration::from_millis(config.turn_timeout_ms),
+            expected_cwd,
             owned_policy_dir,
             owned_runtime_home,
             notifications: Vec::new(),
@@ -808,9 +818,60 @@ impl DshSdkStdioClient {
             .ok_or_else(|| Error::external("DSH session/prompt result missing messageId"))
     }
 
-    /// Own one SDK activity interval: durable inbox receipt -> root-session idle.
-    /// A successful run is executor evidence only; callers must not treat this
-    /// text as a Morn ObservedOutcome or AcceptanceDecision.
+    pub fn wait_for_session(&mut self, session_id: &str) -> Result<()> {
+        if session_id.trim().is_empty() {
+            return Err(Error::validation(
+                "DSH SDK session/wait requires a non-empty session id",
+            ));
+        }
+        let timeout = self.turn_timeout;
+        self.request_with_timeout(
+            DSH_METHOD_SESSION_WAIT,
+            Some(json!({"sessionId": session_id})),
+            timeout,
+        )?;
+        Ok(())
+    }
+
+    /// Verify the SDK session has not changed its effective working directory
+    /// away from the deployment-attested workspace. Morn deliberately does not
+    /// expose the upstream working-directory setter through HarnessProvider.
+    pub fn verify_session_working_directory(&mut self, session_id: &str) -> Result<()> {
+        if session_id.trim().is_empty() {
+            return Err(Error::validation(
+                "DSH SDK working-directory check requires a non-empty session id",
+            ));
+        }
+        let result = self.request(
+            DSH_METHOD_SESSION_WORKING_DIRECTORY_GET,
+            Some(json!({"sessionId": session_id})),
+        )?;
+        let cwd = result
+            .get("cwd")
+            .and_then(Value::as_str)
+            .filter(|cwd| !cwd.trim().is_empty())
+            .ok_or_else(|| {
+                Error::external("DSH session/working-directory/get result missing cwd")
+            })?;
+        let effective = fs::canonicalize(cwd).map_err(|error| {
+            Error::external(format!(
+                "canonicalize DSH effective session working directory {cwd:?}: {error}"
+            ))
+        })?;
+        if effective != self.expected_cwd {
+            return Err(Error::external(format!(
+                "DSH session working directory drifted from pinned workspace: expected {:?}, got {:?}",
+                self.expected_cwd, effective
+            )));
+        }
+        Ok(())
+    }
+
+    /// Own one SDK activity interval using upstream's explicit settlement
+    /// barrier: pinned cwd -> durable inbox receipt -> session/wait -> durable
+    /// turn/end -> pinned cwd. A successful run is executor evidence only;
+    /// callers must not treat this text as a Morn ObservedOutcome or
+    /// AcceptanceDecision.
     pub fn run_text_prompt(&mut self, session_id: &str, text: &str) -> Result<DshSdkRunResult> {
         if session_id.trim().is_empty() || text.trim().is_empty() {
             return Err(Error::validation(
@@ -818,68 +879,49 @@ impl DshSdkStdioClient {
             ));
         }
         let start = self.notifications.len();
+        self.verify_session_working_directory(session_id)?;
         let message_id = self.enqueue_text_prompt(session_id, text)?;
-        let deadline = Instant::now() + self.turn_timeout;
+        self.wait_for_session(session_id)?;
+        self.verify_session_working_directory(session_id)?;
+
+        let end = self.notifications.len();
         let mut received = false;
         let mut final_response = String::new();
         let mut finish_reason = None;
-        let mut cursor = start;
-
-        loop {
-            while cursor < self.notifications.len() {
-                let notification = self.notifications[cursor].clone();
-                cursor += 1;
-                if !received && inbox_receipt_matches(&notification, session_id, &message_id) {
-                    received = true;
-                }
-                if received {
-                    if notification.method == DSH_NOTIFICATION_SESSION_EVENT {
-                        if let Some(text) =
-                            assistant_text_from_session_event(&notification.params, session_id)
-                        {
-                            final_response = text;
-                        }
-                        if let Some(reason) =
-                            finish_reason_from_session_event(&notification.params, session_id)?
-                        {
-                            finish_reason = Some(reason);
-                        }
-                    }
-                    if session_idle_matches(&notification, session_id) {
-                        if finish_reason.is_none() {
-                            return Err(Error::external(
-                                "DSH session became idle without a durable turn/end reason",
-                            ));
-                        }
-                        return Ok(DshSdkRunResult {
-                            session_id: session_id.to_string(),
-                            message_id,
-                            final_response,
-                            finish_reason,
-                            notifications: self.notifications[start..cursor].to_vec(),
-                        });
-                    }
-                }
+        for notification in &self.notifications[start..end] {
+            if !received && inbox_receipt_matches(notification, session_id, &message_id) {
+                received = true;
             }
-
-            let incoming = self.read_frame_until(deadline, "prompt activity")?;
-            if incoming.get("id").is_none() {
-                if let Some(method) = incoming.get("method").and_then(Value::as_str) {
-                    self.notifications.push(DshNotification {
-                        method: method.to_string(),
-                        params: incoming.get("params").cloned().unwrap_or(Value::Null),
-                    });
-                    continue;
+            if received && notification.method == DSH_NOTIFICATION_SESSION_EVENT {
+                if let Some(text) =
+                    assistant_text_from_session_event(&notification.params, session_id)
+                {
+                    final_response = text;
                 }
-            }
-            // The SDK currently sends no server->client requests. Fail closed
-            // rather than silently ignoring a future permission/request surface.
-            if incoming.get("id").is_some() && incoming.get("method").is_some() {
-                return Err(Error::external(
-                    "DSH SDK sent an unsupported server-to-client request",
-                ));
+                if let Some(reason) =
+                    finish_reason_from_session_event(&notification.params, session_id)?
+                {
+                    finish_reason = Some(reason);
+                }
             }
         }
+        if !received {
+            return Err(Error::external(
+                "DSH session/wait settled without the durable inbox receipt for this prompt",
+            ));
+        }
+        if finish_reason.is_none() {
+            return Err(Error::external(
+                "DSH session/wait settled without a durable turn/end reason",
+            ));
+        }
+        Ok(DshSdkRunResult {
+            session_id: session_id.to_string(),
+            message_id,
+            final_response,
+            finish_reason,
+            notifications: self.notifications[start..end].to_vec(),
+        })
     }
 
     pub fn shutdown(&mut self) -> Result<()> {
@@ -925,6 +967,15 @@ impl DshSdkStdioClient {
     }
 
     pub fn request(&mut self, method: &str, params: Option<Value>) -> Result<Value> {
+        self.request_with_timeout(method, params, self.request_timeout)
+    }
+
+    fn request_with_timeout(
+        &mut self,
+        method: &str,
+        params: Option<Value>,
+        timeout: Duration,
+    ) -> Result<Value> {
         let id = self.next_id;
         self.next_id += 1;
         let mut frame = json!({
@@ -949,7 +1000,7 @@ impl DshSdkStdioClient {
             .and_then(|_| stdin.flush())
             .map_err(|error| Error::external(format!("write DSH JSON-RPC: {error}")))?;
 
-        let deadline = Instant::now() + self.request_timeout;
+        let deadline = Instant::now() + timeout;
         loop {
             let incoming = self.read_frame_until(deadline, method)?;
             require_jsonrpc_v2(&incoming)?;
@@ -1322,6 +1373,15 @@ mod tests {
     fn sdk_method_set_matches_current_upstream_boundary() {
         assert_eq!(DSH_METHOD_INITIALIZE, "initialize");
         assert_eq!(DSH_METHOD_SESSION_PROMPT, "session/prompt");
+        assert_eq!(DSH_METHOD_SESSION_WAIT, "session/wait");
+        assert_eq!(
+            DSH_METHOD_SESSION_WORKING_DIRECTORY_GET,
+            "session/working-directory/get"
+        );
+        assert_eq!(
+            DSH_METHOD_SESSION_WORKING_DIRECTORY_SET,
+            "session/working-directory/set"
+        );
         assert_eq!(DSH_METHOD_SHUTDOWN, "shutdown");
         let notifications = [
             DSH_NOTIFICATION_SESSION_EVENT,
@@ -1579,6 +1639,44 @@ mod tests {
         );
     }
 
+    #[test]
+    fn real_sdk_transport_rejects_session_working_directory_drift() {
+        let executable = std::env::current_exe().unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        let config = DshSdkConfig {
+            command: executable.to_string_lossy().to_string(),
+            args: vec![
+                "--exact".to_string(),
+                "dsh_sdk::tests::fake_sdk_runtime".to_string(),
+                "--ignored".to_string(),
+                "--nocapture".to_string(),
+            ],
+            cwd: cwd.to_string_lossy().to_string(),
+            provider: "fixture-provider".to_string(),
+            model: "fixture-model".to_string(),
+            reasoning_effort: None,
+            max_tokens: Some(64),
+            dsh_home: None,
+            execution_environment_ref: None,
+            profile_configuration_ref: None,
+            runtime_version: None,
+            runtime_digest: None,
+            request_timeout_ms: 10_000,
+            turn_timeout_ms: 10_000,
+            enforce_morn_e0_tool_policy: false,
+        };
+        let mut client = DshSdkStdioClient::spawn(&config).unwrap();
+        client.initialize(&config).unwrap();
+        let error = client
+            .run_text_prompt("drift-session", "hello")
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("working directory drifted"),
+            "{error}"
+        );
+        client.shutdown().unwrap();
+    }
+
     /// A tiny protocol peer used only by the parent test above. It is ignored
     /// in normal test discovery and launched as a child test process.
     #[test]
@@ -1615,6 +1713,41 @@ mod tests {
                                 "version":"0.0.1"
                             }
                         }
+                    }),
+                ),
+                DSH_METHOD_SESSION_WORKING_DIRECTORY_GET => {
+                    let session_id = request
+                        .get("params")
+                        .and_then(|params| params.get("sessionId"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("session-1");
+                    let cwd = if session_id == "drift-session" {
+                        std::env::current_dir()
+                            .unwrap()
+                            .parent()
+                            .unwrap()
+                            .to_string_lossy()
+                            .to_string()
+                    } else {
+                        std::env::current_dir()
+                            .unwrap()
+                            .to_string_lossy()
+                            .to_string()
+                    };
+                    write(
+                        &mut stdout,
+                        json!({"jsonrpc":"2.0","id":id,"result":{"cwd":cwd}}),
+                    );
+                }
+                DSH_METHOD_SESSION_WAIT => {
+                    write(&mut stdout, json!({"jsonrpc":"2.0","id":id,"result":{}}));
+                }
+                DSH_METHOD_SESSION_WORKING_DIRECTORY_SET => write(
+                    &mut stdout,
+                    json!({
+                        "jsonrpc":"2.0",
+                        "id":id,
+                        "error":{"code":-32000,"message":"Morn fixture forbids workspace drift"}
                     }),
                 ),
                 DSH_METHOD_SESSION_PROMPT => {
