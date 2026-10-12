@@ -48,7 +48,8 @@ pub const DSH_NOTIFICATION_SUBAGENT_FINISHED: &str = "subagent.finished";
 /// the Authority/ExternalAction boundary. This final overlay disables the
 /// shipped direct tool producers before a model turn. Runtime event checks
 /// remain a second line of defence against added/unknown tool plugins.
-pub const DSH_MORN_E0_TOOL_POLICY_REF: &str = "morn.dsh-e0-no-direct-tools/v2";
+pub const DSH_MORN_E0_TOOL_POLICY_REF: &str = "morn.dsh-e0-no-direct-tools/v3";
+const DSH_MORN_WORKSPACE_ROOT_ENV: &str = "MORN_DSH_WORKSPACE_ROOT";
 const DSH_MORN_E0_TOOL_POLICY_FILE: &str = "morn-e0-no-direct-tools.patch.yml";
 const DSH_MORN_E0_TOOL_GUARD_FILE: &str = "morn-e0-tool-guard.mjs";
 const DSH_MORN_E0_TOOL_GUARD_PLUGIN: &str = r#"export const name = 'morn-e0-tool-guard-v2'
@@ -94,7 +95,7 @@ const DSH_MORN_E0_TOOL_POLICY_PATCH: &str = r#"# Generated/owned by Morn. Applie
 - id: sandbox-policy
   config:
     mode: read-only
-    workspaceRoot: !!js process.cwd()
+    workspaceRoot: !!js process.env.MORN_DSH_WORKSPACE_ROOT
 
 # Defence-in-depth and prompt hygiene: hide shipped direct tool producers so
 # the model is not invited to issue calls that the global guard will reject.
@@ -706,14 +707,22 @@ impl DshSdkStdioClient {
                 return Err(error);
             }
         };
+        // Production launches run the DSH process from Morn's one-shot empty
+        // runtime home, not from the Work workspace. DeepSeek's launcher builds
+        // its launch-environment snapshot from process cwd, so this prevents a
+        // workspace .env from becoming an implicit credential/config layer.
+        // The SDK initialize.cwd and sandbox root remain pinned to the actual
+        // Work workspace.
+        let launch_cwd = owned_runtime_home.as_deref().unwrap_or(&expected_cwd);
         command
             .args(&launch_args)
-            .current_dir(&config.cwd)
+            .current_dir(launch_cwd)
             .env_clear()
             .envs(crate::subprocess_env::scrubbed_environment(
                 "MORN_DSH_ENV_PASSTHROUGH",
             ))
             .env("DSH_PERMISSION_MODE", "read-only")
+            .env(DSH_MORN_WORKSPACE_ROOT_ENV, &expected_cwd)
             .env("DSH_MAX_TOKENS_AS_SUCCESS", "false")
             .env("DSH_TELEMETRY_DISABLED", "1")
             .stdin(Stdio::piped())
@@ -1191,6 +1200,7 @@ fn inbox_receipt_matches(
     })
 }
 
+#[cfg(test)]
 fn session_idle_matches(notification: &DshNotification, session_id: &str) -> bool {
     notification.method == DSH_NOTIFICATION_SESSION_STATUS
         && notification.params.get("sessionId").and_then(Value::as_str) == Some(session_id)
@@ -1332,6 +1342,7 @@ mod tests {
         assert!(policy.contains("id: session-log-deepseek"));
         assert!(policy.contains("enabled: false"));
         assert!(policy.contains("mode: read-only"));
+        assert!(policy.contains("workspaceRoot: !!js process.env.MORN_DSH_WORKSPACE_ROOT"));
         assert!(guard.contains("ctx.tools.guard"));
         for required in [
             "id: tool-bash",
