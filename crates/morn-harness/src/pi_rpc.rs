@@ -64,8 +64,7 @@ fn default_true() -> bool {
 }
 
 fn create_owned_pi_agent_dir(workspace: Option<&str>) -> Result<PathBuf> {
-    let directory =
-        std::env::temp_dir().join(format!("morn-pi-agent-{}", uuid::Uuid::new_v4()));
+    let directory = std::env::temp_dir().join(format!("morn-pi-agent-{}", uuid::Uuid::new_v4()));
     let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
@@ -239,7 +238,7 @@ impl PiRpcConfig {
             ];
             if let Some(missing) = required_containment
                 .iter()
-                .find(|required| !self.args.iter().any(|arg| arg.as_str() == *required))
+                .find(|required| !self.args.iter().any(|arg| arg.as_str() == **required))
             {
                 return Err(Error::validation(format!(
                     "real Pi RPC containment is missing required launcher flag {missing}"

@@ -48,10 +48,10 @@ pub const DSH_NOTIFICATION_SUBAGENT_FINISHED: &str = "subagent.finished";
 /// the Authority/ExternalAction boundary. This final overlay disables the
 /// shipped direct tool producers before a model turn. Runtime event checks
 /// remain a second line of defence against added/unknown tool plugins.
-pub const DSH_MORN_E0_TOOL_POLICY_REF: &str = "morn.dsh-e0-no-direct-tools/v1";
+pub const DSH_MORN_E0_TOOL_POLICY_REF: &str = "morn.dsh-e0-no-direct-tools/v2";
 const DSH_MORN_E0_TOOL_POLICY_FILE: &str = "morn-e0-no-direct-tools.patch.yml";
 const DSH_MORN_E0_TOOL_GUARD_FILE: &str = "morn-e0-tool-guard.mjs";
-const DSH_MORN_E0_TOOL_GUARD_PLUGIN: &str = r#"export const name = 'morn-e0-tool-guard-v1'
+const DSH_MORN_E0_TOOL_GUARD_PLUGIN: &str = r#"export const name = 'morn-e0-tool-guard-v2'
 export const inject = ['tools']
 
 export function apply(ctx) {
@@ -62,7 +62,7 @@ const DSH_MORN_E0_TOOL_POLICY_PATCH: &str = r#"# Generated/owned by Morn. Applie
 # This plugin installs a global monotonic ToolRuntime guard. It denies unknown
 # tools contributed by earlier profile/home layers as well as the shipped set.
 - insert:
-    - id: morn-e0-tool-guard-v1
+    - id: morn-e0-tool-guard-v2
       name: ./morn-e0-tool-guard.mjs
 
 # DeepSeek's official SDK profile mounts canonical session-log upload
@@ -71,6 +71,23 @@ const DSH_MORN_E0_TOOL_POLICY_PATCH: &str = r#"# Generated/owned by Morn. Applie
 - id: session-log-deepseek
   config:
     enabled: false
+
+# Ambient model/config inputs are disabled. Morn real-provider turns must be
+# interpreted only by the pinned Work/Binding/route, not by files discovered
+# in the workspace or a credential fallback hidden in <cwd>/.env.
+#
+# The official DeepSeek API-key adapter explicitly falls back to the launch
+# environment when no credentials service is mounted. Morn already supplies a
+# scrubbed, allow-listed child environment, so disabling credentials-local
+# removes its project/user dotenv fallback without removing explicit secrets.
+- id: credentials
+  disabled: true
+- id: agent-instructions
+  disabled: true
+- id: skill
+  disabled: true
+- id: skill-filesystem
+  disabled: true
 
 # Independent containment: a DSH sandbox remains read-only even though direct
 # model-facing tools are denied by the guard.
@@ -1327,6 +1344,17 @@ mod tests {
             assert!(
                 policy.contains(required),
                 "{required} must be hidden before launch"
+            );
+        }
+        for ambient in [
+            "- id: credentials\n  disabled: true",
+            "- id: agent-instructions\n  disabled: true",
+            "- id: skill\n  disabled: true",
+            "- id: skill-filesystem\n  disabled: true",
+        ] {
+            assert!(
+                policy.contains(ambient),
+                "{ambient} must not reinterpret a pinned Morn provider route"
             );
         }
         let route = config.route_ref().unwrap();
