@@ -280,9 +280,7 @@ impl DshSdkConfig {
     pub fn route_attestation_ref(&self) -> Result<String> {
         let route = self.route_ref()?;
         let digest = Sha256::digest(route.as_bytes());
-        Ok(format!(
-            "deepseek-harness-route@v1#sha256:{digest:x}"
-        ))
+        Ok(format!("deepseek-harness-route@v1#sha256:{digest:x}"))
     }
 
     pub fn profile_sdk(
@@ -1398,15 +1396,11 @@ mod tests {
 
     #[test]
     fn dsh_route_attestation_changes_when_semantic_route_changes() {
-        let mut config = DshSdkConfig::profile_sdk(
-            "/tmp/work",
-            "deepseek-official",
-            "model-a",
-        )
-        .with_profile_configuration_ref(format!(
-            "deepseek-harness-profile@test#sha256:{}",
-            "a".repeat(64)
-        ));
+        let mut config = DshSdkConfig::profile_sdk("/tmp/work", "deepseek-official", "model-a")
+            .with_profile_configuration_ref(format!(
+                "deepseek-harness-profile@test#sha256:{}",
+                "a".repeat(64)
+            ));
         let base = config.route_attestation_ref().unwrap();
         assert!(base.starts_with("deepseek-harness-route@v1#sha256:"));
         assert_eq!(base.rsplit_once(':').unwrap().1.len(), 64);

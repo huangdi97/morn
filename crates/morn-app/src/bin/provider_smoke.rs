@@ -121,9 +121,8 @@ fn run_gate() -> Result<Value> {
                     "execution-environment attestation does not bind the exact DSH Home/Profile composition",
                 ));
             }
-            let route_attestation_ref = provider
-                .configured_route_attestation_ref()
-                .ok_or_else(|| {
+            let route_attestation_ref =
+                provider.configured_route_attestation_ref().ok_or_else(|| {
                     Error::validation("real DSH has no attested semantic route identity")
                 })?;
             if !attestation.attests_identity_ref(&route_attestation_ref, Timestamp::now()) {
@@ -205,9 +204,8 @@ fn run_gate() -> Result<Value> {
                     "execution-environment attestation does not bind the exact Pi runtime artifact",
                 ));
             }
-            let route_attestation_ref = provider
-                .configured_route_attestation_ref()
-                .ok_or_else(|| {
+            let route_attestation_ref =
+                provider.configured_route_attestation_ref().ok_or_else(|| {
                     Error::validation("real Pi has no attested semantic route identity")
                 })?;
             if !attestation.attests_identity_ref(&route_attestation_ref, Timestamp::now()) {
