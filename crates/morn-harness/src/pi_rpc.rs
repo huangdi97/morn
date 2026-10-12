@@ -9,8 +9,9 @@
 //! event collection until `agent_settled`. Rich Pi-specific controls can remain
 //! provider extensions without entering the Morn semantic constitution.
 
+use std::fs;
 use std::io::{BufReader, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TrySendError};
@@ -29,6 +30,7 @@ pub const PI_COMMAND_PROMPT: &str = "prompt";
 pub const PI_COMMAND_GET_STATE: &str = "get_state";
 pub const PI_COMMAND_ABORT: &str = "abort";
 pub const PI_EVENT_AGENT_SETTLED: &str = "agent_settled";
+pub const PI_MORN_RUNTIME_ISOLATION_REF: &str = "morn.pi-rpc-isolation/v2";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PiRpcConfig {
@@ -61,6 +63,40 @@ fn default_true() -> bool {
     true
 }
 
+fn create_owned_pi_agent_dir(workspace: Option<&str>) -> Result<PathBuf> {
+    let directory =
+        std::env::temp_dir().join(format!("morn-pi-agent-{}", uuid::Uuid::new_v4()));
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+        builder.mode(0o700);
+    }
+    builder
+        .create(&directory)
+        .map_err(|error| Error::external(format!("create one-shot Pi agent directory: {error}")))?;
+    let canonical = fs::canonicalize(&directory).map_err(|error| {
+        let _ = fs::remove_dir_all(&directory);
+        Error::external(format!("canonicalize one-shot Pi agent directory: {error}"))
+    })?;
+    if let Some(workspace) = workspace {
+        let workspace = fs::canonicalize(workspace).map_err(|error| {
+            let _ = fs::remove_dir_all(&canonical);
+            Error::validation(format!("canonicalize Pi workspace: {error}"))
+        })?;
+        if canonical == workspace
+            || canonical.starts_with(&workspace)
+            || workspace.starts_with(&canonical)
+        {
+            let _ = fs::remove_dir_all(&canonical);
+            return Err(Error::validation(
+                "one-shot Pi agent directory must be physically disjoint from the workspace",
+            ));
+        }
+    }
+    Ok(canonical)
+}
+
 impl Default for PiRpcConfig {
     fn default() -> Self {
         Self {
@@ -71,6 +107,11 @@ impl Default for PiRpcConfig {
                 "--no-session".to_string(),
                 "--no-tools".to_string(),
                 "--no-mcp".to_string(),
+                "--no-extensions".to_string(),
+                "--no-skills".to_string(),
+                "--no-prompt-templates".to_string(),
+                "--no-context-files".to_string(),
+                "--no-approve".to_string(),
             ],
             cwd: None,
             provider: None,
@@ -105,6 +146,10 @@ impl PiRpcConfig {
             "append_route_args": self.append_route_args,
             "provider": provider,
             "model": model,
+            "runtime_isolation": PI_MORN_RUNTIME_ISOLATION_REF,
+            "agent_dir": "one-shot-empty",
+            "telemetry": "disabled",
+            "version_check": "disabled",
         });
         Ok(format!("pi-rpc-route:{route}"))
     }
@@ -181,13 +226,25 @@ impl PiRpcConfig {
                 "Pi request and prompt timeouts must be positive",
             ));
         }
-        if self.append_route_args
-            && (!self.args.iter().any(|arg| arg == "--no-tools")
-                || !self.args.iter().any(|arg| arg == "--no-mcp"))
-        {
-            return Err(Error::validation(
-                "real Pi RPC must disable built-in/extension/custom and MCP tools; external effects belong to Morn",
-            ));
+        if self.append_route_args {
+            let required_containment = [
+                "--no-session",
+                "--no-tools",
+                "--no-mcp",
+                "--no-extensions",
+                "--no-skills",
+                "--no-prompt-templates",
+                "--no-context-files",
+                "--no-approve",
+            ];
+            if let Some(missing) = required_containment
+                .iter()
+                .find(|required| !self.args.iter().any(|arg| arg == **required))
+            {
+                return Err(Error::validation(format!(
+                    "real Pi RPC containment is missing required launcher flag {missing}"
+                )));
+            }
         }
         Ok(())
     }
@@ -280,6 +337,7 @@ pub struct PiRpcClient {
     next_id: u64,
     request_timeout: Duration,
     prompt_timeout: Duration,
+    owned_agent_dir: Option<PathBuf>,
     pub buffered_events: Vec<PiRpcEvent>,
 }
 
@@ -303,6 +361,7 @@ impl PiRpcClient {
                 "Pi RPC requires command and positive request/prompt timeouts",
             ));
         }
+        let owned_agent_dir = create_owned_pi_agent_dir(config.cwd.as_deref())?;
         let mut command = Command::new(&config.command);
         command
             .args(config.command_line())
@@ -310,26 +369,43 @@ impl PiRpcClient {
             .envs(crate::subprocess_env::scrubbed_environment(
                 "MORN_PI_ENV_PASSTHROUGH",
             ))
+            .env("PI_CODING_AGENT_DIR", &owned_agent_dir)
+            .env("PI_SKIP_VERSION_CHECK", "1")
+            .env("PI_TELEMETRY", "0")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
         if let Some(cwd) = &config.cwd {
             command.current_dir(cwd);
         }
-        let mut child = command.spawn().map_err(|error| {
-            Error::external(format!(
-                "failed to start Pi RPC runtime {:?}: {error}",
-                config.command
-            ))
-        })?;
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| Error::external("Pi RPC runtime has no stdin"))?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| Error::external("Pi RPC runtime has no stdout"))?;
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                let _ = fs::remove_dir_all(&owned_agent_dir);
+                return Err(Error::external(format!(
+                    "failed to start Pi RPC runtime {:?}: {error}",
+                    config.command
+                )));
+            }
+        };
+        let stdin = match child.stdin.take() {
+            Some(stdin) => stdin,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = fs::remove_dir_all(&owned_agent_dir);
+                return Err(Error::external("Pi RPC runtime has no stdin"));
+            }
+        };
+        let stdout = match child.stdout.take() {
+            Some(stdout) => stdout,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = fs::remove_dir_all(&owned_agent_dir);
+                return Err(Error::external("Pi RPC runtime has no stdout"));
+            }
+        };
         let strict_jsonl = config.strict_jsonl;
         let (sender, incoming) =
             mpsc::sync_channel::<PiWireItem>(MAX_PROVIDER_WIRE_BUFFERED_FRAMES);
@@ -381,6 +457,7 @@ impl PiRpcClient {
             next_id: 1,
             request_timeout: Duration::from_millis(config.request_timeout_ms),
             prompt_timeout: Duration::from_millis(config.prompt_timeout_ms),
+            owned_agent_dir: Some(owned_agent_dir),
             buffered_events: Vec::new(),
         })
     }
@@ -607,6 +684,9 @@ impl Drop for PiRpcClient {
         if let Some(reader) = self.reader.take() {
             let _ = reader.join();
         }
+        if let Some(agent_dir) = self.owned_agent_dir.take() {
+            let _ = fs::remove_dir_all(agent_dir);
+        }
     }
 }
 
@@ -686,13 +766,32 @@ mod route_identity_tests {
             runtime_digest: Some(format!("sha256:{}", "a".repeat(64))),
             ..PiRpcConfig::default()
         };
-        assert!(config.args.iter().any(|arg| arg == "--no-tools"));
-        assert!(config.args.iter().any(|arg| arg == "--no-mcp"));
+        for required in [
+            "--no-session",
+            "--no-tools",
+            "--no-mcp",
+            "--no-extensions",
+            "--no-skills",
+            "--no-prompt-templates",
+            "--no-context-files",
+            "--no-approve",
+        ] {
+            assert!(config.args.iter().any(|arg| arg == required), "{required}");
+        }
+        assert!(config
+            .route_ref()
+            .unwrap()
+            .contains(PI_MORN_RUNTIME_ISOLATION_REF));
         config.validate_for_real().unwrap();
 
-        let mut unsafe_config = config;
-        unsafe_config.args.retain(|arg| arg != "--no-tools");
-        assert!(unsafe_config.validate_for_real().is_err());
+        for removed in ["--no-tools", "--no-extensions", "--no-context-files"] {
+            let mut unsafe_config = config.clone();
+            unsafe_config.args.retain(|arg| arg != removed);
+            assert!(
+                unsafe_config.validate_for_real().is_err(),
+                "missing {removed} must fail closed"
+            );
+        }
     }
 
     #[test]
@@ -721,7 +820,18 @@ mod tests {
         assert_eq!(config.command, "pi");
         assert_eq!(
             config.command_line(),
-            vec!["--mode", "rpc", "--no-session", "--no-tools", "--no-mcp"]
+            vec![
+                "--mode",
+                "rpc",
+                "--no-session",
+                "--no-tools",
+                "--no-mcp",
+                "--no-extensions",
+                "--no-skills",
+                "--no-prompt-templates",
+                "--no-context-files",
+                "--no-approve",
+            ]
         );
     }
 
@@ -752,6 +862,17 @@ mod tests {
         let mut client = PiRpcClient::spawn(&config).unwrap();
         let state = client.get_state().unwrap();
         assert_eq!(state["agent"]["status"], "idle");
+        let agent_dir = state["fixtureEnvironment"]["agentDir"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(Path::new(&agent_dir).is_absolute());
+        assert_ne!(
+            fs::canonicalize(&agent_dir).unwrap(),
+            fs::canonicalize(&cwd).unwrap()
+        );
+        assert_eq!(state["fixtureEnvironment"]["skipVersionCheck"], "1");
+        assert_eq!(state["fixtureEnvironment"]["telemetry"], "0");
 
         let run = client.prompt_and_wait("hello").unwrap();
         assert!(run.settled());
@@ -762,6 +883,11 @@ mod tests {
         );
         client.abort().unwrap();
         client.shutdown().unwrap();
+        drop(client);
+        assert!(
+            !Path::new(&agent_dir).exists(),
+            "one-shot Pi agent directory must be removed with the owned runtime"
+        );
     }
 
     #[test]
@@ -800,7 +926,17 @@ mod tests {
             match command {
                 "get_state" => write(
                     &mut stdout,
-                    response("get_state", json!({"agent":{"status":"idle"}})),
+                    response(
+                        "get_state",
+                        json!({
+                            "agent":{"status":"idle"},
+                            "fixtureEnvironment":{
+                                "agentDir":std::env::var("PI_CODING_AGENT_DIR").ok(),
+                                "skipVersionCheck":std::env::var("PI_SKIP_VERSION_CHECK").ok(),
+                                "telemetry":std::env::var("PI_TELEMETRY").ok()
+                            }
+                        }),
+                    ),
                 ),
                 "prompt" => {
                     let prompt_text = request.get("message").and_then(Value::as_str).unwrap_or("");

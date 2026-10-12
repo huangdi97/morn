@@ -675,8 +675,9 @@ impl DshSdkStdioClient {
                 "DSH SDK requires cwd/provider/model and positive timeouts",
             ));
         }
-        let expected_cwd = fs::canonicalize(&config.cwd)
-            .map_err(|error| Error::validation(format!("canonicalize DSH SDK workspace: {error}")))?;
+        let expected_cwd = fs::canonicalize(&config.cwd).map_err(|error| {
+            Error::validation(format!("canonicalize DSH SDK workspace: {error}"))
+        })?;
         let mut command = Command::new(&config.command);
         let (launch_args, owned_policy_dir) = config.launch_args()?;
         let owned_runtime_home = match config.materialize_managed_runtime_home() {
