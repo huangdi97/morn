@@ -2,7 +2,7 @@
 
 只记录 **无法通过继续编码/测试在当前环境解决** 的真实阻塞。
 
-## Current blocker index — 2026-10-13
+## Current blocker index — 2026-10-14
 
 This section is authoritative for the current v11.5 convergence branch. Older
 entries below are retained as historical evidence and must not be read as the
@@ -43,20 +43,22 @@ current implementation state.
 - **Production/physical write — NOT AUTHORIZED.** No local fixture, Harness
   success, Provider health lease, or CI run upgrades this state.
 
-Repository-local engineering gates are now verified at implementation checkpoint
-`18aaf62e510143dff2a4cfffb62f67070da7a9ba` by exact-head Actions run
-`38395875354` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
-local adapter-wire semantic-neutrality gate and the release-readiness trust
-hardening: exact build identity, exact provider runtime artifact identity,
-deployment-pinned evidence issuer, exact deployment site, and fail-closed
-evidence time semantics. None of those controls manufactures external evidence.
-Every blocker above remains external and must not be promoted by fixture/CI
-results. This documentation-only update requires its own exact-head CI before
-becoming the next verified repository HEAD.
+Repository-local engineering gates are verified at implementation checkpoint
+`f121c0804cdc4b289636ac2cf44a227aa1403c58` by exact-head Actions run
+`38432456574` (**5/5 SUCCESS**). This checkpoint retains the DSH-SDK ↔ Pi-RPC
+adapter-wire semantic-neutrality and release-readiness trust hardening and
+additionally closes the reference desktop productization gap: Windows CI proves
+an owned sibling-backend lifecycle, exact Morn v11.5 health identity, graceful
+stdin-EOF shutdown, single-owner semantics and restrictive Tauri CSP/prototype
+hardening. Commit `3678b271d962c060f09d187074d02a343794baf9` further
+requires authenticated DSH/Pi smoke modes to execute only on the attested
+self-hosted provider runner. None of those controls manufactures external
+evidence. Every blocker above remains external and must not be promoted by
+fixture/CI, desktop-reference or runner-binding results.
 
 ## 2026-10-11 local-design convergence
 
-- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** under the current v11.5 reference scope after the exact-head 18f2116 gate, including the Work-bound ACP lifecycle/controller path.
+- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** under the current v11.5 reference scope at verified checkpoint `f121c0804cdc4b289636ac2cf44a227aa1403c58`, including the Work-bound ACP lifecycle/controller path and the owned local desktop-backend lifecycle/security boundary.
 - Release readiness no longer trusts a deployment claim merely because its payload names an issuer; `MORN_EVIDENCE_ISSUER` pins the deployment-owned issuer.
 - RealSite and ProductionWrite readiness are exact-site scoped through `MORN_DEPLOYMENT_SITE_REF`.
 - RealRuntime readiness requires the current provider version/digest identity and a fresh Healthy lease; an old smoke claim cannot be combined with a replacement runtime.

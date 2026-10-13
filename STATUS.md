@@ -1,6 +1,6 @@
 # STATUS — Morn v11.5 Control Plane Convergence
 
-Updated: 2026-10-13  
+Updated: 2026-10-14  
 Branch: `feat/v11.5-control-plane-convergence`  
 PR: #1 (draft)
 
@@ -71,6 +71,7 @@ Canonical invariants:
 - Console: evidence-aware release readiness plus provider/runtime/profile/authority/conformance and blocker visibility.
 - Hub: capability supply chain, providers, packages and reusable assets.
 - Four-surface Playwright smoke and Windows desktop reference build are in CI.
+- Reference desktop owns a single local `server(.exe)` sidecar when needed: it verifies `morn-app` + protocol `11.5.0` health before reuse, fails closed on foreign port occupancy, binds child lifetime to stdin EOF for graceful shutdown, and enforces restrictive Tauri CSP/prototype hardening.
 
 ## Verification policy
 
@@ -92,8 +93,8 @@ Never carry a green conclusion from an older SHA to a newer SHA.
 
 Authoritative details live in `BLOCKERS.md`.
 
-- B-001: authenticated live official DSH runtime/model/credential smoke.
-- B-002: installed/authenticated live Pi runtime/model/credential smoke.
+- B-001: authenticated live official DSH runtime/model/credential smoke on the attested self-hosted provider runner.
+- B-002: installed/authenticated live Pi runtime/model/credential smoke on the attested self-hosted provider runner.
 - B-003: live deployment execution-environment attestation from a real container/microVM/Kubernetes/customer sandbox.
 - B-004: authorized OCI registry publication plus deployment-owned Sigstore/OIDC signature and SLSA provenance evidence.
 - G4-B-002: lawful provenance-bearing real BioLab dataset.
@@ -105,8 +106,9 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `18aaf62e510143dff2a4cfffb62f67070da7a9ba`.
-- Exact-head GitHub Actions: `38395875354` — **5/5 SUCCESS**.
+- Verified implementation checkpoint: `f121c0804cdc4b289636ac2cf44a227aa1403c58`.
+- Exact-head GitHub Actions: `38432456574` — **5/5 SUCCESS**.
+- Subsequent trust-only workflow hardening `3678b271d962c060f09d187074d02a343794baf9` binds authenticated DSH/Pi smoke operations to a deployment-attested self-hosted runner; its exact-head CI must be green before becoming the next verified implementation checkpoint.
 - Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; zero-domain Core; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows; Cordis reference runtime; Windows desktop reference build.
 - Release-readiness trust hardening at this checkpoint binds exact build identity, exact active provider runtime artifact, deployment-pinned evidence issuer and exact deployment site; evidence time ambiguity/future claims fail closed.
 - Business-truth recovery now distinguishes observed outcome from final acceptance: Conditional/RequestMoreEvidence retain OutcomeObservation while remaining non-terminal.
@@ -120,8 +122,8 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `18aaf62e510143dff2a4cfffb62f67070da7a9ba` and Actions `38395875354`.**
-- This STATUS update is documentation-only and must obtain its own exact-head CI before it becomes the next verified repository HEAD.
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `f121c0804cdc4b289636ac2cf44a227aa1403c58` and Actions `38432456574`.**
+- The verified checkpoint includes the owned desktop-backend lifecycle probe and Tauri CSP hardening in addition to the v11.5 control-plane, trust, provider and UI gates.
 - PR #1 remains draft because local engineering evidence is not production/customer evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.
-- A later code SHA must obtain its own full exact-head CI before inheriting `ALL_LOCAL_GATES_PASS`.
+- Any later code SHA must obtain its own full exact-head CI before inheriting `ALL_LOCAL_GATES_PASS`.
