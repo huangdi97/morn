@@ -30,7 +30,10 @@ impl BioLabDatasetProvenance {
             ("schema_ref", self.schema_ref.as_str()),
             ("source_system_ref", self.source_system_ref.as_str()),
             ("governance_ref", self.governance_ref.as_str()),
-            ("license_or_consent_ref", self.license_or_consent_ref.as_str()),
+            (
+                "license_or_consent_ref",
+                self.license_or_consent_ref.as_str(),
+            ),
             ("issuer", self.issuer.as_str()),
         ] {
             if value.trim().is_empty() {
@@ -76,11 +79,7 @@ impl BioLabDatasetProvenance {
     }
 
     pub fn canonical_identity(&self) -> String {
-        format!(
-            "{}#{}",
-            self.dataset_ref.trim(),
-            self.content_digest.trim()
-        )
+        format!("{}#{}", self.dataset_ref.trim(), self.content_digest.trim())
     }
 }
 

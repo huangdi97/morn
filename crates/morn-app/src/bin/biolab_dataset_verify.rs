@@ -11,8 +11,9 @@ use {
 
 #[cfg(feature = "domain-biolab")]
 fn sha256_file(path: &str) -> Result<String> {
-    let mut file = fs::File::open(path)
-        .map_err(|error| Error::external(format!("cannot open BioLab dataset {path:?}: {error}")))?;
+    let mut file = fs::File::open(path).map_err(|error| {
+        Error::external(format!("cannot open BioLab dataset {path:?}: {error}"))
+    })?;
     let mut hasher = Sha256::new();
     let mut buffer = [0_u8; 1024 * 1024];
     loop {
@@ -71,7 +72,9 @@ fn run() -> Result<()> {
     }
 
     let metadata = fs::metadata(&dataset_path).map_err(|error| {
-        Error::external(format!("cannot stat BioLab dataset {dataset_path:?}: {error}"))
+        Error::external(format!(
+            "cannot stat BioLab dataset {dataset_path:?}: {error}"
+        ))
     })?;
     if !metadata.is_file() || metadata.len() == 0 {
         return Err(Error::validation(
