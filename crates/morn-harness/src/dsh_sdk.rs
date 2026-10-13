@@ -242,6 +242,37 @@ pub(crate) fn validate_profile_configuration_ref(reference: &str) -> Result<()> 
     validate_canonical_sha256_digest(digest, "DSH profile_configuration_ref")
 }
 
+pub fn derive_morn_profile_configuration_ref(
+    runtime_version: &str,
+    runtime_digest: &str,
+    profile: &str,
+) -> Result<String> {
+    if runtime_version.trim().is_empty() {
+        return Err(Error::validation(
+            "DSH profile identity requires a non-empty runtime version",
+        ));
+    }
+    validate_canonical_sha256_digest(runtime_digest, "DSH runtime")?;
+    if !matches!(profile, "sdk" | "acp") {
+        return Err(Error::validation(
+            "DSH profile identity supports only the governed sdk or acp profile",
+        ));
+    }
+
+    // The verified runtime artifact commits to the shipped base profile. Morn
+    // then adds an empty one-shot DSH_HOME and its fixed final E0 overlay.
+    // Hash this deployment-owned composition rather than accepting a caller-
+    // invented profile digest.
+    let material = format!(
+        "runtime=deepseek-harness@{runtime_version}#{runtime_digest}\nprofile={profile}\nhome=one-shot-empty\ntool-policy={}\nsandbox=read-only\nsession-log=disabled\ntelemetry=disabled\n",
+        dsh_morn_e0_tool_policy_identity()
+    );
+    let digest = Sha256::digest(material.as_bytes());
+    Ok(format!(
+        "deepseek-harness-profile@{runtime_version}-{profile}-morn-e0-v1#sha256:{digest:x}"
+    ))
+}
+
 impl DshSdkConfig {
     /// Stable, secret-free identity for the execution route selected inside
     /// one DSH distribution. Runtime artifact identity alone is insufficient:
@@ -373,25 +404,32 @@ impl DshSdkConfig {
                 "real DSH SDK requires a pinned execution_environment_ref",
             ));
         }
-        let profile_configuration_ref = self
-            .profile_configuration_ref
-            .as_deref()
-            .ok_or_else(|| Error::validation("real DSH SDK requires profile_configuration_ref"))?;
-        validate_profile_configuration_ref(profile_configuration_ref)?;
-        if self
+        let runtime_version = self
             .runtime_version
             .as_deref()
-            .is_none_or(|version| version.trim().is_empty())
-        {
-            return Err(Error::validation(
-                "real DSH SDK requires a deployment-attested runtime version",
-            ));
-        }
+            .filter(|version| !version.trim().is_empty())
+            .ok_or_else(|| {
+                Error::validation("real DSH SDK requires a deployment-attested runtime version")
+            })?;
         let digest = self
             .runtime_digest
             .as_deref()
             .ok_or_else(|| Error::validation("real DSH SDK requires a runtime SHA-256 digest"))?;
         validate_canonical_sha256_digest(digest, "real DSH SDK runtime")?;
+        let profile_configuration_ref = self
+            .profile_configuration_ref
+            .as_deref()
+            .ok_or_else(|| Error::validation("real DSH SDK requires profile_configuration_ref"))?;
+        validate_profile_configuration_ref(profile_configuration_ref)?;
+        if self.enforce_morn_e0_tool_policy {
+            let expected =
+                derive_morn_profile_configuration_ref(runtime_version, digest, "sdk")?;
+            if profile_configuration_ref != expected {
+                return Err(Error::validation(
+                    "real DSH SDK profile_configuration_ref must be derived from the verified runtime artifact and Morn E0 composition",
+                ));
+            }
+        }
         let workspace = Path::new(&self.cwd);
         let home_path = Path::new(home);
         if !workspace.is_absolute() || !home_path.is_absolute() {
@@ -575,14 +613,21 @@ impl DshSdkConfig {
             std::env::var("MORN_DSH_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
                 Error::validation("MORN_DSH_EXECUTION_ENVIRONMENT_REF is required for real DSH")
             })?;
-        let profile_configuration_ref = std::env::var("MORN_DSH_PROFILE_CONFIGURATION_REF")
-            .map_err(|_| {
-                Error::validation("MORN_DSH_PROFILE_CONFIGURATION_REF is required for real DSH")
-            })?;
         let runtime_version = std::env::var("MORN_DSH_RUNTIME_VERSION")
             .map_err(|_| Error::validation("MORN_DSH_RUNTIME_VERSION is required for real DSH"))?;
         let runtime_digest = std::env::var("MORN_DSH_RUNTIME_DIGEST")
             .map_err(|_| Error::validation("MORN_DSH_RUNTIME_DIGEST is required for real DSH"))?;
+        let derived_profile =
+            derive_morn_profile_configuration_ref(&runtime_version, &runtime_digest, "sdk")?;
+        let profile_configuration_ref = match std::env::var("MORN_DSH_PROFILE_CONFIGURATION_REF") {
+            Ok(claimed) if claimed != derived_profile => {
+                return Err(Error::validation(
+                    "MORN_DSH_PROFILE_CONFIGURATION_REF does not match the verified runtime + Morn E0 composition",
+                ));
+            }
+            Ok(claimed) => claimed,
+            Err(_) => derived_profile,
+        };
         let mut config = Self::profile_sdk(cwd, provider, model)
             .with_dsh_home(home)
             .with_execution_environment_ref(environment_ref)

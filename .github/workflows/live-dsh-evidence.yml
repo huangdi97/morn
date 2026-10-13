@@ -21,10 +21,6 @@ on:
         description: "SHA-256 of the exact deepseek-harness-runtime-bin wheel (sha256:<64-lowercase-hex>)"
         type: string
         required: true
-      profile_configuration_ref:
-        description: "deepseek-harness-profile@<version>#sha256:<64-lowercase-hex>"
-        type: string
-        required: true
       execution_environment_ref:
         description: "Deployment-owned execution environment ref"
         type: string
@@ -73,7 +69,6 @@ jobs:
       MORN_DSH_PROVIDER: ${{ inputs.provider }}
       MORN_DSH_MODEL: ${{ inputs.model }}
       MORN_DSH_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
-      MORN_DSH_PROFILE_CONFIGURATION_REF: ${{ inputs.profile_configuration_ref }}
       MORN_DSH_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       MORN_DSH_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
       MORN_DSH_MAX_TOKENS: ${{ inputs.max_tokens }}
@@ -82,13 +77,11 @@ jobs:
       MORN_DSH_ACP_PROVIDER: ${{ inputs.provider }}
       MORN_DSH_ACP_MODEL: ${{ inputs.model }}
       MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
-      MORN_DSH_ACP_PROFILE_CONFIGURATION_REF: ${{ inputs.profile_configuration_ref }}
       MORN_DSH_ACP_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       MORN_DSH_ACP_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
       INPUT_OPERATION: ${{ inputs.operation }}
       INPUT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       INPUT_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
-      INPUT_PROFILE_CONFIGURATION_REF: ${{ inputs.profile_configuration_ref }}
       INPUT_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       INPUT_ACK_E0: ${{ inputs.acknowledge_e0_only }}
 
@@ -112,10 +105,6 @@ jobs:
           esac
           if [[ ! "$INPUT_RUNTIME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "runtime_digest must be canonical sha256:<64-lowercase-hex>"
-            exit 2
-          fi
-          if [[ ! "$INPUT_PROFILE_CONFIGURATION_REF" =~ ^deepseek-harness-profile@[^[:space:]#]+#sha256:[0-9a-f]{64}$ ]]; then
-            echo "profile_configuration_ref must use canonical lowercase SHA-256"
             exit 2
           fi
           if [[ "$INPUT_OPERATION" == smoke-* && "$INPUT_ACK_E0" != "true" ]]; then

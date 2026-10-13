@@ -26,8 +26,8 @@ use sha2::{Digest, Sha256};
 use morn_kernel::error::{Error, Result};
 
 use crate::dsh_sdk::{
-    dsh_morn_e0_tool_policy_identity, validate_canonical_sha256_digest,
-    validate_profile_configuration_ref,
+    derive_morn_profile_configuration_ref, dsh_morn_e0_tool_policy_identity,
+    validate_canonical_sha256_digest, validate_profile_configuration_ref,
 };
 use crate::subprocess_wire::{read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_FRAMES};
 
@@ -208,25 +208,33 @@ impl DshAcpConfig {
                 "real DSH ACP requires a pinned execution_environment_ref",
             ));
         }
+        let runtime_version = self
+            .runtime_version
+            .as_deref()
+            .filter(|version| !version.trim().is_empty())
+            .ok_or_else(|| {
+                Error::validation("real DSH ACP requires a deployment-attested runtime version")
+            })?;
+        let digest = self
+            .runtime_digest
+            .as_deref()
+            .ok_or_else(|| Error::validation("real DSH ACP requires a runtime SHA-256 digest"))?;
+        validate_canonical_sha256_digest(digest, "real DSH ACP runtime")?;
         let profile_configuration_ref = self
             .profile_configuration_ref
             .as_deref()
             .ok_or_else(|| Error::validation("real DSH ACP requires profile_configuration_ref"))?;
         validate_profile_configuration_ref(profile_configuration_ref)?;
-        if self
-            .runtime_version
-            .as_deref()
-            .is_none_or(|version| version.trim().is_empty())
-        {
-            return Err(Error::validation(
-                "real DSH ACP requires a deployment-attested runtime version",
-            ));
+        if self.enforce_morn_e0_tool_policy {
+            let expected =
+                derive_morn_profile_configuration_ref(runtime_version, digest, "acp")?;
+            if profile_configuration_ref != expected {
+                return Err(Error::validation(
+                    "real DSH ACP profile_configuration_ref must be derived from the verified runtime artifact and Morn E0 composition",
+                ));
+            }
         }
-        let digest = self
-            .runtime_digest
-            .as_deref()
-            .ok_or_else(|| Error::validation("real DSH ACP requires a runtime SHA-256 digest"))?;
-        validate_canonical_sha256_digest(digest, "real DSH ACP runtime")
+        Ok(())
     }
 
     pub fn from_env() -> Result<Self> {
@@ -238,16 +246,24 @@ impl DshAcpConfig {
             std::env::var("MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF").map_err(|_| {
                 Error::validation("MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF is required for real ACP")
             })?;
-        let profile_configuration_ref = std::env::var("MORN_DSH_ACP_PROFILE_CONFIGURATION_REF")
-            .map_err(|_| {
-                Error::validation("MORN_DSH_ACP_PROFILE_CONFIGURATION_REF is required for real ACP")
-            })?;
         let runtime_version = std::env::var("MORN_DSH_ACP_RUNTIME_VERSION").map_err(|_| {
             Error::validation("MORN_DSH_ACP_RUNTIME_VERSION is required for real ACP")
         })?;
         let runtime_digest = std::env::var("MORN_DSH_ACP_RUNTIME_DIGEST").map_err(|_| {
             Error::validation("MORN_DSH_ACP_RUNTIME_DIGEST is required for real ACP")
         })?;
+        let derived_profile =
+            derive_morn_profile_configuration_ref(&runtime_version, &runtime_digest, "acp")?;
+        let profile_configuration_ref =
+            match std::env::var("MORN_DSH_ACP_PROFILE_CONFIGURATION_REF") {
+                Ok(claimed) if claimed != derived_profile => {
+                    return Err(Error::validation(
+                        "MORN_DSH_ACP_PROFILE_CONFIGURATION_REF does not match the verified runtime + Morn E0 composition",
+                    ));
+                }
+                Ok(claimed) => claimed,
+                Err(_) => derived_profile,
+            };
         let provider = std::env::var("MORN_DSH_ACP_PROVIDER")
             .unwrap_or_else(|_| "deepseek-official".to_string());
         let model =
