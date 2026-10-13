@@ -20,6 +20,27 @@ interface StoredSolutionPackage {
   name: string;
   approved_solution_id: string | null;
   version: { major: number; minor: number; patch: number };
+  manifest: Record<string, unknown>;
+}
+
+type ReviewedSolutionPolicy = {
+  profileRef: string | null;
+  siteRef: string | null;
+  acceptanceCriteria: string[];
+};
+
+export function reviewedSolutionPolicy(
+  value: Record<string, unknown> | null | undefined,
+): ReviewedSolutionPolicy | null {
+  if (!value || value.schema !== "morn.solution-package/v11.5") return null;
+  const acceptance = value.acceptance_criteria;
+  return {
+    profileRef: typeof value.profile_ref === "string" ? value.profile_ref : null,
+    siteRef: typeof value.site_ref === "string" ? value.site_ref : null,
+    acceptanceCriteria: Array.isArray(acceptance)
+      ? acceptance.filter((item): item is string => typeof item === "string")
+      : [],
+  };
 }
 
 export default function Studio() {
@@ -70,6 +91,13 @@ export default function Studio() {
   const [solutionPackages, setSolutionPackages] = useState<StoredSolutionPackage[]>([]);
   const [selectedSolutionId, setSelectedSolutionId] = useState("");
   const [solutionListError, setSolutionListError] = useState<string | null>(null);
+
+  const selectedPackage = solutionPackages.find((item) => item.id === selectedSolutionId);
+  const instantiationManifest =
+    selectedPackage?.manifest ?? (!selectedSolutionId ? manifest?.manifest : null);
+  const reviewedPolicy = reviewedSolutionPolicy(instantiationManifest);
+  const instantiationProfileRef = reviewedPolicy?.profileRef ?? profileRef;
+  const instantiationSiteRef = reviewedPolicy?.siteRef ?? siteRef;
 
   const refreshSolutionPackages = async (preferredId?: string) => {
     try {
@@ -251,8 +279,8 @@ export default function Studio() {
       const result = await apiPostJson<SolutionInstantiationOutcome>("/v115/solution/instantiate", {
         solution_package_id: selectedSolutionId || undefined,
         goal,
-        profile_ref: profileRef,
-        site_ref: siteRef || undefined,
+        profile_ref: instantiationProfileRef,
+        site_ref: instantiationSiteRef || undefined,
       });
       setInstantiated(result);
     } catch (e) {
@@ -484,18 +512,45 @@ export default function Studio() {
         {solutionPackages.length === 0 && !manifest && (
           <p>No approved package yet. Compile and approve a SolutionPackage in step 2 above.</p>
         )}
-        <div className="builder-item">
-          <label htmlFor="work-profile">Guarantee profile: </label>
-          <select id="work-profile" value={profileRef} onChange={(e) => setProfileRef(e.target.value)}>
-            {profileOptions.map((profile) => (
-              <option key={profile} value={profile}>{profile}</option>
-            ))}
-          </select>
-        </div>
-        <div className="builder-item">
-          <label htmlFor="work-site">Site (optional): </label>
-          <input id="work-site" value={siteRef} onChange={(e) => setSiteRef(e.target.value)} placeholder="plant-a" />
-        </div>
+        {reviewedPolicy ? (
+          <div className="studio-reviewed-policy" data-testid="reviewed-solution-policy">
+            <div>
+              <span>Reviewed profile</span>
+              <b>{instantiationProfileRef}</b>
+            </div>
+            <div>
+              <span>Reviewed site scope</span>
+              <b>{reviewedPolicy.siteRef ?? "Site-neutral · deployment site remains selectable"}</b>
+            </div>
+            <div>
+              <span>Acceptance contract</span>
+              <b>
+                {reviewedPolicy.acceptanceCriteria.length
+                  ? reviewedPolicy.acceptanceCriteria.join(" · ")
+                  : "Missing reviewed acceptance criteria"}
+              </b>
+            </div>
+            <small>
+              These constraints come from the approved SolutionPackage. Work instantiation cannot
+              silently re-profile or move a site-scoped package.
+            </small>
+          </div>
+        ) : (
+          <div className="builder-item">
+            <label htmlFor="work-profile">Guarantee profile: </label>
+            <select id="work-profile" value={profileRef} onChange={(e) => setProfileRef(e.target.value)}>
+              {profileOptions.map((profile) => (
+                <option key={profile} value={profile}>{profile}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {reviewedPolicy?.siteRef ? null : (
+          <div className="builder-item">
+            <label htmlFor="work-site">Deployment site (optional): </label>
+            <input id="work-site" value={siteRef} onChange={(e) => setSiteRef(e.target.value)} placeholder="plant-a" />
+          </div>
+        )}
         <div className="page-actions">
           <button onClick={instantiateSolution} disabled={!selectedSolutionId && !manifest}>Instantiate Work</button>
         </div>

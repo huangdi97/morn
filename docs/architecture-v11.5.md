@@ -356,6 +356,10 @@ All product surfaces are views over the same semantics:
   only when a real route or an existing lifecycle binding makes them relevant.
 - **Studio**: starts from the work goal or an existing artifact, compiles
   candidate capabilities/solutions, exposes unresolved qualification gates.
+  Once a v11.5 SolutionPackage is reviewed, its profile/site/acceptance policy
+  is projected as reviewed instantiation context rather than a second editable
+  copy; changing that contract requires explicit revalidation/migration, not a
+  UI field edit.
 - **Console**: provider health, composition runtime, profiles, conformance,
   authority, bindings, attempts, reconciliation and external blockers.
 - **Hub**: capabilities, releases, harness providers, composition runtimes,

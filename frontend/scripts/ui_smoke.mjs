@@ -321,6 +321,18 @@ try {
       if (!t.includes('"production_write_allowed": false')) {
         errors.push("studio: default Work creation must not silently enable ProductionWrite");
       }
+      const reviewedPolicy = page.locator('[data-testid="reviewed-solution-policy"]');
+      if (!(await reviewedPolicy.count())) {
+        errors.push("studio: approved v11.5 package policy is not projected before Work instantiation");
+      } else {
+        const reviewedText = await reviewedPolicy.innerText();
+        if (!reviewedText.includes("morn.lite@1.0.0") || !reviewedText.includes("reviewed outcome exists")) {
+          errors.push("studio: reviewed profile/acceptance policy is not preserved in step 3");
+        }
+        if (await page.locator("#work-profile").count()) {
+          errors.push("studio: reviewed v11.5 profile must not remain silently editable in step 3");
+        }
+      }
       await page.getByRole("button", { name: "Instantiate Work", exact: true }).click();
       await page.locator('[role="status"]').filter({ hasText: "Readiness gates" }).waitFor();
       t = (await page.locator("body").innerText()).toLowerCase();

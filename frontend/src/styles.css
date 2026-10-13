@@ -453,6 +453,38 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   overflow-wrap: anywhere;
 }
 
+.studio-reviewed-policy {
+  margin: 12px 0 15px;
+  padding: 12px 14px;
+  border: 1px solid #38506e;
+  border-radius: 11px;
+  background: #121e2e;
+}
+.studio-reviewed-policy > div {
+  display: grid;
+  grid-template-columns: minmax(130px, .35fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #2c3c53;
+  font-size: 12px;
+}
+.studio-reviewed-policy > div:last-of-type { border-bottom: 0; }
+.studio-reviewed-policy span { color: #96a9c3; }
+.studio-reviewed-policy b {
+  min-width: 0;
+  color: #d8e5f8;
+  overflow-wrap: anywhere;
+}
+.studio-reviewed-policy small {
+  display: block;
+  margin-top: 9px;
+  color: #8fa3bf;
+  line-height: 1.5;
+}
+@media (max-width: 760px) {
+  .studio-reviewed-policy > div { grid-template-columns: 1fr; gap: 4px; }
+}
+
 
 /* Secondary diagnostic/catalog surfaces stay available without competing with
    canonical v11.5 control and provider truth. */
