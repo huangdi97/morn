@@ -11,7 +11,7 @@ use crate::dsh_sdk::{
 };
 use crate::event::{ExecutionEvent, ExecutionEventKind};
 use crate::receipt::ExecutionReceipt;
-use crate::scope::CapabilityScope;
+use crate::scope::{CapabilityScope, ScopeKind};
 use morn_kernel::ids::{ExecutionReceiptId, WorkspaceId};
 use morn_kernel::time::Timestamp;
 
@@ -907,13 +907,14 @@ impl HarnessProvider for DeepSeekHarnessProvider {
 
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
         if self.mode == DshMode::Real
-            && !scope
-                .restrictions
-                .iter()
-                .any(|restriction| restriction == DSH_REAL_E0_SCOPE_RESTRICTION)
+            && (scope.kind != ScopeKind::ExecutionRun
+                || !scope
+                    .restrictions
+                    .iter()
+                    .any(|restriction| restriction == DSH_REAL_E0_SCOPE_RESTRICTION))
         {
             return Err(Error::validation(
-                "real DSH SDK scope must explicitly declare morn.effects<=E0",
+                "real DSH SDK requires an ExecutionRun scope explicitly restricted to morn.effects<=E0",
             ));
         }
         let handle = ProviderHandle {
@@ -1432,6 +1433,20 @@ mod dsh_provider_tests {
         )
         .unwrap();
         (provider, ctx, handle)
+    }
+
+    #[test]
+    fn real_dsh_rejects_broader_workcell_scope_even_when_marked_e0() {
+        let (mut provider, ctx, original_handle) = real_wire_fixture_provider();
+        provider.unmount(&original_handle).unwrap();
+        let broad = CapabilityScope::new(
+            ScopeKind::Workcell,
+            None,
+            ctx.workspace_id.clone(),
+            "too-broad-dsh-scope",
+        )
+        .with_restriction(DSH_REAL_E0_SCOPE_RESTRICTION);
+        assert!(provider.mount(broad).is_err());
     }
 
     #[test]

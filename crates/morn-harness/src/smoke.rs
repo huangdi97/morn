@@ -45,8 +45,14 @@ pub fn run_harness_smoke(
     ctx: &RuntimeContext,
 ) -> Result<HarnessSmokeReport> {
     let name = provider.provider_name().to_string();
+    let governed_external_runtime = !provider.required_scope_restrictions().is_empty();
+    let scope_kind = if governed_external_runtime {
+        ScopeKind::ExecutionRun
+    } else {
+        ScopeKind::Workcell
+    };
     let mut smoke_scope = CapabilityScope::new(
-        ScopeKind::Workcell,
+        scope_kind,
         None,
         ctx.workspace_id.clone(),
         "smoke-scope",
@@ -106,7 +112,6 @@ pub fn run_harness_smoke(
         None => false,
     };
 
-    let governed_external_runtime = !provider.required_scope_restrictions().is_empty();
     let mut canary_mismatch = false;
     let scoped_execution = session_id
         .as_ref()

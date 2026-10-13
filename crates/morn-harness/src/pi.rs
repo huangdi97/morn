@@ -19,7 +19,7 @@ use crate::provider::{
     HarnessSnapshot, ProviderHandle,
 };
 use crate::receipt::ExecutionReceipt;
-use crate::scope::CapabilityScope;
+use crate::scope::{CapabilityScope, ScopeKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PiMode {
@@ -413,13 +413,14 @@ impl HarnessProvider for PiHarnessProvider {
 
     fn mount(&mut self, scope: CapabilityScope) -> Result<ProviderHandle> {
         if self.mode == PiMode::Real
-            && !scope
-                .restrictions
-                .iter()
-                .any(|restriction| restriction == PI_REAL_E0_SCOPE_RESTRICTION)
+            && (scope.kind != ScopeKind::ExecutionRun
+                || !scope
+                    .restrictions
+                    .iter()
+                    .any(|restriction| restriction == PI_REAL_E0_SCOPE_RESTRICTION))
         {
             return Err(Error::validation(
-                "real Pi RPC scope must explicitly declare morn.effects<=E0",
+                "real Pi RPC requires an ExecutionRun scope explicitly restricted to morn.effects<=E0",
             ));
         }
         let handle = ProviderHandle {
@@ -999,6 +1000,20 @@ mod tests {
         )
         .unwrap();
         (provider, ctx, handle)
+    }
+
+    #[test]
+    fn real_pi_rejects_broader_workcell_scope_even_when_marked_e0() {
+        let (mut provider, ctx, original_handle) = real_pi_wire_fixture_provider();
+        provider.unmount(&original_handle).unwrap();
+        let broad = CapabilityScope::new(
+            ScopeKind::Workcell,
+            None,
+            ctx.workspace_id.clone(),
+            "too-broad-pi-scope",
+        )
+        .with_restriction(PI_REAL_E0_SCOPE_RESTRICTION);
+        assert!(provider.mount(broad).is_err());
     }
 
     #[test]
