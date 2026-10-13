@@ -120,6 +120,20 @@ impl DshAcpLifecycleController {
         self.sessions.get(session_id).map(|session| &session.public)
     }
 
+    pub fn sessions(&self) -> Vec<DshAcpLifecycleSession> {
+        let mut sessions: Vec<_> = self
+            .sessions
+            .values()
+            .map(|session| session.public.clone())
+            .collect();
+        sessions.sort_by(|left, right| {
+            left.opened_at
+                .cmp(&right.opened_at)
+                .then_with(|| left.session_id.cmp(&right.session_id))
+        });
+        sessions
+    }
+
     pub fn mount_scope(&mut self, scope: CapabilityScope) -> Result<String> {
         if scope.kind != ScopeKind::ExecutionRun {
             return Err(Error::validation(
