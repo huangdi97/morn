@@ -297,7 +297,7 @@ export default function ConsolePage() {
           <span>Provider posture</span>
           <strong>
             {v115
-              ? [v115.harness_runtime.dsh.runtime_health.state, v115.harness_runtime.pi.runtime_health.state]
+              ? [v115.harness_runtime.dsh.health, v115.harness_runtime.pi.health]
                   .filter((state) => state.toLowerCase() === "healthy").length + "/2 healthy"
               : "—"}
           </strong>
