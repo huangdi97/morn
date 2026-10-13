@@ -182,8 +182,27 @@ impl DshAcpLifecycleController {
             .clone()
             .ok_or_else(|| Error::validation("ACP lifecycle config has no model"))?;
         let reasoning_effort = self.config.reasoning_effort.clone();
+        let session_id = {
+            let client = self.ensure_client()?;
+            client.new_session(&cwd)?
+        };
+        if self.sessions.contains_key(&session_id) {
+            // A session id is a durable ownership key. If the external ACP peer
+            // reuses one, Morn cannot distinguish a newly-created scope from
+            // the already-bound session. Closing only that id could also close
+            // the original external session, so quarantine the entire owned
+            // transport and require a fresh one-shot runtime instead.
+            let shutdown = self.shutdown_transport();
+            return Err(Error::conflict(match shutdown {
+                Ok(()) => format!(
+                    "ACP peer reused session id {session_id}; transport quarantined and all sessions closed"
+                ),
+                Err(error) => format!(
+                    "ACP peer reused session id {session_id}; transport quarantine reported: {error}"
+                ),
+            }));
+        }
         let client = self.ensure_client()?;
-        let session_id = client.new_session(&cwd)?;
         if let Err(error) =
             client.pin_model_route(&session_id, &provider, &model, reasoning_effort.as_deref())
         {
@@ -692,6 +711,29 @@ mod tests {
             DshAcpLifecycleState::Active
         );
         controller.shutdown_transport().unwrap();
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn duplicate_upstream_session_id_quarantines_transport_instead_of_rebinding() {
+        if std::env::var("MORN_ACP_FIXTURE_SERVER").ok().as_deref() == Some("1") {
+            return;
+        }
+        let (mut controller, context, scope, root) = fixture();
+        controller.mount_scope(scope).unwrap();
+        let first = controller.open_session(&context).unwrap();
+
+        let error = controller.open_session(&context).unwrap_err();
+        assert!(format!("{error}").contains("reused session id"));
+        assert_eq!(
+            controller.session(&first.session_id).unwrap().state,
+            DshAcpLifecycleState::TransportClosed
+        );
+        assert!(controller.control_handle(&first.session_id).is_err());
+        assert!(controller
+            .prompt_text(&first.session_id, &context, "must-not-run")
+            .is_err());
+
         let _ = std::fs::remove_dir_all(root);
     }
 
