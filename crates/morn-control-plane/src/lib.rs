@@ -881,7 +881,7 @@ pub(crate) fn require_attested_review_authority(
             let authorization: AcceptanceReviewAuthorization = store
                 .load_record("acceptance_review_authorization_v115", authorization_ref)?
                 .ok_or_else(|| Error::not_found("acceptance review authorization"))?;
-            if authorization.authorization_id != *authorization_ref
+            if authorization.authorization_id.as_str() != authorization_ref
                 || !authorization.authorizes(
                     &decision.decided_by,
                     &decision.acting_role,
