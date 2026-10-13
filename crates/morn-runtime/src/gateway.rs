@@ -279,11 +279,7 @@ impl ActionGateway {
     }
 
     /// Verify an execution outcome against expectations.
-    pub fn verify(
-        &self,
-        outcome: &ExecutionOutcome,
-        world: &dyn WorldVerifier,
-    ) -> Result<bool> {
+    pub fn verify(&self, outcome: &ExecutionOutcome, world: &dyn WorldVerifier) -> Result<bool> {
         if !outcome.committed
             || outcome.workspace_ref.trim().is_empty()
             || outcome.object_ref.trim().is_empty()
