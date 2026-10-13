@@ -169,9 +169,7 @@ impl DshAcpConfig {
     pub fn route_attestation_ref(&self) -> Result<String> {
         let route = self.route_ref()?;
         let digest = Sha256::digest(route.as_bytes());
-        Ok(format!(
-            "deepseek-harness-acp-route@v1#sha256:{digest:x}"
-        ))
+        Ok(format!("deepseek-harness-acp-route@v1#sha256:{digest:x}"))
     }
 
     pub fn validate_for_real(&self) -> Result<()> {
@@ -1212,7 +1210,10 @@ mod tests {
 
         let attestation_ref = configured.route_attestation_ref().unwrap();
         assert!(attestation_ref.starts_with("deepseek-harness-acp-route@v1#sha256:"));
-        assert_eq!(attestation_ref.len(), "deepseek-harness-acp-route@v1#sha256:".len() + 64);
+        assert_eq!(
+            attestation_ref.len(),
+            "deepseek-harness-acp-route@v1#sha256:".len() + 64
+        );
         assert!(!attestation_ref.contains("fixture-provider"));
         let mut changed = configured.clone();
         changed.model = Some("other-model".to_string());

@@ -1,0 +1,218 @@
+name: Live DSH evidence (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Plan identities only, or run an authenticated E0 smoke"
+        type: choice
+        required: true
+        default: plan-sdk
+        options:
+          - plan-sdk
+          - plan-acp
+          - smoke-sdk
+          - smoke-acp
+      runtime_version:
+        description: "Exact deployment-attested DeepSeek Harness distribution version"
+        type: string
+        required: true
+      runtime_digest:
+        description: "Exact deployment-attested digest (sha256:<64-hex>)"
+        type: string
+        required: true
+      profile_configuration_ref:
+        description: "deepseek-harness-profile@<version>#sha256:<64-hex>"
+        type: string
+        required: true
+      execution_environment_ref:
+        description: "Deployment-owned execution environment ref"
+        type: string
+        required: true
+      provider:
+        description: "Exact DSH provider route"
+        type: string
+        required: true
+        default: deepseek-official
+      model:
+        description: "Exact DSH model route"
+        type: string
+        required: true
+        default: deepseek-v4-flash
+      reasoning_effort:
+        description: "Optional reasoning effort; blank preserves provider default"
+        type: string
+        required: false
+        default: ""
+      max_tokens:
+        description: "SDK smoke output-token ceiling"
+        type: number
+        required: true
+        default: 8192
+      execution_attestor:
+        description: "Issuer/provider name embedded in the execution attestation file (smoke only)"
+        type: string
+        required: false
+        default: github-actions-manual
+      acknowledge_e0_only:
+        description: "Required for smoke: I understand this proves E0 executor/lifecycle evidence only, never Outcome/Acceptance/production write"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-dsh-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dsh-evidence:
+    name: DSH ${{ inputs.operation }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MORN_DSH_WORKSPACE: ${{ runner.temp }}/morn-dsh-workspace
+      MORN_DSH_HOME: ${{ runner.temp }}/morn-dsh-home
+      MORN_DSH_PROVIDER: ${{ inputs.provider }}
+      MORN_DSH_MODEL: ${{ inputs.model }}
+      MORN_DSH_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
+      MORN_DSH_PROFILE_CONFIGURATION_REF: ${{ inputs.profile_configuration_ref }}
+      MORN_DSH_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      MORN_DSH_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
+      MORN_DSH_MAX_TOKENS: ${{ inputs.max_tokens }}
+      MORN_DSH_ACP_WORKSPACE: ${{ runner.temp }}/morn-dsh-acp-workspace
+      MORN_DSH_ACP_HOME: ${{ runner.temp }}/morn-dsh-acp-home
+      MORN_DSH_ACP_PROVIDER: ${{ inputs.provider }}
+      MORN_DSH_ACP_MODEL: ${{ inputs.model }}
+      MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
+      MORN_DSH_ACP_PROFILE_CONFIGURATION_REF: ${{ inputs.profile_configuration_ref }}
+      MORN_DSH_ACP_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      MORN_DSH_ACP_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      EXECUTION_ATTESTATION_JSON: ${{ secrets.MORN_EXECUTION_ATTESTATION_JSON }}
+      INPUT_OPERATION: ${{ inputs.operation }}
+      INPUT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      INPUT_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
+      INPUT_PROFILE_CONFIGURATION_REF: ${{ inputs.profile_configuration_ref }}
+      INPUT_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+      INPUT_EXECUTION_ATTESTOR: ${{ inputs.execution_attestor }}
+      INPUT_ACK_E0: ${{ inputs.acknowledge_e0_only }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate manual inputs and isolate runtime paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$INPUT_RUNTIME_VERSION" in
+            *[!A-Za-z0-9._+-]*|"") echo "runtime_version contains unsupported characters"; exit 2 ;;
+          esac
+          if [[ ! "$INPUT_RUNTIME_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]]; then
+            echo "runtime_digest must be sha256:<64-hex>"
+            exit 2
+          fi
+          if [[ ! "$INPUT_PROFILE_CONFIGURATION_REF" =~ ^deepseek-harness-profile@[^[:space:]#]+#sha256:[0-9a-fA-F]{64}$ ]]; then
+            echo "profile_configuration_ref has invalid grammar"
+            exit 2
+          fi
+          if [[ "$INPUT_OPERATION" == smoke-* && "$INPUT_ACK_E0" != "true" ]]; then
+            echo "Authenticated smoke requires acknowledge_e0_only=true"
+            exit 2
+          fi
+          mkdir -p "$MORN_DSH_WORKSPACE" "$MORN_DSH_HOME" "$MORN_DSH_ACP_WORKSPACE" "$MORN_DSH_ACP_HOME" target/live-dsh-evidence
+          if [[ -n "$INPUT_REASONING_EFFORT" ]]; then
+            echo "MORN_DSH_REASONING_EFFORT=$INPUT_REASONING_EFFORT" >> "$GITHUB_ENV"
+            echo "MORN_DSH_ACP_REASONING_EFFORT=$INPUT_REASONING_EFFORT" >> "$GITHUB_ENV"
+          fi
+
+      - name: Emit secret-free deployment identity plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$INPUT_OPERATION" in
+            *-acp) export MORN_DSH_PLAN_MODE=acp ;;
+            *)     export MORN_DSH_PLAN_MODE=sdk ;;
+          esac
+          cargo run --quiet -p morn-app --bin dsh_identity_plan | tee target/live-dsh-evidence/identity-plan.json
+
+      - name: Stop after planning
+        if: startsWith(inputs.operation, 'plan-')
+        shell: bash
+        run: |
+          echo "Identity planning completed. No provider process was launched and no credential was required."
+
+      - name: Validate smoke secrets and materialize deployment attestation
+        if: startsWith(inputs.operation, 'smoke-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
+            echo "DEEPSEEK_API_KEY secret is required for authenticated smoke"
+            exit 2
+          fi
+          if [[ -z "${EXECUTION_ATTESTATION_JSON:-}" ]]; then
+            echo "MORN_EXECUTION_ATTESTATION_JSON secret is required for authenticated smoke"
+            exit 2
+          fi
+          python - <<'PY'
+          import json, os, pathlib
+          raw = os.environ["EXECUTION_ATTESTATION_JSON"]
+          parsed = json.loads(raw)
+          if not isinstance(parsed, (list, dict)):
+              raise SystemExit("execution attestation secret must be a JSON object or array")
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "morn-execution-attestations.json"
+          path.write_text(json.dumps(parsed, separators=(",", ":")), encoding="utf-8")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"MORN_EXECUTION_ATTESTATION_FILE={path}\n")
+          PY
+          echo "MORN_EXECUTION_ATTESTOR=$INPUT_EXECUTION_ATTESTOR" >> "$GITHUB_ENV"
+
+      - name: Install exact official DeepSeek Harness SDK distribution
+        if: startsWith(inputs.operation, 'smoke-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check "deepseek-harness-sdk==$INPUT_RUNTIME_VERSION"
+          command -v dsh >/dev/null
+
+      - name: Run authenticated SDK provider smoke (E0 only)
+        if: inputs.operation == 'smoke-sdk'
+        shell: bash
+        env:
+          MORN_DSH_MODE: real
+          MORN_PROVIDER_SMOKE_PROVIDER: deepseek-harness
+          MORN_DSH_ENV_PASSTHROUGH: DEEPSEEK_API_KEY,DEEPSEEK_BASE_URL
+        run: |
+          set -euo pipefail
+          cargo run --quiet -p morn-app --bin provider_smoke | tee target/live-dsh-evidence/provider-smoke.json
+
+      - name: Run authenticated ACP lifecycle smoke (control only)
+        if: inputs.operation == 'smoke-acp'
+        shell: bash
+        env:
+          MORN_DSH_ACP_MODE: real
+          MORN_DSH_ACP_ENV_PASSTHROUGH: DEEPSEEK_API_KEY,DEEPSEEK_BASE_URL
+        run: |
+          set -euo pipefail
+          cargo run --quiet -p morn-app --bin dsh_acp_lifecycle_smoke | tee target/live-dsh-evidence/acp-lifecycle-smoke.json
+
+      - name: Upload evidence reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-dsh-evidence-${{ github.sha }}-${{ inputs.operation }}
+          path: target/live-dsh-evidence
+          if-no-files-found: warn
+          retention-days: 30

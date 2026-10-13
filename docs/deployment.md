@@ -146,6 +146,34 @@ deployment launched.
 
 ## Live provider evidence gate
 
+Before an execution-environment attestor signs a real DSH deployment, derive the
+exact **secret-free identities** that the attestation must bind:
+
+```powershell
+$env:MORN_DSH_PLAN_MODE = "sdk" # or "acp"
+# configure the same MORN_DSH_* or MORN_DSH_ACP_* route/version/digest values
+cargo run -p morn-app --bin dsh_identity_plan
+```
+
+The plan command never starts DSH and never requires a model credential. It
+validates the real configuration and emits the exact runtime artifact identity,
+profile-composition identity and hashed semantic-route identity. ACP keeps its
+raw `dsh-acp-route:{...}` only for internal diagnostics; Work identity and
+execution-environment attestations use
+`deepseek-harness-acp-route@v1#sha256:<64-hex>`, so configuration changes
+cannot silently reuse an older deployment attestation.
+
+For GitHub-hosted deployment verification, the repository also provides the
+manual **Live DSH evidence** workflow. It has four explicit operations:
+`plan-sdk`, `plan-acp`, `smoke-sdk`, and `smoke-acp`. Planning needs no
+credential. Smoke modes require an explicit E0-only acknowledgement plus the
+repository/environment secrets `DEEPSEEK_API_KEY` and
+`MORN_EXECUTION_ATTESTATION_JSON`; the latter is materialized only on the
+ephemeral runner. Configure a protected GitHub Environment or equivalent
+organization approval around these secrets for real deployments. The workflow
+uploads only identity/smoke reports and never promotes Outcome, Acceptance or
+ProductionWrite claims.
+
 Morn includes a one-shot deployment gate for proving the **executor transport**
 against the exact configured real provider and deployment-owned execution
 environment:
