@@ -302,6 +302,7 @@ jobs:
           MORN_PI_MODE: real
           MORN_PROVIDER_SMOKE_PROVIDER: pi
           MORN_EXECUTION_ATTESTOR: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
+          MORN_EVIDENCE_ISSUER: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
           PROVIDER_API_KEY: ${{ secrets.MORN_PI_PROVIDER_API_KEY }}
           PROVIDER_BASE_URL: ${{ secrets.MORN_PI_PROVIDER_BASE_URL }}
         run: |
@@ -321,6 +322,24 @@ jobs:
           fi
           export MORN_PI_ENV_PASSTHROUGH="$passthrough"
           cargo run --quiet -p morn-app --bin provider_smoke | tee target/live-pi-evidence/provider-smoke.json
+
+      - name: Export reusable RealRuntime evidence claim
+        if: inputs.operation == 'smoke'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, pathlib
+          report = json.loads(pathlib.Path("target/live-pi-evidence/provider-smoke.json").read_text(encoding="utf-8"))
+          if report.get("status") != "PASS":
+              raise SystemExit("provider smoke did not PASS; refusing to export a proven claim")
+          claim = report.get("evidence_claim")
+          if not isinstance(claim, dict):
+              raise SystemExit("provider smoke PASS is missing evidence_claim")
+          pathlib.Path("target/live-pi-evidence/real-runtime-evidence-claim.json").write_text(
+              json.dumps(claim, indent=2), encoding="utf-8"
+          )
+          PY
 
       - name: Upload evidence reports
         if: always()

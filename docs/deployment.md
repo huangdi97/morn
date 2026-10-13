@@ -51,6 +51,13 @@ The manual live-provider workflows deliberately separate **identity planning** f
   customer sandbox is **not** accepted as live deployment evidence.
 - Provider smoke remains E0-only and cannot prove Outcome, independent
   Acceptance, customer value, production write, or G12.
+- On a successful SDK/Pi smoke, the workflow also exports
+  `real-runtime-evidence-claim.json`. Morn itself serializes this claim, so it
+  can later be supplied through `MORN_EVIDENCE_CLAIMS_FILE` with the same
+  deployment-pinned `MORN_EVIDENCE_ISSUER` without manually rebuilding the
+  subject/runtime/environment/route references. This is historical
+  `RealRuntime` evidence only: deployment readiness still requires a fresh
+  `Healthy` lease from the currently running exact provider path.
 
 Provision and harden the self-hosted runner outside the repository. The custom
 label and local identity file are admission controls, not a substitute for

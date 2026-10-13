@@ -286,6 +286,7 @@ jobs:
           MORN_PROVIDER_SMOKE_PROVIDER: deepseek-harness
           MORN_DSH_ENV_PASSTHROUGH: DEEPSEEK_API_KEY,DEEPSEEK_BASE_URL
           MORN_EXECUTION_ATTESTOR: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
+          MORN_EVIDENCE_ISSUER: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
         run: |
@@ -306,6 +307,24 @@ jobs:
           set -euo pipefail
           test -n "${DEEPSEEK_API_KEY:-}" || { echo "DEEPSEEK_API_KEY secret is required"; exit 2; }
           cargo run --quiet -p morn-app --bin dsh_acp_lifecycle_smoke | tee target/live-dsh-evidence/acp-lifecycle-smoke.json
+
+      - name: Export reusable RealRuntime evidence claim
+        if: inputs.operation == 'smoke-sdk'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, pathlib
+          report = json.loads(pathlib.Path("target/live-dsh-evidence/provider-smoke.json").read_text(encoding="utf-8"))
+          if report.get("status") != "PASS":
+              raise SystemExit("provider smoke did not PASS; refusing to export a proven claim")
+          claim = report.get("evidence_claim")
+          if not isinstance(claim, dict):
+              raise SystemExit("provider smoke PASS is missing evidence_claim")
+          pathlib.Path("target/live-dsh-evidence/real-runtime-evidence-claim.json").write_text(
+              json.dumps(claim, indent=2), encoding="utf-8"
+          )
+          PY
 
       - name: Upload evidence reports
         if: always()

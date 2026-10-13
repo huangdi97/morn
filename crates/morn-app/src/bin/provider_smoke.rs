@@ -7,6 +7,7 @@
 use std::process::ExitCode;
 
 use morn_app::AppState;
+use morn_assurance::{EvidenceClaim, EvidenceClass};
 use morn_harness::provider::{DshMode, HarnessProvider, HarnessRuntimeHealthState};
 use morn_harness::{run_harness_smoke, PiMode, RuntimeContext};
 use morn_kernel::error::{Error, Result};
@@ -58,6 +59,39 @@ fn find_attestation(
                 "no deployment-owned execution attestation exists for {environment_ref:?}"
             ))
         })
+}
+
+fn real_runtime_claim(
+    subject: &str,
+    pass: bool,
+    mut identity_refs: Vec<String>,
+    health_refs: &[String],
+    environment_evidence_refs: &[String],
+) -> Result<Option<EvidenceClaim>> {
+    if !pass {
+        return Ok(None);
+    }
+    let issuer = std::env::var("MORN_EVIDENCE_ISSUER").map_err(|_| {
+        Error::validation(
+            "MORN_EVIDENCE_ISSUER is required to emit a reusable RealRuntime evidence claim",
+        )
+    })?;
+    let issuer = issuer.trim();
+    if issuer.is_empty() {
+        return Err(Error::validation("MORN_EVIDENCE_ISSUER must not be empty"));
+    }
+    identity_refs.extend(health_refs.iter().cloned());
+    identity_refs.extend(environment_evidence_refs.iter().cloned());
+    identity_refs.sort();
+    identity_refs.dedup();
+    EvidenceClaim::proven(
+        subject,
+        EvidenceClass::RealRuntime,
+        identity_refs,
+        issuer,
+        "authenticated provider smoke passed on the exact attested runtime, route and execution environment with a fresh Healthy lease",
+    )
+    .map(Some)
 }
 
 fn run_gate() -> Result<Value> {
@@ -150,6 +184,19 @@ fn run_gate() -> Result<Value> {
                 && health.state == HarnessRuntimeHealthState::Healthy
                 && selectable
                 && cleanup_ok;
+            let required_claim_refs = vec![
+                format!("runtime://deepseek-harness/{pinned_version}#{pinned_digest}"),
+                environment_ref.clone(),
+                profile_configuration_ref.clone(),
+                route_attestation_ref.clone(),
+            ];
+            let evidence_claim = real_runtime_claim(
+                "deepseek-harness",
+                pass,
+                required_claim_refs.clone(),
+                &health.evidence_refs,
+                &attestation.evidence_refs,
+            )?;
             Ok(json!({
                 "gate": "MORN_LIVE_PROVIDER_SMOKE",
                 "status": if pass { "PASS" } else { "NOT_PROVEN" },
@@ -160,12 +207,8 @@ fn run_gate() -> Result<Value> {
                 "runtime_digest": runtime_digest,
                 "wire_server_version": wire_server_version,
                 "route_attestation_ref": route_attestation_ref,
-                "required_real_runtime_claim_refs": [
-                    format!("runtime://deepseek-harness/{pinned_version}#{pinned_digest}"),
-                    environment_ref,
-                    profile_configuration_ref,
-                    route_attestation_ref
-                ],
+                "required_real_runtime_claim_refs": required_claim_refs,
+                "evidence_claim": evidence_claim,
                 "execution_environment_ref": attestation.environment_ref,
                 "execution_environment_runtime_identities": attestation.runtime_identities,
                 "execution_environment_evidence_refs": attestation.evidence_refs,
@@ -238,6 +281,18 @@ fn run_gate() -> Result<Value> {
                 && health.state == HarnessRuntimeHealthState::Healthy
                 && selectable
                 && cleanup_ok;
+            let required_claim_refs = vec![
+                format!("runtime://pi/{pinned_version}#{pinned_digest}"),
+                environment_ref.clone(),
+                route_attestation_ref.clone(),
+            ];
+            let evidence_claim = real_runtime_claim(
+                "pi-harness",
+                pass,
+                required_claim_refs.clone(),
+                &health.evidence_refs,
+                &attestation.evidence_refs,
+            )?;
             Ok(json!({
                 "gate": "MORN_LIVE_PROVIDER_SMOKE",
                 "status": if pass { "PASS" } else { "NOT_PROVEN" },
@@ -247,11 +302,8 @@ fn run_gate() -> Result<Value> {
                 "runtime_version": runtime_version,
                 "runtime_digest": runtime_digest,
                 "route_attestation_ref": route_attestation_ref,
-                "required_real_runtime_claim_refs": [
-                    format!("runtime://pi/{pinned_version}#{pinned_digest}"),
-                    environment_ref,
-                    route_attestation_ref
-                ],
+                "required_real_runtime_claim_refs": required_claim_refs,
+                "evidence_claim": evidence_claim,
                 "execution_environment_ref": attestation.environment_ref,
                 "execution_environment_runtime_identities": attestation.runtime_identities,
                 "execution_environment_evidence_refs": attestation.evidence_refs,
