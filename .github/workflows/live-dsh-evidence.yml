@@ -68,8 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      MORN_DSH_WORKSPACE: ${{ runner.temp }}/morn-dsh-workspace
-      MORN_DSH_HOME: ${{ runner.temp }}/morn-dsh-home
+      MORN_DSH_WORKSPACE: /tmp/morn-dsh-workspace-${{ github.run_id }}
+      MORN_DSH_HOME: /tmp/morn-dsh-home-${{ github.run_id }}
       MORN_DSH_PROVIDER: ${{ inputs.provider }}
       MORN_DSH_MODEL: ${{ inputs.model }}
       MORN_DSH_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
@@ -77,8 +77,8 @@ jobs:
       MORN_DSH_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       MORN_DSH_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
       MORN_DSH_MAX_TOKENS: ${{ inputs.max_tokens }}
-      MORN_DSH_ACP_WORKSPACE: ${{ runner.temp }}/morn-dsh-acp-workspace
-      MORN_DSH_ACP_HOME: ${{ runner.temp }}/morn-dsh-acp-home
+      MORN_DSH_ACP_WORKSPACE: /tmp/morn-dsh-acp-workspace-${{ github.run_id }}
+      MORN_DSH_ACP_HOME: /tmp/morn-dsh-acp-home-${{ github.run_id }}
       MORN_DSH_ACP_PROVIDER: ${{ inputs.provider }}
       MORN_DSH_ACP_MODEL: ${{ inputs.model }}
       MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
