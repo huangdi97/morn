@@ -227,7 +227,6 @@ impl DshAcpConfig {
             .as_deref()
             .ok_or_else(|| Error::validation("real DSH ACP requires a runtime SHA-256 digest"))?;
         validate_canonical_sha256_digest(digest, "real DSH ACP runtime")
-
     }
 
     pub fn from_env() -> Result<Self> {

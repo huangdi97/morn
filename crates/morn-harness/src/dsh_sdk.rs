@@ -240,7 +240,6 @@ pub(crate) fn validate_profile_configuration_ref(reference: &str) -> Result<()> 
         ));
     }
     validate_canonical_sha256_digest(digest, "DSH profile_configuration_ref")
-
 }
 
 impl DshSdkConfig {
