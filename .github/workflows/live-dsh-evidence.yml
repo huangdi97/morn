@@ -46,14 +46,9 @@ on:
         default: ""
       max_tokens:
         description: "SDK smoke output-token ceiling"
-        type: number
-        required: true
-        default: 8192
-      execution_attestor:
-        description: "Issuer/provider name embedded in the execution attestation file (smoke only)"
         type: string
-        required: false
-        default: github-actions-manual
+        required: true
+        default: "8192"
       acknowledge_e0_only:
         description: "Required for smoke: I understand this proves E0 executor/lifecycle evidence only, never Outcome/Acceptance/production write"
         type: boolean
@@ -98,8 +93,8 @@ jobs:
       INPUT_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
       INPUT_PROFILE_CONFIGURATION_REF: ${{ inputs.profile_configuration_ref }}
       INPUT_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
-      INPUT_EXECUTION_ATTESTOR: ${{ inputs.execution_attestor }}
       INPUT_ACK_E0: ${{ inputs.acknowledge_e0_only }}
+      MORN_EXECUTION_ATTESTOR_SECRET: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
 
     steps:
       - uses: actions/checkout@v4
@@ -177,7 +172,11 @@ jobs:
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
               fh.write(f"MORN_EXECUTION_ATTESTATION_FILE={path}\n")
           PY
-          echo "MORN_EXECUTION_ATTESTOR=$INPUT_EXECUTION_ATTESTOR" >> "$GITHUB_ENV"
+          if [[ -z "${MORN_EXECUTION_ATTESTOR_SECRET:-}" ]]; then
+            echo "MORN_EXECUTION_ATTESTOR secret is required for authenticated smoke"
+            exit 2
+          fi
+          echo "MORN_EXECUTION_ATTESTOR=$MORN_EXECUTION_ATTESTOR_SECRET" >> "$GITHUB_ENV"
 
       - name: Install exact official DeepSeek Harness SDK distribution
         if: startsWith(inputs.operation, 'smoke-')
