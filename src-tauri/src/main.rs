@@ -101,6 +101,7 @@ fn backend_is_healthy() -> bool {
     response.starts_with("HTTP/1.1 200")
         && response.contains("\"status\":\"ok\"")
         && response.contains("\"service\":\"morn-app\"")
+        && response.contains("\"protocol_version\":\"11.5.0\"")
 }
 
 fn acquire_instance_lock() -> Result<TcpListener, String> {

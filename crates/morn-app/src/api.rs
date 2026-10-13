@@ -271,7 +271,11 @@ pub fn router(state: AppState) -> Router {
 }
 
 async fn health() -> ApiResult {
-    Ok(Json(json!({ "status": "ok", "service": "morn-app" })))
+    Ok(Json(json!({
+        "status": "ok",
+        "service": "morn-app",
+        "protocol_version": morn_kernel::protocol::MORN_PROTOCOL_V11_5.to_string()
+    })))
 }
 
 async fn v115_ui_extensions() -> ApiResult {
