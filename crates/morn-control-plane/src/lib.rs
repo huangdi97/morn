@@ -2413,6 +2413,77 @@ mod control_plane_persistence_scope_tests {
             .unwrap();
     }
 
+    fn attest_test_review_authority(
+        store: &MornStore,
+        work: &WorkResource,
+        outcome: &ObservedOutcome,
+        decision: &mut AcceptanceDecision,
+        authorization_id: &str,
+    ) {
+        let reviewer = AcceptanceReviewerAttestation {
+            principal_id: decision.decided_by.clone(),
+            acting_roles: vec![decision.acting_role.clone()],
+            evidence_refs: vec![format!("iam://reviewers/{}", decision.decided_by)],
+            observed_at: decision.decided_at,
+            valid_until: None,
+        };
+        let authorization = AcceptanceReviewAuthorization {
+            authorization_id: authorization_id.to_string(),
+            principal_id: decision.decided_by.clone(),
+            acting_role: decision.acting_role.clone(),
+            work_package_id: work.id.clone(),
+            work_generation: work.generation,
+            outcome_id: outcome.id.clone(),
+            disposition: decision.disposition,
+            evidence_refs: vec![format!(
+                "iam://review-authorizations/{authorization_id}"
+            )],
+            issued_at: decision.decided_at,
+            valid_until: None,
+        };
+        store
+            .save_record_immutable(
+                "acceptance_reviewer_attestation_v115",
+                &reviewer.reference(),
+                work.workspace_id.as_str(),
+                reviewer.observed_at.millis(),
+                &reviewer,
+            )
+            .unwrap();
+        store
+            .save_record_immutable(
+                "acceptance_review_authorization_v115",
+                authorization_id,
+                work.workspace_id.as_str(),
+                authorization.issued_at.millis(),
+                &authorization,
+            )
+            .unwrap();
+        store
+            .save_record_immutable(
+                "acceptance_review_authorization_consumed_v115",
+                authorization_id,
+                work.workspace_id.as_str(),
+                decision.decided_at.millis(),
+                &json!({
+                    "authorization_id": authorization_id,
+                    "work_id": work.id,
+                    "outcome_id": outcome.id,
+                    "reviewer_principal_id": decision.decided_by,
+                    "acting_role": decision.acting_role,
+                    "disposition": decision.disposition,
+                    "consumed_at": decision.decided_at,
+                }),
+            )
+            .unwrap();
+        decision
+            .pin_review_authority(
+                reviewer.reference(),
+                vec![authorization_id.to_string()],
+            )
+            .unwrap();
+    }
+
     #[test]
     fn spoofed_workspace_cannot_retag_work_or_attach_foreign_evidence() {
         let store = MornStore::open_in_memory().unwrap();
@@ -3066,6 +3137,13 @@ mod control_plane_persistence_scope_tests {
         decision
             .evidence_refs
             .push("review://signed/42".to_string());
+        attest_test_review_authority(
+            &store,
+            &work,
+            &outcome,
+            &mut decision,
+            "review-auth-projection-42",
+        );
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
 
         work.status.phase = WorkPhase::Accepted;
@@ -3443,6 +3521,13 @@ mod control_plane_persistence_scope_tests {
         decision.evidence_refs.clear();
         assert!(ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).is_err());
         decision.evidence_refs.push("review://ticket-a".to_string());
+        attest_test_review_authority(
+            &store,
+            &work,
+            &outcome,
+            &mut decision,
+            "review-auth-customer-value",
+        );
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
 
         fake_value.outcome_ref = outcome.id.clone();

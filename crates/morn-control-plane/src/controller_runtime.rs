@@ -795,6 +795,78 @@ mod tests {
         );
     }
 
+    fn persist_test_review_authority(
+        store: &MornStore,
+        work: &WorkResource,
+        outcome: &ObservedOutcome,
+        decision: &mut AcceptanceDecision,
+        authorization_id: &str,
+    ) {
+        use morn_work::acceptance::{
+            AcceptanceReviewAuthorization, AcceptanceReviewerAttestation,
+        };
+
+        let reviewer = AcceptanceReviewerAttestation {
+            principal_id: decision.decided_by.clone(),
+            acting_roles: vec![decision.acting_role.clone()],
+            evidence_refs: vec![format!("iam://reviewers/{}", decision.decided_by)],
+            observed_at: decision.decided_at,
+            valid_until: None,
+        };
+        let authorization = AcceptanceReviewAuthorization {
+            authorization_id: authorization_id.to_string(),
+            principal_id: decision.decided_by.clone(),
+            acting_role: decision.acting_role.clone(),
+            work_package_id: work.id.clone(),
+            work_generation: work.generation,
+            outcome_id: outcome.id.clone(),
+            disposition: decision.disposition,
+            evidence_refs: vec![format!(
+                "iam://review-authorizations/{authorization_id}"
+            )],
+            issued_at: decision.decided_at,
+            valid_until: None,
+        };
+        store
+            .save_record_immutable(
+                "acceptance_reviewer_attestation_v115",
+                &reviewer.reference(),
+                work.workspace_id.as_str(),
+                reviewer.observed_at.millis(),
+                &reviewer,
+            )
+            .unwrap();
+        store
+            .save_record_immutable(
+                "acceptance_review_authorization_v115",
+                authorization_id,
+                work.workspace_id.as_str(),
+                authorization.issued_at.millis(),
+                &authorization,
+            )
+            .unwrap();
+        store
+            .save_record_immutable(
+                "acceptance_review_authorization_consumed_v115",
+                authorization_id,
+                work.workspace_id.as_str(),
+                decision.decided_at.millis(),
+                &json!({
+                    "authorization_id": authorization_id,
+                    "work_id": work.id,
+                    "outcome_id": outcome.id,
+                    "reviewer_principal_id": decision.decided_by,
+                    "acting_role": decision.acting_role,
+                    "disposition": decision.disposition,
+                    "consumed_at": decision.decided_at,
+                }),
+            )
+            .unwrap();
+        decision
+            .pin_review_authority(reviewer.reference(), vec![authorization_id.to_string()])
+            .unwrap();
+    }
+
     #[test]
     fn durable_business_evidence_recovers_attested_acceptance_after_projection_gap() {
         use crate::ControlPlaneStore;
@@ -826,6 +898,13 @@ mod tests {
         decision
             .evidence_refs
             .push("review://signed/delivery-42".to_string());
+        persist_test_review_authority(
+            &store,
+            &work,
+            &outcome,
+            &mut decision,
+            "review-auth-recovery",
+        );
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
 
         // Simulate the crash window: immutable Outcome + Acceptance exist, but
@@ -1008,6 +1087,18 @@ mod tests {
             decision
                 .evidence_refs
                 .push("review://signed/conflict".to_string());
+            let authorization_id = match disposition {
+                AcceptanceDisposition::Accept => "review-auth-conflict-accept",
+                AcceptanceDisposition::Reject => "review-auth-conflict-reject",
+                _ => unreachable!("terminal conflict fixture"),
+            };
+            persist_test_review_authority(
+                &store,
+                &work,
+                &outcome,
+                &mut decision,
+                authorization_id,
+            );
             ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
         }
 
