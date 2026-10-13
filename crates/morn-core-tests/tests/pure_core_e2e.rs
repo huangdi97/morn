@@ -101,7 +101,8 @@ fn pure_core_e2e_zero_domain() {
             .iter()
             .map(|snapshot| snapshot.id.to_string())
             .collect();
-        assert!(gateway.verify(&outcome, &snapshot_refs).unwrap());
+        let execution_verified = gateway.verify(&outcome, &snapshot_refs).unwrap();
+        assert!(execution_verified);
 
         // Artifact (approved for downstream).
         let (artifact, version) = guard
@@ -145,7 +146,7 @@ fn pure_core_e2e_zero_domain() {
                 &wp_id,
                 &morn_work::service::AcceptanceEvidence {
                     produced_artifacts: vec!["result".to_string()],
-                    verification_passed: true,
+                    verification_passed: execution_verified,
                     required_approvals: vec![],
                     forbidden_condition_hit: None,
                 },
@@ -156,7 +157,7 @@ fn pure_core_e2e_zero_domain() {
             .record_outcome(morn_world::outcome::OutcomeRecord::new(
                 ws_id.clone(),
                 "generic outcome",
-                true,
+                execution_verified,
             ));
         guard.persist_all().unwrap();
     }

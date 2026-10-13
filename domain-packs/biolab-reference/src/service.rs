@@ -294,8 +294,11 @@ impl BioLabService {
             .last()
             .cloned()
             .ok_or_else(|| Error::internal("missing claim snapshot"))?;
-        let outcome_record =
-            OutcomeRecord::new(self.workspace_id.clone(), "Reviewed Scientific Claim", true);
+        let outcome_record = OutcomeRecord::new(
+            self.workspace_id.clone(),
+            "Reviewed Scientific Claim",
+            release_verified,
+        );
         let outcome_id = outcome_record.id.clone();
         self.world.record_outcome(OutcomeRecord {
             state_snapshot_ids: vec![snapshot.id.clone()],
