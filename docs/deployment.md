@@ -579,9 +579,14 @@ existing session. Ambiguous/unknown prompt settlement faults the session and
 forbids blind prompt retry; cancellation/close/shutdown remain available for
 quiescent cleanup.
 
-Configure a live ACP lifecycle probe independently from the SDK provider:
+Configure ACP independently from the SDK provider. For the deployment-only smoke gate,
+the ACP variables below are sufficient. To expose the same governed lifecycle
+through the normal Morn server/Workbench, also set
+`MORN_DSH_ACP_MODE=real`. If the mode is absent or `disabled`, the product
+API reports ACP as unconfigured and does not spawn or accept lifecycle sessions.
 
 ~~~powershell
+$env:MORN_DSH_ACP_MODE = "real"
 $env:MORN_DSH_ACP_WORKSPACE = "C:\morn\workspaces\dsh-acp"
 $env:MORN_DSH_ACP_HOME = "C:\morn\runtime\dsh-acp-home-root"
 $env:MORN_DSH_ACP_PROVIDER = "deepseek-official"
@@ -602,6 +607,36 @@ cargo run -p morn-app --bin dsh_acp_lifecycle_smoke
 Optional controls are `MORN_DSH_ACP_COMMAND`,
 `MORN_DSH_ACP_REQUEST_TIMEOUT_MS`, `MORN_DSH_ACP_PROMPT_TIMEOUT_MS` and
 `MORN_DSH_ACP_SMOKE_DB`.
+
+### Work-bound product orchestration
+
+The product path deliberately uses a **separate immutable lifecycle Binding**.
+Create it through `POST /api/v115/work/bind-attested-e0` with
+`transport: "acp-lifecycle"`. That Binding pins the exact Work generation,
+capability, attested execution environment, DSH runtime version/digest and ACP
+route. The ordinary `/work/execute-e0` path rejects/excludes this Binding; it
+is not an SDK executor Binding.
+
+Workbench and the HTTP API then expose:
+
+- `GET /api/v115/work/acp-lifecycle/sessions` — non-secret configured route
+  identity plus Work-bound lifecycle snapshots;
+- `POST .../open` — mount one E0 ExecutionRun scope and create one session;
+- `POST .../prompt` — execute only while the Work generation, capability
+  admission, environment and exact Binding route remain current;
+- `POST .../cancel` — send a session-scoped out-of-band cancellation request
+  without acquiring the blocking prompt/controller mutex;
+- `POST .../close` — quiesce the session but retain its exact scope for
+  same-process resume;
+- `POST .../resume` — continue only after revalidating the original
+  Work/generation/Binding/provider route/environment/scope snapshot;
+- `POST .../release` — permanently release the lifecycle scope and remove the
+  reachable cancel handle.
+
+Cancel/close/release remain usable for a historical generation so operators can
+quiesce stale activity safely. New prompt/resume is fail-closed after the Work
+generation changes. None of these endpoints creates `ObservedOutcome`,
+`AcceptanceDecision`, executor-health evidence or production-write authority.
 
 A `MORN_LIVE_DSH_ACP_LIFECYCLE_SMOKE = PASS` result proves only that the
 deployment-attested ACP runtime could create a Work-bound E0 session, pin the
