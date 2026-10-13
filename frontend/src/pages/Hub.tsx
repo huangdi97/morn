@@ -203,14 +203,17 @@ export default function Hub() {
                   </header>
                   <KeyValue k="Family" v={provider.family} />
                   <KeyValue k="Version" v={provider.version} />
-                  <KeyValue k="Protocols" v={provider.protocols.join(", ") || "None declared"} />
-                  <KeyValue k="Features" v={provider.features.join(", ") || "None declared"} />
-                  <KeyValue k="Digest" v={provider.digest ?? "Not pinned"} />
                   <KeyValue
                     k="Health lease"
                     v={provider.health_valid_until ? String(provider.health_valid_until) : "No live health lease"}
                   />
-                  <KeyValue k="Evidence" v={provider.evidence_refs.join(" · ") || "No evidence recorded"} />
+                  <details className="hub-card-details">
+                    <summary>Technical identity &amp; evidence</summary>
+                    <KeyValue k="Protocols" v={provider.protocols.join(", ") || "None declared"} />
+                    <KeyValue k="Features" v={provider.features.join(", ") || "None declared"} />
+                    <KeyValue k="Digest" v={provider.digest ?? "Not pinned"} />
+                    <KeyValue k="Evidence" v={provider.evidence_refs.join(" · ") || "No evidence recorded"} />
+                  </details>
                 </article>
               ))}
             </div>
@@ -263,8 +266,7 @@ export default function Hub() {
                   <KeyValue k="Provider" v={cap.manifest.provider_ref} />
                   <KeyValue k="Published digest" v={latestRelease?.content_digest ?? "No release"} />
                   <KeyValue k="Release" v={latestRelease ? <StatusPill value={latestRelease.status} /> : "Not released"} />
-                  <KeyValue k="Signature reference" v={latestRelease?.signature_ref ?? "Not supplied"} />
-                  <KeyValue k="Provenance reference" v={latestRelease?.provenance_ref ?? "Not supplied"} />
+                  
                   <KeyValue
                     k="Supply-chain trust"
                     v={
@@ -282,11 +284,7 @@ export default function Hub() {
                       )
                     }
                   />
-                  <KeyValue
-                    k="Verifier"
-                    v={latestRelease?.supply_chain_verification?.verifier_ref ?? "Deployment verification required"}
-                  />
-                  <KeyValue k="Qualifications" v={qualifications.map((q) => q.status).join(", ") || "None recorded"} />
+                  
                   <KeyValue
                     k="Site / Profile admission"
                     v={admissions.length
@@ -294,12 +292,22 @@ export default function Hub() {
                       : "Not admitted"}
                   />
                   <KeyValue k="Authority ceiling" v={cap.manifest.authority.maximum_effect} />
-                  <KeyValue k="Allowed actions" v={cap.manifest.authority.allow.join(", ") || "None declared"} />
-                  <KeyValue k="Denied actions" v={cap.manifest.authority.deny.join(", ") || "None declared"} />
-                  <KeyValue k="Estimated cost (micros)" v={cap.manifest.economics.estimated_cost_micros ?? "Not measured"} />
-                  <KeyValue k="Latency p95 (ms)" v={cap.manifest.economics.latency_p95_ms ?? "Not measured"} />
-                  <KeyValue k="Known failure modes" v={limitations.join("; ") || "Not provided"} />
-                  <KeyValue k="Source provenance" v={cap.manifest.provenance.source_ref} />
+                  <details className="hub-card-details">
+                    <summary>Qualification, provenance &amp; operating envelope</summary>
+                    <KeyValue k="Signature reference" v={latestRelease?.signature_ref ?? "Not supplied"} />
+                    <KeyValue k="Provenance reference" v={latestRelease?.provenance_ref ?? "Not supplied"} />
+                    <KeyValue
+                      k="Verifier"
+                      v={latestRelease?.supply_chain_verification?.verifier_ref ?? "Deployment verification required"}
+                    />
+                    <KeyValue k="Qualifications" v={qualifications.map((q) => q.status).join(", ") || "None recorded"} />
+                    <KeyValue k="Allowed actions" v={cap.manifest.authority.allow.join(", ") || "None declared"} />
+                    <KeyValue k="Denied actions" v={cap.manifest.authority.deny.join(", ") || "None declared"} />
+                    <KeyValue k="Estimated cost (micros)" v={cap.manifest.economics.estimated_cost_micros ?? "Not measured"} />
+                    <KeyValue k="Latency p95 (ms)" v={cap.manifest.economics.latency_p95_ms ?? "Not measured"} />
+                    <KeyValue k="Known failure modes" v={limitations.join("; ") || "Not provided"} />
+                    <KeyValue k="Source provenance" v={cap.manifest.provenance.source_ref} />
+                  </details>
                 </article>
               );
             })}

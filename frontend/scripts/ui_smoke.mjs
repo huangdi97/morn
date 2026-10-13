@@ -131,6 +131,22 @@ try {
       if (!hubText.includes("deepseek-harness") || !hubText.includes("pi")) {
         errors.push("hub: DSH/Pi provider registry entries are missing");
       }
+      const compactProviderDetails = page.locator(".hub-provider-fabric details.hub-card-details");
+      if (!(await compactProviderDetails.count())) {
+        errors.push("hub: provider technical detail disclosure is missing");
+      } else {
+        const openCount = await compactProviderDetails.evaluateAll((nodes) =>
+          nodes.filter((node) => node.open).length,
+        );
+        if (openCount !== 0) {
+          errors.push("hub: provider technical detail should be collapsed by default");
+        }
+        await compactProviderDetails.first().locator("summary").click();
+        if (!(await compactProviderDetails.first().innerText()).includes("Evidence")) {
+          errors.push("hub: provider evidence is not inspectable after expansion");
+        }
+        await compactProviderDetails.first().locator("summary").click();
+      }
       const discoveryText = await page.locator(".hub-discovery").innerText();
       const discoveryTextNormalized = discoveryText.toLowerCase();
       if (!discoveryTextNormalized.includes("declared metadata") || !discoveryTextNormalized.includes("business truth")) {
