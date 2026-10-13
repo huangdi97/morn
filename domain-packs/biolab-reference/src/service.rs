@@ -248,11 +248,13 @@ impl BioLabService {
             self.analyst.as_str(),
             &mut self.world,
         )?;
+        let release_snapshot_count = self.world.snapshots_for(&claim_object_id).len();
+        let release_verified = self.gateway.verify(&outcome, release_snapshot_count)?;
         steps.push(ok_step(
             "governed_action",
             &format!(
-                "release_claim executed -> receipt {} ({} )",
-                outcome.receipt_id, outcome.details
+                "release_claim committed -> receipt {}; explicit verification={} ({})",
+                outcome.receipt_id, release_verified, outcome.details
             ),
         ));
 
@@ -261,7 +263,7 @@ impl BioLabService {
             &wp_id,
             &AcceptanceEvidence {
                 produced_artifacts: vec!["analysis".to_string()],
-                verification_passed: true,
+                verification_passed: release_verified,
                 required_approvals: vec!["pi".to_string()],
                 forbidden_condition_hit: None,
             },

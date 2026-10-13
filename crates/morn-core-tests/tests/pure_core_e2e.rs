@@ -94,7 +94,10 @@ fn pure_core_e2e_zero_domain() {
                 &mut guard.world,
             )
             .unwrap();
-        assert!(outcome.verified);
+        assert!(outcome.committed);
+        assert!(gateway
+            .verify(&outcome, guard.world.snapshots_for(&obj_id).len())
+            .unwrap());
 
         // Artifact (approved for downstream).
         let (artifact, version) = guard

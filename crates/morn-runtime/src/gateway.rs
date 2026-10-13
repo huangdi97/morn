@@ -60,7 +60,11 @@ pub struct AuthorizedAction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionOutcome {
     pub receipt_id: String,
-    pub verified: bool,
+    /// Canonical world commit was durably recorded. This is execution truth,
+    /// not independent verification or accepted business outcome.
+    pub committed: bool,
+    /// Immutable references that witness the committed action/snapshot/ledger entry.
+    pub evidence_refs: Vec<String>,
     pub details: String,
 }
 
@@ -179,13 +183,17 @@ impl ActionGateway {
             ],
         )?;
 
-        // Verification: the snapshot was created and ledger recorded.
-        let verified = true;
+        let evidence_refs = vec![
+            authorized.action.id.to_string(),
+            commit.snapshot.id.to_string(),
+            commit.ledger_entry.id.to_string(),
+        ];
         Ok(ExecutionOutcome {
             receipt_id: ExecutionReceiptId::generate_with("rcpt").to_string(),
-            verified,
+            committed: true,
+            evidence_refs,
             details: format!(
-                "state committed to version {} with {} field diffs",
+                "state committed to version {} with {} field diffs; verification remains separate",
                 commit.snapshot.version,
                 commit.diffs.len()
             ),
@@ -198,10 +206,15 @@ impl ActionGateway {
         outcome: &ExecutionOutcome,
         expected_snapshot_count: usize,
     ) -> Result<bool> {
-        if !outcome.verified {
-            return Err(Error::validation("execution was not verified"));
+        if !outcome.committed || outcome.evidence_refs.len() < 3 {
+            return Err(Error::validation(
+                "execution outcome lacks durable commit evidence",
+            ));
         }
-        Ok(expected_snapshot_count > 0)
+        if expected_snapshot_count == 0 {
+            return Ok(false);
+        }
+        Ok(true)
     }
 
     /// Record a recovery for a failed action.
@@ -308,12 +321,15 @@ mod tests {
                 &mut world,
             )
             .unwrap();
-        assert!(outcome.verified);
+        assert!(outcome.committed);
+        assert!(!outcome.evidence_refs.is_empty());
         assert_eq!(
             world.object(&target).unwrap().state().get("status"),
             Some(&json!("released"))
         );
-        assert_eq!(world.snapshots_for(&target).len(), 1);
+        let snapshot_count = world.snapshots_for(&target).len();
+        assert_eq!(snapshot_count, 1);
+        assert!(gateway.verify(&outcome, snapshot_count).unwrap());
     }
 
     #[test]
@@ -333,6 +349,33 @@ mod tests {
         let target = ObjectId::generate();
         let prop = proposal(ws, target, "pipeline");
         assert!(gateway.authorize(&prop, "exclude_sample").is_err());
+    }
+
+    #[test]
+    fn commit_receipt_is_not_self_verification() {
+        let ws = WorkspaceId::generate();
+        let policy = Policy::new(ws, "p", vec![]);
+        let gateway = ActionGateway::new(policy, EffectContract::e1());
+        let committed_without_witness = ExecutionOutcome {
+            receipt_id: "rcpt:test".to_string(),
+            committed: true,
+            evidence_refs: Vec::new(),
+            details: "commit claimed without witness".to_string(),
+        };
+        assert!(gateway.verify(&committed_without_witness, 1).is_err());
+
+        let durable_commit = ExecutionOutcome {
+            receipt_id: "rcpt:test".to_string(),
+            committed: true,
+            evidence_refs: vec![
+                "action:a".to_string(),
+                "snapshot:s".to_string(),
+                "ledger:l".to_string(),
+            ],
+            details: "durable commit".to_string(),
+        };
+        assert!(!gateway.verify(&durable_commit, 0).unwrap());
+        assert!(gateway.verify(&durable_commit, 1).unwrap());
     }
 
     #[test]
