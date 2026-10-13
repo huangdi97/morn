@@ -248,8 +248,13 @@ impl BioLabService {
             self.analyst.as_str(),
             &mut self.world,
         )?;
-        let release_snapshot_count = self.world.snapshots_for(&claim_object_id).len();
-        let release_verified = self.gateway.verify(&outcome, release_snapshot_count)?;
+        let release_snapshot_refs: Vec<String> = self
+            .world
+            .snapshots_for(&claim_object_id)
+            .iter()
+            .map(|snapshot| snapshot.id.to_string())
+            .collect();
+        let release_verified = self.gateway.verify(&outcome, &release_snapshot_refs)?;
         steps.push(ok_step(
             "governed_action",
             &format!(

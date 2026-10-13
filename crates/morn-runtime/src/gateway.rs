@@ -63,8 +63,9 @@ pub struct ExecutionOutcome {
     /// Canonical world commit was durably recorded. This is execution truth,
     /// not independent verification or accepted business outcome.
     pub committed: bool,
-    /// Immutable references that witness the committed action/snapshot/ledger entry.
-    pub evidence_refs: Vec<String>,
+    pub action_ref: String,
+    pub snapshot_ref: String,
+    pub ledger_ref: String,
     pub details: String,
 }
 
@@ -183,15 +184,12 @@ impl ActionGateway {
             ],
         )?;
 
-        let evidence_refs = vec![
-            authorized.action.id.to_string(),
-            commit.snapshot.id.to_string(),
-            commit.ledger_entry.id.to_string(),
-        ];
         Ok(ExecutionOutcome {
             receipt_id: ExecutionReceiptId::generate_with("rcpt").to_string(),
             committed: true,
-            evidence_refs,
+            action_ref: authorized.action.id.to_string(),
+            snapshot_ref: commit.snapshot.id.to_string(),
+            ledger_ref: commit.ledger_entry.id.to_string(),
             details: format!(
                 "state committed to version {} with {} field diffs; verification remains separate",
                 commit.snapshot.version,
@@ -204,17 +202,20 @@ impl ActionGateway {
     pub fn verify(
         &self,
         outcome: &ExecutionOutcome,
-        expected_snapshot_count: usize,
+        observed_snapshot_refs: &[String],
     ) -> Result<bool> {
-        if !outcome.committed || outcome.evidence_refs.len() < 3 {
+        if !outcome.committed
+            || outcome.action_ref.trim().is_empty()
+            || outcome.snapshot_ref.trim().is_empty()
+            || outcome.ledger_ref.trim().is_empty()
+        {
             return Err(Error::validation(
-                "execution outcome lacks durable commit evidence",
+                "execution outcome lacks exact durable commit identity",
             ));
         }
-        if expected_snapshot_count == 0 {
-            return Ok(false);
-        }
-        Ok(true)
+        Ok(observed_snapshot_refs
+            .iter()
+            .any(|snapshot| snapshot == &outcome.snapshot_ref))
     }
 
     /// Record a recovery for a failed action.
@@ -322,14 +323,18 @@ mod tests {
             )
             .unwrap();
         assert!(outcome.committed);
-        assert!(!outcome.evidence_refs.is_empty());
+        assert!(!outcome.snapshot_ref.is_empty());
         assert_eq!(
             world.object(&target).unwrap().state().get("status"),
             Some(&json!("released"))
         );
-        let snapshot_count = world.snapshots_for(&target).len();
-        assert_eq!(snapshot_count, 1);
-        assert!(gateway.verify(&outcome, snapshot_count).unwrap());
+        let snapshot_refs: Vec<String> = world
+            .snapshots_for(&target)
+            .iter()
+            .map(|snapshot| snapshot.id.to_string())
+            .collect();
+        assert_eq!(snapshot_refs.len(), 1);
+        assert!(gateway.verify(&outcome, &snapshot_refs).unwrap());
     }
 
     #[test]
@@ -359,23 +364,29 @@ mod tests {
         let committed_without_witness = ExecutionOutcome {
             receipt_id: "rcpt:test".to_string(),
             committed: true,
-            evidence_refs: Vec::new(),
+            action_ref: String::new(),
+            snapshot_ref: String::new(),
+            ledger_ref: String::new(),
             details: "commit claimed without witness".to_string(),
         };
-        assert!(gateway.verify(&committed_without_witness, 1).is_err());
+        assert!(gateway
+            .verify(&committed_without_witness, &["snapshot:s".to_string()])
+            .is_err());
 
         let durable_commit = ExecutionOutcome {
             receipt_id: "rcpt:test".to_string(),
             committed: true,
-            evidence_refs: vec![
-                "action:a".to_string(),
-                "snapshot:s".to_string(),
-                "ledger:l".to_string(),
-            ],
+            action_ref: "action:a".to_string(),
+            snapshot_ref: "snapshot:s".to_string(),
+            ledger_ref: "ledger:l".to_string(),
             details: "durable commit".to_string(),
         };
-        assert!(!gateway.verify(&durable_commit, 0).unwrap());
-        assert!(gateway.verify(&durable_commit, 1).unwrap());
+        assert!(!gateway
+            .verify(&durable_commit, &["snapshot:other".to_string()])
+            .unwrap());
+        assert!(gateway
+            .verify(&durable_commit, &["snapshot:s".to_string()])
+            .unwrap());
     }
 
     #[test]
