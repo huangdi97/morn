@@ -67,17 +67,14 @@ fn backend_port_open() -> bool {
 }
 
 fn backend_is_healthy() -> bool {
-    let Ok(mut stream) =
-        TcpStream::connect_timeout(&backend_addr(), Duration::from_millis(250))
+    let Ok(mut stream) = TcpStream::connect_timeout(&backend_addr(), Duration::from_millis(250))
     else {
         return false;
     };
     let _ = stream.set_read_timeout(Some(Duration::from_millis(750)));
     let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
     if stream
-        .write_all(
-            b"GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:8090\r\nConnection: close\r\n\r\n",
-        )
+        .write_all(b"GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:8090\r\nConnection: close\r\n\r\n")
         .is_err()
     {
         return false;
@@ -163,10 +160,8 @@ fn spawn_reference_backend(data_dir: &Path) -> Result<Option<Child>, String> {
 }
 
 fn run_sidecar_probe() -> Result<(), String> {
-    let data_dir = std::env::temp_dir().join(format!(
-        "morn-desktop-sidecar-probe-{}",
-        std::process::id()
-    ));
+    let data_dir =
+        std::env::temp_dir().join(format!("morn-desktop-sidecar-probe-{}", std::process::id()));
     let mut owned = OwnedBackend {
         child: spawn_reference_backend(&data_dir)?,
     };
@@ -216,12 +211,12 @@ fn main() {
     let app = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![app_info])
         .setup(move |app| {
-            let data_dir = app
-                .path()
-                .app_local_data_dir()
-                .map_err(|error| std::io::Error::other(format!("desktop data directory: {error}")))?;
-            let child = spawn_reference_backend(&data_dir)
-                .map_err(|error| std::io::Error::other(format!("desktop backend setup: {error}")))?;
+            let data_dir = app.path().app_local_data_dir().map_err(|error| {
+                std::io::Error::other(format!("desktop data directory: {error}"))
+            })?;
+            let child = spawn_reference_backend(&data_dir).map_err(|error| {
+                std::io::Error::other(format!("desktop backend setup: {error}"))
+            })?;
             setup_backend
                 .lock()
                 .expect("desktop backend state poisoned")
