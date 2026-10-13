@@ -117,7 +117,7 @@ fn run_gate() -> Result<Value> {
                     Error::validation("real DSH has no pinned Home/Profile composition identity")
                 })?
                 .to_string();
-            if !attestation.attests_identity_ref(profile_configuration_ref, Timestamp::now()) {
+            if !attestation.attests_identity_ref(&profile_configuration_ref, Timestamp::now()) {
                 return Err(Error::external(
                     "execution-environment attestation does not bind the exact DSH Home/Profile composition",
                 ));
