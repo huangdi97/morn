@@ -51,12 +51,8 @@ pub fn run_harness_smoke(
     } else {
         ScopeKind::Workcell
     };
-    let mut smoke_scope = CapabilityScope::new(
-        scope_kind,
-        None,
-        ctx.workspace_id.clone(),
-        "smoke-scope",
-    );
+    let mut smoke_scope =
+        CapabilityScope::new(scope_kind, None, ctx.workspace_id.clone(), "smoke-scope");
     for restriction in provider.required_scope_restrictions() {
         smoke_scope = smoke_scope.with_restriction(*restriction);
     }

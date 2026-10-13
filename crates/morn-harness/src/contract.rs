@@ -38,13 +38,17 @@ pub fn run_provider_contract(
     let mut report: Vec<(String, bool)> = Vec::new();
     let provider_name = provider.provider_name().to_string();
 
-    // lifecycle
-    let mut contract_scope = CapabilityScope::new(
-        ScopeKind::Workcell,
-        None,
-        ctx.workspace_id.clone(),
-        "contract-scope",
-    );
+    // lifecycle. Governed external providers are admitted only for one
+    // concrete execution run; deterministic/local providers keep the broader
+    // Workcell scope used by the generic reference contract.
+    let governed_external_runtime = !provider.required_scope_restrictions().is_empty();
+    let scope_kind = if governed_external_runtime {
+        ScopeKind::ExecutionRun
+    } else {
+        ScopeKind::Workcell
+    };
+    let mut contract_scope =
+        CapabilityScope::new(scope_kind, None, ctx.workspace_id.clone(), "contract-scope");
     for restriction in provider.required_scope_restrictions() {
         contract_scope = contract_scope.with_restriction(*restriction);
     }

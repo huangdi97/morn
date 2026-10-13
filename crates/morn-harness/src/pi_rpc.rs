@@ -223,12 +223,16 @@ impl PiRpcConfig {
             .ok_or_else(|| Error::validation("real Pi RPC requires a runtime SHA-256 digest"))?;
         let Some(hex) = digest.strip_prefix("sha256:") else {
             return Err(Error::validation(
-                "real Pi RPC runtime digest must use sha256:<64-hex>",
+                "real Pi RPC runtime digest must use canonical sha256:<64-lowercase-hex>",
             ));
         };
-        if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        if hex.len() != 64
+            || !hex
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
             return Err(Error::validation(
-                "real Pi RPC runtime digest must use sha256:<64-hex>",
+                "real Pi RPC runtime digest must use canonical sha256:<64-lowercase-hex>",
             ));
         }
         if self.request_timeout_ms == 0 || self.prompt_timeout_ms == 0 {
@@ -803,6 +807,22 @@ mod route_identity_tests {
                 "missing {removed} must fail closed"
             );
         }
+    }
+
+    #[test]
+    fn real_pi_runtime_digest_has_one_canonical_lowercase_identity() {
+        let mut config = PiRpcConfig {
+            cwd: Some("/tmp/work".to_string()),
+            provider: Some("provider-a".to_string()),
+            model: Some("model-a".to_string()),
+            execution_environment_ref: Some("env://container/pi".to_string()),
+            runtime_version: Some("1.0.0".to_string()),
+            runtime_digest: Some(format!("sha256:{}", "a".repeat(64))),
+            ..PiRpcConfig::default()
+        };
+        assert!(config.validate_for_real().is_ok());
+        config.runtime_digest = Some(format!("sha256:{}", "A".repeat(64)));
+        assert!(config.validate_for_real().is_err());
     }
 
     #[test]
