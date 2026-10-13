@@ -293,7 +293,6 @@ impl ActionGateway {
         )?;
         Ok(action_id)
     }
-
 }
 
 #[cfg(test)]
@@ -315,11 +314,7 @@ mod tests {
             EffectContract::e2("compensate"),
             EffectContract::e3("irreversible"),
         ] {
-            let policy = Policy::new(
-                ws.clone(),
-                "strict",
-                vec![PolicyRule::allow("write")],
-            );
+            let policy = Policy::new(ws.clone(), "strict", vec![PolicyRule::allow("write")]);
             let mut gateway = ActionGateway::new(policy, contract);
             let prop = proposal(
                 ws.clone(),

@@ -182,7 +182,6 @@ impl WorkService {
             "legacy WorkPackage witnesses cannot create Accepted state; use canonical v11.5 AcceptanceDecision with persisted Outcome and review authority",
         ))
     }
-
 }
 
 /// Durable execution support: checkpoints, pause/resume, recovery, attention.
@@ -315,8 +314,8 @@ mod tests {
             .with_human_approval(true);
         let spec_id = spec.id.clone();
         svc.add_acceptance_spec(spec);
-        let wp = WorkPackage::new(ws, "dataset to reviewed claim", owner)
-            .with_acceptance_spec(spec_id);
+        let wp =
+            WorkPackage::new(ws, "dataset to reviewed claim", owner).with_acceptance_spec(spec_id);
         let wp_id = wp.id.clone();
         svc.add_work_package(wp);
         svc.update_status(&wp_id, WorkStatus::InProgress).unwrap();

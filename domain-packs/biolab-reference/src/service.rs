@@ -228,9 +228,7 @@ impl BioLabService {
             BTreeMap::new(),
             self.analyst.as_str(),
         );
-        let authorized = self
-            .gateway
-            .authorize(&proposal, "record_reviewed_claim")?;
+        let authorized = self.gateway.authorize(&proposal, "record_reviewed_claim")?;
         let mut new_state = BTreeMap::new();
         new_state.insert("status".to_string(), json!("reviewed"));
         new_state.insert(
