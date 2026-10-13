@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import type { V115ControlPlaneData } from "./api";
+import { acpLifecycleSessionMatchesSelection } from "./components/DshAcpLifecyclePanel";
 import {
   biolabEnabled,
   CanonicalWorkOverview,
@@ -508,5 +509,29 @@ describe("progressive Workbench lifecycle surface", () => {
     expect(html).toContain("Work defined");
     expect(html).toContain("Resolve requirements, evidence readiness");
     expect(html).not.toContain("Accepted</");
+  });
+});
+
+
+describe("Work-bound ACP session selection", () => {
+  const bindingIds = new Set(["binding:current"]);
+
+  it("requires the exact selected Work generation and binding", () => {
+    const current = {
+      work_package_id: "work:a",
+      work_generation: 3,
+      execution_binding_ref: "binding:current",
+    };
+    expect(acpLifecycleSessionMatchesSelection(current, "work:a", 3, bindingIds)).toBe(true);
+    expect(acpLifecycleSessionMatchesSelection(current, "work:b", 3, bindingIds)).toBe(false);
+    expect(acpLifecycleSessionMatchesSelection(current, "work:a", 2, bindingIds)).toBe(false);
+    expect(
+      acpLifecycleSessionMatchesSelection(
+        { ...current, execution_binding_ref: "binding:historical" },
+        "work:a",
+        3,
+        bindingIds,
+      ),
+    ).toBe(false);
   });
 });

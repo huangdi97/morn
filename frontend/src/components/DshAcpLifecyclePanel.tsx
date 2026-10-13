@@ -65,6 +65,19 @@ function executionAllowed(phase: string | null | undefined): boolean {
   return ["Ready", "Running", "Waiting"].includes(phase ?? "");
 }
 
+export function acpLifecycleSessionMatchesSelection(
+  session: Pick<AcpLifecycleSession, "work_package_id" | "work_generation" | "execution_binding_ref">,
+  workId: string,
+  generation: number | undefined,
+  bindingIds: ReadonlySet<string>,
+): boolean {
+  return (
+    session.work_package_id === workId &&
+    session.work_generation === generation &&
+    bindingIds.has(session.execution_binding_ref)
+  );
+}
+
 export function DshAcpLifecyclePanel({
   control,
   capabilities,
@@ -160,19 +173,34 @@ export function DshAcpLifecyclePanel({
     (eligibleEnvironments.length === 1 ? eligibleEnvironments[0].environment_ref : "");
 
   const governedSessions = (catalog?.sessions ?? []).filter((entry) => entry.work_bound_control);
+  const currentWorkBindingIds = new Set(
+    acpBindings.map((binding) => textField(binding, "id")).filter((id): id is string => !!id),
+  );
+  const currentWorkSessions = governedSessions.filter(
+    (entry) =>
+      acpLifecycleSessionMatchesSelection(
+        entry.session,
+        effectiveWorkId,
+        selectedWork?.generation,
+        currentWorkBindingIds,
+      ),
+  );
+  const cleanupSessions = governedSessions.filter(
+    (entry) => !currentWorkSessions.includes(entry),
+  );
   const effectiveSessionId =
     sessionId ||
-    (governedSessions.length === 1 ? governedSessions[0].session.session_id : "");
+    (currentWorkSessions.length === 1 ? currentWorkSessions[0].session.session_id : "");
   const selectedSession = governedSessions.find(
     (entry) => entry.session.session_id === effectiveSessionId,
   );
   const currentSessionMatchesWork =
     selectedSession !== undefined &&
-    control.work.some(
-      (work) =>
-        work.id === selectedSession.session.work_package_id &&
-        work.generation === selectedSession.session.work_generation &&
-        !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase),
+    acpLifecycleSessionMatchesSelection(
+      selectedSession.session,
+      effectiveWorkId,
+      selectedWork?.generation,
+      currentWorkBindingIds,
     );
 
   const bindLifecycle = async () => {
@@ -313,6 +341,7 @@ export function DshAcpLifecyclePanel({
                   setCapabilityId("");
                   setBindingId("");
                   setEnvironmentRef("");
+                  setSessionId("");
                 }}
               >
                 {works.map((work) => (
@@ -433,21 +462,30 @@ export function DshAcpLifecyclePanel({
             >
               {governedSessions.length === 0 ? (
                 <option value="">No Work-bound ACP session</option>
-              ) : governedSessions.length > 1 && !sessionId ? (
-                <>
-                  <option value="">Select exact session</option>
-                  {governedSessions.map((entry) => (
-                    <option key={entry.session.session_id} value={entry.session.session_id}>
-                      {entry.session.work_package_id} · g{entry.session.work_generation} · {entry.session.state}
-                    </option>
-                  ))}
-                </>
               ) : (
-                governedSessions.map((entry) => (
-                  <option key={entry.session.session_id} value={entry.session.session_id}>
-                    {entry.session.work_package_id} · g{entry.session.work_generation} · {entry.session.state}
-                  </option>
-                ))
+                <>
+                  {!sessionId && currentWorkSessions.length !== 1 && (
+                    <option value="">Select exact session</option>
+                  )}
+                  {currentWorkSessions.length > 0 && (
+                    <optgroup label="Current Work">
+                      {currentWorkSessions.map((entry) => (
+                        <option key={entry.session.session_id} value={entry.session.session_id}>
+                          g{entry.session.work_generation} · {entry.session.state} · {entry.session.session_id}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {cleanupSessions.length > 0 && (
+                    <optgroup label="Historical / cleanup only">
+                      {cleanupSessions.map((entry) => (
+                        <option key={entry.session.session_id} value={entry.session.session_id}>
+                          {entry.session.work_package_id} · g{entry.session.work_generation} · {entry.session.state}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
               )}
             </select>
           </label>
@@ -520,8 +558,9 @@ export function DshAcpLifecyclePanel({
 
           {!currentSessionMatchesWork && selectedSession && (
             <p className="work-focus-alert" role="status">
-              This session belongs to a historical Work generation. New prompts/resume are blocked,
-              but cancel/close/release remain available for safe cleanup.
+              This session is not bound to the Work/generation/binding currently selected above.
+              New prompts and resume are blocked; cancel, close and release remain available only
+              for safe cleanup of that exact historical/session scope.
             </p>
           )}
           {message && <p role="status" className="work-focus-empty">{message}</p>}
