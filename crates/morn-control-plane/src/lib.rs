@@ -2435,9 +2435,7 @@ mod control_plane_persistence_scope_tests {
             work_generation: work.generation,
             outcome_id: outcome.id.clone(),
             disposition: decision.disposition,
-            evidence_refs: vec![format!(
-                "iam://review-authorizations/{authorization_id}"
-            )],
+            evidence_refs: vec![format!("iam://review-authorizations/{authorization_id}")],
             issued_at: decision.decided_at,
             valid_until: None,
         };
@@ -2477,10 +2475,7 @@ mod control_plane_persistence_scope_tests {
             )
             .unwrap();
         decision
-            .pin_review_authority(
-                reviewer.reference(),
-                vec![authorization_id.to_string()],
-            )
+            .pin_review_authority(reviewer.reference(), vec![authorization_id.to_string()])
             .unwrap();
     }
 

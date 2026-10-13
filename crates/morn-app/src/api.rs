@@ -6488,10 +6488,7 @@ mod workspace_boundary_tests {
             )
             .unwrap();
         decision
-            .pin_review_authority(
-                reviewer.reference(),
-                vec![authorization_id.to_string()],
-            )
+            .pin_review_authority(reviewer.reference(), vec![authorization_id.to_string()])
             .unwrap();
     }
 

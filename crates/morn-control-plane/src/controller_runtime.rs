@@ -802,9 +802,7 @@ mod tests {
         decision: &mut AcceptanceDecision,
         authorization_id: &str,
     ) {
-        use morn_work::acceptance::{
-            AcceptanceReviewAuthorization, AcceptanceReviewerAttestation,
-        };
+        use morn_work::acceptance::{AcceptanceReviewAuthorization, AcceptanceReviewerAttestation};
 
         let reviewer = AcceptanceReviewerAttestation {
             principal_id: decision.decided_by.clone(),
@@ -821,9 +819,7 @@ mod tests {
             work_generation: work.generation,
             outcome_id: outcome.id.clone(),
             disposition: decision.disposition,
-            evidence_refs: vec![format!(
-                "iam://review-authorizations/{authorization_id}"
-            )],
+            evidence_refs: vec![format!("iam://review-authorizations/{authorization_id}")],
             issued_at: decision.decided_at,
             valid_until: None,
         };
@@ -1092,13 +1088,7 @@ mod tests {
                 AcceptanceDisposition::Reject => "review-auth-conflict-reject",
                 _ => unreachable!("terminal conflict fixture"),
             };
-            persist_test_review_authority(
-                &store,
-                &work,
-                &outcome,
-                &mut decision,
-                authorization_id,
-            );
+            persist_test_review_authority(&store, &work, &outcome, &mut decision, authorization_id);
             ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
         }
 
