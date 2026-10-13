@@ -6,6 +6,7 @@ use morn_app::AppState;
 use morn_capability::effect::EffectContract;
 use morn_integration::ConnectorProvider;
 use morn_kernel::policy::{Policy, PolicyRule};
+use morn_kernel::status::WorkStatus;
 use morn_kernel::version::Version;
 use morn_node::{DistributedRuntime, MornNode, NodeType, WorkflowRunId};
 use morn_package::{PackLifecycle, PackManifest, PackStatus};
@@ -66,6 +67,10 @@ fn pure_core_e2e_zero_domain() {
         ));
         let wp_id = wp.id.clone();
         guard.work.add_work_package(wp);
+        guard
+            .work
+            .update_status(&wp_id, WorkStatus::InProgress)
+            .unwrap();
 
         // Capability + governed action (E1 transactional).
         let policy = Policy::new(
@@ -133,7 +138,11 @@ fn pure_core_e2e_zero_domain() {
         assert!(guard.artifacts.require_approved(&version.id).is_ok());
         let _ = artifact;
 
-        // Accept work + outcome.
+        // Completion is execution state; acceptance remains a separate evidence gate.
+        guard
+            .work
+            .update_status(&wp_id, WorkStatus::Completed)
+            .unwrap();
         guard
             .work
             .attempt_accept(

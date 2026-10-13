@@ -100,6 +100,54 @@ impl WorkService {
             .work_packages
             .get_mut(id)
             .ok_or_else(|| Error::not_found(format!("work package {id}")))?;
+        let current = wp.status;
+        if current == status {
+            return Ok(());
+        }
+        if matches!(
+            status,
+            WorkStatus::Accepted | WorkStatus::Rejected
+        ) {
+            return Err(Error::invalid_state(
+                "Accepted/Rejected require the dedicated acceptance decision path",
+            ));
+        }
+        if matches!(
+            current,
+            WorkStatus::Accepted | WorkStatus::Rejected | WorkStatus::Cancelled
+        ) {
+            return Err(Error::invalid_state(
+                "terminal WorkPackage status cannot be reopened",
+            ));
+        }
+        let allowed = matches!(
+            (current, status),
+            (WorkStatus::Proposed, WorkStatus::Planned)
+                | (WorkStatus::Proposed, WorkStatus::InProgress)
+                | (WorkStatus::Proposed, WorkStatus::Blocked)
+                | (WorkStatus::Proposed, WorkStatus::Cancelled)
+                | (WorkStatus::Planned, WorkStatus::InProgress)
+                | (WorkStatus::Planned, WorkStatus::Blocked)
+                | (WorkStatus::Planned, WorkStatus::Cancelled)
+                | (WorkStatus::InProgress, WorkStatus::WaitingApproval)
+                | (WorkStatus::InProgress, WorkStatus::Blocked)
+                | (WorkStatus::InProgress, WorkStatus::Completed)
+                | (WorkStatus::InProgress, WorkStatus::Cancelled)
+                | (WorkStatus::WaitingApproval, WorkStatus::InProgress)
+                | (WorkStatus::WaitingApproval, WorkStatus::Blocked)
+                | (WorkStatus::WaitingApproval, WorkStatus::Completed)
+                | (WorkStatus::WaitingApproval, WorkStatus::Cancelled)
+                | (WorkStatus::Blocked, WorkStatus::Planned)
+                | (WorkStatus::Blocked, WorkStatus::InProgress)
+                | (WorkStatus::Blocked, WorkStatus::Cancelled)
+                | (WorkStatus::Completed, WorkStatus::WaitingApproval)
+                | (WorkStatus::Completed, WorkStatus::Cancelled)
+        );
+        if !allowed {
+            return Err(Error::invalid_state(format!(
+                "invalid WorkPackage status transition {current:?} -> {status:?}"
+            )));
+        }
         wp.status = status;
         Ok(())
     }
@@ -114,6 +162,12 @@ impl WorkService {
             .work_packages
             .get(id)
             .ok_or_else(|| Error::not_found(format!("work package {id}")))?;
+        if !matches!(wp.status, WorkStatus::Completed | WorkStatus::WaitingApproval) {
+            return Err(Error::invalid_state(format!(
+                "work package {id} must be Completed/WaitingApproval before acceptance, got {:?}",
+                wp.status
+            )));
+        }
         let spec_id = wp.acceptance_spec_id.clone().ok_or_else(|| {
             Error::validation(format!(
                 "work package {id} has no AcceptanceSpec and cannot be accepted"
@@ -307,6 +361,8 @@ mod tests {
             ));
         let wp_id = wp.id.clone();
         svc.add_work_package(wp);
+        svc.update_status(&wp_id, WorkStatus::InProgress).unwrap();
+        svc.update_status(&wp_id, WorkStatus::Completed).unwrap();
         let status = svc
             .attempt_accept(
                 &wp_id,
@@ -344,6 +400,8 @@ mod tests {
         let second_id = second.id.clone();
         svc.add_work_package(first);
         svc.add_work_package(second);
+        svc.update_status(&second_id, WorkStatus::InProgress).unwrap();
+        svc.update_status(&second_id, WorkStatus::Completed).unwrap();
         let evidence = AcceptanceEvidence {
             produced_artifacts: vec![],
             verification_witnesses: vec![VerificationWitness::new(
@@ -359,6 +417,23 @@ mod tests {
             forbidden_condition_hit: None,
         };
         assert!(svc.attempt_accept(&second_id, &evidence).is_err());
+    }
+
+    #[test]
+    fn generic_status_update_cannot_bypass_acceptance_or_reopen_terminal_work() {
+        let mut svc = WorkService::new();
+        let ws = WorkspaceId::generate();
+        let owner = PrincipalId::generate();
+        let wp = WorkPackage::new(ws, "guard transitions", owner);
+        let id = wp.id.clone();
+        svc.add_work_package(wp);
+
+        assert!(svc.update_status(&id, WorkStatus::Accepted).is_err());
+        assert!(svc.update_status(&id, WorkStatus::Rejected).is_err());
+        svc.update_status(&id, WorkStatus::InProgress).unwrap();
+        assert!(svc.update_status(&id, WorkStatus::Proposed).is_err());
+        svc.update_status(&id, WorkStatus::Cancelled).unwrap();
+        assert!(svc.update_status(&id, WorkStatus::InProgress).is_err());
     }
 
     #[test]

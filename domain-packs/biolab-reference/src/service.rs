@@ -11,6 +11,7 @@ use morn_capability::effect::EffectContract;
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{ActionTypeId, ObjectId, PrincipalId, WorkspaceId};
 use morn_kernel::policy::{Policy, PolicyRule};
+use morn_kernel::status::WorkStatus;
 use morn_runtime::gateway::ActionGateway;
 use morn_work::acceptance::AcceptanceSpec;
 use morn_work::execution_mode::{ExecutionMode, ExecutorType, WorkNature};
@@ -145,6 +146,7 @@ impl BioLabService {
         ));
         let wp_id = wp.id.clone();
         self.work.add_work_package(wp);
+        self.work.update_status(&wp_id, WorkStatus::InProgress)?;
         steps.push(ok_step(
             "work_package",
             &format!("work package {wp_id} with acceptance spec + hybrid mode"),
@@ -268,7 +270,8 @@ impl BioLabService {
             ),
         ));
 
-        // 6. accept work package
+        // 6. complete execution, then run the separate acceptance gate.
+        self.work.update_status(&wp_id, WorkStatus::Completed)?;
         let status = self.work.attempt_accept(
             &wp_id,
             &AcceptanceEvidence {
