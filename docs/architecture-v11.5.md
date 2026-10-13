@@ -87,6 +87,17 @@ Historical `CustomerValidated` ValueAssessment records are never rewritten,
 but product surfaces must separately project whether their exact RealSite
 support is **currently** proven.
 
+Independent review follows the same durable-trust rule. A terminal
+`AcceptanceDecision` pins a versioned reviewer attestation and the exact
+one-shot review authorization(s) consumed for its linked outcome(s). The
+deployment trust records and consumption records are immutable. Controller
+recovery must revalidate principal, role, time window, Work generation, outcome,
+disposition and consumption before projecting `Accepted` or `Rejected`.
+Older decisions without these structured authority references remain auditable
+history but cannot be promoted into terminal business truth. Reviewer
+attestations are versioned rather than overwritten so credential/role evidence
+can rotate without reinterpreting historical decisions.
+
 ## Capability model
 
 A Morn Capability contains implementation/provider reference, machine-readable

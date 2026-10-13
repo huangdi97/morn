@@ -1,6 +1,6 @@
 # STATUS — Morn v11.5 Control Plane Convergence
 
-Updated: 2026-10-11  
+Updated: 2026-10-13  
 Branch: `feat/v11.5-control-plane-convergence`  
 PR: #1 (draft)
 
@@ -49,7 +49,9 @@ Canonical invariants:
 ### Trust and truth
 - Deployment-backed execution-environment attestations.
 - Source-of-truth bindings and deployment-attested source observations.
-- Independent reviewer identity/authorization is attested and generation-scoped.
+- Independent reviewer identity/authorization is deployment-attested and generation-scoped.
+- Terminal AcceptanceDecision pins a versioned reviewer-attestation reference plus exact one-shot review-authorization references; durable recovery revalidates the persisted trust chain before projecting Accepted/Rejected.
+- Reviewer attestations are append-only/versioned by principal + observation time, so identity evidence can rotate without rewriting historical decisions.
 - Accepted outcome/value records cannot borrow evidence from another Work/generation/workspace.
 - Harness output and assistant text never directly create ObservedOutcome or AcceptanceDecision.
 - Deployment evidence files require a deployment-pinned issuer identity; payloads cannot self-select a trusted issuer.
@@ -103,10 +105,12 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `18f2116aef5a3997fe5d8ed9c7f19fe0b1891a25`.
-- Exact-head GitHub Actions: `38153959959` — **5/5 SUCCESS**.
+- Verified implementation checkpoint: `18aaf62e510143dff2a4cfffb62f67070da7a9ba`.
+- Exact-head GitHub Actions: `38395875354` — **5/5 SUCCESS**.
 - Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; zero-domain Core; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows; Cordis reference runtime; Windows desktop reference build.
 - Release-readiness trust hardening at this checkpoint binds exact build identity, exact active provider runtime artifact, deployment-pinned evidence issuer and exact deployment site; evidence time ambiguity/future claims fail closed.
+- Business-truth recovery now distinguishes observed outcome from final acceptance: Conditional/RequestMoreEvidence retain OutcomeObservation while remaining non-terminal.
+- Final Accept/Reject and CustomerValidated value require the exact persisted reviewer attestation, review authorization, authorization-consumption record, Work generation and linked attested outcome.
 - Governed live-provider smoke still additionally requires an exact `MORN_PROVIDER_SMOKE_OK` canary and a fresh post-turn `Healthy` lease. Process/session initialization alone is not provider-health evidence.
 - DSH SDK ↔ Pi RPC adapter-wire semantic-neutrality runs through the actual subprocess adapter code with the same pinned Work/generation/ExecutionBinding/execution environment; model output is deliberately not compared.
 - ACP v1 lifecycle control is Work/generation/ExecutionBinding/environment/scope/route bound. It pins exact provider/model/reasoning through official session config, re-pins on same-runtime resume, faults ambiguous settlements to prevent blind retry, and preserves out-of-band cancel/cleanup without converting lifecycle settlement into executor success.
@@ -116,7 +120,7 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `18f2116aef5a3997fe5d8ed9c7f19fe0b1891a25` and Actions `38153959959`.**
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `18aaf62e510143dff2a4cfffb62f67070da7a9ba` and Actions `38395875354`.**
 - This STATUS update is documentation-only and must obtain its own exact-head CI before it becomes the next verified repository HEAD.
 - PR #1 remains draft because local engineering evidence is not production/customer evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.

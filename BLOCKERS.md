@@ -2,7 +2,7 @@
 
 只记录 **无法通过继续编码/测试在当前环境解决** 的真实阻塞。
 
-## Current blocker index — 2026-10-11
+## Current blocker index — 2026-10-13
 
 This section is authoritative for the current v11.5 convergence branch. Older
 entries below are retained as historical evidence and must not be read as the
@@ -44,8 +44,8 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are now verified at implementation checkpoint
-`18f2116aef5a3997fe5d8ed9c7f19fe0b1891a25` by exact-head Actions run
-`38153959959` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
+`18aaf62e510143dff2a4cfffb62f67070da7a9ba` by exact-head Actions run
+`38395875354` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
 local adapter-wire semantic-neutrality gate and the release-readiness trust
 hardening: exact build identity, exact provider runtime artifact identity,
 deployment-pinned evidence issuer, exact deployment site, and fail-closed
@@ -62,6 +62,16 @@ becoming the next verified repository HEAD.
 - RealRuntime readiness requires the current provider version/digest identity and a fresh Healthy lease; an old smoke claim cannot be combined with a replacement runtime.
 - Equal-time conflicting evidence is rejected and future-dated evidence cannot satisfy readiness or customer-value support.
 - These are local trust/control-plane completions only. They do **not** change B-001/B-002/B-003/B-004/G4-B-002/G12 or authorize production/physical write.
+
+## 2026-10-13 terminal-review trust convergence
+
+- **TERMINAL_REVIEW_TRUST_CHAIN = LOCAL_COMPLETE** at checkpoint `18aaf62`.
+- A terminal AcceptanceDecision now pins the exact versioned reviewer attestation and exact review-authorization references used for the decision.
+- Deployment-loaded reviewer attestations and review authorizations are persisted as immutable trust evidence; one-shot authorization consumption is persisted separately.
+- Durable business-evidence recovery revalidates reviewer identity/role/time, exact Work generation/outcome/disposition authorization and exact consumption before projecting Accepted or Rejected.
+- Reviewer attestation references are versioned by principal + observation time, so renewal/rotation appends evidence rather than mutating historical trust.
+- Conditional/RequestMoreEvidence remains non-terminal while preserving OutcomeObservation.
+- These controls prevent local/API/recovery-path trust gaps but do **not** create customer IAM, customer evidence or G12. External blocker definitions above remain unchanged.
 
 ## Historical evidence retained below
 
