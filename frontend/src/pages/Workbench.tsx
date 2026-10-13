@@ -640,6 +640,189 @@ export function governedE0ExecutionAllowed(phase: string | null | undefined): bo
   return ["Ready", "Running", "Waiting"].includes(phase ?? "");
 }
 
+export type WorkbenchLifecycleVisibility = {
+  hasCanonicalWork: boolean;
+  hasActiveWork: boolean;
+  showExecution: boolean;
+  showAuthoritativeOutcome: boolean;
+  showIndependentReview: boolean;
+  showValueAssessment: boolean;
+  showAcpLifecycle: boolean;
+};
+
+export function workbenchLifecycleVisibility(
+  control: V115ControlPlaneData,
+  dshMode: "fixture" | "real" | null | undefined,
+): WorkbenchLifecycleVisibility {
+  const activeWorks = control.work.filter(
+    (work) => !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase),
+  );
+  const reviewReady = control.work.some((work) => {
+    if (!["Delivered", "Waiting"].includes(work.status.phase)) return false;
+    return control.outcomes.some(
+      (outcome) =>
+        textField(outcome, "work_package_id") === work.id &&
+        outcome.work_generation === work.generation &&
+        !!textField(outcome, "source_ref") &&
+        fieldRefs(outcome, "evidence_refs").length > 0,
+    );
+  });
+  const valueReady = control.work.some((work) => work.status.phase === "Accepted");
+  const hasAcpBinding = control.execution_bindings.some(
+    (binding) => textField(binding, "runtime_ref")?.startsWith("dsh-acp-route:") === true,
+  );
+
+  return {
+    hasCanonicalWork: control.work.length > 0,
+    hasActiveWork: activeWorks.length > 0,
+    showExecution: activeWorks.length > 0,
+    showAuthoritativeOutcome: activeWorks.length > 0,
+    showIndependentReview: reviewReady,
+    showValueAssessment: valueReady,
+    showAcpLifecycle: activeWorks.length > 0 && (dshMode === "real" || hasAcpBinding),
+  };
+}
+
+export function WorkLifecycleGuide({ control }: { control: V115ControlPlaneData }) {
+  const focus =
+    control.work.find((work) => !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase)) ??
+    control.work[0];
+  if (!focus) return null;
+
+  const trace = workEvidenceTrace(control, focus.id, focus.generation);
+  const phase = focus.status.phase;
+  const complete = [
+    true,
+    ["Ready", "Running", "Waiting", "Reconciling", "Delivered", "Accepted"].includes(phase),
+    trace.receipts.length > 0,
+    trace.outcomes.length > 0,
+    phase === "Accepted" ||
+      trace.acceptances.some((decision) => textField(decision, "disposition") === "Accept"),
+    trace.values.length > 0,
+  ];
+  const firstIncomplete = complete.findIndex((value) => !value);
+  const labels = [
+    "Work defined",
+    "Ready & bound",
+    "Executor evidence",
+    "Authoritative outcome",
+    "Independent acceptance",
+    "Value evidence",
+  ];
+  const next = [
+    "Define canonical Work in Studio.",
+    "Resolve requirements, evidence readiness and persist an exact binding.",
+    "Run only the bound capability and retain executor receipts.",
+    "Observe the real result through a deployment-attested source of truth.",
+    "Obtain an independent review against the acceptance contract.",
+    "Record operational/customer value only from the accepted outcome.",
+  ][firstIncomplete < 0 ? 5 : firstIncomplete];
+
+  return (
+    <section className="work-lifecycle-guide" data-testid="work-lifecycle-guide">
+      <div className="work-lifecycle-guide-head">
+        <div>
+          <span className="work-focus-eyebrow">CURRENT WORK JOURNEY</span>
+          <h2>{focus.spec.goal}</h2>
+        </div>
+        <StatusPill value={phase} />
+      </div>
+      <ol>
+        {labels.map((label, index) => {
+          const state = complete[index]
+            ? "complete"
+            : index === firstIncomplete
+              ? "current"
+              : "pending";
+          return (
+            <li key={label} className={`work-lifecycle-stage work-lifecycle-${state}`}>
+              <span>{index + 1}</span>
+              <div>
+                <b>{label}</b>
+                <small>{state}</small>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <p><b>Next:</b> {next}</p>
+      {control.work.length > 1 && (
+        <small className="muted">
+          Showing the first non-terminal Work. {control.work.length - 1} additional Work resource(s)
+          remain visible in the canonical overview above.
+        </small>
+      )}
+    </section>
+  );
+}
+
+function CanonicalWorkLifecyclePanels({
+  control,
+  capabilities,
+  status,
+  sourceTruthCatalog,
+  sourceObservationCatalog,
+  reviewerCatalog,
+  reload,
+}: {
+  control: V115ControlPlaneData;
+  capabilities: E0HarnessCapability[];
+  status: V115Status | null;
+  sourceTruthCatalog: SourceOfTruthCatalog | null;
+  sourceObservationCatalog: SourceObservationCatalog | null;
+  reviewerCatalog: AcceptanceReviewerCatalog | null;
+  reload: () => void;
+}) {
+  const visibility = workbenchLifecycleVisibility(
+    control,
+    status?.harness_runtime.dsh.mode,
+  );
+  if (!visibility.hasCanonicalWork) return null;
+
+  return (
+    <>
+      <WorkLifecycleGuide control={control} />
+      {visibility.showExecution && (
+        <GovernedE0Executor
+          control={control}
+          capabilities={capabilities}
+          status={status}
+          reload={reload}
+        />
+      )}
+      {visibility.showAuthoritativeOutcome && (
+        <AuthoritativeOutcomePanel
+          control={control}
+          catalog={sourceTruthCatalog}
+          observations={sourceObservationCatalog}
+          reload={reload}
+        />
+      )}
+      {visibility.showIndependentReview && (
+        <OutcomeReviewPanel control={control} reviewers={reviewerCatalog} reload={reload} />
+      )}
+      {visibility.showValueAssessment && (
+        <ValueAssessmentPanel control={control} reload={reload} />
+      )}
+      {visibility.showAcpLifecycle && (
+        <details className="workbench-advanced-control">
+          <summary>Advanced · DeepSeek ACP session lifecycle</summary>
+          <p className="workbench-reference-note">
+            Optional out-of-band session control for a real DSH route. ACP lifecycle settlement is
+            execution-control evidence only and never becomes business Outcome or Acceptance.
+          </p>
+          <DshAcpLifecyclePanel
+            control={control}
+            capabilities={capabilities}
+            status={status}
+            reload={reload}
+          />
+        </details>
+      )}
+    </>
+  );
+}
+
 function GovernedE0Executor({
   control,
   capabilities,
@@ -1977,28 +2160,15 @@ export default function Workbench() {
         </header>
         <CanonicalWorkOverview control={v115Control} error={v115ControlError} />
         {v115Control && (
-          <>
-            <GovernedE0Executor
-              control={v115Control}
-              capabilities={v115Capabilities}
-              status={v115}
-              reload={load}
-            />
-            <DshAcpLifecyclePanel
-              control={v115Control}
-              capabilities={v115Capabilities}
-              status={v115}
-              reload={load}
-            />
-            <AuthoritativeOutcomePanel
-              control={v115Control}
-              catalog={sourceTruthCatalog}
-              observations={sourceObservationCatalog}
-              reload={load}
-            />
-            <OutcomeReviewPanel control={v115Control} reviewers={reviewerCatalog} reload={load} />
-            <ValueAssessmentPanel control={v115Control} reload={load} />
-          </>
+          <CanonicalWorkLifecyclePanels
+            control={v115Control}
+            capabilities={v115Capabilities}
+            status={v115}
+            sourceTruthCatalog={sourceTruthCatalog}
+            sourceObservationCatalog={sourceObservationCatalog}
+            reviewerCatalog={reviewerCatalog}
+            reload={load}
+          />
         )}
         <p role="status" className="work-focus-empty">
           {error
@@ -2157,28 +2327,15 @@ export default function Workbench() {
 
       <CanonicalWorkOverview control={v115Control} error={v115ControlError} />
       {v115Control && (
-        <>
-          <GovernedE0Executor
-            control={v115Control}
-            capabilities={v115Capabilities}
-            status={v115}
-            reload={load}
-          />
-          <DshAcpLifecyclePanel
-            control={v115Control}
-            capabilities={v115Capabilities}
-            status={v115}
-            reload={load}
-          />
-          <AuthoritativeOutcomePanel
-              control={v115Control}
-              catalog={sourceTruthCatalog}
-              observations={sourceObservationCatalog}
-              reload={load}
-            />
-            <OutcomeReviewPanel control={v115Control} reviewers={reviewerCatalog} reload={load} />
-            <ValueAssessmentPanel control={v115Control} reload={load} />
-        </>
+        <CanonicalWorkLifecyclePanels
+          control={v115Control}
+          capabilities={v115Capabilities}
+          status={v115}
+          sourceTruthCatalog={sourceTruthCatalog}
+          sourceObservationCatalog={sourceObservationCatalog}
+          reviewerCatalog={reviewerCatalog}
+          reload={load}
+        />
       )}
 
       <details className="workbench-reference" data-testid="reference-tools">

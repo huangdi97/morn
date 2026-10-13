@@ -182,22 +182,39 @@ try {
     if (route === "/workbench" && !(await page.getByRole("heading", { name: "Work is the unit of coordination" }).isVisible())) {
       errors.push("workbench: canonical Work-first overview is not visible");
     }
-    if (
-      route === "/workbench" &&
-      !(await page.getByRole("heading", { name: "Independent outcome review" }).isVisible())
-    ) {
-      errors.push("workbench: independent source-grounded outcome review is not visible");
-    }
     if (route === "/workbench") {
+      const canonicalWorkCount = await page.locator('[data-work-id]').count();
+      const lifecycleGuide = page.locator('[data-testid="work-lifecycle-guide"]');
       const governedExecution = page.getByRole("heading", { name: "Governed E0 execution" });
-      if ((await governedExecution.count()) && !(await page.locator(".governed-execution-binding select").count())) {
-        errors.push("workbench: rendered governed execution must expose explicit binding selection");
-      }
-      if (!(await page.getByRole("heading", { name: "DeepSeek ACP lifecycle control" }).isVisible())) {
-        errors.push("workbench: Work-bound DSH ACP lifecycle control surface is not visible");
-      }
-      if (!(await page.getByRole("heading", { name: "Authoritative outcome observation" }).isVisible())) {
-        errors.push("workbench: authoritative source-to-outcome surface is not visible");
+      const authoritativeOutcome = page.getByRole("heading", { name: "Authoritative outcome observation" });
+      const advancedAcp = page.locator("details.workbench-advanced-control");
+
+      if (canonicalWorkCount === 0) {
+        if (await lifecycleGuide.count()) {
+          errors.push("workbench: empty state must not fabricate a Work lifecycle");
+        }
+        if (await governedExecution.count()) {
+          errors.push("workbench: executor controls must not render without canonical Work");
+        }
+        if (await authoritativeOutcome.count()) {
+          errors.push("workbench: outcome controls must not render without canonical Work");
+        }
+        if (await advancedAcp.count()) {
+          errors.push("workbench: disabled ACP infrastructure must not dominate an empty Workbench");
+        }
+      } else {
+        if (!(await lifecycleGuide.count())) {
+          errors.push("workbench: canonical Work must render a lifecycle journey");
+        }
+        if ((await governedExecution.count()) && !(await page.locator(".governed-execution-binding select").count())) {
+          errors.push("workbench: rendered governed execution must expose explicit binding selection");
+        }
+        if (!(await authoritativeOutcome.count())) {
+          errors.push("workbench: active Work must expose authoritative source-to-outcome control");
+        }
+        if ((await advancedAcp.count()) && await advancedAcp.evaluate((node) => node.open)) {
+          errors.push("workbench: advanced ACP lifecycle controls must be collapsed by default");
+        }
       }
       if (await page.getByLabel("Observed facts (JSON)").count()) {
         errors.push("workbench: callers must not be able to self-assert authoritative world facts");
@@ -330,6 +347,21 @@ try {
       const focusText = await workCard.innerText();
       if (!focusText.includes(instantiatedWork.goal) || !focusText.includes("Proposed")) {
         errors.push("Workbench: exact Studio-instantiated Work is not shown as canonical state");
+      }
+      const lifecycleGuide = page.locator('[data-testid="work-lifecycle-guide"]');
+      if (!(await lifecycleGuide.count())) {
+        errors.push("Workbench: Studio-instantiated Work has no guided lifecycle surface");
+      } else {
+        const journeyText = await lifecycleGuide.innerText();
+        if (!journeyText.includes("Work defined") || !journeyText.includes("Ready & bound")) {
+          errors.push("Workbench: lifecycle guide does not expose the canonical progression");
+        }
+      }
+      if (!(await page.getByRole("heading", { name: "Governed E0 execution" }).count())) {
+        errors.push("Workbench: active proposed Work has no governed execution controls");
+      }
+      if (!(await page.getByRole("heading", { name: "Authoritative outcome observation" }).count())) {
+        errors.push("Workbench: active Work has no authoritative outcome control");
       }
       if (screenshotsDir) {
         await page.screenshot({ path: join(screenshotsDir, "workbench-after-studio-instantiation.png"), fullPage: true });

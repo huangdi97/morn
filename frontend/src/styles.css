@@ -205,6 +205,114 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .work-focus-conditions ul { list-style: none; padding: 0; margin: 10px 0 0; }
 .work-focus-conditions li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px 0; border-top: 1px solid #2d3a50; overflow-wrap: anywhere; }
 .work-focus-conditions small { grid-column: 1 / -1; color: #9baec7; }
+
+.work-lifecycle-guide {
+  margin: 0 0 16px;
+  padding: 18px;
+  border: 1px solid #33445e;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #141f31, #101925);
+}
+.work-lifecycle-guide-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.work-lifecycle-guide h2 {
+  margin: 5px 0 0;
+  font-size: 18px;
+  line-height: 1.35;
+}
+.work-lifecycle-guide ol {
+  list-style: none;
+  margin: 16px 0 12px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.work-lifecycle-stage {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #31415a;
+  border-radius: 10px;
+  background: #101824;
+}
+.work-lifecycle-stage > span {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid #4b5c76;
+  color: #aebed6;
+  font-size: 11px;
+  font-weight: 700;
+}
+.work-lifecycle-stage div { min-width: 0; }
+.work-lifecycle-stage b {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.work-lifecycle-stage small {
+  display: block;
+  margin-top: 3px;
+  color: #8799b4;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-size: 9px;
+}
+.work-lifecycle-complete {
+  border-color: #315d50;
+  background: #10231f;
+}
+.work-lifecycle-complete > span {
+  border-color: #4c8a74;
+  color: #a7dfc8;
+}
+.work-lifecycle-current {
+  border-color: #4c76ba;
+  background: #15243b;
+  box-shadow: inset 0 0 0 1px rgba(91, 145, 232, .14);
+}
+.work-lifecycle-current > span {
+  border-color: #5d91e8;
+  color: #d7e5ff;
+}
+.work-lifecycle-guide > p {
+  margin: 0;
+  color: #b8c7dc;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.workbench-advanced-control {
+  margin: 16px 0 20px;
+  padding: 0 14px;
+  border: 1px solid #33445e;
+  border-radius: 13px;
+  background: #111a27;
+}
+.workbench-advanced-control > summary {
+  cursor: pointer;
+  padding: 15px 2px;
+  color: #afc0da;
+  font-size: 13px;
+  font-weight: 650;
+}
+.workbench-advanced-control[open] > summary {
+  border-bottom: 1px solid #304057;
+}
+.workbench-advanced-control > .card {
+  margin: 12px 0 14px;
+}
+
 .work-truth-trace {
   margin-top: 15px;
   padding: 0 11px;
@@ -238,6 +346,10 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .work-focus { padding: 16px 13px; margin-bottom: 16px; }
   .work-focus-intro { flex-direction: column; gap: 14px; }
   .work-focus h2 { font-size: 21px; }
+  .work-lifecycle-guide { padding: 14px 12px; }
+  .work-lifecycle-guide-head { flex-direction: column; }
+  .work-lifecycle-guide ol { grid-template-columns: 1fr 1fr; }
+  .workbench-advanced-control { padding: 0 11px; }
   .action-link { width: 100%; }
 }
 /* Keep fixture/legacy execution tools available without making them the Workbench. */

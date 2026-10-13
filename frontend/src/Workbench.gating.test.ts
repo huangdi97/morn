@@ -13,6 +13,8 @@ import {
   governedE0ExecutionAllowed,
   outcomeHasAttestedSourceProvenance,
   ValueAssessmentPanel,
+  workbenchLifecycleVisibility,
+  WorkLifecycleGuide,
   workEvidenceTrace,
 } from "./pages/Workbench";
 
@@ -402,5 +404,109 @@ describe("real Harness environment gating", () => {
       `pi@0.9.0#sha256:${"p".repeat(64)}`,
     );
     expect(governedRealHarnessRuntimeIdentity("morn-native", status)).toBeNull();
+  });
+});
+
+
+describe("progressive Workbench lifecycle surface", () => {
+  const control = (phase: string): V115ControlPlaneData => ({
+    condition_evidence: [],
+    capability_resolutions: [],
+    profile_conformance_attestations: [],
+    work: [{
+      id: "work:journey",
+      generation: 1,
+      spec: {
+        goal: "Review delivery impact",
+        profile_ref: "morn.factory.readonly@1.0.0",
+        required_conditions: [],
+      },
+      status: {
+        phase,
+        observed_generation: 1,
+        conditions: [],
+        active_binding: null,
+      },
+    }],
+    source_of_truth_bindings: [],
+    execution_bindings: [],
+    execution_manifests: [],
+    execution_receipts: [],
+    executor_outcome_reconciliations: [],
+    interop_bindings: [],
+    external_task_observations: [],
+    binding_migrations: [],
+    durable_workflow_bindings: [],
+    attempts: [],
+    reconciliations: [],
+    outcomes: [],
+    acceptance_decisions: [],
+    value_assessments: [],
+    value_assessment_support: [],
+    note: "test",
+  });
+
+  it("does not dump inactive engineering panels into an empty Workbench", () => {
+    const empty = { ...control("Proposed"), work: [] };
+    expect(workbenchLifecycleVisibility(empty, "fixture")).toEqual({
+      hasCanonicalWork: false,
+      hasActiveWork: false,
+      showExecution: false,
+      showAuthoritativeOutcome: false,
+      showIndependentReview: false,
+      showValueAssessment: false,
+      showAcpLifecycle: false,
+    });
+  });
+
+  it("keeps core Work progression visible while ACP stays advanced and opt-in", () => {
+    const proposed = control("Proposed");
+    expect(workbenchLifecycleVisibility(proposed, "fixture")).toMatchObject({
+      hasCanonicalWork: true,
+      hasActiveWork: true,
+      showExecution: true,
+      showAuthoritativeOutcome: true,
+      showIndependentReview: false,
+      showValueAssessment: false,
+      showAcpLifecycle: false,
+    });
+    expect(workbenchLifecycleVisibility(proposed, "real").showAcpLifecycle).toBe(true);
+  });
+
+  it("reveals independent review and value only when their lifecycle stage exists", () => {
+    const delivered = control("Delivered");
+    delivered.outcomes = [{
+      id: "outcome:1",
+      work_package_id: "work:journey",
+      work_generation: 1,
+      objective: "Delivery impact observed",
+      source_ref: "erp://delivery/1",
+      evidence_refs: ["erp://delivery/1/receipt"],
+    }];
+    expect(workbenchLifecycleVisibility(delivered, "fixture").showIndependentReview).toBe(true);
+
+    const accepted = { ...delivered, work: [{
+      ...delivered.work[0],
+      status: { ...delivered.work[0].status, phase: "Accepted" },
+    }] };
+    expect(workbenchLifecycleVisibility(accepted, "fixture")).toMatchObject({
+      hasActiveWork: false,
+      showExecution: false,
+      showAuthoritativeOutcome: false,
+      showValueAssessment: true,
+    });
+  });
+
+  it("renders a Work-first journey without claiming future stages complete", () => {
+    const html = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(WorkLifecycleGuide, {
+        control: control("Proposed"),
+      })),
+    );
+    expect(html).toContain("CURRENT WORK JOURNEY");
+    expect(html).toContain("Review delivery impact");
+    expect(html).toContain("Work defined");
+    expect(html).toContain("Resolve requirements, evidence readiness");
+    expect(html).not.toContain("Accepted</");
   });
 });

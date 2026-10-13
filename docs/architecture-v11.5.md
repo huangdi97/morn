@@ -348,7 +348,12 @@ requires a new binding; the old attempt is never silently rewritten.
 All product surfaces are views over the same semantics:
 
 - **Workbench**: Work, desired/observed state, Conditions, binding, attempts,
-  evidence, outcomes and acceptance.
+  evidence, outcomes and acceptance. The default experience follows the Work
+  lifecycle progressively: define -> ready/bind -> executor evidence ->
+  authoritative outcome -> independent acceptance -> value evidence. Controls
+  for a later stage are not dumped into an empty Workbench. Provider-specific
+  session controls such as DSH ACP remain an advanced disclosure and appear
+  only when a real route or an existing lifecycle binding makes them relevant.
 - **Studio**: starts from the work goal or an existing artifact, compiles
   candidate capabilities/solutions, exposes unresolved qualification gates.
 - **Console**: provider health, composition runtime, profiles, conformance,
@@ -356,7 +361,9 @@ All product surfaces are views over the same semantics:
 - **Hub**: capabilities, releases, harness providers, composition runtimes,
   compilers, profiles and reusable packages.
 
-No surface is allowed to create a parallel domain model.
+No surface is allowed to create a parallel domain model, and no product surface
+may require users to treat provider/session mechanics as the primary business
+workflow.
 
 ## Implementation status on the convergence branch
 
