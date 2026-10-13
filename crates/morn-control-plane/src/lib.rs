@@ -916,7 +916,7 @@ fn require_persisted_work_projection_evidence(
             WorkPhase::Rejected => {
                 decision.disposition == AcceptanceDisposition::Reject
                     && require_attested_outcome_provenance(store, work, linked).is_ok()
-            },
+            }
             _ => true,
         }
     });
