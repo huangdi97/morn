@@ -193,6 +193,7 @@ impl ActionGateway {
                         witness.proposal_ref == proposal.id.to_string()
                             && witness.action_name == action_name
                             && witness.target_object == proposal.target_object.to_string()
+                            && witness.principal_ref != proposal.proposed_by
                     })
                     .ok_or_else(|| {
                         Error::not_authorized(
@@ -456,6 +457,29 @@ mod tests {
         );
         assert_eq!(world.snapshots_for(&target).len(), 1);
         assert!(gateway.verify(&outcome, &world).unwrap());
+    }
+
+    #[test]
+    fn e3_proposer_cannot_self_approve() {
+        let ws = WorkspaceId::generate();
+        let policy = Policy::new(
+            ws.clone(),
+            "strict",
+            vec![PolicyRule::allow("release_claim")],
+        );
+        let mut gateway = ActionGateway::new(policy, EffectContract::e3("public release"));
+        let target = ObjectId::generate();
+        let proposal = proposal(ws, target, "principal://analyst");
+        gateway
+            .record_approval(
+                &proposal,
+                "release_claim",
+                "principal://analyst",
+                "approver",
+                "approval://self",
+            )
+            .unwrap();
+        assert!(gateway.authorize(&proposal, "release_claim").is_err());
     }
 
     #[test]
