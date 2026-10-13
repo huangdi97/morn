@@ -125,15 +125,8 @@ mod tests {
     #[test]
     fn runtime_identity_requires_sha256_digest() {
         assert!(runtime_identity("pi", "1.0.0", "sha256:bad").is_err());
-        let identity = runtime_identity(
-            "pi",
-            "1.0.0",
-            &format!("sha256:{}", "a".repeat(64)),
-        )
-        .unwrap();
-        assert_eq!(
-            identity,
-            format!("pi@1.0.0#sha256:{}", "a".repeat(64))
-        );
+        let identity =
+            runtime_identity("pi", "1.0.0", &format!("sha256:{}", "a".repeat(64))).unwrap();
+        assert_eq!(identity, format!("pi@1.0.0#sha256:{}", "a".repeat(64)));
     }
 }
