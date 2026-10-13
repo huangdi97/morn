@@ -7,7 +7,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -17,6 +17,7 @@ use tauri::Manager;
 
 const DEFAULT_API_BASE: &str = "http://127.0.0.1:8090";
 const DEFAULT_BACKEND_ADDR: &str = "127.0.0.1:8090";
+const DESKTOP_INSTANCE_LOCK_ADDR: &str = "127.0.0.1:18091";
 
 #[derive(Debug, Default)]
 struct OwnedBackend {
@@ -97,7 +98,17 @@ fn backend_is_healthy() -> bool {
     if stream.read_to_string(&mut response).is_err() {
         return false;
     }
-    response.starts_with("HTTP/1.1 200") && response.contains("\"status\":\"ok\"")
+    response.starts_with("HTTP/1.1 200")
+        && response.contains("\"status\":\"ok\"")
+        && response.contains("\"service\":\"morn-app\"")
+}
+
+fn acquire_instance_lock() -> Result<TcpListener, String> {
+    TcpListener::bind(DESKTOP_INSTANCE_LOCK_ADDR).map_err(|error| {
+        format!(
+            "another Morn desktop instance is already active or the local instance-lock address {DESKTOP_INSTANCE_LOCK_ADDR} is unavailable: {error}"
+        )
+    })
 }
 
 fn wait_for_backend(child: &mut Child, timeout: Duration) -> Result<(), String> {
@@ -222,6 +233,14 @@ fn main() {
         return;
     }
 
+    // The reference desktop owns at most one local backend. A second desktop
+    // cannot safely share that owned child because the first owner must reap it
+    // on exit. Hold a loopback listener for the full GUI process lifetime.
+    let _instance_lock = acquire_instance_lock().unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2);
+    });
+
     let backend = Arc::new(Mutex::new(OwnedBackend::default()));
     let setup_backend = Arc::clone(&backend);
     let exit_backend = Arc::clone(&backend);
@@ -277,5 +296,9 @@ mod tests {
     fn default_api_base_is_local_reference_backend() {
         assert_eq!(DEFAULT_API_BASE, "http://127.0.0.1:8090");
         assert_eq!(backend_addr(), "127.0.0.1:8090".parse().unwrap());
+        assert_eq!(
+            DESKTOP_INSTANCE_LOCK_ADDR.parse::<SocketAddr>().unwrap(),
+            "127.0.0.1:18091".parse().unwrap()
+        );
     }
 }

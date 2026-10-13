@@ -154,10 +154,16 @@ SQLite database under the app-local data directory, and reaps only the child it
 started on desktop exit. If port 8090 is occupied by a non-Morn service, startup
 fails closed rather than attaching to or killing that process.
 
-Set `MORN_DESKTOP_AUTOSTART_BACKEND=0` only when intentionally managing the
-local reference server yourself. This convenience lifecycle is still a local
-engineering configuration, **not** a signed installer, remote deployment,
-customer IAM boundary or production authorization.
+The reference shell is single-instance while it owns this local sidecar; a
+second desktop process exits instead of sharing a child whose lifetime belongs
+to the first owner. Set `MORN_DESKTOP_AUTOSTART_BACKEND=0` only when
+intentionally managing the local reference server yourself.
+
+Owned shutdown is graceful: closing the desktop closes a private stdin pipe,
+which asks the local Axum server to drain and exit; force-kill is only a bounded
+fallback and makes the CI lifecycle probe fail. This convenience lifecycle is
+still a local engineering configuration, **not** a signed installer, remote
+deployment, customer IAM boundary or production authorization.
 
 ### Reusable blueprint and runtime instance
 
