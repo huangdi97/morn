@@ -693,8 +693,14 @@ function GovernedE0Executor({
       binding.work_generation ===
         candidateWorks.find((work) => work.id === effectiveWorkId)?.generation,
   );
+  const acpLifecycleBindings = workBindings.filter(
+    (binding) => textField(binding, "runtime_ref")?.startsWith("dsh-acp-route:") === true,
+  );
+  const executorBindings = workBindings.filter(
+    (binding) => textField(binding, "runtime_ref")?.startsWith("dsh-acp-route:") !== true,
+  );
   const workBindingIds = new Set(
-    workBindings.map((binding) => textField(binding, "id")).filter((id): id is string => !!id),
+    executorBindings.map((binding) => textField(binding, "id")).filter((id): id is string => !!id),
   );
   const unknownReceipts = control.execution_receipts.filter(
     (receipt) =>
@@ -734,12 +740,16 @@ function GovernedE0Executor({
       ? eligibleEnvironments[0].environment_ref
       : "");
   const activeBindingId = selectedWork?.status.active_binding ?? "";
-  const activeBindingMatches = workBindings.some(
+  const activeBindingMatches = executorBindings.some(
     (binding) => textField(binding, "id") === activeBindingId,
   );
   const effectiveBindingId =
     bindingId ||
-    (activeBindingMatches ? activeBindingId : workBindings.length === 1 ? textField(workBindings[0], "id") ?? "" : "");
+    (activeBindingMatches
+      ? activeBindingId
+      : executorBindings.length === 1
+        ? textField(executorBindings[0], "id") ?? ""
+        : "");
 
   const resolve = async () => {
     if (!effectiveWorkId || !resolutionAllowed) return;
@@ -960,9 +970,11 @@ function GovernedE0Executor({
           Persist binding
         </button>
         <span className="muted">
-          {workBindings.length > 0
-            ? `${workBindings.length} binding(s) persisted for this generation`
-            : "No binding persisted for this generation"}
+          {executorBindings.length > 0
+            ? `${executorBindings.length} executor binding(s) · ${acpLifecycleBindings.length} ACP lifecycle binding(s)`
+            : acpLifecycleBindings.length > 0
+              ? `${acpLifecycleBindings.length} ACP lifecycle binding(s); no executor binding`
+              : "No binding persisted for this generation"}
         </span>
       </div>
       <label className="governed-execution-binding">
@@ -970,14 +982,14 @@ function GovernedE0Executor({
         <select
           value={effectiveBindingId}
           onChange={(event) => setBindingId(event.target.value)}
-          disabled={workBindings.length === 0}
+          disabled={executorBindings.length === 0}
         >
-          {workBindings.length === 0 ? (
-            <option value="">No binding persisted for this generation</option>
-          ) : workBindings.length > 1 && !activeBindingMatches && !bindingId ? (
+          {executorBindings.length === 0 ? (
+            <option value="">No executor binding persisted for this generation</option>
+          ) : executorBindings.length > 1 && !activeBindingMatches && !bindingId ? (
             <>
-              <option value="">Select an exact binding</option>
-              {workBindings.map((binding, index) => {
+              <option value="">Select an exact executor binding</option>
+              {executorBindings.map((binding, index) => {
                 const id = textField(binding, "id") ?? "";
                 return (
                   <option key={id || index} value={id}>
@@ -987,7 +999,7 @@ function GovernedE0Executor({
               })}
             </>
           ) : (
-            workBindings.map((binding, index) => {
+            executorBindings.map((binding, index) => {
               const id = textField(binding, "id") ?? "";
               return (
                 <option key={id || index} value={id}>
@@ -1000,9 +1012,9 @@ function GovernedE0Executor({
         <small>
           {activeBindingMatches
             ? "Canonical active binding selected by default."
-            : workBindings.length > 1 && !effectiveBindingId
-              ? "Multiple bindings exist; execution is blocked until one is selected explicitly."
-              : "Execution uses this exact immutable binding."}
+            : executorBindings.length > 1 && !effectiveBindingId
+              ? "Multiple executor bindings exist; execution is blocked until one is selected explicitly."
+              : "Execution uses this exact immutable executor binding. ACP lifecycle bindings are excluded."}
         </small>
       </label>
       <label className="governed-execution-prompt">
