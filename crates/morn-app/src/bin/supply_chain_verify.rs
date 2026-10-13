@@ -33,7 +33,7 @@ fn explicit_cosign_env() -> Result<BTreeMap<String, String>, String> {
     let raw = env::var("MORN_COSIGN_ENV_PASSTHROUGH").unwrap_or_default();
     let mut selected = BTreeMap::new();
     for name in raw
-        .split(|ch| ch == ',' || ch == ';')
+        .split([',', ';'])
         .map(str::trim)
         .filter(|name| !name.is_empty())
     {

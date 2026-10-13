@@ -32,8 +32,8 @@ on:
         type: string
         required: false
         default: ""
-      use_runner_docker_config:
-        description: "Use root-owned /etc/morn/registry-auth as DOCKER_CONFIG for private registry verification"
+      use_environment_registry_auth:
+        description: "Materialize protected Environment secret MORN_REGISTRY_AUTH_JSON as an ephemeral DOCKER_CONFIG"
         type: boolean
         required: true
         default: false
@@ -63,7 +63,7 @@ jobs:
       INPUT_CERTIFICATE_OIDC_ISSUER: ${{ inputs.certificate_oidc_issuer }}
       INPUT_RELEASE_RUNNER_REF: ${{ inputs.release_runner_ref }}
       INPUT_COSIGN_DIGEST: ${{ inputs.cosign_digest }}
-      INPUT_USE_DOCKER_CONFIG: ${{ inputs.use_runner_docker_config }}
+      INPUT_USE_REGISTRY_AUTH: ${{ inputs.use_environment_registry_auth }}
       INPUT_ACK_VERIFY_ONLY: ${{ inputs.acknowledge_verify_only }}
       MORN_OCI_REF: ${{ inputs.oci_ref }}
       MORN_COSIGN_CERTIFICATE_IDENTITY: ${{ inputs.certificate_identity }}
@@ -71,15 +71,15 @@ jobs:
       MORN_COSIGN_COMMAND: /usr/local/bin/cosign
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
 
@@ -202,28 +202,33 @@ jobs:
           )
           PY
 
-      - name: Configure optional deployment-owned registry credentials
-        if: inputs.operation == 'verify' && inputs.use_runner_docker_config
+      - name: Materialize optional protected registry credentials
+        if: inputs.operation == 'verify' && inputs.use_environment_registry_auth
         shell: bash
+        env:
+          REGISTRY_AUTH_JSON: ${{ secrets.MORN_REGISTRY_AUTH_JSON }}
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import os, pathlib, stat
+          test -n "${REGISTRY_AUTH_JSON:-}" || {
+            echo "MORN_REGISTRY_AUTH_JSON Environment secret is required"
+            exit 2
+          }
+          umask 077
+          auth_dir="$RUNNER_TEMP/morn-registry-auth"
+          rm -rf "$auth_dir"
+          mkdir -p "$auth_dir"
+          AUTH_DIR="$auth_dir" python - <<'PY'
+          import json, os, pathlib
 
-          path = pathlib.Path("/etc/morn/registry-auth")
-          if not path.exists() or not path.is_dir() or path.is_symlink():
-              raise SystemExit("/etc/morn/registry-auth must be a real directory")
-          st = path.stat()
-          if st.st_uid != 0 or st.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
-              raise SystemExit("/etc/morn/registry-auth must be root-owned with no group/world permissions")
-          config = path / "config.json"
-          if not config.exists() or config.is_symlink() or not config.is_file():
-              raise SystemExit("/etc/morn/registry-auth/config.json must be a regular non-symlink file")
-          cs = config.stat()
-          if cs.st_uid != 0 or cs.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
-              raise SystemExit("registry config must be root-owned with no group/world permissions")
+          raw = os.environ["REGISTRY_AUTH_JSON"]
+          value = json.loads(raw)
+          if not isinstance(value, dict):
+              raise SystemExit("MORN_REGISTRY_AUTH_JSON must be a Docker config JSON object")
+          path = pathlib.Path(os.environ["AUTH_DIR"]) / "config.json"
+          path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
+          path.chmod(0o600)
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
-              fh.write("DOCKER_CONFIG=/etc/morn/registry-auth\n")
+              fh.write(f"DOCKER_CONFIG={path.parent}\n")
               fh.write("MORN_COSIGN_ENV_PASSTHROUGH=DOCKER_CONFIG\n")
           PY
 
@@ -255,9 +260,15 @@ jobs:
           )
           PY
 
+      - name: Remove ephemeral registry credentials
+        if: always() && inputs.operation == 'verify'
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/morn-registry-auth"
+
       - name: Upload evidence reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: live-supply-chain-evidence-${{ github.sha }}-${{ inputs.operation }}
           path: target/live-supply-chain-evidence

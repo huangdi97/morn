@@ -56,6 +56,11 @@ still reference the Environment so the exact workflow/ref remains visible in
 deployment review. The privileged smoke/verify modes must never rely on an
 unprotected repository secret as a shortcut around Environment review.
 
+The three privileged workflows also pin every referenced GitHub Action to a
+reviewed full commit SHA (with the human-readable release noted in repository
+history/docs), rather than trusting a moving major-version tag at execution
+time. Upgrade those pins as an explicit reviewed change.
+
 ## Attested runner requirement for live provider evidence
 
 The manual live-provider workflows deliberately separate **identity planning** from
@@ -110,9 +115,11 @@ The workflow separates planning from proof:
   bytes and requires an exact `sha256:<64-hex>` input. A mutable PATH lookup is
   not accepted as verifier identity.
 - Private-registry credentials are optional and deployment-owned. When enabled,
-  only a root-owned `/etc/morn/registry-auth/config.json` is exposed to the
-  Cosign subprocess through `DOCKER_CONFIG`; repository checkout credentials
-  are not persisted.
+  the protected Environment secret `MORN_REGISTRY_AUTH_JSON` is materialized
+  only after Environment approval into a mode-0600 `$RUNNER_TEMP` Docker
+  config, exposed to Cosign through `DOCKER_CONFIG`, and removed with an
+  `always()` cleanup step. Do not keep a second repository-level copy of this
+  secret; repository checkout credentials are not persisted.
 - Verification uses the deployment-pinned `certificate-identity` and
   `certificate-oidc-issuer` for both the OCI signature and the
   `slsaprovenance` attestation. The two proof axes are merged only when they
