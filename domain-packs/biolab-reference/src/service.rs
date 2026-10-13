@@ -182,11 +182,13 @@ impl BioLabService {
             ReviewDecision::Approve,
             "independent statistical review passed",
         ))?;
-        self.artifacts.approve(ArtifactApproval::approve(
+        let pi_approval = ArtifactApproval::approve(
             version.id.clone(),
             self.pi.clone(),
             Some("PI approves analysis".to_string()),
-        ))?;
+        );
+        let pi_approval_ref = pi_approval.id.to_string();
+        self.artifacts.approve(pi_approval)?;
         steps.push(ok_step(
             "review_approve",
             "statistical reviewer + PI approval recorded",
@@ -217,8 +219,6 @@ impl BioLabService {
         );
         self.world.register_object(claim_object);
 
-        // PI approval satisfied for E3 release
-        self.gateway.mark_approval_satisfied("pi");
         let action_type_id = ActionTypeId::generate_with("actt");
         let proposal = morn_world::action::ActionProposal::new(
             action_type_id,
@@ -227,6 +227,15 @@ impl BioLabService {
             BTreeMap::new(),
             self.analyst.as_str(),
         );
+        // The demo E3 authorization is tied to this exact proposal and to the
+        // concrete PI approval record instead of a reusable role string.
+        self.gateway.record_approval(
+            &proposal,
+            "release_claim",
+            self.pi.as_str(),
+            "pi",
+            format!("artifact-approval://{pi_approval_ref}"),
+        )?;
         let authorized = self.gateway.authorize(&proposal, "release_claim")?;
         let mut new_state = BTreeMap::new();
         new_state.insert("status".to_string(), json!("released"));

@@ -56,6 +56,17 @@ pub struct AuthorizedAction {
     pub preview: ActionPreview,
 }
 
+/// One-shot approval evidence bound to one exact proposal/action/target.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovalWitness {
+    pub proposal_ref: String,
+    pub action_name: String,
+    pub target_object: String,
+    pub principal_ref: String,
+    pub role: String,
+    pub evidence_ref: String,
+}
+
 /// Result of verifying an executed action.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionOutcome {
@@ -74,7 +85,7 @@ pub struct ExecutionOutcome {
 pub struct ActionGateway {
     pub policy: Policy,
     pub effect_contract: EffectContract,
-    pub approved_roles: Vec<String>,
+    pub approval_witnesses: Vec<ApprovalWitness>,
     pub ledger: Ledger,
 }
 
@@ -83,7 +94,7 @@ impl ActionGateway {
         Self {
             policy,
             effect_contract,
-            approved_roles: Vec::new(),
+            approval_witnesses: Vec::new(),
             ledger: Ledger::new(),
         }
     }
@@ -130,15 +141,35 @@ impl ActionGateway {
             ));
         }
 
-        // E3 (irreversible) requires a satisfied human approval by default.
-        if self.effect_contract.approval_required && self.approved_roles.is_empty() {
-            return Err(Error::not_authorized(
-                "irreversible/high-risk action requires human approval (E3 gate)",
-            ));
-        }
+        // E3 (irreversible) requires one exact, proposal-bound approval witness.
+        let approval_index = if self.effect_contract.approval_required {
+            Some(
+                self.approval_witnesses
+                    .iter()
+                    .position(|witness| {
+                        witness.proposal_ref == proposal.id.to_string()
+                            && witness.action_name == action_name
+                            && witness.target_object == proposal.target_object.to_string()
+                    })
+                    .ok_or_else(|| {
+                        Error::not_authorized(
+                            "irreversible/high-risk action requires exact proposal-bound approval evidence",
+                        )
+                    })?,
+            )
+        } else {
+            None
+        };
+        let approval = approval_index.map(|index| self.approval_witnesses[index].clone());
 
         let mut action = Action::new(proposal.id.clone());
         action.status = ActionStatus::Authorized;
+        let mut refs = vec![proposal.id.to_string(), action.id.to_string()];
+        if let Some(approval) = &approval {
+            refs.push(approval.evidence_ref.clone());
+            refs.push(format!("approval-principal:{}", approval.principal_ref));
+            refs.push(format!("approval-role:{}", approval.role));
+        }
         self.ledger.append(
             proposal.workspace_id.clone(),
             "action.authorized",
@@ -146,8 +177,11 @@ impl ActionGateway {
             format!("{action_name} authorized by {}", proposal.proposed_by),
             proposal.proposed_by.clone(),
             None,
-            vec![proposal.id.to_string(), action.id.to_string()],
+            refs,
         )?;
+        if let Some(index) = approval_index {
+            self.approval_witnesses.remove(index);
+        }
         Ok(AuthorizedAction { action, preview })
     }
 
@@ -238,8 +272,43 @@ impl ActionGateway {
         Ok(action_id)
     }
 
-    pub fn mark_approval_satisfied(&mut self, role: impl Into<String>) {
-        self.approved_roles.push(role.into());
+    pub fn record_approval(
+        &mut self,
+        proposal: &ActionProposal,
+        action_name: impl Into<String>,
+        principal_ref: impl Into<String>,
+        role: impl Into<String>,
+        evidence_ref: impl Into<String>,
+    ) -> Result<()> {
+        let action_name = action_name.into();
+        let principal_ref = principal_ref.into();
+        let role = role.into();
+        let evidence_ref = evidence_ref.into();
+        if action_name.trim().is_empty()
+            || principal_ref.trim().is_empty()
+            || role.trim().is_empty()
+            || evidence_ref.trim().is_empty()
+        {
+            return Err(Error::validation(
+                "approval witness requires action, principal, role and evidence",
+            ));
+        }
+        if self.approval_witnesses.iter().any(|existing| {
+            existing.proposal_ref == proposal.id.to_string()
+                && existing.action_name == action_name
+                && existing.evidence_ref == evidence_ref
+        }) {
+            return Err(Error::conflict("duplicate approval witness"));
+        }
+        self.approval_witnesses.push(ApprovalWitness {
+            proposal_ref: proposal.id.to_string(),
+            action_name,
+            target_object: proposal.target_object.to_string(),
+            principal_ref,
+            role,
+            evidence_ref,
+        });
+        Ok(())
     }
 }
 
@@ -270,7 +339,7 @@ mod tests {
         let prop = proposal(ws, target.clone(), "analyst");
         let err = gateway.authorize(&prop, "release_claim");
         assert!(err.is_err(), "E3 without approval must be denied");
-        assert!(gateway.approved_roles.is_empty());
+        assert!(gateway.approval_witnesses.is_empty());
     }
 
     #[test]
@@ -283,7 +352,6 @@ mod tests {
         );
         let e3 = EffectContract::e3("public release");
         let mut gateway = ActionGateway::new(policy, e3);
-        gateway.mark_approval_satisfied("pi");
 
         let mut world = WorldService::new();
         let obj_type = ObjectType::new(
@@ -307,7 +375,17 @@ mod tests {
         ));
 
         let prop = proposal(ws, target.clone(), "analyst");
+        gateway
+            .record_approval(
+                &prop,
+                "release_claim",
+                "principal://pi",
+                "pi",
+                "approval://fixture/pi-release",
+            )
+            .unwrap();
         let authorized = gateway.authorize(&prop, "release_claim").unwrap();
+        assert!(gateway.approval_witnesses.is_empty());
         assert_eq!(authorized.action.status, ActionStatus::Authorized);
 
         let mut new_state = BTreeMap::new();
@@ -335,6 +413,32 @@ mod tests {
             .collect();
         assert_eq!(snapshot_refs.len(), 1);
         assert!(gateway.verify(&outcome, &snapshot_refs).unwrap());
+    }
+
+    #[test]
+    fn approval_witness_cannot_be_replayed_for_another_proposal() {
+        let ws = WorkspaceId::generate();
+        let policy = Policy::new(
+            ws.clone(),
+            "strict",
+            vec![PolicyRule::allow("release_claim")],
+        );
+        let mut gateway = ActionGateway::new(policy, EffectContract::e3("public release"));
+        let target = ObjectId::generate();
+        let first = proposal(ws.clone(), target.clone(), "analyst");
+        let second = proposal(ws, target, "analyst");
+        gateway
+            .record_approval(
+                &first,
+                "release_claim",
+                "principal://pi",
+                "pi",
+                "approval://fixture/one-shot",
+            )
+            .unwrap();
+        assert!(gateway.authorize(&second, "release_claim").is_err());
+        assert!(gateway.authorize(&first, "release_claim").is_ok());
+        assert!(gateway.authorize(&first, "release_claim").is_err());
     }
 
     #[test]
