@@ -24,7 +24,7 @@ use morn_opint::predictor::PredictorTarget;
 use morn_work::durable::{Signal, SignalKind};
 use morn_work::workflow::WorkflowStepKind;
 
-use crate::app::AppState;
+use crate::app::{AppState, WorkBoundAcpSessionControl};
 
 /// API error envelope.
 #[derive(Debug)]
@@ -124,6 +124,34 @@ pub fn router(state: AppState) -> Router {
             post(v115_work_bind_attested_e0),
         )
         .route("/api/v115/work/execute-e0", post(v115_work_execute_e0))
+        .route(
+            "/api/v115/work/acp-lifecycle/sessions",
+            get(v115_acp_lifecycle_sessions),
+        )
+        .route(
+            "/api/v115/work/acp-lifecycle/open",
+            post(v115_acp_lifecycle_open),
+        )
+        .route(
+            "/api/v115/work/acp-lifecycle/prompt",
+            post(v115_acp_lifecycle_prompt),
+        )
+        .route(
+            "/api/v115/work/acp-lifecycle/cancel",
+            post(v115_acp_lifecycle_cancel),
+        )
+        .route(
+            "/api/v115/work/acp-lifecycle/close",
+            post(v115_acp_lifecycle_close),
+        )
+        .route(
+            "/api/v115/work/acp-lifecycle/resume",
+            post(v115_acp_lifecycle_resume),
+        )
+        .route(
+            "/api/v115/work/acp-lifecycle/release",
+            post(v115_acp_lifecycle_release),
+        )
         .route(
             "/api/v115/acceptance/reviewers",
             get(v115_acceptance_reviewers),
@@ -2218,6 +2246,604 @@ async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value
         "execution_manifest": manifest,
         "execution_started": false,
         "note": "Binding is immutable and generation-scoped. No Harness session, business outcome or acceptance was created."
+    })))
+}
+
+fn validate_current_acp_lifecycle_binding(
+    guard: &crate::app::AppInner,
+    work_id: &str,
+    binding_id: &str,
+) -> Result<
+    (
+        morn_work::control::WorkResource,
+        morn_runtime::ExecutionBinding,
+        std::sync::Arc<std::sync::Mutex<morn_harness::DshAcpLifecycleController>>,
+    ),
+    AppError,
+> {
+    use morn_capability::{CapabilityStage, EffectClass};
+
+    let work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
+    if work.workspace_id != guard.workspace.id {
+        return Err(AppError(Error::not_found(format!(
+            "WorkResource {work_id}"
+        ))));
+    }
+    if !work_phase_allows_new_e0_execution(work.status.phase)
+        || !work.required_conditions_satisfied()
+    {
+        return Err(AppError(Error::invalid_state(
+            "ACP lifecycle admission requires a current execution-ready Work",
+        )));
+    }
+    let binding = guard
+        .store
+        .load_record::<morn_runtime::ExecutionBinding>("execution_binding_v115", binding_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("ExecutionBinding {binding_id}"))))?;
+    if !binding.matches_work_generation(&work)
+        || binding.profile_ref != work.spec.profile_ref
+        || binding.site_ref != work.spec.site_ref
+        || binding.autonomy_posture != work.spec.autonomy_posture
+    {
+        return Err(AppError(Error::validation(
+            "ACP lifecycle binding does not match the exact current Work generation/profile/site/autonomy",
+        )));
+    }
+    if binding.provider_ref != "deepseek-harness"
+        || binding.effect_ceiling != Some(EffectClass::E0LifecycleReversible)
+    {
+        return Err(AppError(Error::not_authorized(
+            "ACP lifecycle requires an E0 deepseek-harness ExecutionBinding",
+        )));
+    }
+
+    let capability = guard
+        .v115_capabilities
+        .iter()
+        .find(|record| record.manifest.id.as_str() == binding.capability_manifest_ref)
+        .ok_or_else(|| {
+            AppError(Error::invalid_state(
+                "ACP lifecycle binding capability is no longer in the canonical catalog",
+            ))
+        })?;
+    if !matches!(
+        capability.stage,
+        CapabilityStage::Qualified | CapabilityStage::Admitted
+    ) {
+        return Err(AppError(Error::invalid_state(
+            "ACP lifecycle capability is no longer qualified/admitted",
+        )));
+    }
+    capability.manifest.validate_governance()?;
+    let profile =
+        morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+            AppError(Error::validation(format!(
+                "unsupported Work profile {}",
+                work.spec.profile_ref
+            )))
+        })?;
+    let now = morn_kernel::time::Timestamp::now();
+    if profile.requires("CapabilityQualification") {
+        let site = work
+            .spec
+            .site_ref
+            .as_deref()
+            .ok_or_else(|| AppError(Error::validation("governed Work requires site_ref")))?;
+        if !guard.v115_admission.site_profile_admission_active_at(
+            capability,
+            site,
+            &work.spec.profile_ref,
+            now,
+        ) {
+            return Err(AppError(Error::invalid_state(
+                "ACP lifecycle capability site/profile admission is revoked or expired",
+            )));
+        }
+    }
+    ensure_live_environment_for_binding(
+        &binding,
+        capability,
+        &profile,
+        &guard.execution_environments,
+        now,
+    )?;
+
+    let controller = guard
+        .dsh_acp_lifecycle
+        .as_ref()
+        .cloned()
+        .ok_or_else(|| {
+            AppError(Error::invalid_state(
+                "DSH ACP lifecycle is not enabled; set MORN_DSH_ACP_MODE=real",
+            ))
+        })?;
+    {
+        let controller_guard = controller
+            .lock()
+            .map_err(|_| AppError(Error::internal("DSH ACP lifecycle lock poisoned")))?;
+        let route = controller_guard.configured_route_ref()?;
+        if controller_guard.configured_execution_environment_ref()
+            != binding.execution_environment_ref.as_deref()
+            || controller_guard.configured_runtime_version() != Some(binding.provider_version.as_str())
+            || controller_guard.configured_runtime_digest() != binding.provider_digest.as_deref()
+            || binding.runtime_ref.as_deref() != Some(route.as_str())
+        {
+            return Err(AppError(Error::invalid_state(
+                "ACP lifecycle configuration no longer matches the immutable ExecutionBinding route/runtime/environment",
+            )));
+        }
+        let profile_configuration_ref = controller_guard
+            .configured_profile_configuration_ref()
+            .ok_or_else(|| {
+                AppError(Error::invalid_state(
+                    "ACP lifecycle profile configuration identity is not pinned",
+                ))
+            })?;
+        let environment_ref = binding
+            .execution_environment_ref
+            .as_deref()
+            .ok_or_else(|| AppError(Error::invalid_state("ACP binding has no environment")))?;
+        let attestation = guard
+            .execution_environments
+            .attestation(environment_ref)
+            .ok_or_else(|| AppError(Error::invalid_state("ACP environment attestation missing")))?;
+        if !attestation
+            .runtime_identities
+            .iter()
+            .any(|identity| identity == profile_configuration_ref)
+        {
+            return Err(AppError(Error::invalid_state(
+                "current environment attestation no longer covers the ACP Home/Profile composition",
+            )));
+        }
+    }
+
+    Ok((work, binding, controller))
+}
+
+fn acp_runtime_context(
+    work: &morn_work::control::WorkResource,
+    binding: &morn_runtime::ExecutionBinding,
+    scope_ref: &str,
+) -> Result<morn_harness::RuntimeContext, AppError> {
+    use morn_kernel::ids::ActorInstanceId;
+
+    let environment_ref = binding
+        .execution_environment_ref
+        .clone()
+        .ok_or_else(|| AppError(Error::invalid_state("ACP binding has no environment")))?;
+    let execution_class = binding
+        .execution_class
+        .ok_or_else(|| AppError(Error::invalid_state("ACP binding has no execution class")))?;
+    Ok(morn_harness::RuntimeContext::new(
+        work.workspace_id.clone(),
+        ActorInstanceId::generate_with("dsh-acp-work"),
+        work.id.clone(),
+    )
+    .with_work_binding(work.generation, binding.id.clone())
+    .map_err(Error::validation)?
+    .with_provider_identity(
+        binding.provider_ref.clone(),
+        binding.provider_version.clone(),
+        binding.provider_digest.clone(),
+        binding.runtime_ref.clone(),
+    )
+    .map_err(Error::validation)?
+    .with_scope_id(scope_ref.to_string())
+    .map_err(Error::validation)?
+    .with_execution_environment(
+        environment_ref,
+        execution_class,
+        binding.execution_guarantees.clone(),
+    )
+    .map_err(Error::validation)?)
+}
+
+fn required_control_identity(body: &Value) -> Result<(&str, &str, &str), AppError> {
+    let session_id = body
+        .get("session_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("session_id is required")))?;
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let binding_id = body
+        .get("binding_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("binding_id is required")))?;
+    Ok((session_id, work_id, binding_id))
+}
+
+async fn v115_acp_lifecycle_sessions(State(state): State<AppState>) -> ApiResult {
+    let (controller, controls) = {
+        let guard = state.lock();
+        (guard.dsh_acp_lifecycle.clone(), guard.dsh_acp_controls.clone())
+    };
+    let Some(controller) = controller else {
+        return Ok(Json(json!({
+            "configured": false,
+            "sessions": [],
+            "note": "DSH ACP lifecycle is opt-in and does not affect SDK HarnessProvider feature bits."
+        })));
+    };
+    let sessions = controller
+        .lock()
+        .map_err(|_| AppError(Error::internal("DSH ACP lifecycle lock poisoned")))?
+        .sessions();
+    let controls = controls
+        .lock()
+        .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?;
+    let projected: Vec<_> = sessions
+        .into_iter()
+        .map(|session| {
+            let control = controls.get(&session.session_id);
+            json!({
+                "session": session,
+                "cancel_handle_available": control.and_then(|entry| entry.handle.as_ref()).is_some(),
+                "work_bound_control": control.is_some()
+            })
+        })
+        .collect();
+    Ok(Json(json!({
+        "configured": true,
+        "sessions": projected,
+        "executor_health_claimed": false,
+        "work_outcome_claimed": false
+    })))
+}
+
+async fn v115_acp_lifecycle_open(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_harness::provider::DSH_REAL_E0_SCOPE_RESTRICTION;
+    use morn_harness::{CapabilityScope, ScopeKind};
+
+    let work_id = body
+        .get("work_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("work_id is required")))?;
+    let binding_id = body
+        .get("binding_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("binding_id is required")))?;
+    let (work, binding, controller, controls) = {
+        let guard = state.lock();
+        let (work, binding, controller) =
+            validate_current_acp_lifecycle_binding(&guard, work_id, binding_id)?;
+        (work, binding, controller, guard.dsh_acp_controls.clone())
+    };
+
+    let scope = CapabilityScope::new(
+        ScopeKind::ExecutionRun,
+        None,
+        work.workspace_id.clone(),
+        format!("work:{}:generation:{}:dsh-acp", work.id, work.generation),
+    )
+    .with_restriction(DSH_REAL_E0_SCOPE_RESTRICTION);
+    let scope_ref = scope.id.to_string();
+    let context = acp_runtime_context(&work, &binding, &scope_ref)?;
+    let controller_for_open = controller.clone();
+    let scope_for_open = scope.clone();
+    let context_for_open = context.clone();
+    let opened = tokio::task::spawn_blocking(move || {
+        let mut controller = controller_for_open
+            .lock()
+            .map_err(|_| Error::internal("DSH ACP lifecycle lock poisoned"))?;
+        controller.mount_scope(scope_for_open)?;
+        match controller.open_session(&context_for_open) {
+            Ok(session) => {
+                let handle = controller.control_handle(&session.session_id)?;
+                Ok((session, handle))
+            }
+            Err(error) => {
+                let _ = controller.unmount_scope(&scope_ref);
+                Err(error)
+            }
+        }
+    })
+    .await
+    .map_err(|error| AppError(Error::internal(format!("ACP open task failed: {error}"))))??;
+
+    let (session, handle) = opened;
+    let entry = WorkBoundAcpSessionControl {
+        session_id: session.session_id.clone(),
+        workspace_id: work.workspace_id.clone(),
+        work_id: work.id.clone(),
+        work_generation: work.generation,
+        execution_binding_ref: binding.id.clone(),
+        scope_ref: session.scope_ref.clone(),
+        handle: Some(handle),
+    };
+    let mut controls = controls
+        .lock()
+        .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?;
+    if controls.insert(session.session_id.clone(), entry).is_some() {
+        return Err(AppError(Error::conflict(
+            "ACP session id already has a Work-bound control entry",
+        )));
+    }
+    Ok(Json(json!({
+        "session": session,
+        "binding_id": binding.id,
+        "route_ref": binding.runtime_ref,
+        "executor_success": false,
+        "business_outcome_observed": false,
+        "note": "ACP lifecycle session opened under an immutable Work/binding/scope route. It is not SDK executor success."
+    })))
+}
+
+async fn v115_acp_lifecycle_prompt(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    let (session_id, work_id, binding_id) = required_control_identity(&body)?;
+    let input = body
+        .get("input")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| AppError(Error::validation("input is required")))?
+        .to_string();
+    let (work, binding, controller, control) = {
+        let guard = state.lock();
+        let (work, binding, controller) =
+            validate_current_acp_lifecycle_binding(&guard, work_id, binding_id)?;
+        let control = guard
+            .dsh_acp_controls
+            .lock()
+            .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| AppError(Error::not_found(format!("ACP session {session_id}"))))?;
+        (work, binding, controller, control)
+    };
+    if !control.matches(
+        &work.workspace_id,
+        &work.id,
+        work.generation,
+        &binding.id,
+    ) {
+        return Err(AppError(Error::not_authorized(
+            "ACP prompt identity does not match the session's original Work/binding",
+        )));
+    }
+    let context = acp_runtime_context(&work, &binding, &control.scope_ref)?;
+    let session_id = session_id.to_string();
+    let result = tokio::task::spawn_blocking(move || {
+        let mut controller = controller
+            .lock()
+            .map_err(|_| Error::internal("DSH ACP lifecycle lock poisoned"))?;
+        let result = controller.prompt_text(&session_id, &context, &input)?;
+        let session = controller
+            .session(&session_id)
+            .cloned()
+            .ok_or_else(|| Error::not_found(format!("ACP session {session_id}")))?;
+        Ok::<_, Error>((result, session))
+    })
+    .await
+    .map_err(|error| AppError(Error::internal(format!("ACP prompt task failed: {error}"))))??;
+    Ok(Json(json!({
+        "prompt": result.0,
+        "session": result.1,
+        "executor_success": false,
+        "business_outcome_observed": false,
+        "independent_acceptance": false,
+        "note": "ACP prompt settlement is lifecycle/control evidence only."
+    })))
+}
+
+async fn v115_acp_lifecycle_cancel(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    let (session_id, work_id, binding_id) = required_control_identity(&body)?;
+    let control = {
+        let guard = state.lock();
+        guard
+            .dsh_acp_controls
+            .lock()
+            .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| AppError(Error::not_found(format!("ACP session {session_id}"))))?
+    };
+    if control.work_id.as_str() != work_id || control.execution_binding_ref.as_str() != binding_id {
+        return Err(AppError(Error::not_authorized(
+            "ACP cancel identity does not match the original Work/binding",
+        )));
+    }
+    let handle = control.handle.ok_or_else(|| {
+        AppError(Error::invalid_state(
+            "ACP session is closed or released and has no live cancel handle",
+        ))
+    })?;
+    handle.request_cancel()?;
+    Ok(Json(json!({
+        "session_id": session_id,
+        "cancel_requested": true,
+        "cancel_proven": false,
+        "rollback_proven": false,
+        "note": "The out-of-band request reached the session-scoped ACP control transport; settlement must still be observed by the prompt path."
+    })))
+}
+
+async fn v115_acp_lifecycle_close(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    let (session_id, work_id, binding_id) = required_control_identity(&body)?;
+    let (controller, controls, control) = {
+        let guard = state.lock();
+        let controller = guard
+            .dsh_acp_lifecycle
+            .clone()
+            .ok_or_else(|| AppError(Error::invalid_state("DSH ACP lifecycle is not enabled")))?;
+        let controls = guard.dsh_acp_controls.clone();
+        let control = controls
+            .lock()
+            .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| AppError(Error::not_found(format!("ACP session {session_id}"))))?;
+        (controller, controls, control)
+    };
+    if control.work_id.as_str() != work_id || control.execution_binding_ref.as_str() != binding_id {
+        return Err(AppError(Error::not_authorized(
+            "ACP close identity does not match the original Work/binding",
+        )));
+    }
+    let session_id_owned = session_id.to_string();
+    let session = tokio::task::spawn_blocking(move || {
+        let mut controller = controller
+            .lock()
+            .map_err(|_| Error::internal("DSH ACP lifecycle lock poisoned"))?;
+        controller.close_session(&session_id_owned)?;
+        controller
+            .session(&session_id_owned)
+            .cloned()
+            .ok_or_else(|| Error::not_found(format!("ACP session {session_id_owned}")))
+    })
+    .await
+    .map_err(|error| AppError(Error::internal(format!("ACP close task failed: {error}"))))??;
+    if let Some(entry) = controls
+        .lock()
+        .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?
+        .get_mut(session_id)
+    {
+        entry.handle = None;
+    }
+    Ok(Json(json!({
+        "session": session,
+        "scope_released": false,
+        "note": "Session is quiescent but its exact scope remains mounted so same-process resume can revalidate the original binding."
+    })))
+}
+
+async fn v115_acp_lifecycle_resume(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    let (session_id, work_id, binding_id) = required_control_identity(&body)?;
+    let (work, binding, controller, controls, control) = {
+        let guard = state.lock();
+        let (work, binding, controller) =
+            validate_current_acp_lifecycle_binding(&guard, work_id, binding_id)?;
+        let controls = guard.dsh_acp_controls.clone();
+        let control = controls
+            .lock()
+            .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| AppError(Error::not_found(format!("ACP session {session_id}"))))?;
+        (work, binding, controller, controls, control)
+    };
+    if !control.matches(
+        &work.workspace_id,
+        &work.id,
+        work.generation,
+        &binding.id,
+    ) {
+        return Err(AppError(Error::not_authorized(
+            "ACP resume identity does not match the exact current Work/binding",
+        )));
+    }
+    let context = acp_runtime_context(&work, &binding, &control.scope_ref)?;
+    let session_id_owned = session_id.to_string();
+    let resumed = tokio::task::spawn_blocking(move || {
+        let mut controller = controller
+            .lock()
+            .map_err(|_| Error::internal("DSH ACP lifecycle lock poisoned"))?;
+        controller.resume_session(&session_id_owned, &context)?;
+        let handle = controller.control_handle(&session_id_owned)?;
+        let session = controller
+            .session(&session_id_owned)
+            .cloned()
+            .ok_or_else(|| Error::not_found(format!("ACP session {session_id_owned}")))?;
+        Ok::<_, Error>((session, handle))
+    })
+    .await
+    .map_err(|error| AppError(Error::internal(format!("ACP resume task failed: {error}"))))??;
+    if let Some(entry) = controls
+        .lock()
+        .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?
+        .get_mut(session_id)
+    {
+        entry.handle = Some(resumed.1);
+    }
+    Ok(Json(json!({
+        "session": resumed.0,
+        "executor_success": false,
+        "note": "Same-process ACP resume revalidated the exact current Work/binding/environment/scope/route."
+    })))
+}
+
+async fn v115_acp_lifecycle_release(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    use morn_harness::DshAcpLifecycleState;
+
+    let (session_id, work_id, binding_id) = required_control_identity(&body)?;
+    let (controller, controls, control) = {
+        let guard = state.lock();
+        let controller = guard
+            .dsh_acp_lifecycle
+            .clone()
+            .ok_or_else(|| AppError(Error::invalid_state("DSH ACP lifecycle is not enabled")))?;
+        let controls = guard.dsh_acp_controls.clone();
+        let control = controls
+            .lock()
+            .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| AppError(Error::not_found(format!("ACP session {session_id}"))))?;
+        (controller, controls, control)
+    };
+    if control.work_id.as_str() != work_id || control.execution_binding_ref.as_str() != binding_id {
+        return Err(AppError(Error::not_authorized(
+            "ACP release identity does not match the original Work/binding",
+        )));
+    }
+    let session_id_owned = session_id.to_string();
+    let scope_ref = control.scope_ref.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut controller = controller
+            .lock()
+            .map_err(|_| Error::internal("DSH ACP lifecycle lock poisoned"))?;
+        let state = controller
+            .session(&session_id_owned)
+            .map(|session| session.state)
+            .ok_or_else(|| Error::not_found(format!("ACP session {session_id_owned}")))?;
+        if matches!(
+            state,
+            DshAcpLifecycleState::Active | DshAcpLifecycleState::Faulted
+        ) {
+            controller.close_session(&session_id_owned)?;
+        }
+        controller.unmount_scope(&scope_ref)?;
+        Ok::<_, Error>(())
+    })
+    .await
+    .map_err(|error| AppError(Error::internal(format!("ACP release task failed: {error}"))))??;
+    controls
+        .lock()
+        .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?
+        .remove(session_id);
+    Ok(Json(json!({
+        "session_id": session_id,
+        "released": true,
+        "scope_released": true,
+        "resume_available": false,
+        "note": "The Work-bound lifecycle scope is released permanently; no business outcome or rollback is inferred."
     })))
 }
 
