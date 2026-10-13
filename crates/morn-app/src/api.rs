@@ -1492,12 +1492,11 @@ async fn v115_work_assess_value(
             )?,
         }
 
-        let consumed =
-            morn_assurance::ConsumedCustomerValueAttestation::from_attestation(
-                &attestation,
-                assessment.id.clone(),
-                assessment.assessed_at,
-            )?;
+        let consumed = morn_assurance::ConsumedCustomerValueAttestation::from_attestation(
+            &attestation,
+            assessment.id.clone(),
+            assessment.assessed_at,
+        )?;
         guard.store.save_record_immutable(
             consumed_kind,
             attestation_id,

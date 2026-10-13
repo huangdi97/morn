@@ -1780,10 +1780,7 @@ impl ControlPlaneStore for MornStore {
                 ));
             }
             let consumed: ConsumedCustomerValueAttestation = self
-                .load_record(
-                    "customer_value_attestation_consumed_v115",
-                    attestation_ref,
-                )?
+                .load_record("customer_value_attestation_consumed_v115", attestation_ref)?
                 .ok_or_else(|| Error::not_found("consumed customer value attestation"))?;
             if !consumed.exactly_matches(&attestation, assessment) {
                 return Err(Error::validation(

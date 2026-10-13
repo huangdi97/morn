@@ -243,7 +243,9 @@ mod tests {
             attestation.outcome_id.clone(),
             morn_work::value::ValueEvidenceClass::CustomerValidated,
         );
-        assessment.pin_work_generation(attestation.work_generation).unwrap();
+        assessment
+            .pin_work_generation(attestation.work_generation)
+            .unwrap();
         assessment.acceptance_ref = Some(attestation.acceptance_id.clone());
         assessment.customer_value_attestation_ref = Some(attestation.attestation_id.clone());
         assessment.assessed_at = Timestamp::from_millis(15);
