@@ -7617,7 +7617,7 @@ mod workspace_boundary_tests {
                 .store
                 .save_record_immutable(
                     "acceptance_reviewer_attestation_v115",
-                    reviewer.principal_id.as_str(),
+                    &reviewer.reference(),
                     guard.workspace.id.as_str(),
                     reviewer.observed_at.millis(),
                     &reviewer,
