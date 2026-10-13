@@ -1,5 +1,6 @@
 //! Application state: one shared backend for Workbench/Studio/Console/Hub.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use morn_artifact::service::ArtifactService;
@@ -26,10 +27,14 @@ use morn_foundry::compiler::SolutionCompiler;
 use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
-use morn_harness::{ExecutorOutcomeReconciliationAuthorization, PiHarnessProvider, PiMode};
+use morn_harness::{
+    DshAcpControlHandle, DshAcpLifecycleController, ExecutorOutcomeReconciliationAuthorization,
+    PiHarnessProvider, PiMode,
+};
 use morn_integration::{SourceObservationAttestation, SourceOfTruthBinding};
 #[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;
+use morn_kernel::ids::{RuntimeBindingId, WorkPackageId, WorkspaceId as KernelWorkspaceId};
 use morn_kernel::workspace::{Workspace, WorkspaceKind};
 use morn_opint::dataset::OutcomeDataset;
 use morn_opint::episode::EpisodeAssembler;
@@ -41,6 +46,32 @@ use morn_work::acceptance::{AcceptanceReviewAuthorization, AcceptanceReviewerAtt
 use morn_work::durable::DurableRuntime;
 use morn_work::service::{DurableWorkService, WorkService};
 use morn_world::service::WorldService;
+
+#[derive(Debug, Clone)]
+pub struct WorkBoundAcpSessionControl {
+    pub session_id: String,
+    pub workspace_id: KernelWorkspaceId,
+    pub work_id: WorkPackageId,
+    pub work_generation: u64,
+    pub execution_binding_ref: RuntimeBindingId,
+    pub scope_ref: String,
+    pub handle: Option<DshAcpControlHandle>,
+}
+
+impl WorkBoundAcpSessionControl {
+    pub fn matches(
+        &self,
+        workspace_id: &KernelWorkspaceId,
+        work_id: &WorkPackageId,
+        work_generation: u64,
+        binding_ref: &RuntimeBindingId,
+    ) -> bool {
+        &self.workspace_id == workspace_id
+            && &self.work_id == work_id
+            && self.work_generation == work_generation
+            && &self.execution_binding_ref == binding_ref
+    }
+}
 
 /// The shared application backend state.
 pub struct AppInner {
@@ -58,6 +89,13 @@ pub struct AppInner {
     pub native_harness: Arc<Mutex<MornNativeHarness>>,
     pub dsh_harness: Arc<Mutex<DeepSeekHarnessProvider>>,
     pub pi_harness: Arc<Mutex<PiHarnessProvider>>,
+    /// ACP lifecycle/control is a separate concurrency domain from the blocking
+    /// SDK executor path. It is opt-in and never upgrades HarnessProvider
+    /// interrupt/resume feature bits.
+    pub dsh_acp_lifecycle: Option<Arc<Mutex<DshAcpLifecycleController>>>,
+    /// Session-scoped cancel handles remain reachable while prompt_text holds
+    /// the lifecycle controller mutex in another blocking worker.
+    pub dsh_acp_controls: Arc<Mutex<HashMap<String, WorkBoundAcpSessionControl>>>,
     /// Deployment-owned execution environment attestations. HTTP callers may
     /// select only from this startup-loaded trust set; they cannot self-attest.
     pub execution_environments: AttestedExecutionEnvironmentProvider,
@@ -138,6 +176,25 @@ fn configured_dsh_harness() -> morn_kernel::Result<DeepSeekHarnessProvider> {
         ))),
         Err(error) => Err(morn_kernel::error::Error::validation(format!(
             "cannot read MORN_DSH_MODE: {error}"
+        ))),
+    }
+}
+
+fn configured_dsh_acp_lifecycle(
+) -> morn_kernel::Result<Option<Arc<Mutex<DshAcpLifecycleController>>>> {
+    match std::env::var("MORN_DSH_ACP_MODE") {
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Ok(mode) if mode.eq_ignore_ascii_case("disabled") || mode.eq_ignore_ascii_case("off") => {
+            Ok(None)
+        }
+        Ok(mode) if mode.eq_ignore_ascii_case("real") => Ok(Some(Arc::new(Mutex::new(
+            DshAcpLifecycleController::from_env()?,
+        )))),
+        Ok(mode) => Err(morn_kernel::error::Error::validation(format!(
+            "unsupported MORN_DSH_ACP_MODE {mode:?}; expected real or disabled"
+        ))),
+        Err(error) => Err(morn_kernel::error::Error::validation(format!(
+            "cannot read MORN_DSH_ACP_MODE: {error}"
         ))),
     }
 }
@@ -675,6 +732,7 @@ impl AppState {
             BioLabService::new(workspace_id)
         };
         let execution_environments = configured_execution_environments()?;
+        let dsh_acp_lifecycle = configured_dsh_acp_lifecycle()?;
         let source_of_truth_catalog = configured_source_of_truth_bindings()?;
         let source_observation_attestations = configured_source_observation_attestations()?;
         let acceptance_reviewers = configured_acceptance_reviewers()?;
@@ -697,6 +755,8 @@ impl AppState {
             native_harness: Arc::new(Mutex::new(MornNativeHarness::new())),
             dsh_harness: Arc::new(Mutex::new(configured_dsh_harness()?)),
             pi_harness: Arc::new(Mutex::new(configured_pi_harness()?)),
+            dsh_acp_lifecycle,
+            dsh_acp_controls: Arc::new(Mutex::new(HashMap::new())),
             execution_environments,
             source_of_truth_catalog,
             source_observation_attestations,
