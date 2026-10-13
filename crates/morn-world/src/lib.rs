@@ -13,8 +13,6 @@ pub mod relation;
 pub mod service;
 pub mod state;
 
-pub use gateway::{
-    ActionGateway, ActionPreview, ApprovalWitness, AuthorizedAction, ExecutionOutcome,
-};
+pub use gateway::{ActionGateway, ActionPreview, AuthorizedAction, ExecutionOutcome};
 pub use observed_outcome::{ObservedOutcome, OutcomeSourceKind};
 pub use service::WorldService;

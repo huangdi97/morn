@@ -71,13 +71,13 @@ impl AuthorizedAction {
 
 /// One-shot approval evidence bound to one exact proposal/action/target.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ApprovalWitness {
-    pub proposal_ref: String,
-    pub action_name: String,
-    pub target_object: String,
-    pub principal_ref: String,
-    pub role: String,
-    pub evidence_ref: String,
+struct ApprovalWitness {
+    proposal_ref: String,
+    action_name: String,
+    target_object: String,
+    principal_ref: String,
+    role: String,
+    evidence_ref: String,
 }
 
 /// Result of verifying an executed action.
@@ -98,10 +98,10 @@ pub struct ExecutionOutcome {
 /// The governed Action Gateway.
 #[derive(Debug, Clone)]
 pub struct ActionGateway {
-    pub policy: Policy,
-    pub effect_contract: EffectContract,
-    pub approval_witnesses: Vec<ApprovalWitness>,
-    pub ledger: Ledger,
+    policy: Policy,
+    effect_contract: EffectContract,
+    approval_witnesses: Vec<ApprovalWitness>,
+    ledger: Ledger,
 }
 
 impl ActionGateway {
@@ -112,6 +112,22 @@ impl ActionGateway {
             approval_witnesses: Vec::new(),
             ledger: Ledger::new(),
         }
+    }
+
+    pub fn policy(&self) -> &Policy {
+        &self.policy
+    }
+
+    pub fn effect_contract(&self) -> &EffectContract {
+        &self.effect_contract
+    }
+
+    pub fn ledger(&self) -> &Ledger {
+        &self.ledger
+    }
+
+    pub fn pending_approval_count(&self) -> usize {
+        self.approval_witnesses.len()
     }
 
     /// Show what executing this proposal would do, without authorizing it.
