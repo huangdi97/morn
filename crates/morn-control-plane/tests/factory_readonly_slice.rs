@@ -635,17 +635,14 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     let mut work_service = WorkService::new();
     work_service.add_acceptance_spec(acceptance);
     work_service.add_work_package(work_package);
-    work_service
-        .attempt_accept(
-            &work_package_id,
-            &AcceptanceEvidence {
-                produced_artifacts: vec!["delivery-impact-review".to_string()],
-                verification_passed: true,
-                required_approvals: vec!["production-planner".to_string()],
-                forbidden_condition_hit: None,
-            },
-        )
-        .unwrap();
+    let legacy_acceptance = work_service.attempt_accept(
+        &work_package_id,
+        &AcceptanceEvidence::default(),
+    );
+    assert!(
+        legacy_acceptance.is_err(),
+        "legacy WorkPackage witnesses must not create Accepted state"
+    );
     let mut outcome = ObservedOutcome::new(
         workspace.clone(),
         work_package_id.clone(),
