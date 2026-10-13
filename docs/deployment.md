@@ -94,6 +94,34 @@ Provision and harden the self-hosted runner outside the repository. The custom
 label and local identity file are admission controls, not a substitute for
 customer IAM, workload identity, host hardening or external attestation.
 
+## Customer / production evidence validation
+
+Real-site and production-write truth are external governance facts. Morn does not
+mint them from a provider session, UI action, test fixture or successful CI run.
+
+The protected manual workflow
+`.github/workflows/live-customer-evidence.yml` closes the deployment handoff
+without weakening that boundary:
+
+- select `real-site` or `production-write` and provide the exact
+  `site_ref`;
+- the protected `morn-customer-evidence` Environment supplies
+  `MORN_CUSTOMER_EVIDENCE_CLAIM_JSON` and the pinned
+  `MORN_EVIDENCE_ISSUER`;
+- `evidence_claim_verify` validates the exact subject
+  (`factory-customer:<site>` or `factory-production-write:<site>`),
+  evidence class, `Proven` state, non-future timestamp, issuer identity and
+  ordinary EvidenceLedger invariants;
+- the workflow emits a normalized `evidence-claim.json` that can be supplied
+  through `MORN_EVIDENCE_CLAIMS_FILE`.
+
+This workflow validates the deployment envelope only. It deliberately reports
+that the referenced external evidence was **not cryptographically verified by
+Morn**, customer facts were **not minted by Morn**, and production-write
+authority was **not granted**. The customer/governance system remains
+responsible for the evidence references and each real write still requires its
+own Work/Profile/Authority/ExternalAction permit.
+
 ## Attested OCI / Sigstore / SLSA verification
 
 B-004 has a deployment-facing verification gate in

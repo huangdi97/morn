@@ -502,7 +502,7 @@ fn acquisition_step(axis: &ReleaseReadinessAxis, site_ref: Option<&str>) -> Evid
                 axis_id: axis.id.clone(),
                 external_required: true,
                 acquisition: "Obtain deployment/customer-owned real-site evidence for the exact site and load it through the trusted evidence-claim file.".to_string(),
-                workflow_ref: None,
+                workflow_ref: Some(".github/workflows/live-customer-evidence.yml".to_string()),
                 artifact_or_input: format!("RealSite EvidenceClaim subject={subject}"),
                 deployment_inputs: vec![
                     "MORN_DEPLOYMENT_SITE_REF".to_string(),
@@ -520,7 +520,7 @@ fn acquisition_step(axis: &ReleaseReadinessAxis, site_ref: Option<&str>) -> Evid
                 axis_id: axis.id.clone(),
                 external_required: true,
                 acquisition: "Load deployment-owned ProductionWrite evidence for the exact site; each real action still needs an independent Work/Profile/Authority/Permit decision.".to_string(),
-                workflow_ref: None,
+                workflow_ref: Some(".github/workflows/live-customer-evidence.yml".to_string()),
                 artifact_or_input: format!("ProductionWrite EvidenceClaim subject={subject}"),
                 deployment_inputs: vec![
                     "MORN_DEPLOYMENT_SITE_REF".to_string(),

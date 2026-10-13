@@ -106,9 +106,10 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `f121c0804cdc4b289636ac2cf44a227aa1403c58`.
-- Exact-head GitHub Actions: `38432456574` — **5/5 SUCCESS**.
-- Subsequent trust-only workflow hardening `3678b271d962c060f09d187074d02a343794baf9` binds authenticated DSH/Pi smoke operations to a deployment-attested self-hosted runner; its exact-head CI must be green before becoming the next verified implementation checkpoint.
+- Verified implementation checkpoint: `5bb26a455b1aaea7daf70ab7eb6ff583b29f6c76`.
+- Exact-head GitHub Actions: `38436312727` — **5/5 SUCCESS**.
+- That checkpoint includes protected live-provider/supply-chain evidence workflows, attested runner binding, exact runtime/build/site identity checks and ephemeral registry credential handling.
+- Later readiness-acquisition UX and customer-evidence validation changes must obtain their own exact-head CI before replacing this checkpoint; an older green run is never inherited.
 - Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; zero-domain Core; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows; Cordis reference runtime; Windows desktop reference build.
 - Release-readiness trust hardening at this checkpoint binds exact build identity, exact active provider runtime artifact, deployment-pinned evidence issuer and exact deployment site; evidence time ambiguity/future claims fail closed.
 - Business-truth recovery now distinguishes observed outcome from final acceptance: Conditional/RequestMoreEvidence retain OutcomeObservation while remaining non-terminal.
@@ -119,10 +120,11 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 - ACP scope ownership is revocable and snapshot-pinned: broader scopes are rejected, recreated/mutated scope state cannot take over a historical session, and one-shot DSH_HOME means cross-process resume is explicitly unavailable.
 - `dsh_acp_lifecycle_smoke` is a deployment-facing gate for authenticated ACP lifecycle evidence; its PASS still reports executor/runtime-health/Outcome/Acceptance/production-write claims as false.
 - Current repository-local gap audit found no remaining TODO/FIXME/unimplemented/stub item required to satisfy the v11.5 reference design. Remaining blocker classes below require external deployment/customer evidence.
+- Readiness decisions now expose a machine-readable evidence-acquisition plan per blocked deployment scope. DSH/Pi point to their authenticated smoke gates; RealSite/ProductionWrite point to the protected customer/deployment evidence validation gate. These plans explain how to collect evidence without converting the external blocker into fake local PASS.
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `f121c0804cdc4b289636ac2cf44a227aa1403c58` and Actions `38432456574`.**
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `5bb26a455b1aaea7daf70ab7eb6ff583b29f6c76` and Actions `38436312727`.**
 - The verified checkpoint includes the owned desktop-backend lifecycle probe and Tauri CSP hardening in addition to the v11.5 control-plane, trust, provider and UI gates.
 - PR #1 remains draft because local engineering evidence is not production/customer evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.

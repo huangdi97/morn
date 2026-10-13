@@ -241,3 +241,23 @@ HarnessProvider contract or as production authorization.
 - **LIVE_DSH remains NOT_PROVEN** until an authenticated official runtime/model
   smoke executes inside a deployment-attested environment. Customer Outcome,
   independent Acceptance, ProductionWrite, and G12 remain separate external gates.
+
+
+### 2026-10-14 customer/deployment evidence handoff gate
+
+RealSite and ProductionWrite remain **external truth**, but the repository now has
+a protected validation handoff at
+`.github/workflows/live-customer-evidence.yml`.
+
+The gate accepts only a deployment/customer-governance supplied `EvidenceClaim`
+from the protected `morn-customer-evidence` Environment, pins the exact
+`factory-customer:<site>` or `factory-production-write:<site>` subject,
+requires the expected evidence class, `Proven` state, non-future timestamp,
+non-empty evidence/reason and the deployment-pinned issuer, then exports a
+normalized claim suitable for `MORN_EVIDENCE_CLAIMS_FILE`.
+
+This **does not clear G12 or ProductionWrite by itself**. It does not mint the
+customer fact, verify the external referenced signature/record, grant an
+action-level AuthorityDecision, or bypass the Work/Profile/ExternalAction
+enforcement path. It only removes the manual/schema ambiguity between external
+governance evidence and Morn's deployment evidence loader.

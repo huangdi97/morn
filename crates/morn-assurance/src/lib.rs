@@ -33,7 +33,7 @@ pub use release_readiness::{
     evaluate_deployment_readiness, evaluate_deployment_readiness_for_target,
     release_readiness_axes, release_readiness_axes_for_build,
     release_readiness_axes_for_deployment, DeploymentReadinessDecision, DeploymentReadinessScope,
-    ReadinessState, ReleaseReadinessAxis, RuntimeReadinessEvidence,
+    EvidenceAcquisitionStep, ReadinessState, ReleaseReadinessAxis, RuntimeReadinessEvidence,
 };
 
 pub use replay::{ReplayReport, ReplayRunner, ReplayScenario};
