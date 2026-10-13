@@ -6426,6 +6426,75 @@ mod workspace_boundary_tests {
             .unwrap();
     }
 
+    fn persist_test_review_authority(
+        store: &morn_store::MornStore,
+        work: &WorkResource,
+        outcome: &morn_world::ObservedOutcome,
+        decision: &mut morn_work::acceptance_decision::AcceptanceDecision,
+        authorization_id: &str,
+    ) {
+        let reviewer = morn_work::acceptance::AcceptanceReviewerAttestation {
+            principal_id: decision.decided_by.clone(),
+            acting_roles: vec![decision.acting_role.clone()],
+            evidence_refs: vec![format!("iam://reviewers/{}", decision.decided_by)],
+            observed_at: decision.decided_at,
+            valid_until: None,
+        };
+        let authorization = morn_work::acceptance::AcceptanceReviewAuthorization {
+            authorization_id: authorization_id.to_string(),
+            principal_id: decision.decided_by.clone(),
+            acting_role: decision.acting_role.clone(),
+            work_package_id: work.id.clone(),
+            work_generation: work.generation,
+            outcome_id: outcome.id.clone(),
+            disposition: decision.disposition,
+            evidence_refs: vec![format!("iam://review-authorizations/{authorization_id}")],
+            issued_at: decision.decided_at,
+            valid_until: None,
+        };
+        store
+            .save_record_immutable(
+                "acceptance_reviewer_attestation_v115",
+                reviewer.principal_id.as_str(),
+                work.workspace_id.as_str(),
+                reviewer.observed_at.millis(),
+                &reviewer,
+            )
+            .unwrap();
+        store
+            .save_record_immutable(
+                "acceptance_review_authorization_v115",
+                authorization_id,
+                work.workspace_id.as_str(),
+                authorization.issued_at.millis(),
+                &authorization,
+            )
+            .unwrap();
+        store
+            .save_record_immutable(
+                "acceptance_review_authorization_consumed_v115",
+                authorization_id,
+                work.workspace_id.as_str(),
+                decision.decided_at.millis(),
+                &json!({
+                    "authorization_id": authorization_id,
+                    "work_id": work.id,
+                    "outcome_id": outcome.id,
+                    "reviewer_principal_id": decision.decided_by,
+                    "acting_role": decision.acting_role,
+                    "disposition": decision.disposition,
+                    "consumed_at": decision.decided_at
+                }),
+            )
+            .unwrap();
+        decision
+            .pin_review_authority(
+                reviewer.principal_id.to_string(),
+                vec![authorization_id.to_string()],
+            )
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn v115_status_exposes_runtime_mode_and_only_deployment_attestations() {
         let state = AppState::new(":memory:").unwrap();
@@ -7540,15 +7609,24 @@ mod workspace_boundary_tests {
         let (work, grounded, ungrounded, reviewer_id, authorization_id) = {
             let mut guard = state.lock();
             let reviewer_id = morn_kernel::ids::PrincipalId::generate_with("reviewer");
+            let reviewer = morn_work::acceptance::AcceptanceReviewerAttestation {
+                principal_id: reviewer_id.clone(),
+                acting_roles: vec!["independent-reviewer".to_string()],
+                evidence_refs: vec!["iam://reviewers/alice".to_string()],
+                observed_at: morn_kernel::time::Timestamp::now(),
+                valid_until: None,
+            };
             guard
-                .acceptance_reviewers
-                .push(morn_work::acceptance::AcceptanceReviewerAttestation {
-                    principal_id: reviewer_id.clone(),
-                    acting_roles: vec!["independent-reviewer".to_string()],
-                    evidence_refs: vec!["iam://reviewers/alice".to_string()],
-                    observed_at: morn_kernel::time::Timestamp::now(),
-                    valid_until: None,
-                });
+                .store
+                .save_record_immutable(
+                    "acceptance_reviewer_attestation_v115",
+                    reviewer.principal_id.as_str(),
+                    guard.workspace.id.as_str(),
+                    reviewer.observed_at.millis(),
+                    &reviewer,
+                )
+                .unwrap();
+            guard.acceptance_reviewers.push(reviewer);
             let mut work = WorkResource::new(
                 guard.workspace.id.clone(),
                 WorkSpec::new(
@@ -7620,22 +7698,31 @@ mod workspace_boundary_tests {
                 .unwrap();
 
             let authorization_id = "review-auth-grounded-1".to_string();
-            guard.acceptance_review_authorizations.push(
-                morn_work::acceptance::AcceptanceReviewAuthorization {
-                    authorization_id: authorization_id.clone(),
-                    principal_id: reviewer_id.clone(),
-                    acting_role: "independent-reviewer".to_string(),
-                    work_package_id: work.id.clone(),
-                    work_generation: work.generation,
-                    outcome_id: grounded.id.clone(),
-                    disposition: morn_work::acceptance_decision::AcceptanceDisposition::Accept,
-                    evidence_refs: vec![
-                        "iam://review-authorizations/review-auth-grounded-1".to_string()
-                    ],
-                    issued_at: morn_kernel::time::Timestamp::now(),
-                    valid_until: None,
-                },
-            );
+            let authorization = morn_work::acceptance::AcceptanceReviewAuthorization {
+                authorization_id: authorization_id.clone(),
+                principal_id: reviewer_id.clone(),
+                acting_role: "independent-reviewer".to_string(),
+                work_package_id: work.id.clone(),
+                work_generation: work.generation,
+                outcome_id: grounded.id.clone(),
+                disposition: morn_work::acceptance_decision::AcceptanceDisposition::Accept,
+                evidence_refs: vec![
+                    "iam://review-authorizations/review-auth-grounded-1".to_string()
+                ],
+                issued_at: morn_kernel::time::Timestamp::now(),
+                valid_until: None,
+            };
+            guard
+                .store
+                .save_record_immutable(
+                    "acceptance_review_authorization_v115",
+                    authorization.authorization_id.as_str(),
+                    guard.workspace.id.as_str(),
+                    authorization.issued_at.millis(),
+                    &authorization,
+                )
+                .unwrap();
+            guard.acceptance_review_authorizations.push(authorization);
             (work, grounded, ungrounded, reviewer_id, authorization_id)
         };
 
@@ -7785,6 +7872,13 @@ mod workspace_boundary_tests {
             acceptance
                 .evidence_refs
                 .push("review://signed/recovery-42".to_string());
+            persist_test_review_authority(
+                &guard.store,
+                &work,
+                &outcome,
+                &mut acceptance,
+                "review-auth-recovery-42",
+            );
             ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &acceptance).unwrap();
 
             // Intentionally do not mutate Work: this models the post-evidence,
@@ -7898,6 +7992,13 @@ mod workspace_boundary_tests {
             acceptance
                 .evidence_refs
                 .push("review://signed/42".to_string());
+            persist_test_review_authority(
+                &guard.store,
+                &work,
+                &outcome,
+                &mut acceptance,
+                "review-auth-value-42",
+            );
             ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &acceptance).unwrap();
             work.status.phase = WorkPhase::Accepted;
             guard.store.save_work_resource_cas(&mut work).unwrap();
