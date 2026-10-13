@@ -15,7 +15,6 @@ pub mod state;
 
 pub use gateway::{
     ActionGateway, ActionPreview, ApprovalWitness, AuthorizedAction, ExecutionOutcome,
-    WorldCommitter, WorldVerifier,
 };
 pub use observed_outcome::{ObservedOutcome, OutcomeSourceKind};
 pub use service::WorldService;

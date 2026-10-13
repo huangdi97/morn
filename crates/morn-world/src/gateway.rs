@@ -13,70 +13,31 @@ use morn_kernel::ids::{ActionId, ExecutionReceiptId, ObjectId, WorkspaceId};
 use morn_kernel::ledger::Ledger;
 use morn_kernel::policy::{Policy, PolicyDecision};
 
-/// The canonical world commit port used by the gateway.
-pub trait WorldCommitter {
-    fn commit(
-        &mut self,
-        action: &Action,
-        object_id: ObjectId,
-        new_state: BTreeMap<String, Value>,
-        reason: Option<String>,
-        actor: &str,
-    ) -> Result<StateCommit>;
-}
-
-impl WorldCommitter for WorldService {
-    fn commit(
-        &mut self,
-        action: &Action,
-        object_id: ObjectId,
-        new_state: BTreeMap<String, Value>,
-        reason: Option<String>,
-        actor: &str,
-    ) -> Result<StateCommit> {
-        self.commit_state_authorized_internal(action, object_id, new_state, reason, actor)
-    }
-}
-
-/// Read-only verifier for exact canonical commit evidence.
-pub trait WorldVerifier {
-    fn has_commit_evidence(
-        &self,
-        workspace_ref: &str,
-        object_ref: &str,
-        action_ref: &str,
-        snapshot_ref: &str,
-        ledger_ref: &str,
-    ) -> bool;
-}
-
-impl WorldVerifier for WorldService {
-    fn has_commit_evidence(
-        &self,
-        workspace_ref: &str,
-        object_ref: &str,
-        action_ref: &str,
-        snapshot_ref: &str,
-        ledger_ref: &str,
-    ) -> bool {
-        let object_id = ObjectId::new(object_ref.to_string());
-        let snapshot_matches = self.snapshots_for(&object_id).iter().any(|snapshot| {
-            snapshot.id.to_string() == snapshot_ref
-                && snapshot.workspace_id.as_str() == workspace_ref
-                && snapshot
-                    .action_id
-                    .as_ref()
-                    .is_some_and(|action_id| action_id.as_str() == action_ref)
-        });
-        let ledger_matches = self.ledger_entries().iter().any(|entry| {
-            entry.id.to_string() == ledger_ref
-                && entry.workspace_id.as_str() == workspace_ref
-                && entry.subject == object_ref
-                && entry.refs.iter().any(|reference| reference == action_ref)
-                && entry.refs.iter().any(|reference| reference == snapshot_ref)
-        });
-        snapshot_matches && ledger_matches
-    }
+fn world_has_commit_evidence(
+    world: &WorldService,
+    workspace_ref: &str,
+    object_ref: &str,
+    action_ref: &str,
+    snapshot_ref: &str,
+    ledger_ref: &str,
+) -> bool {
+    let object_id = ObjectId::new(object_ref.to_string());
+    let snapshot_matches = world.snapshots_for(&object_id).iter().any(|snapshot| {
+        snapshot.id.to_string() == snapshot_ref
+            && snapshot.workspace_id.as_str() == workspace_ref
+            && snapshot
+                .action_id
+                .as_ref()
+                .is_some_and(|action_id| action_id.as_str() == action_ref)
+    });
+    let ledger_matches = world.ledger_entries().iter().any(|entry| {
+        entry.id.to_string() == ledger_ref
+            && entry.workspace_id.as_str() == workspace_ref
+            && entry.subject == object_ref
+            && entry.refs.iter().any(|reference| reference == action_ref)
+            && entry.refs.iter().any(|reference| reference == snapshot_ref)
+    });
+    snapshot_matches && ledger_matches
 }
 
 /// Expected effects shown before authorization.
@@ -93,8 +54,18 @@ pub struct ActionPreview {
 /// An action that passed preview + authorization.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthorizedAction {
-    pub action: Action,
-    pub preview: ActionPreview,
+    action: Action,
+    preview: ActionPreview,
+}
+
+impl AuthorizedAction {
+    pub fn action_id(&self) -> &ActionId {
+        &self.action.id
+    }
+
+    pub fn preview(&self) -> &ActionPreview {
+        &self.preview
+    }
 }
 
 /// One-shot approval evidence bound to one exact proposal/action/target.
@@ -237,13 +208,19 @@ impl ActionGateway {
         new_state: BTreeMap<String, Value>,
         reason: Option<String>,
         actor: &str,
-        world: &mut dyn WorldCommitter,
+        world: &mut WorldService,
     ) -> Result<ExecutionOutcome> {
         if authorized.action.status != ActionStatus::Authorized {
             return Err(Error::invalid_state("action is not authorized"));
         }
         let object_ref = object_id.to_string();
-        let commit = world.commit(&authorized.action, object_id, new_state, reason, actor)?;
+        let commit = world.commit_state_authorized_internal(
+            &authorized.action,
+            object_id,
+            new_state,
+            reason,
+            actor,
+        )?;
         self.ledger.append(
             commit.snapshot.workspace_id.clone(),
             "action.executed",
@@ -280,7 +257,7 @@ impl ActionGateway {
     }
 
     /// Verify an execution outcome against expectations.
-    pub fn verify(&self, outcome: &ExecutionOutcome, world: &dyn WorldVerifier) -> Result<bool> {
+    pub fn verify(&self, outcome: &ExecutionOutcome, world: &WorldService) -> Result<bool> {
         if !outcome.committed
             || outcome.workspace_ref.trim().is_empty()
             || outcome.object_ref.trim().is_empty()
@@ -292,7 +269,8 @@ impl ActionGateway {
                 "execution outcome lacks exact durable commit identity",
             ));
         }
-        Ok(world.has_commit_evidence(
+        Ok(world_has_commit_evidence(
+            world,
             &outcome.workspace_ref,
             &outcome.object_ref,
             &outcome.action_ref,
@@ -581,7 +559,13 @@ mod tests {
         let prop = proposal(ws, target.clone(), "runtime");
         let unauthorized = Action::new(prop.id);
         assert!(world
-            .commit_state(&unauthorized, target, BTreeMap::new(), None, "runtime")
+            .commit_state_authorized_internal(
+                &unauthorized,
+                target,
+                BTreeMap::new(),
+                None,
+                "runtime",
+            )
             .is_err());
     }
 }
