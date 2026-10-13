@@ -45,6 +45,9 @@ pub struct SourceObservationAttestation {
 impl SourceObservationAttestation {
     pub fn validate(&self) -> Result<()> {
         if self.attestation_id.trim().is_empty()
+            || self.workspace_id.as_str().trim().is_empty()
+            || self.work_package_id.as_str().trim().is_empty()
+            || self.source_binding_id.as_str().trim().is_empty()
             || self.work_generation == 0
             || self.fact_type.trim().is_empty()
             || self.objective.trim().is_empty()
@@ -141,6 +144,10 @@ impl ConsumedSourceObservationAttestation {
 
     pub fn validate(&self) -> Result<()> {
         if self.attestation_id.trim().is_empty()
+            || self.workspace_id.as_str().trim().is_empty()
+            || self.work_package_id.as_str().trim().is_empty()
+            || self.source_binding_id.as_str().trim().is_empty()
+            || self.outcome_id.as_str().trim().is_empty()
             || self.work_generation == 0
             || self.fact_type.trim().is_empty()
             || self.objective.trim().is_empty()
@@ -182,8 +189,17 @@ pub struct SourceOfTruthBinding {
 
 impl SourceOfTruthBinding {
     pub fn validate(&self) -> Result<()> {
-        if self.source_ref.trim().is_empty()
+        if self.id.as_str().trim().is_empty()
+            || self
+                .site_ref
+                .as_deref()
+                .is_some_and(|site| site.trim().is_empty())
+            || self.source_ref.trim().is_empty()
             || self.authoritative_fact_types.is_empty()
+            || self
+                .authoritative_fact_types
+                .iter()
+                .any(|fact| fact.trim().is_empty())
             || self.key_mapping_ref.trim().is_empty()
             || self.query_capability_ref.trim().is_empty()
             || self.version_ref.trim().is_empty()
@@ -342,6 +358,44 @@ mod tests {
         unbounded.freshness_sla_ms = None;
         assert!(unbounded
             .observation_is_fresh(Timestamp::from_millis(1), Timestamp::from_millis(100_000),));
+    }
+
+    #[test]
+    fn source_truth_records_reject_empty_typed_identities_and_blank_site_scope() {
+        let mut attestation = SourceObservationAttestation {
+            attestation_id: "obs-1".to_string(),
+            workspace_id: WorkspaceId::new(""),
+            work_package_id: WorkPackageId::generate_with("work"),
+            work_generation: 1,
+            source_binding_id: SourceOfTruthBindingId::generate_with("sot"),
+            fact_type: "delivery.status".to_string(),
+            objective: "delivery status".to_string(),
+            source_ref: "erp://delivery/1".to_string(),
+            observed_facts: serde_json::json!({"status":"delivered"}),
+            evidence_refs: vec!["erp://delivery/1/receipt".to_string()],
+            observed_at: Timestamp::from_millis(1),
+            valid_until: None,
+        };
+        assert!(attestation.validate().is_err());
+
+        attestation.workspace_id = WorkspaceId::generate();
+        let mut binding = SourceOfTruthBinding {
+            id: SourceOfTruthBindingId::generate_with("sot"),
+            site_ref: Some(" ".to_string()),
+            source_ref: "erp://delivery".to_string(),
+            authority_kind: TruthAuthorityKind::SystemOfRecord,
+            authoritative_fact_types: vec!["delivery.status".to_string()],
+            key_mapping_ref: "mapping://delivery@1".to_string(),
+            query_capability_ref: "capability://delivery.read@1".to_string(),
+            freshness_sla_ms: None,
+            conflict_policy: ConflictPolicy::ReconcileBeforeUse,
+            version_ref: "binding:v1".to_string(),
+            created_at: Timestamp::from_millis(1),
+        };
+        assert!(binding.validate().is_err());
+        binding.site_ref = None;
+        binding.id = SourceOfTruthBindingId::new("");
+        assert!(binding.validate().is_err());
     }
 
     #[test]

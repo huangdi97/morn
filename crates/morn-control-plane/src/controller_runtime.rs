@@ -886,7 +886,9 @@ mod tests {
         );
         review.pin_work_generation(work.generation).unwrap();
         review.outcome_refs.push(outcome.id.clone());
-        review.evidence_refs.push("review://conditional".to_string());
+        review
+            .evidence_refs
+            .push("review://conditional".to_string());
         ControlPlaneStore::save_acceptance_decision(&store, &work, &review).unwrap();
 
         let runtime = DurableBusinessEvidenceControllerRuntime::new("business-node-conditional");
@@ -942,7 +944,9 @@ mod tests {
         );
         reject.pin_work_generation(work.generation).unwrap();
         reject.outcome_refs.push(outcome.id.clone());
-        reject.evidence_refs.push("review://legacy-reject".to_string());
+        reject
+            .evidence_refs
+            .push("review://legacy-reject".to_string());
 
         // Simulate a row persisted by an older implementation before terminal
         // rejection required deployment-attested source provenance.

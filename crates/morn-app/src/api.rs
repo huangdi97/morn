@@ -1048,7 +1048,7 @@ async fn v115_work_observe_outcome(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> ApiResult {
-    use morn_control_plane::{ControlPlaneStore, WorkProgressController, WorkProgressInputs};
+    use morn_control_plane::{ControlPlaneStore, DurableBusinessEvidenceControllerRuntime};
     use morn_integration::{
         ConsumedSourceObservationAttestation, SourceOfTruthBinding, TruthAuthorityKind,
     };
@@ -1227,30 +1227,22 @@ async fn v115_work_observe_outcome(
     )?;
     guard.store.save_observed_outcome(&work, &outcome)?;
 
-    WorkProgressController.reconcile(
-        &mut work,
-        &WorkProgressInputs {
-            outcome: Some(&outcome),
-            ..Default::default()
-        },
-    );
-    if let Err(cas_error) = guard.store.save_work_resource_cas(&mut work) {
-        let recovery = morn_control_plane::DurableBusinessEvidenceControllerRuntime::new(
-            "morn-app-outcome-projection-recovery",
-        )
-        .reconcile_from_persisted_business_evidence(&guard.store, work_id, now);
-        if recovery.is_err() {
-            return Err(AppError(cas_error));
-        }
-        work = guard
-            .store
-            .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
-            .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
-    }
+    // Business projection always reads the durable immutable evidence back from
+    // the canonical store. The normal path and crash-recovery path are therefore
+    // the same fenced/CAS controller, not two subtly different state machines.
+    let projection = DurableBusinessEvidenceControllerRuntime::new(
+        "morn-app-outcome-projection",
+    )
+    .reconcile_from_persisted_business_evidence(&guard.store, work_id, now)?;
+    work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
 
     Ok(Json(json!({
         "outcome": outcome,
         "work": work,
+        "business_evidence_projection": projection,
         "source_binding": binding.id,
         "observation_attestation_id": attestation_id,
         "business_outcome_source_grounded": true,
@@ -3421,7 +3413,7 @@ async fn v115_work_review_outcome(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> ApiResult {
-    use morn_control_plane::{ControlPlaneStore, WorkProgressController, WorkProgressInputs};
+    use morn_control_plane::{ControlPlaneStore, DurableBusinessEvidenceControllerRuntime};
     use morn_kernel::ids::{AcceptanceSpecId, OutcomeRecordId};
     use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
     use morn_work::control::WorkPhase;
@@ -3644,31 +3636,19 @@ async fn v115_work_review_outcome(
         }),
     )?;
     ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &decision)?;
-    WorkProgressController.reconcile(
-        &mut work,
-        &WorkProgressInputs {
-            outcome: Some(&outcome),
-            acceptance: Some(&decision),
-            ..Default::default()
-        },
-    );
-    if let Err(cas_error) = guard.store.save_work_resource_cas(&mut work) {
-        let recovery = morn_control_plane::DurableBusinessEvidenceControllerRuntime::new(
-            "morn-app-acceptance-projection-recovery",
-        )
-        .reconcile_from_persisted_business_evidence(&guard.store, work_id, now);
-        if recovery.is_err() {
-            return Err(AppError(cas_error));
-        }
-        work = guard
-            .store
-            .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
-            .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
-    }
+    let projection = DurableBusinessEvidenceControllerRuntime::new(
+        "morn-app-acceptance-projection",
+    )
+    .reconcile_from_persisted_business_evidence(&guard.store, work_id, now)?;
+    work = guard
+        .store
+        .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
+        .ok_or_else(|| AppError(Error::not_found(format!("WorkResource {work_id}"))))?;
 
     Ok(Json(json!({
         "decision": decision,
         "work": work,
+        "business_evidence_projection": projection,
         "reviewed_outcome": outcome.id,
         "reviewer_principal_id": reviewer.principal_id,
         "reviewer_identity_evidence": reviewer.evidence_refs,
