@@ -12,6 +12,7 @@ use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{ActionId, ExecutionReceiptId, ObjectId, WorkspaceId};
 use morn_kernel::ledger::Ledger;
 use morn_kernel::policy::{Policy, PolicyDecision};
+use morn_kernel::status::LifecycleStatus;
 
 fn world_has_commit_evidence(
     world: &WorldService,
@@ -139,6 +140,16 @@ impl ActionGateway {
         proposal: &ActionProposal,
         action_name: &str,
     ) -> Result<AuthorizedAction> {
+        if proposal.workspace_id != self.policy.workspace_id {
+            return Err(Error::not_authorized(
+                "proposal workspace does not match the governing policy workspace",
+            ));
+        }
+        if self.policy.status != LifecycleStatus::Active {
+            return Err(Error::not_authorized(
+                "inactive policy cannot authorize canonical World actions",
+            ));
+        }
         let preview = self.preview(proposal, action_name);
         if let PolicyDecision::Deny(reason) = &preview.policy_decision {
             return Err(Error::not_authorized(format!(
@@ -213,7 +224,23 @@ impl ActionGateway {
         if authorized.action.status != ActionStatus::Authorized {
             return Err(Error::invalid_state("action is not authorized"));
         }
+        if actor.trim().is_empty() {
+            return Err(Error::validation("canonical World execution requires an actor"));
+        }
         let object_ref = object_id.to_string();
+        if object_ref != authorized.preview.target_object {
+            return Err(Error::not_authorized(
+                "authorized action is bound to a different target object",
+            ));
+        }
+        let object = world
+            .object(&object_id)
+            .ok_or_else(|| Error::not_found(format!("object {object_id}")))?;
+        if object.workspace_id != self.policy.workspace_id {
+            return Err(Error::not_authorized(
+                "target object workspace does not match the governing policy",
+            ));
+        }
         let commit = world.commit_state_authorized_internal(
             &authorized.action,
             object_id,
@@ -484,6 +511,68 @@ mod tests {
         assert!(gateway.authorize(&second, "release_claim").is_err());
         assert!(gateway.authorize(&first, "release_claim").is_ok());
         assert!(gateway.authorize(&first, "release_claim").is_err());
+    }
+
+    #[test]
+    fn policy_workspace_cannot_authorize_foreign_workspace_proposal() {
+        let policy_workspace = WorkspaceId::generate();
+        let foreign_workspace = WorkspaceId::generate();
+        let policy = Policy::new(
+            policy_workspace,
+            "workspace-bound",
+            vec![PolicyRule::allow("update")],
+        );
+        let mut gateway = ActionGateway::new(policy, EffectContract::e1("local update"));
+        let proposal = proposal(
+            foreign_workspace,
+            ObjectId::generate_with("foreign"),
+            "principal://operator",
+        );
+        assert!(gateway.authorize(&proposal, "update").is_err());
+    }
+
+    #[test]
+    fn authorization_for_one_target_cannot_be_replayed_to_another_object() {
+        let ws = WorkspaceId::generate();
+        let policy = Policy::new(ws.clone(), "strict", vec![PolicyRule::allow("update")]);
+        let mut gateway = ActionGateway::new(policy, EffectContract::e1("update"));
+        let mut world = WorldService::new();
+        let object_type = ObjectType::new("asset", ws.clone(), vec!["status".into()], vec![], vec![]);
+        world.register_object_type(object_type.clone());
+        let target_a = ObjectId::generate_with("asset-a");
+        let target_b = ObjectId::generate_with("asset-b");
+        for target in [target_a.clone(), target_b.clone()] {
+            world.register_object(Object::new(
+                target,
+                object_type.id.clone(),
+                ws.clone(),
+                {
+                    let mut state = BTreeMap::new();
+                    state.insert("status".to_string(), json!("before"));
+                    state
+                },
+            ));
+        }
+
+        let proposal = proposal(ws, target_a.clone(), "principal://operator");
+        let authorized = gateway.authorize(&proposal, "update").unwrap();
+        let mut next = BTreeMap::new();
+        next.insert("status".to_string(), json!("after"));
+        assert!(gateway
+            .execute(
+                &authorized,
+                target_b.clone(),
+                next,
+                Some("wrong target replay".to_string()),
+                "runtime://executor",
+                &mut world,
+            )
+            .is_err());
+        assert_eq!(
+            world.object(&target_b).unwrap().state().get("status"),
+            Some(&json!("before"))
+        );
+        assert!(world.snapshots_for(&target_b).is_empty());
     }
 
     #[test]
