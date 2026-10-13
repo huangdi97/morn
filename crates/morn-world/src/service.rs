@@ -143,7 +143,7 @@ impl WorldService {
     ///
     /// Requires an already-authorized `Action`. Produces a new immutable
     /// `StateSnapshot`, field-level `StateDiff`s, a world event and a ledger entry.
-    pub fn commit_state(
+    pub(crate) fn commit_state_authorized_internal(
         &mut self,
         action: &Action,
         object_id: ObjectId,
@@ -324,7 +324,7 @@ mod tests {
             "pipeline",
         );
         let unauthorized = Action::new(proposal.id.clone());
-        let err = world.commit_state(
+        let err = world.commit_state_authorized_internal(
             &unauthorized,
             obj_id.clone(),
             str_state("qc_status", "failed"),
@@ -365,7 +365,7 @@ mod tests {
         action.status = ActionStatus::Authorized;
 
         let commit = world
-            .commit_state(
+            .commit_state_authorized_internal(
                 &action,
                 obj_id.clone(),
                 str_state("qc_status", "failed"),
