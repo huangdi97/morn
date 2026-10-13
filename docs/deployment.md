@@ -259,6 +259,53 @@ keeps `canonical_work_outcome=false`, `customer_acceptance=false`, and
 `production_write=false`: a provider/model turn is execution evidence, not
 business truth. Exit code 2 means `NOT_PROVEN` rather than a fabricated pass.
 
+## Reproducible Pi RPC runtime identity
+
+Pi's official installer/update path owns a generated
+`packages/coding-agent/install-lock/package-lock.json` for the runtime dependency
+tree. Direct `npm install -g` is not a sufficient provenance boundary because
+transitive dependency resolution can drift independently of Morn's
+`ExecutionBinding`.
+
+Morn's manual **Live Pi evidence** workflow therefore checks out the exact
+`earendil-works/pi@v<runtime_version>` release, copies only its installer
+`package.json` + `package-lock.json` into an isolated directory, and executes
+`npm ci --ignore-scripts`. It then derives a stable SHA-256 over the actual
+installed runtime tree: sorted relative paths, symlink targets, executable/file
+modes and each regular file's SHA-256, together with the two installer metadata
+files. The canonical runtime identity is:
+
+```text
+pi@<version>#sha256:<installed-runtime-tree-digest>
+```
+
+The tree digest is platform-specific by design: optional/native packages that
+differ by deployment platform are part of the executable closure and must not
+share an identity accidentally. The workflow's `plan` operation computes this
+digest without provider credentials. A later `smoke` operation requires the
+deployment-attested digest to match the freshly reconstructed runtime closure
+before exposing any model credential.
+
+The workflow then runs `pi_identity_plan` to derive the independent
+`pi-rpc-route@v1#sha256:<digest>` semantic-route identity from Pi's exact
+provider, model, RPC containment flags and Morn isolation policy. Runtime-tree
+identity and route identity are both required by the deployment execution
+attestation. The authenticated smoke reuses the ordinary `provider_smoke`
+binary with `MORN_PROVIDER_SMOKE_PROVIDER=pi`; successful RPC settlement is
+executor evidence only and never creates Work Outcome, Acceptance or
+ProductionWrite evidence.
+
+Secrets remain step-scoped. Configure:
+- `MORN_PI_PROVIDER_API_KEY` for the provider credential;
+- optional `MORN_PI_PROVIDER_BASE_URL`;
+- `MORN_EXECUTION_ATTESTATION_JSON`;
+- `MORN_EXECUTION_ATTESTOR`.
+
+The workflow input `credential_env_name` selects the provider-specific
+environment variable name that receives the generic credential only for the
+smoke step. The child Pi process still receives only names explicitly listed in
+`MORN_PI_ENV_PASSTHROUGH`.
+
 ## Capability distribution trust gate
 
 Capability release is split into three independent deployment steps:
