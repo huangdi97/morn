@@ -279,7 +279,6 @@ export default function ConsolePage() {
                                 <strong>{readinessLabel(step.axis_id)}</strong>
                                 <StatusPill
                                   value={step.external_required ? "external evidence" : "repository/local"}
-                                  tone={step.external_required ? "blocked" : "neutral"}
                                 />
                               </div>
                               <p>{step.acquisition}</p>
