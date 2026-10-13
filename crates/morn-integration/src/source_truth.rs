@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use morn_kernel::error::{Error, Result};
-use morn_kernel::ids::{Id, WorkPackageId, WorkspaceId};
+use morn_kernel::ids::{Id, OutcomeRecordId, WorkPackageId, WorkspaceId};
 use morn_kernel::time::Timestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -84,6 +84,84 @@ impl SourceObservationAttestation {
             && self.fact_type == fact_type
             && self.observed_at <= now
             && self.valid_until.is_none_or(|until| now <= until)
+    }
+}
+
+/// Durable proof that one deployment-owned source observation attestation
+/// was consumed exactly once to materialize one Morn ObservedOutcome.
+///
+/// This is intentionally a full copy of the attested world fact, not a loose
+/// JSON marker. Control-plane persistence can therefore verify that the
+/// resulting Outcome did not change Work generation, authority, source,
+/// objective, facts, evidence or observation time after admission.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConsumedSourceObservationAttestation {
+    pub attestation_id: String,
+    pub workspace_id: WorkspaceId,
+    pub work_package_id: WorkPackageId,
+    pub work_generation: u64,
+    pub source_binding_id: SourceOfTruthBindingId,
+    pub fact_type: String,
+    pub objective: String,
+    pub source_ref: String,
+    pub observed_facts: Value,
+    pub evidence_refs: Vec<String>,
+    pub observed_at: Timestamp,
+    pub valid_until: Option<Timestamp>,
+    pub outcome_id: OutcomeRecordId,
+    pub consumed_at: Timestamp,
+}
+
+impl ConsumedSourceObservationAttestation {
+    pub fn from_attestation(
+        attestation: &SourceObservationAttestation,
+        outcome_id: OutcomeRecordId,
+        consumed_at: Timestamp,
+    ) -> Result<Self> {
+        attestation.validate()?;
+        let record = Self {
+            attestation_id: attestation.attestation_id.clone(),
+            workspace_id: attestation.workspace_id.clone(),
+            work_package_id: attestation.work_package_id.clone(),
+            work_generation: attestation.work_generation,
+            source_binding_id: attestation.source_binding_id.clone(),
+            fact_type: attestation.fact_type.clone(),
+            objective: attestation.objective.clone(),
+            source_ref: attestation.source_ref.clone(),
+            observed_facts: attestation.observed_facts.clone(),
+            evidence_refs: attestation.evidence_refs.clone(),
+            observed_at: attestation.observed_at,
+            valid_until: attestation.valid_until,
+            outcome_id,
+            consumed_at,
+        };
+        record.validate()?;
+        Ok(record)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.attestation_id.trim().is_empty()
+            || self.work_generation == 0
+            || self.fact_type.trim().is_empty()
+            || self.objective.trim().is_empty()
+            || self.source_ref.trim().is_empty()
+            || !self.observed_facts.is_object()
+            || self.evidence_refs.is_empty()
+        {
+            return Err(Error::validation(
+                "consumed source observation requires exact attestation, Work, source fact and evidence",
+            ));
+        }
+        if self.consumed_at < self.observed_at
+            || self
+                .valid_until
+                .is_some_and(|until| self.consumed_at > until || until < self.observed_at)
+        {
+            return Err(Error::validation(
+                "source observation must be consumed inside its attested validity window",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -186,6 +264,47 @@ mod tests {
             "maintenance.order",
             Timestamp::from_millis(21),
         ));
+    }
+
+    #[test]
+    fn consumed_observation_is_a_full_typed_copy_of_the_admitted_fact() {
+        let workspace = WorkspaceId::generate();
+        let work = WorkPackageId::generate_with("work");
+        let binding = SourceOfTruthBindingId::generate_with("sot");
+        let attestation = SourceObservationAttestation {
+            attestation_id: "obs-attest-consume-1".to_string(),
+            workspace_id: workspace.clone(),
+            work_package_id: work.clone(),
+            work_generation: 3,
+            source_binding_id: binding.clone(),
+            fact_type: "delivery.status".to_string(),
+            objective: "delivery confirmed".to_string(),
+            source_ref: "erp://deliveries/42".to_string(),
+            observed_facts: serde_json::json!({"status":"delivered"}),
+            evidence_refs: vec!["erp://deliveries/42/receipt".to_string()],
+            observed_at: Timestamp::from_millis(10),
+            valid_until: Some(Timestamp::from_millis(20)),
+        };
+        let outcome = OutcomeRecordId::generate_with("out");
+        let consumed = ConsumedSourceObservationAttestation::from_attestation(
+            &attestation,
+            outcome.clone(),
+            Timestamp::from_millis(15),
+        )
+        .unwrap();
+        assert_eq!(consumed.workspace_id, workspace);
+        assert_eq!(consumed.work_package_id, work);
+        assert_eq!(consumed.work_generation, 3);
+        assert_eq!(consumed.source_binding_id, binding);
+        assert_eq!(consumed.outcome_id, outcome);
+        assert_eq!(consumed.observed_facts, serde_json::json!({"status":"delivered"}));
+
+        assert!(ConsumedSourceObservationAttestation::from_attestation(
+            &attestation,
+            OutcomeRecordId::generate_with("out"),
+            Timestamp::from_millis(21),
+        )
+        .is_err());
     }
 
     #[test]

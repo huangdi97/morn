@@ -43,7 +43,10 @@ pub use profile_guard::{
 
 use morn_assurance::CustomerValueAttestation;
 use morn_harness::{ExecutionEvent, ExecutionReceipt};
-use morn_integration::{GovernedExternalTaskObservation, InteropBinding, SourceOfTruthBinding};
+use morn_integration::{
+    ConsumedSourceObservationAttestation, GovernedExternalTaskObservation, InteropBinding,
+    SourceOfTruthBinding,
+};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::protocol::{
     plan_protocol_migration, ProtocolCompatibility, ProtocolMigrationPlan, ProtocolSnapshot,
@@ -798,32 +801,28 @@ pub(crate) fn require_attested_outcome_provenance(
         .source_attestation_ref
         .as_deref()
         .ok_or_else(|| Error::validation("attested outcome missing observation attestation"))?;
-    let consumed: serde_json::Value = store
+    let consumed: ConsumedSourceObservationAttestation = store
         .load_record(
             "source_observation_attestation_consumed_v115",
             attestation_ref,
         )?
         .ok_or_else(|| Error::not_found("consumed source observation attestation"))?;
-    let exact = consumed
-        .get("attestation_id")
-        .and_then(serde_json::Value::as_str)
-        == Some(attestation_ref)
-        && consumed.get("work_id").and_then(serde_json::Value::as_str) == Some(work.id.as_str())
-        && consumed
-            .get("source_binding_id")
-            .and_then(serde_json::Value::as_str)
-            == Some(binding.id.as_str())
-        && consumed
-            .get("fact_type")
-            .and_then(serde_json::Value::as_str)
-            == Some(fact_type)
-        && consumed
-            .get("outcome_id")
-            .and_then(serde_json::Value::as_str)
-            == Some(outcome.id.as_str());
+    consumed.validate()?;
+    let exact = consumed.attestation_id == attestation_ref
+        && consumed.workspace_id == work.workspace_id
+        && consumed.work_package_id == work.id
+        && consumed.work_generation == work.generation
+        && consumed.source_binding_id == binding.id
+        && consumed.fact_type == fact_type
+        && consumed.objective == outcome.objective
+        && consumed.source_ref == outcome.source_ref
+        && consumed.observed_facts == outcome.observed_facts
+        && consumed.evidence_refs == outcome.evidence_refs
+        && consumed.observed_at == outcome.observed_at
+        && consumed.outcome_id == outcome.id;
     if !exact {
         return Err(Error::validation(
-            "attested outcome provenance does not match its consumed observation record",
+            "attested outcome does not exactly match its durable consumed source observation",
         ));
     }
     Ok(())
@@ -2271,20 +2270,33 @@ mod control_plane_persistence_scope_tests {
         outcome
             .pin_source_provenance(binding.id.to_string(), attestation_id.clone(), "test.fact")
             .unwrap();
+        let attestation = morn_integration::SourceObservationAttestation {
+            attestation_id: attestation_id.clone(),
+            workspace_id: work.workspace_id.clone(),
+            work_package_id: work.id.clone(),
+            work_generation: work.generation,
+            source_binding_id: binding.id.clone(),
+            fact_type: "test.fact".to_string(),
+            objective: outcome.objective.clone(),
+            source_ref: outcome.source_ref.clone(),
+            observed_facts: outcome.observed_facts.clone(),
+            evidence_refs: outcome.evidence_refs.clone(),
+            observed_at: outcome.observed_at,
+            valid_until: None,
+        };
+        let consumed = morn_integration::ConsumedSourceObservationAttestation::from_attestation(
+            &attestation,
+            outcome.id.clone(),
+            outcome.observed_at,
+        )
+        .unwrap();
         store
             .save_record_immutable(
                 "source_observation_attestation_consumed_v115",
                 &attestation_id,
                 work.workspace_id.as_str(),
                 outcome.observed_at.millis(),
-                &json!({
-                    "attestation_id": attestation_id,
-                    "work_id": work.id,
-                    "source_binding_id": binding.id,
-                    "fact_type": "test.fact",
-                    "outcome_id": outcome.id,
-                    "consumed_at": outcome.observed_at
-                }),
+                &consumed,
             )
             .unwrap();
     }
@@ -3161,6 +3173,68 @@ mod control_plane_persistence_scope_tests {
             .evidence_refs
             .push("review://ticket-correct".to_string());
         ControlPlaneStore::save_acceptance_decision(&store, &work, &correct).unwrap();
+    }
+
+    #[test]
+    fn weak_consumption_marker_cannot_forge_attested_business_truth() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+
+        let binding = morn_integration::SourceOfTruthBinding {
+            id: morn_integration::SourceOfTruthBindingId::generate_with("sot"),
+            site_ref: work.spec.site_ref.clone(),
+            source_ref: "erp://deliveries".to_string(),
+            authority_kind: morn_integration::TruthAuthorityKind::SystemOfRecord,
+            authoritative_fact_types: vec!["delivery.status".to_string()],
+            key_mapping_ref: "mapping://delivery@1".to_string(),
+            query_capability_ref: "capability://delivery.read@1".to_string(),
+            freshness_sla_ms: None,
+            conflict_policy: morn_integration::ConflictPolicy::ReconcileBeforeUse,
+            version_ref: "binding:v1".to_string(),
+            created_at: morn_kernel::time::Timestamp::now(),
+        };
+        store.save_source_of_truth_binding(&work, &binding).unwrap();
+
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "delivery complete",
+            OutcomeSourceKind::ExternalSystem,
+            "erp://deliveries/42",
+            json!({"status":"delivered"}),
+        );
+        outcome
+            .evidence_refs
+            .push("erp://deliveries/42/receipt".to_string());
+        let attestation_id = format!("observation-attestation:{}", outcome.id);
+        outcome
+            .pin_source_provenance(
+                binding.id.to_string(),
+                attestation_id.clone(),
+                "delivery.status",
+            )
+            .unwrap();
+
+        // This is the old weak marker shape: ids match, but the admitted world
+        // fact itself is absent. Typed control-plane validation must fail closed.
+        store
+            .save_record_immutable(
+                "source_observation_attestation_consumed_v115",
+                &attestation_id,
+                work.workspace_id.as_str(),
+                outcome.observed_at.millis(),
+                &json!({
+                    "attestation_id": attestation_id,
+                    "work_id": work.id,
+                    "source_binding_id": binding.id,
+                    "fact_type": "delivery.status",
+                    "outcome_id": outcome.id,
+                    "consumed_at": outcome.observed_at
+                }),
+            )
+            .unwrap();
+        assert!(require_attested_outcome_provenance(&store, &work, &outcome).is_err());
     }
 
     #[test]

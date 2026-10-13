@@ -723,20 +723,33 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     store
         .save_source_of_truth_binding(&work, &source_binding)
         .unwrap();
+    let source_attestation = morn_integration::SourceObservationAttestation {
+        attestation_id: "fixture://factory-observation-attestation".to_string(),
+        workspace_id: work.workspace_id.clone(),
+        work_package_id: work.id.clone(),
+        work_generation: work.generation,
+        source_binding_id: source_binding.id.clone(),
+        fact_type: "maintenance.order".to_string(),
+        objective: outcome.objective.clone(),
+        source_ref: outcome.source_ref.clone(),
+        observed_facts: outcome.observed_facts.clone(),
+        evidence_refs: outcome.evidence_refs.clone(),
+        observed_at: outcome.observed_at,
+        valid_until: None,
+    };
+    let consumed = morn_integration::ConsumedSourceObservationAttestation::from_attestation(
+        &source_attestation,
+        outcome.id.clone(),
+        outcome.observed_at,
+    )
+    .unwrap();
     store
         .save_record_immutable(
             "source_observation_attestation_consumed_v115",
             "fixture://factory-observation-attestation",
             work.workspace_id.as_str(),
             outcome.observed_at.millis(),
-            &serde_json::json!({
-                "attestation_id": "fixture://factory-observation-attestation",
-                "work_id": work.id,
-                "source_binding_id": source_binding.id,
-                "fact_type": "maintenance.order",
-                "outcome_id": outcome.id,
-                "consumed_at": outcome.observed_at
-            }),
+            &consumed,
         )
         .unwrap();
     store.save_execution_binding(&work, &binding).unwrap();

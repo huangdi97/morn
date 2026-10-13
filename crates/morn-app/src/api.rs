@@ -1049,7 +1049,9 @@ async fn v115_work_observe_outcome(
     Json(body): Json<Value>,
 ) -> ApiResult {
     use morn_control_plane::{ControlPlaneStore, WorkProgressController, WorkProgressInputs};
-    use morn_integration::{SourceOfTruthBinding, TruthAuthorityKind};
+    use morn_integration::{
+        ConsumedSourceObservationAttestation, SourceOfTruthBinding, TruthAuthorityKind,
+    };
     use morn_world::{ObservedOutcome, OutcomeSourceKind};
 
     let work_id = body
@@ -1207,21 +1209,21 @@ async fn v115_work_observe_outcome(
     outcome.evidence_refs = attestation.evidence_refs.clone();
     outcome.observed_at = attestation.observed_at;
 
-    // Consume first. A later storage/controller failure burns the attestation
-    // fail-closed instead of making authoritative world evidence replayable.
+    // Consume first. The durable record is a complete typed copy of the
+    // deployment-attested fact, not a loose marker containing only ids.
+    // A later storage/controller failure burns the attestation fail-closed
+    // instead of making authoritative world evidence replayable.
+    let consumed = ConsumedSourceObservationAttestation::from_attestation(
+        &attestation,
+        outcome.id.clone(),
+        now,
+    )?;
     guard.store.save_record_immutable(
         consumed_kind,
         attestation_id,
         work.workspace_id.as_str(),
         now.millis(),
-        &json!({
-            "attestation_id": attestation_id,
-            "work_id": work.id,
-            "source_binding_id": binding.id,
-            "fact_type": attestation.fact_type,
-            "outcome_id": outcome.id,
-            "consumed_at": now
-        }),
+        &consumed,
     )?;
     guard.store.save_observed_outcome(&work, &outcome)?;
 
@@ -6404,6 +6406,45 @@ mod workspace_boundary_tests {
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
     use morn_work::control::{WorkResource, WorkSpec};
 
+    fn persist_consumed_observation(
+        store: &morn_store::MornStore,
+        work: &WorkResource,
+        binding: &morn_integration::SourceOfTruthBinding,
+        outcome: &morn_world::ObservedOutcome,
+        attestation_id: &str,
+        fact_type: &str,
+    ) {
+        let attestation = morn_integration::SourceObservationAttestation {
+            attestation_id: attestation_id.to_string(),
+            workspace_id: work.workspace_id.clone(),
+            work_package_id: work.id.clone(),
+            work_generation: work.generation,
+            source_binding_id: binding.id.clone(),
+            fact_type: fact_type.to_string(),
+            objective: outcome.objective.clone(),
+            source_ref: outcome.source_ref.clone(),
+            observed_facts: outcome.observed_facts.clone(),
+            evidence_refs: outcome.evidence_refs.clone(),
+            observed_at: outcome.observed_at,
+            valid_until: None,
+        };
+        let consumed = morn_integration::ConsumedSourceObservationAttestation::from_attestation(
+            &attestation,
+            outcome.id.clone(),
+            outcome.observed_at,
+        )
+        .unwrap();
+        store
+            .save_record_immutable(
+                "source_observation_attestation_consumed_v115",
+                attestation_id,
+                work.workspace_id.as_str(),
+                outcome.observed_at.millis(),
+                &consumed,
+            )
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn v115_status_exposes_runtime_mode_and_only_deployment_attestations() {
         let state = AppState::new(":memory:").unwrap();
@@ -7574,23 +7615,14 @@ mod workspace_boundary_tests {
                     "delivery.status",
                 )
                 .unwrap();
-            guard
-                .store
-                .save_record_immutable(
-                    "source_observation_attestation_consumed_v115",
-                    observation_attestation_id,
-                    work.workspace_id.as_str(),
-                    grounded.observed_at.millis(),
-                    &json!({
-                        "attestation_id": observation_attestation_id,
-                        "work_id": work.id,
-                        "source_binding_id": source_binding.id,
-                        "fact_type": "delivery.status",
-                        "outcome_id": grounded.id,
-                        "consumed_at": grounded.observed_at
-                    }),
-                )
-                .unwrap();
+            persist_consumed_observation(
+                &guard.store,
+                &work,
+                &source_binding,
+                &grounded,
+                observation_attestation_id,
+                "delivery.status",
+            );
             guard.store.save_observed_outcome(&work, &grounded).unwrap();
 
             let ungrounded = ObservedOutcome::new(
@@ -7749,23 +7781,14 @@ mod workspace_boundary_tests {
                     "delivery.status",
                 )
                 .unwrap();
-            guard
-                .store
-                .save_record_immutable(
-                    "source_observation_attestation_consumed_v115",
-                    observation_attestation_id,
-                    work.workspace_id.as_str(),
-                    outcome.observed_at.millis(),
-                    &json!({
-                        "attestation_id": observation_attestation_id,
-                        "work_id": work.id,
-                        "source_binding_id": binding.id,
-                        "fact_type": "delivery.status",
-                        "outcome_id": outcome.id,
-                        "consumed_at": outcome.observed_at
-                    }),
-                )
-                .unwrap();
+            persist_consumed_observation(
+                &guard.store,
+                &work,
+                &binding,
+                &outcome,
+                observation_attestation_id,
+                "delivery.status",
+            );
             guard.store.save_observed_outcome(&work, &outcome).unwrap();
 
             let mut acceptance = AcceptanceDecision::new(
@@ -7871,23 +7894,14 @@ mod workspace_boundary_tests {
                     "delivery.metrics",
                 )
                 .unwrap();
-            guard
-                .store
-                .save_record_immutable(
-                    "source_observation_attestation_consumed_v115",
-                    observation_attestation_id,
-                    work.workspace_id.as_str(),
-                    outcome.observed_at.millis(),
-                    &json!({
-                        "attestation_id": observation_attestation_id,
-                        "work_id": work.id,
-                        "source_binding_id": source_binding.id,
-                        "fact_type": "delivery.metrics",
-                        "outcome_id": outcome.id,
-                        "consumed_at": outcome.observed_at
-                    }),
-                )
-                .unwrap();
+            persist_consumed_observation(
+                &guard.store,
+                &work,
+                &source_binding,
+                &outcome,
+                observation_attestation_id,
+                "delivery.metrics",
+            );
             guard.store.save_observed_outcome(&work, &outcome).unwrap();
 
             let mut acceptance = AcceptanceDecision::new(
