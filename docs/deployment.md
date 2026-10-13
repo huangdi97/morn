@@ -94,6 +94,45 @@ Provision and harden the self-hosted runner outside the repository. The custom
 label and local identity file are admission controls, not a substitute for
 customer IAM, workload identity, host hardening or external attestation.
 
+## Real BioLab dataset provenance gate
+
+The reference BioLab pack contains deterministic fixture data for engineering
+tests. A real scientific/customer pilot must not reuse that fixture label as
+real evidence. The deployment-facing gate is
+`.github/workflows/live-biolab-evidence.yml`.
+
+The protected `morn-biolab-evidence` Environment supplies an externally
+governed provenance record and issuer, while a dedicated self-hosted runner
+(`morn-attested-biolab`) supplies the actual dataset bytes under the fixed
+root `/var/lib/morn/biolab-datasets`. The workflow:
+
+- binds itself to the root-owned `/etc/morn/biolab-runner-ref`;
+- rejects absolute/traversal paths and symlink datasets;
+- reads only a non-empty regular file beneath the fixed dataset root;
+- validates `BioLabDatasetProvenance` fields for source system, schema,
+  governance, license/consent and collection provenance;
+- hashes the actual file bytes and requires an exact canonical
+  `sha256:<64-lowercase-hex>` match;
+- pins the deployment-trusted provenance issuer;
+- exports secret-free `dataset-provenance.json`.
+
+The Rust verifier is:
+
+```text
+cargo run --all-features -p morn-app --bin biolab_dataset_verify
+```
+
+with `MORN_BIOLAB_DATASET_FILE`,
+`MORN_BIOLAB_DATASET_PROVENANCE_FILE` and
+`MORN_BIOLAB_DATASET_PROVENANCE_ISSUER`.
+
+A PASS proves only that the exact dataset bytes match the deployment-owned
+provenance envelope. Morn does **not** thereby mint lawful-use consent,
+scientific validity, an accepted outcome or customer value. G4-B-002 is cleared
+only when the real pilot actually uses that provenance-bound dataset under the
+relevant external governance and produces its separate Work/Outcome/Acceptance
+evidence.
+
 ## Customer / production evidence validation
 
 Real-site and production-write truth are external governance facts. Morn does not

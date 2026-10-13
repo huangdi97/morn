@@ -261,3 +261,24 @@ customer fact, verify the external referenced signature/record, grant an
 action-level AuthorityDecision, or bypass the Work/Profile/ExternalAction
 enforcement path. It only removes the manual/schema ambiguity between external
 governance evidence and Morn's deployment evidence loader.
+
+
+### 2026-10-14 BioLab real-dataset provenance handoff
+
+G4-B-002 remains an **external real-data pilot blocker**, but the repository now
+contains the complete admission handoff for that data:
+
+- `BioLabDatasetProvenance` requires an exact dataset ref, canonical SHA-256,
+  schema, source system, governance approval, license/consent and collection
+  provenance references.
+- `biolab_dataset_verify` hashes the actual dataset file and compares it to
+  the deployment-owned provenance record.
+- `.github/workflows/live-biolab-evidence.yml` runs only on the protected
+  `morn-attested-biolab` self-hosted runner, binds runner identity, confines
+  dataset paths to `/var/lib/morn/biolab-datasets`, rejects symlinks/traversal,
+  and exports a secret-free normalized provenance record.
+
+A PASS at this gate does **not** prove scientific validity, lawful use beyond
+the referenced external governance artifact, an accepted Outcome, customer
+value, or G12. The real BioLab pilot must still actually execute on the admitted
+dataset and generate its independent scientific/business evidence.

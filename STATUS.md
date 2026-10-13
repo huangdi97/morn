@@ -121,6 +121,7 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 - `dsh_acp_lifecycle_smoke` is a deployment-facing gate for authenticated ACP lifecycle evidence; its PASS still reports executor/runtime-health/Outcome/Acceptance/production-write claims as false.
 - Current repository-local gap audit found no remaining TODO/FIXME/unimplemented/stub item required to satisfy the v11.5 reference design. Remaining blocker classes below require external deployment/customer evidence.
 - Readiness decisions now expose a machine-readable evidence-acquisition plan per blocked deployment scope. DSH/Pi point to their authenticated smoke gates; RealSite/ProductionWrite point to the protected customer/deployment evidence validation gate. These plans explain how to collect evidence without converting the external blocker into fake local PASS.
+- The BioLab external-data handoff now has an exact-byte provenance contract and protected validation workflow. It can verify a real pilot dataset against source/governance/consent provenance without reclassifying fixture data or claiming scientific/customer acceptance.
 
 ## Release posture
 
