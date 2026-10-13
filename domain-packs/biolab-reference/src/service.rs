@@ -14,7 +14,9 @@ use morn_kernel::policy::{Policy, PolicyRule};
 use morn_runtime::gateway::ActionGateway;
 use morn_work::acceptance::AcceptanceSpec;
 use morn_work::execution_mode::{ExecutionMode, ExecutorType, WorkNature};
-use morn_work::service::{AcceptanceEvidence, WorkService};
+use morn_work::service::{
+    AcceptanceApprovalWitness, AcceptanceEvidence, VerificationWitness, WorkService,
+};
 use morn_work::work_package::WorkPackage;
 use morn_world::object::Object;
 use morn_world::outcome::OutcomeRecord;
@@ -271,8 +273,20 @@ impl BioLabService {
             &wp_id,
             &AcceptanceEvidence {
                 produced_artifacts: vec!["analysis".to_string()],
-                verification_passed: release_verified,
-                required_approvals: vec!["pi".to_string()],
+                verification_witnesses: if release_verified {
+                    vec![VerificationWitness::new(
+                        wp_id.clone(),
+                        format!("world-snapshot://{}", outcome.snapshot_ref),
+                    )]
+                } else {
+                    vec![]
+                },
+                approval_witnesses: vec![AcceptanceApprovalWitness::new(
+                    wp_id.clone(),
+                    self.pi.as_str(),
+                    "pi",
+                    format!("artifact-approval://{pi_approval_ref}"),
+                )],
                 forbidden_condition_hit: None,
             },
         )?;

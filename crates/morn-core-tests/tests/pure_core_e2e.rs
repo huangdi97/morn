@@ -140,8 +140,15 @@ fn pure_core_e2e_zero_domain() {
                 &wp_id,
                 &morn_work::service::AcceptanceEvidence {
                     produced_artifacts: vec!["result".to_string()],
-                    verification_passed: execution_verified,
-                    required_approvals: vec![],
+                    verification_witnesses: if execution_verified {
+                        vec![morn_work::service::VerificationWitness::new(
+                            wp_id.clone(),
+                            format!("world-snapshot://{}", outcome.snapshot_ref),
+                        )]
+                    } else {
+                        vec![]
+                    },
+                    approval_witnesses: vec![],
                     forbidden_condition_hit: None,
                 },
             )

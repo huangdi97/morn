@@ -13,12 +13,54 @@ use crate::checkpoint::Checkpoint;
 use crate::recovery::RecoveryRecord;
 use crate::work_package::WorkPackage;
 
-/// Evidence submitted when trying to accept a WorkPackage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationWitness {
+    pub work_package_id: WorkPackageId,
+    pub evidence_ref: String,
+}
+
+impl VerificationWitness {
+    pub fn new(work_package_id: WorkPackageId, evidence_ref: impl Into<String>) -> Self {
+        Self {
+            work_package_id,
+            evidence_ref: evidence_ref.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcceptanceApprovalWitness {
+    pub work_package_id: WorkPackageId,
+    pub principal_ref: String,
+    pub role: String,
+    pub evidence_ref: String,
+}
+
+impl AcceptanceApprovalWitness {
+    pub fn new(
+        work_package_id: WorkPackageId,
+        principal_ref: impl Into<String>,
+        role: impl Into<String>,
+        evidence_ref: impl Into<String>,
+    ) -> Self {
+        Self {
+            work_package_id,
+            principal_ref: principal_ref.into(),
+            role: role.into(),
+            evidence_ref: evidence_ref.into(),
+        }
+    }
+}
+
+/// Evidence submitted when trying to accept a legacy WorkPackage.
+///
+/// Canonical v11.5 Work uses AcceptanceDecision; this legacy path still
+/// requires Work-bound witness references rather than caller-supplied booleans.
 #[derive(Debug, Clone, Default)]
 pub struct AcceptanceEvidence {
     pub produced_artifacts: Vec<String>,
-    pub verification_passed: bool,
-    pub required_approvals: Vec<String>,
+    pub verification_witnesses: Vec<VerificationWitness>,
+    pub approval_witnesses: Vec<AcceptanceApprovalWitness>,
     pub forbidden_condition_hit: Option<String>,
 }
 
@@ -90,15 +132,26 @@ impl WorkService {
                 )));
             }
         }
-        if !evidence.verification_passed {
+        let has_work_bound_verification = evidence.verification_witnesses.iter().any(|witness| {
+            witness.work_package_id == *id && !witness.evidence_ref.trim().is_empty()
+        });
+        if !has_work_bound_verification {
             return Err(Error::validation(
-                "acceptance requires verification to pass",
+                "acceptance requires a Work-bound verification witness",
             ));
         }
-        if spec.human_approval_required && evidence.required_approvals.is_empty() {
-            return Err(Error::validation(
-                "acceptance requires human approval which is missing",
-            ));
+        if spec.human_approval_required {
+            let has_work_bound_approval = evidence.approval_witnesses.iter().any(|witness| {
+                witness.work_package_id == *id
+                    && !witness.principal_ref.trim().is_empty()
+                    && !witness.role.trim().is_empty()
+                    && !witness.evidence_ref.trim().is_empty()
+            });
+            if !has_work_bound_approval {
+                return Err(Error::validation(
+                    "acceptance requires Work-bound human approval evidence",
+                ));
+            }
         }
         if let Some(forbidden) = &evidence.forbidden_condition_hit {
             return Err(Error::validation(format!(
@@ -259,13 +312,53 @@ mod tests {
                 &wp_id,
                 &AcceptanceEvidence {
                     produced_artifacts: vec!["analysis".to_string()],
-                    verification_passed: true,
-                    required_approvals: vec!["pi".to_string()],
+                    verification_witnesses: vec![VerificationWitness::new(
+                        wp_id.clone(),
+                        "verification://fixture/work",
+                    )],
+                    approval_witnesses: vec![AcceptanceApprovalWitness::new(
+                        wp_id.clone(),
+                        "principal://pi",
+                        "pi",
+                        "approval://fixture/pi",
+                    )],
                     forbidden_condition_hit: None,
                 },
             )
             .unwrap();
         assert_eq!(status, WorkStatus::Accepted);
+    }
+
+    #[test]
+    fn acceptance_witnesses_cannot_be_reused_for_another_work_package() {
+        let mut svc = WorkService::new();
+        let ws = WorkspaceId::generate();
+        let owner = PrincipalId::generate();
+        let spec = AcceptanceSpec::new("review").with_human_approval(true);
+        let spec_id = spec.id.clone();
+        svc.add_acceptance_spec(spec);
+        let first = WorkPackage::new(ws.clone(), "first", owner.clone())
+            .with_acceptance_spec(spec_id.clone());
+        let second = WorkPackage::new(ws, "second", owner).with_acceptance_spec(spec_id);
+        let first_id = first.id.clone();
+        let second_id = second.id.clone();
+        svc.add_work_package(first);
+        svc.add_work_package(second);
+        let evidence = AcceptanceEvidence {
+            produced_artifacts: vec![],
+            verification_witnesses: vec![VerificationWitness::new(
+                first_id.clone(),
+                "verification://first",
+            )],
+            approval_witnesses: vec![AcceptanceApprovalWitness::new(
+                first_id,
+                "principal://reviewer",
+                "reviewer",
+                "approval://first",
+            )],
+            forbidden_condition_hit: None,
+        };
+        assert!(svc.attempt_accept(&second_id, &evidence).is_err());
     }
 
     #[test]
