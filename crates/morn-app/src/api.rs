@@ -430,19 +430,24 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         match (
             dsh_runtime_version.as_deref(),
             dsh_runtime_digest.as_deref(),
+            dsh_environment_ref.as_deref(),
             dsh_profile_configuration_ref.as_deref(),
             dsh_route_attestation_ref.as_deref(),
         ) {
-            (Some(version), Some(digest), Some(profile), Some(route)) => {
+            (Some(version), Some(digest), Some(environment), Some(profile), Some(route)) => {
                 morn_assurance::RuntimeReadinessEvidence::healthy_for_identities(
                     dsh_health.evidence_refs.clone(),
                     format!("runtime://deepseek-harness/{version}#{digest}"),
-                    vec![profile.to_string(), route.to_string()],
+                    vec![
+                        environment.to_string(),
+                        profile.to_string(),
+                        route.to_string(),
+                    ],
                     dsh_health.reason.clone(),
                 )
             }
             _ => morn_assurance::RuntimeReadinessEvidence::unavailable(
-                "real DSH health is fresh but runtime/profile/semantic-route identity is not fully pinned",
+                "real DSH health is fresh but runtime/environment/profile/semantic-route identity is not fully pinned",
             ),
         }
     } else {
@@ -455,18 +460,19 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         match (
             pi_runtime_version.as_deref(),
             pi_runtime_digest.as_deref(),
+            pi_environment_ref.as_deref(),
             pi_route_attestation_ref.as_deref(),
         ) {
-            (Some(version), Some(digest), Some(route)) => {
+            (Some(version), Some(digest), Some(environment), Some(route)) => {
                 morn_assurance::RuntimeReadinessEvidence::healthy_for_identities(
                     pi_health.evidence_refs.clone(),
                     format!("runtime://pi/{version}#{digest}"),
-                    vec![route.to_string()],
+                    vec![environment.to_string(), route.to_string()],
                     pi_health.reason.clone(),
                 )
             }
             _ => morn_assurance::RuntimeReadinessEvidence::unavailable(
-                "real Pi health is fresh but runtime/semantic-route identity is not fully pinned",
+                "real Pi health is fresh but runtime/environment/semantic-route identity is not fully pinned",
             ),
         }
     } else {

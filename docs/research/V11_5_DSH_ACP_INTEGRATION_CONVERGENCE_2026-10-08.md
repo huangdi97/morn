@@ -16,7 +16,7 @@ DeepSeek 官方现在已提供：
 - 自动化进程启动方式：源码构建后 `pnpm dsh --profile acp`（**stdio JSON-RPC，不能将 Web UI HTTP 端口误当 ACP API**）
 - Pi SDK 的进程内接口参考：https://pi.dev/docs/latest/sdk （Pi 是另一 HarnessProvider，不是 DSH fallback 的事实代理）
 
-2026-10-08 当前实现事实：Morn 已有 `DshSdkStdioClient` 和 `DeepSeekHarnessProvider::with_real_sdk`，可按官方 SDK 的 `initialize → session/prompt → durable inbox receipt → session.status=idle → shutdown` 语义驱动一个真实 SDK runtime；仓库内协议 fixture 可验证 wire contract，但没有官方凭据与实际 DSH runtime smoke。因此 **Morn-side adapter 已实现 ≠ 官方 runtime 已实测 ≠ 真实模型成功 ≠ 客户 Outcome 已验收**。
+2026-10-13 当前实现事实：Morn 已有 `DshSdkStdioClient` 和 `DeepSeekHarnessProvider::with_real_sdk`，跟随官方当前 SDK wire 使用 `initialize → session/working-directory/get → session/prompt → durable inbox receipt → session/wait → durable turn/end → session/working-directory/get → shutdown`。Morn 不调用上游 `session/working-directory/set`，并在 turn 前后验证实际 cwd 仍是部署固定的 Work workspace。仓库内协议 fixture 可验证 wire contract，但没有官方凭据与实际 DSH runtime smoke。因此 **Morn-side adapter 已实现 ≠ 官方 runtime 已实测 ≠ 真实模型成功 ≠ 客户 Outcome 已验收**。
 
 ## 2. 边界冻结
 
@@ -50,7 +50,7 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 | Morn 边界 | 当前 SDK wire | ACP 增强面 | 必须补充的 Morn 保证 |
 |---|---|---|---|
 | `start` | `initialize` + 本地 session id（首 prompt 懒创建） | `session/new` | 独立 sandbox/workspace，绑定 Work generation 与 exact provider/runtime identity |
-| `send` | `session/prompt` + `session.event/status` | `session/prompt/update` | 等待 durable inbox receipt 到 root idle；文本永远不是业务事实 |
+| `send` | `session/working-directory/get` + `session/prompt` + durable inbox receipt + `session/wait` + durable `turn/end` + cwd recheck | `session/prompt/update` | 只把完整已结算 activity interval 当 executor evidence；文本永远不是业务事实 |
 | `stream_events` | SDK `session.event` 投影为 Morn execution events | ACP `session/update` | 不混同 durable domain events / Outcome |
 | `inspect` | Morn-owned local projection | `session/list` | 区分 executor status 与 Work desired/observed |
 | `interrupt` | **不支持，fail-closed** | `session/cancel` / `$/cancel_request` | E2/E3 side effects 独立对账 |
@@ -76,7 +76,7 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 |---|---|---|
 | DSH-DIST | 官方可安装包与源码可核验 | `EVIDENCED_BY_PUBLIC_SOURCE`（**非本地安装验收**） |
 | DSH-SDK-ADAPTER | Morn Rust Real provider 能驱动官方 SDK wire，并保持 Work truth 隔离 | `LOCAL_VERIFIED` |
-| DSH-SDK-LIVE | 固定版本官方 SDK runtime 的 initialize/prompt/receipt/idle/shutdown | `NOT_RUN` |
+| DSH-SDK-LIVE | 固定版本官方 SDK runtime 的 initialize/cwd-check/prompt/receipt/session-wait/turn-end/cwd-recheck/shutdown | `NOT_RUN` |
 | DSH-LOCAL-CI | Rust/fixture/provider contract + full repository exact-head CI | `PASS @ 152fd22 / Actions 38060442988` |
 | DSH-ACP-WIRE | ACP v1 identity + initialize/auth/new/prompt/update/list/config/close/resume/cancel/permission wire | `LOCAL_PROTOCOL_IMPLEMENTED`；官方 live runtime `NOT_RUN` |
 | DSH-SESSION-RECOVERY | close/list/resume/cancel 与真正并发控制 | `LOCAL_OUT_OF_BAND_CANCEL_IMPLEMENTED`；Work-facing Provider exposure / live restart `NOT_RUN` |

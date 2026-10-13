@@ -358,9 +358,10 @@ Example exact-head CI proof:
 ]
 ```
 
-A RealRuntime proof must cite the **whole active semantic route**, not only the
+A RealRuntime proof must cite the **whole active execution identity**, not only the
 provider executable. For DSH that means the exact runtime artifact, exact
-Home/Profile composition identity, and exact provider/model route attestation.
+execution-environment identity, exact Home/Profile composition identity, and
+exact provider/model route attestation.
 The live `provider_smoke` report emits `required_real_runtime_claim_refs`
 so the deployment attestor does not have to reconstruct this set manually:
 
@@ -372,6 +373,7 @@ so the deployment attestor does not have to reconstruct this set manually:
   "state": "proven",
   "evidence_refs": [
     "runtime://deepseek-harness/<version>#sha256:<64-hex>",
+    "env://container/dsh-runtime-a",
     "deepseek-harness-profile@<config-version>#sha256:<64-hex>",
     "deepseek-harness-route@v1#sha256:<64-hex>",
     "attestation://provider-smoke/dsh-2026-10-13"
@@ -383,7 +385,8 @@ so the deployment attestor does not have to reconstruct this set manually:
 ```
 
 Pi uses the same rule with
-`runtime://pi/<version>#sha256:<64-hex>` plus
+`runtime://pi/<version>#sha256:<64-hex>`, its exact
+`MORN_PI_EXECUTION_ENVIRONMENT_REF`, and
 `pi-rpc-route@v1#sha256:<64-hex>`.
 
 Real-runtime, real-site and production-write claims use the same append-only
@@ -395,8 +398,9 @@ are rejected so JSON/file order cannot choose readiness. A future-dated current
 claim is projected as `not-yet-valid` rather than proof. The Console release-readiness projection
 also requires a **fresh Healthy provider lease** in addition to a
 `real-runtime` claim for DSH/Pi, and rechecks every currently configured
-semantic identity. A smoke proof for an older runtime, profile or route cannot
-be combined with health from a replacement route.
+execution/semantic identity. A smoke proof from a different environment, or for
+an older runtime, profile or route, cannot be combined with health from the
+currently configured provider.
 
 Canonical subjects used by the top-level readiness projection are:
 

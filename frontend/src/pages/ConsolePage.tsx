@@ -232,7 +232,7 @@ export default function ConsolePage() {
                 {" · "}Pi: {v115.harness_runtime.pi.route_attestation_ref ?? "not pinned"}
               </small>
               <small className="readiness-evidence">
-                RealRuntime proof must cite the currently active runtime and semantic route identities.
+                RealRuntime proof must cite the active runtime, execution environment and semantic route identities.
               </small>
             </article>
           </div>

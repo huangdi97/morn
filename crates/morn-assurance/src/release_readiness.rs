@@ -859,6 +859,44 @@ mod tests {
     }
 
     #[test]
+    fn runtime_proof_cannot_mix_health_with_another_execution_environment() {
+        let runtime = "runtime://deepseek-harness/v1#sha256:artifact";
+        let profile = format!("deepseek-harness-profile@v1#sha256:{}", "a".repeat(64));
+        let route = format!("deepseek-harness-route@v1#sha256:{}", "b".repeat(64));
+        let environment = "env://container/dsh-runtime-a";
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "deepseek-harness",
+                    EvidenceClass::RealRuntime,
+                    vec![runtime.to_string(), profile.clone(), route.clone()],
+                    "deployment-attestor",
+                    "runtime route proven in an unspecified environment",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let axes = release_readiness_axes(
+            &ledger,
+            RuntimeReadinessEvidence::healthy_for_identities(
+                vec!["health://dsh/settled-turn".to_string()],
+                runtime,
+                vec![environment.to_string(), profile, route],
+                "fresh health from the configured execution environment",
+            ),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+        );
+        let dsh = axes
+            .iter()
+            .find(|axis| axis.id == "deepseek-live-runtime")
+            .unwrap();
+        assert_eq!(dsh.state, ReadinessState::IdentityMismatch);
+        assert!(dsh.reason.contains(environment));
+    }
+
+    #[test]
     fn runtime_proof_alone_is_not_enough_without_fresh_health() {
         let mut ledger = reference_evidence_ledger();
         ledger

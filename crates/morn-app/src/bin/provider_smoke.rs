@@ -162,6 +162,7 @@ fn run_gate() -> Result<Value> {
                 "route_attestation_ref": route_attestation_ref,
                 "required_real_runtime_claim_refs": [
                     format!("runtime://deepseek-harness/{pinned_version}#{pinned_digest}"),
+                    environment_ref,
                     profile_configuration_ref,
                     route_attestation_ref
                 ],
@@ -248,6 +249,7 @@ fn run_gate() -> Result<Value> {
                 "route_attestation_ref": route_attestation_ref,
                 "required_real_runtime_claim_refs": [
                     format!("runtime://pi/{pinned_version}#{pinned_digest}"),
+                    environment_ref,
                     route_attestation_ref
                 ],
                 "execution_environment_ref": attestation.environment_ref,

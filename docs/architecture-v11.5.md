@@ -189,7 +189,8 @@ The repository has two provider-neutrality layers:
 - DSH SDK and Pi RPC **real-adapter wire fixtures** drive the actual subprocess
   adapters with the same pinned Workspace/Work generation/ExecutionBinding and
   execution-environment guarantees. This second gate requires exact runtime
-  version/digest identity, E0-only admission, fully normalized execution events,
+  version/digest **and execution-environment identity**, E0-only admission,
+  fully normalized execution events,
   no direct tool activity, and a settled healthy adapter turn.
 
 Neither layer compares model text. The adapter-wire gate proves Morn-side
