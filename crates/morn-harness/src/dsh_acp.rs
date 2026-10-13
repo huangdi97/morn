@@ -226,8 +226,7 @@ impl DshAcpConfig {
             .ok_or_else(|| Error::validation("real DSH ACP requires profile_configuration_ref"))?;
         validate_profile_configuration_ref(profile_configuration_ref)?;
         if self.enforce_morn_e0_tool_policy {
-            let expected =
-                derive_morn_profile_configuration_ref(runtime_version, digest, "acp")?;
+            let expected = derive_morn_profile_configuration_ref(runtime_version, digest, "acp")?;
             if profile_configuration_ref != expected {
                 return Err(Error::validation(
                     "real DSH ACP profile_configuration_ref must be derived from the verified runtime artifact and Morn E0 composition",
@@ -254,16 +253,17 @@ impl DshAcpConfig {
         })?;
         let derived_profile =
             derive_morn_profile_configuration_ref(&runtime_version, &runtime_digest, "acp")?;
-        let profile_configuration_ref =
-            match std::env::var("MORN_DSH_ACP_PROFILE_CONFIGURATION_REF") {
-                Ok(claimed) if claimed != derived_profile => {
-                    return Err(Error::validation(
-                        "MORN_DSH_ACP_PROFILE_CONFIGURATION_REF does not match the verified runtime + Morn E0 composition",
-                    ));
-                }
-                Ok(claimed) => claimed,
-                Err(_) => derived_profile,
-            };
+        let profile_configuration_ref = match std::env::var(
+            "MORN_DSH_ACP_PROFILE_CONFIGURATION_REF",
+        ) {
+            Ok(claimed) if claimed != derived_profile => {
+                return Err(Error::validation(
+                    "MORN_DSH_ACP_PROFILE_CONFIGURATION_REF does not match the verified runtime + Morn E0 composition",
+                ));
+            }
+            Ok(claimed) => claimed,
+            Err(_) => derived_profile,
+        };
         let provider = std::env::var("MORN_DSH_ACP_PROVIDER")
             .unwrap_or_else(|_| "deepseek-official".to_string());
         let model =

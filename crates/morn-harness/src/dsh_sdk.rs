@@ -422,8 +422,7 @@ impl DshSdkConfig {
             .ok_or_else(|| Error::validation("real DSH SDK requires profile_configuration_ref"))?;
         validate_profile_configuration_ref(profile_configuration_ref)?;
         if self.enforce_morn_e0_tool_policy {
-            let expected =
-                derive_morn_profile_configuration_ref(runtime_version, digest, "sdk")?;
+            let expected = derive_morn_profile_configuration_ref(runtime_version, digest, "sdk")?;
             if profile_configuration_ref != expected {
                 return Err(Error::validation(
                     "real DSH SDK profile_configuration_ref must be derived from the verified runtime artifact and Morn E0 composition",
