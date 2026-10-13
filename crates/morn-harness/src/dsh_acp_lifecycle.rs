@@ -93,7 +93,7 @@ impl DshAcpLifecycleController {
     }
 
     pub fn configured_route_ref(&self) -> Result<String> {
-        self.config.route_ref()
+        self.config.route_attestation_ref()
     }
 
     pub fn configured_execution_environment_ref(&self) -> Option<&str> {
@@ -447,7 +447,7 @@ impl DshAcpLifecycleController {
                 execution_binding_ref,
                 execution_environment_ref,
                 scope_ref,
-                route_ref: self.config.route_ref()?,
+                route_ref: self.config.route_attestation_ref()?,
                 model_provider,
                 model,
                 reasoning_effort,
@@ -480,7 +480,7 @@ impl DshAcpLifecycleController {
             .runtime_digest
             .as_deref()
             .ok_or_else(|| Error::validation("ACP lifecycle config has no runtime digest"))?;
-        let route_ref = self.config.route_ref()?;
+        let route_ref = self.config.route_attestation_ref()?;
         if !context.proves_provider_identity(
             "deepseek-harness",
             runtime_version,
@@ -557,7 +557,7 @@ impl DshAcpLifecycleController {
                 != Some(session.public.execution_environment_ref.as_str())
             || context.scope_id.as_deref() != Some(session.public.scope_ref.as_str())
             || current_scope != Some(&session.scope)
-            || session.public.route_ref != self.config.route_ref()?
+            || session.public.route_ref != self.config.route_attestation_ref()?
         {
             return Err(Error::validation(
                 "ACP session cannot be rebound to another Work, generation, binding, environment, scope snapshot or model route",
@@ -618,7 +618,7 @@ mod tests {
         ];
         config.request_timeout_ms = 5_000;
         config.prompt_timeout_ms = 5_000;
-        let route_ref = config.route_ref().unwrap();
+        let route_ref = config.route_attestation_ref().unwrap();
         let runtime_digest = format!("sha256:{}", "b".repeat(64));
 
         let workspace_id = WorkspaceId::generate();
@@ -844,7 +844,10 @@ mod tests {
         controller.mount_scope(scope).unwrap();
 
         let mut forged_route = context.clone();
-        forged_route.provider_route_ref = Some("dsh-acp-route:reinterpreted".to_string());
+        forged_route.provider_route_ref = Some(format!(
+            "deepseek-harness-acp-route@v1#sha256:{}",
+            "f".repeat(64)
+        ));
         assert!(controller.open_session(&forged_route).is_err());
 
         let session = controller.open_session(&context).unwrap();

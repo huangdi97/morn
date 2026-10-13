@@ -21,6 +21,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 use morn_kernel::error::{Error, Result};
 
@@ -160,6 +161,17 @@ impl DshAcpConfig {
             "transport": "acp-v1",
         });
         Ok(format!("dsh-acp-route:{route}"))
+    }
+
+    /// Bounded, deployment-attestable identity for the exact ACP semantic route.
+    /// The raw route_ref remains available for diagnostics, but Work/runtime
+    /// identity and execution-environment attestations use only this hash.
+    pub fn route_attestation_ref(&self) -> Result<String> {
+        let route = self.route_ref()?;
+        let digest = Sha256::digest(route.as_bytes());
+        Ok(format!(
+            "deepseek-harness-acp-route@v1#sha256:{digest:x}"
+        ))
     }
 
     pub fn validate_for_real(&self) -> Result<()> {
@@ -1197,6 +1209,18 @@ mod tests {
         assert!(route.contains("fixture-model"));
         assert!(!route.contains("env://container/acp"));
         assert!(!route.contains(&"b".repeat(64)));
+
+        let attestation_ref = configured.route_attestation_ref().unwrap();
+        assert!(attestation_ref.starts_with("deepseek-harness-acp-route@v1#sha256:"));
+        assert_eq!(attestation_ref.len(), "deepseek-harness-acp-route@v1#sha256:".len() + 64);
+        assert!(!attestation_ref.contains("fixture-provider"));
+        let mut changed = configured.clone();
+        changed.model = Some("other-model".to_string());
+        assert_ne!(
+            attestation_ref,
+            changed.route_attestation_ref().unwrap(),
+            "semantic route changes must require a new deployment attestation"
+        );
 
         let mut bad_digest = configured.clone();
         bad_digest.runtime_digest = Some("sha256:short".to_string());
