@@ -86,6 +86,14 @@ impl AcceptanceReviewAuthorization {
 }
 
 impl AcceptanceReviewerAttestation {
+    pub fn reference(&self) -> String {
+        format!(
+            "acceptance-reviewer:{}@{}",
+            self.principal_id,
+            self.observed_at.millis()
+        )
+    }
+
     pub fn validate(&self) -> morn_kernel::error::Result<()> {
         if self.acting_roles.is_empty()
             || self.acting_roles.iter().any(|role| role.trim().is_empty())
@@ -200,6 +208,10 @@ mod tests {
             valid_until: Some(Timestamp::from_millis(20)),
         };
         reviewer.validate().unwrap();
+        assert_eq!(
+            reviewer.reference(),
+            format!("acceptance-reviewer:{}@10", reviewer.principal_id)
+        );
         assert!(reviewer.active_for("independent-reviewer", Timestamp::from_millis(15)));
         assert!(!reviewer.active_for("approver", Timestamp::from_millis(15)));
         assert!(!reviewer.active_for("independent-reviewer", Timestamp::from_millis(21)));

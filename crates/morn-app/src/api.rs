@@ -3597,7 +3597,7 @@ async fn v115_work_review_outcome(
     );
     decision.pin_work_generation(work.generation)?;
     decision.pin_review_authority(
-        reviewer.principal_id.to_string(),
+        reviewer.reference(),
         vec![authorization.authorization_id.clone()],
     )?;
     decision.outcome_refs.push(outcome.id.clone());
@@ -6455,7 +6455,7 @@ mod workspace_boundary_tests {
         store
             .save_record_immutable(
                 "acceptance_reviewer_attestation_v115",
-                reviewer.principal_id.as_str(),
+                &reviewer.reference(),
                 work.workspace_id.as_str(),
                 reviewer.observed_at.millis(),
                 &reviewer,
@@ -6489,7 +6489,7 @@ mod workspace_boundary_tests {
             .unwrap();
         decision
             .pin_review_authority(
-                reviewer.principal_id.to_string(),
+                reviewer.reference(),
                 vec![authorization_id.to_string()],
             )
             .unwrap();

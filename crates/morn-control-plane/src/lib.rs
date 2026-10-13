@@ -867,7 +867,7 @@ pub(crate) fn require_attested_review_authority(
         .ok_or_else(|| Error::not_found("acceptance reviewer attestation"))?;
     reviewer.validate()?;
     if reviewer.principal_id != decision.decided_by
-        || reviewer.principal_id.as_str() != reviewer_ref
+        || reviewer.reference() != reviewer_ref
         || !reviewer.active_for(&decision.acting_role, decision.decided_at)
     {
         return Err(Error::not_authorized(

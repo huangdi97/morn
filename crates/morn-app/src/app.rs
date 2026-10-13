@@ -395,8 +395,8 @@ fn persist_acceptance_trust_records(
 ) -> morn_kernel::Result<()> {
     for reviewer in reviewers {
         let kind = "acceptance_reviewer_attestation_v115";
-        let id = reviewer.principal_id.as_str();
-        match store.load_record::<AcceptanceReviewerAttestation>(kind, id)? {
+        let id = reviewer.reference();
+        match store.load_record::<AcceptanceReviewerAttestation>(kind, &id)? {
             Some(existing) if existing == *reviewer => {}
             Some(_) => {
                 return Err(morn_kernel::error::Error::conflict(format!(
@@ -405,7 +405,7 @@ fn persist_acceptance_trust_records(
             }
             None => store.save_record_immutable(
                 kind,
-                id,
+                &id,
                 workspace_id.as_str(),
                 reviewer.observed_at.millis(),
                 reviewer,
