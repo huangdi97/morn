@@ -140,15 +140,24 @@ candidate with source provenance; none may claim qualification, site admission,
 Outcome or Acceptance merely because the artifact parses or executes. Studio
 exposes all six flows under the governed advanced import surface.
 
-### Desktop API routing (reference only)
+### Desktop API routing and owned local backend (reference only)
 
 The Tauri desktop shell loads prebuilt frontend assets, so Vite's `/api`
-development proxy is **not** present in the packaged webview. Its API client
-therefore resolves `/api` to `http://127.0.0.1:8090/api` under Tauri
-origins. The server must currently be started separately with
-`cargo run -p morn-app --bin server --all-features` before using the desktop
-shell. This is a development/reference configuration, **not** a self-contained
-signed installer or an authenticated production deployment.
+development proxy is **not** present in the packaged webview. The reference
+desktop therefore uses `http://127.0.0.1:8090/api`.
+
+When `morn-desktop(.exe)` and `server(.exe)` are distributed side-by-side,
+the desktop shell now owns a local backend lifecycle for the reference package:
+it reuses an already-running service only when `/api/health` identifies a
+healthy Morn backend; otherwise it starts the sibling server, stores the default
+SQLite database under the app-local data directory, and reaps only the child it
+started on desktop exit. If port 8090 is occupied by a non-Morn service, startup
+fails closed rather than attaching to or killing that process.
+
+Set `MORN_DESKTOP_AUTOSTART_BACKEND=0` only when intentionally managing the
+local reference server yourself. This convenience lifecycle is still a local
+engineering configuration, **not** a signed installer, remote deployment,
+customer IAM boundary or production authorization.
 
 ### Reusable blueprint and runtime instance
 
@@ -278,11 +287,16 @@ backend and publishes an unsigned `morn-windows-reference-<SHA>` artifact
 containing `morn-desktop.exe` and `server.exe`. This is for engineering
 acceptance, **not** an authenticated production release or signed installer.
 
-Extract both executables, run `server.exe` first (it binds only to
-`127.0.0.1:8090`), then launch `morn-desktop.exe`. The backend uses
-`morn.db` in its working directory unless `MORN_DB` is set.
-Keep the backend local; no production credentials or industrial writes should
-be exposed through this reference package.
+Extract both executables into the same directory and launch
+`morn-desktop.exe`. The desktop verifies the local health endpoint and starts
+the sibling `server.exe` automatically when needed; the owned server is
+stopped when the desktop exits. `MORN_DB` may still override the default
+app-local SQLite path.
+
+The Windows CI job executes the same owned-sidecar lifecycle through
+`morn-desktop.exe --probe-sidecar` before publishing the reference artifact.
+Keep this backend local; no production credentials or industrial writes should
+be exposed through the reference package.
 
 The v11.5 metadata endpoint is:
 
