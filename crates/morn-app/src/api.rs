@@ -6439,16 +6439,18 @@ mod workspace_boundary_tests {
             valid_until: Some(Timestamp::from_millis(30)),
         };
 
+        let active_versions = [old.clone(), current.clone()];
         let active = latest_effective_reviewer_attestations(
-            &[old.clone(), current.clone()],
+            &active_versions,
             &owner,
             Timestamp::from_millis(25),
         );
         assert_eq!(active.len(), 1);
         assert_eq!(active[0].reference(), current.reference());
 
+        let expired_versions = [old, current];
         let expired = latest_effective_reviewer_attestations(
-            &[old, current],
+            &expired_versions,
             &owner,
             Timestamp::from_millis(31),
         );
