@@ -388,6 +388,13 @@ try {
       if (!(await page.getByRole("heading", { name: "Governed E0 execution" }).count())) {
         errors.push("Workbench: active proposed Work has no governed execution controls");
       }
+      const capabilitySelect = page.locator(".governed-execution-grid select").nth(1);
+      if ((await capabilitySelect.count()) && (await capabilitySelect.inputValue()) === "") {
+        const blocker = page.getByRole("status").filter({ hasText: "No selectable E0 capability for this Work." });
+        if (!(await blocker.count()) || !(await blocker.getByRole("link", { name: /Review providers and admitted capabilities in Hub/ }).count())) {
+          errors.push("Workbench: missing-capability state must route users to Hub without weakening admission gates");
+        }
+      }
       if (await page.getByRole("heading", { name: "Authoritative outcome observation" }).count()) {
         errors.push("Workbench: Proposed Work must not expose outcome observation before execution begins");
       }

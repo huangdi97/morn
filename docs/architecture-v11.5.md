@@ -646,19 +646,30 @@ one provider may implement many capabilities, and one capability may be
 available through multiple providers. Cordis service presence is one local
 provider observation source, not the canonical provider/business database.
 
-## Accepted outcome closure
+## Terminal outcome closure
 
-Final acceptance is stricter than an `Accept` enum value. A Work reaches the
-Accepted phase only when:
+A terminal business decision is stricter than an `Accept` or `Reject` enum
+value. Both Accepted and Rejected close the current Work generation, so neither
+may rely on a weaker provenance standard.
 
-1. the AcceptanceDecision belongs to the Work;
+A Work reaches a terminal acceptance/rejection phase only when:
+
+1. the AcceptanceDecision belongs to the exact Work generation;
 2. its AcceptanceSpec matches the Work's pinned acceptance reference when one
    is declared;
-3. it explicitly references a source-grounded ObservedOutcome for that Work;
-4. that same outcome is present as control-plane evidence.
+3. it explicitly references an ObservedOutcome for that Work generation;
+4. the same outcome is deployment-attested back to the exact persisted
+   SourceOfTruthBinding, fact type and one-shot observation-attestation
+   consumption record;
+5. the independent reviewer identity/role, rationale and review evidence are
+   present; and
+6. that same decision/outcome chain is durably present before the Work
+   projection may claim Accepted or Rejected.
 
-An agent/task/session reporting success can therefore never close Work by
-manufacturing an unlinked outcome id.
+Conditional / request-more-evidence decisions may inspect source-grounded
+evidence without closing Work. An agent/task/session reporting success can
+therefore never accept **or reject** Work by manufacturing an unlinked outcome,
+review or source-provenance field.
 
 
 ## Control-plane concurrency and fencing
