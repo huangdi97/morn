@@ -25,7 +25,10 @@ use sha2::{Digest, Sha256};
 
 use morn_kernel::error::{Error, Result};
 
-use crate::dsh_sdk::{dsh_morn_e0_tool_policy_identity, validate_profile_configuration_ref};
+use crate::dsh_sdk::{
+    dsh_morn_e0_tool_policy_identity, validate_canonical_sha256_digest,
+    validate_profile_configuration_ref,
+};
 use crate::subprocess_wire::{read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_FRAMES};
 
 pub const DSH_ACP_PROTOCOL_VERSION: u64 = 1;
@@ -223,17 +226,8 @@ impl DshAcpConfig {
             .runtime_digest
             .as_deref()
             .ok_or_else(|| Error::validation("real DSH ACP requires a runtime SHA-256 digest"))?;
-        let Some(hex) = digest.strip_prefix("sha256:") else {
-            return Err(Error::validation(
-                "real DSH ACP runtime digest must use sha256:<64-hex>",
-            ));
-        };
-        if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(Error::validation(
-                "real DSH ACP runtime digest must use sha256:<64-hex>",
-            ));
-        }
-        Ok(())
+        validate_canonical_sha256_digest(digest, "real DSH ACP runtime")
+
     }
 
     pub fn from_env() -> Result<Self> {
@@ -1226,6 +1220,23 @@ mod tests {
         let mut bad_digest = configured.clone();
         bad_digest.runtime_digest = Some("sha256:short".to_string());
         assert!(bad_digest.validate_for_real().is_err());
+
+        let mut uppercase_digest = configured.clone();
+        uppercase_digest.runtime_digest = Some(format!("sha256:{}", "B".repeat(64)));
+        assert!(
+            uppercase_digest.validate_for_real().is_err(),
+            "artifact identity must have one canonical lowercase spelling"
+        );
+
+        let mut uppercase_profile = configured.clone();
+        uppercase_profile.profile_configuration_ref = Some(format!(
+            "deepseek-harness-profile@1.0.0#sha256:{}",
+            "A".repeat(64)
+        ));
+        assert!(
+            uppercase_profile.validate_for_real().is_err(),
+            "profile identity must have one canonical lowercase spelling"
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 

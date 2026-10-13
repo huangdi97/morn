@@ -205,6 +205,24 @@ const fn default_true() -> bool {
     true
 }
 
+pub(crate) fn validate_canonical_sha256_digest(digest: &str, label: &str) -> Result<()> {
+    let Some(hex) = digest.strip_prefix("sha256:") else {
+        return Err(Error::validation(format!(
+            "{label} digest must use canonical sha256:<64-lowercase-hex>",
+        )));
+    };
+    if hex.len() != 64
+        || !hex
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(Error::validation(format!(
+            "{label} digest must use canonical sha256:<64-lowercase-hex>",
+        )));
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_profile_configuration_ref(reference: &str) -> Result<()> {
     let (provider_version, digest) = reference.rsplit_once('#').ok_or_else(|| {
         Error::validation(
@@ -216,21 +234,13 @@ pub(crate) fn validate_profile_configuration_ref(reference: &str) -> Result<()> 
             "DSH profile_configuration_ref must use deepseek-harness-profile@<version>#sha256:<64-hex>",
         )
     })?;
-    let Some(hex) = digest.strip_prefix("sha256:") else {
+    if provider != "deepseek-harness-profile" || version.trim().is_empty() {
         return Err(Error::validation(
-            "DSH profile_configuration_ref digest must use sha256:<64-hex>",
-        ));
-    };
-    if provider != "deepseek-harness-profile"
-        || version.trim().is_empty()
-        || hex.len() != 64
-        || !hex.bytes().all(|byte| byte.is_ascii_hexdigit())
-    {
-        return Err(Error::validation(
-            "DSH profile_configuration_ref must use deepseek-harness-profile@<version>#sha256:<64-hex>",
+            "DSH profile_configuration_ref must use deepseek-harness-profile@<version>#sha256:<64-lowercase-hex>",
         ));
     }
-    Ok(())
+    validate_canonical_sha256_digest(digest, "DSH profile_configuration_ref")
+
 }
 
 impl DshSdkConfig {
@@ -382,16 +392,7 @@ impl DshSdkConfig {
             .runtime_digest
             .as_deref()
             .ok_or_else(|| Error::validation("real DSH SDK requires a runtime SHA-256 digest"))?;
-        let Some(hex) = digest.strip_prefix("sha256:") else {
-            return Err(Error::validation(
-                "real DSH SDK runtime digest must use sha256:<64-hex>",
-            ));
-        };
-        if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(Error::validation(
-                "real DSH SDK runtime digest must use sha256:<64-hex>",
-            ));
-        }
+        validate_canonical_sha256_digest(digest, "real DSH SDK runtime")?;
         let workspace = Path::new(&self.cwd);
         let home_path = Path::new(home);
         if !workspace.is_absolute() || !home_path.is_absolute() {
@@ -1283,6 +1284,39 @@ mod tests {
 
         config.cwd = root.to_string_lossy().to_string();
         assert!(config.validate_for_real().is_err());
+    }
+
+    #[test]
+    fn real_sdk_requires_canonical_lowercase_sha256_identities() {
+        let root = std::env::temp_dir().join("morn-dsh-canonical-digest");
+        let workspace = root.join("workspace");
+        let home = root.join("home");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        let mut config = DshSdkConfig::profile_sdk(
+            workspace.to_string_lossy(),
+            "deepseek-official",
+            "deepseek-v4-flash",
+        )
+        .with_dsh_home(home.to_string_lossy())
+        .with_execution_environment_ref("env://container/dsh")
+        .with_profile_configuration_ref(format!(
+            "deepseek-harness-profile@1#sha256:{}",
+            "a".repeat(64)
+        ))
+        .with_runtime_identity("1", format!("sha256:{}", "b".repeat(64)));
+        assert!(config.validate_for_real().is_ok());
+
+        config.runtime_digest = Some(format!("sha256:{}", "B".repeat(64)));
+        assert!(config.validate_for_real().is_err());
+
+        config.runtime_digest = Some(format!("sha256:{}", "b".repeat(64)));
+        config.profile_configuration_ref = Some(format!(
+            "deepseek-harness-profile@1#sha256:{}",
+            "A".repeat(64)
+        ));
+        assert!(config.validate_for_real().is_err());
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

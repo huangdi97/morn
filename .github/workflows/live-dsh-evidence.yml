@@ -18,11 +18,11 @@ on:
         type: string
         required: true
       runtime_digest:
-        description: "Exact deployment-attested digest (sha256:<64-hex>)"
+        description: "SHA-256 of the exact deepseek-harness-runtime-bin wheel (sha256:<64-lowercase-hex>)"
         type: string
         required: true
       profile_configuration_ref:
-        description: "deepseek-harness-profile@<version>#sha256:<64-hex>"
+        description: "deepseek-harness-profile@<version>#sha256:<64-lowercase-hex>"
         type: string
         required: true
       execution_environment_ref:
@@ -114,12 +114,12 @@ jobs:
           case "$INPUT_RUNTIME_VERSION" in
             *[!A-Za-z0-9._+-]*|"") echo "runtime_version contains unsupported characters"; exit 2 ;;
           esac
-          if [[ ! "$INPUT_RUNTIME_DIGEST" =~ ^sha256:[0-9a-fA-F]{64}$ ]]; then
-            echo "runtime_digest must be sha256:<64-hex>"
+          if [[ ! "$INPUT_RUNTIME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "runtime_digest must be canonical sha256:<64-lowercase-hex>"
             exit 2
           fi
-          if [[ ! "$INPUT_PROFILE_CONFIGURATION_REF" =~ ^deepseek-harness-profile@[^[:space:]#]+#sha256:[0-9a-fA-F]{64}$ ]]; then
-            echo "profile_configuration_ref has invalid grammar"
+          if [[ ! "$INPUT_PROFILE_CONFIGURATION_REF" =~ ^deepseek-harness-profile@[^[:space:]#]+#sha256:[0-9a-f]{64}$ ]]; then
+            echo "profile_configuration_ref must use canonical lowercase SHA-256"
             exit 2
           fi
           if [[ "$INPUT_OPERATION" == smoke-* && "$INPUT_ACK_E0" != "true" ]]; then
@@ -178,12 +178,71 @@ jobs:
           fi
           echo "MORN_EXECUTION_ATTESTOR=$MORN_EXECUTION_ATTESTOR_SECRET" >> "$GITHUB_ENV"
 
-      - name: Install exact official DeepSeek Harness SDK distribution
+      - name: Verify and install exact official DeepSeek Harness runtime artifact
         if: startsWith(inputs.operation, 'smoke-')
         shell: bash
         run: |
           set -euo pipefail
+          dist_dir="$RUNNER_TEMP/morn-dsh-dist"
+          mkdir -p "$dist_dir"
+          python -m pip download             --disable-pip-version-check             --only-binary=:all:             --no-deps             --dest "$dist_dir"             "deepseek-harness-runtime-bin==$INPUT_RUNTIME_VERSION"
+
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          from packaging.utils import canonicalize_name, parse_wheel_filename
+          from packaging.version import Version
+
+          dist = pathlib.Path(os.environ["RUNNER_TEMP"]) / "morn-dsh-dist"
+          wheels = sorted(dist.glob("deepseek_harness_runtime_bin-*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit(f"expected exactly one runtime-bin wheel, found {len(wheels)}")
+          wheel = wheels[0]
+          digest = "sha256:" + hashlib.sha256(wheel.read_bytes()).hexdigest()
+          expected = os.environ["INPUT_RUNTIME_DIGEST"]
+          if digest != expected:
+              raise SystemExit(
+                  f"runtime artifact digest mismatch: expected {expected}, actual {digest}"
+              )
+          version = os.environ["INPUT_RUNTIME_VERSION"]
+          name, wheel_version, _build, _tags = parse_wheel_filename(wheel.name)
+          if canonicalize_name(name) != canonicalize_name("deepseek-harness-runtime-bin"):
+              raise SystemExit(f"unexpected runtime wheel package: {name}")
+          if wheel_version != Version(version):
+              raise SystemExit(
+                  f"runtime wheel version mismatch: expected {version}, actual {wheel_version}"
+              )
+          report = {
+              "gate": "MORN_DSH_RUNTIME_ARTIFACT_VERIFY",
+              "status": "PASS",
+              "package": "deepseek-harness-runtime-bin",
+              "version": version,
+              "artifact": wheel.name,
+              "digest": digest,
+              "canonical_identity": f"deepseek-harness@{version}#{digest}",
+              "claims": {
+                  "artifact_bytes_verified": True,
+                  "live_provider": False,
+                  "canonical_work_outcome": False,
+                  "customer_acceptance": False,
+                  "production_write": False,
+              },
+          }
+          out = pathlib.Path("target/live-dsh-evidence/runtime-artifact-verification.json")
+          out.write_text(json.dumps(report, indent=2), encoding="utf-8")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"MORN_DSH_VERIFIED_RUNTIME_WHEEL={wheel}\n")
+          PY
+
+          python -m pip install --disable-pip-version-check "$MORN_DSH_VERIFIED_RUNTIME_WHEEL"
           python -m pip install --disable-pip-version-check "deepseek-harness-sdk==$INPUT_RUNTIME_VERSION"
+          python - <<'PY'
+          import importlib.metadata as metadata, os
+          expected = os.environ["INPUT_RUNTIME_VERSION"]
+          for package in ("deepseek-harness-runtime-bin", "deepseek-harness-sdk"):
+              actual = metadata.version(package)
+              if actual != expected:
+                  raise SystemExit(f"{package} version mismatch: expected {expected}, actual {actual}")
+          PY
           command -v dsh >/dev/null
 
       - name: Run authenticated SDK provider smoke (E0 only)

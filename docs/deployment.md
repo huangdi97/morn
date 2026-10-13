@@ -172,6 +172,30 @@ execution-environment attestations use
 `deepseek-harness-acp-route@v1#sha256:<64-hex>`, so configuration changes
 cannot silently reuse an older deployment attestation.
 
+### Canonical DSH runtime artifact digest
+
+For the official Python SDK distribution path, `MORN_DSH_RUNTIME_DIGEST` is
+defined as the SHA-256 of the exact platform-specific
+`deepseek-harness-runtime-bin` wheel whose version equals
+`MORN_DSH_RUNTIME_VERSION`. This is the artifact that contains the bundled
+`dsh` runtime executable used by the Python SDK. The digest must use exactly
+`sha256:<64-lowercase-hex>`; alternate casing is rejected so one artifact
+cannot acquire multiple semantic identities.
+
+A version pin by itself is insufficient. The live-evidence workflow first
+downloads that exact runtime-bin wheel, hashes its bytes, compares the result to
+`MORN_DSH_RUNTIME_DIGEST`, validates the wheel package/version metadata, writes
+a secret-free `runtime-artifact-verification.json`, and only then installs the
+wheel and matching `deepseek-harness-sdk`. A mismatch stops before any model
+credential is exercised. The resulting identity is therefore
+`deepseek-harness@<version>#sha256:<runtime-bin-wheel-bytes>`, not a digest
+copied from an environment variable without byte verification.
+
+The same lowercase-canonical rule applies to
+`deepseek-harness-profile@<version>#sha256:<digest>`. Profile and semantic-route
+digests remain separate identities: hashing the runtime wheel does not prove the
+Cordis/Home/Profile composition or the selected provider/model route.
+
 For GitHub-hosted deployment verification, the repository also provides the
 manual **Live DSH evidence** workflow. It has four explicit operations:
 `plan-sdk`, `plan-acp`, `smoke-sdk`, and `smoke-acp`. Planning needs no
