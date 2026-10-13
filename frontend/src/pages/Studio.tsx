@@ -304,7 +304,7 @@ export default function Studio() {
   };
 
   return (
-    <div className="page">
+    <div className="page studio-page">
       <header className="page-header">
         <h1>Studio — Solution Compiler</h1>
       </header>

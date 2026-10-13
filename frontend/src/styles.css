@@ -447,6 +447,47 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 }
 
 /* Studio follows the Work lifecycle; raw asset importers are advanced tools. */
+/* Studio is a guided contract builder, not a loose form dump. */
+.studio-page > .card {
+  margin-bottom: 14px;
+}
+.studio-page .builder-item {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.studio-page .builder-item > label {
+  line-height: 1.35;
+}
+.studio-page .builder-item > input,
+.studio-page .builder-item > select,
+.studio-page .builder-item > textarea {
+  width: min(100%, 720px) !important;
+  box-sizing: border-box;
+  margin: 0;
+}
+.studio-page .builder-item > textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+.studio-page .page-actions {
+  margin-top: 12px;
+}
+@media (max-width: 760px) {
+  .studio-page .builder-item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 10px 0 12px;
+  }
+  .studio-page .builder-item > input,
+  .studio-page .builder-item > select,
+  .studio-page .builder-item > textarea {
+    width: 100% !important;
+  }
+}
+
 .studio-workflow-hint {
   margin: 2px 0 18px;
   color: #a9bbd5;
