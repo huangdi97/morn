@@ -24,20 +24,34 @@ struct OwnedBackend {
 }
 
 impl OwnedBackend {
-    fn stop(&mut self) {
+    fn stop(&mut self) -> bool {
         let Some(mut child) = self.child.take() else {
-            return;
+            return true;
         };
-        if child.try_wait().ok().flatten().is_none() {
-            let _ = child.kill();
-        }
+        // The owned server watches stdin EOF. Closing only our pipe asks for
+        // graceful Axum/SQLite shutdown without exposing a management endpoint.
+        drop(child.stdin.take());
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let graceful = loop {
+            match child.try_wait() {
+                Ok(Some(_)) => break true,
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+                _ => {
+                    let _ = child.kill();
+                    break false;
+                }
+            }
+        };
         let _ = child.wait();
+        graceful
     }
 }
 
 impl Drop for OwnedBackend {
     fn drop(&mut self) {
-        self.stop();
+        let _ = self.stop();
     }
 }
 
@@ -145,7 +159,8 @@ fn spawn_reference_backend(data_dir: &Path) -> Result<Option<Child>, String> {
         .current_dir(data_dir)
         .env("MORN_PORT", "8090")
         .env("MORN_DB", db_path)
-        .stdin(Stdio::null())
+        .env("MORN_EXIT_ON_STDIN_CLOSE", "1")
+        .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -170,7 +185,10 @@ fn run_sidecar_probe() -> Result<(), String> {
         let _ = std::fs::remove_dir_all(&data_dir);
         return Err("desktop sidecar probe never observed a healthy Morn backend".to_string());
     }
-    owned.stop();
+    if !owned.stop() {
+        let _ = std::fs::remove_dir_all(&data_dir);
+        return Err("desktop sidecar required force-kill instead of graceful stdin-EOF shutdown".to_string());
+    }
     // A child owned by this probe must actually release the listening socket.
     let deadline = Instant::now() + Duration::from_secs(4);
     while backend_port_open() && Instant::now() < deadline {
@@ -228,7 +246,7 @@ fn main() {
 
     app.run(move |_handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
-            exit_backend
+            let _ = exit_backend
                 .lock()
                 .expect("desktop backend state poisoned")
                 .stop();
