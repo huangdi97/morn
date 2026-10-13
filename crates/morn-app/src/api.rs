@@ -3389,8 +3389,10 @@ fn latest_effective_reviewer_attestations<'a>(
     workspace_owner: &morn_kernel::ids::PrincipalId,
     now: morn_kernel::time::Timestamp,
 ) -> Vec<&'a morn_work::acceptance::AcceptanceReviewerAttestation> {
-    let mut latest =
-        std::collections::BTreeMap::<String, &morn_work::acceptance::AcceptanceReviewerAttestation>::new();
+    let mut latest = std::collections::BTreeMap::<
+        String,
+        &morn_work::acceptance::AcceptanceReviewerAttestation,
+    >::new();
     for reviewer in reviewers {
         if reviewer.validate().is_err()
             || reviewer.observed_at > now
@@ -3415,11 +3417,14 @@ fn latest_effective_reviewer_attestations<'a>(
 async fn v115_acceptance_reviewers(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     let now = morn_kernel::time::Timestamp::now();
-    let reviewers: Vec<_> =
-        latest_effective_reviewer_attestations(&guard.acceptance_reviewers, &guard.workspace.owner, now)
-            .into_iter()
-            .cloned()
-            .collect();
+    let reviewers: Vec<_> = latest_effective_reviewer_attestations(
+        &guard.acceptance_reviewers,
+        &guard.workspace.owner,
+        now,
+    )
+    .into_iter()
+    .cloned()
+    .collect();
     Ok(Json(json!({
         "reviewers": reviewers,
         "deployment_attested": true,

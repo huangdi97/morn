@@ -50,7 +50,10 @@ impl ConsumedAcceptanceReviewAuthorization {
         if !authorization.authorizes(
             &authorization.principal_id,
             &authorization.acting_role,
-            (&authorization.work_package_id, authorization.work_generation),
+            (
+                &authorization.work_package_id,
+                authorization.work_generation,
+            ),
             &authorization.outcome_id,
             authorization.disposition,
             consumed_at,
@@ -290,9 +293,11 @@ mod tests {
         decision.decided_at = Timestamp::from_millis(20);
         decision.outcome_refs.push(outcome.clone());
 
-        let consumed =
-            ConsumedAcceptanceReviewAuthorization::from_authorization(&authorization, decision.decided_at)
-                .unwrap();
+        let consumed = ConsumedAcceptanceReviewAuthorization::from_authorization(
+            &authorization,
+            decision.decided_at,
+        )
+        .unwrap();
         assert!(consumed.exactly_matches(&authorization, &decision, &outcome));
 
         let mut stale = consumed.clone();
@@ -312,7 +317,10 @@ mod tests {
         };
         let second = AcceptanceReviewerAttestation {
             principal_id: principal,
-            acting_roles: vec!["independent-reviewer".to_string(), "quality-owner".to_string()],
+            acting_roles: vec![
+                "independent-reviewer".to_string(),
+                "quality-owner".to_string(),
+            ],
             evidence_refs: vec!["iam://reviewers/alice/v2".to_string()],
             observed_at: Timestamp::from_millis(20),
             valid_until: None,
