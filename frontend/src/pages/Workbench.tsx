@@ -657,6 +657,17 @@ export function workbenchLifecycleVisibility(
   const activeWorks = control.work.filter(
     (work) => !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase),
   );
+  const outcomeReady = control.work.some((work) => {
+    const hasCurrentOutcome = control.outcomes.some(
+      (outcome) =>
+        textField(outcome, "work_package_id") === work.id &&
+        outcome.work_generation === work.generation,
+    );
+    return (
+      ["Running", "Waiting", "Reconciling", "Delivered"].includes(work.status.phase) ||
+      hasCurrentOutcome
+    );
+  });
   const reviewReady = control.work.some((work) => {
     if (!["Delivered", "Waiting"].includes(work.status.phase)) return false;
     return control.outcomes.some(
@@ -676,7 +687,7 @@ export function workbenchLifecycleVisibility(
     hasCanonicalWork: control.work.length > 0,
     hasActiveWork: activeWorks.length > 0,
     showExecution: activeWorks.length > 0,
-    showAuthoritativeOutcome: activeWorks.length > 0,
+    showAuthoritativeOutcome: activeWorks.length > 0 && outcomeReady,
     showIndependentReview: reviewReady,
     showValueAssessment: valueReady,
     showAcpLifecycle: activeWorks.length > 0 && (dshMode === "real" || hasAcpBinding),

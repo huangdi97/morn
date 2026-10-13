@@ -466,12 +466,19 @@ describe("progressive Workbench lifecycle surface", () => {
       hasCanonicalWork: true,
       hasActiveWork: true,
       showExecution: true,
-      showAuthoritativeOutcome: true,
+      showAuthoritativeOutcome: false,
       showIndependentReview: false,
       showValueAssessment: false,
       showAcpLifecycle: false,
     });
     expect(workbenchLifecycleVisibility(proposed, "real").showAcpLifecycle).toBe(true);
+
+    const running = control("Running");
+    expect(workbenchLifecycleVisibility(running, "fixture")).toMatchObject({
+      showExecution: true,
+      showAuthoritativeOutcome: true,
+      showIndependentReview: false,
+    });
   });
 
   it("reveals independent review and value only when their lifecycle stage exists", () => {

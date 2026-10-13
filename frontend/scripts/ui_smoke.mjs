@@ -113,11 +113,11 @@ try {
       if (!(await registrySummary.count())) {
         errors.push("hub: availability summary is missing");
       } else {
-        const summaryText = await registrySummary.innerText();
+        const summaryText = (await registrySummary.innerText()).toLowerCase();
         if (
-          !summaryText.includes("Selectable providers now") ||
-          !summaryText.includes("Site-admitted capabilities") ||
-          !summaryText.includes("Candidate / non-admitted")
+          !summaryText.includes("selectable providers now") ||
+          !summaryText.includes("site-admitted capabilities") ||
+          !summaryText.includes("candidate / non-admitted")
         ) {
           errors.push("hub: availability summary does not distinguish selectable/admitted state");
         }
@@ -227,9 +227,6 @@ try {
         }
         if ((await governedExecution.count()) && !(await page.locator(".governed-execution-binding select").count())) {
           errors.push("workbench: rendered governed execution must expose explicit binding selection");
-        }
-        if (!(await authoritativeOutcome.count())) {
-          errors.push("workbench: active Work must expose authoritative source-to-outcome control");
         }
         if ((await advancedAcp.count()) && await advancedAcp.evaluate((node) => node.open)) {
           errors.push("workbench: advanced ACP lifecycle controls must be collapsed by default");
@@ -391,8 +388,8 @@ try {
       if (!(await page.getByRole("heading", { name: "Governed E0 execution" }).count())) {
         errors.push("Workbench: active proposed Work has no governed execution controls");
       }
-      if (!(await page.getByRole("heading", { name: "Authoritative outcome observation" }).count())) {
-        errors.push("Workbench: active Work has no authoritative outcome control");
+      if (await page.getByRole("heading", { name: "Authoritative outcome observation" }).count()) {
+        errors.push("Workbench: Proposed Work must not expose outcome observation before execution begins");
       }
       if (screenshotsDir) {
         await page.screenshot({ path: join(screenshotsDir, "workbench-after-studio-instantiation.png"), fullPage: true });
