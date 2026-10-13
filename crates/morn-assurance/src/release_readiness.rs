@@ -417,12 +417,129 @@ impl DeploymentReadinessScope {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EvidenceAcquisitionStep {
+    pub axis_id: String,
+    pub external_required: bool,
+    pub acquisition: String,
+    pub workflow_ref: Option<String>,
+    pub artifact_or_input: String,
+    pub deployment_inputs: Vec<String>,
+    pub safety_boundary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeploymentReadinessDecision {
     pub scope: DeploymentReadinessScope,
     pub site_ref: Option<String>,
     pub ready: bool,
     pub required_axes: Vec<String>,
     pub blockers: Vec<String>,
+    pub evidence_acquisition_plan: Vec<EvidenceAcquisitionStep>,
+}
+
+fn acquisition_step(axis: &ReleaseReadinessAxis, site_ref: Option<&str>) -> EvidenceAcquisitionStep {
+    match axis.id.as_str() {
+        "architecture-baseline" => EvidenceAcquisitionStep {
+            axis_id: axis.id.clone(),
+            external_required: false,
+            acquisition: "Restore the versioned v11.5 architecture evidence bundled with this exact build.".to_string(),
+            workflow_ref: Some(".github/workflows/ci.yml".to_string()),
+            artifact_or_input: "DesignSpec claim for morn-v11.5-architecture".to_string(),
+            deployment_inputs: vec![],
+            safety_boundary: "Design evidence never proves a live provider, customer site or write authority.".to_string(),
+        },
+        "local-reference-slice" => EvidenceAcquisitionStep {
+            axis_id: axis.id.clone(),
+            external_required: false,
+            acquisition: "Run the exact-head reference CI and factory read-only slice; load only its repository-local fixture proof.".to_string(),
+            workflow_ref: Some(".github/workflows/ci.yml".to_string()),
+            artifact_or_input: "LocalFixture claim for factory-readonly-wedge".to_string(),
+            deployment_inputs: vec![],
+            safety_boundary: "Fixture evidence cannot be promoted to RealRuntime, RealSite or ProductionWrite.".to_string(),
+        },
+        "ci-conformance" => EvidenceAcquisitionStep {
+            axis_id: axis.id.clone(),
+            external_required: false,
+            acquisition: "Run exact-head CI and pin the running deployment to that exact build identity.".to_string(),
+            workflow_ref: Some(".github/workflows/ci.yml".to_string()),
+            artifact_or_input: "MORN_BUILD_IDENTITY_REF matching the CI evidence reference".to_string(),
+            deployment_inputs: vec!["MORN_BUILD_IDENTITY_REF".to_string()],
+            safety_boundary: "A green older SHA cannot satisfy a newer running build.".to_string(),
+        },
+        "deepseek-live-runtime" => EvidenceAcquisitionStep {
+            axis_id: axis.id.clone(),
+            external_required: true,
+            acquisition: "Run authenticated E0 DSH smoke on the attested provider runner, then load the emitted RealRuntime claim and start the exact same pinned runtime route to obtain a fresh Healthy lease.".to_string(),
+            workflow_ref: Some(".github/workflows/live-dsh-evidence.yml".to_string()),
+            artifact_or_input: "real-runtime-evidence-claim.json + fresh DSH Healthy lease".to_string(),
+            deployment_inputs: vec![
+                "MORN_EVIDENCE_CLAIMS_FILE".to_string(),
+                "MORN_EVIDENCE_ISSUER".to_string(),
+                "MORN_DSH_MODE=real".to_string(),
+                "MORN_EXECUTION_ATTESTATION_FILE".to_string(),
+            ],
+            safety_boundary: "Provider smoke is executor evidence only; it never creates Outcome, Acceptance or production-write authority.".to_string(),
+        },
+        "pi-live-runtime" => EvidenceAcquisitionStep {
+            axis_id: axis.id.clone(),
+            external_required: true,
+            acquisition: "Run authenticated E0 Pi smoke on the attested provider runner, then load the emitted RealRuntime claim and start the exact same pinned runtime route to obtain a fresh Healthy lease.".to_string(),
+            workflow_ref: Some(".github/workflows/live-pi-evidence.yml".to_string()),
+            artifact_or_input: "real-runtime-evidence-claim.json + fresh Pi Healthy lease".to_string(),
+            deployment_inputs: vec![
+                "MORN_EVIDENCE_CLAIMS_FILE".to_string(),
+                "MORN_EVIDENCE_ISSUER".to_string(),
+                "MORN_PI_MODE=real".to_string(),
+                "MORN_EXECUTION_ATTESTATION_FILE".to_string(),
+            ],
+            safety_boundary: "Provider smoke is executor evidence only; it never creates Outcome, Acceptance or production-write authority.".to_string(),
+        },
+        "customer-real-site" => {
+            let subject = site_ref
+                .map(|site| format!("factory-customer:{site}"))
+                .unwrap_or_else(|| "factory-customer:<exact-site>".to_string());
+            EvidenceAcquisitionStep {
+                axis_id: axis.id.clone(),
+                external_required: true,
+                acquisition: "Obtain deployment/customer-owned real-site evidence for the exact site and load it through the trusted evidence-claim file.".to_string(),
+                workflow_ref: None,
+                artifact_or_input: format!("RealSite EvidenceClaim subject={subject}"),
+                deployment_inputs: vec![
+                    "MORN_DEPLOYMENT_SITE_REF".to_string(),
+                    "MORN_EVIDENCE_CLAIMS_FILE".to_string(),
+                    "MORN_EVIDENCE_ISSUER".to_string(),
+                ],
+                safety_boundary: "Morn cannot mint customer/site truth; repository fixtures and provider output are insufficient.".to_string(),
+            }
+        }
+        "production-write" => {
+            let subject = site_ref
+                .map(|site| format!("factory-production-write:{site}"))
+                .unwrap_or_else(|| "factory-production-write:<exact-site>".to_string());
+            EvidenceAcquisitionStep {
+                axis_id: axis.id.clone(),
+                external_required: true,
+                acquisition: "Load deployment-owned ProductionWrite evidence for the exact site; each real action still needs an independent Work/Profile/Authority/Permit decision.".to_string(),
+                workflow_ref: None,
+                artifact_or_input: format!("ProductionWrite EvidenceClaim subject={subject}"),
+                deployment_inputs: vec![
+                    "MORN_DEPLOYMENT_SITE_REF".to_string(),
+                    "MORN_EVIDENCE_CLAIMS_FILE".to_string(),
+                    "MORN_EVIDENCE_ISSUER".to_string(),
+                ],
+                safety_boundary: "Readiness evidence cannot grant action-level authority or bypass ExternalAction enforcement.".to_string(),
+            }
+        }
+        other => EvidenceAcquisitionStep {
+            axis_id: other.to_string(),
+            external_required: true,
+            acquisition: "Provide deployment-owned evidence for this readiness axis.".to_string(),
+            workflow_ref: None,
+            artifact_or_input: format!("EvidenceClaim for {}", axis.subject),
+            deployment_inputs: vec!["MORN_EVIDENCE_CLAIMS_FILE".to_string()],
+            safety_boundary: "Unknown evidence classes fail closed and must not be inferred from adjacent proof.".to_string(),
+        },
+    }
 }
 
 /// Evaluate one explicit deployment target. This consumes readiness evidence
@@ -489,6 +606,17 @@ pub fn evaluate_deployment_readiness_for_target(
         );
     }
 
+    let evidence_acquisition_plan = scope
+        .required_axes()
+        .iter()
+        .filter_map(|required| {
+            axes.iter()
+                .find(|axis| axis.id == *required)
+                .filter(|axis| axis.state != ReadinessState::Proven)
+        })
+        .map(|axis| acquisition_step(axis, site_ref))
+        .collect();
+
     DeploymentReadinessDecision {
         scope,
         site_ref: site_ref.map(str::to_string),
@@ -499,6 +627,7 @@ pub fn evaluate_deployment_readiness_for_target(
             .map(|axis| (*axis).to_string())
             .collect(),
         blockers,
+        evidence_acquisition_plan,
     }
 }
 
@@ -783,6 +912,47 @@ mod tests {
             Some("git://huangdi97/morn/abc123"),
         );
         assert_eq!(exact_identity[2].state, ReadinessState::Proven);
+    }
+
+    #[test]
+    fn blocked_customer_runtime_scope_exposes_exact_evidence_acquisition_plan() {
+        let axes = release_readiness_axes_for_deployment(
+            &reference_evidence_ledger(),
+            RuntimeReadinessEvidence::unavailable("live DSH not configured"),
+            RuntimeReadinessEvidence::unavailable("live Pi not configured"),
+            Some("build://morn/test"),
+            Some("plant-a"),
+        );
+        let decision = evaluate_deployment_readiness_for_target(
+            &axes,
+            DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
+            false,
+            Some("plant-a"),
+        );
+        assert!(!decision.ready);
+        let dsh = decision
+            .evidence_acquisition_plan
+            .iter()
+            .find(|step| step.axis_id == "deepseek-live-runtime")
+            .unwrap();
+        assert!(dsh.external_required);
+        assert_eq!(
+            dsh.workflow_ref.as_deref(),
+            Some(".github/workflows/live-dsh-evidence.yml")
+        );
+        assert!(dsh
+            .deployment_inputs
+            .contains(&"MORN_EVIDENCE_CLAIMS_FILE".to_string()));
+
+        let site = decision
+            .evidence_acquisition_plan
+            .iter()
+            .find(|step| step.axis_id == "customer-real-site")
+            .unwrap();
+        assert!(site.artifact_or_input.contains("factory-customer:plant-a"));
+        assert!(site
+            .safety_boundary
+            .contains("cannot mint customer/site truth"));
     }
 
     #[test]

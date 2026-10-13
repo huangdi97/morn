@@ -337,6 +337,15 @@ export interface V115Status {
       ready: boolean;
       required_axes: string[];
       blockers: string[];
+      evidence_acquisition_plan: Array<{
+        axis_id: string;
+        external_required: boolean;
+        acquisition: string;
+        workflow_ref: string | null;
+        artifact_or_input: string;
+        deployment_inputs: string[];
+        safety_boundary: string;
+      }>;
     }>;
     semantics: {
       aggregate_ready: false;

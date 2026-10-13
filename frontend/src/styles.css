@@ -951,6 +951,46 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   margin: 4px 0 0;
   overflow-wrap: anywhere;
 }
+.evidence-acquisition-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.evidence-acquisition-step {
+  padding: 9px 10px;
+  border: 1px solid #31435d;
+  border-radius: 9px;
+  background: #111c2b;
+}
+.evidence-acquisition-step > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.evidence-acquisition-step strong {
+  font-size: 11px;
+  color: #d8e4f4;
+}
+.evidence-acquisition-step p {
+  margin: 7px 0;
+  color: #a8b9cf;
+}
+.evidence-acquisition-step small {
+  display: block;
+  margin-top: 5px;
+  color: #8fa5c2;
+  overflow-wrap: anywhere;
+}
+.evidence-acquisition-step code {
+  color: #c9d8ec;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.evidence-acquisition-boundary {
+  color: #d0b98e !important;
+}
 .release-readiness-footnote {
   margin: 12px 2px 0;
   color: #93a7c5;

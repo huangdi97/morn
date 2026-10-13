@@ -100,6 +100,20 @@ try {
         ) {
           errors.push("console: production-write deployment gate must remain blocked under factory read-only profile");
         }
+        const dshReadOnly = deploymentScopes.locator(".readiness-item", { hasText: "DSH real-runtime read-only" });
+        if (await dshReadOnly.count()) {
+          const details = dshReadOnly.first().locator("details.readiness-scope-details");
+          await details.locator("summary").click();
+          const text = await details.innerText();
+          if (
+            !text.includes("Evidence acquisition plan") ||
+            !text.includes(".github/workflows/live-dsh-evidence.yml") ||
+            !text.includes("MORN_EVIDENCE_CLAIMS_FILE")
+          ) {
+            errors.push("console: blocked DSH scope must expose executable evidence acquisition guidance");
+          }
+          await details.locator("summary").click();
+        }
       }
     }
     if (route === "/hub" && !(await page.getByRole("heading", { name: "v11.5 Capability Supply Chain" }).isVisible())) {

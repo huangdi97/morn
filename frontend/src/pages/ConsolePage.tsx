@@ -269,6 +269,41 @@ export default function ConsolePage() {
                     <p>{decision.required_axes.join(" · ") || "none"}</p>
                     <b>{decision.ready ? "Gate result" : "Active blockers"}</b>
                     <p>{decision.blockers.length ? decision.blockers.join(" · ") : "All required axes proven"}</p>
+                    {!decision.ready && decision.evidence_acquisition_plan.length > 0 && (
+                      <>
+                        <b>Evidence acquisition plan</b>
+                        <div className="evidence-acquisition-list">
+                          {decision.evidence_acquisition_plan.map((step) => (
+                            <article className="evidence-acquisition-step" key={step.axis_id}>
+                              <div>
+                                <strong>{readinessLabel(step.axis_id)}</strong>
+                                <StatusPill
+                                  value={step.external_required ? "external evidence" : "repository/local"}
+                                  tone={step.external_required ? "blocked" : "neutral"}
+                                />
+                              </div>
+                              <p>{step.acquisition}</p>
+                              <small>
+                                Required artifact/input: <code>{step.artifact_or_input}</code>
+                              </small>
+                              {step.workflow_ref && (
+                                <small>
+                                  Workflow: <code>{step.workflow_ref}</code>
+                                </small>
+                              )}
+                              {step.deployment_inputs.length > 0 && (
+                                <small>
+                                  Deployment inputs: <code>{step.deployment_inputs.join(" · ")}</code>
+                                </small>
+                              )}
+                              <small className="evidence-acquisition-boundary">
+                                Boundary: {step.safety_boundary}
+                              </small>
+                            </article>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </details>
               </article>
