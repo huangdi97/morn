@@ -108,6 +108,21 @@ try {
     if (route === "/hub" && !(await page.getByRole("heading", { name: "Provider Fabric" }).isVisible())) {
       errors.push("hub: canonical Provider Fabric registry is not visible");
     }
+    if (route === "/hub") {
+      const registrySummary = page.locator('[data-testid="hub-registry-summary"]');
+      if (!(await registrySummary.count())) {
+        errors.push("hub: availability summary is missing");
+      } else {
+        const summaryText = await registrySummary.innerText();
+        if (
+          !summaryText.includes("Selectable providers now") ||
+          !summaryText.includes("Site-admitted capabilities") ||
+          !summaryText.includes("Candidate / non-admitted")
+        ) {
+          errors.push("hub: availability summary does not distinguish selectable/admitted state");
+        }
+      }
+    }
     if (route === "/hub" && !(await page.getByRole("heading", { name: "Registry projections" }).isVisible())) {
       errors.push("hub: declared-only registry projections are not visible");
     }

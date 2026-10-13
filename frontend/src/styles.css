@@ -382,6 +382,46 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   .workbench-reference { padding: 0 12px; margin-top: 16px; }
   .workbench-reference > summary { font-size: 13px; }
 }
+.hub-registry-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.hub-registry-summary > div {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid #344660;
+  border-radius: 12px;
+  background: #121d2c;
+}
+.hub-registry-summary span {
+  display: block;
+  color: #91a5c1;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .045em;
+}
+.hub-registry-summary strong {
+  display: block;
+  margin: 7px 0 5px;
+  color: #e3ebf7;
+  font-size: 22px;
+  line-height: 1;
+}
+.hub-registry-summary small {
+  display: block;
+  color: #90a2bc;
+  font-size: 10px;
+  line-height: 1.45;
+}
+@media (max-width: 900px) {
+  .hub-registry-summary { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 520px) {
+  .hub-registry-summary { grid-template-columns: 1fr; }
+}
+
 /* v11.5 Hub reads canonical supply-chain facts, never inferred admission. */
 .hub-supply-chain,
 .hub-provider-fabric,

@@ -135,11 +135,50 @@ export default function Hub() {
   if (error) return <ErrorBox message={error} />;
   if (!data) return <Loading />;
 
+  const selectableProviders =
+    providerStatus?.provider_catalog.filter(
+      (provider) => provider.status.toLowerCase() === "healthy" && !!provider.health_valid_until,
+    ).length ?? 0;
+  const registeredProviders = providerStatus?.provider_catalog.length ?? 0;
+  const admittedCapabilities =
+    supply?.capabilities.filter(
+      (capability) =>
+        capability.stage === "Admitted" &&
+        supply.admissions.some(
+          (admission) =>
+            admission.manifest_id === capability.manifest.id &&
+            admission.status.toLowerCase() === "active",
+        ),
+    ).length ?? 0;
+  const candidateCapabilities = (supply?.capabilities.length ?? 0) - admittedCapabilities;
+
   return (
     <div className="page">
       <header className="page-header">
         <h1>Hub — Registry</h1>
       </header>
+      <section className="hub-registry-summary" data-testid="hub-registry-summary" aria-label="Registry availability summary">
+        <div>
+          <span>Selectable providers now</span>
+          <strong>{providerStatus ? selectableProviders : "—"}</strong>
+          <small>Healthy with an active health lease; authority is still Work/Profile scoped.</small>
+        </div>
+        <div>
+          <span>Registered providers</span>
+          <strong>{providerStatus ? registeredProviders : "—"}</strong>
+          <small>Known/configured entries, including unavailable and reference providers.</small>
+        </div>
+        <div>
+          <span>Site-admitted capabilities</span>
+          <strong>{supply ? admittedCapabilities : "—"}</strong>
+          <small>Current canonical lifecycle projection; admission does not itself grant action authority.</small>
+        </div>
+        <div>
+          <span>Candidate / non-admitted</span>
+          <strong>{supply ? candidateCapabilities : "—"}</strong>
+          <small>Declared, observed, qualified or released assets that are not currently site-admitted.</small>
+        </div>
+      </section>
       <section className="hub-provider-fabric" aria-label="Provider fabric registry">
         <div className="hub-supply-head">
           <span className="work-focus-eyebrow">PROVIDER FABRIC · V11.5</span>

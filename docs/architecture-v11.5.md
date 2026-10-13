@@ -366,7 +366,10 @@ All product surfaces are views over the same semantics:
   blocker evidence is progressively disclosed so a blocked production scope
   cannot be mistaken for readiness or buried in diagnostic prose.
 - **Hub**: capabilities, releases, harness providers, composition runtimes,
-  compilers, profiles and reusable packages.
+  compilers, profiles and reusable packages. The first registry view summarizes
+  what is selectable/admitted **now** versus merely registered/candidate;
+  detailed provider and capability records remain available below for evidence
+  inspection.
 
 No surface is allowed to create a parallel domain model, and no product surface
 may require users to treat provider/session mechanics as the primary business
