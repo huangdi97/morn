@@ -85,16 +85,12 @@ jobs:
       MORN_DSH_ACP_PROFILE_CONFIGURATION_REF: ${{ inputs.profile_configuration_ref }}
       MORN_DSH_ACP_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       MORN_DSH_ACP_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
-      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
-      EXECUTION_ATTESTATION_JSON: ${{ secrets.MORN_EXECUTION_ATTESTATION_JSON }}
       INPUT_OPERATION: ${{ inputs.operation }}
       INPUT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       INPUT_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
       INPUT_PROFILE_CONFIGURATION_REF: ${{ inputs.profile_configuration_ref }}
       INPUT_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       INPUT_ACK_E0: ${{ inputs.acknowledge_e0_only }}
-      MORN_EXECUTION_ATTESTOR_SECRET: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
 
     steps:
       - uses: actions/checkout@v4
@@ -151,12 +147,11 @@ jobs:
       - name: Validate smoke secrets and materialize deployment attestation
         if: startsWith(inputs.operation, 'smoke-')
         shell: bash
+        env:
+          EXECUTION_ATTESTATION_JSON: ${{ secrets.MORN_EXECUTION_ATTESTATION_JSON }}
+          MORN_EXECUTION_ATTESTOR_SECRET: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
         run: |
           set -euo pipefail
-          if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
-            echo "DEEPSEEK_API_KEY secret is required for authenticated smoke"
-            exit 2
-          fi
           if [[ -z "${EXECUTION_ATTESTATION_JSON:-}" ]]; then
             echo "MORN_EXECUTION_ATTESTATION_JSON secret is required for authenticated smoke"
             exit 2
@@ -176,7 +171,6 @@ jobs:
             echo "MORN_EXECUTION_ATTESTOR secret is required for authenticated smoke"
             exit 2
           fi
-          echo "MORN_EXECUTION_ATTESTOR=$MORN_EXECUTION_ATTESTOR_SECRET" >> "$GITHUB_ENV"
 
       - name: Verify and install exact official DeepSeek Harness runtime artifact
         if: startsWith(inputs.operation, 'smoke-')
@@ -252,8 +246,12 @@ jobs:
           MORN_DSH_MODE: real
           MORN_PROVIDER_SMOKE_PROVIDER: deepseek-harness
           MORN_DSH_ENV_PASSTHROUGH: DEEPSEEK_API_KEY,DEEPSEEK_BASE_URL
+          MORN_EXECUTION_ATTESTOR: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
         run: |
           set -euo pipefail
+          test -n "${DEEPSEEK_API_KEY:-}" || { echo "DEEPSEEK_API_KEY secret is required"; exit 2; }
           cargo run --quiet -p morn-app --bin provider_smoke | tee target/live-dsh-evidence/provider-smoke.json
 
       - name: Run authenticated ACP lifecycle smoke (control only)
@@ -262,8 +260,12 @@ jobs:
         env:
           MORN_DSH_ACP_MODE: real
           MORN_DSH_ACP_ENV_PASSTHROUGH: DEEPSEEK_API_KEY,DEEPSEEK_BASE_URL
+          MORN_EXECUTION_ATTESTOR: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
         run: |
           set -euo pipefail
+          test -n "${DEEPSEEK_API_KEY:-}" || { echo "DEEPSEEK_API_KEY secret is required"; exit 2; }
           cargo run --quiet -p morn-app --bin dsh_acp_lifecycle_smoke | tee target/live-dsh-evidence/acp-lifecycle-smoke.json
 
       - name: Upload evidence reports
