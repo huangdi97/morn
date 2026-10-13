@@ -188,7 +188,6 @@ impl BioLabService {
             self.pi.clone(),
             Some("PI approves analysis".to_string()),
         );
-        let pi_approval_ref = pi_approval.id.to_string();
         self.artifacts.approve(pi_approval)?;
         steps.push(ok_step(
             "review_approve",

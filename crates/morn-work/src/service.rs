@@ -291,7 +291,6 @@ mod tests {
     use super::*;
     use crate::acceptance::AcceptanceSpec;
     use crate::attention::AttentionKind;
-    use crate::execution_mode::{ExecutionMode, ExecutorType};
     use morn_kernel::ids::{PrincipalId, WorkspaceId};
 
     #[test]
