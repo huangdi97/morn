@@ -149,11 +149,16 @@ impl WorkService {
         Ok(())
     }
 
-    /// Attempt to accept a WorkPackage. Without an AcceptanceSpec this always fails.
+    /// Legacy WorkPackage compatibility boundary.
+    ///
+    /// v11.5 intentionally has one final acceptance truth model:
+    /// `AcceptanceDecision` over persisted, source-grounded outcomes plus
+    /// reviewer attestation and one-shot review authorization. Caller-built
+    /// legacy witnesses therefore cannot promote a WorkPackage to Accepted.
     pub fn attempt_accept(
         &mut self,
         id: &WorkPackageId,
-        evidence: &AcceptanceEvidence,
+        _evidence: &AcceptanceEvidence,
     ) -> Result<WorkStatus> {
         let wp = self
             .work_packages
@@ -164,62 +169,20 @@ impl WorkService {
             WorkStatus::Completed | WorkStatus::WaitingApproval
         ) {
             return Err(Error::invalid_state(format!(
-                "work package {id} must be Completed/WaitingApproval before acceptance, got {:?}",
+                "work package {id} must be Completed/WaitingApproval before canonical acceptance, got {:?}",
                 wp.status
             )));
         }
-        let spec_id = wp.acceptance_spec_id.clone().ok_or_else(|| {
-            Error::validation(format!(
-                "work package {id} has no AcceptanceSpec and cannot be accepted"
-            ))
-        })?;
-        let spec = self
-            .acceptance_specs
-            .get(&spec_id)
-            .ok_or_else(|| Error::not_found(format!("acceptance spec {spec_id}")))?;
-
-        // Every required artifact must have been produced.
-        for required in &spec.required_artifacts {
-            if !evidence.produced_artifacts.iter().any(|a| a == required) {
-                return Err(Error::validation(format!(
-                    "acceptance requires artifact {required:?} which was not produced"
-                )));
-            }
-        }
-        let has_work_bound_verification = evidence.verification_witnesses.iter().any(|witness| {
-            witness.work_package_id == *id && !witness.evidence_ref.trim().is_empty()
-        });
-        if !has_work_bound_verification {
-            return Err(Error::validation(
-                "acceptance requires a Work-bound verification witness",
-            ));
-        }
-        if spec.human_approval_required {
-            let has_work_bound_approval = evidence.approval_witnesses.iter().any(|witness| {
-                witness.work_package_id == *id
-                    && !witness.principal_ref.trim().is_empty()
-                    && !witness.role.trim().is_empty()
-                    && !witness.evidence_ref.trim().is_empty()
-            });
-            if !has_work_bound_approval {
-                return Err(Error::validation(
-                    "acceptance requires Work-bound human approval evidence",
-                ));
-            }
-        }
-        if let Some(forbidden) = &evidence.forbidden_condition_hit {
+        if wp.acceptance_spec_id.is_none() {
             return Err(Error::validation(format!(
-                "forbidden condition hit during work: {forbidden}"
+                "work package {id} has no AcceptanceSpec and cannot enter canonical acceptance"
             )));
         }
-
-        let wp = self
-            .work_packages
-            .get_mut(id)
-            .ok_or_else(|| Error::not_found(format!("work package {id}")))?;
-        wp.status = WorkStatus::Accepted;
-        Ok(wp.status)
+        Err(Error::invalid_state(
+            "legacy WorkPackage witnesses cannot create Accepted state; use canonical v11.5 AcceptanceDecision with persisted Outcome and review authority",
+        ))
     }
+
 }
 
 /// Durable execution support: checkpoints, pause/resume, recovery, attention.
@@ -344,81 +307,42 @@ mod tests {
     }
 
     #[test]
-    fn work_with_satisfied_acceptance_can_be_accepted() {
+    fn legacy_witnesses_cannot_promote_completed_work_to_accepted() {
         let mut svc = WorkService::new();
         let ws = WorkspaceId::generate();
         let owner = PrincipalId::generate();
-        let spec = AcceptanceSpec::new("biolab claim")
+        let spec = AcceptanceSpec::new("legacy compatibility")
             .with_required_artifacts(vec!["analysis".to_string()])
             .with_human_approval(true);
         let spec_id = spec.id.clone();
         svc.add_acceptance_spec(spec);
         let wp = WorkPackage::new(ws, "dataset to reviewed claim", owner)
-            .with_acceptance_spec(spec_id)
-            .with_execution_mode(ExecutionMode::hybrid(
-                vec![crate::execution_mode::WorkNature::Probabilistic],
-                vec![ExecutorType::Actor, ExecutorType::Human],
-            ));
+            .with_acceptance_spec(spec_id);
         let wp_id = wp.id.clone();
         svc.add_work_package(wp);
         svc.update_status(&wp_id, WorkStatus::InProgress).unwrap();
         svc.update_status(&wp_id, WorkStatus::Completed).unwrap();
-        let status = svc
-            .attempt_accept(
-                &wp_id,
-                &AcceptanceEvidence {
-                    produced_artifacts: vec!["analysis".to_string()],
-                    verification_witnesses: vec![VerificationWitness::new(
-                        wp_id.clone(),
-                        "verification://fixture/work",
-                    )],
-                    approval_witnesses: vec![AcceptanceApprovalWitness::new(
-                        wp_id.clone(),
-                        "principal://pi",
-                        "pi",
-                        "approval://fixture/pi",
-                    )],
-                    forbidden_condition_hit: None,
-                },
-            )
-            .unwrap();
-        assert_eq!(status, WorkStatus::Accepted);
-    }
 
-    #[test]
-    fn acceptance_witnesses_cannot_be_reused_for_another_work_package() {
-        let mut svc = WorkService::new();
-        let ws = WorkspaceId::generate();
-        let owner = PrincipalId::generate();
-        let spec = AcceptanceSpec::new("review").with_human_approval(true);
-        let spec_id = spec.id.clone();
-        svc.add_acceptance_spec(spec);
-        let first = WorkPackage::new(ws.clone(), "first", owner.clone())
-            .with_acceptance_spec(spec_id.clone());
-        let second = WorkPackage::new(ws, "second", owner).with_acceptance_spec(spec_id);
-        let first_id = first.id.clone();
-        let second_id = second.id.clone();
-        svc.add_work_package(first);
-        svc.add_work_package(second);
-        svc.update_status(&second_id, WorkStatus::InProgress)
-            .unwrap();
-        svc.update_status(&second_id, WorkStatus::Completed)
-            .unwrap();
         let evidence = AcceptanceEvidence {
-            produced_artifacts: vec![],
+            produced_artifacts: vec!["analysis".to_string()],
             verification_witnesses: vec![VerificationWitness::new(
-                first_id.clone(),
-                "verification://first",
+                wp_id.clone(),
+                "world-snapshot://fixture",
             )],
             approval_witnesses: vec![AcceptanceApprovalWitness::new(
-                first_id,
+                wp_id.clone(),
                 "principal://reviewer",
                 "reviewer",
-                "approval://first",
+                "approval://fixture",
             )],
             forbidden_condition_hit: None,
         };
-        assert!(svc.attempt_accept(&second_id, &evidence).is_err());
+        let err = svc.attempt_accept(&wp_id, &evidence).unwrap_err();
+        assert!(err.to_string().contains("AcceptanceDecision"));
+        assert_eq!(
+            svc.work_package(&wp_id).unwrap().status,
+            WorkStatus::Completed
+        );
     }
 
     #[test]

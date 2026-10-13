@@ -138,30 +138,17 @@ fn pure_core_e2e_zero_domain() {
         assert!(guard.artifacts.require_approved(&version.id).is_ok());
         let _ = artifact;
 
-        // Completion is execution state; acceptance remains a separate evidence gate.
+        // Completion is execution state. The legacy WorkPackage API cannot
+        // manufacture Accepted from caller-built witness strings; final
+        // acceptance is canonical v11.5 AcceptanceDecision state.
         guard
             .work
             .update_status(&wp_id, WorkStatus::Completed)
             .unwrap();
-        guard
-            .work
-            .attempt_accept(
-                &wp_id,
-                &morn_work::service::AcceptanceEvidence {
-                    produced_artifacts: vec!["result".to_string()],
-                    verification_witnesses: if execution_verified {
-                        vec![morn_work::service::VerificationWitness::new(
-                            wp_id.clone(),
-                            format!("world-snapshot://{}", outcome.snapshot_ref),
-                        )]
-                    } else {
-                        vec![]
-                    },
-                    approval_witnesses: vec![],
-                    forbidden_condition_hit: None,
-                },
-            )
-            .unwrap();
+        assert_eq!(
+            guard.work.work_package(&wp_id).unwrap().status,
+            WorkStatus::Completed
+        );
         guard
             .world
             .record_outcome(morn_world::outcome::OutcomeRecord::new(

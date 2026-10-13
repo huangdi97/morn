@@ -15,9 +15,7 @@ use morn_kernel::status::WorkStatus;
 use morn_runtime::gateway::ActionGateway;
 use morn_work::acceptance::AcceptanceSpec;
 use morn_work::execution_mode::{ExecutionMode, ExecutorType, WorkNature};
-use morn_work::service::{
-    AcceptanceApprovalWitness, AcceptanceEvidence, VerificationWitness, WorkService,
-};
+use morn_work::service::WorkService;
 use morn_work::work_package::WorkPackage;
 use morn_world::object::Object;
 use morn_world::outcome::OutcomeRecord;
@@ -81,11 +79,10 @@ impl BioLabService {
                 PolicyRule::allow("start_analysis"),
                 PolicyRule::allow("submit_analysis_artifact"),
                 PolicyRule::allow("approve_claim"),
-                PolicyRule::allow("release_claim"),
+                PolicyRule::allow("record_reviewed_claim"),
             ],
         );
-        let e3 = EffectContract::e3("public release of scientific claim");
-        let gateway = ActionGateway::new(policy, e3);
+        let gateway = ActionGateway::new(policy, EffectContract::e1());
 
         Self {
             workspace_id,
@@ -198,7 +195,8 @@ impl BioLabService {
             "statistical reviewer + PI approval recorded",
         ));
 
-        // 5. governed release action (E3) -> claim state diff -> outcome
+        // 5. governed internal reviewed-state commit (E1) -> claim state diff -> outcome.
+        // Public release is an E3 external effect and must use the v11.5 ExternalAction path.
         let claim_id = ScientificClaimId::generate_with("claim");
         let claim_object_id = ObjectId::new(claim_id.to_string());
         let claim_object = Object::new(
@@ -231,18 +229,11 @@ impl BioLabService {
             BTreeMap::new(),
             self.analyst.as_str(),
         );
-        // The demo E3 authorization is tied to this exact proposal and to the
-        // concrete PI approval record instead of a reusable role string.
-        self.gateway.record_approval(
-            &proposal,
-            "release_claim",
-            self.pi.as_str(),
-            "pi",
-            format!("artifact-approval://{pi_approval_ref}"),
-        )?;
-        let authorized = self.gateway.authorize(&proposal, "release_claim")?;
+        let authorized = self
+            .gateway
+            .authorize(&proposal, "record_reviewed_claim")?;
         let mut new_state = BTreeMap::new();
-        new_state.insert("status".to_string(), json!("released"));
+        new_state.insert("status".to_string(), json!("reviewed"));
         new_state.insert(
             "statement".to_string(),
             json!("Mechanism X is reproducible in this dataset"),
@@ -257,7 +248,7 @@ impl BioLabService {
             &authorized,
             claim_object_id.clone(),
             new_state,
-            Some("PI approved release".to_string()),
+            Some("reviewed analysis recorded internally".to_string()),
             self.analyst.as_str(),
             &mut self.world,
         )?;
@@ -265,37 +256,17 @@ impl BioLabService {
         steps.push(ok_step(
             "governed_action",
             &format!(
-                "release_claim committed -> receipt {}; explicit verification={} ({})",
+                "reviewed-state commit -> receipt {}; explicit verification={} ({})",
                 outcome.receipt_id, release_verified, outcome.details
             ),
         ));
 
-        // 6. complete execution, then run the separate acceptance gate.
+        // 6. Legacy WorkPackage execution is complete. It deliberately does
+        // not claim Accepted: canonical v11.5 AcceptanceDecision owns that truth.
         self.work.update_status(&wp_id, WorkStatus::Completed)?;
-        let status = self.work.attempt_accept(
-            &wp_id,
-            &AcceptanceEvidence {
-                produced_artifacts: vec!["analysis".to_string()],
-                verification_witnesses: if release_verified {
-                    vec![VerificationWitness::new(
-                        wp_id.clone(),
-                        format!("world-snapshot://{}", outcome.snapshot_ref),
-                    )]
-                } else {
-                    vec![]
-                },
-                approval_witnesses: vec![AcceptanceApprovalWitness::new(
-                    wp_id.clone(),
-                    self.pi.as_str(),
-                    "pi",
-                    format!("artifact-approval://{pi_approval_ref}"),
-                )],
-                forbidden_condition_hit: None,
-            },
-        )?;
         steps.push(ok_step(
-            "accept",
-            &format!("work package accepted: {status:?}"),
+            "acceptance_boundary",
+            "execution completed; canonical AcceptanceDecision remains separate and is not claimed by this fixture",
         ));
 
         // 7. outcome record
@@ -410,12 +381,12 @@ mod tests {
         assert!(result.all_ok(), "steps: {:?}", result.steps);
         assert_eq!(result.steps.len(), 7);
 
-        // claim object released
+        // claim object reached internal reviewed state
         let claim = svc
             .world
             .object(&ObjectId::new(result.claim_id.clone()))
             .expect("claim object");
-        assert_eq!(claim.state().get("status"), Some(&json!("released")));
+        assert_eq!(claim.state().get("status"), Some(&json!("reviewed")));
 
         // lineage: outcome links snapshot; claim links dataset/analysis/artifact
         let outcome = svc
@@ -439,13 +410,14 @@ mod tests {
         );
         assert!(svc.artifacts.require_approved(&artifact_version.id).is_ok());
 
-        // work package accepted
+        // legacy WorkPackage remains execution-complete; v11.5 AcceptanceDecision
+        // is the only final acceptance truth.
         assert_eq!(
             svc.work
                 .work_package(&WorkPackageId::new(result.work_package_id.clone()))
                 .unwrap()
                 .status,
-            morn_kernel::status::WorkStatus::Accepted
+            morn_kernel::status::WorkStatus::Completed
         );
     }
 }

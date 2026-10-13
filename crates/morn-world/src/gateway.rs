@@ -69,17 +69,6 @@ impl AuthorizedAction {
     }
 }
 
-/// One-shot approval evidence bound to one exact proposal/action/target.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ApprovalWitness {
-    proposal_ref: String,
-    action_name: String,
-    target_object: String,
-    principal_ref: String,
-    role: String,
-    evidence_ref: String,
-}
-
 /// Result of verifying an executed action.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionOutcome {
@@ -100,7 +89,6 @@ pub struct ExecutionOutcome {
 pub struct ActionGateway {
     policy: Policy,
     effect_contract: EffectContract,
-    approval_witnesses: Vec<ApprovalWitness>,
     ledger: Ledger,
 }
 
@@ -109,7 +97,6 @@ impl ActionGateway {
         Self {
             policy,
             effect_contract,
-            approval_witnesses: Vec::new(),
             ledger: Ledger::new(),
         }
     }
@@ -124,10 +111,6 @@ impl ActionGateway {
 
     pub fn ledger(&self) -> &Ledger {
         &self.ledger
-    }
-
-    pub fn pending_approval_count(&self) -> usize {
-        self.approval_witnesses.len()
     }
 
     /// Show what executing this proposal would do, without authorizing it.
@@ -173,45 +156,15 @@ impl ActionGateway {
             )));
         }
 
-        // E2 must declare a compensation action.
-        if self.effect_contract.class == EffectClass::E2Compensatable
-            && self.effect_contract.compensation_action.is_none()
-        {
-            return Err(Error::validation(
-                "E2 compensatable effect requires a compensation action",
+        if self.effect_contract.class.rank() > EffectClass::E1Transactional.rank() {
+            return Err(Error::not_authorized(
+                "legacy World ActionGateway is limited to E0/E1 canonical state transitions; E2/E3 effects require the v11.5 ExternalAction authority/permit/attempt path",
             ));
         }
 
-        // E3 (irreversible) requires one exact, proposal-bound approval witness.
-        let approval_index = if self.effect_contract.approval_required {
-            Some(
-                self.approval_witnesses
-                    .iter()
-                    .position(|witness| {
-                        witness.proposal_ref == proposal.id.to_string()
-                            && witness.action_name == action_name
-                            && witness.target_object == proposal.target_object.to_string()
-                            && witness.principal_ref != proposal.proposed_by
-                    })
-                    .ok_or_else(|| {
-                        Error::not_authorized(
-                            "irreversible/high-risk action requires exact proposal-bound approval evidence",
-                        )
-                    })?,
-            )
-        } else {
-            None
-        };
-        let approval = approval_index.map(|index| self.approval_witnesses[index].clone());
-
         let mut action = Action::new(proposal.id.clone());
         action.status = ActionStatus::Authorized;
-        let mut refs = vec![proposal.id.to_string(), action.id.to_string()];
-        if let Some(approval) = &approval {
-            refs.push(approval.evidence_ref.clone());
-            refs.push(format!("approval-principal:{}", approval.principal_ref));
-            refs.push(format!("approval-role:{}", approval.role));
-        }
+        let refs = vec![proposal.id.to_string(), action.id.to_string()];
         self.ledger.append(
             proposal.workspace_id.clone(),
             "action.authorized",
@@ -221,9 +174,6 @@ impl ActionGateway {
             None,
             refs,
         )?;
-        if let Some(index) = approval_index {
-            self.approval_witnesses.remove(index);
-        }
         Ok(AuthorizedAction { action, preview })
     }
 
@@ -344,51 +294,12 @@ impl ActionGateway {
         Ok(action_id)
     }
 
-    pub fn record_approval(
-        &mut self,
-        proposal: &ActionProposal,
-        action_name: impl Into<String>,
-        principal_ref: impl Into<String>,
-        role: impl Into<String>,
-        evidence_ref: impl Into<String>,
-    ) -> Result<()> {
-        let action_name = action_name.into();
-        let principal_ref = principal_ref.into();
-        let role = role.into();
-        let evidence_ref = evidence_ref.into();
-        if action_name.trim().is_empty()
-            || principal_ref.trim().is_empty()
-            || role.trim().is_empty()
-            || evidence_ref.trim().is_empty()
-        {
-            return Err(Error::validation(
-                "approval witness requires action, principal, role and evidence",
-            ));
-        }
-        if self.approval_witnesses.iter().any(|existing| {
-            existing.proposal_ref == proposal.id.to_string()
-                && existing.action_name == action_name
-                && existing.evidence_ref == evidence_ref
-        }) {
-            return Err(Error::conflict("duplicate approval witness"));
-        }
-        self.approval_witnesses.push(ApprovalWitness {
-            proposal_ref: proposal.id.to_string(),
-            action_name,
-            target_object: proposal.target_object.to_string(),
-            principal_ref,
-            role,
-            evidence_ref,
-        });
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::object::{Object, ObjectType};
-    use morn_capability::effect::EffectClass;
     use morn_kernel::ids::{ActionTypeId, WorkspaceId};
     use morn_kernel::policy::{Policy, PolicyRule};
     use serde_json::json;
@@ -398,137 +309,29 @@ mod tests {
     }
 
     #[test]
-    fn e3_without_approval_is_denied() {
+    fn legacy_gateway_rejects_e2_and_e3_even_with_policy_allow() {
         let ws = WorkspaceId::generate();
-        let policy = Policy::new(
-            ws.clone(),
-            "strict",
-            vec![PolicyRule::allow("release_claim")],
-        );
-        let e3 = EffectContract::e3("public release of scientific claim");
-        let mut gateway = ActionGateway::new(policy, e3);
-        let target = ObjectId::generate();
-        let prop = proposal(ws, target.clone(), "analyst");
-        let err = gateway.authorize(&prop, "release_claim");
-        assert!(err.is_err(), "E3 without approval must be denied");
-        assert!(gateway.approval_witnesses.is_empty());
-    }
-
-    #[test]
-    fn e3_with_approval_is_authorized_and_executes_via_world() {
-        let ws = WorkspaceId::generate();
-        let policy = Policy::new(
-            ws.clone(),
-            "strict",
-            vec![PolicyRule::allow("release_claim")],
-        );
-        let e3 = EffectContract::e3("public release");
-        let mut gateway = ActionGateway::new(policy, e3);
-
-        let mut world = WorldService::new();
-        let obj_type = ObjectType::new(
-            "biolab.Claim",
-            ws.clone(),
-            vec!["status".into()],
-            vec![],
-            vec![],
-        );
-        world.register_object_type(obj_type.clone());
-        let target = ObjectId::generate_with("claim");
-        world.register_object(Object::new(
-            target.clone(),
-            obj_type.id.clone(),
-            ws.clone(),
-            {
-                let mut m = BTreeMap::new();
-                m.insert("status".to_string(), json!("draft"));
-                m
-            },
-        ));
-
-        let prop = proposal(ws, target.clone(), "analyst");
-        gateway
-            .record_approval(
-                &prop,
-                "release_claim",
-                "principal://pi",
-                "pi",
-                "approval://fixture/pi-release",
-            )
-            .unwrap();
-        let authorized = gateway.authorize(&prop, "release_claim").unwrap();
-        assert!(gateway.approval_witnesses.is_empty());
-        assert_eq!(authorized.action.status, ActionStatus::Authorized);
-
-        let mut new_state = BTreeMap::new();
-        new_state.insert("status".to_string(), json!("released"));
-        let outcome = gateway
-            .execute(
-                &authorized,
-                target.clone(),
-                new_state,
-                Some("pi approved".to_string()),
-                "analyst",
-                &mut world,
-            )
-            .unwrap();
-        assert!(outcome.committed);
-        assert!(!outcome.snapshot_ref.is_empty());
-        assert_eq!(
-            world.object(&target).unwrap().state().get("status"),
-            Some(&json!("released"))
-        );
-        assert_eq!(world.snapshots_for(&target).len(), 1);
-        assert!(gateway.verify(&outcome, &world).unwrap());
-    }
-
-    #[test]
-    fn e3_proposer_cannot_self_approve() {
-        let ws = WorkspaceId::generate();
-        let policy = Policy::new(
-            ws.clone(),
-            "strict",
-            vec![PolicyRule::allow("release_claim")],
-        );
-        let mut gateway = ActionGateway::new(policy, EffectContract::e3("public release"));
-        let target = ObjectId::generate();
-        let proposal = proposal(ws, target, "principal://analyst");
-        gateway
-            .record_approval(
-                &proposal,
-                "release_claim",
-                "principal://analyst",
-                "approver",
-                "approval://self",
-            )
-            .unwrap();
-        assert!(gateway.authorize(&proposal, "release_claim").is_err());
-    }
-
-    #[test]
-    fn approval_witness_cannot_be_replayed_for_another_proposal() {
-        let ws = WorkspaceId::generate();
-        let policy = Policy::new(
-            ws.clone(),
-            "strict",
-            vec![PolicyRule::allow("release_claim")],
-        );
-        let mut gateway = ActionGateway::new(policy, EffectContract::e3("public release"));
-        let target = ObjectId::generate();
-        let first = proposal(ws.clone(), target.clone(), "analyst");
-        let second = proposal(ws, target, "analyst");
-        gateway
-            .record_approval(
-                &first,
-                "release_claim",
-                "principal://pi",
-                "pi",
-                "approval://fixture/one-shot",
-            )
-            .unwrap();
-        assert!(gateway.authorize(&second, "release_claim").is_err());
-        assert!(gateway.authorize(&first, "release_claim").is_ok());
-        assert!(gateway.authorize(&first, "release_claim").is_err());
+        for contract in [
+            EffectContract::e2("compensate"),
+            EffectContract::e3("irreversible"),
+        ] {
+            let policy = Policy::new(
+                ws.clone(),
+                "strict",
+                vec![PolicyRule::allow("write")],
+            );
+            let mut gateway = ActionGateway::new(policy, contract);
+            let prop = proposal(
+                ws.clone(),
+                ObjectId::generate_with("target"),
+                "principal://operator",
+            );
+            let err = gateway.authorize(&prop, "write").unwrap_err();
+            assert!(
+                err.to_string().contains("v11.5 ExternalAction"),
+                "legacy high-risk effects must route through the canonical v11.5 authority path"
+            );
+        }
     }
 
     #[test]
@@ -540,7 +343,7 @@ mod tests {
             "workspace-bound",
             vec![PolicyRule::allow("update")],
         );
-        let mut gateway = ActionGateway::new(policy, EffectContract::e1("local update"));
+        let mut gateway = ActionGateway::new(policy, EffectContract::e1());
         let proposal = proposal(
             foreign_workspace,
             ObjectId::generate_with("foreign"),
@@ -553,7 +356,7 @@ mod tests {
     fn authorization_for_one_target_cannot_be_replayed_to_another_object() {
         let ws = WorkspaceId::generate();
         let policy = Policy::new(ws.clone(), "strict", vec![PolicyRule::allow("update")]);
-        let mut gateway = ActionGateway::new(policy, EffectContract::e1("update"));
+        let mut gateway = ActionGateway::new(policy, EffectContract::e1());
         let mut world = WorldService::new();
         let object_type =
             ObjectType::new("asset", ws.clone(), vec!["status".into()], vec![], vec![]);
@@ -587,25 +390,6 @@ mod tests {
             Some(&json!("before"))
         );
         assert!(world.snapshots_for(&target_b).is_empty());
-    }
-
-    #[test]
-    fn e2_without_compensation_fails_validation() {
-        let ws = WorkspaceId::generate();
-        let policy = Policy::new(ws.clone(), "p", vec![PolicyRule::allow("exclude_sample")]);
-        // E2 contract with no compensation action: must fail.
-        let e2 = EffectContract {
-            class: EffectClass::E2Compensatable,
-            compensation_action: None,
-            irreversible_reason: None,
-            preview_required: true,
-            approval_required: false,
-            verification_required: true,
-        };
-        let mut gateway = ActionGateway::new(policy, e2);
-        let target = ObjectId::generate();
-        let prop = proposal(ws, target, "pipeline");
-        assert!(gateway.authorize(&prop, "exclude_sample").is_err());
     }
 
     #[test]
