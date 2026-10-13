@@ -104,10 +104,7 @@ impl WorkService {
         if current == status {
             return Ok(());
         }
-        if matches!(
-            status,
-            WorkStatus::Accepted | WorkStatus::Rejected
-        ) {
+        if matches!(status, WorkStatus::Accepted | WorkStatus::Rejected) {
             return Err(Error::invalid_state(
                 "Accepted/Rejected require the dedicated acceptance decision path",
             ));
@@ -162,7 +159,10 @@ impl WorkService {
             .work_packages
             .get(id)
             .ok_or_else(|| Error::not_found(format!("work package {id}")))?;
-        if !matches!(wp.status, WorkStatus::Completed | WorkStatus::WaitingApproval) {
+        if !matches!(
+            wp.status,
+            WorkStatus::Completed | WorkStatus::WaitingApproval
+        ) {
             return Err(Error::invalid_state(format!(
                 "work package {id} must be Completed/WaitingApproval before acceptance, got {:?}",
                 wp.status
@@ -400,8 +400,10 @@ mod tests {
         let second_id = second.id.clone();
         svc.add_work_package(first);
         svc.add_work_package(second);
-        svc.update_status(&second_id, WorkStatus::InProgress).unwrap();
-        svc.update_status(&second_id, WorkStatus::Completed).unwrap();
+        svc.update_status(&second_id, WorkStatus::InProgress)
+            .unwrap();
+        svc.update_status(&second_id, WorkStatus::Completed)
+            .unwrap();
         let evidence = AcceptanceEvidence {
             produced_artifacts: vec![],
             verification_witnesses: vec![VerificationWitness::new(
