@@ -494,6 +494,13 @@ impl WorkProgressController {
                         && outcome.is_source_grounded()
                         && acceptance.outcome_refs.iter().any(|id| id == &outcome.id)
                 });
+                if let Some(outcome) = grounded_outcome {
+                    let mut observed =
+                        WorkCondition::new("OutcomeObservation", ConditionStatus::True);
+                    observed.reason = format!("source-grounded outcome {}", outcome.id);
+                    observed.evidence_refs = outcome.evidence_refs.clone();
+                    work.set_condition(observed);
+                }
                 let attested_outcome =
                     grounded_outcome.filter(|outcome| outcome.is_attested_source_grounded());
                 let independently_witnessed = !acceptance.evidence_refs.is_empty()
