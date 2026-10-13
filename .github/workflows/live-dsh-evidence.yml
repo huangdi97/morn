@@ -229,11 +229,11 @@ jobs:
           }
           out = pathlib.Path("target/live-dsh-evidence/runtime-artifact-verification.json")
           out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
-              fh.write(f"MORN_DSH_VERIFIED_RUNTIME_WHEEL={wheel}\n")
           PY
 
-          python -m pip install --disable-pip-version-check "$MORN_DSH_VERIFIED_RUNTIME_WHEEL"
+          runtime_wheel="$(find "$dist_dir" -maxdepth 1 -type f -name 'deepseek_harness_runtime_bin-*.whl' -print -quit)"
+          test -n "$runtime_wheel"
+          python -m pip install --disable-pip-version-check "$runtime_wheel"
           python -m pip install --disable-pip-version-check "deepseek-harness-sdk==$INPUT_RUNTIME_VERSION"
           python - <<'PY'
           import importlib.metadata as metadata, os

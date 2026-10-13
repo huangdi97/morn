@@ -116,13 +116,14 @@ fn run_gate() -> Result<Value> {
             "execution-environment attestation does not bind the exact ACP DSH runtime artifact",
         ));
     }
-    if !attestation
-        .runtime_identities
-        .iter()
-        .any(|identity| identity == &profile_configuration_ref)
-    {
+    if !attestation.attests_identity_ref(&profile_configuration_ref, Timestamp::now()) {
         return Err(Error::external(
             "execution-environment attestation does not bind the exact ACP Home/Profile composition",
+        ));
+    }
+    if !attestation.attests_identity_ref(&route_ref, Timestamp::now()) {
+        return Err(Error::external(
+            "execution-environment attestation does not bind the exact ACP semantic route",
         ));
     }
 
@@ -209,6 +210,12 @@ fn run_gate() -> Result<Value> {
         "wire_agent_version": wire_agent_version,
         "execution_environment_ref": environment_ref,
         "profile_configuration_ref": profile_configuration_ref,
+        "required_real_runtime_claim_refs": [
+            format!("runtime://deepseek-harness/{runtime_version}#{runtime_digest}"),
+            environment_ref,
+            profile_configuration_ref,
+            route_ref
+        ],
         "execution_environment_runtime_identities": attestation.runtime_identities,
         "execution_environment_evidence_refs": attestation.evidence_refs,
         "prompt_settled": prompt_settled,
