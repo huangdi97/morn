@@ -18,8 +18,8 @@ use morn_work::control::{ConditionStatus, WorkCondition, WorkPhase, WorkResource
 use morn_world::ObservedOutcome;
 
 use crate::{
-    derive_controller_inputs, require_attested_outcome_provenance, ConditionEvidence,
-    ControllerInputs, WorkController,
+    derive_controller_inputs, require_attested_outcome_provenance,
+    require_attested_review_authority, ConditionEvidence, ControllerInputs, WorkController,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -326,12 +326,14 @@ impl DurableBusinessEvidenceControllerRuntime {
             match decision.disposition {
                 AcceptanceDisposition::Accept
                     if decision.is_final_acceptance()
-                        && require_attested_outcome_provenance(store, &work, outcome).is_ok() =>
+                        && require_attested_outcome_provenance(store, &work, outcome).is_ok()
+                        && require_attested_review_authority(store, &work, decision).is_ok() =>
                 {
                     accepted.push((decision, outcome));
                 }
                 AcceptanceDisposition::Reject
-                    if require_attested_outcome_provenance(store, &work, outcome).is_ok() =>
+                    if require_attested_outcome_provenance(store, &work, outcome).is_ok()
+                        && require_attested_review_authority(store, &work, decision).is_ok() =>
                 {
                     rejected.push((decision, outcome));
                 }

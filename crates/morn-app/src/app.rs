@@ -387,6 +387,53 @@ fn configured_acceptance_reviewers() -> morn_kernel::Result<Vec<AcceptanceReview
     Ok(reviewers)
 }
 
+fn persist_acceptance_trust_records(
+    store: &MornStore,
+    workspace_id: &KernelWorkspaceId,
+    reviewers: &[AcceptanceReviewerAttestation],
+    authorizations: &[AcceptanceReviewAuthorization],
+) -> morn_kernel::Result<()> {
+    for reviewer in reviewers {
+        let kind = "acceptance_reviewer_attestation_v115";
+        let id = reviewer.principal_id.as_str();
+        match store.load_record::<AcceptanceReviewerAttestation>(kind, id)? {
+            Some(existing) if existing == *reviewer => {}
+            Some(_) => {
+                return Err(morn_kernel::error::Error::conflict(format!(
+                    "deployment reviewer attestation {id} conflicts with persisted trust evidence"
+                )))
+            }
+            None => store.save_record_immutable(
+                kind,
+                id,
+                workspace_id.as_str(),
+                reviewer.observed_at.millis(),
+                reviewer,
+            )?,
+        }
+    }
+    for authorization in authorizations {
+        let kind = "acceptance_review_authorization_v115";
+        let id = authorization.authorization_id.as_str();
+        match store.load_record::<AcceptanceReviewAuthorization>(kind, id)? {
+            Some(existing) if existing == *authorization => {}
+            Some(_) => {
+                return Err(morn_kernel::error::Error::conflict(format!(
+                    "deployment review authorization {id} conflicts with persisted trust evidence"
+                )))
+            }
+            None => store.save_record_immutable(
+                kind,
+                id,
+                workspace_id.as_str(),
+                authorization.issued_at.millis(),
+                authorization,
+            )?,
+        }
+    }
+    Ok(())
+}
+
 fn configured_acceptance_review_authorizations(
 ) -> morn_kernel::Result<Vec<AcceptanceReviewAuthorization>> {
     let Ok(path) = std::env::var("MORN_ACCEPTANCE_REVIEW_AUTHORIZATIONS_FILE") else {
@@ -737,6 +784,12 @@ impl AppState {
         let source_observation_attestations = configured_source_observation_attestations()?;
         let acceptance_reviewers = configured_acceptance_reviewers()?;
         let acceptance_review_authorizations = configured_acceptance_review_authorizations()?;
+        persist_acceptance_trust_records(
+            &store,
+            &workspace.id,
+            &acceptance_reviewers,
+            &acceptance_review_authorizations,
+        )?;
         let customer_value_attestations = configured_customer_value_attestations()?;
         let executor_reconciliation_authorizations =
             configured_executor_reconciliation_authorizations()?;

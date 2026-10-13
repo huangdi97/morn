@@ -60,6 +60,7 @@ use morn_runtime::{
     OutcomeReconciler, ReconciliationRecord,
 };
 use morn_store::MornStore;
+use morn_work::acceptance::{AcceptanceReviewAuthorization, AcceptanceReviewerAttestation};
 use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
 use morn_work::control::{ConditionStatus, WorkCondition, WorkPhase, WorkResource};
 use morn_work::value::{ValueAssessment, ValueEvidenceClass};
@@ -843,6 +844,89 @@ pub(crate) fn require_attested_outcome_provenance(
     Ok(())
 }
 
+/// Verify that an independent review decision is backed by deployment-owned
+/// reviewer identity plus exact one-shot authorizations for every linked
+/// outcome. Older records without these refs remain auditable but cannot close
+/// Work or support customer-value truth.
+pub(crate) fn require_attested_review_authority(
+    store: &MornStore,
+    work: &WorkResource,
+    decision: &AcceptanceDecision,
+) -> Result<()> {
+    if !decision.has_review_authority_refs() {
+        return Err(Error::validation(
+            "acceptance decision lacks pinned reviewer/authorization trust references",
+        ));
+    }
+    let reviewer_ref = decision
+        .reviewer_attestation_ref
+        .as_deref()
+        .ok_or_else(|| Error::validation("reviewer attestation reference is missing"))?;
+    let reviewer: AcceptanceReviewerAttestation = store
+        .load_record("acceptance_reviewer_attestation_v115", reviewer_ref)?
+        .ok_or_else(|| Error::not_found("acceptance reviewer attestation"))?;
+    reviewer.validate()?;
+    if reviewer.principal_id != decision.decided_by
+        || reviewer.principal_id.as_str() != reviewer_ref
+        || !reviewer.active_for(&decision.acting_role, decision.decided_at)
+    {
+        return Err(Error::not_authorized(
+            "acceptance reviewer identity/role is not covered by the pinned deployment attestation",
+        ));
+    }
+
+    for outcome_id in &decision.outcome_refs {
+        let mut authorized = false;
+        for authorization_ref in &decision.review_authorization_refs {
+            let authorization: AcceptanceReviewAuthorization = store
+                .load_record("acceptance_review_authorization_v115", authorization_ref)?
+                .ok_or_else(|| Error::not_found("acceptance review authorization"))?;
+            if authorization.authorization_id != *authorization_ref
+                || !authorization.authorizes(
+                    &decision.decided_by,
+                    &decision.acting_role,
+                    (&work.id, work.generation),
+                    outcome_id,
+                    decision.disposition,
+                    decision.decided_at,
+                )
+            {
+                continue;
+            }
+            let consumed: serde_json::Value = store
+                .load_record("acceptance_review_authorization_consumed_v115", authorization_ref)?
+                .ok_or_else(|| Error::not_found("consumed acceptance review authorization"))?;
+            let disposition = serde_json::to_value(decision.disposition)
+                .map_err(|error| Error::internal(error.to_string()))?;
+            let exact_consumption = consumed
+                .get("authorization_id")
+                .and_then(serde_json::Value::as_str)
+                == Some(authorization_ref.as_str())
+                && consumed.get("work_id").and_then(serde_json::Value::as_str)
+                    == Some(work.id.as_str())
+                && consumed.get("outcome_id").and_then(serde_json::Value::as_str)
+                    == Some(outcome_id.as_str())
+                && consumed
+                    .get("reviewer_principal_id")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(decision.decided_by.as_str())
+                && consumed.get("acting_role").and_then(serde_json::Value::as_str)
+                    == Some(decision.acting_role.as_str())
+                && consumed.get("disposition") == Some(&disposition);
+            if exact_consumption {
+                authorized = true;
+                break;
+            }
+        }
+        if !authorized {
+            return Err(Error::not_authorized(
+                "no consumed deployment authorization matches this exact review outcome",
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Work status is a projection of durable evidence. Persisting the projection
 /// must never create Delivered/Accepted/Rejected truth ahead of its evidence.
 fn require_persisted_work_projection_evidence(
@@ -926,10 +1010,12 @@ fn require_persisted_work_projection_evidence(
             WorkPhase::Accepted => {
                 decision.is_final_acceptance()
                     && require_attested_outcome_provenance(store, work, linked).is_ok()
+                    && require_attested_review_authority(store, work, decision).is_ok()
             }
             WorkPhase::Rejected => {
                 decision.disposition == AcceptanceDisposition::Reject
                     && require_attested_outcome_provenance(store, work, linked).is_ok()
+                    && require_attested_review_authority(store, work, decision).is_ok()
             }
             _ => true,
         }
@@ -1591,6 +1677,9 @@ impl ControlPlaneStore for MornStore {
                 "terminal acceptance/rejection requires linked outcomes, independent reviewer, rationale and evidence",
             ));
         }
+        if decision.has_review_authority_refs() {
+            require_attested_review_authority(self, work, decision)?;
+        }
         for outcome_id in &decision.outcome_refs {
             let outcome: ObservedOutcome = self
                 .load_record("observed_outcome_v115", outcome_id.as_str())?
@@ -1661,6 +1750,7 @@ impl ControlPlaneStore for MornStore {
                 || acceptance.work_generation != work.generation
                 || !acceptance.is_final_acceptance()
                 || !acceptance.outcome_refs.contains(&assessment.outcome_ref)
+                || require_attested_review_authority(self, work, &acceptance).is_err()
             {
                 return Err(Error::validation(
                     "customer-validated value requires final acceptance of that exact outcome",

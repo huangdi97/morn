@@ -35,6 +35,14 @@ pub struct AcceptanceDecision {
     pub evidence_refs: Vec<String>,
     pub decided_by: PrincipalId,
     pub acting_role: String,
+    /// Deployment-attested reviewer identity pinned by the decision. Older
+    /// records deserialize without it and remain non-terminal trust evidence.
+    #[serde(default)]
+    pub reviewer_attestation_ref: Option<String>,
+    /// One or more exact, out-of-band review authorizations consumed for the
+    /// linked outcomes. These are authority references, not user-supplied prose.
+    #[serde(default)]
+    pub review_authorization_refs: Vec<String>,
     pub reason: String,
     pub conditions: Vec<String>,
     pub decided_at: Timestamp,
@@ -59,6 +67,8 @@ impl AcceptanceDecision {
             evidence_refs: Vec::new(),
             decided_by,
             acting_role: acting_role.into(),
+            reviewer_attestation_ref: None,
+            review_authorization_refs: Vec::new(),
             reason: reason.into(),
             conditions: Vec::new(),
             decided_at: Timestamp::now(),
@@ -73,6 +83,36 @@ impl AcceptanceDecision {
         }
         self.work_generation = generation;
         Ok(())
+    }
+
+    pub fn pin_review_authority(
+        &mut self,
+        reviewer_attestation_ref: impl Into<String>,
+        review_authorization_refs: Vec<String>,
+    ) -> morn_kernel::error::Result<()> {
+        let reviewer_attestation_ref = reviewer_attestation_ref.into();
+        if reviewer_attestation_ref.trim().is_empty()
+            || review_authorization_refs.is_empty()
+            || review_authorization_refs.iter().any(|value| value.trim().is_empty())
+        {
+            return Err(morn_kernel::error::Error::validation(
+                "review authority requires a reviewer attestation and explicit authorization refs",
+            ));
+        }
+        self.reviewer_attestation_ref = Some(reviewer_attestation_ref);
+        self.review_authorization_refs = review_authorization_refs;
+        Ok(())
+    }
+
+    pub fn has_review_authority_refs(&self) -> bool {
+        self.reviewer_attestation_ref
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+            && !self.review_authorization_refs.is_empty()
+            && self
+                .review_authorization_refs
+                .iter()
+                .all(|value| !value.trim().is_empty())
     }
 
     pub fn is_final_acceptance(&self) -> bool {

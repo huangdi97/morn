@@ -3596,6 +3596,10 @@ async fn v115_work_review_outcome(
         reason,
     );
     decision.pin_work_generation(work.generation)?;
+    decision.pin_review_authority(
+        reviewer.principal_id.to_string(),
+        vec![authorization.authorization_id.clone()],
+    )?;
     decision.outcome_refs.push(outcome.id.clone());
     decision.evidence_refs = evidence_refs;
     decision
