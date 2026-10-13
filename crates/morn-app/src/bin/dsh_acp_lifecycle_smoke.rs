@@ -36,6 +36,9 @@ fn live_context(
     workspace_id: morn_kernel::ids::WorkspaceId,
     scope_id: &str,
     attestation: &ExecutionEnvironmentAttestation,
+    runtime_version: &str,
+    runtime_digest: &str,
+    route_ref: &str,
 ) -> Result<RuntimeContext> {
     if !attestation.active_at(Timestamp::now()) {
         return Err(Error::external(
@@ -48,6 +51,13 @@ fn live_context(
         WorkPackageId::generate_with("dsh-acp-smoke"),
     )
     .with_work_binding(1, RuntimeBindingId::generate_with("dsh-acp-smoke"))
+    .map_err(Error::validation)?
+    .with_provider_identity(
+        "deepseek-harness",
+        runtime_version,
+        Some(runtime_digest.to_string()),
+        Some(route_ref.to_string()),
+    )
     .map_err(Error::validation)?
     .with_scope_id(scope_id.to_string())
     .map_err(Error::validation)?
@@ -124,7 +134,14 @@ fn run_gate() -> Result<Value> {
     )
     .with_restriction(DSH_REAL_E0_SCOPE_RESTRICTION);
     let scope_id = controller.mount_scope(scope)?;
-    let context = live_context(workspace_id, &scope_id, &attestation)?;
+    let context = live_context(
+        workspace_id,
+        &scope_id,
+        &attestation,
+        &runtime_version,
+        &runtime_digest,
+        &route_ref,
+    )?;
 
     let session = match controller.open_session(&context) {
         Ok(session) => session,
@@ -169,6 +186,12 @@ fn run_gate() -> Result<Value> {
             && observed.execution_environment_ref == environment_ref
             && observed.scope_ref == scope_id
             && observed.route_ref == route_ref
+            && context.proves_provider_identity(
+                "deepseek-harness",
+                &runtime_version,
+                Some(&runtime_digest),
+                Some(&route_ref),
+            )
             && observed.runtime_version == runtime_version
             && observed.runtime_digest == runtime_digest
     });

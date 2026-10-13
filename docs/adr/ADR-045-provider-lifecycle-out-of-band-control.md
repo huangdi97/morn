@@ -56,10 +56,12 @@ stopped when it was not.
    reconciliation.
 
 6. **Resume is exact-history continuation.** The Work-bound ACP lifecycle
-   controller revalidates Work id/generation, ExecutionBinding, exact
+   controller revalidates Work id/generation, ExecutionBinding **and the
+   Binding-admitted provider runtime/version/digest/route identity**, exact
    provider/model/reasoning route, runtime/profile identity, execution
    environment and the complete mounted ExecutionRun scope snapshot before a
-   session may continue. Same-process close/resume re-pins the route.
+   session may continue. Matching only the Binding id is insufficient because
+   it could otherwise reinterpret historical Work under a different provider route. Same-process close/resume re-pins the route.
    Cross-process resume is fail-closed under the one-shot DSH_HOME deployment
    model because that persistent session store has been intentionally reaped.
    Provider replacement creates a new binding; it never edits the historical
