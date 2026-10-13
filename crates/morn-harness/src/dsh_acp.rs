@@ -1065,6 +1065,10 @@ mod tests {
     use super::*;
     use std::io::BufRead;
 
+    fn governed_acp_profile(runtime_version: &str, runtime_digest: &str) -> String {
+        derive_morn_profile_configuration_ref(runtime_version, runtime_digest, "acp").unwrap()
+    }
+
     #[test]
     fn permission_requests_fail_closed_to_reject_once_or_cancelled() {
         assert_eq!(
@@ -1203,9 +1207,9 @@ mod tests {
             .with_model_route("fixture-provider", "fixture-model")
             .with_reasoning_effort("high")
             .with_execution_environment_ref("env://container/acp")
-            .with_profile_configuration_ref(format!(
-                "deepseek-harness-profile@1.0.0#sha256:{}",
-                "a".repeat(64)
+            .with_profile_configuration_ref(governed_acp_profile(
+                "1.0.0",
+                &format!("sha256:{}", "b".repeat(64)),
             ))
             .with_runtime_identity("1.0.0", format!("sha256:{}", "b".repeat(64)));
         assert!(configured.validate_for_real().is_ok());

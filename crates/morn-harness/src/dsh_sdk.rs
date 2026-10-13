@@ -1303,6 +1303,10 @@ pub fn assistant_text_from_session_event(params: &Value, session_id: &str) -> Op
 mod tests {
     use super::*;
 
+    fn governed_sdk_profile(runtime_version: &str, runtime_digest: &str) -> String {
+        derive_morn_profile_configuration_ref(runtime_version, runtime_digest, "sdk").unwrap()
+    }
+
     #[test]
     fn real_sdk_rejects_overlapping_workspace_and_harness_home() {
         let root = std::env::temp_dir().join("morn-dsh-boundary");
@@ -1315,7 +1319,10 @@ mod tests {
         )
         .with_dsh_home(nested_home.to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
-        .with_profile_configuration_ref("deepseek-harness-profile@morn-e0-v1#sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+        .with_profile_configuration_ref(governed_sdk_profile(
+            "fixture-runtime-1",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ))
         .with_runtime_identity(
             "fixture-runtime-1",
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1343,9 +1350,9 @@ mod tests {
         )
         .with_dsh_home(home.to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
-        .with_profile_configuration_ref(format!(
-            "deepseek-harness-profile@1#sha256:{}",
-            "a".repeat(64)
+        .with_profile_configuration_ref(governed_sdk_profile(
+            "1",
+            &format!("sha256:{}", "b".repeat(64)),
         ))
         .with_runtime_identity("1", format!("sha256:{}", "b".repeat(64)));
         assert!(config.validate_for_real().is_ok());
@@ -1397,7 +1404,10 @@ mod tests {
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
-        .with_profile_configuration_ref("deepseek-harness-profile@morn-e0-v1#sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+        .with_profile_configuration_ref(governed_sdk_profile(
+            "fixture-runtime-1",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ))
         .with_runtime_identity(
             "fixture-runtime-1",
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1688,7 +1698,10 @@ mod tests {
         )
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
-        .with_profile_configuration_ref("deepseek-harness-profile@morn-e0-v1#sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+        .with_profile_configuration_ref(governed_sdk_profile(
+            "fixture-runtime-1",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ))
         .with_runtime_identity(
             "fixture-runtime-1",
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
