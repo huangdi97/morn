@@ -301,6 +301,29 @@ mod tests {
     }
 
     #[test]
+    fn reviewer_attestation_reference_supports_append_only_rotation() {
+        let principal = PrincipalId::generate_with("reviewer");
+        let first = AcceptanceReviewerAttestation {
+            principal_id: principal.clone(),
+            acting_roles: vec!["independent-reviewer".to_string()],
+            evidence_refs: vec!["iam://reviewers/alice/v1".to_string()],
+            observed_at: Timestamp::from_millis(10),
+            valid_until: Some(Timestamp::from_millis(19)),
+        };
+        let second = AcceptanceReviewerAttestation {
+            principal_id: principal,
+            acting_roles: vec!["independent-reviewer".to_string(), "quality-owner".to_string()],
+            evidence_refs: vec!["iam://reviewers/alice/v2".to_string()],
+            observed_at: Timestamp::from_millis(20),
+            valid_until: None,
+        };
+        assert_ne!(first.reference(), second.reference());
+        assert!(first.active_for("independent-reviewer", Timestamp::from_millis(15)));
+        assert!(!first.active_for("independent-reviewer", Timestamp::from_millis(20)));
+        assert!(second.active_for("quality-owner", Timestamp::from_millis(20)));
+    }
+
+    #[test]
     fn reviewer_attestation_requires_identity_evidence_and_active_role() {
         let reviewer = AcceptanceReviewerAttestation {
             principal_id: PrincipalId::generate_with("reviewer"),

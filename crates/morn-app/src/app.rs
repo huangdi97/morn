@@ -375,12 +375,15 @@ fn configured_acceptance_reviewers() -> morn_kernel::Result<Vec<AcceptanceReview
             ))
         })?],
     };
-    let mut principals = std::collections::BTreeSet::new();
+    let mut references = std::collections::BTreeSet::new();
     for reviewer in &reviewers {
         reviewer.validate()?;
-        if !principals.insert(reviewer.principal_id.to_string()) {
+        // Reviewer trust is append-only and versioned by observation time.
+        // The same principal may legitimately rotate roles/evidence through a
+        // later attestation; only the immutable attestation reference must be unique.
+        if !references.insert(reviewer.reference()) {
             return Err(morn_kernel::error::Error::validation(
-                "acceptance reviewer principal ids must be unique",
+                "acceptance reviewer attestation references must be unique",
             ));
         }
     }
