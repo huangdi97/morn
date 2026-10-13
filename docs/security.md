@@ -21,6 +21,13 @@ and `crates/morn-core-tests/tests/conformance.rs`, plus architecture guards.
   bypass Core policy (`path_traversal_rejected_by_pack_manifest`,
   `command_injection_boundary_in_pack_names`).
 - **Audit** — append-only ledger; immutable execution receipts.
+- **Local desktop/web origin boundary** — mutating HTTP requests carrying an
+  `Origin` header are accepted only from explicit Morn dev/Tauri origins; the
+  packaged Tauri webview additionally enforces CSP limited to local assets,
+  Tauri IPC and `127.0.0.1:8090`, with prototype freezing enabled.
+- **Owned desktop sidecar** — the reference desktop validates Morn health before
+  attaching to localhost, runs single-instance while it owns a backend, and
+  binds the owned server lifetime to a private stdin pipe for graceful shutdown.
 
 ## Operational notes
 
