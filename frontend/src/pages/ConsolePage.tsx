@@ -168,7 +168,12 @@ export default function ConsolePage() {
   return (
     <div className="page">
       <header className="page-header">
-        <h1>Console</h1>
+        <div>
+          <h1>Console</h1>
+          <p className="page-subtitle">
+            Deployment truth, release gates and governed runtime posture. Evidence is shown separately from authority.
+          </p>
+        </div>
       </header>
       {v115 && (
         <section className="release-readiness" data-testid="release-readiness" aria-label="Release readiness">
@@ -271,7 +276,51 @@ export default function ConsolePage() {
           </div>
         </section>
       )}
-      <div className="grid">
+      <section className="console-ops-summary" aria-label="Current control-plane posture">
+        <article>
+          <span>Canonical Work</span>
+          <strong>{v115Control ? v115Control.work.length : "—"}</strong>
+          <small>
+            {v115Control && v115Control.work.length
+              ? `${v115Control.work.filter((work) => ["Accepted", "Rejected", "Cancelled"].includes(work.status.phase)).length} terminal · ${v115Control.work.filter((work) => !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase)).length} active/non-terminal`
+              : "No persisted Work in the current workspace"}
+          </small>
+        </article>
+        <article>
+          <span>Observed / accepted truth</span>
+          <strong>
+            {v115Control ? `${v115Control.outcomes.length} / ${v115Control.acceptance_decisions.length}` : "—"}
+          </strong>
+          <small>Observed outcomes / independent acceptance decisions</small>
+        </article>
+        <article>
+          <span>Provider posture</span>
+          <strong>
+            {v115
+              ? [v115.harness_runtime.dsh.runtime_health.state, v115.harness_runtime.pi.runtime_health.state]
+                  .filter((state) => state.toLowerCase() === "healthy").length + "/2 healthy"
+              : "—"}
+          </strong>
+          <small>Health is live executor evidence only; it never grants Work authority.</small>
+        </article>
+        <article>
+          <span>Deployment target</span>
+          <strong>{v115?.release_readiness.deployment_site_ref ?? "Not configured"}</strong>
+          <small>
+            {v115?.release_readiness.build_identity_ref
+              ? "Running build identity is pinned"
+              : "Build identity missing; deployment claims remain blocked"}
+          </small>
+        </article>
+      </section>
+
+      <details className="console-control-details">
+        <summary>Control-plane technical detail</summary>
+        <p className="console-reference-note">
+          Inspect registry identity, runtime/provider health, persisted control records, trust composition
+          and evidence classes. These details support the readiness decision above; they do not replace it.
+        </p>
+        <div className="grid">
         <Card title="Identity / Registry">
           <KeyValue k="Workspace" v={data.identity.workspace} />
           <KeyValue k="Owner" v={data.identity.owner} />
@@ -429,7 +478,10 @@ export default function ConsolePage() {
             </Card>
           </>
         )}
-        <details className="console-reference-details">
+        </div>
+      </details>
+
+      <details className="console-reference-details">
           <summary>Reference analytics &amp; legacy assurance views</summary>
           <p className="console-reference-note">
             These v0.2–v0.4 projections remain available for compatibility and diagnostics.
@@ -576,7 +628,6 @@ export default function ConsolePage() {
             </table>
           )}
         </Card>
-      </div>
     </div>
   );
 }

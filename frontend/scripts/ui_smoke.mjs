@@ -150,17 +150,38 @@ try {
       } else if (await legacy.evaluate((node) => node.open)) {
         errors.push("console: legacy/reference diagnostics should be collapsed by default");
       }
-      try {
-        await page.getByText("Harness / Runtime Health", { exact: true }).waitFor({
-          state: "visible",
-          timeout: 5000,
-        });
-        await page.getByText("v11.5 Persisted Control Records", { exact: true }).waitFor({
-          state: "visible",
-          timeout: 5000,
-        });
-      } catch {
-        errors.push("console: canonical v11.5 provider/control health must remain visible");
+
+      const posture = page.locator(".console-ops-summary");
+      if (!(await posture.count())) {
+        errors.push("console: current control-plane posture summary is missing");
+      } else {
+        const postureText = await posture.innerText();
+        if (!postureText.includes("Canonical Work") || !postureText.includes("Provider posture")) {
+          errors.push("console: operational summary does not expose Work/provider posture");
+        }
+      }
+
+      const technical = page.locator("details.console-control-details");
+      if (!(await technical.count())) {
+        errors.push("console: canonical technical-detail disclosure is missing");
+      } else {
+        if (await technical.evaluate((node) => node.open)) {
+          errors.push("console: technical control-plane details should be collapsed by default");
+        }
+        await technical.locator("summary").click();
+        try {
+          await page.getByText("Harness / Runtime Health", { exact: true }).waitFor({
+            state: "visible",
+            timeout: 5000,
+          });
+          await page.getByText("v11.5 Persisted Control Records", { exact: true }).waitFor({
+            state: "visible",
+            timeout: 5000,
+          });
+        } catch {
+          errors.push("console: canonical v11.5 provider/control detail must remain inspectable");
+        }
+        await technical.locator("summary").click();
       }
     }
     if (route === "/studio") {
