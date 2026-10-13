@@ -1112,6 +1112,15 @@ function GovernedE0Executor({
           </select>
         </label>
       </div>
+      {eligibleCapabilities.length === 0 && (
+        <div className="governed-execution-blocker" role="status">
+          <p><strong>No selectable E0 capability for this Work.</strong></p>
+          <small>
+            Qualification and site admission are capability-supply-chain facts, not executor choices.
+          </small>
+          <Link to="/hub">Review providers and admitted capabilities in Hub →</Link>
+        </div>
+      )}
       {realHarness && (
         <label className="governed-execution-environment">
           Trusted execution environment
@@ -1145,6 +1154,22 @@ function GovernedE0Executor({
             provider's launch configuration and runtime distribution identity.
           </small>
         </label>
+      )}
+      {realHarness && eligibleEnvironments.length === 0 && (
+        <div className="governed-execution-blocker" role="status">
+          <p><strong>No trusted execution environment matches this real Harness route.</strong></p>
+          <small>
+            Runtime attestation is deployment evidence and cannot be self-asserted from Workbench.
+          </small>
+          <Link to="/console">Inspect runtime and deployment gates in Console →</Link>
+        </div>
+      )}
+      {selectedWork && !selectedWork.spec.source_solution_ref && (
+        <div className="governed-execution-blocker" role="status">
+          <p><strong>This Work has no approved SolutionPackage provenance.</strong></p>
+          <small>Resolution cannot infer a package or capability set from free-form Work state.</small>
+          <Link to="/studio">Create or instantiate reviewed Work in Studio →</Link>
+        </div>
       )}
       <div className="page-actions">
         <button
