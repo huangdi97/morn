@@ -1,6 +1,8 @@
 use std::fs;
 
-use morn_assurance::{EvidenceClaim, EvidenceClaimState, EvidenceClass, EvidenceLedger};
+use morn_assurance::{
+    reference_evidence_ledger, EvidenceClaim, EvidenceClaimState, EvidenceClass,
+};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::time::Timestamp;
 use serde_json::json;
@@ -65,7 +67,10 @@ fn main() -> Result<()> {
         ));
     }
 
-    let mut ledger = EvidenceLedger::default();
+    // Match normal deployment startup exactly: external claims are appended
+    // after repository/reference baseline claims, so duplicate ids or history
+    // conflicts cannot pass this handoff and fail only later at server boot.
+    let mut ledger = reference_evidence_ledger();
     ledger.append_from_trusted_issuer(claim.clone(), issuer.trim())?;
 
     println!(
