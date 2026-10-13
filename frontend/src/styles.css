@@ -751,6 +751,37 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .readiness-evidence {
   color: #7f93b2;
 }
+.readiness-scope {
+  align-self: start;
+}
+.readiness-scope-details {
+  margin-top: 9px;
+  border-top: 1px solid #2b3b51;
+}
+.readiness-scope-details > summary {
+  cursor: pointer;
+  padding: 8px 0 2px;
+  color: #a8bad3;
+  font-size: 10px;
+  font-weight: 650;
+}
+.readiness-scope-details > summary:hover { color: #e0e9f6; }
+.readiness-scope-details > div {
+  padding: 8px 0 2px;
+  color: #91a5c2;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.readiness-scope-details b {
+  display: block;
+  margin-top: 7px;
+  color: #b8c8dd;
+  font-size: 10px;
+}
+.readiness-scope-details p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
 .release-readiness-footnote {
   margin: 12px 2px 0;
   color: #93a7c5;

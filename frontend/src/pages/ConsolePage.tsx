@@ -248,18 +248,24 @@ export default function ConsolePage() {
           <div className="release-readiness-grid" data-testid="deployment-readiness-scopes">
             {v115.release_readiness.deployment_scopes.map((decision) => (
               <article
-                className={`readiness-item ${decision.ready ? "readiness-ready" : "readiness-blocked"}`}
+                className={`readiness-item readiness-scope ${decision.ready ? "readiness-ready" : "readiness-blocked"}`}
                 key={decision.scope}
               >
                 <span>{deploymentScopeLabel(decision.scope)}</span>
                 <strong>{decision.ready ? "ready" : "blocked"}</strong>
                 <small className="readiness-reason">
-                  Required: {decision.required_axes.join(" · ")}
+                  {decision.required_axes.length} required axis/axes · {decision.blockers.length} blocker(s)
                   {decision.site_ref ? ` · Site: ${decision.site_ref}` : ""}
                 </small>
-                <small className="readiness-evidence">
-                  {decision.blockers.length ? decision.blockers.join(" · ") : "All required axes proven"}
-                </small>
+                <details className="readiness-scope-details">
+                  <summary>{decision.ready ? "Show gate evidence" : "Show blockers & required evidence"}</summary>
+                  <div>
+                    <b>Required axes</b>
+                    <p>{decision.required_axes.join(" · ") || "none"}</p>
+                    <b>{decision.ready ? "Gate result" : "Active blockers"}</b>
+                    <p>{decision.blockers.length ? decision.blockers.join(" · ") : "All required axes proven"}</p>
+                  </div>
+                </details>
               </article>
             ))}
           </div>

@@ -82,6 +82,10 @@ try {
       if (!(await deploymentScopes.count())) {
         errors.push("console: named deployment readiness gates are missing");
       } else {
+        const expandedScopeDetails = deploymentScopes.locator("details.readiness-scope-details[open]");
+        if (await expandedScopeDetails.count()) {
+          errors.push("console: deployment blocker details must be collapsed by default");
+        }
         const localRelease = deploymentScopes.locator(".readiness-item", { hasText: "Local reference release" });
         if (
           !(await localRelease.count()) ||

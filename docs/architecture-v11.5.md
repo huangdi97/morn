@@ -361,7 +361,10 @@ All product surfaces are views over the same semantics:
   copy; changing that contract requires explicit revalidation/migration, not a
   UI field edit.
 - **Console**: provider health, composition runtime, profiles, conformance,
-  authority, bindings, attempts, reconciliation and external blockers.
+  authority, bindings, attempts, reconciliation and external blockers. Release
+  posture keeps every named hard gate visible, while verbose required-axis and
+  blocker evidence is progressively disclosed so a blocked production scope
+  cannot be mistaken for readiness or buried in diagnostic prose.
 - **Hub**: capabilities, releases, harness providers, composition runtimes,
   compilers, profiles and reusable packages.
 
