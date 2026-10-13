@@ -1230,10 +1230,8 @@ async fn v115_work_observe_outcome(
     // Business projection always reads the durable immutable evidence back from
     // the canonical store. The normal path and crash-recovery path are therefore
     // the same fenced/CAS controller, not two subtly different state machines.
-    let projection = DurableBusinessEvidenceControllerRuntime::new(
-        "morn-app-outcome-projection",
-    )
-    .reconcile_from_persisted_business_evidence(&guard.store, work_id, now)?;
+    let projection = DurableBusinessEvidenceControllerRuntime::new("morn-app-outcome-projection")
+        .reconcile_from_persisted_business_evidence(&guard.store, work_id, now)?;
     work = guard
         .store
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
@@ -3636,10 +3634,9 @@ async fn v115_work_review_outcome(
         }),
     )?;
     ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &decision)?;
-    let projection = DurableBusinessEvidenceControllerRuntime::new(
-        "morn-app-acceptance-projection",
-    )
-    .reconcile_from_persisted_business_evidence(&guard.store, work_id, now)?;
+    let projection =
+        DurableBusinessEvidenceControllerRuntime::new("morn-app-acceptance-projection")
+            .reconcile_from_persisted_business_evidence(&guard.store, work_id, now)?;
     work = guard
         .store
         .load_record::<morn_work::control::WorkResource>("work_resource_v115", work_id)?
