@@ -58,7 +58,7 @@ concurrency:
 jobs:
   pi-evidence:
     name: Pi ${{ inputs.operation }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.operation == 'smoke' && 'morn-attested-provider' || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
       INPUT_OPERATION: ${{ inputs.operation }}
@@ -67,6 +67,7 @@ jobs:
       INPUT_CREDENTIAL_ENV: ${{ inputs.credential_env_name }}
       INPUT_BASE_URL_ENV: ${{ inputs.base_url_env_name }}
       INPUT_ACK_E0: ${{ inputs.acknowledge_e0_only }}
+      INPUT_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
       MORN_PI_WORKSPACE: /tmp/morn-pi-workspace-${{ github.run_id }}
       MORN_PI_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
       MORN_PI_PROVIDER: ${{ inputs.provider }}
@@ -125,6 +126,53 @@ jobs:
             exit 2
           fi
           mkdir -p "$MORN_PI_WORKSPACE" target/live-pi-evidence
+
+      - name: Bind authenticated smoke to attested runner identity
+        if: inputs.operation == 'smoke'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, pathlib, stat
+
+          path = pathlib.Path("/etc/morn/execution-environment-ref")
+          if not path.exists():
+              raise SystemExit("attested smoke runner is missing /etc/morn/execution-environment-ref")
+          st = path.lstat()
+          if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+              raise SystemExit("runner execution-environment identity must be a regular non-symlink file")
+          if st.st_uid != 0:
+              raise SystemExit("runner execution-environment identity must be root-owned")
+          if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+              raise SystemExit("runner execution-environment identity must not be group/world writable")
+
+          actual = path.read_text(encoding="utf-8").strip()
+          expected = os.environ["INPUT_EXECUTION_ENVIRONMENT_REF"].strip()
+          if not actual or actual != expected:
+              raise SystemExit(
+                  f"runner execution environment mismatch: expected {expected!r}, runner attests {actual!r}"
+              )
+
+          report = {
+              "gate": "MORN_ATTESTED_RUNNER_BINDING",
+              "status": "PASS",
+              "execution_environment_ref": actual,
+              "runner_name": os.environ.get("RUNNER_NAME"),
+              "runner_os": os.environ.get("RUNNER_OS"),
+              "runner_arch": os.environ.get("RUNNER_ARCH"),
+              "github_run_id": os.environ.get("GITHUB_RUN_ID"),
+              "github_sha": os.environ.get("GITHUB_SHA"),
+              "claims": {
+                  "runner_identity_bound": True,
+                  "live_provider": False,
+                  "canonical_work_outcome": False,
+                  "customer_acceptance": False,
+                  "production_write": False,
+              },
+          }
+          out = pathlib.Path("target/live-pi-evidence/runner-binding.json")
+          out.write_text(json.dumps(report, indent=2), encoding="utf-8")
+          PY
 
       - name: Materialize exact locked Pi runtime and derive installed-tree identity
         shell: bash

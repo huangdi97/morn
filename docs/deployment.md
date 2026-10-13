@@ -30,6 +30,32 @@ and serve `frontend/dist`.
 - Secrets must not be stored in SQLite in plaintext; use the OS secret store
   or a vault and pass references.
 
+## Attested runner requirement for live provider evidence
+
+The manual live-provider workflows deliberately separate **identity planning** from
+**authenticated execution**:
+
+- `plan-sdk` / `plan-acp` / Pi `plan` may run on GitHub-hosted runners because
+  they launch no provider process and consume no provider credential.
+- DSH `smoke-sdk`, DSH `smoke-acp` and Pi `smoke` run only on a self-hosted
+  runner carrying the custom label `morn-attested-provider`.
+- That runner must expose a root-owned, non-symlink, non-group/world-writable
+  `/etc/morn/execution-environment-ref`. Its exact text must equal the
+  workflow's `execution_environment_ref` and the deployment-owned
+  `ExecutionEnvironmentAttestation`.
+- The workflow emits `runner-binding.json` as secret-free evidence of the
+  runner/environment association. This evidence is necessary but not sufficient:
+  the signed/attested environment record still owns isolation class, guarantees,
+  runtime identities and validity.
+- A GitHub-hosted runner plus a JSON attestation for some unrelated container or
+  customer sandbox is **not** accepted as live deployment evidence.
+- Provider smoke remains E0-only and cannot prove Outcome, independent
+  Acceptance, customer value, production write, or G12.
+
+Provision and harden the self-hosted runner outside the repository. The custom
+label and local identity file are admission controls, not a substitute for
+customer IAM, workload identity, host hardening or external attestation.
+
 ## Provider subprocess environment
 
 Real DSH and Pi runtimes are launched with a **scrubbed child environment** rather than inheriting the entire Morn server process.
