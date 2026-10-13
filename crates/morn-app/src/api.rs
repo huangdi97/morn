@@ -3384,20 +3384,42 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
     })))
 }
 
+fn latest_effective_reviewer_attestations<'a>(
+    reviewers: &'a [morn_work::acceptance::AcceptanceReviewerAttestation],
+    workspace_owner: &morn_kernel::ids::PrincipalId,
+    now: morn_kernel::time::Timestamp,
+) -> Vec<&'a morn_work::acceptance::AcceptanceReviewerAttestation> {
+    let mut latest =
+        std::collections::BTreeMap::<String, &morn_work::acceptance::AcceptanceReviewerAttestation>::new();
+    for reviewer in reviewers {
+        if reviewer.validate().is_err()
+            || reviewer.observed_at > now
+            || reviewer.principal_id == *workspace_owner
+        {
+            continue;
+        }
+        let key = reviewer.principal_id.to_string();
+        let replace = latest
+            .get(&key)
+            .is_none_or(|current| reviewer.observed_at > current.observed_at);
+        if replace {
+            latest.insert(key, reviewer);
+        }
+    }
+    latest
+        .into_values()
+        .filter(|reviewer| reviewer.valid_until.is_none_or(|until| now <= until))
+        .collect()
+}
+
 async fn v115_acceptance_reviewers(State(state): State<AppState>) -> ApiResult {
     let guard = state.lock();
     let now = morn_kernel::time::Timestamp::now();
-    let reviewers: Vec<_> = guard
-        .acceptance_reviewers
-        .iter()
-        .filter(|reviewer| {
-            reviewer.validate().is_ok()
-                && reviewer.observed_at <= now
-                && reviewer.valid_until.is_none_or(|until| now <= until)
-                && reviewer.principal_id != guard.workspace.owner
-        })
-        .cloned()
-        .collect();
+    let reviewers: Vec<_> =
+        latest_effective_reviewer_attestations(&guard.acceptance_reviewers, &guard.workspace.owner, now)
+            .into_iter()
+            .cloned()
+            .collect();
     Ok(Json(json!({
         "reviewers": reviewers,
         "deployment_attested": true,
@@ -3487,17 +3509,20 @@ async fn v115_work_review_outcome(
 
     let guard = state.lock();
     let now = morn_kernel::time::Timestamp::now();
-    let reviewer = guard
-        .acceptance_reviewers
-        .iter()
-        .find(|reviewer| reviewer.principal_id.as_str() == reviewer_principal_id)
-        .filter(|reviewer| reviewer.active_for(acting_role, now))
-        .cloned()
-        .ok_or_else(|| {
-            AppError(Error::not_authorized(
-                "reviewer principal/role is not covered by an active deployment attestation",
-            ))
-        })?;
+    let reviewer = latest_effective_reviewer_attestations(
+        &guard.acceptance_reviewers,
+        &guard.workspace.owner,
+        now,
+    )
+    .into_iter()
+    .find(|reviewer| reviewer.principal_id.as_str() == reviewer_principal_id)
+    .filter(|reviewer| reviewer.active_for(acting_role, now))
+    .cloned()
+    .ok_or_else(|| {
+        AppError(Error::not_authorized(
+            "reviewer principal/role is not covered by the latest effective deployment attestation",
+        ))
+    })?;
     if reviewer.principal_id == guard.workspace.owner {
         return Err(AppError(Error::not_authorized(
             "independent acceptance reviewer must differ from the workspace owner",
@@ -6385,6 +6410,48 @@ mod workspace_boundary_tests {
     use super::*;
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
     use morn_work::control::{WorkResource, WorkSpec};
+
+    #[test]
+    fn reviewer_rotation_uses_latest_effective_attestation_without_stale_fallback() {
+        use morn_kernel::ids::PrincipalId;
+        use morn_kernel::time::Timestamp;
+        use morn_work::acceptance::AcceptanceReviewerAttestation;
+
+        let owner = PrincipalId::generate_with("owner");
+        let principal = PrincipalId::generate_with("reviewer");
+        let old = AcceptanceReviewerAttestation {
+            principal_id: principal.clone(),
+            acting_roles: vec!["old-role".to_string()],
+            evidence_refs: vec!["iam://reviewer/v1".to_string()],
+            observed_at: Timestamp::from_millis(10),
+            valid_until: None,
+        };
+        let current = AcceptanceReviewerAttestation {
+            principal_id: principal.clone(),
+            acting_roles: vec!["new-role".to_string()],
+            evidence_refs: vec!["iam://reviewer/v2".to_string()],
+            observed_at: Timestamp::from_millis(20),
+            valid_until: Some(Timestamp::from_millis(30)),
+        };
+
+        let active = latest_effective_reviewer_attestations(
+            &[old.clone(), current.clone()],
+            &owner,
+            Timestamp::from_millis(25),
+        );
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].reference(), current.reference());
+
+        let expired = latest_effective_reviewer_attestations(
+            &[old, current],
+            &owner,
+            Timestamp::from_millis(31),
+        );
+        assert!(
+            expired.is_empty(),
+            "expired latest trust must not revive an older attestation"
+        );
+    }
 
     fn persist_consumed_observation(
         store: &morn_store::MornStore,
