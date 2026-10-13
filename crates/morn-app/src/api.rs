@@ -1838,11 +1838,17 @@ async fn v115_work_bind_attested_e0(
             let version = controller
                 .configured_runtime_version()
                 .map(str::to_string)
-                .ok_or_else(|| AppError(Error::invalid_state("ACP DSH runtime version is not pinned")))?;
+                .ok_or_else(|| {
+                    AppError(Error::invalid_state(
+                        "ACP DSH runtime version is not pinned",
+                    ))
+                })?;
             let digest = controller
                 .configured_runtime_digest()
                 .map(str::to_string)
-                .ok_or_else(|| AppError(Error::invalid_state("ACP DSH runtime digest is not pinned")))?;
+                .ok_or_else(|| {
+                    AppError(Error::invalid_state("ACP DSH runtime digest is not pinned"))
+                })?;
             if !attestation.attests_runtime_identity("deepseek-harness", &version, &digest, now) {
                 return Err(AppError(Error::invalid_state(
                     "execution-environment attestation does not authorize the configured ACP DSH runtime artifact",
@@ -1850,9 +1856,11 @@ async fn v115_work_bind_attested_e0(
             }
             let profile_configuration_ref = controller
                 .configured_profile_configuration_ref()
-                .ok_or_else(|| AppError(Error::invalid_state(
-                    "ACP DSH Home/Profile composition identity is not pinned",
-                )))?;
+                .ok_or_else(|| {
+                    AppError(Error::invalid_state(
+                        "ACP DSH Home/Profile composition identity is not pinned",
+                    ))
+                })?;
             if !attestation
                 .runtime_identities
                 .iter()
@@ -2351,15 +2359,11 @@ fn validate_current_acp_lifecycle_binding(
         now,
     )?;
 
-    let controller = guard
-        .dsh_acp_lifecycle
-        .as_ref()
-        .cloned()
-        .ok_or_else(|| {
-            AppError(Error::invalid_state(
-                "DSH ACP lifecycle is not enabled; set MORN_DSH_ACP_MODE=real",
-            ))
-        })?;
+    let controller = guard.dsh_acp_lifecycle.as_ref().cloned().ok_or_else(|| {
+        AppError(Error::invalid_state(
+            "DSH ACP lifecycle is not enabled; set MORN_DSH_ACP_MODE=real",
+        ))
+    })?;
     {
         let controller_guard = controller
             .lock()
@@ -2367,7 +2371,8 @@ fn validate_current_acp_lifecycle_binding(
         let route = controller_guard.configured_route_ref()?;
         if controller_guard.configured_execution_environment_ref()
             != binding.execution_environment_ref.as_deref()
-            || controller_guard.configured_runtime_version() != Some(binding.provider_version.as_str())
+            || controller_guard.configured_runtime_version()
+                != Some(binding.provider_version.as_str())
             || controller_guard.configured_runtime_digest() != binding.provider_digest.as_deref()
             || binding.runtime_ref.as_deref() != Some(route.as_str())
         {
@@ -2464,7 +2469,10 @@ fn required_control_identity(body: &Value) -> Result<(&str, &str, &str), AppErro
 async fn v115_acp_lifecycle_sessions(State(state): State<AppState>) -> ApiResult {
     let (controller, controls) = {
         let guard = state.lock();
-        (guard.dsh_acp_lifecycle.clone(), guard.dsh_acp_controls.clone())
+        (
+            guard.dsh_acp_lifecycle.clone(),
+            guard.dsh_acp_controls.clone(),
+        )
     };
     let Some(controller) = controller else {
         return Ok(Json(json!({
@@ -2473,14 +2481,25 @@ async fn v115_acp_lifecycle_sessions(State(state): State<AppState>) -> ApiResult
             "note": "DSH ACP lifecycle is opt-in and does not affect SDK HarnessProvider feature bits."
         })));
     };
-    let (sessions, execution_environment_ref, profile_configuration_ref, runtime_version, runtime_digest, route_ref) = {
+    let (
+        sessions,
+        execution_environment_ref,
+        profile_configuration_ref,
+        runtime_version,
+        runtime_digest,
+        route_ref,
+    ) = {
         let controller = controller
             .lock()
             .map_err(|_| AppError(Error::internal("DSH ACP lifecycle lock poisoned")))?;
         (
             controller.sessions(),
-            controller.configured_execution_environment_ref().map(str::to_string),
-            controller.configured_profile_configuration_ref().map(str::to_string),
+            controller
+                .configured_execution_environment_ref()
+                .map(str::to_string),
+            controller
+                .configured_profile_configuration_ref()
+                .map(str::to_string),
             controller.configured_runtime_version().map(str::to_string),
             controller.configured_runtime_digest().map(str::to_string),
             controller.configured_route_ref()?,
@@ -2620,12 +2639,7 @@ async fn v115_acp_lifecycle_prompt(
             .ok_or_else(|| AppError(Error::not_found(format!("ACP session {session_id}"))))?;
         (work, binding, controller, control)
     };
-    if !control.matches(
-        &work.workspace_id,
-        &work.id,
-        work.generation,
-        &binding.id,
-    ) {
+    if !control.matches(&work.workspace_id, &work.id, work.generation, &binding.id) {
         return Err(AppError(Error::not_authorized(
             "ACP prompt identity does not match the session's original Work/binding",
         )));
@@ -2763,12 +2777,7 @@ async fn v115_acp_lifecycle_resume(
             .ok_or_else(|| AppError(Error::not_found(format!("ACP session {session_id}"))))?;
         (work, binding, controller, controls, control)
     };
-    if !control.matches(
-        &work.workspace_id,
-        &work.id,
-        work.generation,
-        &binding.id,
-    ) {
+    if !control.matches(&work.workspace_id, &work.id, work.generation, &binding.id) {
         return Err(AppError(Error::not_authorized(
             "ACP resume identity does not match the exact current Work/binding",
         )));
