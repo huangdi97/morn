@@ -1492,22 +1492,18 @@ async fn v115_work_assess_value(
             )?,
         }
 
+        let consumed =
+            morn_assurance::ConsumedCustomerValueAttestation::from_attestation(
+                &attestation,
+                assessment.id.clone(),
+                assessment.assessed_at,
+            )?;
         guard.store.save_record_immutable(
             consumed_kind,
             attestation_id,
             work.workspace_id.as_str(),
-            now.millis(),
-            &json!({
-                "attestation_id": attestation.attestation_id,
-                "workspace_id": work.workspace_id,
-                "work_id": work.id,
-                "work_generation": work.generation,
-                "outcome_id": outcome.id,
-                "acceptance_id": acceptance.id,
-                "assessment_id": assessment.id,
-                "issuer": attestation.issuer,
-                "consumed_at": now
-            }),
+            assessment.assessed_at.millis(),
+            &consumed,
         )?;
     } else {
         assessment.evidence_refs = caller_evidence_refs;

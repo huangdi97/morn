@@ -22,7 +22,9 @@ pub use admission::{
     QualificationRecordId, QualificationStatus, SiteAdmission, SiteAdmissionId,
     SiteAdmissionStatus, StrictQualificationRequest, VerifiedReleaseRequest,
 };
-pub use customer_value::{CustomerValueAttestation, CustomerValueMetric};
+pub use customer_value::{
+    ConsumedCustomerValueAttestation, CustomerValueAttestation, CustomerValueMetric,
+};
 pub use evidence_class::{
     reference_evidence_ledger, EvidenceClaim, EvidenceClaimId, EvidenceClaimState, EvidenceClass,
     EvidenceLedger,

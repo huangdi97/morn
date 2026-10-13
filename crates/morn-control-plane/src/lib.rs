@@ -41,7 +41,7 @@ pub use profile_guard::{
     ExternalActionPermit, ExternalActionPermitId, ProfileActionDecision,
 };
 
-use morn_assurance::CustomerValueAttestation;
+use morn_assurance::{ConsumedCustomerValueAttestation, CustomerValueAttestation};
 use morn_harness::{ExecutionEvent, ExecutionReceipt};
 use morn_integration::{
     ConsumedSourceObservationAttestation, GovernedExternalTaskObservation, InteropBinding,
@@ -1777,6 +1777,17 @@ impl ControlPlaneStore for MornStore {
             {
                 return Err(Error::validation(
                     "customer-validated value must exactly match a persisted deployment attestation",
+                ));
+            }
+            let consumed: ConsumedCustomerValueAttestation = self
+                .load_record(
+                    "customer_value_attestation_consumed_v115",
+                    attestation_ref,
+                )?
+                .ok_or_else(|| Error::not_found("consumed customer value attestation"))?;
+            if !consumed.exactly_matches(&attestation, assessment) {
+                return Err(Error::validation(
+                    "customer-validated value requires exact one-shot attestation consumption",
                 ));
             }
         }
@@ -3533,6 +3544,25 @@ mod control_plane_persistence_scope_tests {
                 work.workspace_id.as_str(),
                 attestation.observed_at.millis(),
                 &attestation,
+            )
+            .unwrap();
+        assert!(
+            store.save_value_assessment(&work, &fake_value).is_err(),
+            "customer-value attestation cannot be reused without its exact one-shot consumption"
+        );
+        let consumed = ConsumedCustomerValueAttestation::from_attestation(
+            &attestation,
+            fake_value.id.clone(),
+            fake_value.assessed_at,
+        )
+        .unwrap();
+        store
+            .save_record_immutable(
+                "customer_value_attestation_consumed_v115",
+                &attestation.attestation_id,
+                work.workspace_id.as_str(),
+                fake_value.assessed_at.millis(),
+                &consumed,
             )
             .unwrap();
         store.save_value_assessment(&work, &fake_value).unwrap();

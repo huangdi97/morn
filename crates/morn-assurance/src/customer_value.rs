@@ -10,13 +10,85 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use morn_kernel::error::{Error, Result};
-use morn_kernel::ids::{AcceptanceDecisionId, OutcomeRecordId, WorkPackageId, WorkspaceId};
+use morn_kernel::ids::{
+    AcceptanceDecisionId, OutcomeRecordId, ValueAssessmentId, WorkPackageId, WorkspaceId,
+};
 use morn_kernel::time::Timestamp;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CustomerValueMetric {
     pub name: String,
     pub value: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConsumedCustomerValueAttestation {
+    pub attestation_id: String,
+    pub workspace_id: WorkspaceId,
+    pub work_id: WorkPackageId,
+    pub work_generation: u64,
+    pub outcome_id: OutcomeRecordId,
+    pub acceptance_id: AcceptanceDecisionId,
+    pub assessment_id: ValueAssessmentId,
+    pub issuer: String,
+    pub consumed_at: Timestamp,
+}
+
+impl ConsumedCustomerValueAttestation {
+    pub fn from_attestation(
+        attestation: &CustomerValueAttestation,
+        assessment_id: ValueAssessmentId,
+        consumed_at: Timestamp,
+    ) -> Result<Self> {
+        if !attestation.active_for(
+            &attestation.workspace_id,
+            (&attestation.work_package_id, attestation.work_generation),
+            &attestation.outcome_id,
+            &attestation.acceptance_id,
+            consumed_at,
+        ) {
+            return Err(Error::not_authorized(
+                "customer value attestation is not active at consumption time",
+            ));
+        }
+        Ok(Self {
+            attestation_id: attestation.attestation_id.clone(),
+            workspace_id: attestation.workspace_id.clone(),
+            work_id: attestation.work_package_id.clone(),
+            work_generation: attestation.work_generation,
+            outcome_id: attestation.outcome_id.clone(),
+            acceptance_id: attestation.acceptance_id.clone(),
+            assessment_id,
+            issuer: attestation.issuer.clone(),
+            consumed_at,
+        })
+    }
+
+    pub fn exactly_matches(
+        &self,
+        attestation: &CustomerValueAttestation,
+        assessment: &morn_work::value::ValueAssessment,
+    ) -> bool {
+        self.attestation_id == attestation.attestation_id
+            && self.workspace_id == attestation.workspace_id
+            && self.work_id == assessment.work_package_id
+            && self.work_generation == assessment.work_generation
+            && self.outcome_id == assessment.outcome_ref
+            && assessment.acceptance_ref.as_ref() == Some(&self.acceptance_id)
+            && self.acceptance_id == attestation.acceptance_id
+            && self.assessment_id == assessment.id
+            && self.issuer == attestation.issuer
+            && self.consumed_at == assessment.assessed_at
+            && assessment.customer_value_attestation_ref.as_deref()
+                == Some(attestation.attestation_id.as_str())
+            && attestation.active_for(
+                &self.workspace_id,
+                (&self.work_id, self.work_generation),
+                &self.outcome_id,
+                &self.acceptance_id,
+                self.consumed_at,
+            )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -161,6 +233,36 @@ mod tests {
             &attestation.acceptance_id,
             Timestamp::from_millis(21),
         ));
+    }
+
+    #[test]
+    fn consumed_customer_value_attestation_binds_exact_assessment_and_time() {
+        let attestation = fixture();
+        let mut assessment = morn_work::value::ValueAssessment::new(
+            attestation.work_package_id.clone(),
+            attestation.outcome_id.clone(),
+            morn_work::value::ValueEvidenceClass::CustomerValidated,
+        );
+        assessment.pin_work_generation(attestation.work_generation).unwrap();
+        assessment.acceptance_ref = Some(attestation.acceptance_id.clone());
+        assessment.customer_value_attestation_ref = Some(attestation.attestation_id.clone());
+        assessment.assessed_at = Timestamp::from_millis(15);
+
+        let consumed = ConsumedCustomerValueAttestation::from_attestation(
+            &attestation,
+            assessment.id.clone(),
+            assessment.assessed_at,
+        )
+        .unwrap();
+        assert!(consumed.exactly_matches(&attestation, &assessment));
+
+        let mut other = assessment.clone();
+        other.id = ValueAssessmentId::generate_with("value");
+        assert!(!consumed.exactly_matches(&attestation, &other));
+
+        let mut shifted = consumed.clone();
+        shifted.consumed_at = Timestamp::from_millis(14);
+        assert!(!shifted.exactly_matches(&attestation, &assessment));
     }
 
     #[test]
