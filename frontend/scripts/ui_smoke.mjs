@@ -193,6 +193,9 @@ try {
       if ((await governedExecution.count()) && !(await page.locator(".governed-execution-binding select").count())) {
         errors.push("workbench: rendered governed execution must expose explicit binding selection");
       }
+      if (!(await page.getByRole("heading", { name: "DeepSeek ACP lifecycle control" }).isVisible())) {
+        errors.push("workbench: Work-bound DSH ACP lifecycle control surface is not visible");
+      }
       if (!(await page.getByRole("heading", { name: "Authoritative outcome observation" }).isVisible())) {
         errors.push("workbench: authoritative source-to-outcome surface is not visible");
       }

@@ -657,3 +657,46 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
     grid-template-columns: 1fr;
   }
 }
+
+
+/* DSH ACP lifecycle is a control plane, not another business-truth surface. */
+.acp-identity-strip,
+.acp-session-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #344863;
+  border-radius: 10px;
+  background: #152236;
+  color: #b8c8df;
+  font-size: 12px;
+}
+.acp-identity-strip b {
+  color: #e6eef9;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.acp-session-state {
+  align-items: center;
+  background: #101c2d;
+}
+.acp-control-actions {
+  align-items: center;
+  row-gap: 8px;
+}
+.acp-control-actions button {
+  min-width: 104px;
+}
+@media (max-width: 760px) {
+  .acp-identity-strip,
+  .acp-session-state {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .acp-control-actions button {
+    width: 100%;
+  }
+}

@@ -23,6 +23,7 @@ import {
   V115ControlPlaneData,
   UiExtensionRegistry,
 } from "../api";
+import { DshAcpLifecyclePanel } from "../components/DshAcpLifecyclePanel";
 import { Card, EmptyState, KeyValue, Loading, StatusPill } from "../components/ui";
 
 /** Domain-gated UI extension point: BioLab reference UI is only rendered when
@@ -1983,6 +1984,12 @@ export default function Workbench() {
               status={v115}
               reload={load}
             />
+            <DshAcpLifecyclePanel
+              control={v115Control}
+              capabilities={v115Capabilities}
+              status={v115}
+              reload={load}
+            />
             <AuthoritativeOutcomePanel
               control={v115Control}
               catalog={sourceTruthCatalog}
@@ -2152,6 +2159,12 @@ export default function Workbench() {
       {v115Control && (
         <>
           <GovernedE0Executor
+            control={v115Control}
+            capabilities={v115Capabilities}
+            status={v115}
+            reload={load}
+          />
+          <DshAcpLifecyclePanel
             control={v115Control}
             capabilities={v115Capabilities}
             status={v115}
