@@ -199,7 +199,10 @@ fn run_sidecar_probe() -> Result<(), String> {
     }
     if !owned.stop() {
         let _ = std::fs::remove_dir_all(&data_dir);
-        return Err("desktop sidecar required force-kill instead of graceful stdin-EOF shutdown".to_string());
+        return Err(
+            "desktop sidecar required force-kill instead of graceful stdin-EOF shutdown"
+                .to_string(),
+        );
     }
     // A child owned by this probe must actually release the listening socket.
     let deadline = Instant::now() + Duration::from_secs(4);
@@ -235,7 +238,8 @@ fn main() {
     let setup_backend = Arc::clone(&backend);
     let exit_backend = Arc::clone(&backend);
 
-    let app = tauri::Builder::default().setup(move |app| {
+    let app = tauri::Builder::default()
+        .setup(move |app| {
             let data_dir = app.path().app_local_data_dir().map_err(|error| {
                 std::io::Error::other(format!("desktop data directory: {error}"))
             })?;
