@@ -330,7 +330,12 @@ impl DurableBusinessEvidenceControllerRuntime {
                 {
                     accepted.push((decision, outcome));
                 }
-                AcceptanceDisposition::Reject => rejected.push((decision, outcome)),
+                AcceptanceDisposition::Reject
+                    if require_attested_outcome_provenance(store, &work, outcome).is_ok() =>
+                {
+                    rejected.push((decision, outcome));
+                }
+                AcceptanceDisposition::Reject => {}
                 AcceptanceDisposition::Conditional
                 | AcceptanceDisposition::RequestMoreEvidence
                 | AcceptanceDisposition::Accept => {}
@@ -418,9 +423,9 @@ impl DurableBusinessEvidenceControllerRuntime {
             work.set_condition(observed);
 
             let mut independent =
-                WorkCondition::new("IndependentAcceptance", ConditionStatus::True);
+                WorkCondition::new("IndependentAcceptance", ConditionStatus::False);
             independent.reason = format!(
-                "persisted non-final review decision {} by role {}",
+                "persisted non-final review decision {} by role {}; terminal acceptance/rejection is not established",
                 decision.id, decision.acting_role
             );
             independent.evidence_refs = vec![decision.id.to_string()];
@@ -663,7 +668,8 @@ mod tests {
     ) -> ObservedOutcome {
         use crate::ControlPlaneStore;
         use morn_integration::{
-            ConflictPolicy, SourceOfTruthBinding, SourceOfTruthBindingId, TruthAuthorityKind,
+            ConflictPolicy, ConsumedSourceObservationAttestation, SourceObservationAttestation,
+            SourceOfTruthBinding, SourceOfTruthBindingId, TruthAuthorityKind,
         };
         use serde_json::json;
 
@@ -698,20 +704,33 @@ mod tests {
         outcome
             .pin_source_provenance(binding.id.to_string(), attestation_id, "delivery.status")
             .unwrap();
+        let source_attestation = SourceObservationAttestation {
+            attestation_id: attestation_id.to_string(),
+            workspace_id: work.workspace_id.clone(),
+            work_package_id: work.id.clone(),
+            work_generation: work.generation,
+            source_binding_id: binding.id.clone(),
+            fact_type: "delivery.status".to_string(),
+            objective: outcome.objective.clone(),
+            source_ref: outcome.source_ref.clone(),
+            observed_facts: outcome.observed_facts.clone(),
+            evidence_refs: outcome.evidence_refs.clone(),
+            observed_at: outcome.observed_at,
+            valid_until: None,
+        };
+        let consumed = ConsumedSourceObservationAttestation::from_attestation(
+            &source_attestation,
+            outcome.id.clone(),
+            outcome.observed_at,
+        )
+        .unwrap();
         store
             .save_record_immutable(
                 "source_observation_attestation_consumed_v115",
                 attestation_id,
                 work.workspace_id.as_str(),
                 outcome.observed_at.millis(),
-                &json!({
-                    "attestation_id": attestation_id,
-                    "work_id": work.id,
-                    "source_binding_id": binding.id,
-                    "fact_type": "delivery.status",
-                    "outcome_id": outcome.id,
-                    "consumed_at": outcome.observed_at
-                }),
+                &consumed,
             )
             .unwrap();
         store.save_observed_outcome(work, &outcome).unwrap();
@@ -824,6 +843,130 @@ mod tests {
         assert_eq!(persisted.status.phase, WorkPhase::Accepted);
         assert!(persisted.condition_is_true("IndependentAcceptance"));
         assert!(persisted.condition_is_true("AcceptedOutcomeSemantics"));
+    }
+
+    #[test]
+    fn durable_business_evidence_keeps_conditional_review_non_terminal() {
+        use crate::ControlPlaneStore;
+        use morn_kernel::ids::{AcceptanceSpecId, PrincipalId};
+        use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let mut work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "review incomplete delivery evidence",
+                DomainProfile::lite_v1().canonical_ref(),
+            ),
+        );
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "partial delivery evidence",
+            morn_world::OutcomeSourceKind::ExternalSystem,
+            "erp://delivery/partial",
+            json!({"status":"partial"}),
+        );
+        outcome.pin_work_generation(work.generation).unwrap();
+        outcome
+            .evidence_refs
+            .push("erp://delivery/partial/receipt".to_string());
+        store.save_observed_outcome(&work, &outcome).unwrap();
+
+        let mut review = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("acceptance"),
+            AcceptanceDisposition::Conditional,
+            PrincipalId::generate_with("reviewer"),
+            "independent-reviewer",
+            "more evidence required",
+        );
+        review.pin_work_generation(work.generation).unwrap();
+        review.outcome_refs.push(outcome.id.clone());
+        review.evidence_refs.push("review://conditional".to_string());
+        ControlPlaneStore::save_acceptance_decision(&store, &work, &review).unwrap();
+
+        let runtime = DurableBusinessEvidenceControllerRuntime::new("business-node-conditional");
+        let result = runtime
+            .reconcile_from_persisted_business_evidence(&store, work.id.as_str(), Timestamp::now())
+            .unwrap();
+        assert_eq!(result.next_phase, WorkPhase::Waiting);
+        let persisted: WorkResource = store
+            .load_record("work_resource_v115", work.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert!(!persisted.condition_is_true("IndependentAcceptance"));
+        assert!(!persisted.condition_is_true("AcceptedOutcomeSemantics"));
+    }
+
+    #[test]
+    fn recovery_does_not_promote_legacy_weak_rejection_to_terminal_truth() {
+        use morn_kernel::ids::{AcceptanceSpecId, PrincipalId};
+        use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let mut work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "review legacy rejection",
+                DomainProfile::lite_v1().canonical_ref(),
+            ),
+        );
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "legacy source-grounded result",
+            morn_world::OutcomeSourceKind::ExternalSystem,
+            "legacy://result/42",
+            json!({"status":"failed"}),
+        );
+        outcome.pin_work_generation(work.generation).unwrap();
+        outcome
+            .evidence_refs
+            .push("legacy://result/42/receipt".to_string());
+        store.save_observed_outcome(&work, &outcome).unwrap();
+
+        let mut reject = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("acceptance"),
+            AcceptanceDisposition::Reject,
+            PrincipalId::generate_with("reviewer"),
+            "independent-reviewer",
+            "legacy review rejected result",
+        );
+        reject.pin_work_generation(work.generation).unwrap();
+        reject.outcome_refs.push(outcome.id.clone());
+        reject.evidence_refs.push("review://legacy-reject".to_string());
+
+        // Simulate a row persisted by an older implementation before terminal
+        // rejection required deployment-attested source provenance.
+        store
+            .save_record_immutable(
+                "acceptance_decision_v115",
+                reject.id.as_str(),
+                work.workspace_id.as_str(),
+                reject.decided_at.millis(),
+                &reject,
+            )
+            .unwrap();
+
+        let runtime = DurableBusinessEvidenceControllerRuntime::new("business-node-legacy-reject");
+        let result = runtime
+            .reconcile_from_persisted_business_evidence(&store, work.id.as_str(), Timestamp::now())
+            .unwrap();
+        assert_eq!(result.next_phase, WorkPhase::Delivered);
+        let persisted: WorkResource = store
+            .load_record("work_resource_v115", work.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status.phase, WorkPhase::Delivered);
+        assert!(!persisted.condition_is_true("IndependentAcceptance"));
     }
 
     #[test]

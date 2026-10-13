@@ -508,18 +508,26 @@ impl WorkProgressController {
                     && attested_outcome.is_some()
                     && independently_witnessed;
 
+                let final_independent_decision = final_acceptance || final_rejection;
                 let mut independent = WorkCondition::new(
                     "IndependentAcceptance",
-                    if independently_witnessed {
+                    if final_independent_decision {
                         ConditionStatus::True
                     } else {
                         ConditionStatus::False
                     },
                 );
-                independent.reason = format!(
-                    "acceptance decision {} by role {}",
-                    acceptance.id, acceptance.acting_role
-                );
+                independent.reason = if final_independent_decision {
+                    format!(
+                        "final independent decision {} by role {}",
+                        acceptance.id, acceptance.acting_role
+                    )
+                } else {
+                    format!(
+                        "non-final independent review {} by role {}; more evidence or conditions remain",
+                        acceptance.id, acceptance.acting_role
+                    )
+                };
                 independent.evidence_refs = vec![acceptance.id.to_string()];
                 work.set_condition(independent);
 
@@ -3423,6 +3431,64 @@ mod control_plane_persistence_scope_tests {
         );
         assert!(store.save_value_assessment(&other, &assessment).is_err());
         store.save_value_assessment(&work, &assessment).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod non_final_review_semantics_tests {
+    use super::*;
+    use morn_kernel::ids::{AcceptanceSpecId, PrincipalId, WorkPackageId, WorkspaceId};
+    use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
+    use morn_work::control::WorkSpec;
+    use morn_world::{ObservedOutcome, OutcomeSourceKind};
+    use serde_json::json;
+
+    #[test]
+    fn conditional_review_is_observed_but_not_independent_acceptance() {
+        let mut work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "review evidence",
+                "morn.lite@1.0.0",
+            ),
+        );
+        work.status.phase = WorkPhase::Waiting;
+        let mut outcome = ObservedOutcome::new(
+            work.workspace_id.clone(),
+            work.id.clone(),
+            "partial business evidence",
+            OutcomeSourceKind::ExternalSystem,
+            "erp://result/1",
+            json!({"status":"partial"}),
+        );
+        outcome
+            .evidence_refs
+            .push("erp://result/1/receipt".to_string());
+        let mut review = AcceptanceDecision::new(
+            work.id.clone(),
+            AcceptanceSpecId::generate_with("acceptance"),
+            AcceptanceDisposition::Conditional,
+            PrincipalId::generate_with("reviewer"),
+            "independent-reviewer",
+            "additional evidence required",
+        );
+        review.outcome_refs.push(outcome.id.clone());
+        review.evidence_refs.push("review://ticket/1".to_string());
+
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                outcome: Some(&outcome),
+                acceptance: Some(&review),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(work.status.phase, WorkPhase::Waiting);
+        assert!(!work.condition_is_true("IndependentAcceptance"));
+        assert!(!work.condition_is_true("AcceptedOutcomeSemantics"));
+        assert!(work.condition_is_true("OutcomeObservation"));
     }
 }
 

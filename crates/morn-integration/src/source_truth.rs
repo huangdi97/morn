@@ -297,7 +297,10 @@ mod tests {
         assert_eq!(consumed.work_generation, 3);
         assert_eq!(consumed.source_binding_id, binding);
         assert_eq!(consumed.outcome_id, outcome);
-        assert_eq!(consumed.observed_facts, serde_json::json!({"status":"delivered"}));
+        assert_eq!(
+            consumed.observed_facts,
+            serde_json::json!({"status":"delivered"})
+        );
 
         assert!(ConsumedSourceObservationAttestation::from_attestation(
             &attestation,
