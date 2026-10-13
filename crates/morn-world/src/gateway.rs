@@ -5,13 +5,13 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
+use crate::action::{Action, ActionProposal, ActionStatus};
+use crate::service::{StateCommit, WorldService};
 use morn_capability::effect::{EffectClass, EffectContract};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{ActionId, ExecutionReceiptId, ObjectId, WorkspaceId};
 use morn_kernel::ledger::Ledger;
 use morn_kernel::policy::{Policy, PolicyDecision};
-use crate::action::{Action, ActionProposal, ActionStatus};
-use crate::service::{StateCommit, WorldService};
 
 /// The canonical world commit port used by the gateway.
 pub trait WorldCommitter {
@@ -364,10 +364,10 @@ impl ActionGateway {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::object::{Object, ObjectType};
     use morn_capability::effect::EffectClass;
     use morn_kernel::ids::{ActionTypeId, WorkspaceId};
     use morn_kernel::policy::{Policy, PolicyRule};
-    use crate::object::{Object, ObjectType};
     use serde_json::json;
 
     fn proposal(ws: WorkspaceId, target: ObjectId, by: &str) -> ActionProposal {
