@@ -3548,9 +3548,13 @@ async fn v115_work_review_outcome(
             "independent review requires a source-grounded observed outcome",
         )));
     }
-    if disposition == AcceptanceDisposition::Accept && !outcome.is_attested_source_grounded() {
+    if matches!(
+        disposition,
+        AcceptanceDisposition::Accept | AcceptanceDisposition::Reject
+    ) && !outcome.is_attested_source_grounded()
+    {
         return Err(AppError(Error::validation(
-            "final acceptance requires deployment-attested source provenance; manually/imported evidence may be reviewed but cannot be accepted as business truth",
+            "terminal acceptance/rejection requires deployment-attested source provenance; manually/imported evidence may be reviewed conditionally but cannot close Work as business truth",
         )));
     }
 

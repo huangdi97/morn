@@ -502,7 +502,7 @@ impl WorkProgressController {
                     && independently_witnessed;
                 let final_rejection = acceptance.disposition == AcceptanceDisposition::Reject
                     && spec_matches
-                    && grounded_outcome.is_some()
+                    && attested_outcome.is_some()
                     && independently_witnessed;
 
                 let mut independent = WorkCondition::new(
@@ -913,7 +913,10 @@ fn require_persisted_work_projection_evidence(
                 decision.is_final_acceptance()
                     && require_attested_outcome_provenance(store, work, linked).is_ok()
             }
-            WorkPhase::Rejected => decision.disposition == AcceptanceDisposition::Reject,
+            WorkPhase::Rejected => {
+                decision.disposition == AcceptanceDisposition::Reject
+                    && require_attested_outcome_provenance(store, work, linked).is_ok()
+            },
             _ => true,
         }
     });
@@ -1591,7 +1594,7 @@ impl ControlPlaneStore for MornStore {
                     "terminal acceptance/rejection cannot cite an ungrounded observed outcome",
                 ));
             }
-            if is_accept {
+            if is_terminal_decision {
                 require_attested_outcome_provenance(self, work, &outcome)?;
             }
         }
@@ -3039,6 +3042,13 @@ mod control_plane_persistence_scope_tests {
         reject
             .evidence_refs
             .push("review://ticket-reject".to_string());
+        assert!(ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).is_err());
+
+        let mut attested = grounded.clone();
+        attested.id = morn_kernel::ids::OutcomeRecordId::generate_with("out");
+        attest_test_outcome(&store, &work, &mut attested);
+        store.save_observed_outcome(&work, &attested).unwrap();
+        reject.outcome_refs = vec![attested.id.clone()];
         ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).unwrap();
     }
 
@@ -3394,6 +3404,23 @@ mod terminal_phase_tests {
         grounded
             .evidence_refs
             .push("system://result/receipt".to_string());
+        WorkProgressController.reconcile(
+            &mut work,
+            &WorkProgressInputs {
+                outcome: Some(&grounded),
+                acceptance: Some(&reject),
+                ..Default::default()
+            },
+        );
+        assert_eq!(work.status.phase, WorkPhase::Waiting);
+
+        grounded
+            .pin_source_provenance(
+                "source-binding://authoritative",
+                "observation-attestation://rejection",
+                "result.status",
+            )
+            .unwrap();
         WorkProgressController.reconcile(
             &mut work,
             &WorkProgressInputs {
