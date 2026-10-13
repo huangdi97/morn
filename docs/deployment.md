@@ -358,24 +358,33 @@ Example exact-head CI proof:
 ]
 ```
 
-A RealRuntime proof for the configured DSH artifact must cite that exact
-runtime identity in addition to the external smoke/attestation reference:
+A RealRuntime proof must cite the **whole active semantic route**, not only the
+provider executable. For DSH that means the exact runtime artifact, exact
+Home/Profile composition identity, and exact provider/model route attestation.
+The live `provider_smoke` report emits `required_real_runtime_claim_refs`
+so the deployment attestor does not have to reconstruct this set manually:
 
 ```json
 {
-  "id": "evidence-claim:dsh-live-2026-10-11",
+  "id": "evidence-claim:dsh-live-2026-10-13",
   "subject": "deepseek-harness",
   "class": "real-runtime",
   "state": "proven",
   "evidence_refs": [
     "runtime://deepseek-harness/<version>#sha256:<64-hex>",
-    "attestation://provider-smoke/dsh-2026-10-11"
+    "deepseek-harness-profile@<config-version>#sha256:<64-hex>",
+    "deepseek-harness-route@v1#sha256:<64-hex>",
+    "attestation://provider-smoke/dsh-2026-10-13"
   ],
   "issuer": "deployment-attestor-prod-a",
-  "reason": "authenticated official runtime smoke passed for the pinned artifact",
-  "observed_at": "2026-10-11T12:00:00Z"
+  "reason": "authenticated official runtime smoke passed for the exact pinned DSH semantic route",
+  "observed_at": "2026-10-13T03:30:00Z"
 }
 ```
+
+Pi uses the same rule with
+`runtime://pi/<version>#sha256:<64-hex>` plus
+`pi-rpc-route@v1#sha256:<64-hex>`.
 
 Real-runtime, real-site and production-write claims use the same append-only
 ledger but remain separate evidence classes. A later `blocked-external` or
@@ -385,10 +394,9 @@ have strictly increasing `observed_at` values; equal-time contradictory claims
 are rejected so JSON/file order cannot choose readiness. A future-dated current
 claim is projected as `not-yet-valid` rather than proof. The Console release-readiness projection
 also requires a **fresh Healthy provider lease** in addition to a
-`real-runtime` claim for DSH/Pi. That claim must cite the exact active
-provider artifact identity — `runtime://deepseek-harness/<version>#<digest>`
-or `runtime://pi/<version>#<digest>`. A smoke proof for an older runtime
-cannot be combined with health from a replacement binary.
+`real-runtime` claim for DSH/Pi, and rechecks every currently configured
+semantic identity. A smoke proof for an older runtime, profile or route cannot
+be combined with health from a replacement route.
 
 Canonical subjects used by the top-level readiness projection are:
 
@@ -396,7 +404,8 @@ Canonical subjects used by the top-level readiness projection are:
 - `factory-readonly-wedge` / `local-fixture`;
 - `morn-v11.5-ci-conformance` / `ci-conformance`;
 - `deepseek-harness` and `pi-harness` / `real-runtime`, with evidence
-  referencing the exact active runtime artifact identity;
+  referencing the exact active runtime artifact **and** every active semantic
+  route identity required by that provider;
 - `factory-customer:<MORN_DEPLOYMENT_SITE_REF>` / `real-site`;
 - `factory-production-write:<MORN_DEPLOYMENT_SITE_REF>` / `production-write`.
 

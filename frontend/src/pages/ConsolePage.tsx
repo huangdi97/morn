@@ -221,6 +221,20 @@ export default function ConsolePage() {
                 Supply-chain verification proves artifact provenance/signature only; it does not grant execution authority.
               </small>
             </article>
+            <article className="readiness-item readiness-neutral">
+              <span>Active semantic routes</span>
+              <strong>
+                {[v115.harness_runtime.dsh.route_attestation_ref, v115.harness_runtime.pi.route_attestation_ref]
+                  .filter(Boolean).length}/2 pinned
+              </strong>
+              <small className="readiness-reason">
+                DSH: {v115.harness_runtime.dsh.route_attestation_ref ?? "not pinned"}
+                {" · "}Pi: {v115.harness_runtime.pi.route_attestation_ref ?? "not pinned"}
+              </small>
+              <small className="readiness-evidence">
+                RealRuntime proof must cite the currently active runtime and semantic route identities.
+              </small>
+            </article>
           </div>
           <p className="release-readiness-footnote">
             Running build identity: {v115.release_readiness.build_identity_ref ?? "not configured — CI axis cannot be proven"}.

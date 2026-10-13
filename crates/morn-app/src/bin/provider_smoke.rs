@@ -159,6 +159,11 @@ fn run_gate() -> Result<Value> {
                 "runtime_digest": runtime_digest,
                 "wire_server_version": wire_server_version,
                 "route_attestation_ref": route_attestation_ref,
+                "required_real_runtime_claim_refs": [
+                    format!("runtime://deepseek-harness/{pinned_version}#{pinned_digest}"),
+                    profile_configuration_ref,
+                    route_attestation_ref
+                ],
                 "execution_environment_ref": attestation.environment_ref,
                 "execution_environment_runtime_identities": attestation.runtime_identities,
                 "execution_environment_evidence_refs": attestation.evidence_refs,
@@ -240,6 +245,10 @@ fn run_gate() -> Result<Value> {
                 "runtime_version": runtime_version,
                 "runtime_digest": runtime_digest,
                 "route_attestation_ref": route_attestation_ref,
+                "required_real_runtime_claim_refs": [
+                    format!("runtime://pi/{pinned_version}#{pinned_digest}"),
+                    route_attestation_ref
+                ],
                 "execution_environment_ref": attestation.environment_ref,
                 "execution_environment_runtime_identities": attestation.runtime_identities,
                 "execution_environment_evidence_refs": attestation.evidence_refs,

@@ -814,7 +814,7 @@ mod tests {
             .find(|axis| axis.id == "deepseek-live-runtime")
             .unwrap();
         assert_eq!(dsh.state, ReadinessState::IdentityMismatch);
-        assert!(dsh.reason.contains("active runtime identity"));
+        assert!(dsh.reason.contains("active deployment identity"));
     }
 
     #[test]

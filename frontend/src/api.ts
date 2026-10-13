@@ -230,6 +230,7 @@ export interface V115Status {
       profile_configuration_ref: string | null;
       runtime_version: string | null;
       runtime_digest: string | null;
+      route_attestation_ref: string | null;
       wire_server_version: string | null;
     };
     pi: {
@@ -238,6 +239,7 @@ export interface V115Status {
       configured_execution_environment_ref: string | null;
       runtime_version: string | null;
       runtime_digest: string | null;
+      route_attestation_ref: string | null;
     };
   };
   execution_environment_attestations: Array<{
