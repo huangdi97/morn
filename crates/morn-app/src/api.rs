@@ -2473,10 +2473,19 @@ async fn v115_acp_lifecycle_sessions(State(state): State<AppState>) -> ApiResult
             "note": "DSH ACP lifecycle is opt-in and does not affect SDK HarnessProvider feature bits."
         })));
     };
-    let sessions = controller
-        .lock()
-        .map_err(|_| AppError(Error::internal("DSH ACP lifecycle lock poisoned")))?
-        .sessions();
+    let (sessions, execution_environment_ref, profile_configuration_ref, runtime_version, runtime_digest, route_ref) = {
+        let controller = controller
+            .lock()
+            .map_err(|_| AppError(Error::internal("DSH ACP lifecycle lock poisoned")))?;
+        (
+            controller.sessions(),
+            controller.configured_execution_environment_ref().map(str::to_string),
+            controller.configured_profile_configuration_ref().map(str::to_string),
+            controller.configured_runtime_version().map(str::to_string),
+            controller.configured_runtime_digest().map(str::to_string),
+            controller.configured_route_ref()?,
+        )
+    };
     let controls = controls
         .lock()
         .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?;
@@ -2493,6 +2502,11 @@ async fn v115_acp_lifecycle_sessions(State(state): State<AppState>) -> ApiResult
         .collect();
     Ok(Json(json!({
         "configured": true,
+        "execution_environment_ref": execution_environment_ref,
+        "profile_configuration_ref": profile_configuration_ref,
+        "runtime_version": runtime_version,
+        "runtime_digest": runtime_digest,
+        "route_ref": route_ref,
         "sessions": projected,
         "executor_health_claimed": false,
         "work_outcome_claimed": false
