@@ -3657,13 +3657,13 @@ async fn v115_work_review_outcome(
     let consumed =
         morn_work::acceptance::ConsumedAcceptanceReviewAuthorization::from_authorization(
             &authorization,
-            now,
+            decision.decided_at,
         )?;
     guard.store.save_record_immutable(
         consumed_kind,
         review_authorization_id,
         work.workspace_id.as_str(),
-        now.millis(),
+        decision.decided_at.millis(),
         &consumed,
     )?;
     ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &decision)?;
