@@ -106,10 +106,10 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `5bb26a455b1aaea7daf70ab7eb6ff583b29f6c76`.
-- Exact-head GitHub Actions: `38436312727` — **5/5 SUCCESS**.
-- That checkpoint includes protected live-provider/supply-chain evidence workflows, attested runner binding, exact runtime/build/site identity checks and ephemeral registry credential handling.
-- Later readiness-acquisition UX and customer-evidence validation changes must obtain their own exact-head CI before replacing this checkpoint; an older green run is never inherited.
+- Verified implementation checkpoint: `aa5f0ccacf97cd5aa9a11b204fad4b2803ab45aa`.
+- Exact-head GitHub Actions: `38485241628` — **5/5 SUCCESS**.
+- This checkpoint includes protected live-provider/supply-chain/customer/BioLab evidence handoffs, attested runner binding, exact runtime/build/site identity checks, exact-byte BioLab dataset provenance, ephemeral protected credentials, machine-readable evidence-acquisition plans, pinned GitHub Action SHAs and a `Cargo.lock --locked` consistency gate.
+- No older green run is inherited across implementation changes; this checkpoint was verified at the exact implementation SHA above.
 - Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; zero-domain Core; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows; Cordis reference runtime; Windows desktop reference build.
 - Release-readiness trust hardening at this checkpoint binds exact build identity, exact active provider runtime artifact, deployment-pinned evidence issuer and exact deployment site; evidence time ambiguity/future claims fail closed.
 - Business-truth recovery now distinguishes observed outcome from final acceptance: Conditional/RequestMoreEvidence retain OutcomeObservation while remaining non-terminal.
@@ -125,7 +125,7 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `5bb26a455b1aaea7daf70ab7eb6ff583b29f6c76` and Actions `38436312727`.**
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `aa5f0ccacf97cd5aa9a11b204fad4b2803ab45aa` and Actions `38485241628`.**
 - The verified checkpoint includes the owned desktop-backend lifecycle probe and Tauri CSP hardening in addition to the v11.5 control-plane, trust, provider and UI gates.
 - PR #1 remains draft because local engineering evidence is not production/customer evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.
