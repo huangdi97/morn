@@ -63,6 +63,55 @@ Provision and harden the self-hosted runner outside the repository. The custom
 label and local identity file are admission controls, not a substitute for
 customer IAM, workload identity, host hardening or external attestation.
 
+## Attested OCI / Sigstore / SLSA verification
+
+B-004 has a deployment-facing verification gate in
+`.github/workflows/live-supply-chain-evidence.yml`. It verifies an **already
+published**, digest-pinned OCI subject. It never signs or publishes an artifact,
+never creates SiteAdmission, and never authorizes production execution.
+
+The workflow separates planning from proof:
+
+- `plan` runs on a GitHub-hosted runner and only validates/records the intended
+  OCI digest, Fulcio certificate identity, OIDC issuer and release-runner
+  identity. It performs no registry request.
+- `verify` runs only on a self-hosted runner with the custom label
+  `morn-attested-release`.
+- The release runner must expose a root-owned, non-symlink,
+  non-group/world-writable `/etc/morn/release-runner-ref` equal to the explicit
+  workflow input.
+- The verifier is fixed at `/usr/local/bin/cosign`; the workflow hashes its
+  bytes and requires an exact `sha256:<64-hex>` input. A mutable PATH lookup is
+  not accepted as verifier identity.
+- Private-registry credentials are optional and deployment-owned. When enabled,
+  only a root-owned `/etc/morn/registry-auth/config.json` is exposed to the
+  Cosign subprocess through `DOCKER_CONFIG`; repository checkout credentials
+  are not persisted.
+- Verification uses the deployment-pinned `certificate-identity` and
+  `certificate-oidc-issuer` for both the OCI signature and the
+  `slsaprovenance` attestation. The two proof axes are merged only when they
+  bind the same OCI subject digest.
+- A PASS exports
+  `target/live-supply-chain-evidence/supply-chain-verification.json`, directly
+  consumable through `MORN_SUPPLY_CHAIN_VERIFICATIONS_FILE`.
+
+The Rust entrypoint is:
+
+```text
+cargo run -p morn-app --bin supply_chain_verify
+```
+
+with `MORN_OCI_REF`, `MORN_COSIGN_CERTIFICATE_IDENTITY`,
+`MORN_COSIGN_OIDC_ISSUER` and, for private registries, the explicitly allowed
+Cosign environment. The gate deliberately reports
+`artifact_published_by_this_gate=false`, `site_admitted=false`,
+`customer_acceptance=false` and `production_write=false`.
+
+Cryptographic verification proves the named OCI subject under the configured
+identity policy. It does **not** prove that a capability is qualified for a
+Profile/site, that a customer accepted an outcome, or that a production action
+is authorized.
+
 ## Provider subprocess environment
 
 Real DSH and Pi runtimes are launched with a **scrubbed child environment** rather than inheriting the entire Morn server process.
