@@ -53,6 +53,7 @@ concurrency:
 jobs:
   supply-chain-evidence:
     name: Supply chain ${{ inputs.operation }}
+    environment: morn-supply-chain-verification
     runs-on: ${{ inputs.operation == 'verify' && 'morn-attested-release' || 'ubuntu-latest' }}
     timeout-minutes: 20
     env:

@@ -51,8 +51,9 @@ fn explicit_cosign_env() -> Result<BTreeMap<String, String>, String> {
 
 fn receipt_from_env() -> Result<OciPublishReceipt, String> {
     let oci_ref = required("MORN_OCI_REF")?;
-    let (_, digest) = oci_ref
+    let digest = oci_ref
         .rsplit_once('@')
+        .map(|(_, digest)| digest.to_string())
         .ok_or_else(|| "MORN_OCI_REF must be digest-pinned".to_string())?;
     let manifest_media_type = env::var("MORN_OCI_MANIFEST_MEDIA_TYPE")
         .unwrap_or_else(|_| "application/vnd.oci.image.manifest.v1+json".to_string());
@@ -62,7 +63,7 @@ fn receipt_from_env() -> Result<OciPublishReceipt, String> {
         .filter(|value| !value.is_empty());
     let receipt = OciPublishReceipt {
         oci_ref,
-        content_digest: digest.to_string(),
+        content_digest: digest,
         manifest_media_type,
         artifact_type,
     };

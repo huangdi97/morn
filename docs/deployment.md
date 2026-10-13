@@ -30,6 +30,32 @@ and serve `frontend/dist`.
 - Secrets must not be stored in SQLite in plaintext; use the OS secret store
   or a vault and pass references.
 
+## Protected GitHub Environments for privileged evidence workflows
+
+The live evidence workflows reference protected GitHub Environments:
+
+- DSH/Pi provider evidence: `morn-live-provider`
+- OCI/Sigstore/SLSA verification: `morn-supply-chain-verification`
+
+Configure those Environments in GitHub before placing any real credential on the
+repository. Require human review and restrict deployment branches/tags to the
+trusted release line. Move provider/registry credentials to **Environment
+secrets** and remove repository-level duplicates. GitHub evaluates Environment
+protection rules before assigning the protected job to a runner and exposes
+Environment secrets only after the rules pass.
+
+For a public repository, treat self-hosted runners as privileged deployment
+infrastructure, not generic CI capacity. Put `morn-attested-provider` and
+`morn-attested-release` runners in restricted runner groups where available,
+scope those groups to this repository/workflow, and prefer ephemeral/clean
+runner instances or runner-level pre/post-job cleanup hooks. A custom runner
+label or the local identity file alone is not a security boundary.
+
+Planning modes intentionally carry no provider/registry credential, but they
+still reference the Environment so the exact workflow/ref remains visible in
+deployment review. The privileged smoke/verify modes must never rely on an
+unprotected repository secret as a shortcut around Environment review.
+
 ## Attested runner requirement for live provider evidence
 
 The manual live-provider workflows deliberately separate **identity planning** from

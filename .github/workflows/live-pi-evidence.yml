@@ -58,6 +58,7 @@ concurrency:
 jobs:
   pi-evidence:
     name: Pi ${{ inputs.operation }}
+    environment: morn-live-provider
     runs-on: ${{ inputs.operation == 'smoke' && 'morn-attested-provider' || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
