@@ -92,8 +92,10 @@ attestation used for containment must list every exact provider runtime artifact
 allowed to execute there.
 
 Use `runtime_identities` with the canonical form
-`provider@version#sha256:<64-hex>`. For DSH, attest both the runtime artifact
-and the exact Home/Profile composition identity. The Morn real-SDK path does not consume arbitrary persistent Home/Profile overrides:
+`provider@version#sha256:<64-hex>`. For DSH, attest the runtime artifact,
+the exact Home/Profile composition identity **and the exact semantic-route
+identity emitted by `dsh_identity_plan`**. Omitting the route identity makes
+the real-provider gate fail closed. The Morn real-SDK path does not consume arbitrary persistent Home/Profile overrides:
 each launch starts from a fresh child Home plus the runtime-pinned official SDK profile
 and Morn's final policy overlay. A permitted profile-composition change requires a new
 configuration digest/attestation and therefore a new ExecutionBinding.
@@ -124,7 +126,8 @@ For example:
   },
   "runtime_identities": [
     "deepseek-harness@<deployment-attested-version>#sha256:<64-hex>",
-    "deepseek-harness-profile@<config-version>#sha256:<64-hex>"
+    "deepseek-harness-profile@<config-version>#sha256:<64-hex>",
+    "deepseek-harness-route@v1#sha256:<64-hex>"
   ],
   "evidence_refs": [
     "attestation://sandbox-fleet/dsh-runtime-a",
@@ -134,6 +137,12 @@ For example:
   "valid_until": "2026-10-10T00:00:00Z"
 }
 ```
+
+For ACP lifecycle control, use the ACP-specific route identity
+`deepseek-harness-acp-route@v1#sha256:<64-hex>` from
+`MORN_DSH_PLAN_MODE=acp cargo run -p morn-app --bin dsh_identity_plan`.
+An environment may attest SDK and ACP routes together only when the deployment
+has independently approved both exact compositions.
 
 For Pi, use `pi@<version>#sha256:<digest>`. The runtime identity must match the
 provider version/digest written into `ExecutionBinding` exactly. Expiry,

@@ -21,10 +21,9 @@ fn sdk_plan() -> Result<Value> {
         .runtime_digest
         .as_deref()
         .ok_or_else(|| Error::validation("DSH SDK runtime digest missing after validation"))?;
-    let environment_ref = config
-        .execution_environment_ref
-        .as_deref()
-        .ok_or_else(|| Error::validation("DSH SDK execution environment missing after validation"))?;
+    let environment_ref = config.execution_environment_ref.as_deref().ok_or_else(|| {
+        Error::validation("DSH SDK execution environment missing after validation")
+    })?;
     let profile_ref = config
         .profile_configuration_ref
         .as_deref()
@@ -65,10 +64,9 @@ fn acp_plan() -> Result<Value> {
         .runtime_digest
         .as_deref()
         .ok_or_else(|| Error::validation("DSH ACP runtime digest missing after validation"))?;
-    let environment_ref = config
-        .execution_environment_ref
-        .as_deref()
-        .ok_or_else(|| Error::validation("DSH ACP execution environment missing after validation"))?;
+    let environment_ref = config.execution_environment_ref.as_deref().ok_or_else(|| {
+        Error::validation("DSH ACP execution environment missing after validation")
+    })?;
     let profile_ref = config
         .profile_configuration_ref
         .as_deref()

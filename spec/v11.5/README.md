@@ -10,7 +10,10 @@ the Morn server process.
 - `protocol.json` — published protocol manifest and semantic-slot registry.
 - `morn-protocol.schema.json` — JSON Schema 2020-12 bundle for the principal
   cross-runtime records used by v11.5.
-- `examples/` — canonical fixture documents consumed by the conformance tests.
+- `examples/` — canonical protocol fixtures plus deployment-facing evidence
+  examples. The DSH execution-environment attestation examples show the exact
+  runtime/profile/route identity classes required by the live SDK and ACP gates;
+  they are templates only and do not constitute deployment evidence.
 
 The schema bundle intentionally covers the cross-runtime boundary rather than
 every internal implementation type. Provider-specific state belongs behind a
