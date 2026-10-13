@@ -29,6 +29,11 @@ pub struct RuntimeReadinessEvidence {
     /// Exact deployment-attested provider artifact currently running.
     /// When present, the RealRuntime claim must cite this same identity.
     pub runtime_identity_ref: Option<String>,
+    /// Additional active semantic identities for this provider route, such as
+    /// DSH profile composition or provider/model route attestation. A live
+    /// executable digest alone must not authorize a reinterpreted route.
+    #[serde(default)]
+    pub required_identity_refs: Vec<String>,
     pub reason: String,
 }
 
@@ -38,6 +43,7 @@ impl RuntimeReadinessEvidence {
             fresh_healthy: true,
             evidence_refs,
             runtime_identity_ref: None,
+            required_identity_refs: Vec::new(),
             reason: reason.into(),
         }
     }
@@ -51,6 +57,22 @@ impl RuntimeReadinessEvidence {
             fresh_healthy: true,
             evidence_refs,
             runtime_identity_ref: Some(runtime_identity_ref.into()),
+            required_identity_refs: Vec::new(),
+            reason: reason.into(),
+        }
+    }
+
+    pub fn healthy_for_identities(
+        evidence_refs: Vec<String>,
+        runtime_identity_ref: impl Into<String>,
+        required_identity_refs: Vec<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self {
+            fresh_healthy: true,
+            evidence_refs,
+            runtime_identity_ref: Some(runtime_identity_ref.into()),
+            required_identity_refs,
             reason: reason.into(),
         }
     }
@@ -60,6 +82,7 @@ impl RuntimeReadinessEvidence {
             fresh_healthy: false,
             evidence_refs: Vec::new(),
             runtime_identity_ref: None,
+            required_identity_refs: Vec::new(),
             reason: reason.into(),
         }
     }
@@ -166,23 +189,28 @@ fn runtime_axis(
     // RealRuntime evidence remains unproven.
     if axis.state == ReadinessState::Proven {
         if runtime.fresh_healthy {
+            let mut required_identities = runtime.required_identity_refs.clone();
             if let Some(identity_ref) = runtime
                 .runtime_identity_ref
                 .as_deref()
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
             {
-                if !axis
+                required_identities.push(identity_ref.to_string());
+            }
+            required_identities.sort();
+            required_identities.dedup();
+            if let Some(missing) = required_identities.iter().find(|identity_ref| {
+                !axis
                     .evidence_refs
                     .iter()
-                    .any(|reference| reference == identity_ref)
-                {
-                    axis.state = ReadinessState::IdentityMismatch;
-                    axis.reason = format!(
-                        "real-runtime proof does not reference the active runtime identity {identity_ref}"
-                    );
-                    return axis;
-                }
+                    .any(|reference| reference == *identity_ref)
+            }) {
+                axis.state = ReadinessState::IdentityMismatch;
+                axis.reason = format!(
+                    "real-runtime proof does not reference the active deployment identity {missing}"
+                );
+                return axis;
             }
             axis.evidence_refs.extend(runtime.evidence_refs);
             axis.evidence_refs.sort();
@@ -787,6 +815,43 @@ mod tests {
             .unwrap();
         assert_eq!(dsh.state, ReadinessState::IdentityMismatch);
         assert!(dsh.reason.contains("active runtime identity"));
+    }
+
+    #[test]
+    fn runtime_proof_must_bind_every_active_semantic_route_identity() {
+        let runtime = "runtime://deepseek-harness/v1#sha256:artifact";
+        let profile = format!("deepseek-harness-profile@v1#sha256:{}", "a".repeat(64));
+        let route = format!("deepseek-harness-route@v1#sha256:{}", "b".repeat(64));
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "deepseek-harness",
+                    EvidenceClass::RealRuntime,
+                    vec![runtime.to_string(), profile.clone()],
+                    "deployment-attestor",
+                    "runtime and profile proven, but route is stale",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let axes = release_readiness_axes(
+            &ledger,
+            RuntimeReadinessEvidence::healthy_for_identities(
+                vec!["health://dsh/settled-turn".to_string()],
+                runtime,
+                vec![profile, route.clone()],
+                "fresh health on current configured route",
+            ),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+        );
+        let dsh = axes
+            .iter()
+            .find(|axis| axis.id == "deepseek-live-runtime")
+            .unwrap();
+        assert_eq!(dsh.state, ReadinessState::IdentityMismatch);
+        assert!(dsh.reason.contains(&route));
     }
 
     #[test]

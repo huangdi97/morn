@@ -325,6 +325,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         dsh_profile_configuration_ref,
         dsh_runtime_version,
         dsh_runtime_digest,
+        dsh_route_attestation_ref,
         dsh_wire_server_version,
     ) = {
         let provider = dsh_harness.lock().expect("dsh harness poisoned");
@@ -342,10 +343,18 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
                 .map(str::to_string),
             provider.configured_runtime_version().map(str::to_string),
             provider.configured_runtime_digest().map(str::to_string),
+            provider.configured_route_attestation_ref(),
             provider.wire_server_version().map(str::to_string),
         )
     };
-    let (pi_health, pi_mode, pi_environment_ref, pi_runtime_version, pi_runtime_digest) = {
+    let (
+        pi_health,
+        pi_mode,
+        pi_environment_ref,
+        pi_runtime_version,
+        pi_runtime_digest,
+        pi_route_attestation_ref,
+    ) = {
         let provider = pi_harness.lock().expect("pi harness poisoned");
         (
             provider.runtime_health().clone(),
@@ -358,6 +367,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
                 .map(str::to_string),
             provider.configured_runtime_version().map(str::to_string),
             provider.configured_runtime_digest().map(str::to_string),
+            provider.configured_route_attestation_ref(),
         )
     };
     let now = morn_kernel::time::Timestamp::now();
@@ -420,16 +430,19 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         match (
             dsh_runtime_version.as_deref(),
             dsh_runtime_digest.as_deref(),
+            dsh_profile_configuration_ref.as_deref(),
+            dsh_route_attestation_ref.as_deref(),
         ) {
-            (Some(version), Some(digest)) => {
-                morn_assurance::RuntimeReadinessEvidence::healthy_for_identity(
+            (Some(version), Some(digest), Some(profile), Some(route)) => {
+                morn_assurance::RuntimeReadinessEvidence::healthy_for_identities(
                     dsh_health.evidence_refs.clone(),
                     format!("runtime://deepseek-harness/{version}#{digest}"),
+                    vec![profile.to_string(), route.to_string()],
                     dsh_health.reason.clone(),
                 )
             }
             _ => morn_assurance::RuntimeReadinessEvidence::unavailable(
-                "real DSH health is fresh but exact runtime version/digest is not pinned",
+                "real DSH health is fresh but runtime/profile/semantic-route identity is not fully pinned",
             ),
         }
     } else {
@@ -439,16 +452,21 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         ))
     };
     let pi_readiness = if pi_mode == "real" && pi_health.selectable_at(now) {
-        match (pi_runtime_version.as_deref(), pi_runtime_digest.as_deref()) {
-            (Some(version), Some(digest)) => {
-                morn_assurance::RuntimeReadinessEvidence::healthy_for_identity(
+        match (
+            pi_runtime_version.as_deref(),
+            pi_runtime_digest.as_deref(),
+            pi_route_attestation_ref.as_deref(),
+        ) {
+            (Some(version), Some(digest), Some(route)) => {
+                morn_assurance::RuntimeReadinessEvidence::healthy_for_identities(
                     pi_health.evidence_refs.clone(),
                     format!("runtime://pi/{version}#{digest}"),
+                    vec![route.to_string()],
                     pi_health.reason.clone(),
                 )
             }
             _ => morn_assurance::RuntimeReadinessEvidence::unavailable(
-                "real Pi health is fresh but exact runtime version/digest is not pinned",
+                "real Pi health is fresh but runtime/semantic-route identity is not fully pinned",
             ),
         }
     } else {
@@ -518,6 +536,7 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
                 "profile_configuration_ref": dsh_profile_configuration_ref,
                 "runtime_version": dsh_runtime_version,
                 "runtime_digest": dsh_runtime_digest,
+                "route_attestation_ref": dsh_route_attestation_ref,
                 "wire_server_version": dsh_wire_server_version
             },
             "pi": {
@@ -525,7 +544,8 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
                 "health": pi_health.state,
                 "configured_execution_environment_ref": pi_environment_ref,
                 "runtime_version": pi_runtime_version,
-                "runtime_digest": pi_runtime_digest
+                "runtime_digest": pi_runtime_digest,
+                "route_attestation_ref": pi_route_attestation_ref
             }
         },
         "execution_environment_attestations": execution_environment_attestations.iter().map(|attestation| json!({
@@ -550,7 +570,15 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
                 {
                     "id": "deepseek-harness",
                     "status": "fixture contract + real SDK stdio wire client; external runtime/model credentials required",
-                    "wire_methods": ["initialize", "session/prompt", "shutdown"],
+                    "wire_methods": [
+                        "initialize",
+                        "session/prompt",
+                        "session/wait",
+                        "session/working-directory/get",
+                        "session/working-directory/set",
+                        "shutdown"
+                    ],
+                    "working_directory_set_used_by_morn": false,
                     "cancel_method": false
                 },
                 {
