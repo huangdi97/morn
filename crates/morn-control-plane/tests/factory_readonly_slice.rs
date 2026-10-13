@@ -43,7 +43,9 @@ use morn_runtime::{
     ProviderFamily, ProviderRegistry, ProviderStatus, ReconciliationObservation,
 };
 use morn_store::MornStore;
-use morn_work::acceptance::AcceptanceSpec;
+use morn_work::acceptance::{
+    AcceptanceReviewAuthorization, AcceptanceReviewerAttestation, AcceptanceSpec,
+};
 use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
 use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
 use morn_work::service::{AcceptanceEvidence, WorkService};
@@ -763,6 +765,67 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     store.save_action_attempt(&work, &attempt).unwrap();
     store.save_reconciliation(&work, &reconciliation).unwrap();
     store.save_observed_outcome(&work, &outcome).unwrap();
+
+    let reviewer = AcceptanceReviewerAttestation {
+        principal_id: acceptance_decision.decided_by.clone(),
+        acting_roles: vec![acceptance_decision.acting_role.clone()],
+        evidence_refs: vec!["fixture://factory-independent-reviewer".to_string()],
+        observed_at: acceptance_decision.decided_at,
+        valid_until: None,
+    };
+    let review_authorization = AcceptanceReviewAuthorization {
+        authorization_id: "fixture-review-auth-factory".to_string(),
+        principal_id: acceptance_decision.decided_by.clone(),
+        acting_role: acceptance_decision.acting_role.clone(),
+        work_package_id: work.id.clone(),
+        work_generation: work.generation,
+        outcome_id: outcome.id.clone(),
+        disposition: acceptance_decision.disposition,
+        evidence_refs: vec!["fixture://factory-review-authorization".to_string()],
+        issued_at: acceptance_decision.decided_at,
+        valid_until: None,
+    };
+    store
+        .save_record_immutable(
+            "acceptance_reviewer_attestation_v115",
+            &reviewer.reference(),
+            work.workspace_id.as_str(),
+            reviewer.observed_at.millis(),
+            &reviewer,
+        )
+        .unwrap();
+    store
+        .save_record_immutable(
+            "acceptance_review_authorization_v115",
+            &review_authorization.authorization_id,
+            work.workspace_id.as_str(),
+            review_authorization.issued_at.millis(),
+            &review_authorization,
+        )
+        .unwrap();
+    store
+        .save_record_immutable(
+            "acceptance_review_authorization_consumed_v115",
+            &review_authorization.authorization_id,
+            work.workspace_id.as_str(),
+            acceptance_decision.decided_at.millis(),
+            &serde_json::json!({
+                "authorization_id": review_authorization.authorization_id,
+                "work_id": work.id,
+                "outcome_id": outcome.id,
+                "reviewer_principal_id": acceptance_decision.decided_by,
+                "acting_role": acceptance_decision.acting_role,
+                "disposition": acceptance_decision.disposition,
+                "consumed_at": acceptance_decision.decided_at,
+            }),
+        )
+        .unwrap();
+    acceptance_decision
+        .pin_review_authority(
+            reviewer.reference(),
+            vec![review_authorization.authorization_id.clone()],
+        )
+        .unwrap();
     ControlPlaneStore::save_acceptance_decision(&store, &work, &acceptance_decision).unwrap();
     store.save_work_resource_cas(&mut work).unwrap();
     store.save_value_assessment(&work, &value).unwrap();
