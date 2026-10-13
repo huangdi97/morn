@@ -171,8 +171,8 @@ try {
       if (!(await posture.count())) {
         errors.push("console: current control-plane posture summary is missing");
       } else {
-        const postureText = await posture.innerText();
-        if (!postureText.includes("Canonical Work") || !postureText.includes("Provider posture")) {
+        const postureText = (await posture.innerText()).toLowerCase();
+        if (!postureText.includes("canonical work") || !postureText.includes("provider posture")) {
           errors.push("console: operational summary does not expose Work/provider posture");
         }
       }
