@@ -93,7 +93,9 @@ impl AcceptanceDecision {
         let reviewer_attestation_ref = reviewer_attestation_ref.into();
         if reviewer_attestation_ref.trim().is_empty()
             || review_authorization_refs.is_empty()
-            || review_authorization_refs.iter().any(|value| value.trim().is_empty())
+            || review_authorization_refs
+                .iter()
+                .any(|value| value.trim().is_empty())
         {
             return Err(morn_kernel::error::Error::validation(
                 "review authority requires a reviewer attestation and explicit authorization refs",

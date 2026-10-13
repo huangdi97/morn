@@ -894,7 +894,10 @@ pub(crate) fn require_attested_review_authority(
                 continue;
             }
             let consumed: serde_json::Value = store
-                .load_record("acceptance_review_authorization_consumed_v115", authorization_ref)?
+                .load_record(
+                    "acceptance_review_authorization_consumed_v115",
+                    authorization_ref,
+                )?
                 .ok_or_else(|| Error::not_found("consumed acceptance review authorization"))?;
             let disposition = serde_json::to_value(decision.disposition)
                 .map_err(|error| Error::internal(error.to_string()))?;
@@ -904,13 +907,17 @@ pub(crate) fn require_attested_review_authority(
                 == Some(authorization_ref.as_str())
                 && consumed.get("work_id").and_then(serde_json::Value::as_str)
                     == Some(work.id.as_str())
-                && consumed.get("outcome_id").and_then(serde_json::Value::as_str)
+                && consumed
+                    .get("outcome_id")
+                    .and_then(serde_json::Value::as_str)
                     == Some(outcome_id.as_str())
                 && consumed
                     .get("reviewer_principal_id")
                     .and_then(serde_json::Value::as_str)
                     == Some(decision.decided_by.as_str())
-                && consumed.get("acting_role").and_then(serde_json::Value::as_str)
+                && consumed
+                    .get("acting_role")
+                    .and_then(serde_json::Value::as_str)
                     == Some(decision.acting_role.as_str())
                 && consumed.get("disposition") == Some(&disposition);
             if exact_consumption {
