@@ -341,7 +341,7 @@ pub struct DshAcpNotification {
     pub params: Value,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DshAcpPromptResult {
     pub session_id: String,
     pub stop_reason: String,

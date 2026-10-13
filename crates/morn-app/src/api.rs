@@ -2661,14 +2661,17 @@ async fn v115_acp_lifecycle_cancel(
 ) -> ApiResult {
     let (session_id, work_id, binding_id) = required_control_identity(&body)?;
     let control = {
-        let guard = state.lock();
-        guard
-            .dsh_acp_controls
+        let controls = {
+            let guard = state.lock();
+            guard.dsh_acp_controls.clone()
+        };
+        let control = controls
             .lock()
             .map_err(|_| AppError(Error::internal("DSH ACP control map lock poisoned")))?
             .get(session_id)
             .cloned()
-            .ok_or_else(|| AppError(Error::not_found(format!("ACP session {session_id}"))))?
+            .ok_or_else(|| AppError(Error::not_found(format!("ACP session {session_id}"))))?;
+        control
     };
     if control.work_id.as_str() != work_id || control.execution_binding_ref.as_str() != binding_id {
         return Err(AppError(Error::not_authorized(
