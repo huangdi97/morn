@@ -74,6 +74,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Checkout exact Pi release metadata
         uses: actions/checkout@v4
@@ -90,6 +92,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.19.0"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Validate inputs
         shell: bash
@@ -110,12 +116,12 @@ jobs:
             echo "authenticated smoke requires acknowledge_e0_only=true"
             exit 2
           fi
-          if [[ ! "$INPUT_CREDENTIAL_ENV" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
-            echo "credential_env_name must be an uppercase environment variable name"
+          if [[ ! "$INPUT_CREDENTIAL_ENV" =~ ^[A-Z][A-Z0-9_]*_API_KEY$ ]]; then
+            echo "credential_env_name must be a dedicated *_API_KEY variable"
             exit 2
           fi
-          if [[ -n "$INPUT_BASE_URL_ENV" && ! "$INPUT_BASE_URL_ENV" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
-            echo "base_url_env_name must be blank or an uppercase environment variable name"
+          if [[ -n "$INPUT_BASE_URL_ENV" && ! "$INPUT_BASE_URL_ENV" =~ ^[A-Z][A-Z0-9_]*_(BASE_URL|API_URL)$ ]]; then
+            echo "base_url_env_name must be blank or a dedicated *_BASE_URL/*_API_URL variable"
             exit 2
           fi
           mkdir -p "$MORN_PI_WORKSPACE" target/live-pi-evidence
@@ -125,6 +131,7 @@ jobs:
         run: |
           set -euo pipefail
           source_lock="$GITHUB_WORKSPACE/target/pi-release/packages/coding-agent/install-lock"
+          export PI_SOURCE_COMMIT="$(git -C "$GITHUB_WORKSPACE/target/pi-release" rev-parse HEAD)"
           install_root="$RUNNER_TEMP/morn-pi-runtime"
           mkdir -p "$install_root"
           cp "$source_lock/package.json" "$install_root/package.json"
@@ -148,6 +155,7 @@ jobs:
           import hashlib, json, os, pathlib, stat
 
           root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "morn-pi-runtime"
+          root_real = root.resolve()
           hasher = hashlib.sha256()
           entries = [root / "package.json", root / "package-lock.json"]
           entries.extend(sorted((root / "node_modules").rglob("*"), key=lambda p: p.relative_to(root).as_posix()))
@@ -157,6 +165,11 @@ jobs:
               rel = path.relative_to(root).as_posix()
               if path.is_symlink():
                   payload = os.readlink(path)
+                  resolved = (path.parent / payload).resolve()
+                  try:
+                      resolved.relative_to(root_real)
+                  except ValueError:
+                      raise SystemExit(f"Pi runtime symlink escapes isolated root: {rel} -> {payload}")
                   mode = stat.S_IMODE(path.lstat().st_mode)
                   record = f"L\0{rel}\0{mode:o}\0{payload}\n".encode()
                   link_count += 1
@@ -184,7 +197,7 @@ jobs:
               "canonical_identity": f"pi@{version}#{digest}",
               "file_count": file_count,
               "symlink_count": link_count,
-              "source": f"earendil-works/pi@v{version}:packages/coding-agent/install-lock",
+              "source": f"earendil-works/pi@{os.environ['PI_SOURCE_COMMIT']}:packages/coding-agent/install-lock",
               "claims": {
                   "installed_runtime_closure_verified": True,
                   "live_provider": False,
@@ -202,8 +215,6 @@ jobs:
               fh.write(f"MORN_PI_COMMAND={root / 'node_modules' / '.bin' / 'pi'}\n")
           PY
 
-          "$install_root/node_modules/.bin/pi" --version | tee target/live-pi-evidence/pi-version.txt
-          test "$(cat target/live-pi-evidence/pi-version.txt | tr -d '\r\n')" = "$INPUT_RUNTIME_VERSION"
 
       - name: Emit secret-free deployment identity plan
         shell: bash
@@ -248,6 +259,11 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${MORN_EXECUTION_ATTESTOR:-}" || { echo "MORN_EXECUTION_ATTESTOR secret is required"; exit 2; }
+          actual_version="$("$MORN_PI_COMMAND" --version | tr -d '\r\n')"
+          test "$actual_version" = "$MORN_PI_RUNTIME_VERSION" || {
+            echo "Pi executable version mismatch: expected $MORN_PI_RUNTIME_VERSION, actual $actual_version"
+            exit 2
+          }
           test -n "${PROVIDER_API_KEY:-}" || { echo "MORN_PI_PROVIDER_API_KEY secret is required"; exit 2; }
           export "$INPUT_CREDENTIAL_ENV=$PROVIDER_API_KEY"
           passthrough="$INPUT_CREDENTIAL_ENV"
