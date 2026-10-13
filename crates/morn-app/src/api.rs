@@ -3622,20 +3622,19 @@ async fn v115_work_review_outcome(
 
     // Consume before writing the decision: if a later persistence step fails,
     // the authorization fails closed and must be re-issued rather than becoming replayable.
+    // The consumed record is a typed protocol object bound to this exact
+    // authorization and timestamp, not an unvalidated JSON marker.
+    let consumed =
+        morn_work::acceptance::ConsumedAcceptanceReviewAuthorization::from_authorization(
+            &authorization,
+            now,
+        )?;
     guard.store.save_record_immutable(
         consumed_kind,
         review_authorization_id,
         work.workspace_id.as_str(),
         now.millis(),
-        &json!({
-            "authorization_id": review_authorization_id,
-            "work_id": work.id,
-            "outcome_id": outcome.id,
-            "reviewer_principal_id": reviewer.principal_id,
-            "acting_role": acting_role,
-            "disposition": disposition,
-            "consumed_at": now
-        }),
+        &consumed,
     )?;
     ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &decision)?;
     let projection =

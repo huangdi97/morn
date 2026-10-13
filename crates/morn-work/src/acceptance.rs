@@ -32,6 +32,69 @@ pub struct AcceptanceReviewerAttestation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConsumedAcceptanceReviewAuthorization {
+    pub authorization_id: String,
+    pub work_id: WorkPackageId,
+    pub outcome_id: OutcomeRecordId,
+    pub reviewer_principal_id: PrincipalId,
+    pub acting_role: String,
+    pub disposition: AcceptanceDisposition,
+    pub consumed_at: Timestamp,
+}
+
+impl ConsumedAcceptanceReviewAuthorization {
+    pub fn from_authorization(
+        authorization: &AcceptanceReviewAuthorization,
+        consumed_at: Timestamp,
+    ) -> morn_kernel::error::Result<Self> {
+        if !authorization.authorizes(
+            &authorization.principal_id,
+            &authorization.acting_role,
+            (&authorization.work_package_id, authorization.work_generation),
+            &authorization.outcome_id,
+            authorization.disposition,
+            consumed_at,
+        ) {
+            return Err(morn_kernel::error::Error::not_authorized(
+                "review authorization is not active at consumption time",
+            ));
+        }
+        Ok(Self {
+            authorization_id: authorization.authorization_id.clone(),
+            work_id: authorization.work_package_id.clone(),
+            outcome_id: authorization.outcome_id.clone(),
+            reviewer_principal_id: authorization.principal_id.clone(),
+            acting_role: authorization.acting_role.clone(),
+            disposition: authorization.disposition,
+            consumed_at,
+        })
+    }
+
+    pub fn exactly_matches(
+        &self,
+        authorization: &AcceptanceReviewAuthorization,
+        decision: &crate::acceptance_decision::AcceptanceDecision,
+        outcome_id: &OutcomeRecordId,
+    ) -> bool {
+        self.authorization_id == authorization.authorization_id
+            && self.work_id == decision.work_package_id
+            && self.outcome_id == *outcome_id
+            && self.reviewer_principal_id == decision.decided_by
+            && self.acting_role == decision.acting_role
+            && self.disposition == decision.disposition
+            && self.consumed_at == decision.decided_at
+            && authorization.authorizes(
+                &decision.decided_by,
+                &decision.acting_role,
+                (&decision.work_package_id, decision.work_generation),
+                outcome_id,
+                decision.disposition,
+                decision.decided_at,
+            )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AcceptanceReviewAuthorization {
     pub authorization_id: String,
     pub principal_id: PrincipalId,
@@ -196,6 +259,45 @@ mod tests {
             AcceptanceDisposition::Accept,
             Timestamp::from_millis(21),
         ));
+    }
+
+    #[test]
+    fn consumed_review_authorization_is_exactly_bound_to_decision_time() {
+        let principal = PrincipalId::generate_with("reviewer");
+        let work = WorkPackageId::generate_with("work");
+        let outcome = OutcomeRecordId::generate_with("outcome");
+        let authorization = AcceptanceReviewAuthorization {
+            authorization_id: "review-auth-consume".to_string(),
+            principal_id: principal.clone(),
+            acting_role: "independent-reviewer".to_string(),
+            work_package_id: work.clone(),
+            work_generation: 3,
+            outcome_id: outcome.clone(),
+            disposition: AcceptanceDisposition::Accept,
+            evidence_refs: vec!["iam://review-auth-consume".to_string()],
+            issued_at: Timestamp::from_millis(10),
+            valid_until: Some(Timestamp::from_millis(30)),
+        };
+        let mut decision = crate::acceptance_decision::AcceptanceDecision::new(
+            work,
+            AcceptanceSpecId::generate_with("acceptance"),
+            AcceptanceDisposition::Accept,
+            principal,
+            "independent-reviewer",
+            "reviewed",
+        );
+        decision.pin_work_generation(3).unwrap();
+        decision.decided_at = Timestamp::from_millis(20);
+        decision.outcome_refs.push(outcome.clone());
+
+        let consumed =
+            ConsumedAcceptanceReviewAuthorization::from_authorization(&authorization, decision.decided_at)
+                .unwrap();
+        assert!(consumed.exactly_matches(&authorization, &decision, &outcome));
+
+        let mut stale = consumed.clone();
+        stale.consumed_at = Timestamp::from_millis(19);
+        assert!(!stale.exactly_matches(&authorization, &decision, &outcome));
     }
 
     #[test]

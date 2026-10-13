@@ -60,7 +60,10 @@ use morn_runtime::{
     OutcomeReconciler, ReconciliationRecord,
 };
 use morn_store::MornStore;
-use morn_work::acceptance::{AcceptanceReviewAuthorization, AcceptanceReviewerAttestation};
+use morn_work::acceptance::{
+    AcceptanceReviewAuthorization, AcceptanceReviewerAttestation,
+    ConsumedAcceptanceReviewAuthorization,
+};
 use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
 use morn_work::control::{ConditionStatus, WorkCondition, WorkPhase, WorkResource};
 use morn_work::value::{ValueAssessment, ValueEvidenceClass};
@@ -893,34 +896,13 @@ pub(crate) fn require_attested_review_authority(
             {
                 continue;
             }
-            let consumed: serde_json::Value = store
+            let consumed: ConsumedAcceptanceReviewAuthorization = store
                 .load_record(
                     "acceptance_review_authorization_consumed_v115",
                     authorization_ref,
                 )?
                 .ok_or_else(|| Error::not_found("consumed acceptance review authorization"))?;
-            let disposition = serde_json::to_value(decision.disposition)
-                .map_err(|error| Error::internal(error.to_string()))?;
-            let exact_consumption = consumed
-                .get("authorization_id")
-                .and_then(serde_json::Value::as_str)
-                == Some(authorization_ref.as_str())
-                && consumed.get("work_id").and_then(serde_json::Value::as_str)
-                    == Some(work.id.as_str())
-                && consumed
-                    .get("outcome_id")
-                    .and_then(serde_json::Value::as_str)
-                    == Some(outcome_id.as_str())
-                && consumed
-                    .get("reviewer_principal_id")
-                    .and_then(serde_json::Value::as_str)
-                    == Some(decision.decided_by.as_str())
-                && consumed
-                    .get("acting_role")
-                    .and_then(serde_json::Value::as_str)
-                    == Some(decision.acting_role.as_str())
-                && consumed.get("disposition") == Some(&disposition);
-            if exact_consumption {
+            if consumed.exactly_matches(&authorization, decision, outcome_id) {
                 authorized = true;
                 break;
             }
