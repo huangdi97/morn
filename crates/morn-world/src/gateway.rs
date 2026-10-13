@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 
 use crate::action::{Action, ActionProposal, ActionStatus};
-use crate::service::{StateCommit, WorldService};
+use crate::service::WorldService;
 use morn_capability::effect::{EffectClass, EffectContract};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::{ActionId, ExecutionReceiptId, ObjectId, WorkspaceId};
@@ -241,7 +241,9 @@ impl ActionGateway {
             return Err(Error::invalid_state("action is not authorized"));
         }
         if actor.trim().is_empty() {
-            return Err(Error::validation("canonical World execution requires an actor"));
+            return Err(Error::validation(
+                "canonical World execution requires an actor",
+            ));
         }
         let object_ref = object_id.to_string();
         if object_ref != authorized.preview.target_object {
@@ -553,21 +555,17 @@ mod tests {
         let policy = Policy::new(ws.clone(), "strict", vec![PolicyRule::allow("update")]);
         let mut gateway = ActionGateway::new(policy, EffectContract::e1("update"));
         let mut world = WorldService::new();
-        let object_type = ObjectType::new("asset", ws.clone(), vec!["status".into()], vec![], vec![]);
+        let object_type =
+            ObjectType::new("asset", ws.clone(), vec!["status".into()], vec![], vec![]);
         world.register_object_type(object_type.clone());
         let target_a = ObjectId::generate_with("asset-a");
         let target_b = ObjectId::generate_with("asset-b");
         for target in [target_a.clone(), target_b.clone()] {
-            world.register_object(Object::new(
-                target,
-                object_type.id.clone(),
-                ws.clone(),
-                {
-                    let mut state = BTreeMap::new();
-                    state.insert("status".to_string(), json!("before"));
-                    state
-                },
-            ));
+            world.register_object(Object::new(target, object_type.id.clone(), ws.clone(), {
+                let mut state = BTreeMap::new();
+                state.insert("status".to_string(), json!("before"));
+                state
+            }));
         }
 
         let proposal = proposal(ws, target_a.clone(), "principal://operator");

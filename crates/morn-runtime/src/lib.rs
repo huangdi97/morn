@@ -47,10 +47,7 @@ pub use environment::{
     ExecutionEnvironmentSpec, FixtureEnvironmentProvider, IsolationClass,
 };
 pub use execution_manifest::{CompositionRuntimeRef, ExecutionManifest};
-pub use gateway::{
-    ActionGateway, ActionPreview, ApprovalWitness, AuthorizedAction, ExecutionOutcome,
-    WorldCommitter, WorldVerifier,
-};
+pub use gateway::{ActionGateway, ActionPreview, AuthorizedAction, ExecutionOutcome};
 pub use provider_registry::{
     reference_provider_catalog, ProviderDescriptor, ProviderFamily, ProviderObservation,
     ProviderRegistry, ProviderStatus,
