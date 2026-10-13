@@ -515,6 +515,7 @@ impl DurableBusinessEvidenceControllerRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ControlPlaneStore;
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
     use morn_work::control::WorkSpec;
 
