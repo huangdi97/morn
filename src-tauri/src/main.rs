@@ -213,17 +213,6 @@ fn run_sidecar_probe() -> Result<(), String> {
     Ok(())
 }
 
-/// Report the reference desktop shell API boundary.
-#[tauri::command]
-fn app_info() -> serde_json::Value {
-    serde_json::json!({
-        "shell": "morn-desktop",
-        "version": env!("CARGO_PKG_VERSION"),
-        "api_base": DEFAULT_API_BASE,
-        "backend_autostart": autostart_enabled(),
-    })
-}
-
 fn main() {
     if std::env::args().any(|arg| arg == "--probe-sidecar") {
         if let Err(error) = run_sidecar_probe() {
@@ -245,9 +234,7 @@ fn main() {
     let setup_backend = Arc::clone(&backend);
     let exit_backend = Arc::clone(&backend);
 
-    let app = tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info])
-        .setup(move |app| {
+    let app = tauri::Builder::default().setup(move |app| {
             let data_dir = app.path().app_local_data_dir().map_err(|error| {
                 std::io::Error::other(format!("desktop data directory: {error}"))
             })?;
