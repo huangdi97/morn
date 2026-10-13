@@ -48,7 +48,9 @@ impl BioLabDatasetProvenance {
         let digest = self.content_digest.trim();
         let canonical_digest = digest.len() == 71
             && digest.starts_with("sha256:")
-            && digest[7..].chars().all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase());
+            && digest[7..]
+                .chars()
+                .all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase());
         if !canonical_digest {
             return Err(Error::validation(
                 "BioLab dataset content_digest must be canonical sha256:<64-lowercase-hex>",
@@ -74,7 +76,11 @@ impl BioLabDatasetProvenance {
     }
 
     pub fn canonical_identity(&self) -> String {
-        format!("{}#{}", self.dataset_ref.trim(), self.content_digest.trim())
+        format!(
+            "{}#{}",
+            self.dataset_ref.trim(),
+            self.content_digest.trim()
+        )
     }
 }
 

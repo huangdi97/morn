@@ -16,9 +16,9 @@ fn sha256_file(path: &str) -> Result<String> {
     let mut hasher = Sha256::new();
     let mut buffer = [0_u8; 1024 * 1024];
     loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(|error| Error::external(format!("cannot read BioLab dataset {path:?}: {error}")))?;
+        let read = file.read(&mut buffer).map_err(|error| {
+            Error::external(format!("cannot read BioLab dataset {path:?}: {error}"))
+        })?;
         if read == 0 {
             break;
         }

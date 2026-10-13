@@ -1,8 +1,6 @@
 use std::fs;
 
-use morn_assurance::{
-    reference_evidence_ledger, EvidenceClaim, EvidenceClaimState, EvidenceClass,
-};
+use morn_assurance::{reference_evidence_ledger, EvidenceClaim, EvidenceClaimState, EvidenceClass};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::time::Timestamp;
 use serde_json::json;

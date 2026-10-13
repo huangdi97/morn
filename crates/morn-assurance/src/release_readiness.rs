@@ -437,7 +437,10 @@ pub struct DeploymentReadinessDecision {
     pub evidence_acquisition_plan: Vec<EvidenceAcquisitionStep>,
 }
 
-fn acquisition_step(axis: &ReleaseReadinessAxis, site_ref: Option<&str>) -> EvidenceAcquisitionStep {
+fn acquisition_step(
+    axis: &ReleaseReadinessAxis,
+    site_ref: Option<&str>,
+) -> EvidenceAcquisitionStep {
     match axis.id.as_str() {
         "architecture-baseline" => EvidenceAcquisitionStep {
             axis_id: axis.id.clone(),
