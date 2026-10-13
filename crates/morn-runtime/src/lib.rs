@@ -49,7 +49,7 @@ pub use environment::{
 pub use execution_manifest::{CompositionRuntimeRef, ExecutionManifest};
 pub use gateway::{
     ActionGateway, ActionPreview, ApprovalWitness, AuthorizedAction, ExecutionOutcome,
-    WorldCommitter,
+    WorldCommitter, WorldVerifier,
 };
 pub use provider_registry::{
     reference_provider_catalog, ProviderDescriptor, ProviderFamily, ProviderObservation,

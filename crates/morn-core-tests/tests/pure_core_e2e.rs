@@ -95,13 +95,7 @@ fn pure_core_e2e_zero_domain() {
             )
             .unwrap();
         assert!(outcome.committed);
-        let snapshot_refs: Vec<String> = guard
-            .world
-            .snapshots_for(&obj_id)
-            .iter()
-            .map(|snapshot| snapshot.id.to_string())
-            .collect();
-        let execution_verified = gateway.verify(&outcome, &snapshot_refs).unwrap();
+        let execution_verified = gateway.verify(&outcome, &guard.world).unwrap();
         assert!(execution_verified);
 
         // Artifact (approved for downstream).

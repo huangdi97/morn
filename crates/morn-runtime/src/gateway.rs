@@ -38,6 +38,47 @@ impl WorldCommitter for WorldService {
     }
 }
 
+/// Read-only verifier for exact canonical commit evidence.
+pub trait WorldVerifier {
+    fn has_commit_evidence(
+        &self,
+        workspace_ref: &str,
+        object_ref: &str,
+        action_ref: &str,
+        snapshot_ref: &str,
+        ledger_ref: &str,
+    ) -> bool;
+}
+
+impl WorldVerifier for WorldService {
+    fn has_commit_evidence(
+        &self,
+        workspace_ref: &str,
+        object_ref: &str,
+        action_ref: &str,
+        snapshot_ref: &str,
+        ledger_ref: &str,
+    ) -> bool {
+        let object_id = ObjectId::new(object_ref.to_string());
+        let snapshot_matches = self.snapshots_for(&object_id).iter().any(|snapshot| {
+            snapshot.id.to_string() == snapshot_ref
+                && snapshot.workspace_id.as_str() == workspace_ref
+                && snapshot
+                    .action_id
+                    .as_ref()
+                    .is_some_and(|action_id| action_id.as_str() == action_ref)
+        });
+        let ledger_matches = self.ledger_entries().iter().any(|entry| {
+            entry.id.to_string() == ledger_ref
+                && entry.workspace_id.as_str() == workspace_ref
+                && entry.subject == object_ref
+                && entry.refs.iter().any(|reference| reference == action_ref)
+                && entry.refs.iter().any(|reference| reference == snapshot_ref)
+        });
+        snapshot_matches && ledger_matches
+    }
+}
+
 /// Expected effects shown before authorization.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActionPreview {
@@ -74,6 +115,8 @@ pub struct ExecutionOutcome {
     /// Canonical world commit was durably recorded. This is execution truth,
     /// not independent verification or accepted business outcome.
     pub committed: bool,
+    pub workspace_ref: String,
+    pub object_ref: String,
     pub action_ref: String,
     pub snapshot_ref: String,
     pub ledger_ref: String,
@@ -198,6 +241,7 @@ impl ActionGateway {
         if authorized.action.status != ActionStatus::Authorized {
             return Err(Error::invalid_state("action is not authorized"));
         }
+        let object_ref = object_id.to_string();
         let commit = world.commit(&authorized.action, object_id, new_state, reason, actor)?;
         self.ledger.append(
             commit.snapshot.workspace_id.clone(),
@@ -221,6 +265,8 @@ impl ActionGateway {
         Ok(ExecutionOutcome {
             receipt_id: ExecutionReceiptId::generate_with("rcpt").to_string(),
             committed: true,
+            workspace_ref: commit.snapshot.workspace_id.to_string(),
+            object_ref,
             action_ref: authorized.action.id.to_string(),
             snapshot_ref: commit.snapshot.id.to_string(),
             ledger_ref: commit.ledger_entry.id.to_string(),
@@ -236,9 +282,11 @@ impl ActionGateway {
     pub fn verify(
         &self,
         outcome: &ExecutionOutcome,
-        observed_snapshot_refs: &[String],
+        world: &dyn WorldVerifier,
     ) -> Result<bool> {
         if !outcome.committed
+            || outcome.workspace_ref.trim().is_empty()
+            || outcome.object_ref.trim().is_empty()
             || outcome.action_ref.trim().is_empty()
             || outcome.snapshot_ref.trim().is_empty()
             || outcome.ledger_ref.trim().is_empty()
@@ -247,9 +295,13 @@ impl ActionGateway {
                 "execution outcome lacks exact durable commit identity",
             ));
         }
-        Ok(observed_snapshot_refs
-            .iter()
-            .any(|snapshot| snapshot == &outcome.snapshot_ref))
+        Ok(world.has_commit_evidence(
+            &outcome.workspace_ref,
+            &outcome.object_ref,
+            &outcome.action_ref,
+            &outcome.snapshot_ref,
+            &outcome.ledger_ref,
+        ))
     }
 
     /// Record a recovery for a failed action.
@@ -406,13 +458,8 @@ mod tests {
             world.object(&target).unwrap().state().get("status"),
             Some(&json!("released"))
         );
-        let snapshot_refs: Vec<String> = world
-            .snapshots_for(&target)
-            .iter()
-            .map(|snapshot| snapshot.id.to_string())
-            .collect();
-        assert_eq!(snapshot_refs.len(), 1);
-        assert!(gateway.verify(&outcome, &snapshot_refs).unwrap());
+        assert_eq!(world.snapshots_for(&target).len(), 1);
+        assert!(gateway.verify(&outcome, &world).unwrap());
     }
 
     #[test]
@@ -465,32 +512,30 @@ mod tests {
         let ws = WorkspaceId::generate();
         let policy = Policy::new(ws, "p", vec![]);
         let gateway = ActionGateway::new(policy, EffectContract::e1());
+        let world = WorldService::new();
         let committed_without_witness = ExecutionOutcome {
             receipt_id: "rcpt:test".to_string(),
             committed: true,
+            workspace_ref: String::new(),
+            object_ref: String::new(),
             action_ref: String::new(),
             snapshot_ref: String::new(),
             ledger_ref: String::new(),
             details: "commit claimed without witness".to_string(),
         };
-        assert!(gateway
-            .verify(&committed_without_witness, &["snapshot:s".to_string()])
-            .is_err());
+        assert!(gateway.verify(&committed_without_witness, &world).is_err());
 
-        let durable_commit = ExecutionOutcome {
+        let forged_commit = ExecutionOutcome {
             receipt_id: "rcpt:test".to_string(),
             committed: true,
+            workspace_ref: "workspace:w".to_string(),
+            object_ref: "object:o".to_string(),
             action_ref: "action:a".to_string(),
             snapshot_ref: "snapshot:s".to_string(),
             ledger_ref: "ledger:l".to_string(),
-            details: "durable commit".to_string(),
+            details: "unbacked commit".to_string(),
         };
-        assert!(!gateway
-            .verify(&durable_commit, &["snapshot:other".to_string()])
-            .unwrap());
-        assert!(gateway
-            .verify(&durable_commit, &["snapshot:s".to_string()])
-            .unwrap());
+        assert!(!gateway.verify(&forged_commit, &world).unwrap());
     }
 
     #[test]
