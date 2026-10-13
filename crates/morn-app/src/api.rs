@@ -2234,6 +2234,13 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
         )
         .with_work_binding(work.generation, binding.id.clone())
         .map_err(Error::validation)?
+        .with_provider_identity(
+            binding.provider_ref.clone(),
+            binding.provider_version.clone(),
+            binding.provider_digest.clone(),
+            binding.runtime_ref.clone(),
+        )
+        .map_err(Error::validation)?
         .with_scope_id(handle.scope_id.clone())
         .map_err(Error::validation)?;
         if let (Some(environment_ref), Some(class)) = (
