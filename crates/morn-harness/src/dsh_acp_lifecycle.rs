@@ -437,6 +437,27 @@ impl DshAcpLifecycleController {
                 "ACP lifecycle session requires exact Work generation and ExecutionBinding",
             ));
         }
+        let runtime_version = self
+            .config
+            .runtime_version
+            .as_deref()
+            .ok_or_else(|| Error::validation("ACP lifecycle config has no runtime version"))?;
+        let runtime_digest = self
+            .config
+            .runtime_digest
+            .as_deref()
+            .ok_or_else(|| Error::validation("ACP lifecycle config has no runtime digest"))?;
+        let route_ref = self.config.route_ref()?;
+        if !context.proves_provider_identity(
+            "deepseek-harness",
+            runtime_version,
+            Some(runtime_digest),
+            Some(&route_ref),
+        ) {
+            return Err(Error::validation(
+                "ACP lifecycle RuntimeContext does not match the exact DSH runtime/digest/route pinned by the ExecutionBinding",
+            ));
+        }
         if !context.proves_real_harness_environment() {
             return Err(Error::validation(
                 "ACP lifecycle session requires runtime-attested container-or-stronger execution environment",
@@ -495,6 +516,10 @@ impl DshAcpLifecycleController {
             || session.public.work_package_id != context.work_package_id
             || Some(session.public.work_generation) != context.work_generation
             || context.execution_binding_ref.as_ref() != Some(&session.public.execution_binding_ref)
+            || context.provider_ref != session.context.provider_ref
+            || context.provider_version != session.context.provider_version
+            || context.provider_digest != session.context.provider_digest
+            || context.provider_route_ref != session.context.provider_route_ref
             || context.execution_environment_ref.as_deref()
                 != Some(session.public.execution_environment_ref.as_str())
             || context.scope_id.as_deref() != Some(session.public.scope_ref.as_str())
@@ -560,6 +585,8 @@ mod tests {
         ];
         config.request_timeout_ms = 5_000;
         config.prompt_timeout_ms = 5_000;
+        let route_ref = config.route_ref().unwrap();
+        let runtime_digest = format!("sha256:{}", "b".repeat(64));
 
         let workspace_id = WorkspaceId::generate();
         let scope = CapabilityScope::new(
@@ -575,6 +602,13 @@ mod tests {
             WorkPackageId::generate(),
         )
         .with_work_binding(1, RuntimeBindingId::generate_with("binding"))
+        .unwrap()
+        .with_provider_identity(
+            "deepseek-harness",
+            "1.0.0",
+            Some(runtime_digest),
+            Some(route_ref),
+        )
         .unwrap()
         .with_scope_id(scope.id.to_string())
         .unwrap()
@@ -741,6 +775,30 @@ mod tests {
             .resume_session(&session.session_id, &context)
             .is_err());
 
+        controller.shutdown_transport().unwrap();
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn lifecycle_session_rejects_binding_id_reuse_with_provider_route_drift() {
+        if std::env::var("MORN_ACP_FIXTURE_SERVER").ok().as_deref() == Some("1") {
+            return;
+        }
+        let (mut controller, context, scope, root) = fixture();
+        controller.mount_scope(scope).unwrap();
+
+        let mut forged_route = context.clone();
+        forged_route.provider_route_ref = Some("dsh-acp-route:reinterpreted".to_string());
+        assert!(controller.open_session(&forged_route).is_err());
+
+        let session = controller.open_session(&context).unwrap();
+        let mut forged_version = context.clone();
+        forged_version.provider_version = Some("9.9.9".to_string());
+        assert!(controller
+            .prompt_text(&session.session_id, &forged_version, "must-not-run")
+            .is_err());
+
+        controller.close_session(&session.session_id).unwrap();
         controller.shutdown_transport().unwrap();
         let _ = std::fs::remove_dir_all(root);
     }
