@@ -189,15 +189,19 @@ fn runtime_axis(
     // RealRuntime evidence remains unproven.
     if axis.state == ReadinessState::Proven {
         if runtime.fresh_healthy {
-            let mut required_identities = runtime.required_identity_refs.clone();
-            if let Some(identity_ref) = runtime
+            let Some(runtime_identity_ref) = runtime
                 .runtime_identity_ref
                 .as_deref()
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
-            {
-                required_identities.push(identity_ref.to_string());
-            }
+            else {
+                axis.state = ReadinessState::IdentityMismatch;
+                axis.reason =
+                    "fresh provider health has no exact active runtime identity".to_string();
+                return axis;
+            };
+            let mut required_identities = runtime.required_identity_refs.clone();
+            required_identities.push(runtime_identity_ref.to_string());
             required_identities.sort();
             required_identities.dedup();
             if let Some(missing) = required_identities.iter().find(|identity_ref| {
@@ -881,15 +885,19 @@ mod tests {
 
     #[test]
     fn real_runtime_requires_both_current_claim_and_live_health() {
+        let runtime_identity = "runtime://deepseek-harness/v1#sha256:current";
         let mut ledger = reference_evidence_ledger();
         ledger
             .append(
                 EvidenceClaim::proven(
                     "deepseek-harness",
                     EvidenceClass::RealRuntime,
-                    vec!["attestation://dsh/live-2".to_string()],
+                    vec![
+                        "attestation://dsh/live-2".to_string(),
+                        runtime_identity.to_string(),
+                    ],
                     "deployment-attestor",
-                    "authenticated official runtime observed",
+                    "authenticated official runtime observed on the exact artifact",
                 )
                 .unwrap(),
             )
@@ -897,8 +905,9 @@ mod tests {
 
         let axes = release_readiness_axes(
             &ledger,
-            RuntimeReadinessEvidence::healthy(
+            RuntimeReadinessEvidence::healthy_for_identity(
                 vec!["health://dsh/lease-2".to_string()],
+                runtime_identity,
                 "fresh settled-turn lease",
             ),
             RuntimeReadinessEvidence::unavailable("not configured"),
@@ -910,6 +919,33 @@ mod tests {
         assert!(axes[3]
             .evidence_refs
             .contains(&"health://dsh/lease-2".to_string()));
+    }
+
+    #[test]
+    fn healthy_lease_without_exact_runtime_identity_cannot_prove_real_runtime() {
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "deepseek-harness",
+                    EvidenceClass::RealRuntime,
+                    vec!["attestation://dsh/live".to_string()],
+                    "deployment-attestor",
+                    "live runtime claimed",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let axes = release_readiness_axes(
+            &ledger,
+            RuntimeReadinessEvidence::healthy(
+                vec!["health://dsh/live".to_string()],
+                "healthy but identity missing",
+            ),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+        );
+        assert_eq!(axes[3].state, ReadinessState::IdentityMismatch);
+        assert!(axes[3].reason.contains("no exact active runtime identity"));
     }
 
     #[test]
