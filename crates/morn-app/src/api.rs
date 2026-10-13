@@ -1654,6 +1654,17 @@ async fn v115_work_bind_attested_e0(
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| AppError(Error::validation("execution_environment_ref is required")))?;
+    let transport = body
+        .get("transport")
+        .and_then(Value::as_str)
+        .unwrap_or("executor")
+        .trim()
+        .to_ascii_lowercase();
+    if transport != "executor" && transport != "acp-lifecycle" {
+        return Err(AppError(Error::validation(
+            "transport must be executor or acp-lifecycle",
+        )));
+    }
 
     let now = Timestamp::now();
     let guard = state.lock();
@@ -1780,6 +1791,51 @@ async fn v115_work_bind_attested_e0(
 
     let provider_ref = capability.manifest.provider_ref.clone();
     let (provider_version, provider_digest, runtime_ref) = match provider_ref.as_str() {
+        "deepseek-harness" if transport == "acp-lifecycle" => {
+            let controller = guard
+                .dsh_acp_lifecycle
+                .as_ref()
+                .ok_or_else(|| {
+                    AppError(Error::invalid_state(
+                        "DSH ACP lifecycle is not enabled; set MORN_DSH_ACP_MODE=real",
+                    ))
+                })?
+                .lock()
+                .map_err(|_| AppError(Error::internal("DSH ACP lifecycle lock poisoned")))?;
+            if controller.configured_execution_environment_ref() != Some(environment_ref) {
+                return Err(AppError(Error::invalid_state(
+                    "attested environment does not match the environment pinned by the ACP lifecycle configuration",
+                )));
+            }
+            let version = controller
+                .configured_runtime_version()
+                .map(str::to_string)
+                .ok_or_else(|| AppError(Error::invalid_state("ACP DSH runtime version is not pinned")))?;
+            let digest = controller
+                .configured_runtime_digest()
+                .map(str::to_string)
+                .ok_or_else(|| AppError(Error::invalid_state("ACP DSH runtime digest is not pinned")))?;
+            if !attestation.attests_runtime_identity("deepseek-harness", &version, &digest, now) {
+                return Err(AppError(Error::invalid_state(
+                    "execution-environment attestation does not authorize the configured ACP DSH runtime artifact",
+                )));
+            }
+            let profile_configuration_ref = controller
+                .configured_profile_configuration_ref()
+                .ok_or_else(|| AppError(Error::invalid_state(
+                    "ACP DSH Home/Profile composition identity is not pinned",
+                )))?;
+            if !attestation
+                .runtime_identities
+                .iter()
+                .any(|identity| identity == profile_configuration_ref)
+            {
+                return Err(AppError(Error::invalid_state(
+                    "execution-environment attestation does not authorize the configured ACP Home/Profile composition",
+                )));
+            }
+            (version, Some(digest), controller.configured_route_ref()?)
+        }
         "deepseek-harness" => {
             let mut provider = guard
                 .dsh_harness
@@ -1846,6 +1902,11 @@ async fn v115_work_bind_attested_e0(
             (version, Some(digest), route_ref)
         }
         "pi" => {
+            if transport != "executor" {
+                return Err(AppError(Error::validation(
+                    "acp-lifecycle transport is available only for deepseek-harness",
+                )));
+            }
             let mut provider = guard
                 .pi_harness
                 .lock()
@@ -1960,7 +2021,12 @@ async fn v115_work_bind_attested_e0(
             "valid_until": attestation.valid_until
         },
         "execution_started": false,
-        "note": "Trusted deployment attestation plus deployment-pinned DSH distribution version/digest are recorded; SDK serverInfo remains wire identity only. No Harness turn, world outcome, authority grant or acceptance was created."
+        "transport": transport,
+        "note": if transport == "acp-lifecycle" {
+            "Immutable Work binding pins the ACP lifecycle route only; it cannot be executed through the DSH SDK executor endpoint and creates no Outcome/Acceptance."
+        } else {
+            "Trusted deployment attestation plus deployment-pinned runtime identity are recorded. No Harness turn, world outcome, authority grant or acceptance was created."
+        }
     })))
 }
 
