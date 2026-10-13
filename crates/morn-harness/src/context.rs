@@ -15,6 +15,16 @@ pub struct RuntimeContext {
     pub work_generation: Option<u64>,
     #[serde(default)]
     pub execution_binding_ref: Option<RuntimeBindingId>,
+    /// Exact provider semantic identity admitted by the immutable ExecutionBinding.
+    /// Binding id equality alone must never permit runtime/route reinterpretation.
+    #[serde(default)]
+    pub provider_ref: Option<String>,
+    #[serde(default)]
+    pub provider_version: Option<String>,
+    #[serde(default)]
+    pub provider_digest: Option<String>,
+    #[serde(default)]
+    pub provider_route_ref: Option<String>,
     pub policy_snapshot_version: Option<String>,
     pub provenance_refs: Vec<String>,
     pub scope_id: Option<String>,
@@ -38,6 +48,10 @@ impl RuntimeContext {
             work_package_id,
             work_generation: None,
             execution_binding_ref: None,
+            provider_ref: None,
+            provider_version: None,
+            provider_digest: None,
+            provider_route_ref: None,
             policy_snapshot_version: None,
             provenance_refs: Vec::new(),
             scope_id: None,
@@ -67,6 +81,47 @@ impl RuntimeContext {
                 .execution_binding_ref
                 .as_ref()
                 .is_some_and(|binding| !binding.as_str().trim().is_empty())
+    }
+
+    pub fn with_provider_identity(
+        mut self,
+        provider_ref: impl Into<String>,
+        provider_version: impl Into<String>,
+        provider_digest: Option<String>,
+        provider_route_ref: Option<String>,
+    ) -> Result<Self, String> {
+        let provider_ref = provider_ref.into();
+        let provider_version = provider_version.into();
+        if provider_ref.trim().is_empty() || provider_version.trim().is_empty() {
+            return Err("runtime provider reference and version must be explicit".to_string());
+        }
+        if provider_digest
+            .as_deref()
+            .is_some_and(|value| value.trim().is_empty())
+            || provider_route_ref
+                .as_deref()
+                .is_some_and(|value| value.trim().is_empty())
+        {
+            return Err("runtime provider digest/route must be non-empty when present".to_string());
+        }
+        self.provider_ref = Some(provider_ref);
+        self.provider_version = Some(provider_version);
+        self.provider_digest = provider_digest;
+        self.provider_route_ref = provider_route_ref;
+        Ok(self)
+    }
+
+    pub fn proves_provider_identity(
+        &self,
+        provider_ref: &str,
+        provider_version: &str,
+        provider_digest: Option<&str>,
+        provider_route_ref: Option<&str>,
+    ) -> bool {
+        self.provider_ref.as_deref() == Some(provider_ref)
+            && self.provider_version.as_deref() == Some(provider_version)
+            && self.provider_digest.as_deref() == provider_digest
+            && self.provider_route_ref.as_deref() == provider_route_ref
     }
 
     pub fn with_scope_id(mut self, scope_id: impl Into<String>) -> Result<Self, String> {
@@ -147,10 +202,30 @@ mod tests {
         assert!(!base.proves_real_harness_environment());
         assert!(context().with_scope_id("   ").is_err());
         assert!(!context().proves_pinned_work_execution());
+        let digest = format!("sha256:{}", "a".repeat(64));
         let pinned = context()
             .with_work_binding(1, RuntimeBindingId::generate_with("binding"))
+            .unwrap()
+            .with_provider_identity(
+                "deepseek-harness",
+                "1.2.3",
+                Some(digest.clone()),
+                Some("dsh-acp-route:test".to_string()),
+            )
             .unwrap();
         assert!(pinned.proves_pinned_work_execution());
+        assert!(pinned.proves_provider_identity(
+            "deepseek-harness",
+            "1.2.3",
+            Some(&digest),
+            Some("dsh-acp-route:test"),
+        ));
+        assert!(!pinned.proves_provider_identity(
+            "deepseek-harness",
+            "1.2.4",
+            Some(&digest),
+            Some("dsh-acp-route:test"),
+        ));
         assert!(context()
             .with_work_binding(0, RuntimeBindingId::generate_with("binding"))
             .is_err());
