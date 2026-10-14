@@ -1044,10 +1044,7 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                 // no prompt was dispatched and must not strand the session as
                 // "running" or manufacture OUTCOME_UNKNOWN.
                 self.ensure_real_client()?;
-                if !self
-                    .runtime_health
-                    .ready_for_new_turn_at(Timestamp::now())
-                {
+                if !self.runtime_health.ready_for_new_turn_at(Timestamp::now()) {
                     return Err(Error::invalid_state(
                         "DSH runtime health lease expired; preflight and create a new session before sending another prompt",
                     ));
@@ -1570,8 +1567,13 @@ mod dsh_provider_tests {
         // SDK has no independent health ping. Re-preflight replaces the owned
         // runtime and truthfully closes every session belonging to the old one.
         provider.preflight_real_runtime().unwrap();
-        assert_eq!(provider.inspect(&session.id).unwrap().status, "runtime-closed");
-        assert!(provider.send(&session.id, "still-must-not-dispatch").is_err());
+        assert_eq!(
+            provider.inspect(&session.id).unwrap().status,
+            "runtime-closed"
+        );
+        assert!(provider
+            .send(&session.id, "still-must-not-dispatch")
+            .is_err());
         provider.shutdown_real_runtime().unwrap();
     }
     #[test]

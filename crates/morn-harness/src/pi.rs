@@ -567,10 +567,7 @@ impl HarnessProvider for PiHarnessProvider {
                 // Initialize/health-check before marking the session running:
                 // startup failure means no prompt was dispatched.
                 self.ensure_real_client()?;
-                if !self
-                    .runtime_health
-                    .ready_for_new_turn_at(Timestamp::now())
-                {
+                if !self.runtime_health.ready_for_new_turn_at(Timestamp::now()) {
                     return Err(Error::invalid_state(
                         "Pi runtime health lease expired; refresh provider preflight before sending another prompt",
                     ));
