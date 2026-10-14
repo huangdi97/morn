@@ -45,6 +45,14 @@ pub struct DurableProjectionCommit<'a, T: serde::Serialize> {
     pub semantics: &'a morn_kernel::EventSemanticDescriptor,
 }
 
+pub struct ImmutableRecordCommit<'a, T: serde::Serialize> {
+    pub kind: &'a str,
+    pub id: &'a str,
+    pub workspace_id: &'a str,
+    pub created_at: i64,
+    pub record: &'a T,
+}
+
 /// Lease fence checked in the same transaction as a durable projection commit.
 pub struct ControllerFence<'a> {
     pub lease_name: &'a str,
@@ -633,6 +641,120 @@ impl MornStore {
                 Ok(actual + 1)
             }
         }
+    }
+
+    /// Atomically persist one mutable CAS projection and one immutable fact.
+    ///
+    /// This is used when the immutable fact is the authorization/consumption
+    /// witness for the projection itself. A crash or conflict cannot leave one
+    /// side committed without the other.
+    pub fn save_record_cas_with_immutable<T: serde::Serialize, U: serde::Serialize>(
+        &self,
+        kind: &str,
+        id: &str,
+        workspace_id: &str,
+        created_at: i64,
+        expected_revision: u64,
+        record: &T,
+        immutable: ImmutableRecordCommit<'_, U>,
+    ) -> Result<u64> {
+        let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
+        let immutable_payload = serde_json::to_string(immutable.record)
+            .map_err(|e| Error::internal(e.to_string()))?;
+        let expected_i64 = i64::try_from(expected_revision)
+            .map_err(|_| Error::validation("expected revision is too large"))?;
+
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        let current: Option<i64> = tx
+            .query_row(
+                "SELECT revision FROM morn_records WHERE kind = ?1 AND id = ?2",
+                params![kind, id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        let next_revision = match current {
+            None => {
+                if expected_revision != 0 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} does not exist at expected revision {expected_revision}"
+                    )));
+                }
+                tx.execute(
+                    "INSERT INTO morn_records
+                     (kind, id, workspace_id, payload, created_at, immutable, revision)
+                     VALUES (?1, ?2, ?3, ?4, ?5, 0, 1)",
+                    params![kind, id, workspace_id, payload, created_at],
+                )
+                .map_err(|e| {
+                    if e.to_string().contains("UNIQUE") {
+                        Error::conflict(format!("record {kind}/{id} was created concurrently"))
+                    } else {
+                        Error::internal(e.to_string())
+                    }
+                })?;
+                1
+            }
+            Some(actual_i64) => {
+                let actual = u64::try_from(actual_i64)
+                    .map_err(|_| Error::internal("record revision must be non-negative"))?;
+                if actual != expected_revision {
+                    return Err(Error::conflict(format!(
+                        "stale record {kind}/{id}: expected revision {expected_revision}, actual {actual}"
+                    )));
+                }
+                let updated = tx
+                    .execute(
+                        "UPDATE morn_records
+                         SET payload = ?3,
+                             workspace_id = ?4,
+                             revision = revision + 1
+                         WHERE kind = ?1
+                           AND id = ?2
+                           AND immutable = 0
+                           AND revision = ?5",
+                        params![kind, id, payload, workspace_id, expected_i64],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if updated != 1 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} changed concurrently or is immutable"
+                    )));
+                }
+                actual + 1
+            }
+        };
+
+        tx.execute(
+            "INSERT INTO morn_records
+             (kind, id, workspace_id, payload, created_at, immutable, revision)
+             VALUES (?1, ?2, ?3, ?4, ?5, 1, 1)",
+            params![
+                immutable.kind,
+                immutable.id,
+                immutable.workspace_id,
+                immutable_payload,
+                immutable.created_at
+            ],
+        )
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                Error::conflict(format!(
+                    "immutable record {}/{} already exists",
+                    immutable.kind, immutable.id
+                ))
+            } else {
+                Error::internal(e.to_string())
+            }
+        })?;
+
+        tx.commit().map_err(|e| Error::internal(e.to_string()))?;
+        Ok(next_revision)
     }
 
     /// Atomically persist a mutable projection revision and its durable semantic
@@ -2218,6 +2340,83 @@ mod v115_revision_tests {
             .unwrap()
             .is_none());
         assert!(store.pending_outbox_events(10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn cas_and_immutable_fact_commit_or_rollback_together() {
+        let store = MornStore::open_in_memory().unwrap();
+
+        let revision = store
+            .save_record_cas_with_immutable(
+                "attempt",
+                "a1",
+                "ws-1",
+                10,
+                0,
+                &serde_json::json!({"state":"authorized"}),
+                ImmutableRecordCommit {
+                    kind: "permit_consumed",
+                    id: "p1",
+                    workspace_id: "ws-1",
+                    created_at: 11,
+                    record: &serde_json::json!({"attempt":"a1"}),
+                },
+            )
+            .unwrap();
+        assert_eq!(revision, 1);
+
+        let attempt: serde_json::Value = store.load_record("attempt", "a1").unwrap().unwrap();
+        assert_eq!(attempt["state"], "authorized");
+        assert!(store
+            .load_record::<serde_json::Value>("permit_consumed", "p1")
+            .unwrap()
+            .is_some());
+
+        // The immutable conflict occurs after the mutable UPDATE inside the
+        // transaction. The whole transaction must roll back to revision 1.
+        assert!(store
+            .save_record_cas_with_immutable(
+                "attempt",
+                "a1",
+                "ws-1",
+                10,
+                1,
+                &serde_json::json!({"state":"dispatched"}),
+                ImmutableRecordCommit {
+                    kind: "permit_consumed",
+                    id: "p1",
+                    workspace_id: "ws-1",
+                    created_at: 12,
+                    record: &serde_json::json!({"attempt":"different"}),
+                },
+            )
+            .is_err());
+        assert_eq!(store.record_revision("attempt", "a1").unwrap(), Some(1));
+        let attempt: serde_json::Value = store.load_record("attempt", "a1").unwrap().unwrap();
+        assert_eq!(attempt["state"], "authorized");
+
+        // A stale CAS must also leave its companion immutable record absent.
+        assert!(store
+            .save_record_cas_with_immutable(
+                "attempt",
+                "a1",
+                "ws-1",
+                10,
+                0,
+                &serde_json::json!({"state":"stale"}),
+                ImmutableRecordCommit {
+                    kind: "permit_consumed",
+                    id: "p2",
+                    workspace_id: "ws-1",
+                    created_at: 13,
+                    record: &serde_json::json!({"attempt":"a1"}),
+                },
+            )
+            .is_err());
+        assert!(store
+            .load_record::<serde_json::Value>("permit_consumed", "p2")
+            .unwrap()
+            .is_none());
     }
 
     #[test]

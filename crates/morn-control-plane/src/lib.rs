@@ -63,7 +63,7 @@ use morn_runtime::{
     BoundAuthorityDecision, DurableWorkflowBinding, DurableWorkflowEvidence, ExecutionBinding,
     ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
 };
-use morn_store::MornStore;
+use morn_store::{ImmutableRecordCommit, MornStore};
 use morn_work::acceptance::{
     AcceptanceReviewAuthorization, AcceptanceReviewerAttestation,
     ConsumedAcceptanceReviewAuthorization,
@@ -1666,6 +1666,7 @@ impl ControlPlaneStore for MornStore {
             ));
         }
 
+        let mut pending_permit_consumption: Option<ConsumedExternalActionPermit> = None;
         if let Some(permit_ref) = &attempt.external_action_permit_ref {
             let permit: ExternalActionPermit = self
                 .load_record("external_action_permit_v115", permit_ref)?
@@ -1723,29 +1724,11 @@ impl ControlPlaneStore for MornStore {
                 )? {
                     Some(consumed) => ensure_same_consumption(&consumed)?,
                     None => {
-                        let consumed = ConsumedExternalActionPermit::from_write_attempt(
-                            &permit, attempt, now,
-                        )?;
-                        match self.save_record_immutable(
-                            consumption_kind,
-                            permit.id.as_str(),
-                            work.workspace_id.as_str(),
-                            consumed.consumed_at.millis(),
-                            &consumed,
-                        ) {
-                            Ok(()) => {}
-                            Err(Error::Conflict(_)) => {
-                                let raced: ConsumedExternalActionPermit = self
-                                    .load_record(consumption_kind, permit.id.as_str())?
-                                    .ok_or_else(|| {
-                                        Error::conflict(
-                                            "external-action permit consumption raced without a durable winner",
-                                        )
-                                    })?;
-                                ensure_same_consumption(&raced)?;
-                            }
-                            Err(error) => return Err(error),
-                        }
+                        pending_permit_consumption = Some(
+                            ConsumedExternalActionPermit::from_write_attempt(
+                                &permit, attempt, now,
+                            )?,
+                        );
                     }
                 }
             }
@@ -1796,20 +1779,41 @@ impl ControlPlaneStore for MornStore {
                     "action attempt state or external evidence regressed",
                 ));
             }
-            if previous == attempt {
+            if previous == attempt && pending_permit_consumption.is_none() {
                 return Ok(());
             }
         }
 
-        // CAS rejects a concurrent update after our revision snapshot.
-        self.save_record_cas(
-            kind,
-            attempt.id.as_str(),
-            work.workspace_id.as_str(),
-            attempt.created_at.millis(),
-            expected,
-            attempt,
-        )?;
+        // The first write-like Authorized snapshot and the one-shot permit
+        // consumption are one crash-consistent commit. A conflict on either
+        // side rolls back both rows.
+        if let Some(consumed) = pending_permit_consumption {
+            self.save_record_cas_with_immutable(
+                kind,
+                attempt.id.as_str(),
+                work.workspace_id.as_str(),
+                attempt.created_at.millis(),
+                expected,
+                attempt,
+                ImmutableRecordCommit {
+                    kind: "external_action_permit_consumed_v115",
+                    id: consumed.permit_id.as_str(),
+                    workspace_id: work.workspace_id.as_str(),
+                    created_at: consumed.consumed_at.millis(),
+                    record: &consumed,
+                },
+            )?;
+        } else {
+            // CAS rejects a concurrent update after our revision snapshot.
+            self.save_record_cas(
+                kind,
+                attempt.id.as_str(),
+                work.workspace_id.as_str(),
+                attempt.created_at.millis(),
+                expected,
+                attempt,
+            )?;
+        }
         Ok(())
     }
 
