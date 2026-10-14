@@ -27,15 +27,15 @@ async function expandReferenceDiagnostics() {
 page.on("console", (msg) => {
   if (msg.type() === "error") errors.push(`console.error: ${msg.text()}`);
 });
-page.on("pageerror", (err) => errors.push(\`pageerror: \${err.message}\`));
+page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
 
 async function runCanonicalAcceptanceUiContract() {
   const fixturePage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const fixtureErrors = [];
   fixturePage.on("console", (msg) => {
-    if (msg.type() === "error") fixtureErrors.push(\`console.error: \${msg.text()}\`);
+    if (msg.type() === "error") fixtureErrors.push(`console.error: ${msg.text()}`);
   });
-  fixturePage.on("pageerror", (err) => fixtureErrors.push(\`pageerror: \${err.message}\`));
+  fixturePage.on("pageerror", (err) => fixtureErrors.push(`pageerror: ${err.message}`));
 
   // This browser contract proves only that the production UI preserves the
   // deployment-owned trust boundary through the full Work journey. All
@@ -303,7 +303,7 @@ async function runCanonicalAcceptanceUiContract() {
   }
 
   if (fixtureErrors.length > 0) {
-    throw new Error(\`canonical acceptance UI contract failed: \${fixtureErrors.join(" | ")}\`);
+    throw new Error(`canonical acceptance UI contract failed: ${fixtureErrors.join(" | ")}`);
   }
   console.log(
     "OK canonical acceptance UI contract: source authority -> attested Outcome -> independent Accept; fixture evidence only",
