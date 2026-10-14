@@ -567,6 +567,14 @@ impl HarnessProvider for PiHarnessProvider {
                 // Initialize/health-check before marking the session running:
                 // startup failure means no prompt was dispatched.
                 self.ensure_real_client()?;
+                if !self
+                    .runtime_health
+                    .ready_for_new_turn_at(Timestamp::now())
+                {
+                    return Err(Error::invalid_state(
+                        "Pi runtime health lease expired; refresh provider preflight before sending another prompt",
+                    ));
+                }
 
                 {
                     let state = self
@@ -1198,6 +1206,26 @@ mod tests {
         provider.shutdown_real_runtime().unwrap();
     }
 
+    #[test]
+    fn real_pi_expired_health_lease_blocks_until_get_state_preflight_refresh() {
+        let (mut provider, ctx, _handle) = real_pi_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        provider.runtime_health.health_valid_until = Some(Timestamp::from_millis(
+            Timestamp::now().millis().saturating_sub(1),
+        ));
+        let error = provider.send(&session.id, "must-not-dispatch").unwrap_err();
+        assert!(format!("{error}").contains("health lease expired"));
+        assert_eq!(provider.inspect(&session.id).unwrap().current_step, "0");
+
+        provider.preflight_real_runtime().unwrap();
+        assert_eq!(
+            provider.runtime_health().state,
+            crate::provider::HarnessRuntimeHealthState::Initialized
+        );
+        let output = provider.send(&session.id, "hello").unwrap();
+        assert_eq!(output.text, "hello from fake pi");
+        provider.shutdown_real_runtime().unwrap();
+    }
     #[test]
     fn real_pi_scope_admission_requires_exact_scope_identity() {
         let (provider, ctx, handle) = real_pi_wire_fixture_provider();

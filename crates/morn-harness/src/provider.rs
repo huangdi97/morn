@@ -1044,6 +1044,14 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                 // no prompt was dispatched and must not strand the session as
                 // "running" or manufacture OUTCOME_UNKNOWN.
                 self.ensure_real_client()?;
+                if !self
+                    .runtime_health
+                    .ready_for_new_turn_at(Timestamp::now())
+                {
+                    return Err(Error::invalid_state(
+                        "DSH runtime health lease expired; preflight and create a new session before sending another prompt",
+                    ));
+                }
 
                 {
                     let state = self
@@ -1545,6 +1553,27 @@ mod dsh_provider_tests {
         provider.shutdown_real_runtime().unwrap();
     }
 
+    #[test]
+    fn real_dsh_expired_health_lease_blocks_prompt_before_dispatch() {
+        let (mut provider, ctx, _handle) = real_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        provider.runtime_health.health_valid_until = Some(Timestamp::from_millis(
+            Timestamp::now().millis().saturating_sub(1),
+        ));
+        let error = provider.send(&session.id, "must-not-dispatch").unwrap_err();
+        assert!(format!("{error}").contains("health lease expired"));
+        let snapshot = provider.inspect(&session.id).unwrap();
+        assert_eq!(snapshot.status, "ready");
+        assert_eq!(snapshot.current_step, "0");
+        assert!(provider.real_client.is_some());
+
+        // SDK has no independent health ping. Re-preflight replaces the owned
+        // runtime and truthfully closes every session belonging to the old one.
+        provider.preflight_real_runtime().unwrap();
+        assert_eq!(provider.inspect(&session.id).unwrap().status, "runtime-closed");
+        assert!(provider.send(&session.id, "still-must-not-dispatch").is_err());
+        provider.shutdown_real_runtime().unwrap();
+    }
     #[test]
     fn real_dsh_scope_admission_requires_exact_scope_identity() {
         let (provider, ctx, handle) = real_wire_fixture_provider();
