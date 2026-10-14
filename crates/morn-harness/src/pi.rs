@@ -1176,7 +1176,9 @@ mod tests {
     fn real_pi_unsettled_turn_reaps_owned_runtime_and_forbids_retry() {
         let (mut provider, ctx, _handle) = real_pi_wire_fixture_provider();
         let session = provider.start(&ctx).unwrap();
-        let error = provider.send(&session.id, "__malformed_event__").unwrap_err();
+        let error = provider
+            .send(&session.id, "__malformed_event__")
+            .unwrap_err();
         assert!(
             format!("{error}").contains("missing non-empty type"),
             "protocol failure must be surfaced: {error}"
@@ -1193,9 +1195,7 @@ mod tests {
             snapshot.last_event,
             "pi_turn_outcome_unknown_runtime_reaped"
         );
-        assert!(provider
-            .send(&session.id, "blind retry forbidden")
-            .is_err());
+        assert!(provider.send(&session.id, "blind retry forbidden").is_err());
     }
 
     #[test]
