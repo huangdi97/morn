@@ -106,27 +106,20 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `aa5f0ccacf97cd5aa9a11b204fad4b2803ab45aa`.
-- Exact-head GitHub Actions: `38485241628` — **5/5 SUCCESS**.
-- This checkpoint includes protected live-provider/supply-chain/customer/BioLab evidence handoffs, attested runner binding, exact runtime/build/site identity checks, exact-byte BioLab dataset provenance, ephemeral protected credentials, machine-readable evidence-acquisition plans, pinned GitHub Action SHAs and a `Cargo.lock --locked` consistency gate.
-- No older green run is inherited across implementation changes; this checkpoint was verified at the exact implementation SHA above.
+- Verified implementation checkpoint: `a805cac85bed04929cef3dc72c3311ede6fcf483`.
+- Exact-head GitHub Actions: `38535881834` — **5/5 SUCCESS**.
 - Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; zero-domain Core; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows; Cordis reference runtime; Windows desktop reference build.
-- Release-readiness trust hardening at this checkpoint binds exact build identity, exact active provider runtime artifact, deployment-pinned evidence issuer and exact deployment site; evidence time ambiguity/future claims fail closed.
-- Business-truth recovery now distinguishes observed outcome from final acceptance: Conditional/RequestMoreEvidence retain OutcomeObservation while remaining non-terminal.
-- Final Accept/Reject and CustomerValidated value require the exact persisted reviewer attestation, review authorization, authorization-consumption record, Work generation and linked attested outcome.
-- Governed live-provider smoke still additionally requires an exact `MORN_PROVIDER_SMOKE_OK` canary and a fresh post-turn `Healthy` lease. Process/session initialization alone is not provider-health evidence.
-- DSH SDK ↔ Pi RPC adapter-wire semantic-neutrality runs through the actual subprocess adapter code with the same pinned Work/generation/ExecutionBinding/execution environment; model output is deliberately not compared.
-- ACP v1 lifecycle control is Work/generation/ExecutionBinding/environment/scope/route bound. It pins exact provider/model/reasoning through official session config, re-pins on same-runtime resume, faults ambiguous settlements to prevent blind retry, and preserves out-of-band cancel/cleanup without converting lifecycle settlement into executor success.
-- ACP scope ownership is revocable and snapshot-pinned: broader scopes are rejected, recreated/mutated scope state cannot take over a historical session, and one-shot DSH_HOME means cross-process resume is explicitly unavailable.
-- `dsh_acp_lifecycle_smoke` is a deployment-facing gate for authenticated ACP lifecycle evidence; its PASS still reports executor/runtime-health/Outcome/Acceptance/production-write claims as false.
-- Current repository-local gap audit found no remaining TODO/FIXME/unimplemented/stub item required to satisfy the v11.5 reference design. Remaining blocker classes below require external deployment/customer evidence.
-- Readiness decisions now expose a machine-readable evidence-acquisition plan per blocked deployment scope. DSH/Pi point to their authenticated smoke gates; RealSite/ProductionWrite point to the protected customer/deployment evidence validation gate. These plans explain how to collect evidence without converting the external blocker into fake local PASS.
-- The BioLab external-data handoff now has an exact-byte provenance contract and protected validation workflow. It can verify a real pilot dataset against source/governance/consent provenance without reclassifying fixture data or claiming scientific/customer acceptance.
+- The external-effect recovery path is crash-consistent: a write-like `Authorized` ActionAttempt and its one-shot ExternalActionPermit consumption commit atomically; dispatch is persisted before connector execution; an authoritative reconciliation atomically advances the Attempt and appends its immutable ReconciliationRecord.
+- The Factory read-only vertical slice follows that exact durable ordering through `Authorized -> Dispatched -> OutcomeUnknown -> Reconciliation -> Observed -> Verified`; ambiguous effects cannot be blindly redispatched.
+- ExecutionBinding/Work/business-key/resource/site/authority/permit/effect identity remains immutable across persisted Attempt snapshots, with CAS preventing stale projection overwrite.
+- DSH SDK and ACP integration tracks the current official wire boundary, remains E0-only at the Work-facing HarnessProvider seam, and does not convert session/model success into Outcome or Acceptance.
+- Protected live-provider, supply-chain, execution-environment, real BioLab and customer evidence handoffs remain independently external. No fixture, protocol fake, screenshot or local CI result converts those blockers to PASS.
+- Current repository-local gap audit remains closed for the v11.5 reference design at this checkpoint; any later code SHA requires its own exact-head CI before inheriting this conclusion.
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `aa5f0ccacf97cd5aa9a11b204fad4b2803ab45aa` and Actions `38485241628`.**
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `a805cac85bed04929cef3dc72c3311ede6fcf483` and Actions `38535881834`.**
 - The verified checkpoint includes the owned desktop-backend lifecycle probe and Tauri CSP hardening in addition to the v11.5 control-plane, trust, provider and UI gates.
 - PR #1 remains draft because local engineering evidence is not production/customer evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.
-- Any later code SHA must obtain its own full exact-head CI before inheriting `ALL_LOCAL_GATES_PASS`.
+- Any later code SHA must obtain its own full exact-head CI before inheriting `ALL_LOCAL_GATES_PASS`; this STATUS/documentation update itself does not change implementation semantics.

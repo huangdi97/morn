@@ -71,6 +71,35 @@ A timeout after a remote commit is not automatically failure and must not be
 blindly retried. Reconciliation queries the authoritative external system using
 a business/idempotency key and records evidence.
 
+### Crash-consistent external-effect protocol
+
+The durable reference path treats authorization, dispatch and reconciliation as
+a recovery protocol, not merely an in-memory state machine:
+
+```text
+AuthorityDecision + ExternalActionPermit persisted
+  -> Authorized ActionAttempt + one-shot permit consumption (ONE transaction)
+  -> Dispatched ActionAttempt persisted BEFORE connector dispatch
+  -> connector call
+  -> OutcomeUnknown persisted if settlement is ambiguous
+  -> authoritative reconciliation by the same business/idempotency key
+  -> reconciled ActionAttempt + immutable ReconciliationRecord (ONE transaction)
+  -> Verified only after the reconciled evidence is durable
+```
+
+The two paired writes above are atomic SQLite transactions in the reference
+store. A crash or CAS conflict therefore cannot leave a consumed write permit
+without its Authorized attempt, nor an Observed attempt without the immutable
+reconciliation fact that justified that state. Later attempt snapshots are
+monotonic CAS updates: business key, binding, governed resource, authority,
+permit and effect contract cannot be relabelled after authorization.
+
+This atomicity is specifically required for side-effect/reconciliation recovery.
+Other one-shot trust consumptions such as independent-review authorization are
+intentionally fail-closed: if a later business-decision write fails, that trust
+authorization remains consumed and must be explicitly re-issued rather than
+becoming replayable.
+
 ## History and versioning
 
 Current projections are mutable. Published contracts evolve by version. A
