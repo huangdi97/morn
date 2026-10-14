@@ -1035,6 +1035,13 @@ mod tests {
                         &mut stdout,
                         response("prompt", json!({"disposition":"started"})),
                     );
+                    if prompt_text == "__malformed_event__" {
+                        write(
+                            &mut stdout,
+                            json!({"payload":{"fixture":"missing-event-type"}}),
+                        );
+                        continue;
+                    }
                     if matches!(
                         prompt_text,
                         "__tool_activity__" | "__tool_then_bad_response__"

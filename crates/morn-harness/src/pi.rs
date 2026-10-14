@@ -735,20 +735,29 @@ impl HarnessProvider for PiHarnessProvider {
                         })
                     }
                     Err(error) => {
-                        self.runtime_health
-                            .mark_degraded(format!("Pi RPC turn failed to settle: {error}"));
+                        // The synchronous RPC boundary cannot prove that Pi
+                        // stopped executing after settlement/correlation is
+                        // lost. Reap the owned E0 runtime before returning so
+                        // no background executor can outlive Morn's failed
+                        // turn. This contains executor activity; it does not
+                        // claim that any external consequence was rolled back.
+                        let _owned_runtime = self.real_client.take();
+                        self.active_session = None;
+                        self.runtime_health.mark_degraded(format!(
+                            "Pi RPC turn failed to settle; owned runtime reaped: {error}"
+                        ));
                         let state = self
                             .sessions
                             .get_mut(session_id)
                             .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
-                        state.status = "outcome-unknown".to_string();
+                        state.status = "outcome-unknown-runtime-reaped".to_string();
                         state.events.push(ExecutionEvent::new(
                             state.ctx.workspace_id.clone(),
                             session_id.to_string(),
                             ExecutionEventKind::Failed,
-                            "Pi RPC turn lost definitive settlement; blind retry is forbidden",
+                            "Pi RPC turn lost definitive settlement; owned runtime reaped and blind retry forbidden",
                         ));
-                        state.last_event = "pi_turn_outcome_unknown".to_string();
+                        state.last_event = "pi_turn_outcome_unknown_runtime_reaped".to_string();
                         Err(error)
                     }
                 }
@@ -1161,6 +1170,32 @@ mod tests {
             .stream_events(&session.id)
             .iter()
             .any(|event| event.kind == ExecutionEventKind::ToolProposed));
+    }
+
+    #[test]
+    fn real_pi_unsettled_turn_reaps_owned_runtime_and_forbids_retry() {
+        let (mut provider, ctx, _handle) = real_pi_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        let error = provider.send(&session.id, "__malformed_event__").unwrap_err();
+        assert!(
+            format!("{error}").contains("missing non-empty type"),
+            "protocol failure must be surfaced: {error}"
+        );
+        assert!(provider.real_client.is_none());
+        assert!(provider.active_session.is_none());
+        assert_eq!(
+            provider.runtime_health().state,
+            crate::provider::HarnessRuntimeHealthState::Degraded
+        );
+        let snapshot = provider.inspect(&session.id).unwrap();
+        assert_eq!(snapshot.status, "outcome-unknown-runtime-reaped");
+        assert_eq!(
+            snapshot.last_event,
+            "pi_turn_outcome_unknown_runtime_reaped"
+        );
+        assert!(provider
+            .send(&session.id, "blind retry forbidden")
+            .is_err());
     }
 
     #[test]
