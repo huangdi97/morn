@@ -1306,7 +1306,9 @@ impl ControlPlaneStore for MornStore {
             ));
         }
         if permit.issued_at < authority.decision.decided_at
-            || permit.not_before.is_some_and(|start| permit.issued_at < start)
+            || permit
+                .not_before
+                .is_some_and(|start| permit.issued_at < start)
             || permit.expires_at.is_some_and(|end| permit.issued_at > end)
         {
             return Err(Error::validation(
@@ -1653,10 +1655,9 @@ impl ControlPlaneStore for MornStore {
                 ));
             }
             match (permit.mode, effect_class) {
-                (
-                    ExternalActionMode::Read | ExternalActionMode::CandidateOnly,
-                    Some(class),
-                ) if class != morn_capability::effect::EffectClass::E0LifecycleReversible => {
+                (ExternalActionMode::Read | ExternalActionMode::CandidateOnly, Some(class))
+                    if class != morn_capability::effect::EffectClass::E0LifecycleReversible =>
+                {
                     return Err(Error::not_authorized(
                         "read/candidate permit cannot persist a write-like effect",
                     ));

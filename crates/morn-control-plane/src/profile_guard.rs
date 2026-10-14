@@ -312,16 +312,14 @@ mod tests {
         );
         spec.site_ref = Some("plant-a".to_string());
         let mut work = WorkResource::new(WorkspaceId::generate(), spec);
-        let first_binding =
-            ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        let first_binding = ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
         let authority =
             bound_authority(&work, &first_binding, "cmms.sandbox.write", "CMMS-fixture");
 
         let mut next = work.spec.clone();
         next.goal = "generation two".to_string();
         work.replace_spec(next);
-        let next_binding =
-            ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        let next_binding = ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
 
         assert!(issue_external_action_permit(
             &profile,
