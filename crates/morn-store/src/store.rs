@@ -45,6 +45,15 @@ pub struct DurableProjectionCommit<'a, T: serde::Serialize> {
     pub semantics: &'a morn_kernel::EventSemanticDescriptor,
 }
 
+pub struct MutableRecordCommit<'a, T: serde::Serialize> {
+    pub kind: &'a str,
+    pub id: &'a str,
+    pub workspace_id: &'a str,
+    pub created_at: i64,
+    pub expected_revision: u64,
+    pub record: &'a T,
+}
+
 pub struct ImmutableRecordCommit<'a, T: serde::Serialize> {
     pub kind: &'a str,
     pub id: &'a str,
@@ -650,14 +659,17 @@ impl MornStore {
     /// side committed without the other.
     pub fn save_record_cas_with_immutable<T: serde::Serialize, U: serde::Serialize>(
         &self,
-        kind: &str,
-        id: &str,
-        workspace_id: &str,
-        created_at: i64,
-        expected_revision: u64,
-        record: &T,
+        mutable: MutableRecordCommit<'_, T>,
         immutable: ImmutableRecordCommit<'_, U>,
     ) -> Result<u64> {
+        let MutableRecordCommit {
+            kind,
+            id,
+            workspace_id,
+            created_at,
+            expected_revision,
+            record,
+        } = mutable;
         let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
         let immutable_payload =
             serde_json::to_string(immutable.record).map_err(|e| Error::internal(e.to_string()))?;
@@ -2348,12 +2360,14 @@ mod v115_revision_tests {
 
         let revision = store
             .save_record_cas_with_immutable(
-                "attempt",
-                "a1",
-                "ws-1",
-                10,
-                0,
-                &serde_json::json!({"state":"authorized"}),
+                MutableRecordCommit {
+                    kind: "attempt",
+                    id: "a1",
+                    workspace_id: "ws-1",
+                    created_at: 10,
+                    expected_revision: 0,
+                    record: &serde_json::json!({"state":"authorized"}),
+                },
                 ImmutableRecordCommit {
                     kind: "permit_consumed",
                     id: "p1",
@@ -2376,12 +2390,14 @@ mod v115_revision_tests {
         // transaction. The whole transaction must roll back to revision 1.
         assert!(store
             .save_record_cas_with_immutable(
-                "attempt",
-                "a1",
-                "ws-1",
-                10,
-                1,
-                &serde_json::json!({"state":"dispatched"}),
+                MutableRecordCommit {
+                    kind: "attempt",
+                    id: "a1",
+                    workspace_id: "ws-1",
+                    created_at: 10,
+                    expected_revision: 1,
+                    record: &serde_json::json!({"state":"dispatched"}),
+                },
                 ImmutableRecordCommit {
                     kind: "permit_consumed",
                     id: "p1",
@@ -2398,12 +2414,14 @@ mod v115_revision_tests {
         // A stale CAS must also leave its companion immutable record absent.
         assert!(store
             .save_record_cas_with_immutable(
-                "attempt",
-                "a1",
-                "ws-1",
-                10,
-                0,
-                &serde_json::json!({"state":"stale"}),
+                MutableRecordCommit {
+                    kind: "attempt",
+                    id: "a1",
+                    workspace_id: "ws-1",
+                    created_at: 10,
+                    expected_revision: 0,
+                    record: &serde_json::json!({"state":"stale"}),
+                },
                 ImmutableRecordCommit {
                     kind: "permit_consumed",
                     id: "p2",

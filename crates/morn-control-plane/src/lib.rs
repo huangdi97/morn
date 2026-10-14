@@ -63,7 +63,7 @@ use morn_runtime::{
     BoundAuthorityDecision, DurableWorkflowBinding, DurableWorkflowEvidence, ExecutionBinding,
     ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
 };
-use morn_store::{ImmutableRecordCommit, MornStore};
+use morn_store::{ImmutableRecordCommit, MornStore, MutableRecordCommit};
 use morn_work::acceptance::{
     AcceptanceReviewAuthorization, AcceptanceReviewerAttestation,
     ConsumedAcceptanceReviewAuthorization,
@@ -1792,12 +1792,14 @@ impl ControlPlaneStore for MornStore {
         // side rolls back both rows.
         if let Some(consumed) = pending_permit_consumption {
             self.save_record_cas_with_immutable(
-                kind,
-                attempt.id.as_str(),
-                work.workspace_id.as_str(),
-                attempt.created_at.millis(),
-                expected,
-                attempt,
+                MutableRecordCommit {
+                    kind,
+                    id: attempt.id.as_str(),
+                    workspace_id: work.workspace_id.as_str(),
+                    created_at: attempt.created_at.millis(),
+                    expected_revision: expected,
+                    record: attempt,
+                },
                 ImmutableRecordCommit {
                     kind: "external_action_permit_consumed_v115",
                     id: consumed.permit_id.as_str(),
@@ -1928,12 +1930,14 @@ impl ControlPlaneStore for MornStore {
         }
 
         self.save_record_cas_with_immutable(
-            attempt_kind,
-            attempt.id.as_str(),
-            work.workspace_id.as_str(),
-            attempt.created_at.millis(),
-            expected,
-            attempt,
+            MutableRecordCommit {
+                kind: attempt_kind,
+                id: attempt.id.as_str(),
+                workspace_id: work.workspace_id.as_str(),
+                created_at: attempt.created_at.millis(),
+                expected_revision: expected,
+                record: attempt,
+            },
             ImmutableRecordCommit {
                 kind: "reconciliation_v115",
                 id: record.id.as_str(),
