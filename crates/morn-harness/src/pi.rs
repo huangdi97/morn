@@ -602,10 +602,11 @@ impl HarnessProvider for PiHarnessProvider {
                     // get_last_assistant_text is being correlated.
                     client.buffered_events.clear();
                     let run = client.prompt_and_wait(input);
-                    let output_text = if run.is_ok() {
-                        Some(client.get_last_assistant_text())
-                    } else {
-                        None
+                    let output_text = match &run {
+                        Ok(run) if run.proves_executor_settlement() => {
+                            Some(client.get_last_assistant_text())
+                        }
+                        _ => None,
                     };
                     let turn_events = std::mem::take(&mut client.buffered_events);
                     (run, output_text, turn_events)
@@ -636,6 +637,38 @@ impl HarnessProvider for PiHarnessProvider {
                     return Err(Error::external(
                         "Pi E0 provider observed tool activity; executor output was rejected",
                     ));
+                }
+                if let Ok(run) = &run {
+                    if !run.proves_executor_settlement() {
+                        // `handled` means no agent run started. `queued` cannot
+                        // be causally assigned to a later settlement. Either
+                        // disposition violates this provider's idle, extension-
+                        // disabled, one-prompt execution contract.
+                        let _owned_runtime = self.real_client.take();
+                        self.active_session = None;
+                        self.runtime_health.mark_degraded(format!(
+                            "Pi RPC prompt returned non-executor disposition {:?}; owned runtime reaped",
+                            run.disposition
+                        ));
+                        let state = self
+                            .sessions
+                            .get_mut(session_id)
+                            .ok_or_else(|| Error::not_found(format!("session {session_id}")))?;
+                        state.status = "unexpected-disposition-runtime-reaped".to_string();
+                        state.events.push(ExecutionEvent::new(
+                            state.ctx.workspace_id.clone(),
+                            session_id.to_string(),
+                            ExecutionEventKind::Failed,
+                            format!(
+                                "Pi prompt disposition {:?} did not prove this executor run settled",
+                                run.disposition
+                            ),
+                        ));
+                        state.last_event = "pi_prompt_not_executor_settlement".to_string();
+                        return Err(Error::external(
+                            "Pi prompt was handled/queued without proof of this executor run; output rejected",
+                        ));
+                    }
                 }
                 match run {
                     Ok(run) => {
@@ -1120,6 +1153,24 @@ mod tests {
             .any(|event| event.kind == ExecutionEventKind::ToolProposed));
     }
 
+    #[test]
+    fn real_pi_handled_prompt_is_not_executor_health_or_stale_output() {
+        let (mut provider, ctx, _handle) = real_pi_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        let error = provider.send(&session.id, "__handled__").unwrap_err();
+        assert!(
+            format!("{error}").contains("without proof of this executor run"),
+            "handled input must never be promoted to live executor health"
+        );
+        assert!(provider.real_client.is_none());
+        assert_eq!(
+            provider.runtime_health().state,
+            crate::provider::HarnessRuntimeHealthState::Degraded
+        );
+        let snapshot = provider.inspect(&session.id).unwrap();
+        assert_eq!(snapshot.status, "unexpected-disposition-runtime-reaped");
+        assert_eq!(snapshot.last_event, "pi_prompt_not_executor_settlement");
+    }
     #[test]
     fn real_pi_preflight_refreshes_expired_initialization_with_get_state() {
         let (mut provider, _ctx, _handle) = real_pi_wire_fixture_provider();

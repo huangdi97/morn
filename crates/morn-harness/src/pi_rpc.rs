@@ -331,9 +331,23 @@ pub struct PiPromptRun {
 }
 
 impl PiPromptRun {
+    /// The RPC command interval is settled either when an input handler consumes
+    /// it synchronously (`handled`) or when Pi emits `agent_settled`.
     pub fn settled(&self) -> bool {
         self.disposition == "handled"
             || self
+                .events
+                .iter()
+                .any(|event| event.event_type == PI_EVENT_AGENT_SETTLED)
+    }
+
+    /// Morn executor health is stricter than RPC command settlement. A handled
+    /// prompt starts no agent run, and a queued prompt cannot be causally tied
+    /// to the next agent_settled event. The governed provider therefore accepts
+    /// only an exact `started` response followed by `agent_settled`.
+    pub fn proves_executor_settlement(&self) -> bool {
+        self.disposition == "started"
+            && self
                 .events
                 .iter()
                 .any(|event| event.event_type == PI_EVENT_AGENT_SETTLED)
@@ -998,6 +1012,13 @@ mod tests {
                         "hello from fake pi".to_string()
                     };
                     emit_late_tool_activity = prompt_text == "__late_tool_activity__";
+                    if prompt_text == "__handled__" {
+                        write(
+                            &mut stdout,
+                            response("prompt", json!({"disposition":"handled"})),
+                        );
+                        continue;
+                    }
                     write(
                         &mut stdout,
                         response("prompt", json!({"disposition":"started"})),
@@ -1180,6 +1201,23 @@ mod tests {
             events: Vec::new(),
         };
         assert!(run.settled());
+        assert!(
+            !run.proves_executor_settlement(),
+            "handled means no agent run started"
+        );
+    }
+
+    #[test]
+    fn queued_or_handled_prompt_never_proves_executor_settlement() {
+        for disposition in ["handled", "queued"] {
+            let run = PiPromptRun {
+                request_id: "morn-prompt-x".to_string(),
+                disposition: disposition.to_string(),
+                events: vec![parse_event(json!({"type":"agent_settled"}))],
+            };
+            assert!(run.settled());
+            assert!(!run.proves_executor_settlement());
+        }
     }
 
     #[test]
