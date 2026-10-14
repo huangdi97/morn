@@ -1171,7 +1171,12 @@ mod tests {
         let output = provider.send(&session.id, "hello").unwrap();
         assert_eq!(output.text, "hello from fake pi");
         assert!(
-            provider.real_client.as_ref().unwrap().buffered_events.is_empty(),
+            provider
+                .real_client
+                .as_ref()
+                .unwrap()
+                .buffered_events
+                .is_empty(),
             "normalized Pi RPC events must be consumed after each provider turn"
         );
         assert_eq!(

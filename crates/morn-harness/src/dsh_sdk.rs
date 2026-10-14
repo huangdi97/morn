@@ -2087,7 +2087,9 @@ mod tests {
             }
         });
         let error = parse_server_info(&future).unwrap_err();
-        assert!(error.to_string().contains("unsupported DSH SDK wire version"));
+        assert!(error
+            .to_string()
+            .contains("unsupported DSH SDK wire version"));
 
         let wrong_server = json!({
             "serverInfo": {

@@ -1578,7 +1578,12 @@ mod dsh_provider_tests {
         let output = provider.send(&session.id, "hello").unwrap();
         assert_eq!(output.text, "hello from fake sdk");
         assert!(
-            provider.real_client.as_ref().unwrap().notifications.is_empty(),
+            provider
+                .real_client
+                .as_ref()
+                .unwrap()
+                .notifications
+                .is_empty(),
             "normalized SDK notifications must be consumed after each provider turn"
         );
         assert_eq!(
