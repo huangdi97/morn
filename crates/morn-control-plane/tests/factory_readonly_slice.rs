@@ -580,6 +580,19 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         attempt.external_action_permit_ref.as_deref(),
         Some(sandbox_permit.id.as_str())
     );
+
+    // A write-like attempt must make the authorization/permit/Authorized
+    // snapshot durable before the connector is allowed to dispatch. This
+    // makes permit consumption and crash recovery unambiguous.
+    store.save_execution_binding(&work, &cmms_binding).unwrap();
+    store
+        .save_bound_authority_decision(&work, &sandbox_authority_decision)
+        .unwrap();
+    store
+        .save_external_action_permit(&work, &sandbox_permit)
+        .unwrap();
+    store.save_action_attempt(&work, &attempt).unwrap();
+
     attempt.transition(AttemptState::Dispatched).unwrap();
     attempt
         .mark_outcome_unknown("client timeout after external commit")
@@ -755,16 +768,11 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     store
         .save_execution_manifest(&work, &execution_manifest)
         .unwrap();
-    store.save_execution_binding(&work, &cmms_binding).unwrap();
     store
         .save_binding_migration(&work, &migration_decision)
         .unwrap();
-    store
-        .save_bound_authority_decision(&work, &sandbox_authority_decision)
-        .unwrap();
-    store
-        .save_external_action_permit(&work, &sandbox_permit)
-        .unwrap();
+    // Persist the terminal snapshot over the same previously Authorized
+    // attempt; the one-shot permit consumption remains bound to this attempt.
     store.save_action_attempt(&work, &attempt).unwrap();
     store.save_reconciliation(&work, &reconciliation).unwrap();
     store.save_observed_outcome(&work, &outcome).unwrap();
