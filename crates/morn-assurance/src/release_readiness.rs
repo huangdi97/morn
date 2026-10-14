@@ -545,6 +545,94 @@ fn acquisition_step(
     }
 }
 
+fn missing_axis_acquisition_step(
+    axis_id: &str,
+    site_ref: Option<&str>,
+) -> EvidenceAcquisitionStep {
+    let (subject, evidence_class) = match axis_id {
+        "architecture-baseline" => ("morn-v11.5-architecture".to_string(), EvidenceClass::DesignSpec),
+        "local-reference-slice" => ("factory-readonly-wedge".to_string(), EvidenceClass::LocalFixture),
+        "ci-conformance" => ("morn-v11.5-ci-conformance".to_string(), EvidenceClass::CiConformance),
+        "deepseek-live-runtime" => ("deepseek-harness".to_string(), EvidenceClass::RealRuntime),
+        "pi-live-runtime" => ("pi-harness".to_string(), EvidenceClass::RealRuntime),
+        "customer-real-site" => (
+            site_ref
+                .map(|site| format!("factory-customer:{site}"))
+                .unwrap_or_else(|| "factory-customer:<exact-site>".to_string()),
+            EvidenceClass::RealSite,
+        ),
+        "production-write" => (
+            site_ref
+                .map(|site| format!("factory-production-write:{site}"))
+                .unwrap_or_else(|| "factory-production-write:<exact-site>".to_string()),
+            EvidenceClass::ProductionWrite,
+        ),
+        other => (other.to_string(), EvidenceClass::DesignSpec),
+    };
+    acquisition_step(
+        &ReleaseReadinessAxis {
+            id: axis_id.to_string(),
+            subject,
+            evidence_class,
+            state: ReadinessState::MissingEvidence,
+            reason: "required readiness axis is absent from the projection".to_string(),
+            evidence_refs: Vec::new(),
+        },
+        site_ref,
+    )
+}
+
+fn axis_identity_matches_target(
+    axis: &ReleaseReadinessAxis,
+    scope: DeploymentReadinessScope,
+    site_ref: Option<&str>,
+) -> bool {
+    let Some(site) = site_ref else {
+        return true;
+    };
+    match axis.id.as_str() {
+        "customer-real-site" if scope.requires_site_target() => {
+            axis.subject == format!("factory-customer:{site}")
+        }
+        "production-write" if scope.requires_production_write_authority() => {
+            axis.subject == format!("factory-production-write:{site}")
+        }
+        _ => true,
+    }
+}
+
+fn deployment_target_acquisition_step() -> EvidenceAcquisitionStep {
+    EvidenceAcquisitionStep {
+        axis_id: "deployment-target-site".to_string(),
+        external_required: true,
+        acquisition: "Select and attest one exact deployment/customer site before evaluating customer or production readiness.".to_string(),
+        workflow_ref: Some(".github/workflows/live-customer-evidence.yml".to_string()),
+        artifact_or_input: "MORN_DEPLOYMENT_SITE_REF=<exact-site>".to_string(),
+        deployment_inputs: vec!["MORN_DEPLOYMENT_SITE_REF".to_string()],
+        safety_boundary: "A site must never be inferred from another evidence claim or replaced with a default tenant/site.".to_string(),
+    }
+}
+
+fn production_write_authority_acquisition_step(
+    site_ref: Option<&str>,
+) -> EvidenceAcquisitionStep {
+    EvidenceAcquisitionStep {
+        axis_id: "production-write-authority".to_string(),
+        external_required: true,
+        acquisition: "Evaluate the exact Work generation, action, resource and site through Profile/Authority, then issue the corresponding one-action ExternalActionPermit.".to_string(),
+        workflow_ref: None,
+        artifact_or_input: site_ref
+            .map(|site| format!(
+                "AuthorityDecision + ExternalActionPermit for the exact Work/action at site {site}"
+            ))
+            .unwrap_or_else(|| {
+                "AuthorityDecision + ExternalActionPermit for the exact Work/action/site".to_string()
+            }),
+        deployment_inputs: vec!["MORN_DEPLOYMENT_SITE_REF".to_string()],
+        safety_boundary: "ProductionWrite readiness evidence can never grant action-level authority; no permit means no write.".to_string(),
+    }
+}
+
 /// Evaluate one explicit deployment target. This consumes readiness evidence
 /// only; it never creates Authority. Production-write scopes additionally
 /// require the caller to supply the independently evaluated Profile/Authority
@@ -609,16 +697,22 @@ pub fn evaluate_deployment_readiness_for_target(
         );
     }
 
-    let evidence_acquisition_plan = scope
-        .required_axes()
-        .iter()
-        .filter_map(|required| {
-            axes.iter()
-                .find(|axis| axis.id == *required)
-                .filter(|axis| axis.state != ReadinessState::Proven)
-        })
-        .map(|axis| acquisition_step(axis, site_ref))
-        .collect();
+    let mut evidence_acquisition_plan = Vec::new();
+    for required in scope.required_axes() {
+        match axes.iter().find(|axis| axis.id == *required) {
+            Some(axis)
+                if axis.state == ReadinessState::Proven
+                    && axis_identity_matches_target(axis, scope, site_ref) => {}
+            Some(axis) => evidence_acquisition_plan.push(acquisition_step(axis, site_ref)),
+            None => evidence_acquisition_plan.push(missing_axis_acquisition_step(required, site_ref)),
+        }
+    }
+    if scope.requires_site_target() && site_ref.is_none() {
+        evidence_acquisition_plan.push(deployment_target_acquisition_step());
+    }
+    if scope.requires_production_write_authority() && !production_write_authority {
+        evidence_acquisition_plan.push(production_write_authority_acquisition_step(site_ref));
+    }
 
     DeploymentReadinessDecision {
         scope,
@@ -848,6 +942,116 @@ mod tests {
             .blockers
             .iter()
             .any(|blocker| blocker.contains("identity-mismatch")));
+    }
+
+    #[test]
+    fn every_non_ready_scope_exposes_remediation_for_identity_missing_axis_and_authority() {
+        let mut axes = vec![
+            ReleaseReadinessAxis {
+                id: "architecture-baseline".to_string(),
+                subject: "morn-v11.5-architecture".to_string(),
+                evidence_class: EvidenceClass::DesignSpec,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["design://1".to_string()],
+            },
+            ReleaseReadinessAxis {
+                id: "local-reference-slice".to_string(),
+                subject: "factory-readonly-wedge".to_string(),
+                evidence_class: EvidenceClass::LocalFixture,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["fixture://1".to_string()],
+            },
+            ReleaseReadinessAxis {
+                id: "ci-conformance".to_string(),
+                subject: "morn-v11.5-ci-conformance".to_string(),
+                evidence_class: EvidenceClass::CiConformance,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["ci://1".to_string()],
+            },
+            ReleaseReadinessAxis {
+                id: "deepseek-live-runtime".to_string(),
+                subject: "deepseek-harness".to_string(),
+                evidence_class: EvidenceClass::RealRuntime,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["runtime://1".to_string()],
+            },
+            ReleaseReadinessAxis {
+                id: "customer-real-site".to_string(),
+                subject: "factory-customer:plant-a".to_string(),
+                evidence_class: EvidenceClass::RealSite,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["site://plant-a".to_string()],
+            },
+            ReleaseReadinessAxis {
+                id: "production-write".to_string(),
+                subject: "factory-production-write:plant-a".to_string(),
+                evidence_class: EvidenceClass::ProductionWrite,
+                state: ReadinessState::Proven,
+                reason: "ok".to_string(),
+                evidence_refs: vec!["write://plant-a".to_string()],
+            },
+        ];
+
+        let wrong_site = evaluate_deployment_readiness_for_target(
+            &axes,
+            DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
+            false,
+            Some("plant-b"),
+        );
+        assert!(!wrong_site.ready);
+        assert!(wrong_site
+            .evidence_acquisition_plan
+            .iter()
+            .any(|step| step.axis_id == "customer-real-site"
+                && step.artifact_or_input.contains("factory-customer:plant-b")));
+
+        let missing_target = evaluate_deployment_readiness(
+            &axes,
+            DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
+            false,
+        );
+        assert!(missing_target
+            .evidence_acquisition_plan
+            .iter()
+            .any(|step| step.axis_id == "deployment-target-site"));
+
+        let no_authority = evaluate_deployment_readiness_for_target(
+            &axes,
+            DeploymentReadinessScope::ProductionWriteDeepSeek,
+            false,
+            Some("plant-a"),
+        );
+        assert!(no_authority
+            .evidence_acquisition_plan
+            .iter()
+            .any(|step| step.axis_id == "production-write-authority"
+                && step.safety_boundary.contains("no permit means no write")));
+
+        axes.retain(|axis| axis.id != "deepseek-live-runtime");
+        let missing_runtime_axis = evaluate_deployment_readiness_for_target(
+            &axes,
+            DeploymentReadinessScope::CustomerReadOnlyDeepSeek,
+            false,
+            Some("plant-a"),
+        );
+        assert!(missing_runtime_axis
+            .blockers
+            .iter()
+            .any(|blocker| blocker == "deepseek-live-runtime=missing-axis"));
+        let runtime_plan = missing_runtime_axis
+            .evidence_acquisition_plan
+            .iter()
+            .find(|step| step.axis_id == "deepseek-live-runtime")
+            .expect("missing required axis must still expose its acquisition path");
+        assert_eq!(
+            runtime_plan.workflow_ref.as_deref(),
+            Some(".github/workflows/live-dsh-evidence.yml")
+        );
     }
 
     #[test]

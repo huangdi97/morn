@@ -115,6 +115,10 @@ function readinessLabel(id: string): string {
       return "Real-site evidence";
     case "production-write":
       return "Production-write evidence";
+    case "deployment-target-site":
+      return "Deployment target site";
+    case "production-write-authority":
+      return "Action-level write authority";
     default:
       return id;
   }
