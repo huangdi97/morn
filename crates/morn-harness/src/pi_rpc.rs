@@ -577,7 +577,7 @@ impl PiRpcClient {
                 continue;
             }
 
-            let event = parse_event(record);
+            let event = parse_event(record)?;
             if event.event_type == PI_EVENT_AGENT_SETTLED {
                 settled = true;
             }
@@ -650,7 +650,7 @@ impl PiRpcClient {
                         .unwrap_or_else(|| "unknown error".to_string())
                 )));
             }
-            self.buffered_events.push(parse_event(incoming));
+            self.buffered_events.push(parse_event(incoming)?);
         }
     }
 
@@ -767,16 +767,17 @@ fn require_correlated_response(
     Ok(())
 }
 
-fn parse_event(value: Value) -> PiRpcEvent {
+fn parse_event(value: Value) -> Result<PiRpcEvent> {
     let event_type = value
         .get("type")
         .and_then(Value::as_str)
-        .unwrap_or("unknown")
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| Error::external("Pi RPC event missing non-empty type"))?
         .to_string();
-    PiRpcEvent {
+    Ok(PiRpcEvent {
         event_type,
         payload: value,
-    }
+    })
 }
 
 fn prompt_disposition(response: &PiRpcResponse) -> Option<&str> {
@@ -879,6 +880,14 @@ mod route_identity_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn malformed_pi_event_without_type_fails_closed() {
+        assert!(parse_event(json!({})).is_err());
+        assert!(parse_event(json!({"type":""})).is_err());
+        let event = parse_event(json!({"type":"future_event","payload":{"x":1}})).unwrap();
+        assert_eq!(event.event_type, "future_event");
+    }
 
     #[test]
     fn default_process_boundary_matches_current_pi_rpc_mode() {
@@ -1173,7 +1182,7 @@ mod tests {
         let run = PiPromptRun {
             request_id: "morn-prompt-1".to_string(),
             disposition: "started".to_string(),
-            events: vec![parse_event(json!({"type":"agent_settled"}))],
+            events: vec![parse_event(json!({"type":"agent_settled"})).unwrap()],
         };
         assert!(run.settled());
     }
@@ -1183,7 +1192,7 @@ mod tests {
         // The parser/state machine deliberately treats response correlation and
         // settled state as two independent conditions. This mirrors Pi's
         // asynchronous event/response streams.
-        let settled = parse_event(json!({"type":"agent_settled"}));
+        let settled = parse_event(json!({"type":"agent_settled"})).unwrap();
         let response = parse_response(&json!({
             "id":"morn-prompt-3",
             "type":"response",
@@ -1216,7 +1225,7 @@ mod tests {
             let run = PiPromptRun {
                 request_id: "morn-prompt-x".to_string(),
                 disposition: disposition.to_string(),
-                events: vec![parse_event(json!({"type":"agent_settled"}))],
+                events: vec![parse_event(json!({"type":"agent_settled"})).unwrap()],
             };
             assert!(run.settled());
             assert!(!run.proves_executor_settlement());
