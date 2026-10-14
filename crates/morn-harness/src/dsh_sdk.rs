@@ -35,6 +35,10 @@ pub const DSH_METHOD_SESSION_WORKING_DIRECTORY_GET: &str = "session/working-dire
 pub const DSH_METHOD_SESSION_WORKING_DIRECTORY_SET: &str = "session/working-directory/set";
 pub const DSH_METHOD_SHUTDOWN: &str = "shutdown";
 pub const DSH_SDK_SERVER_NAME: &str = "deepseek-harness-sdk-runtime";
+/// Upstream SDK has no protocol-version negotiation and currently documents
+/// serverInfo.version=0.0.1 with no compatibility promise. Fail closed on a
+/// new wire version until this adapter is explicitly re-qualified.
+pub const DSH_SDK_WIRE_VERSION: &str = "0.0.1";
 
 pub const DSH_NOTIFICATION_SESSION_EVENT: &str = "session.event";
 pub const DSH_NOTIFICATION_SESSION_STATUS: &str = "session.status";
@@ -1223,6 +1227,11 @@ fn parse_server_info(result: &Value) -> Result<DshSdkServerInfo> {
             "unexpected DSH SDK server identity {name:?}"
         )));
     }
+    if version != DSH_SDK_WIRE_VERSION {
+        return Err(Error::external(format!(
+            "unsupported DSH SDK wire version {version:?}; re-qualify the adapter before accepting a new pre-release protocol"
+        )));
+    }
     Ok(DshSdkServerInfo {
         name: name.to_string(),
         version: version.to_string(),
@@ -2056,6 +2065,37 @@ mod tests {
                 ),
             }
         }
+    }
+
+    #[test]
+    fn sdk_server_identity_rejects_unqualified_wire_versions() {
+        let supported = json!({
+            "serverInfo": {
+                "name": DSH_SDK_SERVER_NAME,
+                "version": DSH_SDK_WIRE_VERSION
+            }
+        });
+        assert_eq!(
+            parse_server_info(&supported).unwrap().version,
+            DSH_SDK_WIRE_VERSION
+        );
+
+        let future = json!({
+            "serverInfo": {
+                "name": DSH_SDK_SERVER_NAME,
+                "version": "0.0.2"
+            }
+        });
+        let error = parse_server_info(&future).unwrap_err();
+        assert!(error.to_string().contains("unsupported DSH SDK wire version"));
+
+        let wrong_server = json!({
+            "serverInfo": {
+                "name": "lookalike-runtime",
+                "version": DSH_SDK_WIRE_VERSION
+            }
+        });
+        assert!(parse_server_info(&wrong_server).is_err());
     }
 
     #[test]

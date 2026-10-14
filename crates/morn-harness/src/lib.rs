@@ -39,7 +39,7 @@ pub use dsh_sdk::{
     assistant_text_from_session_event, DshNotification, DshSdkConfig, DshSdkRunResult,
     DshSdkStdioClient, DSH_METHOD_INITIALIZE, DSH_METHOD_SESSION_PROMPT, DSH_METHOD_SESSION_WAIT,
     DSH_METHOD_SESSION_WORKING_DIRECTORY_GET, DSH_METHOD_SESSION_WORKING_DIRECTORY_SET,
-    DSH_METHOD_SHUTDOWN,
+    DSH_METHOD_SHUTDOWN, DSH_SDK_WIRE_VERSION,
 };
 pub use event::{ExecutionEvent, ExecutionEventKind};
 pub use intelligence::{
