@@ -1243,7 +1243,8 @@ mod tests {
         let event = parse_event(json!({
             "type":"agent_settled",
             "messages":[]
-        }));
+        }))
+        .unwrap();
         let encoded = serde_json::to_value(event).unwrap();
         assert!(encoded.get("acceptance").is_none());
         assert!(encoded.get("outcome").is_none());
