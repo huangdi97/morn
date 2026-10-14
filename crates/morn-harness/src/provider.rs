@@ -150,6 +150,18 @@ impl HarnessRuntimeHealth {
         ));
     }
 
+    /// Mark initialization of a newly spawned runtime instance. Historical
+    /// settled-turn counts belong to the previous process and must not leak
+    /// across provider replacement/restart.
+    pub fn mark_new_runtime_initialized(
+        &mut self,
+        reason: impl Into<String>,
+        evidence_ref: impl Into<String>,
+    ) {
+        self.settled_turns = 0;
+        self.mark_initialized(reason, evidence_ref);
+    }
+
     pub fn mark_live_turn(&mut self, reason: impl Into<String>, evidence_ref: impl Into<String>) {
         self.state = HarnessRuntimeHealthState::Healthy;
         self.settled_turns = self.settled_turns.saturating_add(1);
@@ -670,7 +682,7 @@ impl DeepSeekHarnessProvider {
                     self.real_runtime_digest = Some(runtime_digest.clone());
                     self.real_wire_server_version = Some(server.version.clone());
                     self.real_client = Some(client);
-                    self.runtime_health.mark_initialized(
+                    self.runtime_health.mark_new_runtime_initialized(
                         format!(
                             "official DSH SDK wire {} handshake succeeded; deployment pins distribution {} ({}) and no settled live turn yet",
                             server.version, runtime_version, runtime_digest
@@ -973,6 +985,11 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                 self.require_real_e0_scope(ctx)?;
                 self.require_pinned_real_environment(ctx)?;
                 self.ensure_real_client()?;
+                if !self.runtime_health.ready_for_new_turn_at(Timestamp::now()) {
+                    return Err(Error::invalid_state(
+                        "DSH runtime health lease expired; refresh provider preflight before reserving a new session",
+                    ));
+                }
                 let session_id = format!("morn-dsh-{}", uuid::Uuid::new_v4());
                 let event = ExecutionEvent::new(
                     ctx.workspace_id.clone(),
@@ -1551,6 +1568,24 @@ mod dsh_provider_tests {
     }
 
     #[test]
+    fn real_dsh_expired_health_lease_blocks_new_session_before_reservation() {
+        let (mut provider, ctx, _handle) = real_wire_fixture_provider();
+        provider.preflight_real_runtime().unwrap();
+        provider.runtime_health.health_valid_until = Some(Timestamp::from_millis(
+            Timestamp::now().millis().saturating_sub(1),
+        ));
+        let before = provider.sessions.len();
+        let error = provider.start(&ctx).unwrap_err();
+        assert!(format!("{error}").contains("health lease expired"));
+        assert_eq!(provider.sessions.len(), before);
+
+        provider.preflight_real_runtime().unwrap();
+        let session = provider.start(&ctx).unwrap();
+        assert_eq!(session.status, "ready");
+        provider.shutdown_real_runtime().unwrap();
+    }
+
+    #[test]
     fn real_dsh_expired_health_lease_blocks_prompt_before_dispatch() {
         let (mut provider, ctx, _handle) = real_wire_fixture_provider();
         let session = provider.start(&ctx).unwrap();
@@ -1796,7 +1831,12 @@ mod dsh_provider_tests {
         assert!(health.evidence_refs.is_empty());
         assert!(!health.selectable_at(Timestamp::now()));
 
-        health.mark_initialized("restarted", "runtime://dsh/restarted");
+        // A health refresh on the same runtime may preserve historical turns.
+        health.mark_initialized("same runtime refreshed", "runtime://dsh/refreshed");
+        assert_eq!(health.settled_turns, 1);
+        // A newly spawned process starts a new settled-turn counter.
+        health.mark_new_runtime_initialized("restarted", "runtime://dsh/restarted");
+        assert_eq!(health.settled_turns, 0);
         assert_eq!(
             health.evidence_refs,
             vec!["runtime://dsh/restarted".to_string()]

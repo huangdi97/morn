@@ -224,7 +224,7 @@ impl PiHarnessProvider {
                         .and_then(|config| config.runtime_digest.as_deref())
                         .unwrap_or("unattested");
                     self.real_client = Some(client);
-                    self.runtime_health.mark_initialized(
+                    self.runtime_health.mark_new_runtime_initialized(
                         format!(
                             "Pi RPC get_state handshake succeeded; deployment pins distribution {version} ({digest}); no settled live turn yet"
                         ),
@@ -493,6 +493,11 @@ impl HarnessProvider for PiHarnessProvider {
                     }
                 }
                 self.ensure_real_client()?;
+                if !self.runtime_health.ready_for_new_turn_at(Timestamp::now()) {
+                    return Err(Error::invalid_state(
+                        "Pi runtime health lease expired; refresh provider preflight before reserving a new session",
+                    ));
+                }
                 let session_id = format!("morn-pi-{}", uuid::Uuid::new_v4());
                 let event = ExecutionEvent::new(
                     ctx.workspace_id.clone(),
@@ -1200,6 +1205,25 @@ mod tests {
             .runtime_health()
             .ready_for_new_turn_at(morn_kernel::time::Timestamp::now()));
         assert!(provider.runtime_health().observed_at >= first_observed);
+        provider.shutdown_real_runtime().unwrap();
+    }
+
+    #[test]
+    fn real_pi_expired_health_lease_blocks_new_session_before_reservation() {
+        let (mut provider, ctx, _handle) = real_pi_wire_fixture_provider();
+        provider.preflight_real_runtime().unwrap();
+        provider.runtime_health.health_valid_until = Some(Timestamp::from_millis(
+            Timestamp::now().millis().saturating_sub(1),
+        ));
+        let before = provider.sessions.len();
+        let error = provider.start(&ctx).unwrap_err();
+        assert!(format!("{error}").contains("health lease expired"));
+        assert_eq!(provider.sessions.len(), before);
+        assert!(provider.active_session.is_none());
+
+        provider.preflight_real_runtime().unwrap();
+        let session = provider.start(&ctx).unwrap();
+        assert_eq!(session.status, "ready");
         provider.shutdown_real_runtime().unwrap();
     }
 
