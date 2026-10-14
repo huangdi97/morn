@@ -969,6 +969,9 @@ impl DshSdkStdioClient {
         self.verify_session_working_directory(session_id)?;
 
         let end = self.notifications.len();
+        for notification in &self.notifications[start..end] {
+            validate_consumed_dsh_notification(notification, session_id)?;
+        }
         let mut received = false;
         let mut final_response = String::new();
         let mut finish_reason = None;
@@ -1267,6 +1270,97 @@ fn session_idle_matches(notification: &DshNotification, session_id: &str) -> boo
     notification.method == DSH_NOTIFICATION_SESSION_STATUS
         && notification.params.get("sessionId").and_then(Value::as_str) == Some(session_id)
         && notification.params.get("status").and_then(Value::as_str) == Some("idle")
+}
+
+fn validate_consumed_dsh_notification(
+    notification: &DshNotification,
+    session_id: &str,
+) -> Result<()> {
+    if notification.method == DSH_NOTIFICATION_SESSION_STATUS
+        && notification.params.get("sessionId").and_then(Value::as_str) == Some(session_id)
+    {
+        match notification.params.get("status").and_then(Value::as_str) {
+            Some("idle" | "running") => {}
+            _ => {
+                return Err(Error::external(
+                    "DSH session.status carried an invalid status for the active session",
+                ))
+            }
+        }
+    }
+    if notification.method != DSH_NOTIFICATION_SESSION_EVENT
+        || notification.params.get("sessionId").and_then(Value::as_str) != Some(session_id)
+    {
+        return Ok(());
+    }
+    let event = notification
+        .params
+        .get("event")
+        .and_then(Value::as_object)
+        .ok_or_else(|| Error::external("DSH session.event carried no event envelope"))?;
+    let event_type = event
+        .get("type")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| Error::external("DSH session.event carried no event type"))?;
+    if event_type == "assistant/message" {
+        let content = event
+            .get("data")
+            .and_then(Value::as_object)
+            .and_then(|data| data.get("message"))
+            .and_then(Value::as_object)
+            .and_then(|message| message.get("content"))
+            .and_then(Value::as_array)
+            .ok_or_else(|| Error::external("DSH assistant/message carried malformed content"))?;
+        for block in content {
+            let block = block
+                .as_object()
+                .ok_or_else(|| Error::external("DSH assistant/message content block is not an object"))?;
+            let kind = block
+                .get("type")
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| Error::external("DSH assistant/message content block has no type"))?;
+            if kind == "text" && block.get("text").and_then(Value::as_str).is_none() {
+                return Err(Error::external(
+                    "DSH assistant/message text block has no string text",
+                ));
+            }
+        }
+    }
+    if event_type == "turn/end" {
+        let reason = event
+            .get("data")
+            .and_then(Value::as_object)
+            .and_then(|data| data.get("reason"))
+            .and_then(Value::as_object)
+            .ok_or_else(|| Error::external("DSH turn/end carried malformed reason"))?;
+        let kind = reason
+            .get("kind")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| Error::external("DSH turn/end carried no reason kind"))?;
+        if kind == "aborted" {
+            let cause = reason
+                .get("reason")
+                .and_then(Value::as_object)
+                .ok_or_else(|| Error::external("DSH aborted turn carried malformed cause"))?;
+            let cause_kind = cause
+                .get("kind")
+                .and_then(Value::as_str)
+                .ok_or_else(|| Error::external("DSH aborted turn carried no cause kind"))?;
+            match cause_kind {
+                "user" | "parent" | "disposed" | "legacy" => {}
+                "hook" if cause.get("reason").and_then(Value::as_str).is_some() => {}
+                _ => {
+                    return Err(Error::external(
+                        "DSH aborted turn carried an unsupported or malformed cause",
+                    ))
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn finish_reason_from_session_event(params: &Value, session_id: &str) -> Result<Option<String>> {
@@ -2098,6 +2192,45 @@ mod tests {
             }
         });
         assert!(parse_server_info(&wrong_server).is_err());
+    }
+
+    #[test]
+    fn consumed_sdk_events_fail_closed_on_malformed_output_fields() {
+        let malformed_assistant = DshNotification {
+            method: DSH_NOTIFICATION_SESSION_EVENT.to_string(),
+            params: json!({
+                "sessionId":"dsh-1",
+                "event":{
+                    "type":"assistant/message",
+                    "data":{"message":{"content":[{"type":"text"}]}}
+                }
+            }),
+        };
+        assert!(validate_consumed_dsh_notification(&malformed_assistant, "dsh-1").is_err());
+
+        let malformed_abort = DshNotification {
+            method: DSH_NOTIFICATION_SESSION_EVENT.to_string(),
+            params: json!({
+                "sessionId":"dsh-1",
+                "event":{
+                    "type":"turn/end",
+                    "data":{"reason":{"kind":"aborted","reason":{"kind":"unknown"}}}
+                }
+            }),
+        };
+        assert!(validate_consumed_dsh_notification(&malformed_abort, "dsh-1").is_err());
+
+        let malformed_status = DshNotification {
+            method: DSH_NOTIFICATION_SESSION_STATUS.to_string(),
+            params: json!({"sessionId":"dsh-1","status":"paused"}),
+        };
+        assert!(validate_consumed_dsh_notification(&malformed_status, "dsh-1").is_err());
+
+        let other_session = DshNotification {
+            method: DSH_NOTIFICATION_SESSION_EVENT.to_string(),
+            params: json!({"sessionId":"other","event":null}),
+        };
+        assert!(validate_consumed_dsh_notification(&other_session, "dsh-1").is_ok());
     }
 
     #[test]
