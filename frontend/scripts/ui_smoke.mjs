@@ -27,7 +27,288 @@ async function expandReferenceDiagnostics() {
 page.on("console", (msg) => {
   if (msg.type() === "error") errors.push(`console.error: ${msg.text()}`);
 });
-page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
+page.on("pageerror", (err) => errors.push(\`pageerror: \${err.message}\`));
+
+async function runCanonicalAcceptanceUiContract() {
+  const fixturePage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const fixtureErrors = [];
+  fixturePage.on("console", (msg) => {
+    if (msg.type() === "error") fixtureErrors.push(\`console.error: \${msg.text()}\`);
+  });
+  fixturePage.on("pageerror", (err) => fixtureErrors.push(\`pageerror: \${err.message}\`));
+
+  // This browser contract proves only that the production UI preserves the
+  // deployment-owned trust boundary through the full Work journey. All
+  // authority/observation/reviewer material below is explicitly fixture data;
+  // it never becomes RealSite, CustomerValidated or production evidence.
+  const workId = "work:ui-acceptance-fixture";
+  const sourceCatalogId = "source-catalog:ui-fixture";
+  const sourceBindingId = "source-binding:ui-fixture";
+  const observationId = "observation-attestation:ui-fixture";
+  const outcomeId = "outcome:ui-fixture";
+  const reviewerId = "principal:ui-independent-reviewer";
+  const reviewAuthorizationId = "review-auth:ui-fixture";
+  let sourceBound = false;
+  let observed = false;
+  let accepted = false;
+
+  const json = (route, body, status = 200) =>
+    route.fulfill({
+      status,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+
+  const work = () => ({
+    id: workId,
+    generation: 1,
+    spec: {
+      goal: "Reference UI acceptance contract",
+      profile_ref: "morn.lite@1.0.0",
+      site_ref: null,
+      required_conditions: [],
+    },
+    status: {
+      phase: accepted ? "Accepted" : observed ? "Delivered" : "Waiting",
+      observed_generation: 1,
+      conditions: sourceBound
+        ? [{ condition_type: "SourceOfTruthBound", status: "True", reason: "deployment fixture witness" }]
+        : [],
+      active_binding: null,
+      active_bindings: [],
+    },
+  });
+
+  const outcome = () => ({
+    id: outcomeId,
+    work_package_id: workId,
+    work_generation: 1,
+    objective: "Reference delivery outcome observed",
+    source_kind: "ExternalSystem",
+    source_ref: "fixture-authority://orders/42",
+    source_binding_ref: sourceBindingId,
+    source_attestation_ref: observationId,
+    fact_type: "delivery.status",
+    observed_facts: { status: "complete" },
+    evidence_refs: ["fixture-authority://orders/42/receipt"],
+  });
+
+  const control = () => ({
+    work: [work()],
+    condition_evidence: sourceBound
+      ? [{
+          id: "condition:source-bound-ui-fixture",
+          work_ref: workId,
+          work_generation: 1,
+          condition_type: "SourceOfTruthBound",
+          satisfied: true,
+          producer_ref: "fixture-deployment://source-authority",
+          evidence_refs: [sourceBindingId],
+        }]
+      : [],
+    capability_resolutions: [],
+    profile_conformance_attestations: [],
+    source_of_truth_bindings: sourceBound
+      ? [{ id: sourceBindingId, source_ref: "fixture-authority://orders", site_ref: null }]
+      : [],
+    execution_bindings: [],
+    execution_manifests: [],
+    execution_receipts: [],
+    execution_events: [],
+    executor_outcome_reconciliations: [],
+    interop_bindings: [],
+    external_task_observations: [],
+    binding_migrations: [],
+    durable_workflow_bindings: [],
+    attempts: [],
+    reconciliations: [],
+    outcomes: observed ? [outcome()] : [],
+    acceptance_decisions: accepted
+      ? [{
+          id: "acceptance:ui-fixture",
+          work_package_id: workId,
+          work_generation: 1,
+          disposition: "Accept",
+          outcome_refs: [outcomeId],
+          evidence_refs: [
+            "fixture-iam://reviewer",
+            "fixture-iam://review-authorization",
+            "fixture-review://ticket-42",
+          ],
+          decided_by: reviewerId,
+          acting_role: "independent-reviewer",
+          reason: "reference UI contract accepted source-attested fixture outcome",
+        }]
+      : [],
+    value_assessments: [],
+    value_assessment_support: [],
+    note: "Playwright fixture contract only; never RealSite or CustomerValidated evidence",
+  });
+
+  await fixturePage.route("**/api/v115/control-plane", (route) => json(route, control()));
+  await fixturePage.route("**/api/v115/status", (route) =>
+    json(route, {
+      harness_runtime: {
+        dsh: { mode: "fixture", health: "fixture" },
+        pi: { mode: "fixture", health: "fixture" },
+      },
+      execution_environment_attestations: [],
+    }),
+  );
+  await fixturePage.route("**/api/v115/ui/extensions", (route) => json(route, { extensions: [] }));
+  await fixturePage.route("**/api/v115/capabilities", (route) => json(route, { capabilities: [] }));
+  await fixturePage.route("**/api/v115/source-of-truth/catalog", (route) =>
+    json(route, {
+      bindings: [{
+        id: sourceCatalogId,
+        site_ref: null,
+        source_ref: "fixture-authority://orders",
+        authority_kind: "SystemOfRecord",
+      }],
+      deployment_owned: true,
+      caller_can_create_authority: false,
+    }),
+  );
+  await fixturePage.route("**/api/v115/source-of-truth/observations", (route) =>
+    json(route, {
+      observations: sourceBound && !observed
+        ? [{
+            attestation_id: observationId,
+            work_package_id: workId,
+            work_generation: 1,
+            source_binding_id: sourceBindingId,
+            fact_type: "delivery.status",
+            objective: "Reference delivery outcome observed",
+            source_ref: "fixture-authority://orders/42",
+            evidence_refs: ["fixture-authority://orders/42/receipt"],
+          }]
+        : [],
+      deployment_owned: true,
+      caller_can_assert_world_facts: false,
+    }),
+  );
+  await fixturePage.route("**/api/v115/acceptance/reviewers", (route) =>
+    json(route, {
+      reviewers: [{
+        principal_id: reviewerId,
+        acting_roles: ["independent-reviewer"],
+        evidence_refs: ["fixture-iam://reviewer"],
+      }],
+      deployment_owned: true,
+      caller_can_assert_reviewer: false,
+    }),
+  );
+
+  await fixturePage.route("**/api/v115/work/bind-source-of-truth", async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.work_id !== workId || body.catalog_binding_id !== sourceCatalogId) {
+      fixtureErrors.push("canonical acceptance fixture: source binding request lost exact Work/catalog identity");
+      return json(route, { error: "fixture contract mismatch" }, 400);
+    }
+    sourceBound = true;
+    return json(route, {
+      binding: { id: sourceBindingId, source_ref: "fixture-authority://orders" },
+      condition_evidence: { condition_type: "SourceOfTruthBound", satisfied: true },
+      note: "fixture deployment authority attached",
+    });
+  });
+  await fixturePage.route("**/api/v115/work/observe-outcome", async (route) => {
+    const body = route.request().postDataJSON();
+    if (
+      body.work_id !== workId ||
+      body.observation_attestation_id !== observationId ||
+      "observed_facts" in body ||
+      "source_ref" in body ||
+      "evidence_refs" in body
+    ) {
+      fixtureErrors.push("canonical acceptance fixture: browser attempted to self-assert world truth");
+      return json(route, { error: "fixture trust-boundary mismatch" }, 400);
+    }
+    observed = true;
+    return json(route, {
+      work: work(),
+      outcome: outcome(),
+      business_outcome_source_grounded: true,
+      caller_supplied_world_facts: false,
+      independent_acceptance: false,
+    });
+  });
+  await fixturePage.route("**/api/v115/work/review-outcome", async (route) => {
+    const body = route.request().postDataJSON();
+    if (
+      body.work_id !== workId ||
+      body.outcome_id !== outcomeId ||
+      body.review_authorization_id !== reviewAuthorizationId ||
+      body.reviewer_principal_id !== reviewerId ||
+      body.acting_role !== "independent-reviewer" ||
+      body.disposition !== "accept" ||
+      !Array.isArray(body.evidence_refs) ||
+      body.evidence_refs.length !== 1
+    ) {
+      fixtureErrors.push("canonical acceptance fixture: review request lost exact deployment-bound identity");
+      return json(route, { error: "fixture review-boundary mismatch" }, 400);
+    }
+    accepted = true;
+    return json(route, {
+      work: work(),
+      decision: {
+        id: "acceptance:ui-fixture",
+        disposition: "Accept",
+        work_package_id: workId,
+        work_generation: 1,
+        outcome_refs: [outcomeId],
+      },
+      business_outcome_source_grounded: true,
+    });
+  });
+
+  try {
+    await fixturePage.goto(BASE + "/workbench", { waitUntil: "networkidle", timeout: 30000 });
+    await fixturePage.getByRole("heading", { name: "Authoritative outcome observation" }).waitFor();
+
+    await fixturePage.getByRole("button", { name: "Attach authoritative source" }).click();
+    await fixturePage.getByLabel("Deployment-attested observation").waitFor({ state: "visible" });
+    await fixturePage.getByRole("button", { name: "Persist attested authoritative Outcome" }).click();
+
+    await fixturePage.getByRole("heading", { name: "Independent outcome review" }).waitFor();
+    await fixturePage
+      .getByLabel("Out-of-band review authorization ID")
+      .fill(reviewAuthorizationId);
+    await fixturePage
+      .getByLabel("Review reason")
+      .fill("Independent fixture review of deployment-attested reference evidence");
+    await fixturePage
+      .getByLabel("Independent review evidence reference")
+      .fill("fixture-review://ticket-42");
+    await fixturePage.getByRole("button", { name: "Persist independent review" }).click();
+
+    const journey = fixturePage.locator('[data-testid="work-lifecycle-guide"]');
+    await journey.getByText("Accepted", { exact: true }).waitFor({ state: "visible" });
+    await fixturePage.getByRole("heading", { name: "Accepted outcome value" }).waitFor();
+    const body = await fixturePage.locator("body").innerText();
+    if (!accepted || !body.includes("Reference UI acceptance contract")) {
+      fixtureErrors.push("canonical acceptance fixture: Accepted state was not projected back into Workbench");
+    }
+    if (!body.includes("No value assessment is pinned to this Work generation")) {
+      fixtureErrors.push("canonical acceptance fixture: acceptance must not fabricate CustomerValidated value evidence");
+    }
+    if (screenshotsDir) {
+      await fixturePage.screenshot({
+        path: join(screenshotsDir, "workbench-canonical-acceptance-fixture.png"),
+        fullPage: true,
+      });
+    }
+  } finally {
+    await fixturePage.close();
+  }
+
+  if (fixtureErrors.length > 0) {
+    throw new Error(\`canonical acceptance UI contract failed: \${fixtureErrors.join(" | ")}\`);
+  }
+  console.log(
+    "OK canonical acceptance UI contract: source authority -> attested Outcome -> independent Accept; fixture evidence only",
+  );
+}
 
 try {
   for (const route of routes) {
@@ -472,6 +753,10 @@ try {
       } else {
         console.log("OK studio compiler flow (run -> approve -> manifest)");
       }
+    }
+
+    if (process.exitCode !== 1) {
+      await runCanonicalAcceptanceUiContract();
     }
   }
 } finally {
