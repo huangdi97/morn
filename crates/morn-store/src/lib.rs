@@ -6,4 +6,4 @@
 pub mod store;
 
 pub use morn_kernel::error::Error as StoreError;
-pub use store::{ControllerLease, MornStore, OutboxEvent};
+pub use store::{ControllerLease, ImmutableRecordCommit, MornStore, OutboxEvent};

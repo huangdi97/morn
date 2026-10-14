@@ -659,8 +659,8 @@ impl MornStore {
         immutable: ImmutableRecordCommit<'_, U>,
     ) -> Result<u64> {
         let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
-        let immutable_payload = serde_json::to_string(immutable.record)
-            .map_err(|e| Error::internal(e.to_string()))?;
+        let immutable_payload =
+            serde_json::to_string(immutable.record).map_err(|e| Error::internal(e.to_string()))?;
         let expected_i64 = i64::try_from(expected_revision)
             .map_err(|_| Error::validation("expected revision is too large"))?;
 

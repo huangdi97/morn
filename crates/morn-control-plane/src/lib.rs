@@ -1728,11 +1728,10 @@ impl ControlPlaneStore for MornStore {
                 )? {
                     Some(consumed) => ensure_same_consumption(&consumed)?,
                     None => {
-                        pending_permit_consumption = Some(
-                            ConsumedExternalActionPermit::from_write_attempt(
+                        pending_permit_consumption =
+                            Some(ConsumedExternalActionPermit::from_write_attempt(
                                 &permit, attempt, now,
-                            )?,
-                        );
+                            )?);
                     }
                 }
             }
@@ -1872,10 +1871,7 @@ impl ControlPlaneStore for MornStore {
             ));
         }
 
-        let expected_after = match (
-            record.observation.committed,
-            record.observation.observed,
-        ) {
+        let expected_after = match (record.observation.committed, record.observation.observed) {
             (Some(true), Some(true)) => AttemptState::Observed,
             (Some(false), _) => AttemptState::Failed,
             _ => AttemptState::OutcomeUnknown,
@@ -1914,21 +1910,15 @@ impl ControlPlaneStore for MornStore {
         }
 
         if let Some(permit_ref) = &attempt.external_action_permit_ref {
-            if attempt
-                .effect_contract
-                .as_ref()
-                .is_some_and(|effect| {
-                    effect.class != morn_capability::effect::EffectClass::E0LifecycleReversible
-                })
-            {
+            if attempt.effect_contract.as_ref().is_some_and(|effect| {
+                effect.class != morn_capability::effect::EffectClass::E0LifecycleReversible
+            }) {
                 let permit: ExternalActionPermit = self
                     .load_record("external_action_permit_v115", permit_ref)?
                     .ok_or_else(|| Error::not_found("reconciliation external-action permit"))?;
                 let consumed: ConsumedExternalActionPermit = self
                     .load_record("external_action_permit_consumed_v115", permit_ref)?
-                    .ok_or_else(|| {
-                        Error::not_found("reconciliation permit consumption witness")
-                    })?;
+                    .ok_or_else(|| Error::not_found("reconciliation permit consumption witness"))?;
                 if !consumed.exactly_matches(&permit, attempt) {
                     return Err(Error::validation(
                         "reconciliation attempt does not match its one-shot permit consumption",
@@ -3279,16 +3269,12 @@ mod control_plane_persistence_scope_tests {
             },
             created_at: morn_kernel::time::Timestamp::now(),
         };
-        assert!(store
-            .save_reconciliation(&work, &attempt, &record)
-            .is_err());
+        assert!(store.save_reconciliation(&work, &attempt, &record).is_err());
         record.observation.business_key = attempt.business_key.clone();
         assert!(store
             .save_reconciliation(&other, &attempt, &record)
             .is_err());
-        store
-            .save_reconciliation(&work, &attempt, &record)
-            .unwrap();
+        store.save_reconciliation(&work, &attempt, &record).unwrap();
     }
 
     #[test]
