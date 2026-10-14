@@ -1723,8 +1723,9 @@ impl ControlPlaneStore for MornStore {
                 )? {
                     Some(consumed) => ensure_same_consumption(&consumed)?,
                     None => {
-                        let consumed =
-                            ConsumedExternalActionPermit::from_write_attempt(&permit, attempt, now)?;
+                        let consumed = ConsumedExternalActionPermit::from_write_attempt(
+                            &permit, attempt, now,
+                        )?;
                         match self.save_record_immutable(
                             consumption_kind,
                             permit.id.as_str(),
@@ -3413,8 +3414,7 @@ mod control_plane_persistence_scope_tests {
             vec![PolicyRule::allow("cmms.sandbox.write")],
         );
         let provider = NativePolicyAuthority::new(policy);
-        let mut request =
-            AuthorityRequest::new("controller", "cmms.sandbox.write", "CMMS-fixture");
+        let mut request = AuthorityRequest::new("controller", "cmms.sandbox.write", "CMMS-fixture");
         request.work_ref = Some(work.id.to_string());
         request.work_generation = Some(work.generation);
         request.site_ref = work.spec.site_ref.clone();

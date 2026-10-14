@@ -6,14 +6,12 @@
 
 use serde::{Deserialize, Serialize};
 
+use morn_capability::{EffectClass, EffectContract};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::Id;
 use morn_kernel::time::Timestamp;
-use morn_capability::{EffectClass, EffectContract};
 use morn_profile::DomainProfile;
-use morn_runtime::{
-    ActionAttempt, ActionAttemptId, BoundAuthorityDecision, ExecutionBinding,
-};
+use morn_runtime::{ActionAttempt, ActionAttemptId, BoundAuthorityDecision, ExecutionBinding};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "kebab-case")]
@@ -148,11 +146,7 @@ impl ConsumedExternalActionPermit {
         })
     }
 
-    pub fn exactly_matches(
-        &self,
-        permit: &ExternalActionPermit,
-        attempt: &ActionAttempt,
-    ) -> bool {
+    pub fn exactly_matches(&self, permit: &ExternalActionPermit, attempt: &ActionAttempt) -> bool {
         self.permit_id == permit.id
             && self.work_ref == permit.work_ref
             && self.work_generation == permit.work_generation
