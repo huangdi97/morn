@@ -59,8 +59,8 @@ use morn_profile::{
 };
 use morn_runtime::{
     reconcile_attempt, ActionAttempt, AttemptState, BindingMigrationDecision,
-    DurableWorkflowBinding, DurableWorkflowEvidence, ExecutionBinding, ExecutionManifest,
-    OutcomeReconciler, ReconciliationRecord,
+    BoundAuthorityDecision, DurableWorkflowBinding, DurableWorkflowEvidence, ExecutionBinding,
+    ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
 };
 use morn_store::MornStore;
 use morn_work::acceptance::{
@@ -707,6 +707,16 @@ pub trait ControlPlaneStore {
     fn save_work_resource_cas(&self, work: &mut WorkResource) -> Result<u64>;
     fn save_execution_binding(&self, work: &WorkResource, binding: &ExecutionBinding)
         -> Result<()>;
+    fn save_bound_authority_decision(
+        &self,
+        work: &WorkResource,
+        authority: &BoundAuthorityDecision,
+    ) -> Result<()>;
+    fn save_external_action_permit(
+        &self,
+        work: &WorkResource,
+        permit: &ExternalActionPermit,
+    ) -> Result<()>;
     fn save_condition_evidence(
         &self,
         work: &WorkResource,
@@ -1209,6 +1219,109 @@ impl ControlPlaneStore for MornStore {
         )
     }
 
+    fn save_bound_authority_decision(
+        &self,
+        work: &WorkResource,
+        authority: &BoundAuthorityDecision,
+    ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
+        let request = &authority.request;
+        if request.work_ref.as_deref() != Some(work.id.as_str())
+            || request.work_generation != Some(work.generation)
+            || request.site_ref != work.spec.site_ref
+            || request.principal.trim().is_empty()
+            || request.action.trim().is_empty()
+            || request.resource.trim().is_empty()
+        {
+            return Err(Error::validation(
+                "authority decision request must be pinned to the exact Work generation/site/action",
+            ));
+        }
+        if authority.decision.allowed && authority.decision.evidence_refs.is_empty() {
+            return Err(Error::validation(
+                "allowed authority decision requires durable policy/approval evidence",
+            ));
+        }
+        if authority.decision.decided_at < work.created_at
+            || authority.decision.decided_at > morn_kernel::time::Timestamp::now()
+        {
+            return Err(Error::validation(
+                "authority decision timestamp falls outside the durable Work observation window",
+            ));
+        }
+        self.save_record_immutable(
+            "authority_decision_v115",
+            authority.decision.id.as_str(),
+            work.workspace_id.as_str(),
+            authority.decision.decided_at.millis(),
+            authority,
+        )
+    }
+
+    fn save_external_action_permit(
+        &self,
+        work: &WorkResource,
+        permit: &ExternalActionPermit,
+    ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
+        if permit.work_ref != work.id.to_string()
+            || permit.work_generation != work.generation
+            || permit.profile_ref != work.spec.profile_ref
+            || permit.site_ref != work.spec.site_ref
+        {
+            return Err(Error::validation(
+                "external-action permit must match the exact current Work generation/profile/site",
+            ));
+        }
+        let binding: ExecutionBinding = self
+            .load_record("execution_binding_v115", &permit.binding_ref)?
+            .ok_or_else(|| Error::not_found("external-action permit execution binding"))?;
+        if !binding.matches_work_generation(work)
+            || binding.profile_ref != permit.profile_ref
+            || binding.site_ref != permit.site_ref
+        {
+            return Err(Error::validation(
+                "external-action permit binding is stale or belongs to another Work scope",
+            ));
+        }
+        let authority: BoundAuthorityDecision = self
+            .load_record("authority_decision_v115", &permit.authority_decision_ref)?
+            .ok_or_else(|| Error::not_found("external-action permit authority decision"))?;
+        let request = &authority.request;
+        if !authority.decision.allowed
+            || request.work_ref.as_deref() != Some(work.id.as_str())
+            || request.work_generation != Some(work.generation)
+            || request.principal != permit.principal
+            || request.acting_for != permit.acting_for
+            || request.action != permit.action
+            || request.resource != permit.resource
+            || request.site_ref != permit.site_ref
+            || request.scope != permit.scope
+            || request.parameter_envelope != permit.parameter_envelope
+            || request.not_before != permit.not_before
+            || request.expires_at != permit.expires_at
+        {
+            return Err(Error::validation(
+                "external-action permit must exactly preserve its durable allowed authority request",
+            ));
+        }
+        if permit.issued_at < authority.decision.decided_at
+            || permit.not_before.is_some_and(|start| permit.issued_at < start)
+            || permit.expires_at.is_some_and(|end| permit.issued_at > end)
+        {
+            return Err(Error::validation(
+                "external-action permit issuance is outside its authority validity window",
+            ));
+        }
+        self.save_record_immutable(
+            "external_action_permit_v115",
+            permit.id.as_str(),
+            work.workspace_id.as_str(),
+            permit.issued_at.millis(),
+            permit,
+        )
+    }
+
     fn save_execution_manifest(
         &self,
         work: &WorkResource,
@@ -1495,6 +1608,72 @@ impl ControlPlaneStore for MornStore {
             return Err(Error::validation(
                 "action attempt must have a business key and binding pinned to the current Work generation",
             ));
+        }
+        let effect_class = attempt.effect_contract.as_ref().map(|effect| effect.class);
+        let write_like = effect_class.is_some_and(|class| {
+            class != morn_capability::effect::EffectClass::E0LifecycleReversible
+        });
+        if let Some(effect) = &attempt.effect_contract {
+            let ceiling = binding
+                .effect_ceiling
+                .unwrap_or(morn_capability::effect::EffectClass::E0LifecycleReversible);
+            if !ceiling.permits(effect.class) {
+                return Err(Error::not_authorized(
+                    "persisted action effect exceeds the pinned ExecutionBinding ceiling",
+                ));
+            }
+            if effect.class == morn_capability::effect::EffectClass::E2Compensatable
+                && binding.compensation_ref.as_deref() != effect.compensation_action.as_deref()
+            {
+                return Err(Error::validation(
+                    "persisted E2 action must use the exact compensation pinned by the binding",
+                ));
+            }
+        }
+        if write_like && attempt.external_action_permit_ref.is_none() {
+            return Err(Error::validation(
+                "write-like action attempt requires a durable external-action permit reference",
+            ));
+        }
+        if let Some(permit_ref) = &attempt.external_action_permit_ref {
+            let permit: ExternalActionPermit = self
+                .load_record("external_action_permit_v115", permit_ref)?
+                .ok_or_else(|| Error::not_found("action attempt external-action permit"))?;
+            if permit.work_ref != work.id.to_string()
+                || permit.work_generation != work.generation
+                || permit.binding_ref != binding.id.to_string()
+                || permit.action != attempt.action
+                || Some(permit.resource.as_str()) != attempt.resource_ref.as_deref()
+                || permit.site_ref != attempt.site_ref
+                || Some(permit.authority_decision_ref.as_str())
+                    != attempt.authority_decision_ref.as_deref()
+            {
+                return Err(Error::validation(
+                    "action attempt must exactly match its durable Work/binding/permit/authority scope",
+                ));
+            }
+            match (permit.mode, effect_class) {
+                (
+                    ExternalActionMode::Read | ExternalActionMode::CandidateOnly,
+                    Some(class),
+                ) if class != morn_capability::effect::EffectClass::E0LifecycleReversible => {
+                    return Err(Error::not_authorized(
+                        "read/candidate permit cannot persist a write-like effect",
+                    ));
+                }
+                (
+                    ExternalActionMode::SandboxWrite
+                    | ExternalActionMode::ShadowWrite
+                    | ExternalActionMode::ProductionWrite
+                    | ExternalActionMode::PhysicalControl,
+                    None | Some(morn_capability::effect::EffectClass::E0LifecycleReversible),
+                ) => {
+                    return Err(Error::validation(
+                        "write-like permit requires an explicit non-E0 effect contract",
+                    ));
+                }
+                _ => {}
+            }
         }
         if matches!(
             attempt.state,
@@ -3144,6 +3323,34 @@ mod control_plane_persistence_scope_tests {
             ConditionStatus::True,
         ));
         store.save_work_resource_cas(&mut work).unwrap();
+    }
+
+    #[test]
+    fn handcrafted_write_attempt_without_durable_permit_cannot_be_persisted() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+        let mut binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        binding.effect_ceiling = Some(morn_capability::effect::EffectClass::E2Compensatable);
+        binding.compensation_ref = Some("cancel".to_string());
+        store.save_execution_binding(&work, &binding).unwrap();
+
+        let mut attempt = ActionAttempt::new(binding.id.clone(), "work:create", "create");
+        attempt
+            .set_effect_contract(morn_capability::effect::EffectContract::e2("cancel"))
+            .unwrap();
+        attempt.transition(AttemptState::Authorized).unwrap();
+        assert!(store.save_action_attempt(&work, &attempt).is_err());
+
+        attempt.external_action_permit_ref = Some("permit:missing".to_string());
+        attempt.resource_ref = Some("system://resource".to_string());
+        attempt.site_ref = work.spec.site_ref.clone();
+        attempt.authority_decision_ref = Some("authz:missing".to_string());
+        assert!(store.save_action_attempt(&work, &attempt).is_err());
+        assert!(store
+            .load_record::<ActionAttempt>("action_attempt_v115", attempt.id.as_str())
+            .unwrap()
+            .is_none());
     }
 
     #[test]

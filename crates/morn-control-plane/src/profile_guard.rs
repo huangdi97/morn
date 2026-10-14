@@ -62,6 +62,8 @@ pub struct ExternalActionPermit {
     pub scope: Vec<String>,
     pub parameter_envelope: std::collections::BTreeMap<String, String>,
     pub work_ref: String,
+    #[serde(default)]
+    pub work_generation: u64,
     pub binding_ref: String,
     pub not_before: Option<Timestamp>,
     pub expires_at: Option<Timestamp>,
@@ -156,6 +158,11 @@ pub fn issue_external_action_permit(
             "authority request must be bound to the exact Work in ExecutionBinding",
         ));
     }
+    if authority.request.work_generation != Some(binding.work_generation) {
+        return Err(Error::validation(
+            "authority request must be bound to the exact Work generation in ExecutionBinding",
+        ));
+    }
     if authority.request.site_ref != binding.site_ref {
         return Err(Error::validation(
             "authority request site does not match pinned ExecutionBinding site",
@@ -180,6 +187,7 @@ pub fn issue_external_action_permit(
         scope: authority.request.scope.clone(),
         parameter_envelope: authority.request.parameter_envelope.clone(),
         work_ref: binding.work_id.to_string(),
+        work_generation: binding.work_generation,
         binding_ref: binding.id.to_string(),
         not_before: authority.request.not_before,
         expires_at: authority.request.expires_at,
@@ -289,8 +297,39 @@ mod tests {
         let provider = NativePolicyAuthority::new(policy);
         let mut request = AuthorityRequest::new("controller", action, resource);
         request.work_ref = Some(work.id.to_string());
+        request.work_generation = Some(work.generation);
         request.site_ref = binding.site_ref.clone();
         decide_bound(&provider, &request).unwrap()
+    }
+
+    #[test]
+    fn authority_from_previous_work_generation_cannot_issue_new_permit() {
+        let profile = DomainProfile::factory_readonly_v1();
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "generation one",
+            profile.canonical_ref(),
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        let first_binding =
+            ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        let authority =
+            bound_authority(&work, &first_binding, "cmms.sandbox.write", "CMMS-fixture");
+
+        let mut next = work.spec.clone();
+        next.goal = "generation two".to_string();
+        work.replace_spec(next);
+        let next_binding =
+            ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+
+        assert!(issue_external_action_permit(
+            &profile,
+            ExternalActionMode::SandboxWrite,
+            &authority,
+            &next_binding,
+        )
+        .is_err());
     }
 
     #[test]

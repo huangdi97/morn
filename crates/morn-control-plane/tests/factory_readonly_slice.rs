@@ -543,6 +543,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         "CMMS-fixture",
     );
     sandbox_authority_request.work_ref = Some(work_package_id.to_string());
+    sandbox_authority_request.work_generation = Some(work.generation);
     sandbox_authority_request.site_ref = Some("plant-a".to_string());
     sandbox_authority_request.scope = vec!["maintenance-order:create".to_string()];
     let sandbox_authority_decision = decide_bound(&authority, &sandbox_authority_request).unwrap();
@@ -757,6 +758,12 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     store.save_execution_binding(&work, &cmms_binding).unwrap();
     store
         .save_binding_migration(&work, &migration_decision)
+        .unwrap();
+    store
+        .save_bound_authority_decision(&work, &sandbox_authority_decision)
+        .unwrap();
+    store
+        .save_external_action_permit(&work, &sandbox_permit)
         .unwrap();
     store.save_action_attempt(&work, &attempt).unwrap();
     store.save_reconciliation(&work, &reconciliation).unwrap();

@@ -24,6 +24,8 @@ pub struct AuthorityRequest {
     pub action: String,
     pub resource: String,
     pub work_ref: Option<String>,
+    #[serde(default)]
+    pub work_generation: Option<u64>,
     pub site_ref: Option<String>,
     pub scope: Vec<String>,
     pub parameter_envelope: BTreeMap<String, String>,
@@ -49,6 +51,7 @@ impl AuthorityRequest {
             action: action.into(),
             resource: resource.into(),
             work_ref: None,
+            work_generation: None,
             site_ref: None,
             scope: Vec::new(),
             parameter_envelope: BTreeMap::new(),
@@ -191,6 +194,7 @@ mod tests {
         let provider = NativePolicyAuthority::new(policy);
         let mut request = AuthorityRequest::new("investigator", "historian.read", "CNC-17");
         request.work_ref = Some("work-1042".to_string());
+        request.work_generation = Some(3);
         request.site_ref = Some("plant-a".to_string());
         request.scope = vec!["historian.read".to_string()];
         let decision = provider.decide(&request).unwrap();
@@ -208,6 +212,7 @@ mod tests {
         let provider = NativePolicyAuthority::new(policy);
         let mut request = AuthorityRequest::new("controller", "cmms.write", "CMMS-A");
         request.work_ref = Some("work-1".to_string());
+        request.work_generation = Some(2);
         request.site_ref = Some("plant-a".to_string());
         request.scope = vec!["maintenance-order:create".to_string()];
         let bound = decide_bound(&provider, &request).unwrap();
@@ -215,6 +220,7 @@ mod tests {
         assert_eq!(bound.request.action, "cmms.write");
         assert_eq!(bound.request.resource, "CMMS-A");
         assert_eq!(bound.request.work_ref.as_deref(), Some("work-1"));
+        assert_eq!(bound.request.work_generation, Some(2));
         assert_eq!(bound.request.site_ref.as_deref(), Some("plant-a"));
     }
 

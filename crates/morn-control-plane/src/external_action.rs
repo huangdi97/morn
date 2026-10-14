@@ -87,9 +87,11 @@ fn build_external_attempt_with_effect(
     business_key: impl Into<String>,
     action_name: impl Into<String>,
 ) -> Result<ActionAttempt> {
-    if permit.work_ref != binding.work_id.to_string() {
+    if permit.work_ref != binding.work_id.to_string()
+        || permit.work_generation != binding.work_generation
+    {
         return Err(Error::validation(
-            "external action permit Work does not match ExecutionBinding Work",
+            "external action permit Work/generation does not match ExecutionBinding",
         ));
     }
     if permit.binding_ref != binding.id.to_string() {
@@ -215,6 +217,7 @@ mod tests {
             scope: vec![],
             parameter_envelope: BTreeMap::new(),
             work_ref: work.id.to_string(),
+            work_generation: work.generation,
             binding_ref: binding.id.to_string(),
             not_before: None,
             expires_at: None,
@@ -257,6 +260,7 @@ mod tests {
             scope: vec![],
             parameter_envelope: BTreeMap::new(),
             work_ref: work.id.to_string(),
+            work_generation: work.generation,
             binding_ref: binding.id.to_string(),
             not_before: None,
             expires_at: None,
@@ -309,6 +313,7 @@ mod tests {
             scope: vec![],
             parameter_envelope: BTreeMap::new(),
             work_ref: work.id.to_string(),
+            work_generation: work.generation,
             binding_ref: binding.id.to_string(),
             not_before: None,
             expires_at: None,
@@ -359,6 +364,7 @@ mod tests {
             scope: vec![],
             parameter_envelope: BTreeMap::new(),
             work_ref: work.id.to_string(),
+            work_generation: work.generation,
             binding_ref: binding.id.to_string(),
             not_before: None,
             expires_at: None,
@@ -395,6 +401,7 @@ mod tests {
             scope: vec![],
             parameter_envelope: BTreeMap::new(),
             work_ref: work.id.to_string(),
+            work_generation: work.generation,
             binding_ref: binding.id.to_string(),
             not_before: None,
             expires_at: None,
@@ -437,6 +444,7 @@ mod tests {
             scope: vec![],
             parameter_envelope: BTreeMap::new(),
             work_ref: work.id.to_string(),
+            work_generation: work.generation,
             binding_ref: binding.id.to_string(),
             not_before: None,
             expires_at: None,
@@ -498,6 +506,7 @@ mod tests {
             scope: vec![],
             parameter_envelope: BTreeMap::new(),
             work_ref: work.id.to_string(),
+            work_generation: work.generation,
             binding_ref: binding.id.to_string(),
             not_before: None,
             expires_at: None,
@@ -532,6 +541,7 @@ mod tests {
             scope: vec!["maintenance-order:create".to_string()],
             parameter_envelope: BTreeMap::new(),
             work_ref: work.id.to_string(),
+            work_generation: work.generation,
             binding_ref: binding.id.to_string(),
             not_before: None,
             expires_at: None,
