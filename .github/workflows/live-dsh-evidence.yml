@@ -267,17 +267,68 @@ jobs:
 
           runtime_wheel="$(find "$dist_dir" -maxdepth 1 -type f -name 'deepseek_harness_runtime_bin-*.whl' -print -quit)"
           test -n "$runtime_wheel"
-          python -m pip install --disable-pip-version-check "$runtime_wheel"
-          python -m pip install --disable-pip-version-check "deepseek-harness-sdk==$INPUT_RUNTIME_VERSION"
+          python -m pip install --disable-pip-version-check --no-deps "$runtime_wheel"
+          export MORN_DSH_RUNTIME_WHEEL="$runtime_wheel"
           python - <<'PY'
-          import importlib.metadata as metadata, os
+          import hashlib
+          import importlib.metadata as metadata
+          import json
+          import os
+          import pathlib
+          import zipfile
+
+          from deepseek_harness_runtime import bundled_runtime_path
+
           expected = os.environ["INPUT_RUNTIME_VERSION"]
-          for package in ("deepseek-harness-runtime-bin", "deepseek-harness-sdk"):
-              actual = metadata.version(package)
-              if actual != expected:
-                  raise SystemExit(f"{package} version mismatch: expected {expected}, actual {actual}")
+          actual = metadata.version("deepseek-harness-runtime-bin")
+          if actual != expected:
+              raise SystemExit(
+                  f"deepseek-harness-runtime-bin version mismatch: expected {expected}, actual {actual}"
+              )
+
+          wheel = pathlib.Path(os.environ["MORN_DSH_RUNTIME_WHEEL"]).resolve()
+          executable = pathlib.Path(bundled_runtime_path()).resolve()
+          import deepseek_harness_runtime
+          package_root = pathlib.Path(deepseek_harness_runtime.__file__).resolve().parent
+          site_root = package_root.parent
+          try:
+              member = executable.relative_to(site_root).as_posix()
+          except ValueError as exc:
+              raise SystemExit(
+                  f"bundled DSH executable escaped installed package root: {executable}"
+              ) from exc
+
+          with zipfile.ZipFile(wheel) as archive:
+              try:
+                  wheel_bytes = archive.read(member)
+              except KeyError as exc:
+                  raise SystemExit(
+                      f"verified runtime wheel does not contain launched executable member {member}"
+                  ) from exc
+
+          installed_bytes = executable.read_bytes()
+          wheel_member_digest = hashlib.sha256(wheel_bytes).hexdigest()
+          installed_digest = hashlib.sha256(installed_bytes).hexdigest()
+          if installed_digest != wheel_member_digest:
+              raise SystemExit(
+                  "installed DSH executable bytes differ from the already verified wheel member"
+              )
+
+          report_path = pathlib.Path("target/live-dsh-evidence/runtime-artifact-verification.json")
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          report["launcher"] = {
+              "path": str(executable),
+              "wheel_member": member,
+              "sha256": f"sha256:{installed_digest}",
+              "matches_verified_wheel_member": True,
+          }
+          report["claims"]["launched_executable_bound_to_verified_artifact"] = True
+          report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"MORN_DSH_COMMAND={executable}\n")
+              fh.write(f"MORN_DSH_ACP_COMMAND={executable}\n")
           PY
-          command -v dsh >/dev/null
 
       - name: Run authenticated SDK provider smoke (E0 only)
         if: inputs.operation == 'smoke-sdk'
