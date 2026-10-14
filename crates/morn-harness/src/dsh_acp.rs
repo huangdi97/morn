@@ -715,7 +715,10 @@ impl DshAcpStdioClient {
                 "DSH ACP prompt requires non-empty session id and text",
             ));
         }
-        let start = self.notifications.len();
+        // ACP lifecycle controllers can stay alive for many sessions. Keep
+        // only the current prompt interval in memory; prior notifications have
+        // already served their caller and must not become an unbounded transcript.
+        self.notifications.clear();
         let result = self.request(
             DSH_ACP_METHOD_SESSION_PROMPT,
             Some(json!({
@@ -723,18 +726,20 @@ impl DshAcpStdioClient {
                 "prompt":[{"type":"text","text":text}]
             })),
             self.prompt_timeout,
-        )?;
-        let stop_reason = required_string(&result, "stopReason", "DSH ACP prompt result")?;
-        let updates = &self.notifications[start..];
+        );
+        let updates = std::mem::take(&mut self.notifications);
         if updates.iter().any(acp_update_reports_tool_activity) {
+            // Policy evidence dominates a later protocol or transport failure.
             return Err(Error::external(
                 "DSH ACP reported tool activity on a transport that has no Morn authority grant",
             ));
         }
+        let result = result?;
+        let stop_reason = required_string(&result, "stopReason", "DSH ACP prompt result")?;
         Ok(DshAcpPromptResult {
             session_id: session_id.to_string(),
             stop_reason,
-            assistant_text: assistant_text_from_acp_updates(updates, session_id),
+            assistant_text: assistant_text_from_acp_updates(&updates, session_id),
         })
     }
 
@@ -1525,6 +1530,10 @@ mod tests {
         let result = client.prompt_text(&session, "hello").unwrap();
         assert_eq!(result.stop_reason, "end_turn");
         assert_eq!(result.assistant_text, "hello ACP");
+        assert!(
+            client.notifications.is_empty(),
+            "settled ACP prompt notifications must be consumed after projection"
+        );
         let options = client
             .set_session_config_option(
                 &session,

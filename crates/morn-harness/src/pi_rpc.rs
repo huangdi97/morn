@@ -948,6 +948,7 @@ mod tests {
         let stdin = std::io::stdin();
         let mut stdout = std::io::stdout().lock();
         let mut last_assistant_text = "hello from fake pi".to_string();
+        let mut emit_late_tool_activity = false;
         for line in stdin.lock().lines() {
             let line = line.unwrap();
             let request: Value = match serde_json::from_str(&line) {
@@ -996,6 +997,7 @@ mod tests {
                     } else {
                         "hello from fake pi".to_string()
                     };
+                    emit_late_tool_activity = prompt_text == "__late_tool_activity__";
                     write(
                         &mut stdout,
                         response("prompt", json!({"disposition":"started"})),
@@ -1040,13 +1042,38 @@ mod tests {
                     }
                     write(&mut stdout, json!({"type":"agent_settled"}));
                 }
-                "get_last_assistant_text" => write(
-                    &mut stdout,
-                    response(
-                        "get_last_assistant_text",
-                        json!({"text":last_assistant_text}),
-                    ),
-                ),
+                "get_last_assistant_text" => {
+                    if emit_late_tool_activity {
+                        write(
+                            &mut stdout,
+                            json!({
+                                "type":"tool_execution_start",
+                                "toolCallId":"late-call-1",
+                                "toolName":"bash",
+                                "args":{"command":"echo late"}
+                            }),
+                        );
+                        write(
+                            &mut stdout,
+                            json!({
+                                "type":"tool_execution_end",
+                                "toolCallId":"late-call-1",
+                                "toolName":"bash",
+                                "result":{"content":[]},
+                                "isError":false,
+                                "durationMs":1
+                            }),
+                        );
+                        emit_late_tool_activity = false;
+                    }
+                    write(
+                        &mut stdout,
+                        response(
+                            "get_last_assistant_text",
+                            json!({"text":last_assistant_text}),
+                        ),
+                    )
+                }
                 "abort" => write(&mut stdout, response("abort", Value::Null)),
                 _ => write(
                     &mut stdout,

@@ -590,15 +590,25 @@ impl HarnessProvider for PiHarnessProvider {
                     state.last_event = format!("pi_prompt:{}", state.step);
                 }
 
-                let (run, turn_events) = {
+                let (run, output_text, turn_events) = {
                     let client = self
                         .real_client
                         .as_mut()
                         .ok_or_else(|| Error::internal("Pi RPC client missing after startup"))?;
-                    let event_start = client.buffered_events.len();
+                    // A provider turn owns all RPC events until its final
+                    // assistant-output read completes. Clear already-consumed
+                    // history, then consume this interval after both operations.
+                    // This also catches late tool activity delivered while
+                    // get_last_assistant_text is being correlated.
+                    client.buffered_events.clear();
                     let run = client.prompt_and_wait(input);
-                    let turn_events = client.buffered_events[event_start..].to_vec();
-                    (run, turn_events)
+                    let output_text = if run.is_ok() {
+                        Some(client.get_last_assistant_text())
+                    } else {
+                        None
+                    };
+                    let turn_events = std::mem::take(&mut client.buffered_events);
+                    (run, output_text, turn_events)
                 };
                 if pi_events_have_prohibited_tool_activity(&turn_events) {
                     let normalized =
@@ -629,11 +639,8 @@ impl HarnessProvider for PiHarnessProvider {
                 }
                 match run {
                     Ok(run) => {
-                        let text = match self
-                            .real_client
-                            .as_mut()
-                            .ok_or_else(|| Error::internal("Pi RPC client missing after prompt"))?
-                            .get_last_assistant_text()
+                        let text = match output_text
+                            .expect("successful Pi run always performs assistant output retrieval")
                         {
                             Ok(text) => text.unwrap_or_default(),
                             Err(error) => {
@@ -1092,6 +1099,28 @@ mod tests {
     }
 
     #[test]
+    fn real_pi_e0_policy_catches_tool_activity_arriving_during_output_read() {
+        let (mut provider, ctx, _handle) = real_pi_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        let error = provider
+            .send(&session.id, "__late_tool_activity__")
+            .unwrap_err();
+        assert!(
+            format!("{error}").contains("tool activity"),
+            "late tool evidence must dominate an otherwise settled prompt"
+        );
+        assert!(provider.real_client.is_none());
+        assert_eq!(
+            provider.inspect(&session.id).unwrap().status,
+            "policy-violation-runtime-reaped"
+        );
+        assert!(provider
+            .stream_events(&session.id)
+            .iter()
+            .any(|event| event.kind == ExecutionEventKind::ToolProposed));
+    }
+
+    #[test]
     fn real_pi_preflight_refreshes_expired_initialization_with_get_state() {
         let (mut provider, _ctx, _handle) = real_pi_wire_fixture_provider();
         assert_eq!(provider.preflight_real_runtime().unwrap(), "1.0.0");
@@ -1141,6 +1170,10 @@ mod tests {
 
         let output = provider.send(&session.id, "hello").unwrap();
         assert_eq!(output.text, "hello from fake pi");
+        assert!(
+            provider.real_client.as_ref().unwrap().buffered_events.is_empty(),
+            "normalized Pi RPC events must be consumed after each provider turn"
+        );
         assert_eq!(
             provider.runtime_health().state,
             crate::provider::HarnessRuntimeHealthState::Healthy

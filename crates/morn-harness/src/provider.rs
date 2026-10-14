@@ -1071,9 +1071,12 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     let client = self.real_client.as_mut().ok_or_else(|| {
                         Error::internal("DSH SDK client missing after initialization")
                     })?;
-                    let notification_start = client.notifications.len();
+                    // Each provider turn owns one bounded notification interval.
+                    // Prior notifications have already been normalized into Morn
+                    // execution events and must not accumulate forever.
+                    client.notifications.clear();
                     let run = client.run_text_prompt(session_id, input);
-                    let turn_notifications = client.notifications[notification_start..].to_vec();
+                    let turn_notifications = std::mem::take(&mut client.notifications);
                     (run, turn_notifications)
                 };
                 let state = self
@@ -1574,6 +1577,10 @@ mod dsh_provider_tests {
 
         let output = provider.send(&session.id, "hello").unwrap();
         assert_eq!(output.text, "hello from fake sdk");
+        assert!(
+            provider.real_client.as_ref().unwrap().notifications.is_empty(),
+            "normalized SDK notifications must be consumed after each provider turn"
+        );
         assert_eq!(
             provider.runtime_health().state,
             HarnessRuntimeHealthState::Healthy
