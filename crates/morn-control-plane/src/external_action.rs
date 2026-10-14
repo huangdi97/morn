@@ -8,6 +8,7 @@ use morn_capability::effect::{EffectClass, EffectContract};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::time::Timestamp;
 use morn_runtime::{ActionAttempt, AttemptState, ExecutionBinding};
+use morn_work::control::WorkResource;
 
 use crate::ExternalActionPermit;
 
@@ -27,6 +28,59 @@ pub fn begin_external_attempt(
 }
 
 pub fn begin_external_attempt_with_effect(
+    permit: &ExternalActionPermit,
+    binding: &ExecutionBinding,
+    effect: EffectContract,
+    business_key: impl Into<String>,
+    action_name: impl Into<String>,
+) -> Result<ActionAttempt> {
+    if matches!(
+        permit.mode,
+        crate::ExternalActionMode::SandboxWrite
+            | crate::ExternalActionMode::ShadowWrite
+            | crate::ExternalActionMode::ProductionWrite
+            | crate::ExternalActionMode::PhysicalControl
+    ) {
+        return Err(Error::validation(
+            "write-like external actions require a current Work-generation witness; use begin_external_attempt_for_work_with_effect",
+        ));
+    }
+    build_external_attempt_with_effect(permit, binding, effect, business_key, action_name)
+}
+
+/// Governed constructor for write-like external actions. Requiring the current
+/// Work here closes the gap between permit issuance and actual dispatch: a
+/// generation-N permit/binding cannot be used after desired state advances.
+pub fn begin_external_attempt_for_work_with_effect(
+    work: &WorkResource,
+    permit: &ExternalActionPermit,
+    binding: &ExecutionBinding,
+    effect: EffectContract,
+    business_key: impl Into<String>,
+    action_name: impl Into<String>,
+) -> Result<ActionAttempt> {
+    if work.termination_requested_at.is_some() {
+        return Err(Error::invalid_state(
+            "cannot begin an external action after Work termination is requested",
+        ));
+    }
+    if !binding.matches_work_generation(work)
+        || binding.profile_ref != work.spec.profile_ref
+        || binding.site_ref != work.spec.site_ref
+    {
+        return Err(Error::conflict(
+            "external action requires a binding pinned to the current Work generation/profile/site",
+        ));
+    }
+    if permit.work_ref != work.id.to_string() {
+        return Err(Error::validation(
+            "external action permit does not belong to the current Work",
+        ));
+    }
+    build_external_attempt_with_effect(permit, binding, effect, business_key, action_name)
+}
+
+fn build_external_attempt_with_effect(
     permit: &ExternalActionPermit,
     binding: &ExecutionBinding,
     effect: EffectContract,
@@ -77,6 +131,15 @@ pub fn begin_external_attempt_with_effect(
         )));
     }
 
+    if matches!(
+        permit.mode,
+        crate::ExternalActionMode::Read | crate::ExternalActionMode::CandidateOnly
+    ) && effect.class != EffectClass::E0LifecycleReversible
+    {
+        return Err(Error::not_authorized(
+            "read/candidate external-action modes cannot authorize write-like effects",
+        ));
+    }
     if matches!(
         permit.mode,
         crate::ExternalActionMode::SandboxWrite
@@ -157,7 +220,8 @@ mod tests {
             expires_at: None,
             issued_at: Timestamp::now(),
         };
-        assert!(begin_external_attempt_with_effect(
+        assert!(begin_external_attempt_for_work_with_effect(
+            &work,
             &permit,
             &binding,
             EffectContract::e2("cmms.cancel-order"),
@@ -199,7 +263,8 @@ mod tests {
             issued_at: Timestamp::now(),
         };
 
-        assert!(begin_external_attempt_with_effect(
+        assert!(begin_external_attempt_for_work_with_effect(
+            &work,
             &permit,
             &binding,
             EffectContract::e2("cmms.other-cancel"),
@@ -207,7 +272,8 @@ mod tests {
             "cmms.create-order",
         )
         .is_err());
-        assert!(begin_external_attempt_with_effect(
+        assert!(begin_external_attempt_for_work_with_effect(
+            &work,
             &permit,
             &binding,
             EffectContract::e2("cmms.cancel-order"),
@@ -248,7 +314,8 @@ mod tests {
             expires_at: None,
             issued_at: Timestamp::now(),
         };
-        assert!(begin_external_attempt_with_effect(
+        assert!(begin_external_attempt_for_work_with_effect(
+            &work,
             &permit,
             &binding,
             EffectContract::e2("cmms.cancel-order"),
@@ -258,7 +325,8 @@ mod tests {
         .is_err());
 
         binding.compensation_ref = Some("cmms.cancel-order".to_string());
-        assert!(begin_external_attempt_with_effect(
+        assert!(begin_external_attempt_for_work_with_effect(
+            &work,
             &permit,
             &binding,
             EffectContract::e2("cmms.cancel-order"),
@@ -300,6 +368,113 @@ mod tests {
             begin_external_attempt(&permit, &binding, "business-key", "cmms.sandbox.write",)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn read_mode_cannot_smuggle_a_write_effect_under_a_permissive_binding() {
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "read maintenance order",
+            "morn.factory.readonly@1.0.0",
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let mut binding =
+            ExecutionBinding::for_work(&work, "capability:mixed", "provider:a", "1");
+        binding.effect_ceiling = Some(EffectClass::E3Irreversible);
+        binding.compensation_ref = Some("cmms.cancel-order".to_string());
+        let permit = ExternalActionPermit {
+            id: crate::ExternalActionPermitId::generate_with("permit"),
+            profile_ref: binding.profile_ref.clone(),
+            mode: crate::ExternalActionMode::Read,
+            authority_decision_ref: "authz:test".to_string(),
+            principal: "controller".to_string(),
+            acting_for: None,
+            action: "cmms.read-order".to_string(),
+            resource: "cmms://fixture".to_string(),
+            site_ref: binding.site_ref.clone(),
+            scope: vec![],
+            parameter_envelope: BTreeMap::new(),
+            work_ref: work.id.to_string(),
+            binding_ref: binding.id.to_string(),
+            not_before: None,
+            expires_at: None,
+            issued_at: Timestamp::now(),
+        };
+
+        assert!(begin_external_attempt_for_work_with_effect(
+            &work,
+            &permit,
+            &binding,
+            EffectContract::e2("cmms.cancel-order"),
+            "smuggled-write",
+            "cmms.read-order",
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn write_permit_cannot_dispatch_after_work_generation_changes() {
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "create maintenance order",
+            "morn.factory.readonly@1.0.0",
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        let mut binding =
+            ExecutionBinding::for_work(&work, "capability:write", "provider:a", "1");
+        binding.effect_ceiling = Some(EffectClass::E2Compensatable);
+        binding.compensation_ref = Some("cmms.cancel-order".to_string());
+        let permit = ExternalActionPermit {
+            id: crate::ExternalActionPermitId::generate_with("permit"),
+            profile_ref: binding.profile_ref.clone(),
+            mode: crate::ExternalActionMode::SandboxWrite,
+            authority_decision_ref: "authz:test".to_string(),
+            principal: "controller".to_string(),
+            acting_for: None,
+            action: "cmms.create-order".to_string(),
+            resource: "cmms://fixture".to_string(),
+            site_ref: binding.site_ref.clone(),
+            scope: vec![],
+            parameter_envelope: BTreeMap::new(),
+            work_ref: work.id.to_string(),
+            binding_ref: binding.id.to_string(),
+            not_before: None,
+            expires_at: None,
+            issued_at: Timestamp::now(),
+        };
+
+        assert!(begin_external_attempt_with_effect(
+            &permit,
+            &binding,
+            EffectContract::e2("cmms.cancel-order"),
+            "legacy-write",
+            "cmms.create-order",
+        )
+        .is_err());
+        assert!(begin_external_attempt_for_work_with_effect(
+            &work,
+            &permit,
+            &binding,
+            EffectContract::e2("cmms.cancel-order"),
+            "current-generation",
+            "cmms.create-order",
+        )
+        .is_ok());
+
+        let mut next = work.spec.clone();
+        next.goal = "changed desired action".to_string();
+        work.replace_spec(next);
+        assert!(begin_external_attempt_for_work_with_effect(
+            &work,
+            &permit,
+            &binding,
+            EffectContract::e2("cmms.cancel-order"),
+            "stale-generation",
+            "cmms.create-order",
+        )
+        .is_err());
     }
 
     #[test]

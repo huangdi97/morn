@@ -25,7 +25,10 @@ pub use condition_evidence::{derive_controller_inputs, ConditionEvidence, Condit
 pub use controller_runtime::{
     ControllerTickResult, DurableBusinessEvidenceControllerRuntime, DurableWorkControllerRuntime,
 };
-pub use external_action::{begin_external_attempt, begin_external_attempt_with_effect};
+pub use external_action::{
+    begin_external_attempt, begin_external_attempt_for_work_with_effect,
+    begin_external_attempt_with_effect,
+};
 
 pub use provider_gate::{ProviderGate, ProviderGateBlock, ProviderGatePolicy, ProviderGateReport};
 pub use readiness::{
@@ -1488,9 +1491,9 @@ impl ControlPlaneStore for MornStore {
         let binding: ExecutionBinding = self
             .load_record("execution_binding_v115", attempt.binding_id.as_str())?
             .ok_or_else(|| Error::not_found("action attempt execution binding"))?;
-        if binding.work_id != work.id || attempt.business_key.trim().is_empty() {
+        if !binding.matches_work_generation(work) || attempt.business_key.trim().is_empty() {
             return Err(Error::validation(
-                "action attempt must have a business key and binding owned by this Work",
+                "action attempt must have a business key and binding pinned to the current Work generation",
             ));
         }
         if matches!(
@@ -3141,6 +3144,27 @@ mod control_plane_persistence_scope_tests {
             ConditionStatus::True,
         ));
         store.save_work_resource_cas(&mut work).unwrap();
+    }
+
+    #[test]
+    fn stale_generation_attempt_cannot_enter_current_work_projection() {
+        let store = MornStore::open_in_memory().unwrap();
+        let mut work = fixture_work();
+        store.save_work_resource_cas(&mut work).unwrap();
+        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        store.save_execution_binding(&work, &binding).unwrap();
+        let attempt = ActionAttempt::new(binding.id.clone(), "work:create", "create");
+
+        let mut next = work.spec.clone();
+        next.goal = "changed desired generation".to_string();
+        work.replace_spec(next);
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        assert!(store.save_action_attempt(&work, &attempt).is_err());
+        assert!(store
+            .load_record::<ActionAttempt>("action_attempt_v115", attempt.id.as_str())
+            .unwrap()
+            .is_none());
     }
 
     #[test]

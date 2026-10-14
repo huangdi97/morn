@@ -373,7 +373,8 @@ mod tests {
         let finalizer = finalizer.unwrap();
         assert!(work.finalizers.contains(&finalizer));
 
-        let mut attempt = crate::begin_external_attempt_with_effect(
+        let mut attempt = crate::begin_external_attempt_for_work_with_effect(
+            &work,
             &permit,
             &binding,
             morn_capability::effect::EffectContract::e2("cmms.cancel"),

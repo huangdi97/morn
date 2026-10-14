@@ -17,7 +17,7 @@ use morn_capability::{
     CapabilityStage, EffectClass, IsolationLevel, WorkcellMember, WorkcellPlan,
 };
 use morn_control_plane::{
-    begin_external_attempt_with_effect, capability_qualification_evidence,
+    begin_external_attempt_for_work_with_effect, capability_qualification_evidence,
     capability_resolution_evidence, issue_external_action_permit,
     issue_external_action_permit_for_work, provenance_condition_evidence,
     source_of_truth_condition_evidence, CapabilityEligibilityGate, ControlPlaneStore,
@@ -566,7 +566,8 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
 
     // Simulate the classic timeout-after-remote-commit ambiguity. The attempt
     // must originate from the governed permit boundary, not direct construction.
-    let mut attempt = begin_external_attempt_with_effect(
+    let mut attempt = begin_external_attempt_for_work_with_effect(
+        &work,
         &sandbox_permit,
         &cmms_binding,
         EffectContract::e2("cmms.sandbox.cancel-order"),
