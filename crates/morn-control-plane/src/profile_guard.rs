@@ -9,8 +9,11 @@ use serde::{Deserialize, Serialize};
 use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::Id;
 use morn_kernel::time::Timestamp;
+use morn_capability::{EffectClass, EffectContract};
 use morn_profile::DomainProfile;
-use morn_runtime::{BoundAuthorityDecision, ExecutionBinding};
+use morn_runtime::{
+    ActionAttempt, ActionAttemptId, BoundAuthorityDecision, ExecutionBinding,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "kebab-case")]
@@ -68,6 +71,100 @@ pub struct ExternalActionPermit {
     pub not_before: Option<Timestamp>,
     pub expires_at: Option<Timestamp>,
     pub issued_at: Timestamp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConsumedExternalActionPermit {
+    pub permit_id: ExternalActionPermitId,
+    pub work_ref: String,
+    pub work_generation: u64,
+    pub binding_ref: String,
+    pub attempt_id: ActionAttemptId,
+    pub business_key: String,
+    pub action: String,
+    pub resource: String,
+    pub mode: ExternalActionMode,
+    pub effect_contract: EffectContract,
+    pub consumed_at: Timestamp,
+}
+
+impl ConsumedExternalActionPermit {
+    pub fn from_write_attempt(
+        permit: &ExternalActionPermit,
+        attempt: &ActionAttempt,
+        now: Timestamp,
+    ) -> Result<Self> {
+        let effect = attempt
+            .effect_contract
+            .clone()
+            .ok_or_else(|| Error::validation("write-like permit consumption requires an effect"))?;
+        if !matches!(
+            permit.mode,
+            ExternalActionMode::SandboxWrite
+                | ExternalActionMode::ShadowWrite
+                | ExternalActionMode::ProductionWrite
+                | ExternalActionMode::PhysicalControl
+        ) || effect.class == EffectClass::E0LifecycleReversible
+        {
+            return Err(Error::validation(
+                "only a write-like permit with a non-E0 effect can be consumed as an external action",
+            ));
+        }
+        if attempt.external_action_permit_ref.as_deref() != Some(permit.id.as_str())
+            || attempt.binding_id.as_str() != permit.binding_ref
+            || attempt.action != permit.action
+            || attempt.resource_ref.as_deref() != Some(permit.resource.as_str())
+            || attempt.site_ref != permit.site_ref
+            || attempt.authority_decision_ref.as_deref()
+                != Some(permit.authority_decision_ref.as_str())
+            || attempt.business_key.trim().is_empty()
+        {
+            return Err(Error::validation(
+                "external-action permit consumption must exactly match its action attempt",
+            ));
+        }
+        if now < permit.issued_at
+            || permit.not_before.is_some_and(|start| now < start)
+            || permit.expires_at.is_some_and(|end| now > end)
+            || attempt.created_at < permit.issued_at
+            || attempt.created_at > now
+        {
+            return Err(Error::not_authorized(
+                "external-action permit cannot be consumed outside its issuance/validity window",
+            ));
+        }
+        Ok(Self {
+            permit_id: permit.id.clone(),
+            work_ref: permit.work_ref.clone(),
+            work_generation: permit.work_generation,
+            binding_ref: permit.binding_ref.clone(),
+            attempt_id: attempt.id.clone(),
+            business_key: attempt.business_key.clone(),
+            action: attempt.action.clone(),
+            resource: permit.resource.clone(),
+            mode: permit.mode,
+            effect_contract: effect,
+            consumed_at: now,
+        })
+    }
+
+    pub fn exactly_matches(
+        &self,
+        permit: &ExternalActionPermit,
+        attempt: &ActionAttempt,
+    ) -> bool {
+        self.permit_id == permit.id
+            && self.work_ref == permit.work_ref
+            && self.work_generation == permit.work_generation
+            && self.binding_ref == permit.binding_ref
+            && self.attempt_id == attempt.id
+            && self.business_key == attempt.business_key
+            && self.action == attempt.action
+            && self.resource == permit.resource
+            && self.mode == permit.mode
+            && attempt.effect_contract.as_ref() == Some(&self.effect_contract)
+            && attempt.external_action_permit_ref.as_deref() == Some(permit.id.as_str())
+    }
 }
 
 pub fn evaluate_profile_action(

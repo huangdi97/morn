@@ -40,8 +40,9 @@ pub use readiness::{
 
 pub use profile_guard::{
     enforce_profile_action, evaluate_profile_action, issue_external_action_permit,
-    issue_external_action_permit_for_work, resolve_external_action_finalizer, ExternalActionMode,
-    ExternalActionPermit, ExternalActionPermitId, ProfileActionDecision,
+    issue_external_action_permit_for_work, resolve_external_action_finalizer,
+    ConsumedExternalActionPermit, ExternalActionMode, ExternalActionPermit, ExternalActionPermitId,
+    ProfileActionDecision,
 };
 
 use morn_assurance::{ConsumedCustomerValueAttestation, CustomerValueAttestation};
@@ -1611,6 +1612,18 @@ impl ControlPlaneStore for MornStore {
                 "action attempt must have a business key and binding pinned to the current Work generation",
             ));
         }
+
+        let now = morn_kernel::time::Timestamp::now();
+        if attempt.created_at < work.created_at
+            || attempt.created_at > now
+            || attempt.updated_at < attempt.created_at
+            || attempt.updated_at > now
+        {
+            return Err(Error::validation(
+                "action attempt timestamps must remain inside the canonical Work observation window",
+            ));
+        }
+
         let effect_class = attempt.effect_contract.as_ref().map(|effect| effect.class);
         let write_like = effect_class.is_some_and(|class| {
             class != morn_capability::effect::EffectClass::E0LifecycleReversible
@@ -1637,6 +1650,22 @@ impl ControlPlaneStore for MornStore {
                 "write-like action attempt requires a durable external-action permit reference",
             ));
         }
+
+        let kind = "action_attempt_v115";
+        // Capture the revision before inspecting the snapshot. Re-reading it
+        // after validation could let a competing writer advance the row and
+        // accidentally supply our stale projection with that newer revision.
+        let expected = self
+            .record_revision(kind, attempt.id.as_str())?
+            .unwrap_or(0);
+        let previous: Option<ActionAttempt> = self.load_record(kind, attempt.id.as_str())?;
+
+        if write_like && previous.is_none() && attempt.state != AttemptState::Authorized {
+            return Err(Error::invalid_state(
+                "a write-like action must be durably recorded as Authorized before dispatch or later states",
+            ));
+        }
+
         if let Some(permit_ref) = &attempt.external_action_permit_ref {
             let permit: ExternalActionPermit = self
                 .load_record("external_action_permit_v115", permit_ref)?
@@ -1675,7 +1704,52 @@ impl ControlPlaneStore for MornStore {
                 }
                 _ => {}
             }
+
+            if write_like {
+                let consumption_kind = "external_action_permit_consumed_v115";
+                let ensure_same_consumption =
+                    |consumed: &ConsumedExternalActionPermit| -> Result<()> {
+                        if consumed.exactly_matches(&permit, attempt) {
+                            Ok(())
+                        } else {
+                            Err(Error::conflict(
+                                "write-like external-action permit was already consumed by another attempt",
+                            ))
+                        }
+                    };
+                match self.load_record::<ConsumedExternalActionPermit>(
+                    consumption_kind,
+                    permit.id.as_str(),
+                )? {
+                    Some(consumed) => ensure_same_consumption(&consumed)?,
+                    None => {
+                        let consumed =
+                            ConsumedExternalActionPermit::from_write_attempt(&permit, attempt, now)?;
+                        match self.save_record_immutable(
+                            consumption_kind,
+                            permit.id.as_str(),
+                            work.workspace_id.as_str(),
+                            consumed.consumed_at.millis(),
+                            &consumed,
+                        ) {
+                            Ok(()) => {}
+                            Err(Error::Conflict(_)) => {
+                                let raced: ConsumedExternalActionPermit = self
+                                    .load_record(consumption_kind, permit.id.as_str())?
+                                    .ok_or_else(|| {
+                                        Error::conflict(
+                                            "external-action permit consumption raced without a durable winner",
+                                        )
+                                    })?;
+                                ensure_same_consumption(&raced)?;
+                            }
+                            Err(error) => return Err(error),
+                        }
+                    }
+                }
+            }
         }
+
         if matches!(
             attempt.state,
             AttemptState::Observed | AttemptState::Verified
@@ -1689,14 +1763,6 @@ impl ControlPlaneStore for MornStore {
                 "observed external attempt requires an external reference and evidence",
             ));
         }
-        let kind = "action_attempt_v115";
-        // Capture the revision before inspecting the snapshot. Re-reading it
-        // after validation could let a competing writer advance the row and
-        // accidentally supply our stale projection with that newer revision.
-        let expected = self
-            .record_revision(kind, attempt.id.as_str())?
-            .unwrap_or(0);
-        let previous: Option<ActionAttempt> = self.load_record(kind, attempt.id.as_str())?;
         if let Some(previous) = &previous {
             if previous.binding_id != attempt.binding_id
                 || previous.business_key != attempt.business_key
@@ -1733,6 +1799,7 @@ impl ControlPlaneStore for MornStore {
                 return Ok(());
             }
         }
+
         // CAS rejects a concurrent update after our revision snapshot.
         self.save_record_cas(
             kind,
@@ -3324,6 +3391,78 @@ mod control_plane_persistence_scope_tests {
             ConditionStatus::True,
         ));
         store.save_work_resource_cas(&mut work).unwrap();
+    }
+
+    #[test]
+    fn write_like_permit_is_consumed_by_first_attempt_and_cannot_replay() {
+        use morn_kernel::policy::{Policy, PolicyRule};
+        use morn_runtime::{decide_bound, AuthorityRequest, NativePolicyAuthority};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+
+        let mut binding = ExecutionBinding::for_work(&work, "cap:write", "provider:a", "v1");
+        binding.effect_ceiling = Some(morn_capability::EffectClass::E2Compensatable);
+        binding.compensation_ref = Some("cmms.cancel-order".to_string());
+        store.save_execution_binding(&work, &binding).unwrap();
+
+        let policy = Policy::new(
+            work.workspace_id.clone(),
+            "external-write",
+            vec![PolicyRule::allow("cmms.sandbox.write")],
+        );
+        let provider = NativePolicyAuthority::new(policy);
+        let mut request =
+            AuthorityRequest::new("controller", "cmms.sandbox.write", "CMMS-fixture");
+        request.work_ref = Some(work.id.to_string());
+        request.work_generation = Some(work.generation);
+        request.site_ref = work.spec.site_ref.clone();
+        let authority = decide_bound(&provider, &request).unwrap();
+        store
+            .save_bound_authority_decision(&work, &authority)
+            .unwrap();
+
+        let permit = issue_external_action_permit(
+            &DomainProfile::factory_readonly_v1(),
+            ExternalActionMode::SandboxWrite,
+            &authority,
+            &binding,
+        )
+        .unwrap();
+        store.save_external_action_permit(&work, &permit).unwrap();
+
+        let mut first = begin_external_attempt_for_work_with_effect(
+            &work,
+            &permit,
+            &binding,
+            morn_capability::EffectContract::e2("cmms.cancel-order"),
+            "order:create:1",
+            "cmms.sandbox.write",
+        )
+        .unwrap();
+        store.save_action_attempt(&work, &first).unwrap();
+
+        let replay = begin_external_attempt_for_work_with_effect(
+            &work,
+            &permit,
+            &binding,
+            morn_capability::EffectContract::e2("cmms.cancel-order"),
+            "order:create:2",
+            "cmms.sandbox.write",
+        )
+        .unwrap();
+        assert!(store.save_action_attempt(&work, &replay).is_err());
+
+        let consumed: ConsumedExternalActionPermit = store
+            .load_record("external_action_permit_consumed_v115", permit.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(consumed.attempt_id, first.id);
+        assert_eq!(consumed.business_key, "order:create:1");
+
+        first.transition(AttemptState::Dispatched).unwrap();
+        store.save_action_attempt(&work, &first).unwrap();
     }
 
     #[test]
