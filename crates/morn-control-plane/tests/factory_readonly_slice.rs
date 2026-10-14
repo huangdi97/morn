@@ -594,9 +594,14 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     store.save_action_attempt(&work, &attempt).unwrap();
 
     attempt.transition(AttemptState::Dispatched).unwrap();
+    // Persist dispatch intent before the connector can produce an external
+    // effect. Crash recovery can then reconcile by the same business key.
+    store.save_action_attempt(&work, &attempt).unwrap();
+
     attempt
         .mark_outcome_unknown("client timeout after external commit")
         .unwrap();
+    store.save_action_attempt(&work, &attempt).unwrap();
     assert!(attempt.transition(AttemptState::Dispatched).is_err());
     WorkProgressController.reconcile(
         &mut work,
@@ -613,7 +618,14 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .unwrap();
     assert_eq!(attempt.state, AttemptState::Observed);
     assert_eq!(attempt.external_ref.as_deref(), Some("MO-88273"));
+    // Reconciliation evidence and the Observed attempt become durable in one
+    // transaction; neither half can survive a crash alone.
+    store
+        .save_reconciliation(&work, &attempt, &reconciliation)
+        .unwrap();
+
     attempt.transition(AttemptState::Verified).unwrap();
+    store.save_action_attempt(&work, &attempt).unwrap();
     WorkProgressController.reconcile(
         &mut work,
         &WorkProgressInputs {
@@ -771,10 +783,6 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     store
         .save_binding_migration(&work, &migration_decision)
         .unwrap();
-    // Persist the terminal snapshot over the same previously Authorized
-    // attempt; the one-shot permit consumption remains bound to this attempt.
-    store.save_action_attempt(&work, &attempt).unwrap();
-    store.save_reconciliation(&work, &reconciliation).unwrap();
     store.save_observed_outcome(&work, &outcome).unwrap();
 
     let reviewer = AcceptanceReviewerAttestation {

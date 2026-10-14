@@ -753,8 +753,12 @@ pub trait ControlPlaneStore {
         binding: &DurableWorkflowBinding,
     ) -> Result<()>;
     fn save_action_attempt(&self, work: &WorkResource, attempt: &ActionAttempt) -> Result<()>;
-    fn save_reconciliation(&self, work: &WorkResource, record: &ReconciliationRecord)
-        -> Result<()>;
+    fn save_reconciliation(
+        &self,
+        work: &WorkResource,
+        attempt: &ActionAttempt,
+        record: &ReconciliationRecord,
+    ) -> Result<()>;
     fn save_source_of_truth_binding(
         &self,
         work: &WorkResource,
@@ -1820,27 +1824,135 @@ impl ControlPlaneStore for MornStore {
     fn save_reconciliation(
         &self,
         work: &WorkResource,
+        attempt: &ActionAttempt,
         record: &ReconciliationRecord,
     ) -> Result<()> {
         require_canonical_work_workspace(self, work)?;
-        let attempt: ActionAttempt = self
-            .load_record("action_attempt_v115", record.attempt_id.as_str())?
-            .ok_or_else(|| Error::not_found("reconciliation action attempt"))?;
-        let binding: ExecutionBinding = self
-            .load_record("execution_binding_v115", attempt.binding_id.as_str())?
-            .ok_or_else(|| Error::not_found("reconciliation execution binding"))?;
-        if binding.work_id != work.id || record.observation.business_key != attempt.business_key {
+        if record.attempt_id != attempt.id {
             return Err(Error::validation(
-                "reconciliation must match an attempt and business key owned by this Work",
+                "reconciliation record does not belong to the supplied attempt",
             ));
         }
-        self.save_record_immutable(
-            "reconciliation_v115",
-            record.id.as_str(),
+
+        let attempt_kind = "action_attempt_v115";
+        let expected = self
+            .record_revision(attempt_kind, attempt.id.as_str())?
+            .ok_or_else(|| Error::not_found("reconciliation action attempt revision"))?;
+        let previous: ActionAttempt = self
+            .load_record(attempt_kind, attempt.id.as_str())?
+            .ok_or_else(|| Error::not_found("reconciliation action attempt"))?;
+        let binding: ExecutionBinding = self
+            .load_record("execution_binding_v115", previous.binding_id.as_str())?
+            .ok_or_else(|| Error::not_found("reconciliation execution binding"))?;
+        if !binding.matches_work_generation(work)
+            || previous.binding_id != attempt.binding_id
+            || previous.business_key != attempt.business_key
+            || previous.action != attempt.action
+            || previous.resource_ref != attempt.resource_ref
+            || previous.site_ref != attempt.site_ref
+            || previous.authority_decision_ref != attempt.authority_decision_ref
+            || previous.external_action_permit_ref != attempt.external_action_permit_ref
+            || previous.effect_contract != attempt.effect_contract
+            || previous.created_at != attempt.created_at
+            || record.observation.business_key != attempt.business_key
+        {
+            return Err(Error::validation(
+                "reconciliation must preserve the exact Work/binding/attempt identity",
+            ));
+        }
+        if record.before != previous.state
+            || !matches!(
+                record.before,
+                AttemptState::OutcomeUnknown | AttemptState::Reconciling
+            )
+            || record.after != attempt.state
+        {
+            return Err(Error::validation(
+                "reconciliation before/after states must exactly bridge the durable attempt",
+            ));
+        }
+
+        let expected_after = match (
+            record.observation.committed,
+            record.observation.observed,
+        ) {
+            (Some(true), Some(true)) => AttemptState::Observed,
+            (Some(false), _) => AttemptState::Failed,
+            _ => AttemptState::OutcomeUnknown,
+        };
+        if record.after != expected_after {
+            return Err(Error::validation(
+                "reconciliation state does not match its authoritative observation",
+            ));
+        }
+        if record.after == AttemptState::Observed {
+            if record
+                .observation
+                .external_ref
+                .as_deref()
+                .is_none_or(|reference| reference.trim().is_empty())
+                || record.observation.evidence_refs.is_empty()
+                || attempt.external_ref != record.observation.external_ref
+                || !record
+                    .observation
+                    .evidence_refs
+                    .iter()
+                    .all(|reference| attempt.evidence_refs.contains(reference))
+            {
+                return Err(Error::validation(
+                    "observed reconciliation must retain its exact external reference and evidence",
+                ));
+            }
+        }
+        if attempt.updated_at < previous.updated_at
+            || record.created_at < attempt.updated_at
+            || record.created_at > morn_kernel::time::Timestamp::now()
+        {
+            return Err(Error::validation(
+                "reconciliation timestamps must advance monotonically from the durable attempt",
+            ));
+        }
+
+        if let Some(permit_ref) = &attempt.external_action_permit_ref {
+            if attempt
+                .effect_contract
+                .as_ref()
+                .is_some_and(|effect| {
+                    effect.class != morn_capability::effect::EffectClass::E0LifecycleReversible
+                })
+            {
+                let permit: ExternalActionPermit = self
+                    .load_record("external_action_permit_v115", permit_ref)?
+                    .ok_or_else(|| Error::not_found("reconciliation external-action permit"))?;
+                let consumed: ConsumedExternalActionPermit = self
+                    .load_record("external_action_permit_consumed_v115", permit_ref)?
+                    .ok_or_else(|| {
+                        Error::not_found("reconciliation permit consumption witness")
+                    })?;
+                if !consumed.exactly_matches(&permit, attempt) {
+                    return Err(Error::validation(
+                        "reconciliation attempt does not match its one-shot permit consumption",
+                    ));
+                }
+            }
+        }
+
+        self.save_record_cas_with_immutable(
+            attempt_kind,
+            attempt.id.as_str(),
             work.workspace_id.as_str(),
-            record.created_at.millis(),
-            record,
-        )
+            attempt.created_at.millis(),
+            expected,
+            attempt,
+            ImmutableRecordCommit {
+                kind: "reconciliation_v115",
+                id: record.id.as_str(),
+                workspace_id: work.workspace_id.as_str(),
+                created_at: record.created_at.millis(),
+                record,
+            },
+        )?;
+        Ok(())
     }
 
     fn save_source_of_truth_binding(
@@ -2435,18 +2547,23 @@ mod tests {
             .mark_outcome_unknown("client timed out after remote commit")
             .unwrap();
 
+        let store = MornStore::open_in_memory().unwrap();
+        store.save_work_resource(&work).unwrap();
+        store.save_execution_binding(&work, &binding).unwrap();
+        // Persist the ambiguous state before asking the authority source to
+        // reconcile it. The reconciliation commit will atomically advance the
+        // attempt and append its immutable evidence record.
+        store.save_action_attempt(&work, &attempt).unwrap();
+
         let reconciliation = ReconciliationController
             .reconcile(&mut attempt, &CmmsLookup)
             .unwrap();
         assert_eq!(attempt.state, AttemptState::Observed);
         assert_eq!(attempt.external_ref.as_deref(), Some("MO-88273"));
         assert_eq!(reconciliation.after, AttemptState::Observed);
-
-        let store = MornStore::open_in_memory().unwrap();
-        store.save_work_resource(&work).unwrap();
-        store.save_execution_binding(&work, &binding).unwrap();
-        store.save_action_attempt(&work, &attempt).unwrap();
-        store.save_reconciliation(&work, &reconciliation).unwrap();
+        store
+            .save_reconciliation(&work, &attempt, &reconciliation)
+            .unwrap();
 
         let loaded: WorkResource = store
             .load_record("work_resource_v115", work.id.as_str())
@@ -3138,15 +3255,21 @@ mod control_plane_persistence_scope_tests {
         store.save_work_resource(&other).unwrap();
         let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
         store.save_execution_binding(&work, &binding).unwrap();
-        let attempt = ActionAttempt::new(binding.id.clone(), "work-a:create", "create");
+        let mut attempt = ActionAttempt::new(binding.id.clone(), "work-a:create", "create");
+        attempt.transition(AttemptState::Authorized).unwrap();
+        attempt.transition(AttemptState::Dispatched).unwrap();
+        attempt.mark_outcome_unknown("timeout").unwrap();
         assert!(store.save_action_attempt(&other, &attempt).is_err());
         store.save_action_attempt(&work, &attempt).unwrap();
 
+        let before = attempt.state;
+        attempt.transition(AttemptState::Reconciling).unwrap();
+        attempt.transition(AttemptState::OutcomeUnknown).unwrap();
         let mut record = ReconciliationRecord {
             id: ReconciliationRecordId::generate_with("reconcile"),
             attempt_id: attempt.id.clone(),
-            before: AttemptState::OutcomeUnknown,
-            after: AttemptState::Reconciling,
+            before,
+            after: attempt.state,
             observation: ReconciliationObservation {
                 business_key: "some-other-work:create".to_string(),
                 committed: None,
@@ -3156,10 +3279,16 @@ mod control_plane_persistence_scope_tests {
             },
             created_at: morn_kernel::time::Timestamp::now(),
         };
-        assert!(store.save_reconciliation(&work, &record).is_err());
+        assert!(store
+            .save_reconciliation(&work, &attempt, &record)
+            .is_err());
         record.observation.business_key = attempt.business_key.clone();
-        assert!(store.save_reconciliation(&other, &record).is_err());
-        store.save_reconciliation(&work, &record).unwrap();
+        assert!(store
+            .save_reconciliation(&other, &attempt, &record)
+            .is_err());
+        store
+            .save_reconciliation(&work, &attempt, &record)
+            .unwrap();
     }
 
     #[test]
