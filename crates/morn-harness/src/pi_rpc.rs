@@ -66,7 +66,10 @@ fn default_true() -> bool {
 
 fn create_owned_pi_agent_dir(workspace: Option<&str>) -> Result<PathBuf> {
     let directory = std::env::temp_dir().join(format!("morn-pi-agent-{}", uuid::Uuid::new_v4()));
+    #[cfg(unix)]
     let mut builder = fs::DirBuilder::new();
+    #[cfg(not(unix))]
+    let builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
         use std::os::unix::fs::DirBuilderExt as _;
