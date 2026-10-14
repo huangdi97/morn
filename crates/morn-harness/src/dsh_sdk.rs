@@ -1313,14 +1313,16 @@ fn validate_consumed_dsh_notification(
             .and_then(Value::as_array)
             .ok_or_else(|| Error::external("DSH assistant/message carried malformed content"))?;
         for block in content {
-            let block = block
-                .as_object()
-                .ok_or_else(|| Error::external("DSH assistant/message content block is not an object"))?;
+            let block = block.as_object().ok_or_else(|| {
+                Error::external("DSH assistant/message content block is not an object")
+            })?;
             let kind = block
                 .get("type")
                 .and_then(Value::as_str)
                 .filter(|value| !value.trim().is_empty())
-                .ok_or_else(|| Error::external("DSH assistant/message content block has no type"))?;
+                .ok_or_else(|| {
+                    Error::external("DSH assistant/message content block has no type")
+                })?;
             if kind == "text" && block.get("text").and_then(Value::as_str).is_none() {
                 return Err(Error::external(
                     "DSH assistant/message text block has no string text",
