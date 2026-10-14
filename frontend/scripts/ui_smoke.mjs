@@ -100,6 +100,20 @@ try {
         ) {
           errors.push("console: production-write deployment gate must remain blocked under factory read-only profile");
         }
+        if (await production.count()) {
+          const details = production.first().locator("details.readiness-scope-details");
+          await details.locator("summary").click();
+          const text = await details.innerText();
+          if (
+            !text.includes("Deployment target site") ||
+            !text.includes("Action-level write authority") ||
+            !text.includes("MORN_DEPLOYMENT_SITE_REF") ||
+            !text.includes("no permit means no write")
+          ) {
+            errors.push("console: production-write blockers must expose site targeting and action-level authority remediation");
+          }
+          await details.locator("summary").click();
+        }
         const dshReadOnly = deploymentScopes.locator(".readiness-item", { hasText: "DSH real-runtime read-only" });
         if (await dshReadOnly.count()) {
           const details = dshReadOnly.first().locator("details.readiness-scope-details");
