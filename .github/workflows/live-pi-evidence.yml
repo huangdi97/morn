@@ -69,7 +69,7 @@ jobs:
       INPUT_BASE_URL_ENV: ${{ inputs.base_url_env_name }}
       INPUT_ACK_E0: ${{ inputs.acknowledge_e0_only }}
       INPUT_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
-      MORN_PI_WORKSPACE: /tmp/morn-pi-workspace-${{ github.run_id }}
+      MORN_PI_WORKSPACE: ${{ runner.temp }}/morn-pi-workspace-${{ github.run_id }}-${{ github.run_attempt }}
       MORN_PI_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
       MORN_PI_PROVIDER: ${{ inputs.provider }}
       MORN_PI_MODEL: ${{ inputs.model }}
@@ -126,7 +126,11 @@ jobs:
             echo "base_url_env_name must be blank or a dedicated *_BASE_URL/*_API_URL variable"
             exit 2
           fi
-          mkdir -p "$MORN_PI_WORKSPACE" target/live-pi-evidence
+          if [[ -e "$MORN_PI_WORKSPACE" || -L "$MORN_PI_WORKSPACE" ]]; then
+            echo "refusing to reuse pre-existing Pi live-evidence workspace: $MORN_PI_WORKSPACE"
+            exit 2
+          fi
+          mkdir -m 700 -p "$MORN_PI_WORKSPACE" target/live-pi-evidence
 
       - name: Bind authenticated smoke to attested runner identity
         if: inputs.operation == 'smoke'
@@ -346,7 +350,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: live-pi-evidence-${{ github.sha }}-${{ inputs.operation }}
+          name: live-pi-evidence-${{ github.sha }}-${{ inputs.operation }}-${{ github.run_attempt }}
           path: target/live-pi-evidence
           if-no-files-found: warn
           retention-days: 30

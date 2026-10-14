@@ -65,16 +65,16 @@ jobs:
     runs-on: ${{ startsWith(inputs.operation, 'smoke-') && 'morn-attested-provider' || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
-      MORN_DSH_WORKSPACE: /tmp/morn-dsh-workspace-${{ github.run_id }}
-      MORN_DSH_HOME: /tmp/morn-dsh-home-${{ github.run_id }}
+      MORN_DSH_WORKSPACE: ${{ runner.temp }}/morn-dsh-workspace-${{ github.run_id }}-${{ github.run_attempt }}
+      MORN_DSH_HOME: ${{ runner.temp }}/morn-dsh-home-${{ github.run_id }}-${{ github.run_attempt }}
       MORN_DSH_PROVIDER: ${{ inputs.provider }}
       MORN_DSH_MODEL: ${{ inputs.model }}
       MORN_DSH_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
       MORN_DSH_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       MORN_DSH_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
       MORN_DSH_MAX_TOKENS: ${{ inputs.max_tokens }}
-      MORN_DSH_ACP_WORKSPACE: /tmp/morn-dsh-acp-workspace-${{ github.run_id }}
-      MORN_DSH_ACP_HOME: /tmp/morn-dsh-acp-home-${{ github.run_id }}
+      MORN_DSH_ACP_WORKSPACE: ${{ runner.temp }}/morn-dsh-acp-workspace-${{ github.run_id }}-${{ github.run_attempt }}
+      MORN_DSH_ACP_HOME: ${{ runner.temp }}/morn-dsh-acp-home-${{ github.run_id }}-${{ github.run_attempt }}
       MORN_DSH_ACP_PROVIDER: ${{ inputs.provider }}
       MORN_DSH_ACP_MODEL: ${{ inputs.model }}
       MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
@@ -115,10 +115,20 @@ jobs:
             echo "Authenticated smoke requires acknowledge_e0_only=true"
             exit 2
           fi
-          mkdir -p "$MORN_DSH_WORKSPACE" "$MORN_DSH_HOME" "$MORN_DSH_ACP_WORKSPACE" "$MORN_DSH_ACP_HOME" target/live-dsh-evidence
+          if [[ -n "$INPUT_REASONING_EFFORT" && ! "$INPUT_REASONING_EFFORT" =~ ^[A-Za-z0-9._+-]{1,64}$ ]]; then
+            echo "reasoning_effort contains unsupported characters or exceeds 64 bytes"
+            exit 2
+          fi
+          for path in "$MORN_DSH_WORKSPACE" "$MORN_DSH_HOME" "$MORN_DSH_ACP_WORKSPACE" "$MORN_DSH_ACP_HOME"; do
+            if [[ -e "$path" || -L "$path" ]]; then
+              echo "refusing to reuse pre-existing live-evidence path: $path"
+              exit 2
+            fi
+          done
+          mkdir -m 700 -p "$MORN_DSH_WORKSPACE" "$MORN_DSH_HOME" "$MORN_DSH_ACP_WORKSPACE" "$MORN_DSH_ACP_HOME" target/live-dsh-evidence
           if [[ -n "$INPUT_REASONING_EFFORT" ]]; then
-            echo "MORN_DSH_REASONING_EFFORT=$INPUT_REASONING_EFFORT" >> "$GITHUB_ENV"
-            echo "MORN_DSH_ACP_REASONING_EFFORT=$INPUT_REASONING_EFFORT" >> "$GITHUB_ENV"
+            printf 'MORN_DSH_REASONING_EFFORT=%s\n' "$INPUT_REASONING_EFFORT" >> "$GITHUB_ENV"
+            printf 'MORN_DSH_ACP_REASONING_EFFORT=%s\n' "$INPUT_REASONING_EFFORT" >> "$GITHUB_ENV"
           fi
 
       - name: Bind authenticated smoke to attested runner identity
@@ -382,7 +392,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: live-dsh-evidence-${{ github.sha }}-${{ inputs.operation }}
+          name: live-dsh-evidence-${{ github.sha }}-${{ inputs.operation }}-${{ github.run_attempt }}
           path: target/live-dsh-evidence
           if-no-files-found: warn
           retention-days: 30
