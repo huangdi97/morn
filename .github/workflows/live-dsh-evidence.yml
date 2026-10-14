@@ -65,16 +65,12 @@ jobs:
     runs-on: ${{ startsWith(inputs.operation, 'smoke-') && 'morn-attested-provider' || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
-      MORN_DSH_WORKSPACE: ${{ runner.temp }}/morn-dsh-workspace-${{ github.run_id }}-${{ github.run_attempt }}
-      MORN_DSH_HOME: ${{ runner.temp }}/morn-dsh-home-${{ github.run_id }}-${{ github.run_attempt }}
       MORN_DSH_PROVIDER: ${{ inputs.provider }}
       MORN_DSH_MODEL: ${{ inputs.model }}
       MORN_DSH_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
       MORN_DSH_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       MORN_DSH_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
       MORN_DSH_MAX_TOKENS: ${{ inputs.max_tokens }}
-      MORN_DSH_ACP_WORKSPACE: ${{ runner.temp }}/morn-dsh-acp-workspace-${{ github.run_id }}-${{ github.run_attempt }}
-      MORN_DSH_ACP_HOME: ${{ runner.temp }}/morn-dsh-acp-home-${{ github.run_id }}-${{ github.run_attempt }}
       MORN_DSH_ACP_PROVIDER: ${{ inputs.provider }}
       MORN_DSH_ACP_MODEL: ${{ inputs.model }}
       MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
@@ -119,13 +115,21 @@ jobs:
             echo "reasoning_effort contains unsupported characters or exceeds 64 bytes"
             exit 2
           fi
-          for path in "$MORN_DSH_WORKSPACE" "$MORN_DSH_HOME" "$MORN_DSH_ACP_WORKSPACE" "$MORN_DSH_ACP_HOME"; do
+          dsh_workspace="$RUNNER_TEMP/morn-dsh-workspace-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          dsh_home="$RUNNER_TEMP/morn-dsh-home-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          acp_workspace="$RUNNER_TEMP/morn-dsh-acp-workspace-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          acp_home="$RUNNER_TEMP/morn-dsh-acp-home-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          for path in "$dsh_workspace" "$dsh_home" "$acp_workspace" "$acp_home"; do
             if [[ -e "$path" || -L "$path" ]]; then
               echo "refusing to reuse pre-existing live-evidence path: $path"
               exit 2
             fi
           done
-          mkdir -m 700 -p "$MORN_DSH_WORKSPACE" "$MORN_DSH_HOME" "$MORN_DSH_ACP_WORKSPACE" "$MORN_DSH_ACP_HOME" target/live-dsh-evidence
+          mkdir -m 700 -p "$dsh_workspace" "$dsh_home" "$acp_workspace" "$acp_home" target/live-dsh-evidence
+          printf 'MORN_DSH_WORKSPACE=%s\n' "$dsh_workspace" >> "$GITHUB_ENV"
+          printf 'MORN_DSH_HOME=%s\n' "$dsh_home" >> "$GITHUB_ENV"
+          printf 'MORN_DSH_ACP_WORKSPACE=%s\n' "$acp_workspace" >> "$GITHUB_ENV"
+          printf 'MORN_DSH_ACP_HOME=%s\n' "$acp_home" >> "$GITHUB_ENV"
           if [[ -n "$INPUT_REASONING_EFFORT" ]]; then
             printf 'MORN_DSH_REASONING_EFFORT=%s\n' "$INPUT_REASONING_EFFORT" >> "$GITHUB_ENV"
             printf 'MORN_DSH_ACP_REASONING_EFFORT=%s\n' "$INPUT_REASONING_EFFORT" >> "$GITHUB_ENV"
@@ -212,7 +216,7 @@ jobs:
           parsed = json.loads(raw)
           if not isinstance(parsed, (list, dict)):
               raise SystemExit("execution attestation secret must be a JSON object or array")
-          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "morn-execution-attestations.json"
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / f"morn-execution-attestations-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}.json"
           path.write_text(json.dumps(parsed, separators=(",", ":")), encoding="utf-8")
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
               fh.write(f"MORN_EXECUTION_ATTESTATION_FILE={path}\n")
@@ -227,7 +231,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dist_dir="$RUNNER_TEMP/morn-dsh-dist"
+          dist_dir="$RUNNER_TEMP/morn-dsh-dist-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$dist_dir"
           python -m pip download             --disable-pip-version-check             --only-binary=:all:             --no-deps             --dest "$dist_dir"             "deepseek-harness-runtime-bin==$INPUT_RUNTIME_VERSION"
 
@@ -236,7 +240,7 @@ jobs:
           from packaging.utils import canonicalize_name, parse_wheel_filename
           from packaging.version import Version
 
-          dist = pathlib.Path(os.environ["RUNNER_TEMP"]) / "morn-dsh-dist"
+          dist = pathlib.Path(os.environ["RUNNER_TEMP"]) / f"morn-dsh-dist-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
           wheels = sorted(dist.glob("deepseek_harness_runtime_bin-*.whl"))
           if len(wheels) != 1:
               raise SystemExit(f"expected exactly one runtime-bin wheel, found {len(wheels)}")

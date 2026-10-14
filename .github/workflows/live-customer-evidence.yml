@@ -66,23 +66,30 @@ jobs:
             echo "protected Environment secret MORN_EVIDENCE_ISSUER is required"
             exit 2
           fi
-          if [[ -z "$INPUT_SITE_REF" || "$INPUT_SITE_REF" == *$'\n'* || "$INPUT_SITE_REF" == *$'\r'* ]]; then
-            echo "site_ref must be a non-empty single-line exact site identity"
+          python - <<'PY'
+          import os
+          for name in ("INPUT_SITE_REF", "TRUSTED_EVIDENCE_ISSUER"):
+              value = os.environ[name]
+              if not value.strip() or any(ord(ch) < 32 for ch in value):
+                  raise SystemExit(f"{name} must be a non-empty single-line identity")
+          PY
+          mkdir -p target/live-customer-evidence
+          claim_file="$RUNNER_TEMP/morn-customer-evidence-claim-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          if [[ -e "$claim_file" || -L "$claim_file" ]]; then
+            echo "refusing to reuse pre-existing customer evidence temp file"
             exit 2
           fi
-          mkdir -p target/live-customer-evidence
-          claim_file="$RUNNER_TEMP/morn-customer-evidence-claim.json"
           umask 077
           printf '%s' "$EVIDENCE_CLAIM_JSON" > "$claim_file"
-          echo "MORN_EVIDENCE_CLAIM_FILE=$claim_file" >> "$GITHUB_ENV"
-          echo "MORN_EVIDENCE_ISSUER=$TRUSTED_EVIDENCE_ISSUER" >> "$GITHUB_ENV"
-          echo "MORN_EVIDENCE_EXPECTED_CLASS=$INPUT_EVIDENCE_CLASS" >> "$GITHUB_ENV"
+          printf 'MORN_EVIDENCE_CLAIM_FILE=%s\n' "$claim_file" >> "$GITHUB_ENV"
+          printf 'MORN_EVIDENCE_ISSUER=%s\n' "$TRUSTED_EVIDENCE_ISSUER" >> "$GITHUB_ENV"
+          printf 'MORN_EVIDENCE_EXPECTED_CLASS=%s\n' "$INPUT_EVIDENCE_CLASS" >> "$GITHUB_ENV"
           if [[ "$INPUT_EVIDENCE_CLASS" == "real-site" ]]; then
             expected="factory-customer:$INPUT_SITE_REF"
           else
             expected="factory-production-write:$INPUT_SITE_REF"
           fi
-          echo "MORN_EVIDENCE_EXPECTED_SUBJECT=$expected" >> "$GITHUB_ENV"
+          printf 'MORN_EVIDENCE_EXPECTED_SUBJECT=%s\n' "$expected" >> "$GITHUB_ENV"
 
       - name: Validate exact claim with Morn semantics
         shell: bash
@@ -124,7 +131,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: live-customer-evidence-${{ github.sha }}-${{ inputs.evidence_class }}
+          name: live-customer-evidence-${{ github.sha }}-${{ inputs.evidence_class }}-${{ github.run_attempt }}
           path: target/live-customer-evidence
           if-no-files-found: warn
           retention-days: 14

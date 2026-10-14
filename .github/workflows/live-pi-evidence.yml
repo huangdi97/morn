@@ -69,7 +69,6 @@ jobs:
       INPUT_BASE_URL_ENV: ${{ inputs.base_url_env_name }}
       INPUT_ACK_E0: ${{ inputs.acknowledge_e0_only }}
       INPUT_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
-      MORN_PI_WORKSPACE: ${{ runner.temp }}/morn-pi-workspace-${{ github.run_id }}-${{ github.run_attempt }}
       MORN_PI_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
       MORN_PI_PROVIDER: ${{ inputs.provider }}
       MORN_PI_MODEL: ${{ inputs.model }}
@@ -126,11 +125,13 @@ jobs:
             echo "base_url_env_name must be blank or a dedicated *_BASE_URL/*_API_URL variable"
             exit 2
           fi
-          if [[ -e "$MORN_PI_WORKSPACE" || -L "$MORN_PI_WORKSPACE" ]]; then
-            echo "refusing to reuse pre-existing Pi live-evidence workspace: $MORN_PI_WORKSPACE"
+          pi_workspace="$RUNNER_TEMP/morn-pi-workspace-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [[ -e "$pi_workspace" || -L "$pi_workspace" ]]; then
+            echo "refusing to reuse pre-existing Pi live-evidence workspace: $pi_workspace"
             exit 2
           fi
-          mkdir -m 700 -p "$MORN_PI_WORKSPACE" target/live-pi-evidence
+          mkdir -m 700 -p "$pi_workspace" target/live-pi-evidence
+          printf 'MORN_PI_WORKSPACE=%s\n' "$pi_workspace" >> "$GITHUB_ENV"
 
       - name: Bind authenticated smoke to attested runner identity
         if: inputs.operation == 'smoke'
@@ -185,14 +186,14 @@ jobs:
           set -euo pipefail
           source_lock="$GITHUB_WORKSPACE/target/pi-release/packages/coding-agent/install-lock"
           export PI_SOURCE_COMMIT="$(git -C "$GITHUB_WORKSPACE/target/pi-release" rev-parse HEAD)"
-          install_root="$RUNNER_TEMP/morn-pi-runtime"
+          install_root="$RUNNER_TEMP/morn-pi-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$install_root"
           cp "$source_lock/package.json" "$install_root/package.json"
           cp "$source_lock/package-lock.json" "$install_root/package-lock.json"
 
           python - <<'PY'
           import json, os, pathlib
-          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "morn-pi-runtime"
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / f"morn-pi-runtime-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
           package = json.loads((root / "package.json").read_text(encoding="utf-8"))
           expected = os.environ["INPUT_RUNTIME_VERSION"]
           if package.get("version") != expected:
@@ -207,7 +208,7 @@ jobs:
           python - <<'PY'
           import hashlib, json, os, pathlib, stat
 
-          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "morn-pi-runtime"
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / f"morn-pi-runtime-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
           root_real = root.resolve()
           hasher = hashlib.sha256()
           entries = [root / "package.json", root / "package-lock.json"]
@@ -294,7 +295,7 @@ jobs:
           parsed = json.loads(os.environ["EXECUTION_ATTESTATION_JSON"])
           if not isinstance(parsed, (list, dict)):
               raise SystemExit("execution attestation secret must be a JSON object or array")
-          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "morn-pi-execution-attestations.json"
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / f"morn-pi-execution-attestations-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}.json"
           path.write_text(json.dumps(parsed, separators=(",", ":")), encoding="utf-8")
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
               fh.write(f"MORN_EXECUTION_ATTESTATION_FILE={path}\n")

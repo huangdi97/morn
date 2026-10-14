@@ -214,9 +214,12 @@ jobs:
             exit 2
           }
           umask 077
-          auth_dir="$RUNNER_TEMP/morn-registry-auth"
-          rm -rf "$auth_dir"
-          mkdir -p "$auth_dir"
+          auth_dir="$RUNNER_TEMP/morn-registry-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [[ -e "$auth_dir" || -L "$auth_dir" ]]; then
+            echo "refusing to reuse pre-existing registry auth directory"
+            exit 2
+          fi
+          mkdir -m 700 "$auth_dir"
           AUTH_DIR="$auth_dir" python - <<'PY'
           import json, os, pathlib
 
@@ -264,13 +267,13 @@ jobs:
         if: always() && inputs.operation == 'verify'
         shell: bash
         run: |
-          rm -rf "$RUNNER_TEMP/morn-registry-auth"
+          rm -rf "$RUNNER_TEMP/morn-registry-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
       - name: Upload evidence reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: live-supply-chain-evidence-${{ github.sha }}-${{ inputs.operation }}
+          name: live-supply-chain-evidence-${{ github.sha }}-${{ inputs.operation }}-${{ github.run_attempt }}
           path: target/live-supply-chain-evidence
           if-no-files-found: warn
           retention-days: 30

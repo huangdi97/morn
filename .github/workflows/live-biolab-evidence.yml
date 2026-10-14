@@ -62,6 +62,10 @@ jobs:
           python - <<'PY'
           import os, pathlib, stat
 
+          trusted_issuer = os.environ["TRUSTED_PROVENANCE_ISSUER"]
+          if not trusted_issuer.strip() or any(ord(ch) < 32 for ch in trusted_issuer):
+              raise SystemExit("trusted provenance issuer must be a non-empty single-line identity")
+
           identity_path = pathlib.Path("/etc/morn/biolab-runner-ref")
           if not identity_path.exists():
               raise SystemExit("attested BioLab runner is missing /etc/morn/biolab-runner-ref")
@@ -72,13 +76,18 @@ jobs:
               raise SystemExit("BioLab runner identity must be root-owned and not group/world writable")
           actual_runner = identity_path.read_text(encoding="utf-8").strip()
           expected_runner = os.environ["INPUT_RUNNER_REF"].strip()
+          if not expected_runner or any(ord(ch) < 32 for ch in expected_runner):
+              raise SystemExit("runner_ref must be a non-empty single-line identity")
           if not actual_runner or actual_runner != expected_runner:
               raise SystemExit(
                   f"BioLab runner identity mismatch: expected {expected_runner!r}, got {actual_runner!r}"
               )
 
           root = pathlib.Path("/var/lib/morn/biolab-datasets").resolve(strict=True)
-          relative = pathlib.PurePosixPath(os.environ["INPUT_DATASET_RELATIVE_PATH"])
+          raw_relative = os.environ["INPUT_DATASET_RELATIVE_PATH"]
+          if not raw_relative or any(ord(ch) < 32 for ch in raw_relative):
+              raise SystemExit("dataset_relative_path must be a non-empty control-free path")
+          relative = pathlib.PurePosixPath(raw_relative)
           if relative.is_absolute() or ".." in relative.parts or not relative.parts:
               raise SystemExit("dataset_relative_path must stay below the fixed BioLab dataset root")
           candidate = root.joinpath(*relative.parts)
@@ -99,11 +108,15 @@ jobs:
           PY
 
           mkdir -p target/live-biolab-evidence
-          provenance_file="$RUNNER_TEMP/morn-biolab-dataset-provenance.json"
+          provenance_file="$RUNNER_TEMP/morn-biolab-dataset-provenance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          if [[ -e "$provenance_file" || -L "$provenance_file" ]]; then
+            echo "refusing to reuse pre-existing provenance temp file"
+            exit 2
+          fi
           umask 077
           printf '%s' "$PROVENANCE_JSON" > "$provenance_file"
-          echo "MORN_BIOLAB_DATASET_PROVENANCE_FILE=$provenance_file" >> "$GITHUB_ENV"
-          echo "MORN_BIOLAB_DATASET_PROVENANCE_ISSUER=$TRUSTED_PROVENANCE_ISSUER" >> "$GITHUB_ENV"
+          printf 'MORN_BIOLAB_DATASET_PROVENANCE_FILE=%s\n' "$provenance_file" >> "$GITHUB_ENV"
+          printf 'MORN_BIOLAB_DATASET_PROVENANCE_ISSUER=%s\n' "$TRUSTED_PROVENANCE_ISSUER" >> "$GITHUB_ENV"
 
       - name: Verify dataset bytes against deployment-owned provenance
         shell: bash
@@ -148,7 +161,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: live-biolab-evidence-${{ github.sha }}
+          name: live-biolab-evidence-${{ github.sha }}-${{ github.run_attempt }}
           path: target/live-biolab-evidence
           if-no-files-found: warn
           retention-days: 14
