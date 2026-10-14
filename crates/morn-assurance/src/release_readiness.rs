@@ -545,14 +545,20 @@ fn acquisition_step(
     }
 }
 
-fn missing_axis_acquisition_step(
-    axis_id: &str,
-    site_ref: Option<&str>,
-) -> EvidenceAcquisitionStep {
+fn missing_axis_acquisition_step(axis_id: &str, site_ref: Option<&str>) -> EvidenceAcquisitionStep {
     let (subject, evidence_class) = match axis_id {
-        "architecture-baseline" => ("morn-v11.5-architecture".to_string(), EvidenceClass::DesignSpec),
-        "local-reference-slice" => ("factory-readonly-wedge".to_string(), EvidenceClass::LocalFixture),
-        "ci-conformance" => ("morn-v11.5-ci-conformance".to_string(), EvidenceClass::CiConformance),
+        "architecture-baseline" => (
+            "morn-v11.5-architecture".to_string(),
+            EvidenceClass::DesignSpec,
+        ),
+        "local-reference-slice" => (
+            "factory-readonly-wedge".to_string(),
+            EvidenceClass::LocalFixture,
+        ),
+        "ci-conformance" => (
+            "morn-v11.5-ci-conformance".to_string(),
+            EvidenceClass::CiConformance,
+        ),
         "deepseek-live-runtime" => ("deepseek-harness".to_string(), EvidenceClass::RealRuntime),
         "pi-live-runtime" => ("pi-harness".to_string(), EvidenceClass::RealRuntime),
         "customer-real-site" => (
@@ -613,9 +619,7 @@ fn deployment_target_acquisition_step() -> EvidenceAcquisitionStep {
     }
 }
 
-fn production_write_authority_acquisition_step(
-    site_ref: Option<&str>,
-) -> EvidenceAcquisitionStep {
+fn production_write_authority_acquisition_step(site_ref: Option<&str>) -> EvidenceAcquisitionStep {
     EvidenceAcquisitionStep {
         axis_id: "production-write-authority".to_string(),
         external_required: true,
@@ -704,7 +708,9 @@ pub fn evaluate_deployment_readiness_for_target(
                 if axis.state == ReadinessState::Proven
                     && axis_identity_matches_target(axis, scope, site_ref) => {}
             Some(axis) => evidence_acquisition_plan.push(acquisition_step(axis, site_ref)),
-            None => evidence_acquisition_plan.push(missing_axis_acquisition_step(required, site_ref)),
+            None => {
+                evidence_acquisition_plan.push(missing_axis_acquisition_step(required, site_ref))
+            }
         }
     }
     if scope.requires_site_target() && site_ref.is_none() {
