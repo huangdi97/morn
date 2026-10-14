@@ -1883,8 +1883,8 @@ impl ControlPlaneStore for MornStore {
                 "reconciliation state does not match its authoritative observation",
             ));
         }
-        if record.after == AttemptState::Observed {
-            if record
+        if record.after == AttemptState::Observed
+            && (record
                 .observation
                 .external_ref
                 .as_deref()
@@ -1895,12 +1895,11 @@ impl ControlPlaneStore for MornStore {
                     .observation
                     .evidence_refs
                     .iter()
-                    .all(|reference| attempt.evidence_refs.contains(reference))
-            {
-                return Err(Error::validation(
-                    "observed reconciliation must retain its exact external reference and evidence",
-                ));
-            }
+                    .all(|reference| attempt.evidence_refs.contains(reference)))
+        {
+            return Err(Error::validation(
+                "observed reconciliation must retain its exact external reference and evidence",
+            ));
         }
         if attempt.updated_at < previous.updated_at
             || record.created_at < attempt.updated_at
