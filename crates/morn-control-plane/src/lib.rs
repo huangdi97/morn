@@ -279,7 +279,6 @@ impl WorkProgressController {
         if work.status.phase.is_terminal() {
             return;
         }
-        use morn_work::acceptance_decision::AcceptanceDisposition;
 
         if !work.required_conditions_satisfied() {
             work.status.phase = WorkPhase::Blocked;
