@@ -135,6 +135,8 @@ export default function ConsolePage() {
   const [opint, setOpint] = useState<OpintRegistry | null>(null);
   const [v115, setV115] = useState<V115Status | null>(null);
   const [v115Control, setV115Control] = useState<V115ControlPlaneData | null>(null);
+  const [v115Error, setV115Error] = useState<string | null>(null);
+  const [controlPlaneError, setControlPlaneError] = useState<string | null>(null);
 
   useEffect(() => {
     apiGet<ConsoleData>("/console")
@@ -160,10 +162,10 @@ export default function ConsolePage() {
       .catch(() => undefined);
     apiGet<V115Status>("/v115/status")
       .then(setV115)
-      .catch(() => undefined);
+      .catch((e: Error) => setV115Error(e.message));
     apiGet<V115ControlPlaneData>("/v115/control-plane")
       .then(setV115Control)
-      .catch(() => undefined);
+      .catch((e: Error) => setControlPlaneError(e.message));
   }, []);
 
   if (error) return <ErrorBox message={error} />;
@@ -179,6 +181,27 @@ export default function ConsolePage() {
           </p>
         </div>
       </header>
+      {v115Error && (
+        <div className="state-box state-error" role="alert" data-testid="console-canonical-error">
+          Canonical release posture is unavailable: {v115Error}. No gate may be read as
+          ready, and legacy diagnostics cannot establish readiness or authority.
+        </div>
+      )}
+      {controlPlaneError && (
+        <div
+          className="state-box state-error"
+          role="alert"
+          data-testid="console-control-plane-error"
+        >
+          Canonical control-plane data is unavailable: {controlPlaneError}. Work and
+          provider posture counts are not shown.
+        </div>
+      )}
+      {!v115 && !v115Error && (
+        <p role="status" data-testid="console-canonical-loading">
+          Loading canonical release posture…
+        </p>
+      )}
       {v115 && (
         <section className="release-readiness" data-testid="release-readiness" aria-label="Release readiness">
           <div className="release-readiness-heading">
