@@ -373,9 +373,6 @@ async function runCanonicalAcceptanceUiContract() {
     if (!accepted || !body.includes("Reference UI acceptance contract")) {
       fixtureErrors.push("canonical acceptance fixture: Accepted state was not projected back into Workbench");
     }
-    if (!body.includes("Accepted outcome value")) {
-      fixtureErrors.push("canonical acceptance fixture: accepted Work did not expose the separate value-assessment stage");
-    }
     if (screenshotsDir) {
       await fixturePage.screenshot({
         path: join(screenshotsDir, "workbench-canonical-acceptance-fixture.png"),

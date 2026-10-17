@@ -62,8 +62,11 @@ mode-0600 temporary files; setup/cache/checkout and artifact-upload actions do
 not receive those raw secret values through job-level environment variables.
 Live DSH/Pi workflows also remove their one-shot runtime homes/workspaces,
 provider session material and execution-attestation temp files in an
-`always()` cleanup step. On persistent self-hosted runners this workflow-level
-cleanup is mandatory defense-in-depth, not a substitute for runner-level
+`always()` cleanup step. The DSH runtime wheel is installed only into a
+run-scoped virtual environment under `RUNNER_TEMP`, never into the persistent
+runner's global Python environment, and that venv is removed by the same
+cleanup. On persistent self-hosted runners this workflow-level cleanup is
+mandatory defense-in-depth, not a substitute for runner-level
 ephemeral/clean-machine policy.
 
 The three privileged workflows also pin every referenced GitHub Action to a
