@@ -216,7 +216,12 @@ impl DshAcpConfig {
             .ok_or_else(|| {
                 Error::validation("real DSH ACP requires a deployment-attested runtime version")
             })?;
-        validate_qualified_dsh_distribution_version(runtime_version)?;
+        // Protocol fixtures are compiled only under cfg(test) and do not
+        // represent a qualified DeepSeek Harness distribution. Production
+        // transports keep the exact distribution qualification gate.
+        if self.enforce_morn_e0_tool_policy {
+            validate_qualified_dsh_distribution_version(runtime_version)?;
+        }
         let digest = self
             .runtime_digest
             .as_deref()
@@ -1215,10 +1220,13 @@ mod tests {
             .with_reasoning_effort("high")
             .with_execution_environment_ref("env://container/acp")
             .with_profile_configuration_ref(governed_acp_profile(
-                "1.0.0",
+                DSH_QUALIFIED_DISTRIBUTION_VERSION,
                 &format!("sha256:{}", "b".repeat(64)),
             ))
-            .with_runtime_identity("1.0.0", format!("sha256:{}", "b".repeat(64)));
+            .with_runtime_identity(
+                DSH_QUALIFIED_DISTRIBUTION_VERSION,
+                format!("sha256:{}", "b".repeat(64)),
+            );
         assert!(configured.validate_for_real().is_ok());
         let route = configured.route_ref().unwrap();
         assert!(route.contains("dsh-acp-route:"));

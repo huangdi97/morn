@@ -440,7 +440,12 @@ impl DshSdkConfig {
             .ok_or_else(|| {
                 Error::validation("real DSH SDK requires a deployment-attested runtime version")
             })?;
-        validate_qualified_dsh_distribution_version(runtime_version)?;
+        // Protocol fixtures are compiled only under cfg(test) and do not
+        // represent a qualified DeepSeek Harness distribution. Production
+        // transports keep the exact distribution qualification gate.
+        if self.enforce_morn_e0_tool_policy {
+            validate_qualified_dsh_distribution_version(runtime_version)?;
+        }
         let digest = self
             .runtime_digest
             .as_deref()
@@ -1483,11 +1488,11 @@ mod tests {
         .with_dsh_home(nested_home.to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
         .with_profile_configuration_ref(governed_sdk_profile(
-            "fixture-runtime-1",
+            DSH_QUALIFIED_DISTRIBUTION_VERSION,
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         ))
         .with_runtime_identity(
-            "fixture-runtime-1",
+            DSH_QUALIFIED_DISTRIBUTION_VERSION,
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         );
         assert!(config.validate_for_real().is_err());
@@ -1514,10 +1519,13 @@ mod tests {
         .with_dsh_home(home.to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
         .with_profile_configuration_ref(governed_sdk_profile(
-            "1",
+            DSH_QUALIFIED_DISTRIBUTION_VERSION,
             &format!("sha256:{}", "b".repeat(64)),
         ))
-        .with_runtime_identity("1", format!("sha256:{}", "b".repeat(64)));
+        .with_runtime_identity(
+            DSH_QUALIFIED_DISTRIBUTION_VERSION,
+            format!("sha256:{}", "b".repeat(64)),
+        );
         assert!(config.validate_for_real().is_ok());
 
         config.runtime_digest = Some(format!("sha256:{}", "B".repeat(64)));
@@ -1568,11 +1576,11 @@ mod tests {
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
         .with_profile_configuration_ref(governed_sdk_profile(
-            "fixture-runtime-1",
+            DSH_QUALIFIED_DISTRIBUTION_VERSION,
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         ))
         .with_runtime_identity(
-            "fixture-runtime-1",
+            DSH_QUALIFIED_DISTRIBUTION_VERSION,
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         );
         assert!(config.validate_for_real().is_ok());
@@ -1878,11 +1886,11 @@ mod tests {
         .with_dsh_home(root.join("dsh-home").to_string_lossy())
         .with_execution_environment_ref("env://container/dsh")
         .with_profile_configuration_ref(governed_sdk_profile(
-            "fixture-runtime-1",
+            DSH_QUALIFIED_DISTRIBUTION_VERSION,
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         ))
         .with_runtime_identity(
-            "fixture-runtime-1",
+            DSH_QUALIFIED_DISTRIBUTION_VERSION,
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         );
         assert!(configured.validate_for_real().is_ok());
@@ -1912,7 +1920,7 @@ mod tests {
             "deepseek-harness-profile@morn-e0-v1#sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         )
         .with_runtime_identity(
-            "fixture-runtime-1",
+            DSH_QUALIFIED_DISTRIBUTION_VERSION,
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         );
         let runtime_home = config
