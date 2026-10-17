@@ -835,20 +835,18 @@ fn project_dsh_notification_for_morn(method: &str, params: Value) -> Result<Opti
         Some("tool/result") => {
             let data = event.and_then(|event| event.get("data"));
             let message = data.and_then(|data| data.get("message"));
-            json!({
-                "type":"tool/result",
-                "data":{
-                    "error": if data.is_some_and(|data| data.get("error").is_some()) {
-                        Some(true)
-                    } else {
-                        None
-                    },
-                    "message":{
-                        "toolCallId": message.and_then(|message| message.get("toolCallId")).cloned().unwrap_or(Value::Null),
-                        "isError": message.and_then(|message| message.get("isError")).cloned().unwrap_or(Value::Null),
-                    }
-                }
-            })
+            let mut projected_data = serde_json::Map::new();
+            if data.is_some_and(|data| data.get("error").is_some()) {
+                projected_data.insert("error".to_string(), json!(true));
+            }
+            projected_data.insert(
+                "message".to_string(),
+                json!({
+                    "toolCallId": message.and_then(|message| message.get("toolCallId")).cloned().unwrap_or(Value::Null),
+                    "isError": message.and_then(|message| message.get("isError")).cloned().unwrap_or(Value::Null),
+                }),
+            );
+            json!({"type":"tool/result","data":Value::Object(projected_data)})
         }
         Some("turn/end") => {
             let reason = event
@@ -2593,6 +2591,53 @@ mod tests {
         assert!(serialized.contains("call-1"));
         assert!(serialized.contains("shell"));
         assert!(!serialized.contains("secret args"));
+
+        let successful_result = project_dsh_notification_for_morn(
+            DSH_NOTIFICATION_SESSION_EVENT,
+            json!({
+                "sessionId":"dsh-1",
+                "event":{
+                    "type":"tool/result",
+                    "data":{"message":{"toolCallId":"call-1","isError":false,"content":"secret result"}}
+                }
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            successful_result
+                .params
+                .pointer("/event/data/error")
+                .is_none(),
+            "a successful tool result must not gain a synthetic error marker"
+        );
+        assert!(
+            !serde_json::to_string(&successful_result.params)
+                .unwrap()
+                .contains("secret result")
+        );
+
+        let failed_result = project_dsh_notification_for_morn(
+            DSH_NOTIFICATION_SESSION_EVENT,
+            json!({
+                "sessionId":"dsh-1",
+                "event":{
+                    "type":"tool/result",
+                    "data":{"error":{"message":"private failure detail"},"message":{"toolCallId":"call-2","isError":true}}
+                }
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            failed_result.params.pointer("/event/data/error"),
+            Some(&json!(true))
+        );
+        assert!(
+            !serde_json::to_string(&failed_result.params)
+                .unwrap()
+                .contains("private failure detail")
+        );
     }
 
     #[test]
