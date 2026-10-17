@@ -3,6 +3,14 @@ name: Live BioLab dataset provenance (manual)
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        description: "plan validates inputs and prints the evidence path without secrets; verify runs the protected attestation gate"
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - verify
       dataset_relative_path:
         description: "Path below /var/lib/morn/biolab-datasets to the exact pilot dataset file"
         type: string
@@ -25,8 +33,53 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  plan:
+    name: Plan BioLab dataset evidence run
+    if: inputs.operation == 'plan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      INPUT_DATASET_RELATIVE_PATH: ${{ inputs.dataset_relative_path }}
+      INPUT_RUNNER_REF: ${{ inputs.runner_ref }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Validate plan inputs without reading protected material
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, pathlib
+
+          raw_relative = os.environ["INPUT_DATASET_RELATIVE_PATH"]
+          if not raw_relative or any(ord(ch) < 32 for ch in raw_relative):
+              raise SystemExit("dataset_relative_path must be a non-empty control-free path")
+          relative = pathlib.PurePosixPath(raw_relative)
+          if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+              raise SystemExit("dataset_relative_path must stay below the fixed BioLab dataset root")
+
+          runner = os.environ["INPUT_RUNNER_REF"]
+          if not runner or any(ord(ch) < 32 for ch in runner):
+              raise SystemExit("runner_ref must be a non-empty single-line identity")
+
+          print("PLAN ONLY - no secrets read, no dataset accessed, no provenance verified.")
+          print(f"dataset_relative_path={raw_relative}")
+          print(f"runner_ref={runner}")
+          print("required runner label: morn-attested-biolab")
+          print("required environment: morn-biolab-evidence")
+          print(
+              "required secrets: MORN_BIOLAB_DATASET_PROVENANCE_JSON, "
+              "MORN_BIOLAB_DATASET_PROVENANCE_ISSUER"
+          )
+          print("verify entrypoint: operation=verify with acknowledge_boundary=true")
+          PY
+
   biolab-dataset-evidence:
     name: Verify real BioLab dataset provenance
+    if: inputs.operation == 'verify'
     environment: morn-biolab-evidence
     runs-on: morn-attested-biolab
     timeout-minutes: 20

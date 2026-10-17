@@ -3,6 +3,14 @@ name: Customer / production evidence validation (manual)
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        description: "plan validates inputs and prints the evidence path without secrets; verify runs the protected evidence gate"
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - verify
       evidence_class:
         description: "Validate deployment-owned RealSite or ProductionWrite evidence"
         type: choice
@@ -29,8 +37,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  plan:
+    name: Plan ${{ inputs.evidence_class }} evidence for ${{ inputs.site_ref }}
+    if: inputs.operation == 'plan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      INPUT_EVIDENCE_CLASS: ${{ inputs.evidence_class }}
+      INPUT_SITE_REF: ${{ inputs.site_ref }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Validate plan inputs without reading protected material
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+
+          site = os.environ["INPUT_SITE_REF"]
+          if not site.strip() or any(ord(ch) < 32 for ch in site):
+              raise SystemExit("site_ref must be a non-empty single-line identity")
+
+          evidence_class = os.environ["INPUT_EVIDENCE_CLASS"]
+          if evidence_class not in ("real-site", "production-write"):
+              raise SystemExit("evidence_class must be real-site or production-write")
+          expected = (
+              f"factory-customer:{site}"
+              if evidence_class == "real-site"
+              else f"factory-production-write:{site}"
+          )
+
+          print("PLAN ONLY - no secrets read and no customer evidence validated or minted.")
+          print(f"evidence_class={evidence_class}")
+          print(f"site_ref={site}")
+          print(f"expected_subject={expected}")
+          print("required environment: morn-customer-evidence")
+          print(
+              "required secrets: MORN_CUSTOMER_EVIDENCE_CLAIM_JSON, MORN_EVIDENCE_ISSUER"
+          )
+          print("verify entrypoint: operation=verify with acknowledge_external_truth=true")
+          PY
+
   validate-evidence:
     name: Validate ${{ inputs.evidence_class }} for ${{ inputs.site_ref }}
+    if: inputs.operation == 'verify'
     environment: morn-customer-evidence
     runs-on: ubuntu-latest
     timeout-minutes: 15
