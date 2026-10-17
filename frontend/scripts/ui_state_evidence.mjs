@@ -335,6 +335,123 @@ try {
     await page.close();
     console.log("OK hub provider-registry failure state");
   }
+
+  // 7. Console loading states: first the legacy console payload, then the
+  //    canonical posture. Neither may render as an empty/zero console.
+  {
+    const { page, pageErrors } = await newPage();
+    let releaseConsole;
+    let releaseStatus;
+    const consoleGate = new Promise((resolve) => (releaseConsole = resolve));
+    const statusGate = new Promise((resolve) => (releaseStatus = resolve));
+    await page.route("**/api/console", async (route) => {
+      await consoleGate;
+      await route.continue();
+    });
+    await page.route("**/api/v115/status", async (route) => {
+      await statusGate;
+      await route.continue();
+    });
+    await page.goto(`${BASE}/console`, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.getByText("Loading…", { exact: false }).first().waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await screenshot(page, "console-loading-state.png");
+    releaseConsole();
+    await page.getByTestId("console-canonical-loading").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await screenshot(page, "console-canonical-loading.png");
+    releaseStatus();
+    await page.getByTestId("release-readiness").waitFor({ state: "visible", timeout: 15000 });
+    consoleErrors.push(...pageErrors);
+    await page.close();
+    console.log("OK console loading states");
+  }
+
+  // 8. Hub loading states: hub payload, then provider registry.
+  {
+    const { page, pageErrors } = await newPage();
+    let releaseHub;
+    let releaseStatus;
+    const hubGate = new Promise((resolve) => (releaseHub = resolve));
+    const statusGate = new Promise((resolve) => (releaseStatus = resolve));
+    await page.route("**/api/hub", async (route) => {
+      await hubGate;
+      await route.continue();
+    });
+    await page.route("**/api/v115/status", async (route) => {
+      await statusGate;
+      await route.continue();
+    });
+    await page.goto(`${BASE}/hub`, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.getByText("Loading…", { exact: false }).first().waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await screenshot(page, "hub-loading-state.png");
+    releaseHub();
+    await page.getByText("Loading provider registry…", { exact: false }).first().waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await screenshot(page, "hub-provider-loading.png");
+    releaseStatus();
+    await page.getByText("Technical identity & evidence", { exact: false }).first().waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    consoleErrors.push(...pageErrors);
+    await page.close();
+    console.log("OK hub loading states");
+  }
+
+  // 9. Multi-Work selection: the journey selector and the governed executor
+  //    must always point at the same Work.
+  {
+    const { page, pageErrors } = await newPage();
+    const first = control("Proposed");
+    const secondWork = {
+      ...first.work[0],
+      id: "work:ui-state-second",
+      spec: { ...first.work[0].spec, goal: "Reference second Work" },
+    };
+    await routeControlPlane(page, { ...first, work: [first.work[0], secondWork] });
+    await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
+
+    const waitForJourneyHeading = (expected) =>
+      page.waitForFunction(
+        (text) =>
+          document
+            .querySelector('[data-testid="work-lifecycle-guide"] h2')
+            ?.textContent?.includes(text) === true,
+        expected,
+        { timeout: 10000 },
+      );
+
+    const journeySelect = page.getByTestId("journey-work-select");
+    await journeySelect.waitFor({ state: "visible", timeout: 15000 });
+    await journeySelect.selectOption("work:ui-state-second");
+    await waitForJourneyHeading("Reference second Work");
+    const governedSelect = page.getByTestId("governed-work-select");
+    await governedSelect.waitFor({ state: "visible", timeout: 15000 });
+    if ((await governedSelect.inputValue()) !== "work:ui-state-second") {
+      failures.push("multi-work fixture: journey selection did not update governed execution");
+    }
+    await screenshot(page, "workbench-multi-work-selection.png");
+
+    await governedSelect.selectOption(first.work[0].id);
+    await waitForJourneyHeading("Reference proposed Work");
+    if ((await journeySelect.inputValue()) !== first.work[0].id) {
+      failures.push("multi-work fixture: governed selection did not update the journey");
+    }
+
+    consoleErrors.push(...pageErrors);
+    await page.close();
+    console.log("OK workbench multi-Work selection");
+  }
 } finally {
   await browser.close();
 }
@@ -348,5 +465,5 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  "UI state evidence OK: loading / reconciling / rejected / canonical error / console+hub failures",
+  "UI state evidence OK: loading / reconciling / rejected / canonical error / console+hub failures / console+hub loading",
 );
