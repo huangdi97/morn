@@ -1,5 +1,12 @@
 # Morn v11.5 Convergence Closeout — 2026-10-08
 
+> **Historical / Superseded snapshot.** This ledger records the 2026-10-08
+> candidate state (`CI_IN_PROGRESS`) and is retained as dated evidence. It is
+> **not** the current branch status. Current exact-head verification, the
+> implementation checkpoint and every external blocker are authoritative in
+> `../STATUS.md` and `../BLOCKERS.md`. Do not read the promotion condition near
+> the end of this report as still pending.
+
 Status: **LOCAL_ENGINEERING_CANDIDATE / CI_IN_PROGRESS**
 
 This report is a repository-level implementation/evidence ledger for the

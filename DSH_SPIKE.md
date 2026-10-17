@@ -1,5 +1,14 @@
 # DSH_SPIKE.md — DeepSeek Harness / Cordis Architecture Spike
 
+> **Historical planning document (2026-10-08 scope).** The spike questions and
+> provider-contract sketch below are retained as design history. Current
+> implementation truth is authoritative in `STATUS.md`, and later decisions
+> supersede plan-level statements where they differ: **D-031** makes Cordis a
+> pinned reference composition runtime (not merely a one-off spike), and
+> **D-032** records the real DSH SDK/ACP adapters plus the exact `0.2.1-rc.2`
+> distribution qualification. Authenticated live DSH evidence remains
+> `EXTERNAL_BLOCKED` in `BLOCKERS.md`; this file does not upgrade it.
+
 ## 目标
 
 验证 DeepSeek Harness 是 Morn 的 Provider，而不是 Morn 的 Source of Truth。

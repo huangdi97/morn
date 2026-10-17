@@ -275,3 +275,29 @@ Upstream evidence:
   (`release(dsh): 0.2.1-rc.1`, 2026-10-16)
 - current SDK protocol README / `HarnessSdkRequestMap` on
   `deepseek-ai/deepseek-harness@1600d8a1e140dcde43a1a0941940a0480712c011`
+
+## 14. 2026-10-17 final qualification revalidation: 0.2.1-rc.2
+
+Section 13 above recorded `0.2.1-rc.1`. The official repository advanced again
+on the same day, and Morn re-qualified the exact official distribution
+`0.2.1-rc.2`. Re-verified against the GitHub API on 2026-10-17:
+
+- `deepseek-ai/deepseek-harness` default branch `master` at
+  `687f282e8625c6b8d11ff58211a90524be2e4317`.
+- Release `dsh-v0.2.1-rc.2` published 2026-10-17T08:16:33Z (pre-release),
+  immediately after `dsh-v0.2.1-rc.1` (2026-10-17T05:22:10Z).
+- Morn's qualification constant is exactly
+  `DSH_QUALIFIED_DISTRIBUTION_VERSION = "0.2.1-rc.2"`. Production launch is
+  fail-closed for every other distribution version. A later DSH package —
+  including one that keeps the same wire version — remains `UNQUALIFIED` until
+  the full provenance/protocol/SDK/ACP/security/compatibility review is
+  repeated (`DECISIONS.md` D-032).
+- Morn continues to track only these SDK request names: `initialize`,
+  `session/prompt`, `session/resume`, `session/wait`,
+  `session/working-directory/get`, `session/working-directory/set` and
+  `shutdown`. Any additional upstream method must be reviewed before use; ACP
+  lifecycle remains a separate Work-bound controller (ADR-045).
+- Distribution identity and `serverInfo.version` remain different concepts;
+  the latter must never be treated as the runtime distribution identity.
+- This revalidation is repository-local only. Authenticated live DSH evidence
+  remains `EXTERNAL_BLOCKED` (B-001) in `BLOCKERS.md`.
