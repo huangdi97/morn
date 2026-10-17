@@ -821,18 +821,12 @@ impl DshAcpStdioClient {
                     .and_then(Value::as_str)
                     .filter(|method| !method.trim().is_empty())
                     .ok_or_else(|| Error::external("DSH ACP notification method is empty"))?;
-                let params = incoming.get("params").cloned().unwrap_or(Value::Null);
-                // ACP deliberately carries committed agent thoughts. Morn never
-                // needs private reasoning for Work truth, lifecycle control, or
-                // acceptance, so discard it at the transport boundary instead
-                // of retaining it in the in-memory notification transcript.
-                if acp_notification_is_private_thought(method, &params) {
-                    continue;
+                if let Some(notification) = project_acp_notification_for_morn(
+                    method,
+                    incoming.get("params").cloned().unwrap_or(Value::Null),
+                )? {
+                    self.notifications.push(notification);
                 }
-                self.notifications.push(DshAcpNotification {
-                    method: method.to_string(),
-                    params,
-                });
                 continue;
             }
             return Err(Error::external(
@@ -1066,25 +1060,77 @@ fn permission_denial_result(params: &Value) -> Value {
     }
 }
 
-fn acp_notification_is_private_thought(method: &str, params: &Value) -> bool {
-    method == DSH_ACP_METHOD_SESSION_UPDATE
-        && params
-            .get("update")
-            .and_then(|update| update.get("sessionUpdate"))
-            .and_then(Value::as_str)
-            == Some("agent_thought_chunk")
+fn project_acp_notification_for_morn(
+    method: &str,
+    params: Value,
+) -> Result<Option<DshAcpNotification>> {
+    if method != DSH_ACP_METHOD_SESSION_UPDATE {
+        return Err(Error::external(format!(
+            "qualified DSH ACP emitted unsupported notification method {method:?}",
+        )));
+    }
+    let session_id = params
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| Error::external("DSH ACP session/update missing non-empty sessionId"))?;
+    let update = params
+        .get("update")
+        .and_then(Value::as_object)
+        .ok_or_else(|| Error::external("DSH ACP session/update missing update object"))?;
+    let update_type = update
+        .get("sessionUpdate")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| Error::external("DSH ACP update missing sessionUpdate type"))?;
+
+    let projected_update = match update_type {
+        "agent_thought_chunk" | "usage_update" => return Ok(None),
+        "agent_message_chunk" => {
+            let content = update
+                .get("content")
+                .and_then(Value::as_object)
+                .ok_or_else(|| Error::external("DSH ACP agent message missing content object"))?;
+            if content.get("type").and_then(Value::as_str) != Some("text") {
+                return Ok(None);
+            }
+            let text = content
+                .get("text")
+                .and_then(Value::as_str)
+                .ok_or_else(|| Error::external("DSH ACP text message missing string text"))?;
+            json!({
+                "sessionUpdate":"agent_message_chunk",
+                "content":{"type":"text","text":text}
+            })
+        }
+        "tool_call" => json!({
+            "sessionUpdate":"tool_call",
+            "toolCallId":update.get("toolCallId").cloned().unwrap_or(Value::Null),
+            "title":update.get("title").cloned().unwrap_or(Value::Null),
+            "status":update.get("status").cloned().unwrap_or(Value::Null)
+        }),
+        "tool_call_update" => json!({
+            "sessionUpdate":"tool_call_update",
+            "toolCallId":update.get("toolCallId").cloned().unwrap_or(Value::Null),
+            "status":update.get("status").cloned().unwrap_or(Value::Null)
+        }),
+        other => json!({"sessionUpdate":other}),
+    };
+
+    Ok(Some(DshAcpNotification {
+        method: method.to_string(),
+        params: json!({"sessionId":session_id,"update":projected_update}),
+    }))
 }
 
 fn acp_update_reports_tool_activity(notification: &DshAcpNotification) -> bool {
     notification.method == DSH_ACP_METHOD_SESSION_UPDATE
-        && matches!(
-            notification
-                .params
-                .get("update")
-                .and_then(|update| update.get("sessionUpdate"))
-                .and_then(Value::as_str),
-            Some("tool_call" | "tool_call_update")
-        )
+        && notification
+            .params
+            .get("update")
+            .and_then(|update| update.get("sessionUpdate"))
+            .and_then(Value::as_str)
+            .is_some_and(|update_type| update_type.starts_with("tool_"))
 }
 
 pub fn assistant_text_from_acp_updates(
@@ -1186,13 +1232,21 @@ mod tests {
             assistant_text_from_acp_updates(&updates, "a"),
             "hello world"
         );
-        assert!(acp_notification_is_private_thought(
-            &updates[1].method,
-            &updates[1].params
-        ));
         assert!(
-            !acp_notification_is_private_thought(DSH_ACP_METHOD_SESSION_UPDATE, &updates[0].params),
-            "visible assistant messages must remain available to the caller"
+            project_acp_notification_for_morn(updates[1].method.as_str(), updates[1].params.clone())
+                .unwrap()
+                .is_none(),
+            "private ACP thought chunks must be discarded before buffering"
+        );
+        let visible = project_acp_notification_for_morn(
+            DSH_ACP_METHOD_SESSION_UPDATE,
+            updates[0].params.clone(),
+        )
+        .unwrap()
+        .expect("visible assistant message remains available");
+        assert_eq!(
+            assistant_text_from_acp_updates(&[visible], "a"),
+            "hello "
         );
     }
 
@@ -1234,14 +1288,58 @@ mod tests {
 
     #[test]
     fn tool_updates_are_never_silently_treated_as_read_only_output() {
-        let tool = DshAcpNotification {
+        let tool = project_acp_notification_for_morn(
+            DSH_ACP_METHOD_SESSION_UPDATE,
+            json!({
+                "sessionId":"a",
+                "update":{
+                    "sessionUpdate":"tool_call",
+                    "toolCallId":"call-1",
+                    "title":"bash",
+                    "status":"in_progress",
+                    "rawInput":{"command":"secret command","token":"secret token"}
+                }
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(acp_update_reports_tool_activity(&tool));
+        let serialized = serde_json::to_string(&tool.params).unwrap();
+        assert!(serialized.contains("call-1"));
+        assert!(serialized.contains("bash"));
+        assert!(!serialized.contains("secret command"));
+        assert!(!serialized.contains("secret token"));
+
+        let result = project_acp_notification_for_morn(
+            DSH_ACP_METHOD_SESSION_UPDATE,
+            json!({
+                "sessionId":"a",
+                "update":{
+                    "sessionUpdate":"tool_call_update",
+                    "toolCallId":"call-1",
+                    "status":"failed",
+                    "content":[{"type":"content","content":{"type":"text","text":"secret result"}}]
+                }
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(acp_update_reports_tool_activity(&result));
+        assert!(!serde_json::to_string(&result.params)
+            .unwrap()
+            .contains("secret result"));
+
+        let future_tool = DshAcpNotification {
             method: DSH_ACP_METHOD_SESSION_UPDATE.to_string(),
             params: json!({
                 "sessionId":"a",
-                "update":{"sessionUpdate":"tool_call","toolCallId":"call-1"}
+                "update":{"sessionUpdate":"tool_future_lifecycle"}
             }),
         };
-        assert!(acp_update_reports_tool_activity(&tool));
+        assert!(
+            acp_update_reports_tool_activity(&future_tool),
+            "future ACP tool lifecycle names must fail closed"
+        );
     }
 
     #[test]

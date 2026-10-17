@@ -581,9 +581,10 @@ impl PiRpcClient {
             if event.event_type == PI_EVENT_AGENT_SETTLED {
                 settled = true;
             }
-            // Durable local audit buffering is independent of whether the
-            // correlated prompt later settles successfully. A tool event
-            // followed by a protocol error must not disappear.
+            // Minimal local evidence buffering is independent of whether the
+            // correlated prompt later settles successfully. Sensitive provider
+            // transcript is removed by parse_event, while tool-policy facts
+            // must remain visible even if a later protocol error occurs.
             self.buffered_events.push(event.clone());
             events.push(event);
             if settled && response.is_some() {
@@ -774,9 +775,68 @@ fn parse_event(value: Value) -> Result<PiRpcEvent> {
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| Error::external("Pi RPC event missing non-empty type"))?
         .to_string();
+
+    let payload = match event_type.as_str() {
+        PI_EVENT_AGENT_SETTLED => json!({
+            "type":PI_EVENT_AGENT_SETTLED,
+            "aborted":value.get("aborted").cloned().unwrap_or(Value::Null)
+        }),
+        "message_update" => {
+            let update = value
+                .get("assistantMessageEvent")
+                .and_then(Value::as_object);
+            let update_type = update
+                .and_then(|update| update.get("type"))
+                .and_then(Value::as_str);
+            match update_type {
+                Some(kind) => {
+                    let mut projected = serde_json::Map::new();
+                    projected.insert("type".to_string(), json!(kind));
+                    if kind == "toolcall_start" {
+                        if let Some(id) = update.and_then(|update| update.get("id")).cloned() {
+                            projected.insert("id".to_string(), id);
+                        }
+                        if let Some(tool_name) =
+                            update.and_then(|update| update.get("toolName")).cloned()
+                        {
+                            projected.insert("toolName".to_string(), tool_name);
+                        }
+                    }
+                    json!({
+                        "type":"message_update",
+                        "assistantMessageEvent":Value::Object(projected)
+                    })
+                }
+                None => json!({"type":"message_update"}),
+            }
+        }
+        "tool_execution_start" | "tool_execution_update" => json!({
+            "type":event_type,
+            "toolCallId":value.get("toolCallId").cloned().unwrap_or(Value::Null),
+            "toolName":value.get("toolName").cloned().unwrap_or(Value::Null)
+        }),
+        "tool_execution_end" => json!({
+            "type":"tool_execution_end",
+            "toolCallId":value.get("toolCallId").cloned().unwrap_or(Value::Null),
+            "toolName":value.get("toolName").cloned().unwrap_or(Value::Null),
+            "isError":value.get("isError").cloned().unwrap_or(Value::Null)
+        }),
+        "turn_end" => {
+            let tool_activity = value
+                .get("toolResults")
+                .and_then(Value::as_array)
+                .is_some_and(|results| !results.is_empty());
+            json!({
+                "type":"turn_end",
+                "toolResults":if tool_activity { vec![json!({})] } else { Vec::<Value>::new() }
+            })
+        }
+        _ => json!({"type":event_type}),
+    };
+
     Ok(PiRpcEvent {
         event_type,
-        payload: value,
+        payload,
     })
 }
 
@@ -895,8 +955,73 @@ mod tests {
     fn malformed_pi_event_without_type_fails_closed() {
         assert!(parse_event(json!({})).is_err());
         assert!(parse_event(json!({"type":""})).is_err());
-        let event = parse_event(json!({"type":"future_event","payload":{"x":1}})).unwrap();
+        let event =
+            parse_event(json!({"type":"future_event","payload":{"private":"secret"}})).unwrap();
         assert_eq!(event.event_type, "future_event");
+        assert_eq!(event.payload, json!({"type":"future_event"}));
+    }
+
+    #[test]
+    fn pi_rpc_event_projection_discards_thinking_messages_and_tool_bodies() {
+        let thinking = parse_event(json!({
+            "type":"message_update",
+            "assistantMessageEvent":{
+                "type":"thinking_delta",
+                "contentIndex":0,
+                "delta":"private reasoning"
+            }
+        }))
+        .unwrap();
+        let thinking_json = serde_json::to_string(&thinking.payload).unwrap();
+        assert!(thinking_json.contains("thinking_delta"));
+        assert!(!thinking_json.contains("private reasoning"));
+
+        let message = parse_event(json!({
+            "type":"message_end",
+            "message":{"role":"assistant","content":[{"type":"thinking","thinking":"private"},{"type":"text","text":"visible"}]}
+        }))
+        .unwrap();
+        assert_eq!(message.payload, json!({"type":"message_end"}));
+
+        let tool_start = parse_event(json!({
+            "type":"tool_execution_start",
+            "toolCallId":"call-1",
+            "toolName":"bash",
+            "args":{"command":"secret command"}
+        }))
+        .unwrap();
+        let tool_start_json = serde_json::to_string(&tool_start.payload).unwrap();
+        assert!(tool_start_json.contains("call-1"));
+        assert!(tool_start_json.contains("bash"));
+        assert!(!tool_start_json.contains("secret command"));
+
+        let tool_end = parse_event(json!({
+            "type":"tool_execution_end",
+            "toolCallId":"call-1",
+            "toolName":"bash",
+            "result":{"content":[{"type":"text","text":"secret result"}]},
+            "isError":false
+        }))
+        .unwrap();
+        let tool_end_json = serde_json::to_string(&tool_end.payload).unwrap();
+        assert!(!tool_end_json.contains("secret result"));
+        assert_eq!(tool_end.payload.get("isError"), Some(&json!(false)));
+
+        let turn = parse_event(json!({
+            "type":"turn_end",
+            "message":{"role":"assistant","content":"private final transcript"},
+            "toolResults":[{"content":"secret result"}]
+        }))
+        .unwrap();
+        assert!(
+            turn.payload
+                .get("toolResults")
+                .and_then(Value::as_array)
+                .is_some_and(|results| !results.is_empty())
+        );
+        let turn_json = serde_json::to_string(&turn.payload).unwrap();
+        assert!(!turn_json.contains("private final transcript"));
+        assert!(!turn_json.contains("secret result"));
     }
 
     #[test]
