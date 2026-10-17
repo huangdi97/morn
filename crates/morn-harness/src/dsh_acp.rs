@@ -460,9 +460,19 @@ impl std::fmt::Debug for DshAcpStdioClient {
     }
 }
 
+fn dsh_acp_process_launch_cwd<'a>(
+    workspace: &'a Path,
+    owned_runtime_home: Option<&'a Path>,
+) -> &'a Path {
+    owned_runtime_home.unwrap_or(workspace)
+}
+
 impl DshAcpStdioClient {
     pub fn spawn(config: &DshAcpConfig) -> Result<Self> {
         config.validate()?;
+        let expected_cwd = std::fs::canonicalize(&config.cwd).map_err(|error| {
+            Error::validation(format!("canonicalize DSH ACP workspace: {error}"))
+        })?;
         let mut command = Command::new(&config.command);
         let (launch_args, owned_policy_dir, owned_runtime_home) =
             if config.enforce_morn_e0_tool_policy {
@@ -489,13 +499,20 @@ impl DshAcpStdioClient {
             } else {
                 (config.args.clone(), None, None)
             };
+        // Match the SDK provider boundary: the DSH launcher itself runs from
+        // Morn's fresh one-shot Home so a Work workspace .env cannot become an
+        // ambient launcher/config layer. The ACP session still receives the
+        // canonical Work workspace explicitly through session/new or resume.
+        let launch_cwd =
+            dsh_acp_process_launch_cwd(&expected_cwd, owned_runtime_home.as_deref());
         command
             .args(&launch_args)
-            .current_dir(&config.cwd)
+            .current_dir(launch_cwd)
             .env_clear()
             .envs(crate::subprocess_env::scrubbed_environment(
                 "MORN_DSH_ACP_ENV_PASSTHROUGH",
             ))
+            .env(crate::dsh_sdk::DSH_MORN_WORKSPACE_ROOT_ENV, &expected_cwd)
             .env("DSH_PERMISSION_MODE", "read-only")
             .env("DSH_MAX_TOKENS_AS_SUCCESS", "false")
             .env("DSH_TELEMETRY_DISABLED", "1")
@@ -1081,6 +1098,23 @@ mod tests {
 
     fn governed_acp_profile(runtime_version: &str, runtime_digest: &str) -> String {
         derive_morn_profile_configuration_ref(runtime_version, runtime_digest, "acp").unwrap()
+    }
+
+    #[test]
+    fn governed_acp_process_launch_isolated_from_work_workspace() {
+        let workspace = Path::new("work-workspace");
+        let runtime_home = Path::new("one-shot-runtime-home");
+
+        assert_eq!(
+            dsh_acp_process_launch_cwd(workspace, Some(runtime_home)),
+            runtime_home,
+            "governed ACP must launch DSH from the one-shot runtime Home, not the Work workspace",
+        );
+        assert_eq!(
+            dsh_acp_process_launch_cwd(workspace, None),
+            workspace,
+            "protocol fixtures without a managed runtime Home keep their explicit fixture cwd",
+        );
     }
 
     #[test]

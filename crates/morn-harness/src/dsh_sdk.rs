@@ -78,7 +78,7 @@ pub const DSH_NOTIFICATION_SUBAGENT_FINISHED: &str = "subagent.finished";
 /// shipped direct tool producers before a model turn. Runtime event checks
 /// remain a second line of defence against added/unknown tool plugins.
 pub const DSH_MORN_E0_TOOL_POLICY_REF: &str = "morn.dsh-e0-no-direct-tools/v3";
-const DSH_MORN_WORKSPACE_ROOT_ENV: &str = "MORN_DSH_WORKSPACE_ROOT";
+pub(crate) const DSH_MORN_WORKSPACE_ROOT_ENV: &str = "MORN_DSH_WORKSPACE_ROOT";
 const DSH_MORN_E0_TOOL_POLICY_FILE: &str = "morn-e0-no-direct-tools.patch.yml";
 const DSH_MORN_E0_TOOL_GUARD_FILE: &str = "morn-e0-tool-guard.mjs";
 const DSH_MORN_E0_TOOL_GUARD_PLUGIN: &str = r#"export const name = 'morn-e0-tool-guard-v2'
