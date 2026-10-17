@@ -2304,9 +2304,9 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert_eq!(work.status.phase, WorkPhase::Accepted);
-        assert!(work.condition_is_true("IndependentAcceptance"));
-        assert!(work.condition_is_true("AcceptedOutcomeSemantics"));
+        assert_eq!(work.status.phase, WorkPhase::Waiting);
+        assert!(!work.condition_is_true("IndependentAcceptance"));
+        assert!(!work.condition_is_true("AcceptedOutcomeSemantics"));
     }
 
     #[test]
@@ -4239,7 +4239,9 @@ mod terminal_phase_tests {
                 ..Default::default()
             },
         );
-        assert_eq!(work.status.phase, WorkPhase::Rejected);
+        assert_eq!(work.status.phase, WorkPhase::Waiting);
+        assert!(!work.condition_is_true("IndependentAcceptance"));
+        assert!(!work.condition_is_true("AcceptedOutcomeSemantics"));
     }
 
     #[test]
