@@ -44,17 +44,19 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are verified at implementation checkpoint
-`a54c9b203f24dd79d2d16cfabcd7ef1f594c1a73` by exact-head Actions run
-`39040980703` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
+`eed9ada351f470c6e4113c999dbf29e2d79375bf` by exact-head Actions run
+`39044227292` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
 adapter-wire semantic-neutrality, Work/acceptance trust hardening, owned desktop
 backend lifecycle/security boundary, the DSH `0.2.1-rc.2` distribution
 qualification gate, a full-resolution Cargo.lock gate, Windows-portable provider
-tests, explicit browser evidence for loading/reconciling/rejected/error states,
-explicit Console/Hub canonical-failure alerts, a real zero-domain HTTP/browser
+tests, explicit browser evidence for loading/reconciling/rejected/error plus
+Console/Hub loading and canonical-failure states, a real zero-domain HTTP/browser
 smoke (no domain packs, BioLab routes 404, no BioLab DOM), desktop
-foreign-port/protocol-mismatch plus single-instance lock fail-closed probes, and
-no-credential `plan` modes for every live evidence workflow. Production DSH
-launch remains fail-closed unless the exact deployment-attested distribution
+foreign-port/protocol-mismatch plus single-instance lock fail-closed probes, a
+shared Workbench Work selection, and an automated external-evidence entrypoint
+matrix (plan/verify, plan-secret isolation, attested runner, protected
+environment, upload, cleanup). Production DSH launch remains fail-closed unless
+the exact deployment-attested distribution
 version/digest/profile/route/environment match the qualified contract; only a
 private `#[cfg(test)]` protocol-fixture path may use synthetic runtime
 identities. None of these controls manufactures external evidence. Every blocker
