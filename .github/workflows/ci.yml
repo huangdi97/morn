@@ -166,6 +166,28 @@ jobs:
           export UI_SCREENSHOT_DIR="$PWD/../artifacts/ci-ui-screenshots"
           node scripts/ui_smoke.mjs
           node scripts/ui_state_evidence.mjs
+      - name: Zero-domain runtime smoke (no domain packs)
+        run: |
+          set -euo pipefail
+          cargo build -p morn-app --bin server
+          export MORN_DB="$PWD/target/ci_zero_domain.db" MORN_PORT=8090
+          ./target/debug/server &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8090/api/health 2>/dev/null | grep -q '"status":"ok"'; then break; fi
+            sleep 1
+          done
+          cd frontend
+          npx vite --host 127.0.0.1 --port 5173 --strictPort &
+          VITE_PID=$!
+          trap 'kill $VITE_PID $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:5173/ 2>/dev/null; then break; fi
+            sleep 1
+          done
+          export UI_SCREENSHOT_DIR="$PWD/../artifacts/ci-ui-screenshots"
+          node scripts/ui_zero_domain.mjs
       - name: Upload four-surface visual evidence (fixture only)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -212,6 +234,12 @@ jobs:
         run: |
           & ./target/debug/morn-desktop.exe --probe-foreign-port
           if ($LASTEXITCODE -ne 0) { throw "desktop foreign-port fail-closed probe failed" }
+      - name: Desktop single-instance lock probe
+        shell: pwsh
+        working-directory: .
+        run: |
+          & ./target/debug/morn-desktop.exe --probe-instance-lock
+          if ($LASTEXITCODE -ne 0) { throw "desktop single-instance lock probe failed" }
       - name: Publish unsigned Windows reference bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
