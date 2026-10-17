@@ -1191,10 +1191,7 @@ mod tests {
             &updates[1].params
         ));
         assert!(
-            !acp_notification_is_private_thought(
-                DSH_ACP_METHOD_SESSION_UPDATE,
-                &updates[0].params
-            ),
+            !acp_notification_is_private_thought(DSH_ACP_METHOD_SESSION_UPDATE, &updates[0].params),
             "visible assistant messages must remain available to the caller"
         );
     }

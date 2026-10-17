@@ -725,7 +725,10 @@ pub struct DshNotification {
     pub params: Value,
 }
 
-fn project_dsh_notification_for_morn(method: &str, params: Value) -> Result<Option<DshNotification>> {
+fn project_dsh_notification_for_morn(
+    method: &str,
+    params: Value,
+) -> Result<Option<DshNotification>> {
     match method {
         DSH_NOTIFICATION_SESSION_STATUS => {
             return Ok(Some(DshNotification {
@@ -863,7 +866,11 @@ fn project_dsh_notification_for_morn(method: &str, params: Value) -> Result<Opti
                         .and_then(Value::as_str);
                     match cause_kind {
                         Some("hook") => {
-                            if cause.and_then(|cause| cause.get("reason")).and_then(Value::as_str).is_some() {
+                            if cause
+                                .and_then(|cause| cause.get("reason"))
+                                .and_then(Value::as_str)
+                                .is_some()
+                            {
                                 json!({"kind":"aborted","reason":{"kind":"hook","reason":"redacted"}})
                             } else {
                                 json!({"kind":"aborted","reason":{"kind":"hook"}})
@@ -2563,17 +2570,15 @@ mod tests {
 
     #[test]
     fn sdk_transport_drops_unneeded_session_transcript_and_minimizes_tool_payloads() {
-        assert!(
-            project_dsh_notification_for_morn(
-                DSH_NOTIFICATION_SESSION_EVENT,
-                json!({
-                    "sessionId":"dsh-1",
-                    "event":{"type":"user/message","data":{"message":{"content":"private prompt"}}}
-                }),
-            )
-            .unwrap()
-            .is_none()
-        );
+        assert!(project_dsh_notification_for_morn(
+            DSH_NOTIFICATION_SESSION_EVENT,
+            json!({
+                "sessionId":"dsh-1",
+                "event":{"type":"user/message","data":{"message":{"content":"private prompt"}}}
+            }),
+        )
+        .unwrap()
+        .is_none());
 
         let tool = project_dsh_notification_for_morn(
             DSH_NOTIFICATION_SESSION_EVENT,
