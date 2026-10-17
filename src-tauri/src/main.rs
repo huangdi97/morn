@@ -202,6 +202,27 @@ fn probe_health_body(service: &str, protocol: &str) -> String {
 /// it does not own. Both a non-Morn service and a Morn-identified service with
 /// a mismatched protocol must fail closed while the foreign listener keeps its
 /// port for the whole probe.
+/// Proves a second desktop cannot start while the first holds the loopback
+/// instance lock, and that the lock is released for a later start.
+fn run_instance_lock_probe() -> Result<(), String> {
+    let first = acquire_instance_lock()?;
+    let second = acquire_instance_lock();
+    if second.is_ok() {
+        return Err(
+            "second desktop acquired the instance lock while the first still held it".to_string(),
+        );
+    }
+    if TcpListener::bind(DESKTOP_INSTANCE_LOCK_ADDR).is_ok() {
+        return Err("instance-lock probe lost the original lock".to_string());
+    }
+    drop(first);
+    let reacquired = acquire_instance_lock().map_err(|error| {
+        format!("instance lock was not released after the first owner exited: {error}")
+    })?;
+    drop(reacquired);
+    Ok(())
+}
+
 fn run_foreign_port_probe() -> Result<(), String> {
     let data_dir = std::env::temp_dir().join(format!(
         "morn-desktop-foreign-port-probe-{}",
@@ -300,6 +321,13 @@ fn run_sidecar_probe() -> Result<(), String> {
 }
 
 fn main() {
+    if std::env::args().any(|arg| arg == "--probe-instance-lock") {
+        if let Err(error) = run_instance_lock_probe() {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if std::env::args().any(|arg| arg == "--probe-foreign-port") {
         if let Err(error) = run_foreign_port_probe() {
             eprintln!("{error}");
