@@ -1,14 +1,20 @@
 //! DeepSeek Harness SDK stdio boundary.
 //!
 //! DSH currently exposes newline-delimited JSON-RPC 2.0 over stdio. The
-//! current request methods at the researched upstream boundary are
-//! `initialize`, `session/prompt`, `session/wait`,
-//! `session/working-directory/get`, `session/working-directory/set`, and
-//! `shutdown`; notifications are `session.event`, `session.status`,
-//! `subagent.started`, and `subagent.finished`. The SDK wire still has no
-//! cancel/session-close method, so Morn must not fabricate those semantics.
-//! Morn observes but never uses the working-directory setter: Work execution
-//! stays pinned to the deployment-attested workspace.
+//! current request methods at the researched upstream boundary (DSH 0.2.1-rc.1,
+//! 2026-10-16) are `initialize`, `session/prompt`, `session/resume`,
+//! `session/wait`, `session/working-directory/get`,
+//! `session/working-directory/set`, and `shutdown`; notifications are
+//! `session.event`, `session.status`, `subagent.started`, and
+//! `subagent.finished`. The SDK wire still has no mid-turn cancel or
+//! per-session close method, so Morn must not fabricate those semantics.
+//!
+//! Upstream `session/resume` restores a persisted DSH session. It is exposed
+//! here as a wire primitive, but it is deliberately not equated with the
+//! HarnessProvider pause/resume semantic: restoring executor conversation state
+//! cannot recreate Morn Work/generation/ExecutionBinding ownership. Morn also
+//! observes but never uses the working-directory setter: Work execution stays
+//! pinned to the deployment-attested workspace.
 
 use std::fs;
 use std::io::{BufReader, Write};
@@ -30,6 +36,7 @@ use crate::subprocess_wire::{read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_
 
 pub const DSH_METHOD_INITIALIZE: &str = "initialize";
 pub const DSH_METHOD_SESSION_PROMPT: &str = "session/prompt";
+pub const DSH_METHOD_SESSION_RESUME: &str = "session/resume";
 pub const DSH_METHOD_SESSION_WAIT: &str = "session/wait";
 pub const DSH_METHOD_SESSION_WORKING_DIRECTORY_GET: &str = "session/working-directory/get";
 pub const DSH_METHOD_SESSION_WORKING_DIRECTORY_SET: &str = "session/working-directory/set";
@@ -902,6 +909,25 @@ impl DshSdkStdioClient {
             .ok_or_else(|| Error::external("DSH session/prompt result missing messageId"))
     }
 
+    /// Restore a DSH-persisted session on this exact SDK runtime/home.
+    ///
+    /// This is an executor transport primitive only. Callers must separately
+    /// prove the Morn Work/generation/ExecutionBinding and execution-environment
+    /// identity before associating restored executor state with canonical Work.
+    pub fn resume_persisted_session(&mut self, session_id: &str) -> Result<()> {
+        if session_id.trim().is_empty() {
+            return Err(Error::validation(
+                "DSH SDK session/resume requires a non-empty persisted session id",
+            ));
+        }
+        self.request(
+            DSH_METHOD_SESSION_RESUME,
+            Some(json!({"sessionId": session_id})),
+        )?;
+        self.verify_session_working_directory(session_id)?;
+        Ok(())
+    }
+
     pub fn wait_for_session(&mut self, session_id: &str) -> Result<()> {
         if session_id.trim().is_empty() {
             return Err(Error::validation(
@@ -1633,6 +1659,7 @@ mod tests {
     fn sdk_method_set_matches_current_upstream_boundary() {
         assert_eq!(DSH_METHOD_INITIALIZE, "initialize");
         assert_eq!(DSH_METHOD_SESSION_PROMPT, "session/prompt");
+        assert_eq!(DSH_METHOD_SESSION_RESUME, "session/resume");
         assert_eq!(DSH_METHOD_SESSION_WAIT, "session/wait");
         assert_eq!(
             DSH_METHOD_SESSION_WORKING_DIRECTORY_GET,
@@ -1903,6 +1930,39 @@ mod tests {
     }
 
     #[test]
+    fn current_sdk_resume_wire_restores_only_executor_session_state() {
+        let executable = std::env::current_exe().unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        let config = DshSdkConfig {
+            command: executable.to_string_lossy().to_string(),
+            args: vec![
+                "--exact".to_string(),
+                "dsh_sdk::tests::fake_sdk_runtime".to_string(),
+                "--ignored".to_string(),
+                "--nocapture".to_string(),
+            ],
+            cwd: cwd.to_string_lossy().to_string(),
+            provider: "fixture-provider".to_string(),
+            model: "fixture-model".to_string(),
+            reasoning_effort: None,
+            max_tokens: Some(64),
+            dsh_home: None,
+            execution_environment_ref: None,
+            profile_configuration_ref: None,
+            runtime_version: None,
+            runtime_digest: None,
+            request_timeout_ms: 10_000,
+            turn_timeout_ms: 10_000,
+            enforce_morn_e0_tool_policy: false,
+        };
+        let mut client = DshSdkStdioClient::spawn(&config).unwrap();
+        client.initialize(&config).unwrap();
+        client.resume_persisted_session("persisted-session").unwrap();
+        client.wait_for_session("persisted-session").unwrap();
+        client.shutdown().unwrap();
+    }
+
+    #[test]
     fn real_sdk_transport_rejects_session_working_directory_drift() {
         let executable = std::env::current_exe().unwrap();
         let cwd = std::env::current_dir().unwrap();
@@ -2002,7 +2062,7 @@ mod tests {
                         json!({"jsonrpc":"2.0","id":id,"result":{"cwd":cwd}}),
                     );
                 }
-                DSH_METHOD_SESSION_WAIT => {
+                DSH_METHOD_SESSION_RESUME | DSH_METHOD_SESSION_WAIT => {
                     write(&mut stdout, json!({"jsonrpc":"2.0","id":id,"result":{}}));
                 }
                 DSH_METHOD_SESSION_WORKING_DIRECTORY_SET => write(

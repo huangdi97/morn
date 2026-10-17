@@ -54,11 +54,11 @@ Morn Work / Spec / Status / Conditions / Acceptance (durable canonical truth)
 | `stream_events` | SDK `session.event` 投影为 Morn execution events | ACP `session/update` | 不混同 durable domain events / Outcome |
 | `inspect` | Morn-owned local projection | `session/list` | 区分 executor status 与 Work desired/observed |
 | `interrupt` | **不支持，fail-closed** | `session/cancel` / `$/cancel_request` | E2/E3 side effects 独立对账 |
-| `resume` | **不支持，fail-closed** | `session/resume` | 相同 workspace identity、binding version/digest |
+| `resume` | SDK 0.2.1-rc.1 新增 persisted `session/resume` wire primitive；**不等同于 HarnessProvider pause/resume** | `session/resume` | 恢复前必须重新证明相同 workspace、Work generation、ExecutionBinding、environment/runtime/profile identity；Morn one-shot SDK Home 当前不做跨进程 Provider restore |
 | `terminate` | 只有 process-level `shutdown`，无 per-session close | `session/close` | 关闭 session/process 不等于真实世界副作用回滚 |
 | external permission | SDK 当前没有 server→client approval surface | `session/request_permission` | 不可 auto-allow，仍需 Profile/Authority/Permit/Effect PEP |
 
-注意：官方 SDK 明确没有 mid-turn cancel / session-close；Morn SDK Provider 因此对 `interrupt/resume/terminate(session)` fail-closed。官方 ACP 已提供 `list/resume/close/cancel/set_config_option/request_permission`。Morn 已有独立 `DshAcpStdioClient` 对这些 wire surface 做本地协议验证，但同步 `HarnessProvider::send(&mut self, ...)` 仍不能保证并发可达的 mid-turn control，因此**不能把 ACP wire 能力误报成当前 Provider feature**。参见 ADR-045。
+注意：截至 DSH 0.2.1-rc.1，官方 SDK 仍没有 mid-turn cancel / session-close，但已经新增 persisted `session/resume`。Morn SDK client 跟踪该 wire primitive；`HarnessProvider::resume` 仍 fail-closed，因为其语义是当前 Work-bound provider lifecycle，而一个 DSH session id 不能重建 Morn 的 Work/generation/ExecutionBinding，且生产 SDK 路径使用 one-shot DSH_HOME。官方 ACP 已提供 `list/resume/close/cancel/set_config_option/request_permission`。Morn 已有独立 `DshAcpStdioClient` 对这些 wire surface 做本地协议验证，但同步 `HarnessProvider::send(&mut self, ...)` 仍不能保证并发可达的 mid-turn control，因此**不能把 ACP wire 能力误报成当前 Provider feature**。参见 ADR-045。
 
 ## 4. 建议的可执行工程交付顺序
 
@@ -234,3 +234,44 @@ This removes the previous local lifecycle exposure gap without changing the
 external evidence posture. Authenticated official ACP execution inside the
 deployment-attested environment remains a live deployment gate; customer/site
 outcome and G12 remain independent.
+
+
+## 13. 2026-10-17 upstream DSH 0.2.1-rc.1 SDK wire drift revalidation
+
+DeepSeek Harness master/release advanced on 2026-10-16 to `0.2.1-rc.1`. The
+official SDK protocol now declares **seven** client→server requests:
+
+```text
+initialize
+session/prompt
+session/resume
+session/wait
+session/working-directory/get
+session/working-directory/set
+shutdown
+```
+
+The previous Morn statement that the SDK wire had no resume method is therefore
+historical. Morn now tracks `session/resume` in `DshSdkStdioClient`, validates
+the restored session's effective cwd against the deployment-pinned Work
+workspace, and includes the method in the wire fixture contract.
+
+This does **not** make `HarnessProviderFeatures.resume=true`. That flag models
+Morn's in-process provider pause/resume lifecycle. Upstream SDK
+`session/resume` instead restores a persisted DSH conversation from the same
+persistence store. Production Morn SDK execution deliberately launches a fresh
+one-shot DSH_HOME and retains Work/generation/ExecutionBinding/environment
+authority outside DSH. A bare persisted session id therefore cannot reconstitute
+canonical Morn ownership.
+
+Cross-process/durable Work-facing lifecycle restore remains the separate ACP
+controller concern and must revalidate the exact Work generation, binding,
+runtime/profile identity, execution environment and mounted scope. This keeps
+the new upstream transport capability available without silently widening the
+Morn Provider contract or turning executor persistence into Work truth.
+
+Upstream evidence:
+- DeepSeek Harness release commit `c6e89e6755b41c1d10e68f7ca5b614ea734e7f37`
+  (`release(dsh): 0.2.1-rc.1`, 2026-10-16)
+- current SDK protocol README / `HarnessSdkRequestMap` on
+  `deepseek-ai/deepseek-harness@1600d8a1e140dcde43a1a0941940a0480712c011`

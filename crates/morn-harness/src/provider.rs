@@ -47,8 +47,12 @@ pub struct HarnessSession {
     pub status: String,
 }
 
-/// Provider feature negotiation. Optional lifecycle features are explicit:
-/// Morn must never invent cancellation/resume semantics a wire protocol lacks.
+/// Provider feature negotiation. Optional lifecycle features are explicit.
+///
+/// `resume` means the HarnessProvider's current-session pause/resume semantic,
+/// not an executor-specific persisted-conversation restore primitive. A wire may
+/// support persisted restoration without proving the Morn Work/binding identity
+/// required to advertise this flag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HarnessProviderFeatures {
     pub interrupt: bool,
@@ -1265,7 +1269,7 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                 return Err(Error::not_found(format!("session {session_id}")));
             }
             return Err(Error::invalid_state(
-                "current DSH SDK wire has no per-session resume; use ACP for persisted session resume",
+                "DSH SDK 0.2.1 supports persisted session/resume, but HarnessProvider resume remains disabled: Morn's one-shot E0 runtime home and Work/generation/ExecutionBinding ownership are not reconstructible from a DSH session id alone; use the Work-bound ACP lifecycle path for governed durable session restore",
             ));
         }
         let state = self
@@ -1472,6 +1476,18 @@ mod dsh_provider_tests {
         )
         .with_restriction(DSH_REAL_E0_SCOPE_RESTRICTION);
         assert!(provider.mount(broad).is_err());
+    }
+
+    #[test]
+    fn dsh_persisted_restore_does_not_masquerade_as_harness_pause_resume() {
+        let (mut provider, ctx, _handle) = real_wire_fixture_provider();
+        let session = provider.start(&ctx).unwrap();
+        assert!(!provider.features().resume);
+        let error = provider.resume(&session.id).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("persisted session/resume"), "{message}");
+        assert!(message.contains("Work/generation/ExecutionBinding"), "{message}");
+        provider.shutdown_real_runtime().unwrap();
     }
 
     #[test]
