@@ -942,7 +942,6 @@ impl DshSdkStdioClient {
             timeout,
         )?;
         require_empty_object_result(&result, DSH_METHOD_SESSION_WAIT)
-
     }
 
     /// Verify the SDK session has not changed its effective working directory
@@ -1242,10 +1241,7 @@ fn response_result_for_id(value: &Value, expected_id: u64, operation: &str) -> R
 }
 
 fn require_empty_object_result(result: &Value, method: &str) -> Result<()> {
-    if result
-        .as_object()
-        .is_some_and(|object| object.is_empty())
-    {
+    if result.as_object().is_some_and(|object| object.is_empty()) {
         Ok(())
     } else {
         Err(Error::external(format!(
@@ -1700,9 +1696,7 @@ mod tests {
     fn empty_object_protocol_results_are_exactly_validated() {
         assert!(require_empty_object_result(&json!({}), "session/wait").is_ok());
         assert!(require_empty_object_result(&Value::Null, "session/wait").is_err());
-        assert!(
-            require_empty_object_result(&json!({"unexpected": true}), "session/wait").is_err()
-        );
+        assert!(require_empty_object_result(&json!({"unexpected": true}), "session/wait").is_err());
     }
 
     #[test]
