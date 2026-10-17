@@ -606,6 +606,25 @@ describe("progressive Workbench lifecycle surface", () => {
     );
     expect(reconcilingHtml).toContain("Reconcile the unknown executor outcome");
   });
+
+  it("keeps the journey selector and its Work identity explicit", () => {
+    const base = control("Proposed");
+    const second = {
+      ...base.work[0],
+      id: "work:second",
+      spec: { ...base.work[0].spec, goal: "Second Work" },
+    };
+    const multi = { ...base, work: [base.work[0], second] };
+    const html = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(WorkLifecycleGuide, {
+        control: multi,
+        selectedWorkId: "work:second",
+      })),
+    );
+    expect(html).toContain("Second Work");
+    expect(html).toContain('data-testid="journey-work-select"');
+    expect(html).toContain("governed execution panel below");
+  });
 });
 
 

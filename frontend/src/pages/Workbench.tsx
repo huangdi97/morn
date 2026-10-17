@@ -694,9 +694,21 @@ export function workbenchLifecycleVisibility(
   };
 }
 
-export function WorkLifecycleGuide({ control }: { control: V115ControlPlaneData }) {
+export function WorkLifecycleGuide({
+  control,
+  selectedWorkId,
+  onSelectWork,
+}: {
+  control: V115ControlPlaneData;
+  selectedWorkId?: string;
+  onSelectWork?: (workId: string) => void;
+}) {
+  const activeWorks = control.work.filter(
+    (work) => !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase),
+  );
   const focus =
-    control.work.find((work) => !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase)) ??
+    (selectedWorkId ? control.work.find((work) => work.id === selectedWorkId) : undefined) ??
+    activeWorks[0] ??
     control.work[0];
   if (!focus) return null;
 
@@ -764,7 +776,23 @@ export function WorkLifecycleGuide({ control }: { control: V115ControlPlaneData 
           <span className="work-focus-eyebrow">CURRENT WORK JOURNEY</span>
           <h2>{focus.spec.goal}</h2>
         </div>
-        <StatusPill value={phase} />
+        <div className="work-lifecycle-guide-head-actions">
+          {control.work.length > 1 && (
+            <select
+              aria-label="Work shown in the journey"
+              data-testid="journey-work-select"
+              value={focus.id}
+              onChange={(event) => onSelectWork?.(event.target.value)}
+            >
+              {control.work.map((work) => (
+                <option key={work.id} value={work.id}>
+                  {work.spec.goal} · {work.status.phase}
+                </option>
+              ))}
+            </select>
+          )}
+          <StatusPill value={phase} />
+        </div>
       </div>
       <ol>
         {labels.map((label, index) => {
@@ -792,9 +820,8 @@ export function WorkLifecycleGuide({ control }: { control: V115ControlPlaneData 
       <p><b>Next:</b> {next}</p>
       {control.work.length > 1 && (
         <small className="muted">
-          {terminal
-            ? `Showing the first Work (${phase}). ${control.work.length - 1} additional Work resource(s) remain visible in the canonical overview above.`
-            : `Showing the first non-terminal Work. ${control.work.length - 1} additional Work resource(s) remain visible in the canonical overview above.`}
+          The selector updates this journey and the governed execution panel below. All{" "}
+          {control.work.length} Work resources remain visible in the canonical overview above.
         </small>
       )}
     </section>
@@ -818,6 +845,18 @@ function CanonicalWorkLifecyclePanels({
   reviewerCatalog: AcceptanceReviewerCatalog | null;
   reload: () => void;
 }) {
+  const works = control.work;
+  const activeWorks = works.filter(
+    (work) => !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase),
+  );
+  const fallbackWorkId = activeWorks[0]?.id ?? works[0]?.id ?? "";
+  const [selectedWorkId, setSelectedWorkId] = useState(fallbackWorkId);
+  useEffect(() => {
+    if (!works.some((work) => work.id === selectedWorkId)) {
+      setSelectedWorkId(fallbackWorkId);
+    }
+  }, [works, selectedWorkId, fallbackWorkId]);
+
   const visibility = workbenchLifecycleVisibility(
     control,
     status?.harness_runtime.dsh.mode,
@@ -826,13 +865,19 @@ function CanonicalWorkLifecyclePanels({
 
   return (
     <>
-      <WorkLifecycleGuide control={control} />
+      <WorkLifecycleGuide
+        control={control}
+        selectedWorkId={selectedWorkId}
+        onSelectWork={setSelectedWorkId}
+      />
       {visibility.showExecution && (
         <GovernedE0Executor
           control={control}
           capabilities={capabilities}
           status={status}
           reload={reload}
+          selectedWorkId={selectedWorkId}
+          onSelectWork={setSelectedWorkId}
         />
       )}
       {visibility.showAuthoritativeOutcome && (
@@ -873,11 +918,15 @@ function GovernedE0Executor({
   capabilities,
   status,
   reload,
+  selectedWorkId,
+  onSelectWork,
 }: {
   control: V115ControlPlaneData;
   capabilities: E0HarnessCapability[];
   status: V115Status | null;
   reload: () => void;
+  selectedWorkId?: string;
+  onSelectWork?: (workId: string) => void;
 }) {
   const [workId, setWorkId] = useState("");
   const [capabilityId, setCapabilityId] = useState("");
@@ -890,11 +939,17 @@ function GovernedE0Executor({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const candidateWorks = control.work.filter(
+  const works = control.work;
+  const candidateWorks = works.filter(
     (work) => !["Accepted", "Rejected", "Cancelled"].includes(work.status.phase),
   );
-  const effectiveWorkId = workId || candidateWorks[0]?.id || "";
-  const selectedWork = candidateWorks.find((work) => work.id === effectiveWorkId);
+  const selected =
+    (selectedWorkId ? works.find((work) => work.id === selectedWorkId) : undefined) ??
+    (workId ? works.find((work) => work.id === workId) : undefined) ??
+    candidateWorks[0] ??
+    works[0];
+  const effectiveWorkId = selected?.id ?? "";
+  const selectedWork = selected;
   const resolutionAllowed = governedRequirementResolutionAllowed(selectedWork?.status.phase);
   const executionAllowed = governedE0ExecutionAllowed(selectedWork?.status.phase);
   const reconciliationRequired = selectedWork?.status.phase === "Reconciling";
@@ -919,8 +974,7 @@ function GovernedE0Executor({
   const workBindings = control.execution_bindings.filter(
     (binding) =>
       textField(binding, "work_id") === effectiveWorkId &&
-      binding.work_generation ===
-        candidateWorks.find((work) => work.id === effectiveWorkId)?.generation,
+      binding.work_generation === selectedWork?.generation,
   );
   const acpLifecycleBindings = workBindings.filter(
     (binding) => textField(binding, "runtime_ref")?.startsWith("dsh-acp-route:") === true,
@@ -1106,9 +1160,12 @@ function GovernedE0Executor({
         <label>
           Work
           <select
+            aria-label="Governed execution Work"
+            data-testid="governed-work-select"
             value={effectiveWorkId}
             onChange={(event) => {
               setWorkId(event.target.value);
+              onSelectWork?.(event.target.value);
               setCapabilityId("");
               setBindingId("");
               setEnvironmentRef("");
@@ -1117,7 +1174,7 @@ function GovernedE0Executor({
               setReconciliationReason("");
             }}
           >
-            {candidateWorks.map((work) => (
+            {works.map((work) => (
               <option key={work.id} value={work.id}>
                 {work.spec.goal} · {work.status.phase}
               </option>

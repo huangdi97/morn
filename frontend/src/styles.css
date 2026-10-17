@@ -77,6 +77,16 @@ a { color: #86b4ff; }
 .kv-key { color: var(--muted); flex: 0 0 auto; overflow-wrap: normal; }
 .kv-value { text-align: right; }
 
+.work-lifecycle-guide-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.work-lifecycle-guide-head-actions select { max-width: 100%; }
+
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 th { color: var(--muted); font-weight: 600; }
