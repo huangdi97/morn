@@ -1043,9 +1043,16 @@ impl ControlPlaneStore for MornStore {
                 "invalid canonical Work identity or generation",
             ));
         }
-        if let Some(persisted) =
-            self.load_record::<WorkResource>("work_resource_v115", work.id.as_str())?
+        let persisted =
+            self.load_record::<WorkResource>("work_resource_v115", work.id.as_str())?;
+        if persisted.is_none()
+            && matches!(work.status.phase, WorkPhase::Accepted | WorkPhase::Rejected)
         {
+            return Err(Error::invalid_state(
+                "terminal business Work projection must be created by the fenced durable business-evidence controller",
+            ));
+        }
+        if let Some(persisted) = persisted {
             if persisted.workspace_id != work.workspace_id
                 || persisted.created_at != work.created_at
             {
@@ -1077,6 +1084,16 @@ impl ControlPlaneStore for MornStore {
             {
                 return Err(Error::validation(
                     "terminal Work phase cannot be reopened within the same generation",
+                ));
+            }
+            if work.generation == persisted.generation
+                && matches!(
+                    work.status.phase,
+                    WorkPhase::Accepted | WorkPhase::Rejected
+                )
+            {
+                return Err(Error::invalid_state(
+                    "Accepted/Rejected Work projection must be committed by the fenced durable business-evidence controller",
                 ));
             }
             if persisted.termination_requested_at.is_some()
@@ -3475,7 +3492,21 @@ mod control_plane_persistence_scope_tests {
             "AcceptedOutcomeSemantics",
             ConditionStatus::True,
         ));
-        store.save_work_resource_cas(&mut work).unwrap();
+        assert!(
+            store.save_work_resource_cas(&mut work).is_err(),
+            "generic Work CAS must not bypass fenced terminal business projection"
+        );
+
+        let terminal = DurableBusinessEvidenceControllerRuntime::new(
+            "test-terminal-business-projection",
+        )
+        .reconcile_from_persisted_business_evidence(
+            &store,
+            work.id.as_str(),
+            morn_kernel::time::Timestamp::now(),
+        )
+        .unwrap();
+        assert_eq!(terminal.next_phase, WorkPhase::Accepted);
     }
 
     #[test]
