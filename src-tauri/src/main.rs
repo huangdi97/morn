@@ -10,6 +10,7 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -186,6 +187,87 @@ fn spawn_reference_backend(data_dir: &Path) -> Result<Option<Child>, String> {
     Ok(Some(child))
 }
 
+fn probe_health_body(service: &str, protocol: &str) -> String {
+    let body = format!(
+        "{{\"status\":\"ok\",\"service\":\"{service}\",\"protocol_version\":\"{protocol}\"}}"
+    );
+    format!(
+        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\nconnection: close\r\ncontent-length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    )
+}
+
+/// Proves the owned-backend boundary refuses to attach to, or kill, a process
+/// it does not own. Both a non-Morn service and a Morn-identified service with
+/// a mismatched protocol must fail closed while the foreign listener keeps its
+/// port for the whole probe.
+fn run_foreign_port_probe() -> Result<(), String> {
+    let data_dir = std::env::temp_dir().join(format!(
+        "morn-desktop-foreign-port-probe-{}",
+        std::process::id()
+    ));
+    let cases = [
+        ("non-Morn service", "foreign-service", "11.5.0"),
+        ("protocol-mismatched Morn identity", "morn-app", "11.4.0"),
+    ];
+    for (label, service, protocol) in cases {
+        let listener = TcpListener::bind(DEFAULT_BACKEND_ADDR)
+            .map_err(|error| format!("{label}: bind foreign probe listener: {error}"))?;
+        listener
+            .set_nonblocking(true)
+            .map_err(|error| format!("{label}: configure foreign probe listener: {error}"))?;
+        let body = probe_health_body(service, protocol);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_thread = Arc::clone(&stop);
+        let handle = std::thread::spawn(move || {
+            while !stop_thread.load(Ordering::SeqCst) {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let _ = stream.set_read_timeout(Some(Duration::from_millis(250)));
+                        let mut request = [0u8; 1024];
+                        let _ = stream.read(&mut request);
+                        let _ = stream.write_all(body.as_bytes());
+                    }
+                    Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let outcome = spawn_reference_backend(&data_dir);
+        let refused = matches!(
+            &outcome,
+            Err(error) if error.contains("refusing to attach or kill it")
+        );
+        let foreign_port_preserved = TcpListener::bind(DEFAULT_BACKEND_ADDR).is_err();
+        if let Ok(Some(mut child)) = outcome {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+
+        stop.store(true, Ordering::SeqCst);
+        let _ = handle.join();
+
+        if !refused {
+            let _ = std::fs::remove_dir_all(&data_dir);
+            return Err(format!(
+                "{label}: desktop did not fail closed on a foreign backend"
+            ));
+        }
+        if !foreign_port_preserved {
+            let _ = std::fs::remove_dir_all(&data_dir);
+            return Err(format!(
+                "{label}: probe unexpectedly released or replaced the foreign listener"
+            ));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&data_dir);
+    Ok(())
+}
+
 fn run_sidecar_probe() -> Result<(), String> {
     let data_dir =
         std::env::temp_dir().join(format!("morn-desktop-sidecar-probe-{}", std::process::id()));
@@ -218,6 +300,13 @@ fn run_sidecar_probe() -> Result<(), String> {
 }
 
 fn main() {
+    if std::env::args().any(|arg| arg == "--probe-foreign-port") {
+        if let Err(error) = run_foreign_port_probe() {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if std::env::args().any(|arg| arg == "--probe-sidecar") {
         if let Err(error) = run_sidecar_probe() {
             eprintln!("{error}");
