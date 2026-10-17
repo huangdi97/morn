@@ -44,11 +44,12 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are verified at implementation checkpoint
-`49023ac444d824ae74694d61cfc0d44ac87afe50` by exact-head Actions run
-`39026643224` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
+`eab884fe88f8fec1751b538daee9b4a8352f38d8` by exact-head Actions run
+`39035081189` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
 adapter-wire semantic-neutrality, Work/acceptance trust hardening, owned desktop
 backend lifecycle/security boundary, and the DSH `0.2.1-rc.2` distribution
-qualification gate. Production DSH launch remains fail-closed unless the exact
+qualification gate, plus a full-resolution Cargo.lock gate and Windows-portable
+provider tests. Production DSH launch remains fail-closed unless the exact
 deployment-attested distribution version/digest/profile/route/environment match
 the qualified contract; only a private `#[cfg(test)]` protocol-fixture path may
 use synthetic runtime identities. None of these controls manufactures external
