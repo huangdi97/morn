@@ -117,10 +117,11 @@ jobs:
           umask 077
           printf '%s' "$PROVENANCE_JSON" > "$provenance_file"
           printf 'MORN_BIOLAB_DATASET_PROVENANCE_FILE=%s\n' "$provenance_file" >> "$GITHUB_ENV"
-          printf 'MORN_BIOLAB_DATASET_PROVENANCE_ISSUER=%s\n' "$TRUSTED_PROVENANCE_ISSUER" >> "$GITHUB_ENV"
 
       - name: Verify dataset bytes against deployment-owned provenance
         shell: bash
+        env:
+          MORN_BIOLAB_DATASET_PROVENANCE_ISSUER: ${{ secrets.MORN_BIOLAB_DATASET_PROVENANCE_ISSUER }}
         run: |
           set -euo pipefail
           cargo run --quiet --all-features -p morn-app --bin biolab_dataset_verify \

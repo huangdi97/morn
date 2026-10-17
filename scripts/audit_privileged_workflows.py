@@ -45,6 +45,27 @@ def job_env_secret_violations(path: Path, lines: list[str]) -> list[str]:
     return violations
 
 
+def checkout_credential_violations(path: Path, lines: list[str]) -> list[str]:
+    violations: list[str] = []
+    for index, line in enumerate(lines):
+        if "uses: actions/checkout@" not in line:
+            continue
+        base_indent = indentation(line)
+        window: list[str] = []
+        cursor = index + 1
+        while cursor < len(lines):
+            current = lines[cursor]
+            if current.strip() and indentation(current) <= base_indent:
+                break
+            window.append(current)
+            cursor += 1
+        if not any("persist-credentials: false" in current for current in window):
+            violations.append(
+                f"{path.relative_to(ROOT)}:{index + 1}: checkout must set persist-credentials: false"
+            )
+    return violations
+
+
 def action_pin_violations(path: Path, lines: list[str]) -> list[str]:
     violations: list[str] = []
     for index, line in enumerate(lines, start=1):
@@ -58,6 +79,27 @@ def action_pin_violations(path: Path, lines: list[str]) -> list[str]:
             violations.append(
                 f"{path.relative_to(ROOT)}:{index}: action must be pinned to a full 40-hex commit SHA"
             )
+    return violations
+
+
+def cross_step_secret_violations(path: Path, lines: list[str]) -> list[str]:
+    sensitive_names = (
+        "MORN_EVIDENCE_ISSUER",
+        "MORN_BIOLAB_DATASET_PROVENANCE_ISSUER",
+        "MORN_EXECUTION_ATTESTOR",
+        "DEEPSEEK_API_KEY",
+        "MORN_PI_PROVIDER_API_KEY",
+        "MORN_REGISTRY_AUTH_JSON",
+    )
+    violations: list[str] = []
+    for index, line in enumerate(lines, start=1):
+        if "GITHUB_ENV" not in line:
+            continue
+        for name in sensitive_names:
+            if name in line:
+                violations.append(
+                    f"{path.relative_to(ROOT)}:{index}: sensitive value {name} must not be persisted through GITHUB_ENV"
+                )
     return violations
 
 
@@ -80,6 +122,8 @@ def main() -> int:
         lines = text.splitlines()
         violations.extend(job_env_secret_violations(path, lines))
         violations.extend(action_pin_violations(path, lines))
+        violations.extend(checkout_credential_violations(path, lines))
+        violations.extend(cross_step_secret_violations(path, lines))
 
     cleanup_requirements = {
         "live-dsh-evidence.yml": (
@@ -113,6 +157,8 @@ def main() -> int:
     print(f"Privileged workflow audit PASS: {len(LIVE)} live workflows")
     print(" - no job-level secret exposure")
     print(" - all external actions pinned to full commit SHAs")
+    print(" - all checkouts disable credential persistence")
+    print(" - protected issuer/credential values are not persisted through GITHUB_ENV")
     print(" - DSH/Pi one-shot runtime cleanup markers present")
     return 0
 

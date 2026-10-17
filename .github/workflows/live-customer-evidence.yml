@@ -83,7 +83,6 @@ jobs:
           umask 077
           printf '%s' "$EVIDENCE_CLAIM_JSON" > "$claim_file"
           printf 'MORN_EVIDENCE_CLAIM_FILE=%s\n' "$claim_file" >> "$GITHUB_ENV"
-          printf 'MORN_EVIDENCE_ISSUER=%s\n' "$TRUSTED_EVIDENCE_ISSUER" >> "$GITHUB_ENV"
           printf 'MORN_EVIDENCE_EXPECTED_CLASS=%s\n' "$INPUT_EVIDENCE_CLASS" >> "$GITHUB_ENV"
           if [[ "$INPUT_EVIDENCE_CLASS" == "real-site" ]]; then
             expected="factory-customer:$INPUT_SITE_REF"
@@ -94,6 +93,8 @@ jobs:
 
       - name: Validate exact claim with Morn semantics
         shell: bash
+        env:
+          MORN_EVIDENCE_ISSUER: ${{ secrets.MORN_EVIDENCE_ISSUER }}
         run: |
           set -euo pipefail
           cargo run --quiet -p morn-app --bin evidence_claim_verify \
