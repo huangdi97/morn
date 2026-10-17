@@ -725,6 +725,37 @@ pub struct DshNotification {
     pub params: Value,
 }
 
+fn redact_private_reasoning_from_dsh_notification(method: &str, mut params: Value) -> Value {
+    if method != DSH_NOTIFICATION_SESSION_EVENT {
+        return params;
+    }
+    let Some(event) = params.get_mut("event").and_then(Value::as_object_mut) else {
+        return params;
+    };
+    if event.get("type").and_then(Value::as_str) != Some("assistant/message") {
+        return params;
+    }
+    let Some(data) = event.get_mut("data").and_then(Value::as_object_mut) else {
+        return params;
+    };
+
+    // Upstream assistant/message may embed the exact compact timed stream,
+    // including reasoning deltas. Morn needs neither that stream nor reasoning
+    // blocks for executor settlement, Work truth, or Acceptance.
+    data.remove("stream");
+    if let Some(content) = data
+        .get_mut("message")
+        .and_then(Value::as_object_mut)
+        .and_then(|message| message.get_mut("content"))
+        .and_then(Value::as_array_mut)
+    {
+        content.retain(|block| {
+            block.get("type").and_then(Value::as_str) != Some("reasoning")
+        });
+    }
+    params
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DshSdkRunResult {
     pub session_id: String,
@@ -1163,9 +1194,13 @@ impl DshSdkStdioClient {
                     .and_then(Value::as_str)
                     .filter(|method| !method.trim().is_empty())
                     .ok_or_else(|| Error::external("DSH SDK notification method is empty"))?;
+                let params = redact_private_reasoning_from_dsh_notification(
+                    notification_method,
+                    incoming.get("params").cloned().unwrap_or(Value::Null),
+                );
                 self.notifications.push(DshNotification {
                     method: notification_method.to_string(),
-                    params: incoming.get("params").cloned().unwrap_or(Value::Null),
+                    params,
                 });
                 continue;
             }
@@ -2353,6 +2388,37 @@ mod tests {
             params: json!({"sessionId":"other","event":null}),
         };
         assert!(validate_consumed_dsh_notification(&other_session, "dsh-1").is_ok());
+    }
+
+    #[test]
+    fn sdk_transport_redacts_private_reasoning_before_buffering() {
+        let params = json!({
+            "sessionId":"dsh-1",
+            "event":{
+                "type":"assistant/message",
+                "data":{
+                    "stream":{"chunks":[{"type":"reasoning","text":"private stream"}]},
+                    "message":{
+                        "content":[
+                            {"type":"text","text":"visible"},
+                            {"type":"reasoning","text":"private chain"}
+                        ]
+                    }
+                }
+            }
+        });
+        let projected = redact_private_reasoning_from_dsh_notification(
+            DSH_NOTIFICATION_SESSION_EVENT,
+            params,
+        );
+        let serialized = serde_json::to_string(&projected).unwrap();
+        assert!(!serialized.contains("private stream"));
+        assert!(!serialized.contains("private chain"));
+        assert!(!serialized.contains("\"type\":\"reasoning\""));
+        assert_eq!(
+            assistant_text_from_session_event(&projected, "dsh-1").as_deref(),
+            Some("visible")
+        );
     }
 
     #[test]
