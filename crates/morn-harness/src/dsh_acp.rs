@@ -25,13 +25,13 @@ use sha2::{Digest, Sha256};
 
 use morn_kernel::error::{Error, Result};
 
+#[cfg(test)]
+use crate::dsh_sdk::DSH_QUALIFIED_DISTRIBUTION_VERSION;
 use crate::dsh_sdk::{
     derive_morn_profile_configuration_ref, dsh_morn_e0_tool_policy_identity,
     validate_canonical_sha256_digest, validate_profile_configuration_ref,
     validate_qualified_dsh_distribution_version,
 };
-#[cfg(test)]
-use crate::dsh_sdk::DSH_QUALIFIED_DISTRIBUTION_VERSION;
 use crate::subprocess_wire::{read_bounded_utf8_line, MAX_PROVIDER_WIRE_BUFFERED_FRAMES};
 
 pub const DSH_ACP_PROTOCOL_VERSION: u64 = 1;
