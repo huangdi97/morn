@@ -2633,11 +2633,9 @@ mod tests {
             failed_result.params.pointer("/event/data/error"),
             Some(&json!(true))
         );
-        assert!(
-            !serde_json::to_string(&failed_result.params)
-                .unwrap()
-                .contains("private failure detail")
-        );
+        assert!(!serde_json::to_string(&failed_result.params)
+            .unwrap()
+            .contains("private failure detail"));
     }
 
     #[test]
