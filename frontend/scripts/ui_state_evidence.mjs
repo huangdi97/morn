@@ -270,6 +270,71 @@ try {
     await page.close();
     console.log("OK workbench canonical error state");
   }
+
+  // 5. Console canonical failures: an unavailable release posture or control
+  //    plane must be stated explicitly; a silently missing section could be
+  //    mistaken for "no blockers".
+  {
+    const { page, pageErrors } = await newPage();
+    await page.route("**/api/v115/status", (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "fixture canonical status unavailable" }),
+      }),
+    );
+    await page.route("**/api/v115/control-plane", (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "fixture control-plane unavailable" }),
+      }),
+    );
+    await page.goto(`${BASE}/console`, { waitUntil: "networkidle", timeout: 30000 });
+    const postureAlert = page.getByTestId("console-canonical-error");
+    await postureAlert.waitFor({ state: "visible", timeout: 15000 });
+    if (!(await postureAlert.innerText()).includes("Canonical release posture is unavailable")) {
+      failures.push("console failure fixture: release posture failure is not surfaced");
+    }
+    const controlAlert = page.getByTestId("console-control-plane-error");
+    await controlAlert.waitFor({ state: "visible", timeout: 15000 });
+    if (!(await controlAlert.innerText()).includes("Canonical control-plane data is unavailable")) {
+      failures.push("console failure fixture: control-plane failure is not surfaced");
+    }
+    await screenshot(page, "console-canonical-error.png");
+    consoleErrors.push(
+      ...pageErrors.filter(
+        (entry) => !entry.includes("500") && !entry.includes("Failed to load resource"),
+      ),
+    );
+    await page.close();
+    console.log("OK console canonical failure state");
+  }
+
+  // 6. Hub provider-registry failure: registry absence must be explicit.
+  {
+    const { page, pageErrors } = await newPage();
+    await page.route("**/api/v115/status", (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "fixture provider registry unavailable" }),
+      }),
+    );
+    await page.goto(`${BASE}/hub`, { waitUntil: "networkidle", timeout: 30000 });
+    const providerAlert = page
+      .getByText("The provider registry is unavailable", { exact: false })
+      .first();
+    await providerAlert.waitFor({ state: "visible", timeout: 15000 });
+    await screenshot(page, "hub-provider-error.png");
+    consoleErrors.push(
+      ...pageErrors.filter(
+        (entry) => !entry.includes("500") && !entry.includes("Failed to load resource"),
+      ),
+    );
+    await page.close();
+    console.log("OK hub provider-registry failure state");
+  }
 } finally {
   await browser.close();
 }
@@ -282,4 +347,6 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(` - ${failure}`);
   process.exit(1);
 }
-console.log("UI state evidence OK: loading / reconciling / rejected / canonical error");
+console.log(
+  "UI state evidence OK: loading / reconciling / rejected / canonical error / console+hub failures",
+);
