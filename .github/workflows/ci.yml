@@ -165,6 +165,7 @@ jobs:
           done
           export UI_SCREENSHOT_DIR="$PWD/../artifacts/ci-ui-screenshots"
           node scripts/ui_smoke.mjs
+          node scripts/ui_state_evidence.mjs
       - name: Upload four-surface visual evidence (fixture only)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -205,6 +206,12 @@ jobs:
         run: |
           & ./target/debug/morn-desktop.exe --probe-sidecar
           if ($LASTEXITCODE -ne 0) { throw "desktop sidecar lifecycle probe failed" }
+      - name: Desktop foreign-port and protocol-mismatch fail-closed probe
+        shell: pwsh
+        working-directory: .
+        run: |
+          & ./target/debug/morn-desktop.exe --probe-foreign-port
+          if ($LASTEXITCODE -ne 0) { throw "desktop foreign-port fail-closed probe failed" }
       - name: Publish unsigned Windows reference bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
