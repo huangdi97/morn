@@ -50,16 +50,20 @@ def checkout_credential_violations(path: Path, lines: list[str]) -> list[str]:
     for index, line in enumerate(lines):
         if "uses: actions/checkout@" not in line:
             continue
-        base_indent = indentation(line)
-        window: list[str] = []
-        cursor = index + 1
-        while cursor < len(lines):
-            current = lines[cursor]
-            if current.strip() and indentation(current) <= base_indent:
-                break
-            window.append(current)
-            cursor += 1
-        if not any("persist-credentials: false" in current for current in window):
+
+        # A checkout may be written either as "- uses: ..." or as a named step
+        # with a sibling "uses:" key. Find the containing six-space list item
+        # and inspect that whole step rather than treating the uses-line's
+        # indentation as the step boundary.
+        step_start = index
+        while step_start > 0 and not lines[step_start].startswith("      - "):
+            step_start -= 1
+        step_end = step_start + 1
+        while step_end < len(lines) and not lines[step_end].startswith("      - "):
+            step_end += 1
+        step = lines[step_start:step_end]
+
+        if not any("persist-credentials: false" in current for current in step):
             violations.append(
                 f"{path.relative_to(ROOT)}:{index + 1}: checkout must set persist-credentials: false"
             )
