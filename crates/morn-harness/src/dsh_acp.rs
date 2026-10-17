@@ -27,6 +27,7 @@ use morn_kernel::error::{Error, Result};
 
 use crate::dsh_sdk::{
     derive_morn_profile_configuration_ref, dsh_morn_e0_tool_policy_identity,
+    DSH_QUALIFIED_DISTRIBUTION_VERSION,
     validate_canonical_sha256_digest, validate_profile_configuration_ref,
     validate_qualified_dsh_distribution_version,
 };
