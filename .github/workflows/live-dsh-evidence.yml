@@ -103,6 +103,10 @@ jobs:
           case "$INPUT_RUNTIME_VERSION" in
             *[!A-Za-z0-9._+-]*|"") echo "runtime_version contains unsupported characters"; exit 2 ;;
           esac
+          if [[ "$INPUT_RUNTIME_VERSION" != "0.2.1-rc.2" ]]; then
+            echo "This Morn build has qualified only DeepSeek Harness 0.2.1-rc.2; re-qualify the adapter before using $INPUT_RUNTIME_VERSION"
+            exit 2
+          fi
           if [[ ! "$INPUT_RUNTIME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "runtime_digest must be canonical sha256:<64-lowercase-hex>"
             exit 2
