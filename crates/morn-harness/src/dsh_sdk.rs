@@ -725,35 +725,176 @@ pub struct DshNotification {
     pub params: Value,
 }
 
-fn redact_private_reasoning_from_dsh_notification(method: &str, mut params: Value) -> Value {
-    if method != DSH_NOTIFICATION_SESSION_EVENT {
-        return params;
+fn project_dsh_notification_for_morn(method: &str, params: Value) -> Result<Option<DshNotification>> {
+    match method {
+        DSH_NOTIFICATION_SESSION_STATUS => {
+            return Ok(Some(DshNotification {
+                method: method.to_string(),
+                params: json!({
+                    "sessionId": params.get("sessionId").cloned().unwrap_or(Value::Null),
+                    "status": params.get("status").cloned().unwrap_or(Value::Null),
+                }),
+            }));
+        }
+        DSH_NOTIFICATION_SUBAGENT_STARTED | DSH_NOTIFICATION_SUBAGENT_FINISHED => {
+            // The method itself is enough to prove an E0 policy violation.
+            // Do not retain the subagent payload or transcript.
+            return Ok(Some(DshNotification {
+                method: method.to_string(),
+                params: Value::Null,
+            }));
+        }
+        DSH_NOTIFICATION_SESSION_EVENT => {}
+        other => {
+            return Err(Error::external(format!(
+                "qualified DSH SDK emitted unsupported notification method {other:?}",
+            )));
+        }
     }
-    let Some(event) = params.get_mut("event").and_then(Value::as_object_mut) else {
-        return params;
-    };
-    if event.get("type").and_then(Value::as_str) != Some("assistant/message") {
-        return params;
-    }
-    let Some(data) = event.get_mut("data").and_then(Value::as_object_mut) else {
-        return params;
+
+    let session_id = params.get("sessionId").cloned().unwrap_or(Value::Null);
+    let event = params.get("event").and_then(Value::as_object);
+    let event_type = event
+        .and_then(|event| event.get("type"))
+        .and_then(Value::as_str);
+
+    let projected_event = match event_type {
+        Some("agent/inbox/spliced") => {
+            let inserted = event
+                .and_then(|event| event.get("data"))
+                .and_then(|data| data.get("inserted"))
+                .and_then(Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .map(|item| json!({"id": item.get("id").cloned().unwrap_or(Value::Null)}))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            json!({"type":"agent/inbox/spliced","data":{"inserted":inserted}})
+        }
+        Some("request/header") => {
+            let model = event
+                .and_then(|event| event.get("data"))
+                .and_then(|data| data.get("header"))
+                .and_then(|header| header.get("config"))
+                .and_then(|config| config.get("model"))
+                .cloned()
+                .unwrap_or(Value::Null);
+            json!({"type":"request/header","data":{"header":{"config":{"model":model}}}})
+        }
+        Some("assistant/message") => {
+            let content = event
+                .and_then(|event| event.get("data"))
+                .and_then(|data| data.get("message"))
+                .and_then(|message| message.get("content"))
+                .and_then(Value::as_array)
+                .map(|blocks| {
+                    blocks
+                        .iter()
+                        .filter_map(|block| {
+                            let Some(object) = block.as_object() else {
+                                return Some(Value::Null);
+                            };
+                            let Some(kind) = object.get("type").and_then(Value::as_str) else {
+                                return Some(json!({}));
+                            };
+                            match kind {
+                                "reasoning" => None,
+                                "text" => Some(match object.get("text").and_then(Value::as_str) {
+                                    Some(text) => json!({"type":"text","text":text}),
+                                    None => json!({"type":"text"}),
+                                }),
+                                other => Some(json!({"type":other})),
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                });
+            match content {
+                Some(content) => {
+                    json!({"type":"assistant/message","data":{"message":{"content":content}}})
+                }
+                None => json!({"type":"assistant/message","data":{"message":{}}}),
+            }
+        }
+        Some("assistant/attempt") => {
+            // A failed/retried attempt can embed the exact compact reasoning
+            // stream. Its existence is enough for Morn's failure projection.
+            json!({"type":"assistant/attempt","data":{}})
+        }
+        Some("tool/call") => {
+            let data = event.and_then(|event| event.get("data"));
+            json!({
+                "type":"tool/call",
+                "data":{
+                    "callId": data.and_then(|data| data.get("callId")).cloned().unwrap_or(Value::Null),
+                    "name": data.and_then(|data| data.get("name")).cloned().unwrap_or(Value::Null),
+                }
+            })
+        }
+        Some("tool/result") => {
+            let data = event.and_then(|event| event.get("data"));
+            let message = data.and_then(|data| data.get("message"));
+            json!({
+                "type":"tool/result",
+                "data":{
+                    "error": if data.is_some_and(|data| data.get("error").is_some()) {
+                        Some(true)
+                    } else {
+                        None
+                    },
+                    "message":{
+                        "toolCallId": message.and_then(|message| message.get("toolCallId")).cloned().unwrap_or(Value::Null),
+                        "isError": message.and_then(|message| message.get("isError")).cloned().unwrap_or(Value::Null),
+                    }
+                }
+            })
+        }
+        Some("turn/end") => {
+            let reason = event
+                .and_then(|event| event.get("data"))
+                .and_then(|data| data.get("reason"));
+            let kind = reason
+                .and_then(|reason| reason.get("kind"))
+                .and_then(Value::as_str);
+            let projected_reason = match kind {
+                Some("aborted") => {
+                    let cause = reason.and_then(|reason| reason.get("reason"));
+                    let cause_kind = cause
+                        .and_then(|cause| cause.get("kind"))
+                        .and_then(Value::as_str);
+                    match cause_kind {
+                        Some("hook") => {
+                            if cause.and_then(|cause| cause.get("reason")).and_then(Value::as_str).is_some() {
+                                json!({"kind":"aborted","reason":{"kind":"hook","reason":"redacted"}})
+                            } else {
+                                json!({"kind":"aborted","reason":{"kind":"hook"}})
+                            }
+                        }
+                        Some(cause_kind) => {
+                            json!({"kind":"aborted","reason":{"kind":cause_kind}})
+                        }
+                        None => json!({"kind":"aborted"}),
+                    }
+                }
+                Some(kind) => json!({"kind":kind}),
+                None => json!({}),
+            };
+            json!({"type":"turn/end","data":{"reason":projected_reason}})
+        }
+        Some(other) if other.starts_with("tool/") => {
+            // Preserve the type only; any tool lifecycle activity is an E0
+            // policy violation and raw arguments/results are not audit facts.
+            json!({"type":other,"data":{}})
+        }
+        Some(_) => return Ok(None),
+        None => json!({"type":Value::Null}),
     };
 
-    // Upstream assistant/message may embed the exact compact timed stream,
-    // including reasoning deltas. Morn needs neither that stream nor reasoning
-    // blocks for executor settlement, Work truth, or Acceptance.
-    data.remove("stream");
-    if let Some(content) = data
-        .get_mut("message")
-        .and_then(Value::as_object_mut)
-        .and_then(|message| message.get_mut("content"))
-        .and_then(Value::as_array_mut)
-    {
-        content.retain(|block| {
-            block.get("type").and_then(Value::as_str) != Some("reasoning")
-        });
-    }
-    params
+    Ok(Some(DshNotification {
+        method: method.to_string(),
+        params: json!({"sessionId":session_id,"event":projected_event}),
+    }))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1194,14 +1335,12 @@ impl DshSdkStdioClient {
                     .and_then(Value::as_str)
                     .filter(|method| !method.trim().is_empty())
                     .ok_or_else(|| Error::external("DSH SDK notification method is empty"))?;
-                let params = redact_private_reasoning_from_dsh_notification(
+                if let Some(notification) = project_dsh_notification_for_morn(
                     notification_method,
                     incoming.get("params").cloned().unwrap_or(Value::Null),
-                );
-                self.notifications.push(DshNotification {
-                    method: notification_method.to_string(),
-                    params,
-                });
+                )? {
+                    self.notifications.push(notification);
+                }
                 continue;
             }
 
@@ -2391,34 +2530,69 @@ mod tests {
     }
 
     #[test]
-    fn sdk_transport_redacts_private_reasoning_before_buffering() {
-        let params = json!({
-            "sessionId":"dsh-1",
-            "event":{
-                "type":"assistant/message",
-                "data":{
-                    "stream":{"chunks":[{"type":"reasoning","text":"private stream"}]},
-                    "message":{
-                        "content":[
-                            {"type":"text","text":"visible"},
-                            {"type":"reasoning","text":"private chain"}
-                        ]
+    fn sdk_transport_projects_only_visible_assistant_content() {
+        let notification = project_dsh_notification_for_morn(
+            DSH_NOTIFICATION_SESSION_EVENT,
+            json!({
+                "sessionId":"dsh-1",
+                "event":{
+                    "type":"assistant/message",
+                    "data":{
+                        "stream":{"chunks":[{"type":"reasoning","text":"private stream"}]},
+                        "message":{
+                            "content":[
+                                {"type":"text","text":"visible"},
+                                {"type":"reasoning","text":"private chain"}
+                            ],
+                            "modelSource":{"thinking":"private replay metadata"}
+                        }
                     }
                 }
-            }
-        });
-        let projected = redact_private_reasoning_from_dsh_notification(
-            DSH_NOTIFICATION_SESSION_EVENT,
-            params,
-        );
-        let serialized = serde_json::to_string(&projected).unwrap();
-        assert!(!serialized.contains("private stream"));
-        assert!(!serialized.contains("private chain"));
-        assert!(!serialized.contains("\"type\":\"reasoning\""));
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        let serialized = serde_json::to_string(&notification.params).unwrap();
         assert_eq!(
-            assistant_text_from_session_event(&projected, "dsh-1").as_deref(),
+            assistant_text_from_session_event(&notification.params, "dsh-1").as_deref(),
             Some("visible")
         );
+        assert!(!serialized.contains("private stream"));
+        assert!(!serialized.contains("private chain"));
+        assert!(!serialized.contains("private replay metadata"));
+        assert!(!serialized.contains("\"type\":\"reasoning\""));
+    }
+
+    #[test]
+    fn sdk_transport_drops_unneeded_session_transcript_and_minimizes_tool_payloads() {
+        assert!(
+            project_dsh_notification_for_morn(
+                DSH_NOTIFICATION_SESSION_EVENT,
+                json!({
+                    "sessionId":"dsh-1",
+                    "event":{"type":"user/message","data":{"message":{"content":"private prompt"}}}
+                }),
+            )
+            .unwrap()
+            .is_none()
+        );
+
+        let tool = project_dsh_notification_for_morn(
+            DSH_NOTIFICATION_SESSION_EVENT,
+            json!({
+                "sessionId":"dsh-1",
+                "event":{
+                    "type":"tool/call",
+                    "data":{"callId":"call-1","name":"shell","arguments":"secret args"}
+                }
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        let serialized = serde_json::to_string(&tool.params).unwrap();
+        assert!(serialized.contains("call-1"));
+        assert!(serialized.contains("shell"));
+        assert!(!serialized.contains("secret args"));
     }
 
     #[test]
