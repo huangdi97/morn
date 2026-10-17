@@ -920,10 +920,11 @@ impl DshSdkStdioClient {
                 "DSH SDK session/resume requires a non-empty persisted session id",
             ));
         }
-        self.request(
+        let result = self.request(
             DSH_METHOD_SESSION_RESUME,
             Some(json!({"sessionId": session_id})),
         )?;
+        require_empty_object_result(&result, DSH_METHOD_SESSION_RESUME)?;
         self.verify_session_working_directory(session_id)?;
         Ok(())
     }
@@ -935,12 +936,13 @@ impl DshSdkStdioClient {
             ));
         }
         let timeout = self.turn_timeout;
-        self.request_with_timeout(
+        let result = self.request_with_timeout(
             DSH_METHOD_SESSION_WAIT,
             Some(json!({"sessionId": session_id})),
             timeout,
         )?;
-        Ok(())
+        require_empty_object_result(&result, DSH_METHOD_SESSION_WAIT)
+
     }
 
     /// Verify the SDK session has not changed its effective working directory
@@ -1038,7 +1040,9 @@ impl DshSdkStdioClient {
     }
 
     pub fn shutdown(&mut self) -> Result<()> {
-        let protocol_result = self.request(DSH_METHOD_SHUTDOWN, None);
+        let protocol_result = self
+            .request(DSH_METHOD_SHUTDOWN, None)
+            .and_then(|result| require_empty_object_result(&result, DSH_METHOD_SHUTDOWN));
         // Match the official SDK client's ownership semantics: after the
         // shutdown response, close stdin to deliver EOF and allow the runtime
         // to flush persistence and exit on its own. Kill is only a bounded
@@ -1235,6 +1239,19 @@ fn response_result_for_id(value: &Value, expected_id: u64, operation: &str) -> R
         .get("result")
         .cloned()
         .ok_or_else(|| Error::external("DSH SDK response result disappeared"))
+}
+
+fn require_empty_object_result(result: &Value, method: &str) -> Result<()> {
+    if result
+        .as_object()
+        .is_some_and(|object| object.is_empty())
+    {
+        Ok(())
+    } else {
+        Err(Error::external(format!(
+            "DSH JSON-RPC {method} result must be an empty object"
+        )))
+    }
 }
 
 fn parse_server_info(result: &Value) -> Result<DshSdkServerInfo> {
@@ -1677,6 +1694,15 @@ mod tests {
             DSH_NOTIFICATION_SUBAGENT_FINISHED,
         ];
         assert_eq!(notifications.len(), 4);
+    }
+
+    #[test]
+    fn empty_object_protocol_results_are_exactly_validated() {
+        assert!(require_empty_object_result(&json!({}), "session/wait").is_ok());
+        assert!(require_empty_object_result(&Value::Null, "session/wait").is_err());
+        assert!(
+            require_empty_object_result(&json!({"unexpected": true}), "session/wait").is_err()
+        );
     }
 
     #[test]
