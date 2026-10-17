@@ -1957,7 +1957,9 @@ mod tests {
         };
         let mut client = DshSdkStdioClient::spawn(&config).unwrap();
         client.initialize(&config).unwrap();
-        client.resume_persisted_session("persisted-session").unwrap();
+        client
+            .resume_persisted_session("persisted-session")
+            .unwrap();
         client.wait_for_session("persisted-session").unwrap();
         client.shutdown().unwrap();
     }

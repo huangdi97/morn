@@ -1486,7 +1486,10 @@ mod dsh_provider_tests {
         let error = provider.resume(&session.id).unwrap_err();
         let message = error.to_string();
         assert!(message.contains("persisted session/resume"), "{message}");
-        assert!(message.contains("Work/generation/ExecutionBinding"), "{message}");
+        assert!(
+            message.contains("Work/generation/ExecutionBinding"),
+            "{message}"
+        );
         provider.shutdown_real_runtime().unwrap();
     }
 
