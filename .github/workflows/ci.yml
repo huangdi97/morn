@@ -44,8 +44,10 @@ jobs:
         run: |
           npm ci
           npm run build
-      - name: Cargo.lock matches manifests
-        run: cargo metadata --locked --format-version 1 --no-deps > /dev/null
+      - name: Cargo.lock matches manifests (full dependency resolution)
+        run: |
+          cargo metadata --locked --format-version 1 > /dev/null
+          git diff --exit-code -- Cargo.lock
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
       - name: cargo clippy (-D warnings)

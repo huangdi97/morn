@@ -2007,8 +2007,11 @@ name = "morn-assurance"
 version = "0.1.0"
 dependencies = [
  "morn-artifact",
+ "morn-capability",
  "morn-foundry",
  "morn-kernel",
+ "morn-package",
+ "morn-profile",
  "morn-work",
  "morn-world",
  "serde",
@@ -2056,13 +2059,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "morn-control-plane"
+version = "0.1.0"
+dependencies = [
+ "morn-assurance",
+ "morn-capability",
+ "morn-harness",
+ "morn-integration",
+ "morn-kernel",
+ "morn-package",
+ "morn-profile",
+ "morn-runtime",
+ "morn-store",
+ "morn-work",
+ "morn-world",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "morn-core-tests"
 version = "0.1.0"
 dependencies = [
  "morn-app",
  "morn-artifact",
+ "morn-assurance",
  "morn-biolab-reference",
  "morn-capability",
+ "morn-control-plane",
  "morn-domain-sdk",
  "morn-harness",
  "morn-integration",
@@ -2070,6 +2094,7 @@ dependencies = [
  "morn-node",
  "morn-package",
  "morn-process",
+ "morn-profile",
  "morn-runtime",
  "morn-store",
  "morn-work",
@@ -2119,6 +2144,7 @@ dependencies = [
  "morn-harness",
  "morn-kernel",
  "morn-organization",
+ "morn-profile",
  "morn-work",
  "morn-world",
  "serde",
@@ -2146,6 +2172,7 @@ version = "0.1.0"
 dependencies = [
  "morn-kernel",
  "morn-runtime",
+ "morn-work",
  "morn-world",
  "serde",
  "serde_json",
@@ -2201,6 +2228,7 @@ dependencies = [
  "morn-kernel",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -2210,6 +2238,14 @@ dependencies = [
  "morn-kernel",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "morn-profile"
+version = "0.1.0"
+dependencies = [
+ "morn-kernel",
+ "serde",
 ]
 
 [[package]]
@@ -2256,6 +2292,7 @@ dependencies = [
 name = "morn-world"
 version = "0.1.0"
 dependencies = [
+ "morn-capability",
  "morn-kernel",
  "serde",
  "serde_json",
