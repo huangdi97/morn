@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Audit privileged live-evidence workflows
         run: python3 scripts/audit_privileged_workflows.py
+      - name: Audit external evidence entrypoints
+        run: python3 scripts/audit_external_evidence_entrypoints.py
       - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
         with:
           components: rustfmt, clippy
