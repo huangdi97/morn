@@ -831,7 +831,6 @@ fn project_dsh_notification_for_morn(
                 "type":"tool/call",
                 "data":{
                     "callId": data.and_then(|data| data.get("callId")).cloned().unwrap_or(Value::Null),
-                    "name": data.and_then(|data| data.get("name")).cloned().unwrap_or(Value::Null),
                 }
             })
         }
@@ -2586,7 +2585,7 @@ mod tests {
                 "sessionId":"dsh-1",
                 "event":{
                     "type":"tool/call",
-                    "data":{"callId":"call-1","name":"shell","arguments":"secret args"}
+                    "data":{"callId":"call-1","name":"shell secret-tool-name","arguments":"secret args"}
                 }
             }),
         )
@@ -2594,7 +2593,7 @@ mod tests {
         .unwrap();
         let serialized = serde_json::to_string(&tool.params).unwrap();
         assert!(serialized.contains("call-1"));
-        assert!(serialized.contains("shell"));
+        assert!(!serialized.contains("secret-tool-name"));
         assert!(!serialized.contains("secret args"));
 
         let successful_result = project_dsh_notification_for_morn(
