@@ -2611,11 +2611,9 @@ mod tests {
                 .is_none(),
             "a successful tool result must not gain a synthetic error marker"
         );
-        assert!(
-            !serde_json::to_string(&successful_result.params)
-                .unwrap()
-                .contains("secret result")
-        );
+        assert!(!serde_json::to_string(&successful_result.params)
+            .unwrap()
+            .contains("secret result"));
 
         let failed_result = project_dsh_notification_for_morn(
             DSH_NOTIFICATION_SESSION_EVENT,
