@@ -796,11 +796,6 @@ fn parse_event(value: Value) -> Result<PiRpcEvent> {
                         if let Some(id) = update.and_then(|update| update.get("id")).cloned() {
                             projected.insert("id".to_string(), id);
                         }
-                        if let Some(tool_name) =
-                            update.and_then(|update| update.get("toolName")).cloned()
-                        {
-                            projected.insert("toolName".to_string(), tool_name);
-                        }
                     }
                     json!({
                         "type":"message_update",
@@ -812,13 +807,11 @@ fn parse_event(value: Value) -> Result<PiRpcEvent> {
         }
         "tool_execution_start" | "tool_execution_update" => json!({
             "type":event_type,
-            "toolCallId":value.get("toolCallId").cloned().unwrap_or(Value::Null),
-            "toolName":value.get("toolName").cloned().unwrap_or(Value::Null)
+            "toolCallId":value.get("toolCallId").cloned().unwrap_or(Value::Null)
         }),
         "tool_execution_end" => json!({
             "type":"tool_execution_end",
             "toolCallId":value.get("toolCallId").cloned().unwrap_or(Value::Null),
-            "toolName":value.get("toolName").cloned().unwrap_or(Value::Null),
             "isError":value.get("isError").cloned().unwrap_or(Value::Null)
         }),
         "turn_end" => {
@@ -986,24 +979,25 @@ mod tests {
         let tool_start = parse_event(json!({
             "type":"tool_execution_start",
             "toolCallId":"call-1",
-            "toolName":"bash",
+            "toolName":"bash secret-tool-name",
             "args":{"command":"secret command"}
         }))
         .unwrap();
         let tool_start_json = serde_json::to_string(&tool_start.payload).unwrap();
         assert!(tool_start_json.contains("call-1"));
-        assert!(tool_start_json.contains("bash"));
+        assert!(!tool_start_json.contains("secret-tool-name"));
         assert!(!tool_start_json.contains("secret command"));
 
         let tool_end = parse_event(json!({
             "type":"tool_execution_end",
             "toolCallId":"call-1",
-            "toolName":"bash",
+            "toolName":"bash secret-tool-end-name",
             "result":{"content":[{"type":"text","text":"secret result"}]},
             "isError":false
         }))
         .unwrap();
         let tool_end_json = serde_json::to_string(&tool_end.payload).unwrap();
+        assert!(!tool_end_json.contains("secret-tool-end-name"));
         assert!(!tool_end_json.contains("secret result"));
         assert_eq!(tool_end.payload.get("isError"), Some(&json!(false)));
 
