@@ -3691,6 +3691,13 @@ mod control_plane_persistence_scope_tests {
         attest_test_outcome(&store, &work, &mut attested);
         store.save_observed_outcome(&work, &attested).unwrap();
         reject.outcome_refs = vec![attested.id.clone()];
+        attest_test_review_authority(
+            &store,
+            &work,
+            &attested,
+            &mut reject,
+            "review-auth-terminal-reject",
+        );
         ControlPlaneStore::save_acceptance_decision(&store, &work, &reject).unwrap();
     }
 
@@ -3731,6 +3738,13 @@ mod control_plane_persistence_scope_tests {
         decision
             .evidence_refs
             .push("review://generation-one".to_string());
+        attest_test_review_authority(
+            &store,
+            &work,
+            &outcome,
+            &mut decision,
+            "review-auth-generation-one",
+        );
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
 
         let mut next = work.spec.clone();
@@ -3802,6 +3816,13 @@ mod control_plane_persistence_scope_tests {
         correct
             .evidence_refs
             .push("review://ticket-correct".to_string());
+        attest_test_review_authority(
+            &store,
+            &work,
+            &outcome,
+            &mut correct,
+            "review-auth-correct-spec",
+        );
         ControlPlaneStore::save_acceptance_decision(&store, &work, &correct).unwrap();
     }
 
