@@ -503,8 +503,7 @@ impl DshAcpStdioClient {
         // Morn's fresh one-shot Home so a Work workspace .env cannot become an
         // ambient launcher/config layer. The ACP session still receives the
         // canonical Work workspace explicitly through session/new or resume.
-        let launch_cwd =
-            dsh_acp_process_launch_cwd(&expected_cwd, owned_runtime_home.as_deref());
+        let launch_cwd = dsh_acp_process_launch_cwd(&expected_cwd, owned_runtime_home.as_deref());
         command
             .args(&launch_args)
             .current_dir(launch_cwd)
@@ -822,9 +821,17 @@ impl DshAcpStdioClient {
                     .and_then(Value::as_str)
                     .filter(|method| !method.trim().is_empty())
                     .ok_or_else(|| Error::external("DSH ACP notification method is empty"))?;
+                let params = incoming.get("params").cloned().unwrap_or(Value::Null);
+                // ACP deliberately carries committed agent thoughts. Morn never
+                // needs private reasoning for Work truth, lifecycle control, or
+                // acceptance, so discard it at the transport boundary instead
+                // of retaining it in the in-memory notification transcript.
+                if acp_notification_is_private_thought(method, &params) {
+                    continue;
+                }
                 self.notifications.push(DshAcpNotification {
                     method: method.to_string(),
-                    params: incoming.get("params").cloned().unwrap_or(Value::Null),
+                    params,
                 });
                 continue;
             }
@@ -1059,6 +1066,15 @@ fn permission_denial_result(params: &Value) -> Value {
     }
 }
 
+fn acp_notification_is_private_thought(method: &str, params: &Value) -> bool {
+    method == DSH_ACP_METHOD_SESSION_UPDATE
+        && params
+            .get("update")
+            .and_then(|update| update.get("sessionUpdate"))
+            .and_then(Value::as_str)
+            == Some("agent_thought_chunk")
+}
+
 fn acp_update_reports_tool_activity(notification: &DshAcpNotification) -> bool {
     notification.method == DSH_ACP_METHOD_SESSION_UPDATE
         && matches!(
@@ -1169,6 +1185,17 @@ mod tests {
         assert_eq!(
             assistant_text_from_acp_updates(&updates, "a"),
             "hello world"
+        );
+        assert!(acp_notification_is_private_thought(
+            &updates[1].method,
+            &updates[1].params
+        ));
+        assert!(
+            !acp_notification_is_private_thought(
+                DSH_ACP_METHOD_SESSION_UPDATE,
+                &updates[0].params
+            ),
+            "visible assistant messages must remain available to the caller"
         );
     }
 
