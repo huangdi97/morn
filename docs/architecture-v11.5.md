@@ -216,11 +216,20 @@ only on the normalized boundary.
 Required Morn-side semantics include:
 
 - mount/unmount scoped capability lifecycle;
-- start/send/inspect/interrupt/resume/terminate;
+- start/send/inspect plus **feature-negotiated** optional interrupt/resume/session-close semantics — Morn never fabricates lifecycle methods absent from the upstream transport;
 - normalized execution events;
-- execution receipt;
+- a durable per-turn `ExecutionReceipt` owned by the Morn execution boundary and pinned to Workspace/Work generation/ExecutionBinding/scope/runtime identity; provider `terminate()` may also return a receipt when a provider actually supports session close, but session close is not the receipt's semantic prerequisite;
 - explicit runtime context;
 - no direct mutation of canonical Work state.
+
+This distinction matters for current DSH SDK and Pi RPC adapters: both can settle
+real execution turns while lacking a provider-neutral per-session close. The
+Workbench/API execution boundary therefore constructs the receipt from the
+pinned RuntimeContext, normalized events, provider identity and settlement
+classification, persists it, and then advances only control-plane receipt
+Conditions. A lost settlement or observed policy escape produces an unsettled
+`outcome-unknown` receipt requiring reconciliation. It never manufactures an
+`ObservedOutcome` or `AcceptanceDecision`.
 
 The repository has two provider-neutrality layers:
 

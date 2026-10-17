@@ -1,6 +1,6 @@
 # STATUS — Morn v11.5 Control Plane Convergence
 
-Updated: 2026-10-14  
+Updated: 2026-10-17  
 Branch: `feat/v11.5-control-plane-convergence`  
 PR: #1 (draft)
 
@@ -37,7 +37,7 @@ Canonical invariants:
 
 ### Execution and Provider Fabric
 - MornNative deterministic reference provider.
-- DeepSeek Harness fixture provider plus real official SDK stdio/JSON-RPC adapter.
+- DeepSeek Harness fixture provider plus real official SDK stdio/JSON-RPC adapter, re-qualified against the exact official `0.2.1-rc.2` distribution and current pre-release wire surface.
 - Pi fixture provider plus real JSONL RPC adapter.
 - Real DSH/Pi execution is E0-only at the HarnessProvider seam.
 - E1/E2/E3 effects remain governed ExternalAction operations.
@@ -45,6 +45,8 @@ Canonical invariants:
 - Child-process environments are scrubbed and explicit.
 - Real runtime admission requires a runtime-attested execution environment, exact environment identity and mounted E0 scope.
 - Provider health uses bounded leases after a successful settled real turn; initialized/configured alone are not Healthy.
+- Official DSH distribution identity is independent of `serverInfo.version`: live launch is fail-closed unless the deployment-attested distribution version equals the currently qualified `0.2.1-rc.2`; test-only protocol fixtures cannot weaken that production gate.
+- DSH SDK `session/resume` / `session/wait` / working-directory methods are used only within their documented transport semantics; Work-facing durable lifecycle ownership remains generation/binding-scoped and is not inferred from a DSH session id.
 
 ### Trust and truth
 - Deployment-backed execution-environment attestations.
@@ -106,20 +108,22 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `a805cac85bed04929cef3dc72c3311ede6fcf483`.
-- Exact-head GitHub Actions: `38535881834` — **5/5 SUCCESS**.
-- Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; zero-domain Core; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows; Cordis reference runtime; Windows desktop reference build.
+- Verified implementation checkpoint: `49023ac444d824ae74694d61cfc0d44ac87afe50`.
+- Exact-head GitHub Actions: `39026643224` — **5/5 SUCCESS**.
+- Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; domain-boundary guard; zero-domain Core build/tests; developer CLI smoke; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows; Cordis reference runtime; Windows desktop reference build and owned-backend lifecycle smoke.
 - The external-effect recovery path is crash-consistent: a write-like `Authorized` ActionAttempt and its one-shot ExternalActionPermit consumption commit atomically; dispatch is persisted before connector execution; an authoritative reconciliation atomically advances the Attempt and appends its immutable ReconciliationRecord.
 - The Factory read-only vertical slice follows that exact durable ordering through `Authorized -> Dispatched -> OutcomeUnknown -> Reconciliation -> Observed -> Verified`; ambiguous effects cannot be blindly redispatched.
 - ExecutionBinding/Work/business-key/resource/site/authority/permit/effect identity remains immutable across persisted Attempt snapshots, with CAS preventing stale projection overwrite.
-- DSH SDK and ACP integration tracks the current official wire boundary, remains E0-only at the Work-facing HarnessProvider seam, and does not convert session/model success into Outcome or Acceptance.
+- DSH SDK/ACP integration has been re-checked against official DeepSeek Harness `0.2.1-rc.2`. Production configs require that exact qualified distribution plus deployment-attested digest/profile/route/environment identity. The only qualification bypass is the private `#[cfg(test)]` protocol-fixture transport and is not serializable or available to production builds.
+- SDK `session/resume`, `session/wait` and working-directory methods are treated as executor-transport controls only. Morn does not widen HarnessProvider lifecycle semantics or reconstruct Work ownership from a DSH session id.
+- For real providers without per-session close, the Morn E0 execution boundary constructs and persists a Work/generation/binding/scope/runtime-pinned `ExecutionReceipt` after each turn. A lost settlement or policy escape becomes an unsettled `outcome-unknown` receipt and requires explicit reconciliation; it never becomes an ObservedOutcome or AcceptanceDecision.
 - Protected live-provider, supply-chain, execution-environment, real BioLab and customer evidence handoffs remain independently external. No fixture, protocol fake, screenshot or local CI result converts those blockers to PASS.
-- Current repository-local gap audit remains closed for the v11.5 reference design at this checkpoint; any later code SHA requires its own exact-head CI before inheriting this conclusion.
+- Current repository-local required-design gap audit remains closed for the v11.5 reference scope at this implementation checkpoint; any later code SHA requires its own exact-head CI before inheriting this conclusion.
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `a805cac85bed04929cef3dc72c3311ede6fcf483` and Actions `38535881834`.**
-- The verified checkpoint includes the owned desktop-backend lifecycle probe and Tauri CSP hardening in addition to the v11.5 control-plane, trust, provider and UI gates.
-- PR #1 remains draft because local engineering evidence is not production/customer evidence.
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `49023ac444d824ae74694d61cfc0d44ac87afe50` and Actions `39026643224`.**
+- The verified checkpoint includes the Work/acceptance trust chain, real DSH/Pi adapter boundaries, exact DSH distribution qualification, owned desktop-backend lifecycle, Tauri security hardening, four-surface UI smoke and zero-domain gates.
+- PR #1 remains draft because repository-local engineering evidence is not authenticated provider/customer/production evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.
-- Any later code SHA must obtain its own full exact-head CI before inheriting `ALL_LOCAL_GATES_PASS`; this STATUS/documentation update itself does not change implementation semantics.
+- Any later code SHA must obtain its own full exact-head CI before inheriting `ALL_LOCAL_GATES_PASS`; documentation-only commits do not inherit the prior SHA's green status automatically.

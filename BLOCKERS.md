@@ -2,7 +2,7 @@
 
 只记录 **无法通过继续编码/测试在当前环境解决** 的真实阻塞。
 
-## Current blocker index — 2026-10-14
+## Current blocker index — 2026-10-17
 
 This section is authoritative for the current v11.5 convergence branch. Older
 entries below are retained as historical evidence and must not be read as the
@@ -44,17 +44,25 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are verified at implementation checkpoint
-`f121c0804cdc4b289636ac2cf44a227aa1403c58` by exact-head Actions run
-`38432456574` (**5/5 SUCCESS**). This checkpoint retains the DSH-SDK ↔ Pi-RPC
-adapter-wire semantic-neutrality and release-readiness trust hardening and
-additionally closes the reference desktop productization gap: Windows CI proves
-an owned sibling-backend lifecycle, exact Morn v11.5 health identity, graceful
-stdin-EOF shutdown, single-owner semantics and restrictive Tauri CSP/prototype
-hardening. Commit `3678b271d962c060f09d187074d02a343794baf9` further
-requires authenticated DSH/Pi smoke modes to execute only on the attested
-self-hosted provider runner. None of those controls manufactures external
+`49023ac444d824ae74694d61cfc0d44ac87afe50` by exact-head Actions run
+`39026643224` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
+adapter-wire semantic-neutrality, Work/acceptance trust hardening, owned desktop
+backend lifecycle/security boundary, and the DSH `0.2.1-rc.2` distribution
+qualification gate. Production DSH launch remains fail-closed unless the exact
+deployment-attested distribution version/digest/profile/route/environment match
+the qualified contract; only a private `#[cfg(test)]` protocol-fixture path may
+use synthetic runtime identities. None of these controls manufactures external
 evidence. Every blocker above remains external and must not be promoted by
 fixture/CI, desktop-reference or runner-binding results.
+
+## 2026-10-17 DSH 0.2.1 qualification convergence
+
+- **DSH_DISTRIBUTION_QUALIFICATION = LOCAL_COMPLETE** for the currently reviewed official distribution `0.2.1-rc.2`.
+- Morn validates distribution provenance separately from the pre-release SDK/ACP wire identity; retaining the same wire version does not authorize an unreviewed future DSH package.
+- Current official SDK transport methods used by Morn include `initialize`, `session/prompt`, `session/resume`, `session/wait`, working-directory get/set and `shutdown`; ACP lifecycle remains a separate Work-bound controller.
+- The protocol-fixture bypass is compile-time test-only. It exists so fake subprocesses can test wire behavior without claiming to be an official DSH distribution; it cannot be configured through production serialization/environment.
+- Real DSH/Pi per-session close support is not fabricated. Morn's E0 turn boundary emits the durable Work-pinned `ExecutionReceipt`; an unsettled or policy-violating turn remains `outcome-unknown` and requires executor reconciliation.
+- This closes a repository-local compatibility/test migration issue only. **B-001 remains EXTERNAL_BLOCKED** until the exact qualified runtime actually completes the protected authenticated live smoke in a real attested environment.
 
 ## 2026-10-11 local-design convergence
 
