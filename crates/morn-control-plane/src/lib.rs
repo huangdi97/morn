@@ -492,10 +492,6 @@ impl WorkProgressController {
             if acceptance.work_package_id == work.id
                 && acceptance.work_generation == work.generation
             {
-                let spec_matches =
-                    work.spec.acceptance_ref.as_deref().is_none_or(|expected| {
-                        expected == acceptance.acceptance_spec_id.to_string()
-                    });
                 let grounded_outcome = inputs.outcome.filter(|outcome| {
                     outcome.work_package_id == work.id
                         && outcome.work_generation == work.generation
@@ -509,72 +505,31 @@ impl WorkProgressController {
                     observed.evidence_refs = outcome.evidence_refs.clone();
                     work.set_condition(observed);
                 }
-                let attested_outcome =
-                    grounded_outcome.filter(|outcome| outcome.is_attested_source_grounded());
-                let independently_witnessed = acceptance.has_review_authority_refs()
-                    && !acceptance.evidence_refs.is_empty()
-                    && !acceptance.acting_role.trim().is_empty()
-                    && !acceptance.reason.trim().is_empty();
-                let final_acceptance = acceptance.is_final_acceptance()
-                    && spec_matches
-                    && attested_outcome.is_some()
-                    && independently_witnessed;
-                let final_rejection = acceptance.disposition == AcceptanceDisposition::Reject
-                    && spec_matches
-                    && attested_outcome.is_some()
-                    && independently_witnessed;
 
-                let final_independent_decision = final_acceptance || final_rejection;
-                let mut independent = WorkCondition::new(
-                    "IndependentAcceptance",
-                    if final_independent_decision {
-                        ConditionStatus::True
-                    } else {
-                        ConditionStatus::False
-                    },
+                // This pure controller cannot dereference deployment attestations
+                // or one-shot review authorizations. It therefore never creates
+                // terminal business truth from caller-supplied AcceptanceDecision
+                // objects, even when their reference fields are populated.
+                let mut independent =
+                    WorkCondition::new("IndependentAcceptance", ConditionStatus::False);
+                independent.reason = format!(
+                    "review decision {} observed; terminal reviewer authority must be verified from durable trust records",
+                    acceptance.id
                 );
-                independent.reason = if final_independent_decision {
-                    format!(
-                        "final independent decision {} by role {}",
-                        acceptance.id, acceptance.acting_role
-                    )
-                } else {
-                    format!(
-                        "non-final independent review {} by role {}; more evidence or conditions remain",
-                        acceptance.id, acceptance.acting_role
-                    )
-                };
                 independent.evidence_refs = vec![acceptance.id.to_string()];
                 work.set_condition(independent);
 
-                let mut semantics = WorkCondition::new(
-                    "AcceptedOutcomeSemantics",
-                    if final_acceptance {
-                        ConditionStatus::True
-                    } else {
-                        ConditionStatus::False
-                    },
-                );
-                semantics.reason = if final_acceptance {
-                    "acceptance spec and deployment-attested source-grounded outcome reference match"
-                        .to_string()
-                } else {
-                    "acceptance cannot close Work until its spec and a deployment-attested source-grounded outcome are explicitly linked"
-                        .to_string()
-                };
+                let mut semantics =
+                    WorkCondition::new("AcceptedOutcomeSemantics", ConditionStatus::False);
+                semantics.reason =
+                    "terminal acceptance/rejection is projected only by the durable business-evidence controller after source and reviewer trust verification"
+                        .to_string();
                 semantics.evidence_refs = grounded_outcome
                     .map(|outcome| vec![outcome.id.to_string()])
                     .unwrap_or_default();
                 work.set_condition(semantics);
 
-                work.status.phase = match acceptance.disposition {
-                    AcceptanceDisposition::Accept if final_acceptance => WorkPhase::Accepted,
-                    AcceptanceDisposition::Reject if final_rejection => WorkPhase::Rejected,
-                    AcceptanceDisposition::Conditional
-                    | AcceptanceDisposition::RequestMoreEvidence
-                    | AcceptanceDisposition::Accept
-                    | AcceptanceDisposition::Reject => WorkPhase::Waiting,
-                };
+                work.status.phase = WorkPhase::Waiting;
                 work.mark_observed();
                 return;
             }

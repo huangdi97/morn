@@ -21,8 +21,8 @@ use morn_control_plane::{
     capability_resolution_evidence, issue_external_action_permit,
     issue_external_action_permit_for_work, provenance_condition_evidence,
     source_of_truth_condition_evidence, CapabilityEligibilityGate, ControlPlaneStore,
-    DurableWorkControllerRuntime, ExternalActionMode, ReconciliationController,
-    WorkProgressController, WorkProgressInputs,
+    DurableBusinessEvidenceControllerRuntime, DurableWorkControllerRuntime, ExternalActionMode,
+    ReconciliationController, WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
@@ -716,32 +716,6 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
     acceptance_decision
         .evidence_refs
         .extend(outcome.evidence_refs.clone());
-    let reviewer = AcceptanceReviewerAttestation {
-        principal_id: acceptance_decision.decided_by.clone(),
-        acting_roles: vec![acceptance_decision.acting_role.clone()],
-        evidence_refs: vec!["fixture://factory-independent-reviewer".to_string()],
-        observed_at: acceptance_decision.decided_at,
-        valid_until: None,
-    };
-    let review_authorization = AcceptanceReviewAuthorization {
-        authorization_id: "fixture-review-auth-factory".to_string(),
-        principal_id: acceptance_decision.decided_by.clone(),
-        acting_role: acceptance_decision.acting_role.clone(),
-        work_package_id: work.id.clone(),
-        work_generation: work.generation,
-        outcome_id: outcome.id.clone(),
-        disposition: acceptance_decision.disposition,
-        evidence_refs: vec!["fixture://factory-review-authorization".to_string()],
-        issued_at: acceptance_decision.decided_at,
-        valid_until: None,
-    };
-    acceptance_decision
-        .pin_review_authority(
-            reviewer.reference(),
-            vec![review_authorization.authorization_id.clone()],
-        )
-        .unwrap();
-
     assert!(acceptance_decision.is_final_acceptance());
     WorkProgressController.reconcile(
         &mut work,
@@ -752,9 +726,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             ..Default::default()
         },
     );
-    assert_eq!(work.status.phase, WorkPhase::Accepted);
-    assert!(work.condition_is_true("IndependentAcceptance"));
-    assert!(work.condition_is_true("AcceptedOutcomeSemantics"));
+    assert_eq!(work.status.phase, WorkPhase::Waiting);
+    assert!(!work.condition_is_true("IndependentAcceptance"));
+    assert!(!work.condition_is_true("AcceptedOutcomeSemantics"));
 
     let mut value = ValueAssessment::new(
         work_package_id.clone(),
@@ -778,7 +752,33 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         workspace_id: work.workspace_id.clone(),
         work_package_id: work.id.clone(),
         work_generation: work.generation,
-        source_binding_id: source_bindinution_manifest)
+        source_binding_id: source_binding.id.clone(),
+        fact_type: "maintenance.order".to_string(),
+        objective: outcome.objective.clone(),
+        source_ref: outcome.source_ref.clone(),
+        observed_facts: outcome.observed_facts.clone(),
+        evidence_refs: outcome.evidence_refs.clone(),
+        observed_at: outcome.observed_at,
+        valid_until: None,
+    };
+    let consumed = morn_integration::ConsumedSourceObservationAttestation::from_attestation(
+        &source_attestation,
+        outcome.id.clone(),
+        outcome.observed_at,
+    )
+    .unwrap();
+    store
+        .save_record_immutable(
+            "source_observation_attestation_consumed_v115",
+            "fixture://factory-observation-attestation",
+            work.workspace_id.as_str(),
+            outcome.observed_at.millis(),
+            &consumed,
+        )
+        .unwrap();
+    store.save_execution_binding(&work, &binding).unwrap();
+    store
+        .save_execution_manifest(&work, &execution_manifest)
         .unwrap();
     store
         .save_binding_migration(&work, &migration_decision)
@@ -809,7 +809,13 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
             "acceptance_reviewer_attestation_v115",
             &reviewer.reference(),
             work.workspace_id.as_str(),
-   ",
+            reviewer.observed_at.millis(),
+            &reviewer,
+        )
+        .unwrap();
+    store
+        .save_record_immutable(
+            "acceptance_review_authorization_v115",
             &review_authorization.authorization_id,
             work.workspace_id.as_str(),
             review_authorization.issued_at.millis(),
@@ -840,7 +846,24 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         )
         .unwrap();
     ControlPlaneStore::save_acceptance_decision(&store, &work, &acceptance_decision).unwrap();
+
+    // The mutable projection is still non-terminal until the durable
+    // controller re-reads and verifies both source provenance and reviewer
+    // authority from the store.
     store.save_work_resource_cas(&mut work).unwrap();
+    let terminal_tick =
+        DurableBusinessEvidenceControllerRuntime::new("factory-readonly-business-evidence")
+            .reconcile_from_persisted_business_evidence(
+                &store,
+                work.id.as_str(),
+                morn_kernel::time::Timestamp::now(),
+            )
+            .unwrap();
+    assert_eq!(terminal_tick.next_phase, WorkPhase::Accepted);
+    work = store
+        .load_record("work_resource_v115", work.id.as_str())
+        .unwrap()
+        .unwrap();
     store.save_value_assessment(&work, &value).unwrap();
     let restored: WorkResource = store
         .load_record("work_resource_v115", work.id.as_str())
