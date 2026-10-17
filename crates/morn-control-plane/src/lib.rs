@@ -2026,7 +2026,14 @@ impl ControlPlaneStore for MornStore {
                 "terminal acceptance/rejection requires linked outcomes, independent reviewer, rationale and evidence",
             ));
         }
-        if decision.has_review_authority_refs() {
+        if is_terminal_decision {
+            if !decision.has_review_authority_refs() {
+                return Err(Error::not_authorized(
+                    "terminal acceptance/rejection requires deployment-attested reviewer identity and exact review authorization",
+                ));
+            }
+            require_attested_review_authority(self, work, decision)?;
+        } else if decision.has_review_authority_refs() {
             require_attested_review_authority(self, work, decision)?;
         }
         for outcome_id in &decision.outcome_refs {
@@ -3943,6 +3950,17 @@ mod control_plane_persistence_scope_tests {
         attest_test_outcome(&store, &work, &mut attested);
         store.save_observed_outcome(&work, &attested).unwrap();
         decision.outcome_refs = vec![attested.id.clone()];
+        assert!(
+            ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).is_err(),
+            "attested world evidence cannot substitute for independent reviewer authority"
+        );
+        attest_test_review_authority(
+            &store,
+            &work,
+            &attested,
+            &mut decision,
+            "review-auth-final-source-provenance",
+        );
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
     }
 
@@ -4095,6 +4113,17 @@ mod control_plane_persistence_scope_tests {
             .evidence_refs
             .push("review://independent-witness".to_string());
         assert!(ControlPlaneStore::save_acceptance_decision(&store, &other, &decision).is_err());
+        assert!(
+            ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).is_err(),
+            "same-Work terminal decision still requires reviewer authority"
+        );
+        attest_test_review_authority(
+            &store,
+            &work,
+            &outcome,
+            &mut decision,
+            "review-auth-same-work",
+        );
         ControlPlaneStore::save_acceptance_decision(&store, &work, &decision).unwrap();
 
         let mut foreign_decision = AcceptanceDecision::new(
