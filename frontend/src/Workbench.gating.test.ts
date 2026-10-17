@@ -350,6 +350,60 @@ describe("accepted outcome value UI", () => {
   });
 });
 
+describe("canonical Work lifecycle panel visibility", () => {
+  it("shows authoritative observation for an active Running/Waiting Work without requiring an existing Outcome", () => {
+    const control = {
+      condition_evidence: [],
+      capability_resolutions: [],
+      profile_conformance_attestations: [],
+      work: [{
+        id: "work:observation",
+        generation: 1,
+        spec: {
+          goal: "Observe delivery result",
+          profile_ref: "morn.lite@1.0.0",
+          required_conditions: [],
+        },
+        status: {
+          phase: "Running",
+          observed_generation: 1,
+          conditions: [],
+          active_binding: null,
+        },
+      }],
+      source_of_truth_bindings: [],
+      execution_bindings: [],
+      execution_manifests: [],
+      execution_receipts: [],
+      executor_outcome_reconciliations: [],
+      interop_bindings: [],
+      external_task_observations: [],
+      binding_migrations: [],
+      durable_workflow_bindings: [],
+      attempts: [],
+      reconciliations: [],
+      outcomes: [],
+      acceptance_decisions: [],
+      value_assessments: [],
+      value_assessment_support: [],
+      note: "fixture",
+    } as V115ControlPlaneData;
+
+    expect(workbenchLifecycleVisibility(control, "fixture")).toEqual({
+      hasCanonicalWork: true,
+      hasActiveWork: true,
+      showExecution: true,
+      showAuthoritativeOutcome: true,
+      showIndependentReview: false,
+      showValueAssessment: false,
+      showAcpLifecycle: false,
+    });
+
+    control.work[0].status.phase = "Waiting";
+    expect(workbenchLifecycleVisibility(control, "fixture").showAuthoritativeOutcome).toBe(true);
+  });
+});
+
 describe("governed Work execution phase gates", () => {
   it("cannot use requirement resolution to escape an in-flight/outcome reconciliation phase", () => {
     expect(governedRequirementResolutionAllowed("Proposed")).toBe(true);

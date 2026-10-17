@@ -69,7 +69,7 @@ async function runCanonicalAcceptanceUiContract() {
       required_conditions: [],
     },
     status: {
-      phase: accepted ? "Accepted" : observed ? "Delivered" : "Waiting",
+      phase: accepted ? "Accepted" : observed ? "Delivered" : "Running",
       observed_generation: 1,
       conditions: sourceBound
         ? [{ condition_type: "SourceOfTruthBound", status: "True", reason: "deployment fixture witness" }]
@@ -148,11 +148,72 @@ async function runCanonicalAcceptanceUiContract() {
   await fixturePage.route("**/api/v115/control-plane", (route) => json(route, control()));
   await fixturePage.route("**/api/v115/status", (route) =>
     json(route, {
+      provider_catalog: [],
+      provider_observations: [],
+      provider_status_semantics: { registered: "registered", healthy: "healthy" },
       harness_runtime: {
-        dsh: { mode: "fixture", health: "fixture" },
-        pi: { mode: "fixture", health: "fixture" },
+        dsh: {
+          mode: "fixture",
+          health: "fixture",
+          configured_execution_environment_ref: null,
+          profile_configuration_ref: null,
+          runtime_version: null,
+          runtime_digest: null,
+          route_attestation_ref: null,
+          wire_server_version: null,
+        },
+        pi: {
+          mode: "fixture",
+          health: "fixture",
+          configured_execution_environment_ref: null,
+          runtime_version: null,
+          runtime_digest: null,
+          route_attestation_ref: null,
+        },
       },
       execution_environment_attestations: [],
+      architecture: {
+        definition: "fixture",
+        protocol_version: { major: 11, minor: 5, patch: 0 },
+        semantic_slots: [],
+        semantic_invariants: [],
+        control_model: "fixture",
+        composition_runtime: { name: "fixture", role: "test", reference_version: "fixture", business_truth: false },
+      },
+      providers: { harness: [], execution_environment: [], authority: "fixture" },
+      profiles: [],
+      capability_supply_chain: {
+        stages: [],
+        artifact_compilers: [],
+        qualification_is_not_admission: true,
+        site_admission_requires_verified_signature_and_provenance: true,
+        caller_can_self_assert_verification: false,
+        verification_evidence: [],
+      },
+      factory_profile: {
+        id: "morn.factory.readonly",
+        version: { major: 1, minor: 0, patch: 0 },
+        minimum_isolation: "container",
+        required_execution_guarantees: [],
+        required_guarantees: [],
+        production_write: false,
+        first_wedge: "fixture",
+      },
+      evidence_policy: { classes: [], classes_are_categorical: true, no_implicit_promotion: true, claims: [] },
+      release_readiness: {
+        build_identity_ref: null,
+        deployment_site_ref: null,
+        axes: [],
+        deployment_scopes: [],
+        semantics: { aggregate_ready: false, reason: "fixture only" },
+      },
+      claims: {
+        local_engineering: "fixture",
+        real_dsh: "not-claimed",
+        real_pi: "not-claimed",
+        real_factory: "not-claimed",
+        production_write: "not-claimed",
+      },
     }),
   );
   await fixturePage.route("**/api/v115/ui/extensions", (route) => json(route, { extensions: [] }));
@@ -164,9 +225,16 @@ async function runCanonicalAcceptanceUiContract() {
         site_ref: null,
         source_ref: "fixture-authority://orders",
         authority_kind: "SystemOfRecord",
+        authoritative_fact_types: ["delivery.status"],
+        key_mapping_ref: "fixture://mapping/orders",
+        query_capability_ref: "fixture://capability/orders.read",
+        freshness_sla_ms: 60000,
+        conflict_policy: "system-of-record-wins",
+        version_ref: "fixture-authority@1",
       }],
       deployment_owned: true,
       caller_can_create_authority: false,
+      note: "fixture deployment-owned source catalog",
     }),
   );
   await fixturePage.route("**/api/v115/source-of-truth/observations", (route) =>
@@ -180,11 +248,15 @@ async function runCanonicalAcceptanceUiContract() {
             fact_type: "delivery.status",
             objective: "Reference delivery outcome observed",
             source_ref: "fixture-authority://orders/42",
+            observed_facts: { status: "complete" },
             evidence_refs: ["fixture-authority://orders/42/receipt"],
+            observed_at: Date.now(),
+            valid_until: null,
           }]
         : [],
-      deployment_owned: true,
-      caller_can_assert_world_facts: false,
+      deployment_attested: true,
+      caller_can_submit_world_facts: false,
+      consumed_attestations_are_listed: false,
     }),
   );
   await fixturePage.route("**/api/v115/acceptance/reviewers", (route) =>
@@ -193,9 +265,13 @@ async function runCanonicalAcceptanceUiContract() {
         principal_id: reviewerId,
         acting_roles: ["independent-reviewer"],
         evidence_refs: ["fixture-iam://reviewer"],
+        observed_at: Date.now(),
+        valid_until: null,
       }],
-      deployment_owned: true,
-      caller_can_assert_reviewer: false,
+      deployment_attested: true,
+      caller_can_self_assert_identity: false,
+      final_review_requires_exact_out_of_band_authorization: true,
+      authorization_ids_are_listed: false,
     }),
   );
 
@@ -264,7 +340,10 @@ async function runCanonicalAcceptanceUiContract() {
 
   try {
     await fixturePage.goto(BASE + "/workbench", { waitUntil: "networkidle", timeout: 30000 });
-    await fixturePage.getByRole("heading", { name: "Authoritative outcome observation" }).waitFor();
+    await fixturePage.getByTestId("work-lifecycle-guide").waitFor({ state: "visible" });
+    await fixturePage
+      .locator("h3.card-title", { hasText: "Authoritative outcome observation" })
+      .waitFor({ state: "visible" });
 
     await fixturePage.getByRole("button", { name: "Attach authoritative source" }).click();
     await fixturePage.getByLabel("Deployment-attested observation").waitFor({ state: "visible" });
