@@ -4,7 +4,9 @@
 use morn_harness::contract::{run_provider_contract, test_context};
 use morn_harness::provider::{
     DeepSeekHarnessProvider, DshMode, HarnessProvider, MornNativeHarness,
+    DSH_REAL_E0_SCOPE_RESTRICTION,
 };
+use morn_harness::{CapabilityScope, PiHarnessProvider, PiMode, ScopeKind};
 use morn_kernel::ids::WorkspaceId;
 use morn_world::object::{Object, ObjectType};
 use serde_json::json;
@@ -96,6 +98,30 @@ fn provider_switch_preserves_actor_identity_and_canonical_records() {
 }
 
 #[test]
+fn real_pi_scope_is_e0_only_before_any_runtime_starts() {
+    let ws = WorkspaceId::generate();
+    let mut provider = PiHarnessProvider::new(PiMode::Real);
+    let unsafe_scope = CapabilityScope::new(ScopeKind::ExecutionRun, None, ws.clone(), "unsafe");
+    assert!(provider.mount(unsafe_scope).is_err());
+
+    let safe_scope = CapabilityScope::new(ScopeKind::ExecutionRun, None, ws, "isolated")
+        .with_restriction(morn_harness::pi::PI_REAL_E0_SCOPE_RESTRICTION);
+    assert!(provider.mount(safe_scope).is_ok());
+}
+
+#[test]
+fn real_dsh_scope_is_e0_only_before_any_runtime_starts() {
+    let ws = WorkspaceId::generate();
+    let mut provider = DeepSeekHarnessProvider::new(DshMode::Real);
+    let unsafe_scope = CapabilityScope::new(ScopeKind::ExecutionRun, None, ws.clone(), "unsafe");
+    assert!(provider.mount(unsafe_scope).is_err());
+
+    let safe_scope = CapabilityScope::new(ScopeKind::ExecutionRun, None, ws, "isolated")
+        .with_restriction(DSH_REAL_E0_SCOPE_RESTRICTION);
+    assert!(provider.mount(safe_scope).is_ok());
+}
+
+#[test]
 fn deepseek_harness_real_mode_reports_external_blocker() {
     let ws = WorkspaceId::generate();
     let ctx = test_context(&ws);
@@ -106,5 +132,5 @@ fn deepseek_harness_real_mode_reports_external_blocker() {
         "real DSH is not available in this environment"
     );
     let msg = format!("{}", err.unwrap_err());
-    assert!(msg.contains("not installed"), "unexpected error: {msg}");
+    assert!(msg.contains("not configured"), "unexpected error: {msg}");
 }

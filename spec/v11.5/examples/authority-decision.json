@@ -1,0 +1,38 @@
+{
+  "request": {
+    "principal": "controller",
+    "acting_for": null,
+    "action": "historian.read",
+    "resource": "historian://plant-a/CNC-17",
+    "work_ref": "work-1042",
+    "site_ref": "plant-a",
+    "scope": [
+      "historian.read"
+    ],
+    "parameter_envelope": {
+      "machine": "CNC-17"
+    },
+    "not_before": null,
+    "expires_at": null,
+    "budget_micros": 10000,
+    "preconditions": [
+      "profile-conformant"
+    ],
+    "approval_refs": [],
+    "delegation_depth": 0,
+    "revoked": false,
+    "context": {
+      "shift": "night"
+    }
+  },
+  "decision": {
+    "id": "authz-1042-read",
+    "provider": "morn-native-policy",
+    "allowed": true,
+    "reason": "allowed by policy",
+    "evidence_refs": [
+      "policy:factory-readonly"
+    ],
+    "decided_at": "2026-10-08T05:00:30Z"
+  }
+}

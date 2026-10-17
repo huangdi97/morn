@@ -1,0 +1,52 @@
+{
+  "id": "work-1042",
+  "workspace_id": "ws-plant-a",
+  "resource_version": 1,
+  "generation": 1,
+  "spec": {
+    "work_package_id": "work-1042",
+    "protocol_version": {
+      "major": 11,
+      "minor": 5,
+      "patch": 0
+    },
+    "goal": "Review CNC-17 outage capacity and delivery impact",
+    "constraints": [
+      "no-production-write"
+    ],
+    "required_conditions": [
+      "CapabilityResolved",
+      "CapabilityQualified",
+      "SourceOfTruthBound",
+      "ProvenanceReady"
+    ],
+    "acceptance_ref": "acceptance-1042",
+    "source_solution_ref": "solution:factory-exception@1.0.0",
+    "site_ref": "plant-a",
+    "autonomy_posture": "governed",
+    "profile_ref": "morn.factory.readonly@1.0.0"
+  },
+  "status": {
+    "observed_generation": 1,
+    "phase": "Ready",
+    "conditions": [
+      {
+        "condition_type": "CapabilityResolved",
+        "status": "True",
+        "reason": "site-admitted candidate selected",
+        "evidence_refs": [
+          "resolution:1042"
+        ],
+        "observed_at": "2026-10-08T05:00:00Z"
+      }
+    ],
+    "active_binding": null,
+    "active_bindings": [],
+    "last_event_seq": 1,
+    "updated_at": "2026-10-08T05:00:00Z"
+  },
+  "termination_requested_at": null,
+  "termination_reason": null,
+  "finalizers": [],
+  "created_at": "2026-10-08T04:59:00Z"
+}

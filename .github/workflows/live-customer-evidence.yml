@@ -1,0 +1,193 @@
+name: Customer / production evidence validation (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "plan validates inputs and prints the evidence path without secrets; verify runs the protected evidence gate"
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - verify
+      evidence_class:
+        description: "Validate deployment-owned RealSite or ProductionWrite evidence"
+        type: choice
+        required: true
+        default: real-site
+        options:
+          - real-site
+          - production-write
+      site_ref:
+        description: "Exact deployment/customer site identity"
+        type: string
+        required: true
+      acknowledge_external_truth:
+        description: "I understand Morn validates the envelope only and does not mint/cryptographically prove the referenced customer fact"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-customer-evidence-${{ github.ref }}-${{ inputs.site_ref }}-${{ inputs.evidence_class }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan ${{ inputs.evidence_class }} evidence for ${{ inputs.site_ref }}
+    if: inputs.operation == 'plan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      INPUT_EVIDENCE_CLASS: ${{ inputs.evidence_class }}
+      INPUT_SITE_REF: ${{ inputs.site_ref }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Validate plan inputs without reading protected material
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+
+          site = os.environ["INPUT_SITE_REF"]
+          if not site.strip() or any(ord(ch) < 32 for ch in site):
+              raise SystemExit("site_ref must be a non-empty single-line identity")
+
+          evidence_class = os.environ["INPUT_EVIDENCE_CLASS"]
+          if evidence_class not in ("real-site", "production-write"):
+              raise SystemExit("evidence_class must be real-site or production-write")
+          expected = (
+              f"factory-customer:{site}"
+              if evidence_class == "real-site"
+              else f"factory-production-write:{site}"
+          )
+
+          print("PLAN ONLY - no secrets read and no customer evidence validated or minted.")
+          print(f"evidence_class={evidence_class}")
+          print(f"site_ref={site}")
+          print(f"expected_subject={expected}")
+          print("required environment: morn-customer-evidence")
+          print(
+              "required secrets: MORN_CUSTOMER_EVIDENCE_CLAIM_JSON, MORN_EVIDENCE_ISSUER"
+          )
+          print("verify entrypoint: operation=verify with acknowledge_external_truth=true")
+          PY
+
+  validate-evidence:
+    name: Validate ${{ inputs.evidence_class }} for ${{ inputs.site_ref }}
+    if: inputs.operation == 'verify'
+    environment: morn-customer-evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      INPUT_EVIDENCE_CLASS: ${{ inputs.evidence_class }}
+      INPUT_SITE_REF: ${{ inputs.site_ref }}
+      INPUT_ACK_EXTERNAL: ${{ inputs.acknowledge_external_truth }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+
+      - name: Validate protected inputs
+        shell: bash
+        env:
+          EVIDENCE_CLAIM_JSON: ${{ secrets.MORN_CUSTOMER_EVIDENCE_CLAIM_JSON }}
+          TRUSTED_EVIDENCE_ISSUER: ${{ secrets.MORN_EVIDENCE_ISSUER }}
+        run: |
+          set -euo pipefail
+          if [[ "$INPUT_ACK_EXTERNAL" != "true" ]]; then
+            echo "acknowledge_external_truth=true is required"
+            exit 2
+          fi
+          if [[ -z "${EVIDENCE_CLAIM_JSON:-}" ]]; then
+            echo "protected Environment secret MORN_CUSTOMER_EVIDENCE_CLAIM_JSON is required"
+            exit 2
+          fi
+          if [[ -z "${TRUSTED_EVIDENCE_ISSUER:-}" ]]; then
+            echo "protected Environment secret MORN_EVIDENCE_ISSUER is required"
+            exit 2
+          fi
+          python - <<'PY'
+          import os
+          for name in ("INPUT_SITE_REF", "TRUSTED_EVIDENCE_ISSUER"):
+              value = os.environ[name]
+              if not value.strip() or any(ord(ch) < 32 for ch in value):
+                  raise SystemExit(f"{name} must be a non-empty single-line identity")
+          PY
+          mkdir -p target/live-customer-evidence
+          claim_file="$RUNNER_TEMP/morn-customer-evidence-claim-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          if [[ -e "$claim_file" || -L "$claim_file" ]]; then
+            echo "refusing to reuse pre-existing customer evidence temp file"
+            exit 2
+          fi
+          umask 077
+          printf '%s' "$EVIDENCE_CLAIM_JSON" > "$claim_file"
+          printf 'MORN_EVIDENCE_CLAIM_FILE=%s\n' "$claim_file" >> "$GITHUB_ENV"
+          printf 'MORN_EVIDENCE_EXPECTED_CLASS=%s\n' "$INPUT_EVIDENCE_CLASS" >> "$GITHUB_ENV"
+          if [[ "$INPUT_EVIDENCE_CLASS" == "real-site" ]]; then
+            expected="factory-customer:$INPUT_SITE_REF"
+          else
+            expected="factory-production-write:$INPUT_SITE_REF"
+          fi
+          printf 'MORN_EVIDENCE_EXPECTED_SUBJECT=%s\n' "$expected" >> "$GITHUB_ENV"
+
+      - name: Validate exact claim with Morn semantics
+        shell: bash
+        env:
+          MORN_EVIDENCE_ISSUER: ${{ secrets.MORN_EVIDENCE_ISSUER }}
+        run: |
+          set -euo pipefail
+          cargo run --quiet -p morn-app --bin evidence_claim_verify \
+            | tee target/live-customer-evidence/verification-report.json
+
+      - name: Export normalized Morn-loadable EvidenceClaim
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, pathlib
+          report_path = pathlib.Path("target/live-customer-evidence/verification-report.json")
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          if report.get("status") != "PASS":
+              raise SystemExit("evidence verification did not PASS")
+          claim = report.get("claim")
+          if not isinstance(claim, dict):
+              raise SystemExit("PASS report missing normalized EvidenceClaim")
+          claims = report.get("claims", {})
+          if claims.get("customer_fact_minted_by_morn") is not False:
+              raise SystemExit("gate must never claim Morn minted customer truth")
+          if claims.get("production_write_authority_granted") is not False:
+              raise SystemExit("gate must never claim action-level write authority")
+          pathlib.Path("target/live-customer-evidence/evidence-claim.json").write_text(
+              json.dumps(claim, indent=2), encoding="utf-8"
+          )
+          PY
+
+      - name: Remove protected source claim
+        if: always()
+        shell: bash
+        run: |
+          rm -f "${MORN_EVIDENCE_CLAIM_FILE:-}"
+
+      - name: Upload normalized evidence envelope
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-customer-evidence-${{ github.sha }}-${{ inputs.evidence_class }}-${{ github.run_attempt }}
+          path: target/live-customer-evidence
+          if-no-files-found: warn
+          retention-days: 14

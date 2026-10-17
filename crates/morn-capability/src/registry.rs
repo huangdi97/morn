@@ -20,6 +20,7 @@ pub enum CapabilityKind {
     Solver,
     Model,
     Llm,
+    Agent,
     Tool,
     Api,
     Service,
@@ -36,6 +37,7 @@ impl CapabilityKind {
             CapabilityKind::Solver => "solver",
             CapabilityKind::Model => "model",
             CapabilityKind::Llm => "llm",
+            CapabilityKind::Agent => "agent",
             CapabilityKind::Tool => "tool",
             CapabilityKind::Api => "api",
             CapabilityKind::Service => "service",
@@ -212,6 +214,7 @@ mod tests {
             CapabilityKind::Solver,
             CapabilityKind::Model,
             CapabilityKind::Llm,
+            CapabilityKind::Agent,
             CapabilityKind::Tool,
             CapabilityKind::Api,
             CapabilityKind::Service,
@@ -221,7 +224,7 @@ mod tests {
         ] {
             reg.register(def(kind.as_str()), kind);
         }
-        assert_eq!(reg.bindings.len(), 11);
+        assert_eq!(reg.bindings.len(), 12);
         assert!(reg.bindings.iter().any(|b| b.kind == CapabilityKind::Human));
     }
 }

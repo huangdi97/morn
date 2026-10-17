@@ -1,5 +1,12 @@
 # Release Notes — Morn v1.0.0-rc.1
 
+> **Historical snapshot — not current v11.5 product truth.** This document records the
+> v1.0.0-rc.1 / August 2026 state. For the current convergence branch use
+> [STATUS.md](STATUS.md) and [BLOCKERS.md](BLOCKERS.md). In particular, statements
+> below saying that official DSH was unavailable or that Real mode was only a stub
+> are preserved historical observations and have been superseded by the v11.5
+> SDK/ACP adapters and current external-evidence blockers.
+
 Release candidate for the Morn v1.0 GA Re-Foundation (Goal
 `MORN-G6R-V1-GA-REFOUNDATION-GITHUB-TAKEOVER`).
 

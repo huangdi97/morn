@@ -15,6 +15,84 @@ pub struct DomainPackTag;
 pub type DomainDefinitionId = Id<DomainDefinitionTag>;
 pub type DomainPackId = Id<DomainPackTag>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "kebab-case")]
+pub enum UiSurface {
+    Workbench,
+    Studio,
+    Console,
+    Hub,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "kebab-case")]
+pub enum UiRenderer {
+    KeyValue,
+    Table,
+    Timeline,
+    Status,
+    Json,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UiActionSpec {
+    pub id: String,
+    pub label: String,
+    pub method: String,
+    pub endpoint: String,
+    pub authority_semantic: Option<String>,
+}
+
+impl UiActionSpec {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.id.trim().is_empty() || self.label.trim().is_empty() {
+            return Err("UI action id/label required".to_string());
+        }
+        if !matches!(self.method.as_str(), "GET" | "POST") {
+            return Err("UI action method must be GET or POST".to_string());
+        }
+        if !self.endpoint.starts_with("/api/") {
+            return Err("UI action endpoint must be an in-app /api/ route".to_string());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UiExtensionSpec {
+    pub id: String,
+    pub domain: String,
+    pub surface: UiSurface,
+    pub slot: String,
+    pub title: String,
+    pub renderer: UiRenderer,
+    pub data_endpoint: Option<String>,
+    pub actions: Vec<UiActionSpec>,
+    pub required_profile: Option<String>,
+    pub priority: i32,
+}
+
+impl UiExtensionSpec {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.id.trim().is_empty()
+            || self.domain.trim().is_empty()
+            || self.slot.trim().is_empty()
+            || self.title.trim().is_empty()
+        {
+            return Err("UI extension id/domain/slot/title required".to_string());
+        }
+        if let Some(endpoint) = &self.data_endpoint {
+            if !endpoint.starts_with("/api/") {
+                return Err("UI data endpoint must be an in-app /api/ route".to_string());
+            }
+        }
+        for action in &self.actions {
+            action.validate()?;
+        }
+        Ok(())
+    }
+}
+
 /// A declaration a domain pack can make.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DomainDeclaration {
@@ -53,6 +131,16 @@ impl DomainDefinition {
             payload,
         });
         self
+    }
+
+    pub fn declare_ui_extension(mut self, extension: UiExtensionSpec) -> Result<Self, String> {
+        extension.validate()?;
+        self.declarations.push(DomainDeclaration {
+            kind: "ui_extension".to_string(),
+            name: extension.id.clone(),
+            payload: serde_json::to_value(extension).map_err(|error| error.to_string())?,
+        });
+        Ok(self)
     }
 
     /// Validate: domain/version/sdk required; declarations have known kinds.
@@ -132,6 +220,23 @@ impl DomainRegistry {
             .filter(|x| x.kind == kind)
             .collect()
     }
+
+    pub fn ui_extensions(&self, surface: UiSurface) -> Vec<UiExtensionSpec> {
+        let mut extensions: Vec<UiExtensionSpec> = self
+            .definitions
+            .iter()
+            .filter(|definition| self.is_enabled(&definition.domain))
+            .flat_map(|definition| definition.declarations.iter())
+            .filter(|declaration| declaration.kind == "ui_extension")
+            .filter_map(|declaration| {
+                serde_json::from_value::<UiExtensionSpec>(declaration.payload.clone()).ok()
+            })
+            .filter(|extension| extension.surface == surface)
+            .filter(|extension| extension.validate().is_ok())
+            .collect();
+        extensions.sort_by_key(|extension| extension.priority);
+        extensions
+    }
 }
 
 #[cfg(test)]
@@ -178,6 +283,46 @@ mod tests {
             );
         reg.install(def).unwrap();
         assert_eq!(reg.definitions[0].declarations.len(), 2);
+    }
+
+    #[test]
+    fn ui_extension_contract_rejects_remote_arbitrary_code() {
+        let extension = UiExtensionSpec {
+            id: "biolab-summary".to_string(),
+            domain: "biolab".to_string(),
+            surface: UiSurface::Workbench,
+            slot: "domain-summary".to_string(),
+            title: "BioLab".to_string(),
+            renderer: UiRenderer::Status,
+            data_endpoint: Some("https://evil.example/plugin.js".to_string()),
+            actions: vec![],
+            required_profile: None,
+            priority: 10,
+        };
+        assert!(extension.validate().is_err());
+    }
+
+    #[test]
+    fn enabled_domain_exposes_declarative_ui_slot() {
+        let extension = UiExtensionSpec {
+            id: "biolab-summary".to_string(),
+            domain: "biolab".to_string(),
+            surface: UiSurface::Workbench,
+            slot: "domain-summary".to_string(),
+            title: "BioLab".to_string(),
+            renderer: UiRenderer::Status,
+            data_endpoint: Some("/api/workbench".to_string()),
+            actions: vec![],
+            required_profile: None,
+            priority: 10,
+        };
+        let definition = DomainDefinition::new("biolab", "1.0.0", "1.0.0")
+            .declare_ui_extension(extension)
+            .unwrap();
+        let mut registry = DomainRegistry::new();
+        registry.install(definition).unwrap();
+        registry.enable("biolab");
+        assert_eq!(registry.ui_extensions(UiSurface::Workbench).len(), 1);
     }
 
     #[test]

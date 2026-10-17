@@ -1,0 +1,79 @@
+{
+  "id": "morn.factory.readonly",
+  "version": {
+    "major": 1,
+    "minor": 0,
+    "patch": 0
+  },
+  "requirements": [
+    {
+      "semantic": "DurableWorkState",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "SourceOfTruthBinding",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "CapabilityQualification",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "AuthorityBeforeSideEffect",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "ReceiptAfterExternalAction",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "ReconciliationOnUnknown",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "OutcomeObservation",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "AcceptedOutcomeSemantics",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "IndependentAcceptance",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "ProfileVersionPinned",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "Provenance",
+      "level": "Required",
+      "contexts": []
+    },
+    {
+      "semantic": "ProductionWrite",
+      "level": "Forbidden",
+      "contexts": []
+    }
+  ],
+  "minimum_isolation": "container",
+  "required_execution_guarantees": [
+    "filesystem-write-policy",
+    "network-egress-policy",
+    "secret-indirection"
+  ],
+  "source_of_truth_binding_required": true,
+  "durable_work_state_required": true,
+  "provenance_required": true
+}

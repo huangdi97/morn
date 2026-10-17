@@ -6,6 +6,7 @@ use morn_app::AppState;
 use morn_capability::effect::EffectContract;
 use morn_integration::ConnectorProvider;
 use morn_kernel::policy::{Policy, PolicyRule};
+use morn_kernel::status::WorkStatus;
 use morn_kernel::version::Version;
 use morn_node::{DistributedRuntime, MornNode, NodeType, WorkflowRunId};
 use morn_package::{PackLifecycle, PackManifest, PackStatus};
@@ -66,6 +67,10 @@ fn pure_core_e2e_zero_domain() {
         ));
         let wp_id = wp.id.clone();
         guard.work.add_work_package(wp);
+        guard
+            .work
+            .update_status(&wp_id, WorkStatus::InProgress)
+            .unwrap();
 
         // Capability + governed action (E1 transactional).
         let policy = Policy::new(
@@ -94,7 +99,9 @@ fn pure_core_e2e_zero_domain() {
                 &mut guard.world,
             )
             .unwrap();
-        assert!(outcome.verified);
+        assert!(outcome.committed);
+        let execution_verified = gateway.verify(&outcome, &guard.world).unwrap();
+        assert!(execution_verified);
 
         // Artifact (approved for downstream).
         let (artifact, version) = guard
@@ -131,25 +138,23 @@ fn pure_core_e2e_zero_domain() {
         assert!(guard.artifacts.require_approved(&version.id).is_ok());
         let _ = artifact;
 
-        // Accept work + outcome.
+        // Completion is execution state. The legacy WorkPackage API cannot
+        // manufacture Accepted from caller-built witness strings; final
+        // acceptance is canonical v11.5 AcceptanceDecision state.
         guard
             .work
-            .attempt_accept(
-                &wp_id,
-                &morn_work::service::AcceptanceEvidence {
-                    produced_artifacts: vec!["result".to_string()],
-                    verification_passed: true,
-                    required_approvals: vec![],
-                    forbidden_condition_hit: None,
-                },
-            )
+            .update_status(&wp_id, WorkStatus::Completed)
             .unwrap();
+        assert_eq!(
+            guard.work.work_package(&wp_id).unwrap().status,
+            WorkStatus::Completed
+        );
         guard
             .world
             .record_outcome(morn_world::outcome::OutcomeRecord::new(
                 ws_id.clone(),
                 "generic outcome",
-                true,
+                execution_verified,
             ));
         guard.persist_all().unwrap();
     }

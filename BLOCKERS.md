@@ -2,14 +2,127 @@
 
 只记录 **无法通过继续编码/测试在当前环境解决** 的真实阻塞。
 
-## Active
+## Current blocker index — 2026-10-17
 
-### B-001 — 真实 DeepSeek Harness smoke 无法在当前环境完成
-Status: Active
+This section is authoritative for the current v11.5 convergence branch. Older
+entries below are retained as historical evidence and must not be read as the
+current implementation state.
+
+- **B-001 / DSH live evidence — EXTERNAL_BLOCKED.** The official DSH
+  distribution and Morn real SDK/JSON-RPC adapter now exist, and the repository
+  includes the one-shot `provider_smoke` executor gate and a separate
+  `dsh_acp_lifecycle_smoke` control-plane gate. The ACP gate proves only
+  Work-bound lifecycle/control semantics and cannot promote provider health.
+  Remaining executor evidence requires an authorized runtime, exact model
+  route/credentials and a real runtime-attested execution environment.
+  Fixture/wire tests do not satisfy this gate; only a successful
+  deployment-run live gate does.
+- **B-002 / Pi live evidence — EXTERNAL_BLOCKED.** Morn has a real Pi JSONL RPC
+  adapter and the same `provider_smoke` live gate; a live installed Pi
+  runtime/model/credential path and an authorized runtime-attested execution
+  environment are still required. The gate entrypoint exists; the external
+  evidence does not yet.
+- **B-003 / execution containment — EXTERNAL_BLOCKED for live evidence.** Morn
+  has provider-neutral environment contracts and an attestation-backed external
+  environment adapter. A real container/microVM/Kubernetes/customer-sandbox
+  attestation, with exact environment identity and required guarantee vector,
+  must come from the deployment platform. Morn does not infer containment from
+  a Docker binary or a caller-supplied label.
+- **B-004 / OCI + Sigstore + SLSA live evidence — EXTERNAL_BLOCKED.** Morn
+  now has an ORAS publication adapter, digest-pinned publication receipt,
+  identity-scoped Cosign signature verification, independent SLSA provenance
+  verification, deployment-owned verification loading and a SiteAdmission gate
+  that rejects caller-claimed signature/provenance URLs. Remaining proof needs
+  an authorized real registry plus deployment OIDC/signing/build provenance;
+  CI/unit command-contract tests cannot manufacture those external identities.
+- **G4-B-002 / real BioLab dataset — EXTERNAL_BLOCKED.** A lawful,
+  provenance-bearing real dataset is still required.
+- **G12 / customer-site acceptance — EXTERNAL_BLOCKED.** Real source-system
+  access, site IAM/policy, customer evidence and independent acceptance have not
+  been supplied.
+- **Production/physical write — NOT AUTHORIZED.** No local fixture, Harness
+  success, Provider health lease, or CI run upgrades this state.
+
+Repository-local engineering gates are verified at implementation checkpoint
+`eed9ada351f470c6e4113c999dbf29e2d79375bf` by exact-head Actions run
+`39044227292` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
+adapter-wire semantic-neutrality, Work/acceptance trust hardening, owned desktop
+backend lifecycle/security boundary, the DSH `0.2.1-rc.2` distribution
+qualification gate, a full-resolution Cargo.lock gate, Windows-portable provider
+tests, explicit browser evidence for loading/reconciling/rejected/error plus
+Console/Hub loading and canonical-failure states, a real zero-domain HTTP/browser
+smoke (no domain packs, BioLab routes 404, no BioLab DOM), desktop
+foreign-port/protocol-mismatch plus single-instance lock fail-closed probes, a
+shared Workbench Work selection, and an automated external-evidence entrypoint
+matrix (plan/verify, plan-secret isolation, attested runner, protected
+environment, upload, cleanup). Production DSH launch remains fail-closed unless
+the exact deployment-attested distribution
+version/digest/profile/route/environment match the qualified contract; only a
+private `#[cfg(test)]` protocol-fixture path may use synthetic runtime
+identities. None of these controls manufactures external evidence. Every blocker
+above remains external and must not be promoted by fixture/CI, desktop-reference
+or runner-binding results.
+
+## External blocker local entrypoints — 2026-10-17
+
+Each external blocker now has a repository-local entrypoint that fails closed
+without external material. `plan` modes never read protected secrets; `verify`
+paths keep their protected environment, secrets, attestation and cleanup.
+
+| Blocker | Plan entrypoint | Live/verify entrypoint | Evidence and cleanup |
+|---|---|---|---|
+| B-001 DSH | `live-dsh-evidence.yml` `plan-sdk` / `plan-acp` | `smoke-sdk` / `smoke-acp` on `morn-attested-provider` | RealRuntime claim; always-cleanup of one-shot workspace, DSH home, venv and attestation file |
+| B-002 Pi | `live-pi-evidence.yml` `plan` | `smoke` on `morn-attested-provider` | RealRuntime claim; always-cleanup of workspace and attestation file |
+| B-003 environment | deployment-owned attestation file supplied to DSH/Pi smoke | smoke aborts without a valid runtime-attested file | attestation file removed on exit; Morn never infers containment from caller labels |
+| B-004 supply chain | `live-supply-chain-evidence.yml` `plan` | `verify` with deployment registry auth | digest-pinned publication receipt plus independent Cosign/SLSA evidence |
+| G4-B-002 BioLab | `live-biolab-evidence.yml` `plan` | `verify` on `morn-attested-biolab` | byte-digest provenance report; protected provenance source removed |
+| G12 / production write | `live-customer-evidence.yml` `plan` | `verify` with deployment claim and issuer | normalized evidence envelope only; Morn never mints customer truth or write authority |
+
+Plan validation rejects absolute/traversal dataset paths, multiline identities and
+unknown evidence classes. These entrypoints are local engineering only and do not
+convert any blocker to PASS.
+
+## 2026-10-17 DSH 0.2.1 qualification convergence
+
+- **DSH_DISTRIBUTION_QUALIFICATION = LOCAL_COMPLETE** for the currently reviewed official distribution `0.2.1-rc.2`.
+- Morn validates distribution provenance separately from the pre-release SDK/ACP wire identity; retaining the same wire version does not authorize an unreviewed future DSH package.
+- Current official SDK transport methods used by Morn include `initialize`, `session/prompt`, `session/resume`, `session/wait`, working-directory get/set and `shutdown`; ACP lifecycle remains a separate Work-bound controller.
+- The protocol-fixture bypass is compile-time test-only. It exists so fake subprocesses can test wire behavior without claiming to be an official DSH distribution; it cannot be configured through production serialization/environment.
+- Real DSH/Pi per-session close support is not fabricated. Morn's E0 turn boundary emits the durable Work-pinned `ExecutionReceipt`; an unsettled or policy-violating turn remains `outcome-unknown` and requires executor reconciliation.
+- This closes a repository-local compatibility/test migration issue only. **B-001 remains EXTERNAL_BLOCKED** until the exact qualified runtime actually completes the protected authenticated live smoke in a real attested environment.
+
+## 2026-10-11 local-design convergence
+
+- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** under the current v11.5 reference scope at verified checkpoint `f121c0804cdc4b289636ac2cf44a227aa1403c58`, including the Work-bound ACP lifecycle/controller path and the owned local desktop-backend lifecycle/security boundary.
+- Release readiness no longer trusts a deployment claim merely because its payload names an issuer; `MORN_EVIDENCE_ISSUER` pins the deployment-owned issuer.
+- RealSite and ProductionWrite readiness are exact-site scoped through `MORN_DEPLOYMENT_SITE_REF`.
+- RealRuntime readiness requires the current provider version/digest identity and a fresh Healthy lease; an old smoke claim cannot be combined with a replacement runtime.
+- Equal-time conflicting evidence is rejected and future-dated evidence cannot satisfy readiness or customer-value support.
+- These are local trust/control-plane completions only. They do **not** change B-001/B-002/B-003/B-004/G4-B-002/G12 or authorize production/physical write.
+
+## 2026-10-13 terminal-review trust convergence
+
+- **TERMINAL_REVIEW_TRUST_CHAIN = LOCAL_COMPLETE** at checkpoint `18aaf62`.
+- A terminal AcceptanceDecision now pins the exact versioned reviewer attestation and exact review-authorization references used for the decision.
+- Deployment-loaded reviewer attestations and review authorizations are persisted as immutable trust evidence; one-shot authorization consumption is persisted separately.
+- Durable business-evidence recovery revalidates reviewer identity/role/time, exact Work generation/outcome/disposition authorization and exact consumption before projecting Accepted or Rejected.
+- Reviewer attestation references are versioned by principal + observation time, so renewal/rotation appends evidence rather than mutating historical trust.
+- Conditional/RequestMoreEvidence remains non-terminal while preserving OutcomeObservation.
+- These controls prevent local/API/recovery-path trust gaps but do **not** create customer IAM, customer evidence or G12. External blocker definitions above remain unchanged.
+
+## Historical evidence retained below
+
+> **Superseded:** the August B-001 record below captures what was observed in that older environment.
+> It is not the current blocker definition. The authoritative 2026-10-10 blocker index above and
+> the 2026-10-08 revalidation section below supersede claims such as “no official DSH distribution”
+> or “DshMode::Real is only a stub.” Do not use the historical reproduction as current product truth.
+
+### Historical B-001 — August environment could not complete a real DeepSeek Harness smoke
+Status: Superseded historical evidence
 Category: Credential / ExternalService
 
-What is blocked:
-官方 DeepSeek Harness（DSH，agent harness，Developer Preview）在当前环境没有官方可安装发行物；无法执行“真实 DSH 启动 + 至少一个真实 smoke”。Morn 侧 `DeepSeekHarnessProvider` 边界与 provider contract（fixture）已完成并通过，但这不是“真实 DSH 已集成”。
+What was blocked at that time:
+The August environment could not locate the later official DeepSeek Harness distribution or perform a credentialed real smoke. The commands and errors below are retained only as provenance for that historical observation.
 
 Why Codex cannot resolve locally:
 1. 无官方 DSH 二进制/包；唯一同名的 PyPI `deepseek-harness` 0.2.0 是第三方 OpenAI 兼容客户端，需要真实 DeepSeek API key（credential）与真实模型访问，当前无凭据；
@@ -105,3 +218,102 @@ pilot，需合法真实 dataset）保持 Active。Goal 3 全部本地可完成�
 无新增 blocker。B-001（真实 DeepSeek Harness smoke）与 G4-B-002（真实 BioLab 数据 pilot）保持 Active；
 二者均不阻塞 Goal 5 任何本地可完成项（Provider/Connector/Node/Distributed 全部以 fixture/conformance 证明）。
 `CORE COMPLETE = YES`（唯一非本地项即上述两个 external blocker，与 Core 本体无关）。
+
+
+## B-001 2026-10-08 revalidation — official DSH is installable
+
+The earlier August record above is preserved as **historical evidence** and must not
+be repeated as a current claim. The official DeepSeek Harness now has public
+source code and an official npm launcher:
+
+- https://github.com/deepseek-ai/deepseek-harness
+- https://www.deepseek.com/harness/en/
+- `npx @deepseek-ai/dsh web` (interactive Web UI, not Morn's provider API).
+- The official `@deepseek-ai/dsh-acp` supports automation over ACP/JSON-RPC
+  stdio, with `pnpm dsh --profile acp` from a built source checkout:
+  https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/acp/acp/README.md
+
+Current truth:
+- **OFFICIAL_INSTALL_DISTRIBUTION = AVAILABLE** (the August missing-package
+  premise is no longer valid).
+- **MORN_DSH_REAL_SDK_ADAPTER = IMPLEMENTED_AND_LOCAL_CONTRACT_VERIFIED**:
+  `crates/morn-harness/src/provider.rs` accepts an explicit isolated
+  `DshSdkConfig`, initializes the official SDK JSON-RPC wire, owns a
+  receipt-to-idle turn, and records executor evidence without promoting it to
+  Work truth. The production launcher also appends a Morn-owned final overlay
+  containing a global monotonic ToolRuntime deny guard, hides shipped direct
+  tools, forces a read-only DSH sandbox, and pins the policy SHA-256 into the
+  provider route. The protocol-fixture bypass exists only under `cfg(test)`
+  and is not serializable. The unconfigured `DshMode::Real` path still fails
+  closed.
+- **AUTHENTICATED_REAL_DSH_SESSION = NOT_VERIFIED**: official credentials and
+  a sandboxed external runtime have not been supplied or exercised.
+- **MORN_WORK_OUTCOME_ACCEPTANCE = NOT_PROVEN_BY_DSH**: no harness status
+  can independently assert a customer's real observed/accepted outcome.
+
+B-001 now means **authenticated official-runtime smoke / live provider evidence blocked**,
+not "no official package exists" and not "the Morn-side SDK adapter is absent." The adapter path and permission controls are
+specified in
+`docs/research/V11_5_DSH_ACP_INTEGRATION_CONVERGENCE_2026-10-08.md`.
+Never treat a successful `dsh web` launch as completion of the Morn
+HarnessProvider contract or as production authorization.
+
+
+### 2026-10-10 DSH real-adapter convergence update
+
+- **MORN_DSH_REAL_SDK_ADAPTER = IMPLEMENTED_AND_LOCAL_CONTRACT_VERIFIED**.
+- Exact local verification checkpoint: `b5f5940d942437c8e159a09d8ee2a2e23441002c`, Actions `38033568210` (**5/5 SUCCESS**).
+- The live gate now requires the exact smoke canary and a fresh post-turn Healthy lease; initialization/transport success alone cannot prove live provider health.
+- The real SDK path now pins runtime artifact, execution-environment identity,
+  provider/model route, Morn E0 policy digest, and an attested
+  `deepseek-harness-profile@<version>#sha256:<digest>` composition identity.
+- Each real launch uses a fresh Morn-owned one-shot child `DSH_HOME`; persistent
+  profile/home overrides under the configured root are not loaded into that run.
+- DSH tool/subagent activity fails closed on the E0 seam, including future
+  `tool/*` event names; Pi symmetrically rejects future `tool_*` events.
+- DSH graceful teardown now requests protocol shutdown, closes stdin, waits
+  boundedly for a clean exit, and only then force-reaps as containment fallback.
+- **LIVE_DSH remains NOT_PROVEN** until an authenticated official runtime/model
+  smoke executes inside a deployment-attested environment. Customer Outcome,
+  independent Acceptance, ProductionWrite, and G12 remain separate external gates.
+
+
+### 2026-10-14 customer/deployment evidence handoff gate
+
+RealSite and ProductionWrite remain **external truth**, but the repository now has
+a protected validation handoff at
+`.github/workflows/live-customer-evidence.yml`.
+
+The gate accepts only a deployment/customer-governance supplied `EvidenceClaim`
+from the protected `morn-customer-evidence` Environment, pins the exact
+`factory-customer:<site>` or `factory-production-write:<site>` subject,
+requires the expected evidence class, `Proven` state, non-future timestamp,
+non-empty evidence/reason and the deployment-pinned issuer, then exports a
+normalized claim suitable for `MORN_EVIDENCE_CLAIMS_FILE`.
+
+This **does not clear G12 or ProductionWrite by itself**. It does not mint the
+customer fact, verify the external referenced signature/record, grant an
+action-level AuthorityDecision, or bypass the Work/Profile/ExternalAction
+enforcement path. It only removes the manual/schema ambiguity between external
+governance evidence and Morn's deployment evidence loader.
+
+
+### 2026-10-14 BioLab real-dataset provenance handoff
+
+G4-B-002 remains an **external real-data pilot blocker**, but the repository now
+contains the complete admission handoff for that data:
+
+- `BioLabDatasetProvenance` requires an exact dataset ref, canonical SHA-256,
+  schema, source system, governance approval, license/consent and collection
+  provenance references.
+- `biolab_dataset_verify` hashes the actual dataset file and compares it to
+  the deployment-owned provenance record.
+- `.github/workflows/live-biolab-evidence.yml` runs only on the protected
+  `morn-attested-biolab` self-hosted runner, binds runner identity, confines
+  dataset paths to `/var/lib/morn/biolab-datasets`, rejects symlinks/traversal,
+  and exports a secret-free normalized provenance record.
+
+A PASS at this gate does **not** prove scientific validity, lawful use beyond
+the referenced external governance artifact, an accepted Outcome, customer
+value, or G12. The real BioLab pilot must still actually execute on the admitted
+dataset and generate its independent scientific/business evidence.

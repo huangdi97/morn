@@ -1,0 +1,222 @@
+name: Live BioLab dataset provenance (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "plan validates inputs and prints the evidence path without secrets; verify runs the protected attestation gate"
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - verify
+      dataset_relative_path:
+        description: "Path below /var/lib/morn/biolab-datasets to the exact pilot dataset file"
+        type: string
+        required: true
+      runner_ref:
+        description: "Expected attested BioLab runner identity"
+        type: string
+        required: true
+      acknowledge_boundary:
+        description: "I understand this verifies exact bytes + provenance only, not scientific validity, customer acceptance or lawful use beyond referenced governance artifacts"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-biolab-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan BioLab dataset evidence run
+    if: inputs.operation == 'plan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      INPUT_DATASET_RELATIVE_PATH: ${{ inputs.dataset_relative_path }}
+      INPUT_RUNNER_REF: ${{ inputs.runner_ref }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Validate plan inputs without reading protected material
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, pathlib
+
+          raw_relative = os.environ["INPUT_DATASET_RELATIVE_PATH"]
+          if not raw_relative or any(ord(ch) < 32 for ch in raw_relative):
+              raise SystemExit("dataset_relative_path must be a non-empty control-free path")
+          relative = pathlib.PurePosixPath(raw_relative)
+          if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+              raise SystemExit("dataset_relative_path must stay below the fixed BioLab dataset root")
+
+          runner = os.environ["INPUT_RUNNER_REF"]
+          if not runner or any(ord(ch) < 32 for ch in runner):
+              raise SystemExit("runner_ref must be a non-empty single-line identity")
+
+          print("PLAN ONLY - no secrets read, no dataset accessed, no provenance verified.")
+          print(f"dataset_relative_path={raw_relative}")
+          print(f"runner_ref={runner}")
+          print("required runner label: morn-attested-biolab")
+          print("required environment: morn-biolab-evidence")
+          print(
+              "required secrets: MORN_BIOLAB_DATASET_PROVENANCE_JSON, "
+              "MORN_BIOLAB_DATASET_PROVENANCE_ISSUER"
+          )
+          print("verify entrypoint: operation=verify with acknowledge_boundary=true")
+          PY
+
+  biolab-dataset-evidence:
+    name: Verify real BioLab dataset provenance
+    if: inputs.operation == 'verify'
+    environment: morn-biolab-evidence
+    runs-on: morn-attested-biolab
+    timeout-minutes: 20
+    env:
+      INPUT_DATASET_RELATIVE_PATH: ${{ inputs.dataset_relative_path }}
+      INPUT_RUNNER_REF: ${{ inputs.runner_ref }}
+      INPUT_ACK_BOUNDARY: ${{ inputs.acknowledge_boundary }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+
+      - name: Bind workflow to attested BioLab runner and exact dataset path
+        shell: bash
+        env:
+          PROVENANCE_JSON: ${{ secrets.MORN_BIOLAB_DATASET_PROVENANCE_JSON }}
+          TRUSTED_PROVENANCE_ISSUER: ${{ secrets.MORN_BIOLAB_DATASET_PROVENANCE_ISSUER }}
+        run: |
+          set -euo pipefail
+          if [[ "$INPUT_ACK_BOUNDARY" != "true" ]]; then
+            echo "acknowledge_boundary=true is required"
+            exit 2
+          fi
+          if [[ -z "${PROVENANCE_JSON:-}" || -z "${TRUSTED_PROVENANCE_ISSUER:-}" ]]; then
+            echo "protected provenance JSON and issuer secrets are required"
+            exit 2
+          fi
+
+          python - <<'PY'
+          import os, pathlib, stat
+
+          trusted_issuer = os.environ["TRUSTED_PROVENANCE_ISSUER"]
+          if not trusted_issuer.strip() or any(ord(ch) < 32 for ch in trusted_issuer):
+              raise SystemExit("trusted provenance issuer must be a non-empty single-line identity")
+
+          identity_path = pathlib.Path("/etc/morn/biolab-runner-ref")
+          if not identity_path.exists():
+              raise SystemExit("attested BioLab runner is missing /etc/morn/biolab-runner-ref")
+          st = identity_path.lstat()
+          if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+              raise SystemExit("BioLab runner identity must be a regular non-symlink file")
+          if st.st_uid != 0 or st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+              raise SystemExit("BioLab runner identity must be root-owned and not group/world writable")
+          actual_runner = identity_path.read_text(encoding="utf-8").strip()
+          expected_runner = os.environ["INPUT_RUNNER_REF"].strip()
+          if not expected_runner or any(ord(ch) < 32 for ch in expected_runner):
+              raise SystemExit("runner_ref must be a non-empty single-line identity")
+          if not actual_runner or actual_runner != expected_runner:
+              raise SystemExit(
+                  f"BioLab runner identity mismatch: expected {expected_runner!r}, got {actual_runner!r}"
+              )
+
+          root = pathlib.Path("/var/lib/morn/biolab-datasets").resolve(strict=True)
+          raw_relative = os.environ["INPUT_DATASET_RELATIVE_PATH"]
+          if not raw_relative or any(ord(ch) < 32 for ch in raw_relative):
+              raise SystemExit("dataset_relative_path must be a non-empty control-free path")
+          relative = pathlib.PurePosixPath(raw_relative)
+          if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+              raise SystemExit("dataset_relative_path must stay below the fixed BioLab dataset root")
+          candidate = root.joinpath(*relative.parts)
+          if not candidate.exists():
+              raise SystemExit(f"dataset does not exist: {candidate}")
+          lst = candidate.lstat()
+          if stat.S_ISLNK(lst.st_mode) or not stat.S_ISREG(lst.st_mode):
+              raise SystemExit("dataset must be a regular non-symlink file")
+          resolved = candidate.resolve(strict=True)
+          try:
+              resolved.relative_to(root)
+          except ValueError:
+              raise SystemExit("resolved dataset path escaped the fixed BioLab dataset root")
+          if resolved.stat().st_size <= 0:
+              raise SystemExit("dataset must be non-empty")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as out:
+              out.write(f"MORN_BIOLAB_DATASET_FILE={resolved}\n")
+          PY
+
+          mkdir -p target/live-biolab-evidence
+          provenance_file="$RUNNER_TEMP/morn-biolab-dataset-provenance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          if [[ -e "$provenance_file" || -L "$provenance_file" ]]; then
+            echo "refusing to reuse pre-existing provenance temp file"
+            exit 2
+          fi
+          umask 077
+          printf '%s' "$PROVENANCE_JSON" > "$provenance_file"
+          printf 'MORN_BIOLAB_DATASET_PROVENANCE_FILE=%s\n' "$provenance_file" >> "$GITHUB_ENV"
+
+      - name: Verify dataset bytes against deployment-owned provenance
+        shell: bash
+        env:
+          MORN_BIOLAB_DATASET_PROVENANCE_ISSUER: ${{ secrets.MORN_BIOLAB_DATASET_PROVENANCE_ISSUER }}
+        run: |
+          set -euo pipefail
+          cargo run --quiet --all-features -p morn-app --bin biolab_dataset_verify \
+            | tee target/live-biolab-evidence/verification-report.json
+
+      - name: Export normalized provenance record
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, pathlib
+          report = json.loads(
+              pathlib.Path("target/live-biolab-evidence/verification-report.json").read_text(encoding="utf-8")
+          )
+          if report.get("status") != "PASS":
+              raise SystemExit("BioLab dataset verification did not PASS")
+          claims = report.get("claims", {})
+          if claims.get("dataset_bytes_digest_verified") is not True:
+              raise SystemExit("PASS report did not verify exact dataset bytes")
+          if claims.get("lawful_use_minted_by_morn") is not False:
+              raise SystemExit("Morn must never mint lawful-use truth")
+          if claims.get("scientific_outcome_proven") is not False:
+              raise SystemExit("dataset provenance cannot prove a scientific outcome")
+          provenance = report.get("provenance")
+          if not isinstance(provenance, dict):
+              raise SystemExit("PASS report missing normalized provenance")
+          pathlib.Path("target/live-biolab-evidence/dataset-provenance.json").write_text(
+              json.dumps(provenance, indent=2), encoding="utf-8"
+          )
+          PY
+
+      - name: Remove protected provenance source
+        if: always()
+        shell: bash
+        run: |
+          rm -f "${MORN_BIOLAB_DATASET_PROVENANCE_FILE:-}"
+
+      - name: Upload secret-free provenance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-biolab-evidence-${{ github.sha }}-${{ github.run_attempt }}
+          path: target/live-biolab-evidence
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,0 +1,426 @@
+name: Live DSH evidence (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Plan identities only, or run an authenticated E0 smoke"
+        type: choice
+        required: true
+        default: plan-sdk
+        options:
+          - plan-sdk
+          - plan-acp
+          - smoke-sdk
+          - smoke-acp
+      runtime_version:
+        description: "Exact deployment-attested DeepSeek Harness distribution version"
+        type: string
+        required: true
+      runtime_digest:
+        description: "SHA-256 of the exact deepseek-harness-runtime-bin wheel (sha256:<64-lowercase-hex>)"
+        type: string
+        required: true
+      execution_environment_ref:
+        description: "Deployment-owned execution environment ref"
+        type: string
+        required: true
+      provider:
+        description: "Exact DSH provider route"
+        type: string
+        required: true
+        default: deepseek-official
+      model:
+        description: "Exact DSH model route"
+        type: string
+        required: true
+        default: deepseek-v4-flash
+      reasoning_effort:
+        description: "Optional reasoning effort; blank preserves provider default"
+        type: string
+        required: false
+        default: ""
+      max_tokens:
+        description: "SDK smoke output-token ceiling"
+        type: string
+        required: true
+        default: "8192"
+      acknowledge_e0_only:
+        description: "Required for smoke: I understand this proves E0 executor/lifecycle evidence only, never Outcome/Acceptance/production write"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-dsh-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dsh-evidence:
+    name: DSH ${{ inputs.operation }}
+    environment: morn-live-provider
+    runs-on: ${{ startsWith(inputs.operation, 'smoke-') && 'morn-attested-provider' || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    env:
+      MORN_DSH_PROVIDER: ${{ inputs.provider }}
+      MORN_DSH_MODEL: ${{ inputs.model }}
+      MORN_DSH_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
+      MORN_DSH_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      MORN_DSH_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
+      MORN_DSH_MAX_TOKENS: ${{ inputs.max_tokens }}
+      MORN_DSH_ACP_PROVIDER: ${{ inputs.provider }}
+      MORN_DSH_ACP_MODEL: ${{ inputs.model }}
+      MORN_DSH_ACP_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
+      MORN_DSH_ACP_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      MORN_DSH_ACP_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
+      INPUT_OPERATION: ${{ inputs.operation }}
+      INPUT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      INPUT_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
+      INPUT_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+      INPUT_ACK_E0: ${{ inputs.acknowledge_e0_only }}
+      INPUT_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Validate manual inputs and isolate runtime paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$INPUT_RUNTIME_VERSION" in
+            *[!A-Za-z0-9._+-]*|"") echo "runtime_version contains unsupported characters"; exit 2 ;;
+          esac
+          if [[ "$INPUT_RUNTIME_VERSION" != "0.2.1-rc.2" ]]; then
+            echo "This Morn build has qualified only DeepSeek Harness 0.2.1-rc.2; re-qualify the adapter before using $INPUT_RUNTIME_VERSION"
+            exit 2
+          fi
+          if [[ ! "$INPUT_RUNTIME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "runtime_digest must be canonical sha256:<64-lowercase-hex>"
+            exit 2
+          fi
+          if [[ "$INPUT_OPERATION" == smoke-* && "$INPUT_ACK_E0" != "true" ]]; then
+            echo "Authenticated smoke requires acknowledge_e0_only=true"
+            exit 2
+          fi
+          if [[ -n "$INPUT_REASONING_EFFORT" && ! "$INPUT_REASONING_EFFORT" =~ ^[A-Za-z0-9._+-]{1,64}$ ]]; then
+            echo "reasoning_effort contains unsupported characters or exceeds 64 bytes"
+            exit 2
+          fi
+          dsh_workspace="$RUNNER_TEMP/morn-dsh-workspace-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          dsh_home="$RUNNER_TEMP/morn-dsh-home-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          acp_workspace="$RUNNER_TEMP/morn-dsh-acp-workspace-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          acp_home="$RUNNER_TEMP/morn-dsh-acp-home-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          for path in "$dsh_workspace" "$dsh_home" "$acp_workspace" "$acp_home"; do
+            if [[ -e "$path" || -L "$path" ]]; then
+              echo "refusing to reuse pre-existing live-evidence path: $path"
+              exit 2
+            fi
+          done
+          mkdir -m 700 -p "$dsh_workspace" "$dsh_home" "$acp_workspace" "$acp_home" target/live-dsh-evidence
+          printf 'MORN_DSH_WORKSPACE=%s\n' "$dsh_workspace" >> "$GITHUB_ENV"
+          printf 'MORN_DSH_HOME=%s\n' "$dsh_home" >> "$GITHUB_ENV"
+          printf 'MORN_DSH_ACP_WORKSPACE=%s\n' "$acp_workspace" >> "$GITHUB_ENV"
+          printf 'MORN_DSH_ACP_HOME=%s\n' "$acp_home" >> "$GITHUB_ENV"
+          if [[ -n "$INPUT_REASONING_EFFORT" ]]; then
+            printf 'MORN_DSH_REASONING_EFFORT=%s\n' "$INPUT_REASONING_EFFORT" >> "$GITHUB_ENV"
+            printf 'MORN_DSH_ACP_REASONING_EFFORT=%s\n' "$INPUT_REASONING_EFFORT" >> "$GITHUB_ENV"
+          fi
+
+      - name: Bind authenticated smoke to attested runner identity
+        if: startsWith(inputs.operation, 'smoke-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, pathlib, stat
+
+          path = pathlib.Path("/etc/morn/execution-environment-ref")
+          if not path.exists():
+              raise SystemExit("attested smoke runner is missing /etc/morn/execution-environment-ref")
+          st = path.lstat()
+          if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+              raise SystemExit("runner execution-environment identity must be a regular non-symlink file")
+          if st.st_uid != 0:
+              raise SystemExit("runner execution-environment identity must be root-owned")
+          if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+              raise SystemExit("runner execution-environment identity must not be group/world writable")
+
+          actual = path.read_text(encoding="utf-8").strip()
+          expected = os.environ["INPUT_EXECUTION_ENVIRONMENT_REF"].strip()
+          if not actual or actual != expected:
+              raise SystemExit(
+                  f"runner execution environment mismatch: expected {expected!r}, runner attests {actual!r}"
+              )
+
+          report = {
+              "gate": "MORN_ATTESTED_RUNNER_BINDING",
+              "status": "PASS",
+              "execution_environment_ref": actual,
+              "runner_name": os.environ.get("RUNNER_NAME"),
+              "runner_os": os.environ.get("RUNNER_OS"),
+              "runner_arch": os.environ.get("RUNNER_ARCH"),
+              "github_run_id": os.environ.get("GITHUB_RUN_ID"),
+              "github_sha": os.environ.get("GITHUB_SHA"),
+              "claims": {
+                  "runner_identity_bound": True,
+                  "live_provider": False,
+                  "canonical_work_outcome": False,
+                  "customer_acceptance": False,
+                  "production_write": False,
+              },
+          }
+          out = pathlib.Path("target/live-dsh-evidence/runner-binding.json")
+          out.write_text(json.dumps(report, indent=2), encoding="utf-8")
+          PY
+
+      - name: Emit secret-free deployment identity plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$INPUT_OPERATION" in
+            *-acp) export MORN_DSH_PLAN_MODE=acp ;;
+            *)     export MORN_DSH_PLAN_MODE=sdk ;;
+          esac
+          cargo run --quiet -p morn-app --bin dsh_identity_plan | tee target/live-dsh-evidence/identity-plan.json
+
+      - name: Stop after planning
+        if: startsWith(inputs.operation, 'plan-')
+        shell: bash
+        run: |
+          echo "Identity planning completed. No provider process was launched and no credential was required."
+
+      - name: Validate smoke secrets and materialize deployment attestation
+        if: startsWith(inputs.operation, 'smoke-')
+        shell: bash
+        env:
+          EXECUTION_ATTESTATION_JSON: ${{ secrets.MORN_EXECUTION_ATTESTATION_JSON }}
+          MORN_EXECUTION_ATTESTOR_SECRET: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXECUTION_ATTESTATION_JSON:-}" ]]; then
+            echo "MORN_EXECUTION_ATTESTATION_JSON secret is required for authenticated smoke"
+            exit 2
+          fi
+          python - <<'PY'
+          import json, os, pathlib
+          raw = os.environ["EXECUTION_ATTESTATION_JSON"]
+          parsed = json.loads(raw)
+          if not isinstance(parsed, (list, dict)):
+              raise SystemExit("execution attestation secret must be a JSON object or array")
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / f"morn-execution-attestations-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}.json"
+          path.write_text(json.dumps(parsed, separators=(",", ":")), encoding="utf-8")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"MORN_EXECUTION_ATTESTATION_FILE={path}\n")
+          PY
+          if [[ -z "${MORN_EXECUTION_ATTESTOR_SECRET:-}" ]]; then
+            echo "MORN_EXECUTION_ATTESTOR secret is required for authenticated smoke"
+            exit 2
+          fi
+
+      - name: Verify and install exact official DeepSeek Harness runtime artifact
+        if: startsWith(inputs.operation, 'smoke-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist_dir="$RUNNER_TEMP/morn-dsh-dist-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$dist_dir"
+          python -m pip download             --disable-pip-version-check             --only-binary=:all:             --no-deps             --dest "$dist_dir"             "deepseek-harness-runtime-bin==$INPUT_RUNTIME_VERSION"
+
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          from packaging.utils import canonicalize_name, parse_wheel_filename
+          from packaging.version import Version
+
+          dist = pathlib.Path(os.environ["RUNNER_TEMP"]) / f"morn-dsh-dist-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+          wheels = sorted(dist.glob("deepseek_harness_runtime_bin-*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit(f"expected exactly one runtime-bin wheel, found {len(wheels)}")
+          wheel = wheels[0]
+          digest = "sha256:" + hashlib.sha256(wheel.read_bytes()).hexdigest()
+          expected = os.environ["INPUT_RUNTIME_DIGEST"]
+          if digest != expected:
+              raise SystemExit(
+                  f"runtime artifact digest mismatch: expected {expected}, actual {digest}"
+              )
+          version = os.environ["INPUT_RUNTIME_VERSION"]
+          name, wheel_version, _build, _tags = parse_wheel_filename(wheel.name)
+          if canonicalize_name(name) != canonicalize_name("deepseek-harness-runtime-bin"):
+              raise SystemExit(f"unexpected runtime wheel package: {name}")
+          if wheel_version != Version(version):
+              raise SystemExit(
+                  f"runtime wheel version mismatch: expected {version}, actual {wheel_version}"
+              )
+          report = {
+              "gate": "MORN_DSH_RUNTIME_ARTIFACT_VERIFY",
+              "status": "PASS",
+              "package": "deepseek-harness-runtime-bin",
+              "version": version,
+              "artifact": wheel.name,
+              "digest": digest,
+              "canonical_identity": f"deepseek-harness@{version}#{digest}",
+              "claims": {
+                  "artifact_bytes_verified": True,
+                  "live_provider": False,
+                  "canonical_work_outcome": False,
+                  "customer_acceptance": False,
+                  "production_write": False,
+              },
+          }
+          out = pathlib.Path("target/live-dsh-evidence/runtime-artifact-verification.json")
+          out.write_text(json.dumps(report, indent=2), encoding="utf-8")
+          PY
+
+          runtime_wheel="$(find "$dist_dir" -maxdepth 1 -type f -name 'deepseek_harness_runtime_bin-*.whl' -print -quit)"
+          test -n "$runtime_wheel"
+          venv_dir="$RUNNER_TEMP/morn-dsh-venv-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [[ -e "$venv_dir" || -L "$venv_dir" ]]; then
+            echo "refusing to reuse pre-existing DSH runtime venv: $venv_dir"
+            exit 2
+          fi
+          python -m venv "$venv_dir"
+          "$venv_dir/bin/python" -m pip install --disable-pip-version-check --no-deps "$runtime_wheel"
+          export MORN_DSH_RUNTIME_WHEEL="$runtime_wheel"
+          "$venv_dir/bin/python" - <<'PY'
+          import hashlib
+          import importlib.metadata as metadata
+          import json
+          import os
+          import pathlib
+          import zipfile
+
+          from deepseek_harness_runtime import bundled_runtime_path
+
+          expected = os.environ["INPUT_RUNTIME_VERSION"]
+          actual = metadata.version("deepseek-harness-runtime-bin")
+          if actual != expected:
+              raise SystemExit(
+                  f"deepseek-harness-runtime-bin version mismatch: expected {expected}, actual {actual}"
+              )
+
+          wheel = pathlib.Path(os.environ["MORN_DSH_RUNTIME_WHEEL"]).resolve()
+          executable = pathlib.Path(bundled_runtime_path()).resolve()
+          import deepseek_harness_runtime
+          package_root = pathlib.Path(deepseek_harness_runtime.__file__).resolve().parent
+          site_root = package_root.parent
+          try:
+              member = executable.relative_to(site_root).as_posix()
+          except ValueError as exc:
+              raise SystemExit(
+                  f"bundled DSH executable escaped installed package root: {executable}"
+              ) from exc
+
+          with zipfile.ZipFile(wheel) as archive:
+              try:
+                  wheel_bytes = archive.read(member)
+              except KeyError as exc:
+                  raise SystemExit(
+                      f"verified runtime wheel does not contain launched executable member {member}"
+                  ) from exc
+
+          installed_bytes = executable.read_bytes()
+          wheel_member_digest = hashlib.sha256(wheel_bytes).hexdigest()
+          installed_digest = hashlib.sha256(installed_bytes).hexdigest()
+          if installed_digest != wheel_member_digest:
+              raise SystemExit(
+                  "installed DSH executable bytes differ from the already verified wheel member"
+              )
+
+          report_path = pathlib.Path("target/live-dsh-evidence/runtime-artifact-verification.json")
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          report["launcher"] = {
+              "path": str(executable),
+              "wheel_member": member,
+              "sha256": f"sha256:{installed_digest}",
+              "matches_verified_wheel_member": True,
+          }
+          report["claims"]["launched_executable_bound_to_verified_artifact"] = True
+          report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"MORN_DSH_COMMAND={executable}\n")
+              fh.write(f"MORN_DSH_ACP_COMMAND={executable}\n")
+          PY
+
+      - name: Run authenticated SDK provider smoke (E0 only)
+        if: inputs.operation == 'smoke-sdk'
+        shell: bash
+        env:
+          MORN_DSH_MODE: real
+          MORN_PROVIDER_SMOKE_PROVIDER: deepseek-harness
+          MORN_DSH_ENV_PASSTHROUGH: DEEPSEEK_API_KEY,DEEPSEEK_BASE_URL
+          MORN_EXECUTION_ATTESTOR: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
+          MORN_EVIDENCE_ISSUER: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+        run: |
+          set -euo pipefail
+          test -n "${DEEPSEEK_API_KEY:-}" || { echo "DEEPSEEK_API_KEY secret is required"; exit 2; }
+          cargo run --quiet -p morn-app --bin provider_smoke | tee target/live-dsh-evidence/provider-smoke.json
+
+      - name: Run authenticated ACP lifecycle smoke (control only)
+        if: inputs.operation == 'smoke-acp'
+        shell: bash
+        env:
+          MORN_DSH_ACP_MODE: real
+          MORN_DSH_ACP_ENV_PASSTHROUGH: DEEPSEEK_API_KEY,DEEPSEEK_BASE_URL
+          MORN_EXECUTION_ATTESTOR: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+        run: |
+          set -euo pipefail
+          test -n "${DEEPSEEK_API_KEY:-}" || { echo "DEEPSEEK_API_KEY secret is required"; exit 2; }
+          cargo run --quiet -p morn-app --bin dsh_acp_lifecycle_smoke | tee target/live-dsh-evidence/acp-lifecycle-smoke.json
+
+      - name: Export reusable RealRuntime evidence claim
+        if: inputs.operation == 'smoke-sdk'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, pathlib
+          report = json.loads(pathlib.Path("target/live-dsh-evidence/provider-smoke.json").read_text(encoding="utf-8"))
+          if report.get("status") != "PASS":
+              raise SystemExit("provider smoke did not PASS; refusing to export a proven claim")
+          claim = report.get("evidence_claim")
+          if not isinstance(claim, dict):
+              raise SystemExit("provider smoke PASS is missing evidence_claim")
+          pathlib.Path("target/live-dsh-evidence/real-runtime-evidence-claim.json").write_text(
+              json.dumps(claim, indent=2), encoding="utf-8"
+          )
+          PY
+
+      - name: Remove live DSH runtime, session and attestation material
+        if: always() && startsWith(inputs.operation, 'smoke-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf \
+            "${MORN_DSH_WORKSPACE:-}" \
+            "${MORN_DSH_HOME:-}" \
+            "${MORN_DSH_ACP_WORKSPACE:-}" \
+            "${MORN_DSH_ACP_HOME:-}" \
+            "$RUNNER_TEMP/morn-dsh-dist-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "$RUNNER_TEMP/morn-dsh-venv-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -f "${MORN_EXECUTION_ATTESTATION_FILE:-}"
+
+      - name: Upload evidence reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-dsh-evidence-${{ github.sha }}-${{ inputs.operation }}-${{ github.run_attempt }}
+          path: target/live-dsh-evidence
+          if-no-files-found: warn
+          retention-days: 30

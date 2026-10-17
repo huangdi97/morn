@@ -1,9 +1,12 @@
 name: CI
 
 on:
+  # Active feature heads are verified through their PR. Avoid duplicate
+  # push+pull_request builds for the same SHA (and mutual cancellations).
   push:
-    branches: [main, morn-v1, "**"]
+    branches: [main, morn-v1]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -17,11 +20,15 @@ jobs:
     name: Backend (fmt / clippy / tests / zero-domain)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Audit privileged live-evidence workflows
+        run: python3 scripts/audit_privileged_workflows.py
+      - name: Audit external evidence entrypoints
+        run: python3 scripts/audit_external_evidence_entrypoints.py
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - name: No UTF-8 BOM in tracked text files
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check_no_bom.ps1
@@ -29,7 +36,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -39,6 +46,10 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Cargo.lock matches manifests (full dependency resolution)
+        run: |
+          cargo metadata --locked --format-version 1 > /dev/null
+          git diff --exit-code -- Cargo.lock
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
       - name: cargo clippy (-D warnings)
@@ -64,6 +75,22 @@ jobs:
           }
           Write-Host "CLI smoke OK"
 
+  composition-runtime:
+    name: Composition runtime (Cordis)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: runtime/cordis-host
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Install exact-pinned Cordis host
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: npm run smoke
+
   frontend:
     name: Frontend (typecheck / lint / test / build)
     runs-on: ubuntu-latest
@@ -71,8 +98,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -87,10 +114,10 @@ jobs:
     name: E2E (server + BioLab + Playwright UI smoke)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -138,7 +165,39 @@ jobs:
             if curl -fsS -o /dev/null http://127.0.0.1:5173/ 2>/dev/null; then break; fi
             sleep 1
           done
+          export UI_SCREENSHOT_DIR="$PWD/../artifacts/ci-ui-screenshots"
           node scripts/ui_smoke.mjs
+          node scripts/ui_state_evidence.mjs
+      - name: Zero-domain runtime smoke (no domain packs)
+        run: |
+          set -euo pipefail
+          cargo build -p morn-app --bin server
+          export MORN_DB="$PWD/target/ci_zero_domain.db" MORN_PORT=8090
+          ./target/debug/server &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8090/api/health 2>/dev/null | grep -q '"status":"ok"'; then break; fi
+            sleep 1
+          done
+          cd frontend
+          npx vite --host 127.0.0.1 --port 5173 --strictPort &
+          VITE_PID=$!
+          trap 'kill $VITE_PID $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:5173/ 2>/dev/null; then break; fi
+            sleep 1
+          done
+          export UI_SCREENSHOT_DIR="$PWD/../artifacts/ci-ui-screenshots"
+          node scripts/ui_zero_domain.mjs
+      - name: Upload four-surface visual evidence (fixture only)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: morn-ui-reference-${{ github.sha }}
+          path: artifacts/ci-ui-screenshots
+          if-no-files-found: warn
+          retention-days: 14
 
   desktop:
     name: Desktop (Tauri build)
@@ -147,10 +206,10 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -161,3 +220,34 @@ jobs:
         shell: pwsh
         working-directory: .
         run: cargo build -p morn-desktop
+      - name: Build Windows reference backend
+        shell: pwsh
+        working-directory: .
+        run: cargo build -p morn-app --bin server --all-features
+      - name: Desktop owned-backend lifecycle smoke
+        shell: pwsh
+        working-directory: .
+        run: |
+          & ./target/debug/morn-desktop.exe --probe-sidecar
+          if ($LASTEXITCODE -ne 0) { throw "desktop sidecar lifecycle probe failed" }
+      - name: Desktop foreign-port and protocol-mismatch fail-closed probe
+        shell: pwsh
+        working-directory: .
+        run: |
+          & ./target/debug/morn-desktop.exe --probe-foreign-port
+          if ($LASTEXITCODE -ne 0) { throw "desktop foreign-port fail-closed probe failed" }
+      - name: Desktop single-instance lock probe
+        shell: pwsh
+        working-directory: .
+        run: |
+          & ./target/debug/morn-desktop.exe --probe-instance-lock
+          if ($LASTEXITCODE -ne 0) { throw "desktop single-instance lock probe failed" }
+      - name: Publish unsigned Windows reference bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: morn-windows-reference-${{ github.sha }}
+          path: |
+            target/debug/morn-desktop.exe
+            target/debug/server.exe
+          if-no-files-found: error
+          retention-days: 14

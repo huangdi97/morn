@@ -1,0 +1,367 @@
+name: Live Pi evidence (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Plan a reproducible Pi identity, or run an authenticated E0 smoke"
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - smoke
+      runtime_version:
+        description: "Exact Pi release version (checked out as v<version>)"
+        type: string
+        required: true
+      runtime_digest:
+        description: "For smoke: expected installed-tree digest sha256:<64-lowercase-hex>; plan may leave blank"
+        type: string
+        required: false
+        default: ""
+      execution_environment_ref:
+        description: "Deployment-owned execution environment ref"
+        type: string
+        required: true
+      provider:
+        description: "Exact Pi provider route"
+        type: string
+        required: true
+      model:
+        description: "Exact Pi model route"
+        type: string
+        required: true
+      credential_env_name:
+        description: "Provider credential variable exposed only to the smoke process"
+        type: string
+        required: true
+        default: "ANTHROPIC_API_KEY"
+      base_url_env_name:
+        description: "Optional provider base-URL variable; blank means none"
+        type: string
+        required: false
+        default: ""
+      acknowledge_e0_only:
+        description: "Required for smoke: this proves E0 executor evidence only"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-pi-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pi-evidence:
+    name: Pi ${{ inputs.operation }}
+    environment: morn-live-provider
+    runs-on: ${{ inputs.operation == 'smoke' && 'morn-attested-provider' || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    env:
+      INPUT_OPERATION: ${{ inputs.operation }}
+      INPUT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      INPUT_RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
+      INPUT_CREDENTIAL_ENV: ${{ inputs.credential_env_name }}
+      INPUT_BASE_URL_ENV: ${{ inputs.base_url_env_name }}
+      INPUT_ACK_E0: ${{ inputs.acknowledge_e0_only }}
+      INPUT_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
+      MORN_PI_EXECUTION_ENVIRONMENT_REF: ${{ inputs.execution_environment_ref }}
+      MORN_PI_PROVIDER: ${{ inputs.provider }}
+      MORN_PI_MODEL: ${{ inputs.model }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact Pi release metadata
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: earendil-works/pi
+          ref: v${{ inputs.runtime_version }}
+          path: target/pi-release
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.19.0"
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$INPUT_RUNTIME_VERSION" in
+            *[!A-Za-z0-9._+-]*|"") echo "runtime_version contains unsupported characters"; exit 2 ;;
+          esac
+          if [[ -n "$INPUT_RUNTIME_DIGEST" && ! "$INPUT_RUNTIME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "runtime_digest must be canonical sha256:<64-lowercase-hex>"
+            exit 2
+          fi
+          if [[ "$INPUT_OPERATION" == "smoke" && ! "$INPUT_RUNTIME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "smoke requires runtime_digest"
+            exit 2
+          fi
+          if [[ "$INPUT_OPERATION" == "smoke" && "$INPUT_ACK_E0" != "true" ]]; then
+            echo "authenticated smoke requires acknowledge_e0_only=true"
+            exit 2
+          fi
+          if [[ ! "$INPUT_CREDENTIAL_ENV" =~ ^[A-Z][A-Z0-9_]*_API_KEY$ ]]; then
+            echo "credential_env_name must be a dedicated *_API_KEY variable"
+            exit 2
+          fi
+          if [[ -n "$INPUT_BASE_URL_ENV" && ! "$INPUT_BASE_URL_ENV" =~ ^[A-Z][A-Z0-9_]*_(BASE_URL|API_URL)$ ]]; then
+            echo "base_url_env_name must be blank or a dedicated *_BASE_URL/*_API_URL variable"
+            exit 2
+          fi
+          pi_workspace="$RUNNER_TEMP/morn-pi-workspace-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [[ -e "$pi_workspace" || -L "$pi_workspace" ]]; then
+            echo "refusing to reuse pre-existing Pi live-evidence workspace: $pi_workspace"
+            exit 2
+          fi
+          mkdir -m 700 -p "$pi_workspace" target/live-pi-evidence
+          printf 'MORN_PI_WORKSPACE=%s\n' "$pi_workspace" >> "$GITHUB_ENV"
+
+      - name: Bind authenticated smoke to attested runner identity
+        if: inputs.operation == 'smoke'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, pathlib, stat
+
+          path = pathlib.Path("/etc/morn/execution-environment-ref")
+          if not path.exists():
+              raise SystemExit("attested smoke runner is missing /etc/morn/execution-environment-ref")
+          st = path.lstat()
+          if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+              raise SystemExit("runner execution-environment identity must be a regular non-symlink file")
+          if st.st_uid != 0:
+              raise SystemExit("runner execution-environment identity must be root-owned")
+          if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+              raise SystemExit("runner execution-environment identity must not be group/world writable")
+
+          actual = path.read_text(encoding="utf-8").strip()
+          expected = os.environ["INPUT_EXECUTION_ENVIRONMENT_REF"].strip()
+          if not actual or actual != expected:
+              raise SystemExit(
+                  f"runner execution environment mismatch: expected {expected!r}, runner attests {actual!r}"
+              )
+
+          report = {
+              "gate": "MORN_ATTESTED_RUNNER_BINDING",
+              "status": "PASS",
+              "execution_environment_ref": actual,
+              "runner_name": os.environ.get("RUNNER_NAME"),
+              "runner_os": os.environ.get("RUNNER_OS"),
+              "runner_arch": os.environ.get("RUNNER_ARCH"),
+              "github_run_id": os.environ.get("GITHUB_RUN_ID"),
+              "github_sha": os.environ.get("GITHUB_SHA"),
+              "claims": {
+                  "runner_identity_bound": True,
+                  "live_provider": False,
+                  "canonical_work_outcome": False,
+                  "customer_acceptance": False,
+                  "production_write": False,
+              },
+          }
+          out = pathlib.Path("target/live-pi-evidence/runner-binding.json")
+          out.write_text(json.dumps(report, indent=2), encoding="utf-8")
+          PY
+
+      - name: Materialize exact locked Pi runtime and derive installed-tree identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_lock="$GITHUB_WORKSPACE/target/pi-release/packages/coding-agent/install-lock"
+          export PI_SOURCE_COMMIT="$(git -C "$GITHUB_WORKSPACE/target/pi-release" rev-parse HEAD)"
+          install_root="$RUNNER_TEMP/morn-pi-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$install_root"
+          cp "$source_lock/package.json" "$install_root/package.json"
+          cp "$source_lock/package-lock.json" "$install_root/package-lock.json"
+
+          python - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / f"morn-pi-runtime-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+          package = json.loads((root / "package.json").read_text(encoding="utf-8"))
+          expected = os.environ["INPUT_RUNTIME_VERSION"]
+          if package.get("version") != expected:
+              raise SystemExit(f"Pi install-lock version mismatch: expected {expected}, got {package.get('version')}")
+          dep = (package.get("dependencies") or {}).get("@earendil-works/pi-coding-agent")
+          if dep != expected:
+              raise SystemExit(f"Pi coding-agent pin mismatch: expected {expected}, got {dep}")
+          PY
+
+          npm ci --prefix "$install_root" --ignore-scripts --no-audit --no-fund
+
+          python - <<'PY'
+          import hashlib, json, os, pathlib, stat
+
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / f"morn-pi-runtime-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+          root_real = root.resolve()
+          hasher = hashlib.sha256()
+          entries = [root / "package.json", root / "package-lock.json"]
+          entries.extend(sorted((root / "node_modules").rglob("*"), key=lambda p: p.relative_to(root).as_posix()))
+          file_count = 0
+          link_count = 0
+          for path in entries:
+              rel = path.relative_to(root).as_posix()
+              if path.is_symlink():
+                  payload = os.readlink(path)
+                  resolved = (path.parent / payload).resolve()
+                  try:
+                      resolved.relative_to(root_real)
+                  except ValueError:
+                      raise SystemExit(f"Pi runtime symlink escapes isolated root: {rel} -> {payload}")
+                  mode = stat.S_IMODE(path.lstat().st_mode)
+                  record = f"L\0{rel}\0{mode:o}\0{payload}\n".encode()
+                  link_count += 1
+              elif path.is_file():
+                  data_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+                  mode = stat.S_IMODE(path.stat().st_mode)
+                  record = f"F\0{rel}\0{mode:o}\0{data_hash}\n".encode()
+                  file_count += 1
+              else:
+                  continue
+              hasher.update(record)
+
+          digest = "sha256:" + hasher.hexdigest()
+          requested = os.environ.get("INPUT_RUNTIME_DIGEST", "")
+          if requested and digest != requested:
+              raise SystemExit(f"Pi installed-tree digest mismatch: expected {requested}, actual {digest}")
+
+          version = os.environ["INPUT_RUNTIME_VERSION"]
+          report = {
+              "gate": "MORN_PI_RUNTIME_CLOSURE_VERIFY",
+              "status": "PASS",
+              "package": "@earendil-works/pi-coding-agent",
+              "version": version,
+              "digest": digest,
+              "canonical_identity": f"pi@{version}#{digest}",
+              "file_count": file_count,
+              "symlink_count": link_count,
+              "source": f"earendil-works/pi@{os.environ['PI_SOURCE_COMMIT']}:packages/coding-agent/install-lock",
+              "claims": {
+                  "installed_runtime_closure_verified": True,
+                  "live_provider": False,
+                  "canonical_work_outcome": False,
+                  "customer_acceptance": False,
+                  "production_write": False,
+              },
+          }
+          pathlib.Path("target/live-pi-evidence/runtime-closure-verification.json").write_text(
+              json.dumps(report, indent=2), encoding="utf-8"
+          )
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"MORN_PI_RUNTIME_DIGEST={digest}\n")
+              fh.write(f"MORN_PI_RUNTIME_VERSION={version}\n")
+              fh.write(f"MORN_PI_COMMAND={root / 'node_modules' / '.bin' / 'pi'}\n")
+          PY
+
+
+      - name: Emit secret-free deployment identity plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run --quiet -p morn-app --bin pi_identity_plan | tee target/live-pi-evidence/identity-plan.json
+
+      - name: Stop after planning
+        if: inputs.operation == 'plan'
+        shell: bash
+        run: |
+          echo "Pi identity planning completed. No model credential was exposed and no provider turn was run."
+
+      - name: Materialize deployment attestation
+        if: inputs.operation == 'smoke'
+        shell: bash
+        env:
+          EXECUTION_ATTESTATION_JSON: ${{ secrets.MORN_EXECUTION_ATTESTATION_JSON }}
+        run: |
+          set -euo pipefail
+          test -n "${EXECUTION_ATTESTATION_JSON:-}" || { echo "MORN_EXECUTION_ATTESTATION_JSON is required"; exit 2; }
+          python - <<'PY'
+          import json, os, pathlib
+          parsed = json.loads(os.environ["EXECUTION_ATTESTATION_JSON"])
+          if not isinstance(parsed, (list, dict)):
+              raise SystemExit("execution attestation secret must be a JSON object or array")
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / f"morn-pi-execution-attestations-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}.json"
+          path.write_text(json.dumps(parsed, separators=(",", ":")), encoding="utf-8")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"MORN_EXECUTION_ATTESTATION_FILE={path}\n")
+          PY
+
+      - name: Run authenticated Pi provider smoke (E0 only)
+        if: inputs.operation == 'smoke'
+        shell: bash
+        env:
+          MORN_PI_MODE: real
+          MORN_PROVIDER_SMOKE_PROVIDER: pi
+          MORN_EXECUTION_ATTESTOR: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
+          MORN_EVIDENCE_ISSUER: ${{ secrets.MORN_EXECUTION_ATTESTOR }}
+          PROVIDER_API_KEY: ${{ secrets.MORN_PI_PROVIDER_API_KEY }}
+          PROVIDER_BASE_URL: ${{ secrets.MORN_PI_PROVIDER_BASE_URL }}
+        run: |
+          set -euo pipefail
+          test -n "${MORN_EXECUTION_ATTESTOR:-}" || { echo "MORN_EXECUTION_ATTESTOR secret is required"; exit 2; }
+          actual_version="$("$MORN_PI_COMMAND" --version | tr -d '\r\n')"
+          test "$actual_version" = "$MORN_PI_RUNTIME_VERSION" || {
+            echo "Pi executable version mismatch: expected $MORN_PI_RUNTIME_VERSION, actual $actual_version"
+            exit 2
+          }
+          test -n "${PROVIDER_API_KEY:-}" || { echo "MORN_PI_PROVIDER_API_KEY secret is required"; exit 2; }
+          export "$INPUT_CREDENTIAL_ENV=$PROVIDER_API_KEY"
+          passthrough="$INPUT_CREDENTIAL_ENV"
+          if [[ -n "$INPUT_BASE_URL_ENV" && -n "${PROVIDER_BASE_URL:-}" ]]; then
+            export "$INPUT_BASE_URL_ENV=$PROVIDER_BASE_URL"
+            passthrough="$passthrough,$INPUT_BASE_URL_ENV"
+          fi
+          export MORN_PI_ENV_PASSTHROUGH="$passthrough"
+          cargo run --quiet -p morn-app --bin provider_smoke | tee target/live-pi-evidence/provider-smoke.json
+
+      - name: Export reusable RealRuntime evidence claim
+        if: inputs.operation == 'smoke'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, pathlib
+          report = json.loads(pathlib.Path("target/live-pi-evidence/provider-smoke.json").read_text(encoding="utf-8"))
+          if report.get("status") != "PASS":
+              raise SystemExit("provider smoke did not PASS; refusing to export a proven claim")
+          claim = report.get("evidence_claim")
+          if not isinstance(claim, dict):
+              raise SystemExit("provider smoke PASS is missing evidence_claim")
+          pathlib.Path("target/live-pi-evidence/real-runtime-evidence-claim.json").write_text(
+              json.dumps(claim, indent=2), encoding="utf-8"
+          )
+          PY
+
+      - name: Remove live Pi runtime, workspace and attestation material
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf \
+            "${MORN_PI_WORKSPACE:-}" \
+            "$RUNNER_TEMP/morn-pi-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -f "${MORN_EXECUTION_ATTESTATION_FILE:-}"
+
+      - name: Upload evidence reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-pi-evidence-${{ github.sha }}-${{ inputs.operation }}-${{ github.run_attempt }}
+          path: target/live-pi-evidence
+          if-no-files-found: warn
+          retention-days: 30

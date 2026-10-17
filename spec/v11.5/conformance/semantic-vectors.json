@@ -1,0 +1,174 @@
+{
+  "schema": "morn.conformance-vectors/v11.5",
+  "protocol": "11.5.0",
+  "vectors": [
+    {
+      "id": "work-truth-independent-of-executor",
+      "required": true,
+      "given": [
+        "Work exists with active binding",
+        "executor session terminates unexpectedly"
+      ],
+      "when": "runtime/harness session disappears",
+      "then": [
+        "Work remains addressable",
+        "Work state is not rewritten to Accepted",
+        "replacement executor requires explicit binding/migration"
+      ]
+    },
+    {
+      "id": "workflow-runtime-not-work-truth",
+      "required": true,
+      "given": [
+        "durable workflow reports Completed"
+      ],
+      "when": "no source-grounded Outcome and no AcceptanceDecision exist",
+      "then": [
+        "Work must not become Accepted",
+        "workflow completion may be retained as executor evidence"
+      ]
+    },
+    {
+      "id": "active-binding-pinned",
+      "required": true,
+      "given": [
+        "Attempt A starts under Binding B1",
+        "provider B1 disappears",
+        "provider B2 becomes available"
+      ],
+      "when": "controller recovers the Work",
+      "then": [
+        "Attempt A still references B1",
+        "B2 requires a new binding",
+        "no in-place provider mutation occurs"
+      ]
+    },
+    {
+      "id": "profile-effect-gate-before-dispatch",
+      "required": true,
+      "given": [
+        "readonly profile forbids ProductionWrite",
+        "capability proposes an external write"
+      ],
+      "when": "dispatch is requested",
+      "then": [
+        "dispatch is denied before connector invocation",
+        "denial is evidence/audit visible"
+      ]
+    },
+    {
+      "id": "authority-before-restricted-effect",
+      "required": true,
+      "given": [
+        "restricted external action",
+        "no valid authority decision"
+      ],
+      "when": "dispatch is requested",
+      "then": [
+        "dispatch is denied",
+        "tool metadata or agent self-claim cannot satisfy authority"
+      ]
+    },
+    {
+      "id": "proposal-execution-receipt-outcome-acceptance-distinct",
+      "required": true,
+      "given": [
+        "executor completes",
+        "external connector returns success"
+      ],
+      "when": "no independent outcome observation or acceptance exists",
+      "then": [
+        "executor completion is not Outcome",
+        "external receipt is not Acceptance",
+        "records retain distinct identities"
+      ]
+    },
+    {
+      "id": "unknown-requires-reconciliation",
+      "required": true,
+      "given": [
+        "external server commits",
+        "client times out before receiving response"
+      ],
+      "when": "Attempt result is ambiguous",
+      "then": [
+        "Attempt becomes OutcomeUnknown/Reconciliation state",
+        "same action is not blindly redispatched",
+        "source-of-truth query can resolve existing external reference"
+      ]
+    },
+    {
+      "id": "compiler-not-qualification",
+      "required": true,
+      "given": [
+        "Artifact2Capability compiler emits candidate"
+      ],
+      "when": "candidate has no independent evaluation",
+      "then": [
+        "stage remains Declared/Observed at most",
+        "candidate cannot be site-admitted"
+      ]
+    },
+    {
+      "id": "qualification-not-admission",
+      "required": true,
+      "given": [
+        "capability is Qualified"
+      ],
+      "when": "site/profile admission is absent",
+      "then": [
+        "resolver for that site/profile does not treat it as admitted"
+      ]
+    },
+    {
+      "id": "profile-version-pinned",
+      "required": true,
+      "given": [
+        "Work/Binding starts under profile P@1",
+        "profile P@2 is published"
+      ],
+      "when": "Work continues",
+      "then": [
+        "existing binding remains interpreted under P@1",
+        "migration to P@2 requires explicit reevaluation/new binding"
+      ]
+    },
+    {
+      "id": "history-no-silent-rewrite",
+      "required": true,
+      "given": [
+        "historical fact F1 contributed to a decision",
+        "later correction F2 arrives"
+      ],
+      "when": "current projection changes",
+      "then": [
+        "F1 remains historically addressable or explicitly redacted",
+        "F2 supersedes/retracts F1 explicitly",
+        "past decision context remains explainable"
+      ]
+    },
+    {
+      "id": "profile-guarantees-not-provider-names",
+      "required": true,
+      "given": [
+        "two provider compositions satisfy the same guarantees"
+      ],
+      "when": "profile conformance is evaluated",
+      "then": [
+        "provider brand/name alone does not change conformance"
+      ]
+    },
+    {
+      "id": "evidence-class-explicit",
+      "required": true,
+      "given": [
+        "fixture E2E and CI pass"
+      ],
+      "when": "status is reported",
+      "then": [
+        "engineering/CI evidence may be PASS",
+        "site/customer/shadow/production evidence remains external-blocked unless independently obtained"
+      ]
+    }
+  ]
+}

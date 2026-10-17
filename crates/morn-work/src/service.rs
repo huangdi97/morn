@@ -13,12 +13,54 @@ use crate::checkpoint::Checkpoint;
 use crate::recovery::RecoveryRecord;
 use crate::work_package::WorkPackage;
 
-/// Evidence submitted when trying to accept a WorkPackage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationWitness {
+    pub work_package_id: WorkPackageId,
+    pub evidence_ref: String,
+}
+
+impl VerificationWitness {
+    pub fn new(work_package_id: WorkPackageId, evidence_ref: impl Into<String>) -> Self {
+        Self {
+            work_package_id,
+            evidence_ref: evidence_ref.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AcceptanceApprovalWitness {
+    pub work_package_id: WorkPackageId,
+    pub principal_ref: String,
+    pub role: String,
+    pub evidence_ref: String,
+}
+
+impl AcceptanceApprovalWitness {
+    pub fn new(
+        work_package_id: WorkPackageId,
+        principal_ref: impl Into<String>,
+        role: impl Into<String>,
+        evidence_ref: impl Into<String>,
+    ) -> Self {
+        Self {
+            work_package_id,
+            principal_ref: principal_ref.into(),
+            role: role.into(),
+            evidence_ref: evidence_ref.into(),
+        }
+    }
+}
+
+/// Evidence submitted when trying to accept a legacy WorkPackage.
+///
+/// Canonical v11.5 Work uses AcceptanceDecision; this legacy path still
+/// requires Work-bound witness references rather than caller-supplied booleans.
 #[derive(Debug, Clone, Default)]
 pub struct AcceptanceEvidence {
     pub produced_artifacts: Vec<String>,
-    pub verification_passed: bool,
-    pub required_approvals: Vec<String>,
+    pub verification_witnesses: Vec<VerificationWitness>,
+    pub approval_witnesses: Vec<AcceptanceApprovalWitness>,
     pub forbidden_condition_hit: Option<String>,
 }
 
@@ -58,60 +100,87 @@ impl WorkService {
             .work_packages
             .get_mut(id)
             .ok_or_else(|| Error::not_found(format!("work package {id}")))?;
+        let current = wp.status;
+        if current == status {
+            return Ok(());
+        }
+        if matches!(status, WorkStatus::Accepted | WorkStatus::Rejected) {
+            return Err(Error::invalid_state(
+                "Accepted/Rejected require the dedicated acceptance decision path",
+            ));
+        }
+        if matches!(
+            current,
+            WorkStatus::Accepted | WorkStatus::Rejected | WorkStatus::Cancelled
+        ) {
+            return Err(Error::invalid_state(
+                "terminal WorkPackage status cannot be reopened",
+            ));
+        }
+        let allowed = matches!(
+            (current, status),
+            (WorkStatus::Proposed, WorkStatus::Planned)
+                | (WorkStatus::Proposed, WorkStatus::InProgress)
+                | (WorkStatus::Proposed, WorkStatus::Blocked)
+                | (WorkStatus::Proposed, WorkStatus::Cancelled)
+                | (WorkStatus::Planned, WorkStatus::InProgress)
+                | (WorkStatus::Planned, WorkStatus::Blocked)
+                | (WorkStatus::Planned, WorkStatus::Cancelled)
+                | (WorkStatus::InProgress, WorkStatus::WaitingApproval)
+                | (WorkStatus::InProgress, WorkStatus::Blocked)
+                | (WorkStatus::InProgress, WorkStatus::Completed)
+                | (WorkStatus::InProgress, WorkStatus::Cancelled)
+                | (WorkStatus::WaitingApproval, WorkStatus::InProgress)
+                | (WorkStatus::WaitingApproval, WorkStatus::Blocked)
+                | (WorkStatus::WaitingApproval, WorkStatus::Completed)
+                | (WorkStatus::WaitingApproval, WorkStatus::Cancelled)
+                | (WorkStatus::Blocked, WorkStatus::Planned)
+                | (WorkStatus::Blocked, WorkStatus::InProgress)
+                | (WorkStatus::Blocked, WorkStatus::Cancelled)
+                | (WorkStatus::Completed, WorkStatus::WaitingApproval)
+                | (WorkStatus::Completed, WorkStatus::Cancelled)
+        );
+        if !allowed {
+            return Err(Error::invalid_state(format!(
+                "invalid WorkPackage status transition {current:?} -> {status:?}"
+            )));
+        }
         wp.status = status;
         Ok(())
     }
 
-    /// Attempt to accept a WorkPackage. Without an AcceptanceSpec this always fails.
+    /// Legacy WorkPackage compatibility boundary.
+    ///
+    /// v11.5 intentionally has one final acceptance truth model:
+    /// `AcceptanceDecision` over persisted, source-grounded outcomes plus
+    /// reviewer attestation and one-shot review authorization. Caller-built
+    /// legacy witnesses therefore cannot promote a WorkPackage to Accepted.
     pub fn attempt_accept(
         &mut self,
         id: &WorkPackageId,
-        evidence: &AcceptanceEvidence,
+        _evidence: &AcceptanceEvidence,
     ) -> Result<WorkStatus> {
         let wp = self
             .work_packages
             .get(id)
             .ok_or_else(|| Error::not_found(format!("work package {id}")))?;
-        let spec_id = wp.acceptance_spec_id.clone().ok_or_else(|| {
-            Error::validation(format!(
-                "work package {id} has no AcceptanceSpec and cannot be accepted"
-            ))
-        })?;
-        let spec = self
-            .acceptance_specs
-            .get(&spec_id)
-            .ok_or_else(|| Error::not_found(format!("acceptance spec {spec_id}")))?;
-
-        // Every required artifact must have been produced.
-        for required in &spec.required_artifacts {
-            if !evidence.produced_artifacts.iter().any(|a| a == required) {
-                return Err(Error::validation(format!(
-                    "acceptance requires artifact {required:?} which was not produced"
-                )));
-            }
-        }
-        if !evidence.verification_passed {
-            return Err(Error::validation(
-                "acceptance requires verification to pass",
-            ));
-        }
-        if spec.human_approval_required && evidence.required_approvals.is_empty() {
-            return Err(Error::validation(
-                "acceptance requires human approval which is missing",
-            ));
-        }
-        if let Some(forbidden) = &evidence.forbidden_condition_hit {
-            return Err(Error::validation(format!(
-                "forbidden condition hit during work: {forbidden}"
+        if !matches!(
+            wp.status,
+            WorkStatus::Completed | WorkStatus::WaitingApproval
+        ) {
+            return Err(Error::invalid_state(format!(
+                "work package {id} must be Completed/WaitingApproval before canonical acceptance, got {:?}",
+                wp.status
             )));
         }
-
-        let wp = self
-            .work_packages
-            .get_mut(id)
-            .ok_or_else(|| Error::not_found(format!("work package {id}")))?;
-        wp.status = WorkStatus::Accepted;
-        Ok(wp.status)
+        if wp.acceptance_spec_id.is_none() {
+            return Err(Error::validation(format!(
+                "work package {id} has no AcceptanceSpec and cannot enter canonical acceptance"
+            )));
+        }
+        Err(Error::invalid_state(
+            "legacy WorkPackage witnesses cannot create Accepted state; use canonical v11.5 AcceptanceDecision with persisted Outcome and review authority",
+        ))
     }
 }
 
@@ -221,7 +290,6 @@ mod tests {
     use super::*;
     use crate::acceptance::AcceptanceSpec;
     use crate::attention::AttentionKind;
-    use crate::execution_mode::{ExecutionMode, ExecutorType};
     use morn_kernel::ids::{PrincipalId, WorkspaceId};
 
     #[test]
@@ -237,35 +305,59 @@ mod tests {
     }
 
     #[test]
-    fn work_with_satisfied_acceptance_can_be_accepted() {
+    fn legacy_witnesses_cannot_promote_completed_work_to_accepted() {
         let mut svc = WorkService::new();
         let ws = WorkspaceId::generate();
         let owner = PrincipalId::generate();
-        let spec = AcceptanceSpec::new("biolab claim")
+        let spec = AcceptanceSpec::new("legacy compatibility")
             .with_required_artifacts(vec!["analysis".to_string()])
             .with_human_approval(true);
         let spec_id = spec.id.clone();
         svc.add_acceptance_spec(spec);
-        let wp = WorkPackage::new(ws, "dataset to reviewed claim", owner)
-            .with_acceptance_spec(spec_id)
-            .with_execution_mode(ExecutionMode::hybrid(
-                vec![crate::execution_mode::WorkNature::Probabilistic],
-                vec![ExecutorType::Actor, ExecutorType::Human],
-            ));
+        let wp =
+            WorkPackage::new(ws, "dataset to reviewed claim", owner).with_acceptance_spec(spec_id);
         let wp_id = wp.id.clone();
         svc.add_work_package(wp);
-        let status = svc
-            .attempt_accept(
-                &wp_id,
-                &AcceptanceEvidence {
-                    produced_artifacts: vec!["analysis".to_string()],
-                    verification_passed: true,
-                    required_approvals: vec!["pi".to_string()],
-                    forbidden_condition_hit: None,
-                },
-            )
-            .unwrap();
-        assert_eq!(status, WorkStatus::Accepted);
+        svc.update_status(&wp_id, WorkStatus::InProgress).unwrap();
+        svc.update_status(&wp_id, WorkStatus::Completed).unwrap();
+
+        let evidence = AcceptanceEvidence {
+            produced_artifacts: vec!["analysis".to_string()],
+            verification_witnesses: vec![VerificationWitness::new(
+                wp_id.clone(),
+                "world-snapshot://fixture",
+            )],
+            approval_witnesses: vec![AcceptanceApprovalWitness::new(
+                wp_id.clone(),
+                "principal://reviewer",
+                "reviewer",
+                "approval://fixture",
+            )],
+            forbidden_condition_hit: None,
+        };
+        let err = svc.attempt_accept(&wp_id, &evidence).unwrap_err();
+        assert!(err.to_string().contains("AcceptanceDecision"));
+        assert_eq!(
+            svc.work_package(&wp_id).unwrap().status,
+            WorkStatus::Completed
+        );
+    }
+
+    #[test]
+    fn generic_status_update_cannot_bypass_acceptance_or_reopen_terminal_work() {
+        let mut svc = WorkService::new();
+        let ws = WorkspaceId::generate();
+        let owner = PrincipalId::generate();
+        let wp = WorkPackage::new(ws, "guard transitions", owner);
+        let id = wp.id.clone();
+        svc.add_work_package(wp);
+
+        assert!(svc.update_status(&id, WorkStatus::Accepted).is_err());
+        assert!(svc.update_status(&id, WorkStatus::Rejected).is_err());
+        svc.update_status(&id, WorkStatus::InProgress).unwrap();
+        assert!(svc.update_status(&id, WorkStatus::Proposed).is_err());
+        svc.update_status(&id, WorkStatus::Cancelled).unwrap();
+        assert!(svc.update_status(&id, WorkStatus::InProgress).is_err());
     }
 
     #[test]
