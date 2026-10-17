@@ -511,7 +511,8 @@ impl WorkProgressController {
                 }
                 let attested_outcome =
                     grounded_outcome.filter(|outcome| outcome.is_attested_source_grounded());
-                let independently_witnessed = !acceptance.evidence_refs.is_empty()
+                let independently_witnessed = acceptance.has_review_authority_refs()
+                    && !acceptance.evidence_refs.is_empty()
                     && !acceptance.acting_role.trim().is_empty()
                     && !acceptance.reason.trim().is_empty();
                 let final_acceptance = acceptance.is_final_acceptance()
