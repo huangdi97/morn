@@ -8069,16 +8069,15 @@ mod workspace_boundary_tests {
                 "review-auth-value-42",
             );
             ControlPlaneStore::save_acceptance_decision(&guard.store, &work, &acceptance).unwrap();
-            let terminal =
-                morn_control_plane::DurableBusinessEvidenceControllerRuntime::new(
-                    "api-value-test-business-projection",
-                )
-                .reconcile_from_persisted_business_evidence(
-                    &guard.store,
-                    work.id.as_str(),
-                    morn_kernel::time::Timestamp::now(),
-                )
-                .unwrap();
+            let terminal = morn_control_plane::DurableBusinessEvidenceControllerRuntime::new(
+                "api-value-test-business-projection",
+            )
+            .reconcile_from_persisted_business_evidence(
+                &guard.store,
+                work.id.as_str(),
+                morn_kernel::time::Timestamp::now(),
+            )
+            .unwrap();
             assert_eq!(terminal.next_phase, WorkPhase::Accepted);
             work = guard
                 .store
