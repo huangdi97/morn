@@ -1927,7 +1927,10 @@ mod tests {
             .materialize_managed_runtime_home()
             .unwrap()
             .expect("production config owns a one-shot home");
-        assert!(runtime_home.starts_with(configured_home.join("morn-runtime-home")));
+        // `canonicalize` returns a verbatim path on Windows, so compare against
+        // the canonical configured root rather than the caller's spelling.
+        let canonical_configured_home = fs::canonicalize(&configured_home).unwrap();
+        assert!(runtime_home.starts_with(canonical_configured_home.join("morn-runtime-home")));
         assert!(!runtime_home.join("cordis.patch.yml").exists());
         assert!(runtime_home.read_dir().unwrap().next().is_none());
         fs::remove_dir_all(&runtime_home).unwrap();

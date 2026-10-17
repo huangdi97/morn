@@ -791,7 +791,12 @@ mod route_identity_tests {
     #[test]
     fn production_default_disables_all_pi_tool_surfaces() {
         let config = PiRpcConfig {
-            cwd: Some("/tmp/work".to_string()),
+            cwd: Some(
+                std::env::current_dir()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
             provider: Some("provider-a".to_string()),
             model: Some("model-a".to_string()),
             execution_environment_ref: Some("env://container/pi".to_string()),
@@ -830,7 +835,12 @@ mod route_identity_tests {
     #[test]
     fn real_pi_runtime_digest_has_one_canonical_lowercase_identity() {
         let mut config = PiRpcConfig {
-            cwd: Some("/tmp/work".to_string()),
+            cwd: Some(
+                std::env::current_dir()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
             provider: Some("provider-a".to_string()),
             model: Some("model-a".to_string()),
             execution_environment_ref: Some("env://container/pi".to_string()),
