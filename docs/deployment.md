@@ -56,6 +56,16 @@ still reference the Environment so the exact workflow/ref remains visible in
 deployment review. The privileged smoke/verify modes must never rely on an
 unprotected repository secret as a shortcut around Environment review.
 
+Secret exposure is step-scoped. Raw customer EvidenceClaim JSON and BioLab
+provenance JSON are injected only into the step that materializes their
+mode-0600 temporary files; setup/cache/checkout and artifact-upload actions do
+not receive those raw secret values through job-level environment variables.
+Live DSH/Pi workflows also remove their one-shot runtime homes/workspaces,
+provider session material and execution-attestation temp files in an
+`always()` cleanup step. On persistent self-hosted runners this workflow-level
+cleanup is mandatory defense-in-depth, not a substitute for runner-level
+ephemeral/clean-machine policy.
+
 The three privileged workflows also pin every referenced GitHub Action to a
 reviewed full commit SHA (with the human-readable release noted in repository
 history/docs), rather than trusting a moving major-version tag at execution

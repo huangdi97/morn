@@ -38,8 +38,6 @@ jobs:
       INPUT_EVIDENCE_CLASS: ${{ inputs.evidence_class }}
       INPUT_SITE_REF: ${{ inputs.site_ref }}
       INPUT_ACK_EXTERNAL: ${{ inputs.acknowledge_external_truth }}
-      EVIDENCE_CLAIM_JSON: ${{ secrets.MORN_CUSTOMER_EVIDENCE_CLAIM_JSON }}
-      TRUSTED_EVIDENCE_ISSUER: ${{ secrets.MORN_EVIDENCE_ISSUER }}
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -52,6 +50,9 @@ jobs:
 
       - name: Validate protected inputs
         shell: bash
+        env:
+          EVIDENCE_CLAIM_JSON: ${{ secrets.MORN_CUSTOMER_EVIDENCE_CLAIM_JSON }}
+          TRUSTED_EVIDENCE_ISSUER: ${{ secrets.MORN_EVIDENCE_ISSUER }}
         run: |
           set -euo pipefail
           if [[ "$INPUT_ACK_EXTERNAL" != "true" ]]; then

@@ -309,6 +309,11 @@ async function runCanonicalAcceptanceUiContract() {
       independent_acceptance: false,
     });
   });
+  await fixturePage.route("**/api/v115/work/assess-value", async (route) => {
+    fixtureErrors.push("canonical acceptance fixture: acceptance journey attempted to fabricate value evidence");
+    return json(route, { error: "value assessment is outside this acceptance-only contract" }, 400);
+  });
+
   await fixturePage.route("**/api/v115/work/review-outcome", async (route) => {
     const body = route.request().postDataJSON();
     if (
@@ -368,8 +373,8 @@ async function runCanonicalAcceptanceUiContract() {
     if (!accepted || !body.includes("Reference UI acceptance contract")) {
       fixtureErrors.push("canonical acceptance fixture: Accepted state was not projected back into Workbench");
     }
-    if (!body.includes("No value assessment is pinned to this Work generation")) {
-      fixtureErrors.push("canonical acceptance fixture: acceptance must not fabricate CustomerValidated value evidence");
+    if (!body.includes("Accepted outcome value")) {
+      fixtureErrors.push("canonical acceptance fixture: accepted Work did not expose the separate value-assessment stage");
     }
     if (screenshotsDir) {
       await fixturePage.screenshot({

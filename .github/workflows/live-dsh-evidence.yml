@@ -392,6 +392,19 @@ jobs:
           )
           PY
 
+      - name: Remove live DSH runtime, session and attestation material
+        if: always() && startsWith(inputs.operation, 'smoke-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf \
+            "${MORN_DSH_WORKSPACE:-}" \
+            "${MORN_DSH_HOME:-}" \
+            "${MORN_DSH_ACP_WORKSPACE:-}" \
+            "${MORN_DSH_ACP_HOME:-}" \
+            "$RUNNER_TEMP/morn-dsh-dist-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -f "${MORN_EXECUTION_ATTESTATION_FILE:-}"
+
       - name: Upload evidence reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -34,8 +34,6 @@ jobs:
       INPUT_DATASET_RELATIVE_PATH: ${{ inputs.dataset_relative_path }}
       INPUT_RUNNER_REF: ${{ inputs.runner_ref }}
       INPUT_ACK_BOUNDARY: ${{ inputs.acknowledge_boundary }}
-      PROVENANCE_JSON: ${{ secrets.MORN_BIOLAB_DATASET_PROVENANCE_JSON }}
-      TRUSTED_PROVENANCE_ISSUER: ${{ secrets.MORN_BIOLAB_DATASET_PROVENANCE_ISSUER }}
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -48,6 +46,9 @@ jobs:
 
       - name: Bind workflow to attested BioLab runner and exact dataset path
         shell: bash
+        env:
+          PROVENANCE_JSON: ${{ secrets.MORN_BIOLAB_DATASET_PROVENANCE_JSON }}
+          TRUSTED_PROVENANCE_ISSUER: ${{ secrets.MORN_BIOLAB_DATASET_PROVENANCE_ISSUER }}
         run: |
           set -euo pipefail
           if [[ "$INPUT_ACK_BOUNDARY" != "true" ]]; then
