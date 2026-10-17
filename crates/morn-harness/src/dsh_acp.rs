@@ -1233,9 +1233,12 @@ mod tests {
             "hello world"
         );
         assert!(
-            project_acp_notification_for_morn(updates[1].method.as_str(), updates[1].params.clone())
-                .unwrap()
-                .is_none(),
+            project_acp_notification_for_morn(
+                updates[1].method.as_str(),
+                updates[1].params.clone()
+            )
+            .unwrap()
+            .is_none(),
             "private ACP thought chunks must be discarded before buffering"
         );
         let visible = project_acp_notification_for_morn(
@@ -1244,10 +1247,7 @@ mod tests {
         )
         .unwrap()
         .expect("visible assistant message remains available");
-        assert_eq!(
-            assistant_text_from_acp_updates(&[visible], "a"),
-            "hello "
-        );
+        assert_eq!(assistant_text_from_acp_updates(&[visible], "a"), "hello ");
     }
 
     #[test]

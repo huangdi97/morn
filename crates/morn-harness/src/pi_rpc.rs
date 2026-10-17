@@ -1013,12 +1013,11 @@ mod tests {
             "toolResults":[{"content":"secret result"}]
         }))
         .unwrap();
-        assert!(
-            turn.payload
-                .get("toolResults")
-                .and_then(Value::as_array)
-                .is_some_and(|results| !results.is_empty())
-        );
+        assert!(turn
+            .payload
+            .get("toolResults")
+            .and_then(Value::as_array)
+            .is_some_and(|results| !results.is_empty()));
         let turn_json = serde_json::to_string(&turn.payload).unwrap();
         assert!(!turn_json.contains("private final transcript"));
         assert!(!turn_json.contains("secret result"));
