@@ -47,6 +47,24 @@ pub const DSH_SDK_SERVER_NAME: &str = "deepseek-harness-sdk-runtime";
 /// new wire version until this adapter is explicitly re-qualified.
 pub const DSH_SDK_WIRE_VERSION: &str = "0.0.1";
 
+/// Exact DeepSeek Harness distribution qualified against this adapter.
+///
+/// The SDK wire is pre-release and serverInfo.version does not prove the
+/// distribution/event semantics. A future DSH package must therefore be
+/// explicitly re-qualified before live Morn execution can use it, even if it
+/// retains the same JSON-RPC wire version.
+pub const DSH_QUALIFIED_DISTRIBUTION_VERSION: &str = "0.2.1-rc.2";
+
+pub(crate) fn validate_qualified_dsh_distribution_version(version: &str) -> Result<()> {
+    if version == DSH_QUALIFIED_DISTRIBUTION_VERSION {
+        Ok(())
+    } else {
+        Err(Error::validation(format!(
+            "DSH distribution {version:?} is not qualified by this Morn build; expected exactly {DSH_QUALIFIED_DISTRIBUTION_VERSION:?}",
+        )))
+    }
+}
+
 pub const DSH_NOTIFICATION_SESSION_EVENT: &str = "session.event";
 pub const DSH_NOTIFICATION_SESSION_STATUS: &str = "session.status";
 pub const DSH_NOTIFICATION_SUBAGENT_STARTED: &str = "subagent.started";
@@ -422,6 +440,7 @@ impl DshSdkConfig {
             .ok_or_else(|| {
                 Error::validation("real DSH SDK requires a deployment-attested runtime version")
             })?;
+        validate_qualified_dsh_distribution_version(runtime_version)?;
         let digest = self
             .runtime_digest
             .as_deref()
@@ -1666,6 +1685,14 @@ mod tests {
             .route_ref()
             .unwrap()
             .contains(DSH_MORN_E0_TOOL_POLICY_REF));
+    }
+
+    #[test]
+    fn live_distribution_version_is_explicitly_requalified() {
+        assert!(validate_qualified_dsh_distribution_version("0.2.1-rc.2").is_ok());
+        assert!(validate_qualified_dsh_distribution_version("0.2.1-rc.3").is_err());
+        assert!(validate_qualified_dsh_distribution_version("0.2.2").is_err());
+        assert!(validate_qualified_dsh_distribution_version("").is_err());
     }
 
     #[test]
