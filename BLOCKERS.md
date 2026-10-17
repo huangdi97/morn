@@ -44,19 +44,20 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are verified at implementation checkpoint
-`433f77a0775473258cdbe034f03b1d702058d32c` by exact-head Actions run
-`39036829497` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
+`4d09ee3c6cb400217ca931bbccbaa38001329d5d` by exact-head Actions run
+`39038160199` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
 adapter-wire semantic-neutrality, Work/acceptance trust hardening, owned desktop
 backend lifecycle/security boundary, the DSH `0.2.1-rc.2` distribution
 qualification gate, a full-resolution Cargo.lock gate, Windows-portable provider
 tests, explicit browser evidence for loading/reconciling/rejected/error states,
-and a desktop foreign-port/protocol-mismatch fail-closed probe. Production DSH
-launch remains fail-closed unless the exact deployment-attested distribution
-version/digest/profile/route/environment match the qualified contract; only a
-private `#[cfg(test)]` protocol-fixture path may use synthetic runtime
-identities. None of these controls manufactures external evidence. Every blocker
-above remains external and must not be promoted by fixture/CI, desktop-reference
-or runner-binding results.
+a real zero-domain HTTP/browser smoke (no domain packs, BioLab routes 404, no
+BioLab DOM), and desktop foreign-port/protocol-mismatch plus single-instance
+lock fail-closed probes. Production DSH launch remains fail-closed unless the
+exact deployment-attested distribution version/digest/profile/route/environment
+match the qualified contract; only a private `#[cfg(test)]` protocol-fixture
+path may use synthetic runtime identities. None of these controls manufactures
+external evidence. Every blocker above remains external and must not be
+promoted by fixture/CI, desktop-reference or runner-binding results.
 
 ## 2026-10-17 DSH 0.2.1 qualification convergence
 

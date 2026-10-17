@@ -108,10 +108,10 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `433f77a0775473258cdbe034f03b1d702058d32c`.
-- Exact-head GitHub Actions: `39036829497` — **5/5 SUCCESS**.
-- Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; domain-boundary guard; zero-domain Core build/tests; developer CLI smoke; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows plus explicit loading/reconciling/rejected/error state evidence; Cordis reference runtime; Windows desktop reference build, owned-backend lifecycle smoke and foreign-port/protocol-mismatch fail-closed probe.
-- Local Windows re-verification for this checkpoint: 670 Rust tests across 73 suites, all 12 developer CLI subcommands, frontend 27 tests + build, Cordis 2/2, four-surface Playwright smoke with desktop/mobile screenshots, `morn-desktop --probe-sidecar`, and `morn-desktop --probe-foreign-port`. The lockfile gate performs full dependency resolution (the previous `--no-deps` check could not see the stale lock), three Windows-only test-portability defects were fixed without weakening assertions, and terminal/reconciling Work journeys no longer point at an impossible next step.
+- Verified implementation checkpoint: `4d09ee3c6cb400217ca931bbccbaa38001329d5d`.
+- Exact-head GitHub Actions: `39038160199` — **5/5 SUCCESS**.
+- Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; domain-boundary guard; zero-domain Core build/tests; zero-domain HTTP/browser runtime smoke (no domain packs, BioLab routes 404, no BioLab DOM); developer CLI smoke; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows plus explicit loading/reconciling/rejected/error state evidence; Cordis reference runtime; Windows desktop reference build, owned-backend lifecycle smoke, foreign-port/protocol-mismatch fail-closed probe and single-instance lock probe.
+- Local Windows re-verification for this checkpoint: 670 Rust tests across 73 suites, all 12 developer CLI subcommands, frontend 27 tests + build, Cordis 2/2, four-surface Playwright smoke with desktop/mobile screenshots, `morn-desktop --probe-sidecar`, `--probe-foreign-port` and `--probe-instance-lock`, plus a real zero-domain server/browser run. The lockfile gate performs full dependency resolution, three Windows-only test-portability defects were fixed without weakening assertions, and terminal/reconciling Work journeys no longer point at an impossible next step.
 - The external-effect recovery path is crash-consistent: a write-like `Authorized` ActionAttempt and its one-shot ExternalActionPermit consumption commit atomically; dispatch is persisted before connector execution; an authoritative reconciliation atomically advances the Attempt and appends its immutable ReconciliationRecord.
 - The Factory read-only vertical slice follows that exact durable ordering through `Authorized -> Dispatched -> OutcomeUnknown -> Reconciliation -> Observed -> Verified`; ambiguous effects cannot be blindly redispatched.
 - ExecutionBinding/Work/business-key/resource/site/authority/permit/effect identity remains immutable across persisted Attempt snapshots, with CAS preventing stale projection overwrite.
@@ -123,7 +123,7 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `433f77a0775473258cdbe034f03b1d702058d32c` and Actions `39036829497`.**
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `4d09ee3c6cb400217ca931bbccbaa38001329d5d` and Actions `39038160199`.**
 - The verified checkpoint includes the Work/acceptance trust chain, real DSH/Pi adapter boundaries, exact DSH distribution qualification, owned desktop-backend lifecycle, Tauri security hardening, four-surface UI smoke and zero-domain gates.
 - PR #1 remains draft because repository-local engineering evidence is not authenticated provider/customer/production evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.
