@@ -1106,7 +1106,6 @@ fn project_acp_notification_for_morn(
         "tool_call" => json!({
             "sessionUpdate":"tool_call",
             "toolCallId":update.get("toolCallId").cloned().unwrap_or(Value::Null),
-            "title":update.get("title").cloned().unwrap_or(Value::Null),
             "status":update.get("status").cloned().unwrap_or(Value::Null)
         }),
         "tool_call_update" => json!({
@@ -1295,7 +1294,7 @@ mod tests {
                 "update":{
                     "sessionUpdate":"tool_call",
                     "toolCallId":"call-1",
-                    "title":"bash",
+                    "title":"bash --token secret-title-token",
                     "status":"in_progress",
                     "rawInput":{"command":"secret command","token":"secret token"}
                 }
@@ -1306,7 +1305,7 @@ mod tests {
         assert!(acp_update_reports_tool_activity(&tool));
         let serialized = serde_json::to_string(&tool.params).unwrap();
         assert!(serialized.contains("call-1"));
-        assert!(serialized.contains("bash"));
+        assert!(!serialized.contains("secret-title-token"));
         assert!(!serialized.contains("secret command"));
         assert!(!serialized.contains("secret token"));
 
