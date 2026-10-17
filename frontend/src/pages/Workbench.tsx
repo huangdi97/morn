@@ -702,13 +702,28 @@ export function WorkLifecycleGuide({ control }: { control: V115ControlPlaneData 
 
   const trace = workEvidenceTrace(control, focus.id, focus.generation);
   const phase = focus.status.phase;
+  const terminal = ["Accepted", "Rejected", "Cancelled"].includes(phase);
+  // Reaching a terminal phase implies the Work progressed past definition and
+  // readiness, even when the projection no longer carries every earlier trace.
+  const progressed = [
+    "Ready",
+    "Running",
+    "Waiting",
+    "Reconciling",
+    "Delivered",
+    "Accepted",
+    "Rejected",
+  ].includes(phase);
+  const independentDecisionReached = trace.acceptances.some((decision) => {
+    const disposition = textField(decision, "disposition");
+    return disposition === "Accept" || disposition === "Reject";
+  });
   const complete = [
     true,
-    ["Ready", "Running", "Waiting", "Reconciling", "Delivered", "Accepted"].includes(phase),
+    progressed,
     trace.receipts.length > 0,
     trace.outcomes.length > 0,
-    phase === "Accepted" ||
-      trace.acceptances.some((decision) => textField(decision, "disposition") === "Accept"),
+    phase === "Accepted" || independentDecisionReached,
     trace.values.length > 0,
   ];
   const firstIncomplete = complete.findIndex((value) => !value);
@@ -720,14 +735,27 @@ export function WorkLifecycleGuide({ control }: { control: V115ControlPlaneData 
     "Independent acceptance",
     "Value evidence",
   ];
-  const next = [
-    "Define canonical Work in Studio.",
-    "Resolve requirements, evidence readiness and persist an exact binding.",
-    "Run only the bound capability and retain executor receipts.",
-    "Observe the real result through a deployment-attested source of truth.",
-    "Obtain an independent review against the acceptance contract.",
-    "Record operational/customer value only from the accepted outcome.",
-  ][firstIncomplete < 0 ? 5 : firstIncomplete];
+  let next =
+    firstIncomplete < 0
+      ? "No further action: the accepted outcome and its value evidence are recorded."
+      : [
+          "Define canonical Work in Studio.",
+          "Resolve requirements, evidence readiness and persist an exact binding.",
+          "Run only the bound capability and retain executor receipts.",
+          "Observe the real result through a deployment-attested source of truth.",
+          "Obtain an independent review against the acceptance contract.",
+          "Record operational/customer value only from the accepted outcome.",
+        ][firstIncomplete];
+  if (phase === "Reconciling") {
+    next =
+      "Reconcile the unknown executor outcome through the authoritative external system before any retry.";
+  } else if (phase === "Rejected") {
+    next =
+      "No further acceptance step: independent review rejected this outcome. Keep this generation terminal; create a new Work or generation if the goal still matters.";
+  } else if (phase === "Cancelled") {
+    next =
+      "This Work is terminal (cancelled). Execution, reconciliation and acceptance cannot reopen it.";
+  }
 
   return (
     <section className="work-lifecycle-guide" data-testid="work-lifecycle-guide">
@@ -740,11 +768,16 @@ export function WorkLifecycleGuide({ control }: { control: V115ControlPlaneData 
       </div>
       <ol>
         {labels.map((label, index) => {
+          // A terminal Work has no actionable "current" stage: earlier stages
+          // are complete, missing evidence stays pending, and the Next line
+          // carries the only truthful terminal instruction.
           const state = complete[index]
             ? "complete"
-            : index === firstIncomplete
-              ? "current"
-              : "pending";
+            : terminal
+              ? "pending"
+              : index === firstIncomplete
+                ? "current"
+                : "pending";
           return (
             <li key={label} className={`work-lifecycle-stage work-lifecycle-${state}`}>
               <span>{index + 1}</span>
@@ -759,8 +792,9 @@ export function WorkLifecycleGuide({ control }: { control: V115ControlPlaneData 
       <p><b>Next:</b> {next}</p>
       {control.work.length > 1 && (
         <small className="muted">
-          Showing the first non-terminal Work. {control.work.length - 1} additional Work resource(s)
-          remain visible in the canonical overview above.
+          {terminal
+            ? `Showing the first Work (${phase}). ${control.work.length - 1} additional Work resource(s) remain visible in the canonical overview above.`
+            : `Showing the first non-terminal Work. ${control.work.length - 1} additional Work resource(s) remain visible in the canonical overview above.`}
         </small>
       )}
     </section>

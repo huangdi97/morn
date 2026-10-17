@@ -571,6 +571,41 @@ describe("progressive Workbench lifecycle surface", () => {
     expect(html).toContain("Resolve requirements, evidence readiness");
     expect(html).not.toContain("Accepted</");
   });
+
+  it("never points a terminal or reconciling Work at an impossible next step", () => {
+    const rejected = control("Rejected");
+    rejected.outcomes = [{
+      id: "outcome:rejected",
+      work_package_id: "work:journey",
+      work_generation: 1,
+      objective: "Delivery impact observed and rejected",
+      source_ref: "erp://delivery/rejected",
+      evidence_refs: ["erp://delivery/rejected/receipt"],
+    }];
+    rejected.acceptance_decisions = [{
+      id: "acceptance:rejected",
+      work_package_id: "work:journey",
+      work_generation: 1,
+      disposition: "Reject",
+      outcome_refs: ["outcome:rejected"],
+      evidence_refs: ["review://ticket-7"],
+      acting_role: "independent-reviewer",
+      reason: "independent review rejected the outcome",
+    }];
+    const rejectedHtml = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(WorkLifecycleGuide, { control: rejected })),
+    );
+    expect(rejectedHtml).toContain("rejected this outcome");
+    expect(rejectedHtml).not.toContain("work-lifecycle-current");
+    expect(rejectedHtml).toContain("work-lifecycle-complete");
+
+    const reconcilingHtml = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(WorkLifecycleGuide, {
+        control: control("Reconciling"),
+      })),
+    );
+    expect(reconcilingHtml).toContain("Reconcile the unknown executor outcome");
+  });
 });
 
 
