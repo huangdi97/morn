@@ -44,20 +44,41 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are verified at implementation checkpoint
-`4d09ee3c6cb400217ca931bbccbaa38001329d5d` by exact-head Actions run
-`39038160199` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
+`a54c9b203f24dd79d2d16cfabcd7ef1f594c1a73` by exact-head Actions run
+`39040980703` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
 adapter-wire semantic-neutrality, Work/acceptance trust hardening, owned desktop
 backend lifecycle/security boundary, the DSH `0.2.1-rc.2` distribution
 qualification gate, a full-resolution Cargo.lock gate, Windows-portable provider
 tests, explicit browser evidence for loading/reconciling/rejected/error states,
-a real zero-domain HTTP/browser smoke (no domain packs, BioLab routes 404, no
-BioLab DOM), and desktop foreign-port/protocol-mismatch plus single-instance
-lock fail-closed probes. Production DSH launch remains fail-closed unless the
-exact deployment-attested distribution version/digest/profile/route/environment
-match the qualified contract; only a private `#[cfg(test)]` protocol-fixture
-path may use synthetic runtime identities. None of these controls manufactures
-external evidence. Every blocker above remains external and must not be
-promoted by fixture/CI, desktop-reference or runner-binding results.
+explicit Console/Hub canonical-failure alerts, a real zero-domain HTTP/browser
+smoke (no domain packs, BioLab routes 404, no BioLab DOM), desktop
+foreign-port/protocol-mismatch plus single-instance lock fail-closed probes, and
+no-credential `plan` modes for every live evidence workflow. Production DSH
+launch remains fail-closed unless the exact deployment-attested distribution
+version/digest/profile/route/environment match the qualified contract; only a
+private `#[cfg(test)]` protocol-fixture path may use synthetic runtime
+identities. None of these controls manufactures external evidence. Every blocker
+above remains external and must not be promoted by fixture/CI, desktop-reference
+or runner-binding results.
+
+## External blocker local entrypoints — 2026-10-17
+
+Each external blocker now has a repository-local entrypoint that fails closed
+without external material. `plan` modes never read protected secrets; `verify`
+paths keep their protected environment, secrets, attestation and cleanup.
+
+| Blocker | Plan entrypoint | Live/verify entrypoint | Evidence and cleanup |
+|---|---|---|---|
+| B-001 DSH | `live-dsh-evidence.yml` `plan-sdk` / `plan-acp` | `smoke-sdk` / `smoke-acp` on `morn-attested-provider` | RealRuntime claim; always-cleanup of one-shot workspace, DSH home, venv and attestation file |
+| B-002 Pi | `live-pi-evidence.yml` `plan` | `smoke` on `morn-attested-provider` | RealRuntime claim; always-cleanup of workspace and attestation file |
+| B-003 environment | deployment-owned attestation file supplied to DSH/Pi smoke | smoke aborts without a valid runtime-attested file | attestation file removed on exit; Morn never infers containment from caller labels |
+| B-004 supply chain | `live-supply-chain-evidence.yml` `plan` | `verify` with deployment registry auth | digest-pinned publication receipt plus independent Cosign/SLSA evidence |
+| G4-B-002 BioLab | `live-biolab-evidence.yml` `plan` | `verify` on `morn-attested-biolab` | byte-digest provenance report; protected provenance source removed |
+| G12 / production write | `live-customer-evidence.yml` `plan` | `verify` with deployment claim and issuer | normalized evidence envelope only; Morn never mints customer truth or write authority |
+
+Plan validation rejects absolute/traversal dataset paths, multiline identities and
+unknown evidence classes. These entrypoints are local engineering only and do not
+convert any blocker to PASS.
 
 ## 2026-10-17 DSH 0.2.1 qualification convergence
 
