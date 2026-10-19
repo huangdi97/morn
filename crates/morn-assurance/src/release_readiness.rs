@@ -386,9 +386,8 @@ fn release_readiness_axes_internal(
     if require_site_identity && site_ref.is_none() {
         for axis in [&mut customer_axis, &mut write_axis] {
             axis.state = ReadinessState::MissingEvidence;
-            axis.reason =
-                "deployment evidence requires an explicit exact deployment site identity"
-                    .to_string();
+            axis.reason = "deployment evidence requires an explicit exact deployment site identity"
+                .to_string();
             axis.evidence_refs.clear();
         }
     }
