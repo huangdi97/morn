@@ -815,6 +815,17 @@ impl AppState {
         let deployment_site_ref = configured_deployment_site_ref()?;
         let evidence_ledger = configured_evidence_ledger()?;
         let supply_chain_verifications = configured_supply_chain_verifications()?;
+        let execution_environments = configured_execution_environments()?;
+        let dsh_acp_lifecycle = configured_dsh_acp_lifecycle()?;
+        let source_of_truth_catalog = configured_source_of_truth_bindings()?;
+        let source_observation_attestations = configured_source_observation_attestations()?;
+        let acceptance_reviewers = configured_acceptance_reviewers()?;
+        let acceptance_review_authorizations = configured_acceptance_review_authorizations()?;
+        let customer_value_attestations = configured_customer_value_attestations()?;
+        let executor_reconciliation_authorizations =
+            configured_executor_reconciliation_authorizations()?;
+        let dsh_harness = configured_dsh_harness()?;
+        let pi_harness = configured_pi_harness()?;
 
         let store = MornStore::open(db_path)?;
         // Reuse the persisted workspace on restart so workspace-scoped records hydrate.
@@ -835,21 +846,12 @@ impl AppState {
             let workspace_id: WorkspaceId = workspace.id.clone();
             BioLabService::new(workspace_id)
         };
-        let execution_environments = configured_execution_environments()?;
-        let dsh_acp_lifecycle = configured_dsh_acp_lifecycle()?;
-        let source_of_truth_catalog = configured_source_of_truth_bindings()?;
-        let source_observation_attestations = configured_source_observation_attestations()?;
-        let acceptance_reviewers = configured_acceptance_reviewers()?;
-        let acceptance_review_authorizations = configured_acceptance_review_authorizations()?;
         persist_acceptance_trust_records(
             &store,
             &workspace.id,
             &acceptance_reviewers,
             &acceptance_review_authorizations,
         )?;
-        let customer_value_attestations = configured_customer_value_attestations()?;
-        let executor_reconciliation_authorizations =
-            configured_executor_reconciliation_authorizations()?;
         let mut inner = AppInner {
             store,
             workspace,
@@ -859,8 +861,8 @@ impl AppState {
             #[cfg(feature = "domain-biolab")]
             biolab,
             native_harness: Arc::new(Mutex::new(MornNativeHarness::new())),
-            dsh_harness: Arc::new(Mutex::new(configured_dsh_harness()?)),
-            pi_harness: Arc::new(Mutex::new(configured_pi_harness()?)),
+            dsh_harness: Arc::new(Mutex::new(dsh_harness)),
+            pi_harness: Arc::new(Mutex::new(pi_harness)),
             dsh_acp_lifecycle,
             dsh_acp_controls: Arc::new(Mutex::new(HashMap::new())),
             execution_environments,
