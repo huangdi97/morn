@@ -580,26 +580,72 @@ fn configured_executor_reconciliation_authorizations(
     Ok(authorizations)
 }
 
+fn validate_build_identity_ref(
+    runtime_value: &str,
+    compiled_value: Option<&str>,
+) -> morn_kernel::Result<String> {
+    let runtime_value = runtime_value.trim();
+    if runtime_value.is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_BUILD_IDENTITY_REF must not be empty when set",
+        ));
+    }
+    if !runtime_value.contains("://") || runtime_value.chars().any(char::is_control) {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_BUILD_IDENTITY_REF must be a single-line explicit evidence URI",
+        ));
+    }
+    let compiled_value = compiled_value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            morn_kernel::error::Error::validation(
+                "this Morn binary has no compile-time build identity; rebuild with MORN_BUILD_IDENTITY_REF set before claiming deployment readiness",
+            )
+        })?;
+    if runtime_value != compiled_value {
+        return Err(morn_kernel::error::Error::validation(format!(
+            "runtime MORN_BUILD_IDENTITY_REF {runtime_value:?} does not match this binary's compile-time build identity {compiled_value:?}"
+        )));
+    }
+    Ok(runtime_value.to_string())
+}
+
 fn configured_build_identity_ref() -> morn_kernel::Result<Option<String>> {
     match std::env::var("MORN_BUILD_IDENTITY_REF") {
         Err(std::env::VarError::NotPresent) => Ok(None),
-        Ok(value) => {
-            let value = value.trim();
-            if value.is_empty() {
-                return Err(morn_kernel::error::Error::validation(
-                    "MORN_BUILD_IDENTITY_REF must not be empty when set",
-                ));
-            }
-            if !value.contains("://") {
-                return Err(morn_kernel::error::Error::validation(
-                    "MORN_BUILD_IDENTITY_REF must be an explicit evidence URI",
-                ));
-            }
-            Ok(Some(value.to_string()))
-        }
+        Ok(value) => validate_build_identity_ref(&value, option_env!("MORN_BUILD_IDENTITY_REF"))
+            .map(Some),
         Err(error) => Err(morn_kernel::error::Error::validation(format!(
             "cannot read MORN_BUILD_IDENTITY_REF: {error}"
         ))),
+    }
+}
+
+#[cfg(test)]
+mod build_identity_tests {
+    use super::validate_build_identity_ref;
+
+    #[test]
+    fn deployment_build_identity_requires_a_compile_time_anchor() {
+        assert!(validate_build_identity_ref("git://huangdi97/morn/abc123", None).is_err());
+    }
+
+    #[test]
+    fn deployment_build_identity_must_match_the_compiled_binary() {
+        assert!(validate_build_identity_ref(
+            "git://huangdi97/morn/current",
+            Some("git://huangdi97/morn/old"),
+        )
+        .is_err());
+        assert_eq!(
+            validate_build_identity_ref(
+                "git://huangdi97/morn/current",
+                Some("git://huangdi97/morn/current"),
+            )
+            .unwrap(),
+            "git://huangdi97/morn/current"
+        );
     }
 }
 
