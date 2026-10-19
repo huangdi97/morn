@@ -61,6 +61,21 @@ fn find_attestation(
         })
 }
 
+fn configured_morn_build_identity_ref() -> Result<String> {
+    let value = std::env::var("MORN_BUILD_IDENTITY_REF").map_err(|_| {
+        Error::validation(
+            "MORN_BUILD_IDENTITY_REF is required to emit reusable RealRuntime evidence",
+        )
+    })?;
+    let value = value.trim();
+    if value.is_empty() || !value.contains("://") {
+        return Err(Error::validation(
+            "MORN_BUILD_IDENTITY_REF must be a non-empty explicit evidence URI",
+        ));
+    }
+    Ok(value.to_string())
+}
+
 fn real_runtime_claim(
     subject: &str,
     pass: bool,
@@ -71,17 +86,6 @@ fn real_runtime_claim(
     if !pass {
         return Ok(None);
     }
-    let build_identity_ref = std::env::var("MORN_BUILD_IDENTITY_REF").map_err(|_| {
-        Error::validation(
-            "MORN_BUILD_IDENTITY_REF is required to emit a reusable RealRuntime evidence claim",
-        )
-    })?;
-    let build_identity_ref = build_identity_ref.trim();
-    if build_identity_ref.is_empty() || !build_identity_ref.contains("://") {
-        return Err(Error::validation(
-            "MORN_BUILD_IDENTITY_REF must be a non-empty explicit evidence URI",
-        ));
-    }
     let issuer = std::env::var("MORN_EVIDENCE_ISSUER").map_err(|_| {
         Error::validation(
             "MORN_EVIDENCE_ISSUER is required to emit a reusable RealRuntime evidence claim",
@@ -91,7 +95,6 @@ fn real_runtime_claim(
     if issuer.is_empty() {
         return Err(Error::validation("MORN_EVIDENCE_ISSUER must not be empty"));
     }
-    identity_refs.push(build_identity_ref.to_string());
     identity_refs.extend(health_refs.iter().cloned());
     identity_refs.extend(environment_evidence_refs.iter().cloned());
     identity_refs.sort();
@@ -107,6 +110,7 @@ fn real_runtime_claim(
 }
 
 fn run_gate() -> Result<Value> {
+    let morn_build_identity_ref = configured_morn_build_identity_ref()?;
     let provider_name = std::env::var("MORN_PROVIDER_SMOKE_PROVIDER").map_err(|_| {
         Error::validation("MORN_PROVIDER_SMOKE_PROVIDER is required (deepseek-harness or pi)")
     })?;
@@ -197,6 +201,7 @@ fn run_gate() -> Result<Value> {
                 && selectable
                 && cleanup_ok;
             let required_claim_refs = vec![
+                morn_build_identity_ref.clone(),
                 format!("runtime://deepseek-harness/{pinned_version}#{pinned_digest}"),
                 environment_ref.clone(),
                 profile_configuration_ref.clone(),
@@ -220,7 +225,7 @@ fn run_gate() -> Result<Value> {
                 "wire_server_version": wire_server_version,
                 "route_attestation_ref": route_attestation_ref,
                 "required_real_runtime_claim_refs": required_claim_refs,
-                "morn_build_identity_ref": std::env::var("MORN_BUILD_IDENTITY_REF").ok(),
+                "morn_build_identity_ref": morn_build_identity_ref,
                 "evidence_claim": evidence_claim,
                 "execution_environment_ref": attestation.environment_ref,
                 "execution_environment_runtime_identities": attestation.runtime_identities,
@@ -295,6 +300,7 @@ fn run_gate() -> Result<Value> {
                 && selectable
                 && cleanup_ok;
             let required_claim_refs = vec![
+                morn_build_identity_ref.clone(),
                 format!("runtime://pi/{pinned_version}#{pinned_digest}"),
                 environment_ref.clone(),
                 route_attestation_ref.clone(),
@@ -316,7 +322,7 @@ fn run_gate() -> Result<Value> {
                 "runtime_digest": runtime_digest,
                 "route_attestation_ref": route_attestation_ref,
                 "required_real_runtime_claim_refs": required_claim_refs,
-                "morn_build_identity_ref": std::env::var("MORN_BUILD_IDENTITY_REF").ok(),
+                "morn_build_identity_ref": morn_build_identity_ref,
                 "evidence_claim": evidence_claim,
                 "execution_environment_ref": attestation.environment_ref,
                 "execution_environment_runtime_identities": attestation.runtime_identities,
