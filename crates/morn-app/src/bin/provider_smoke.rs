@@ -61,21 +61,6 @@ fn find_attestation(
         })
 }
 
-fn configured_morn_build_identity_ref() -> Result<String> {
-    let value = std::env::var("MORN_BUILD_IDENTITY_REF").map_err(|_| {
-        Error::validation(
-            "MORN_BUILD_IDENTITY_REF is required to emit reusable RealRuntime evidence",
-        )
-    })?;
-    let value = value.trim();
-    if value.is_empty() || !value.contains("://") {
-        return Err(Error::validation(
-            "MORN_BUILD_IDENTITY_REF must be a non-empty explicit evidence URI",
-        ));
-    }
-    Ok(value.to_string())
-}
-
 fn real_runtime_claim(
     subject: &str,
     pass: bool,
@@ -110,7 +95,6 @@ fn real_runtime_claim(
 }
 
 fn run_gate() -> Result<Value> {
-    let morn_build_identity_ref = configured_morn_build_identity_ref()?;
     let provider_name = std::env::var("MORN_PROVIDER_SMOKE_PROVIDER").map_err(|_| {
         Error::validation("MORN_PROVIDER_SMOKE_PROVIDER is required (deepseek-harness or pi)")
     })?;
@@ -118,13 +102,19 @@ fn run_gate() -> Result<Value> {
         std::env::var("MORN_PROVIDER_SMOKE_DB").unwrap_or_else(|_| ":memory:".to_string());
     let state = AppState::new(&db_path)?;
 
-    let (workspace_id, dsh, pi, attestations) = {
+    let (workspace_id, dsh, pi, attestations, morn_build_identity_ref) = {
         let guard = state.lock();
+        let build_identity_ref = guard.build_identity_ref.clone().ok_or_else(|| {
+            Error::validation(
+                "validated MORN_BUILD_IDENTITY_REF is required to emit reusable RealRuntime evidence",
+            )
+        })?;
         (
             guard.workspace.id.clone(),
             guard.dsh_harness.clone(),
             guard.pi_harness.clone(),
             guard.execution_environments.attestations(),
+            build_identity_ref,
         )
     };
 
