@@ -34,6 +34,11 @@ MATRIX = {
             "MORN_DSH_HOME",
             "MORN_EXECUTION_ATTESTATION_FILE",
         ],
+        "required_tokens": [
+            "MORN_BUILD_IDENTITY_REF",
+            "git://huangdi97/morn/${{ github.sha }}",
+            "build-identity.json",
+        ],
     },
     "live-pi-evidence.yml": {
         "operations": ["plan", "smoke"],
@@ -45,6 +50,11 @@ MATRIX = {
             "Remove live Pi runtime, workspace and attestation material",
             "MORN_PI_WORKSPACE",
             "MORN_EXECUTION_ATTESTATION_FILE",
+        ],
+        "required_tokens": [
+            "MORN_BUILD_IDENTITY_REF",
+            "git://huangdi97/morn/${{ github.sha }}",
+            "build-identity.json",
         ],
     },
     "live-supply-chain-evidence.yml": {
