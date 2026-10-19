@@ -2,7 +2,7 @@
 
 只记录 **无法通过继续编码/测试在当前环境解决** 的真实阻塞。
 
-## Current blocker index — 2026-10-17
+## Current blocker index — 2026-10-19
 
 This section is authoritative for the current v11.5 convergence branch. Older
 entries below are retained as historical evidence and must not be read as the
@@ -26,8 +26,10 @@ current implementation state.
   has provider-neutral environment contracts and an attestation-backed external
   environment adapter. A real container/microVM/Kubernetes/customer-sandbox
   attestation, with exact environment identity and required guarantee vector,
-  must come from the deployment platform. Morn does not infer containment from
-  a Docker binary or a caller-supplied label.
+  must come from the deployment platform. Loading such external evidence now
+  also requires an explicit deployment-pinned `MORN_EXECUTION_ATTESTOR`; Morn
+  does not infer containment from a Docker binary, caller-supplied label, or
+  implicit/default attestor name.
 - **B-004 / OCI + Sigstore + SLSA live evidence — EXTERNAL_BLOCKED.** Morn
   now has an ORAS publication adapter, digest-pinned publication receipt,
   identity-scoped Cosign signature verification, independent SLSA provenance
@@ -44,8 +46,8 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are verified at implementation checkpoint
-`c307ba70c357c31669c2b8d78f1d728939ec7741` by exact-head Actions run
-`39255039214` (**5/5 SUCCESS**). This checkpoint includes provider-ingress evidence minimization, build-bound RealRuntime/RealSite/ProductionWrite readiness, the protected build-bound provider/customer evidence handoffs, the DSH-SDK ↔ Pi-RPC
+`5287de6c915dde49fce110c897d3ef938191d535` by exact-source-head Actions run
+`39262476902` (**5/5 SUCCESS**). Every PR job checked out the exact feature/source HEAD rather than GitHub's synthetic merge ref, and the Backend source-identity audit verified that contract. This checkpoint includes provider-ingress evidence minimization, build/site fail-closed RealRuntime/RealSite/ProductionWrite readiness, binary-anchored Morn build identity, explicit execution-attestor trust, pre-storage deployment/provider/trust configuration validation, the protected build-bound provider/customer evidence handoffs, the DSH-SDK ↔ Pi-RPC
 adapter-wire semantic-neutrality, Work/acceptance trust hardening, owned desktop
 backend lifecycle/security boundary, the DSH `0.2.1-rc.2` distribution
 qualification gate, a full-resolution Cargo.lock gate, Windows-portable provider
@@ -65,9 +67,12 @@ or runner-binding results.
 
 ## 2026-10-19 deployment-evidence coherence hardening
 
-- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** remains the current v11.5 reference-scope result at verified implementation checkpoint `c307ba70c357c31669c2b8d78f1d728939ec7741`; exact-head Actions `39255039214` passed **5/5**.
-- DSH SDK, DSH ACP and Pi evidence streams now discard private reasoning, raw tool arguments/results and free-form tool names/titles at transport ingress while retaining only the visible assistant/correlation/settlement/policy facts required by the governed E0 boundary.
-- RealRuntime, RealSite and ProductionWrite remain independent categorical evidence classes and append-only history. For **current deployment readiness**, RealRuntime must cite the exact running `MORN_BUILD_IDENTITY_REF` in addition to the active provider/runtime/route/environment identities and fresh health, while RealSite/ProductionWrite must use the exact site subject and cite that same build. Old-build proof remains auditable history, not readiness for a different build.
+- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** remains the current v11.5 reference-scope result at verified implementation checkpoint `5287de6c915dde49fce110c897d3ef938191d535`; exact-source-head Actions `39262476902` passed **5/5**.
+- DSH SDK, DSH ACP and Pi evidence streams discard private reasoning, raw tool arguments/results and free-form tool names/titles at transport ingress while retaining only the visible assistant/correlation/settlement/policy facts required by the governed E0 boundary.
+- RealRuntime, RealSite and ProductionWrite remain independent categorical evidence classes and append-only history. For **current deployment readiness**, missing build identity now fails the RealRuntime axis itself; missing site identity fails RealSite/ProductionWrite axes themselves. Current proof still requires the exact active provider/runtime/profile/route/environment identities and fresh health, and old-build/site proof remains auditable history rather than readiness for a different deployment.
+- `MORN_BUILD_IDENTITY_REF` is no longer accepted as a free runtime label: when configured it must equal the value embedded at compile time in the running `morn-app` binary, and provider smoke exports the AppState-validated identity. This prevents relabeling a newer binary as an older proven build; supply-chain authenticity of the builder/artifact remains the independent B-004 responsibility.
+- Loading `MORN_EXECUTION_ATTESTATION_FILE` requires an explicit non-empty `MORN_EXECUTION_ATTESTOR`; no implicit default can become the trust selector for external containment evidence. Deployment/build/site/evidence/provider/trust configuration is preflighted before `MornStore::open` or startup trust persistence.
+- Main CI now derives `MORN_CI_SOURCE_SHA` from `pull_request.head.sha` (or `github.sha` outside PRs), pins all five checkouts to it, disables credential persistence, verifies the checked-out commit and names UI/desktop artifacts with that tested source SHA. `scripts/audit_ci_source_identity.py` and `scripts/run_all.ps1` lock the contract.
 - `live-dsh-evidence.yml` and `live-pi-evidence.yml` derive the canonical build identity as `git://huangdi97/morn/<github.sha>` from the exact checkout, include it in reusable RealRuntime claims and evidence artifacts, and the external-entrypoint audit fails if that binding disappears. `live-customer-evidence.yml` independently carries the deployment build identity through plan/verify and `evidence_claim_verify` rejects customer/write claims without it.
 - This does **not** mint customer truth, grant production-write authority, reinterpret provider success as Outcome/Acceptance, or change any external blocker below.
 
