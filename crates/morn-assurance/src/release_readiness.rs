@@ -309,7 +309,7 @@ pub fn release_readiness_axes(
     dsh_runtime: RuntimeReadinessEvidence,
     pi_runtime: RuntimeReadinessEvidence,
 ) -> Vec<ReleaseReadinessAxis> {
-    release_readiness_axes_internal(ledger, dsh_runtime, pi_runtime, None, None, false)
+    release_readiness_axes_internal(ledger, dsh_runtime, pi_runtime, None, None, false, false)
 }
 
 pub fn release_readiness_axes_for_build(
@@ -325,6 +325,7 @@ pub fn release_readiness_axes_for_build(
         build_identity_ref,
         None,
         true,
+        false,
     )
 }
 
@@ -346,6 +347,7 @@ pub fn release_readiness_axes_for_deployment(
         build_identity_ref,
         site_ref,
         true,
+        true,
     )
 }
 
@@ -356,6 +358,7 @@ fn release_readiness_axes_internal(
     build_identity_ref: Option<&str>,
     site_ref: Option<&str>,
     require_runtime_build_identity: bool,
+    require_site_identity: bool,
 ) -> Vec<ReleaseReadinessAxis> {
     let site_ref = site_ref.map(str::trim).filter(|value| !value.is_empty());
     let customer_subject = site_ref
@@ -364,6 +367,32 @@ fn release_readiness_axes_internal(
     let write_subject = site_ref
         .map(|site| format!("factory-production-write:{site}"))
         .unwrap_or_else(|| "factory-production-write".to_string());
+    let mut customer_axis = build_bound_evidence_axis(
+        ledger,
+        "customer-real-site",
+        &customer_subject,
+        EvidenceClass::RealSite,
+        "no authorized real-site evidence exists",
+        build_identity_ref,
+    );
+    let mut write_axis = build_bound_evidence_axis(
+        ledger,
+        "production-write",
+        &write_subject,
+        EvidenceClass::ProductionWrite,
+        "no explicit production-write evidence exists",
+        build_identity_ref,
+    );
+    if require_site_identity && site_ref.is_none() {
+        for axis in [&mut customer_axis, &mut write_axis] {
+            axis.state = ReadinessState::MissingEvidence;
+            axis.reason =
+                "deployment evidence requires an explicit exact deployment site identity"
+                    .to_string();
+            axis.evidence_refs.clear();
+        }
+    }
+
     vec![
         evidence_axis(
             ledger,
@@ -396,22 +425,8 @@ fn release_readiness_axes_internal(
             build_identity_ref,
             require_runtime_build_identity,
         ),
-        build_bound_evidence_axis(
-            ledger,
-            "customer-real-site",
-            &customer_subject,
-            EvidenceClass::RealSite,
-            "no authorized real-site evidence exists",
-            build_identity_ref,
-        ),
-        build_bound_evidence_axis(
-            ledger,
-            "production-write",
-            &write_subject,
-            EvidenceClass::ProductionWrite,
-            "no explicit production-write evidence exists",
-            build_identity_ref,
-        ),
+        customer_axis,
+        write_axis,
     ]
 }
 
@@ -1364,6 +1379,49 @@ mod tests {
                 fresh.iter().find(|axis| axis.id == id).unwrap().state,
                 ReadinessState::Proven
             );
+        }
+    }
+
+    #[test]
+    fn deployment_customer_axes_require_explicit_site_identity() {
+        let build = "build://morn/current";
+        let mut ledger = reference_evidence_ledger();
+        for (subject, class, evidence) in [
+            (
+                "factory-customer",
+                EvidenceClass::RealSite,
+                "site://generic/pilot",
+            ),
+            (
+                "factory-production-write",
+                EvidenceClass::ProductionWrite,
+                "write://generic/change",
+            ),
+        ] {
+            let mut claim = EvidenceClaim::proven(
+                subject,
+                class,
+                vec![evidence.to_string(), build.to_string()],
+                "deployment-attestor",
+                "generic deployment evidence",
+            )
+            .unwrap();
+            claim.observed_at = Timestamp::from_millis(10);
+            ledger.append(claim).unwrap();
+        }
+
+        let axes = release_readiness_axes_for_deployment(
+            &ledger,
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            Some(build),
+            None,
+        );
+        for id in ["customer-real-site", "production-write"] {
+            let axis = axes.iter().find(|axis| axis.id == id).unwrap();
+            assert_eq!(axis.state, ReadinessState::MissingEvidence);
+            assert!(axis.reason.contains("exact deployment site identity"));
+            assert!(axis.evidence_refs.is_empty());
         }
     }
 
