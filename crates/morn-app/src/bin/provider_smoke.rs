@@ -71,6 +71,17 @@ fn real_runtime_claim(
     if !pass {
         return Ok(None);
     }
+    let build_identity_ref = std::env::var("MORN_BUILD_IDENTITY_REF").map_err(|_| {
+        Error::validation(
+            "MORN_BUILD_IDENTITY_REF is required to emit a reusable RealRuntime evidence claim",
+        )
+    })?;
+    let build_identity_ref = build_identity_ref.trim();
+    if build_identity_ref.is_empty() || !build_identity_ref.contains("://") {
+        return Err(Error::validation(
+            "MORN_BUILD_IDENTITY_REF must be a non-empty explicit evidence URI",
+        ));
+    }
     let issuer = std::env::var("MORN_EVIDENCE_ISSUER").map_err(|_| {
         Error::validation(
             "MORN_EVIDENCE_ISSUER is required to emit a reusable RealRuntime evidence claim",
@@ -80,6 +91,7 @@ fn real_runtime_claim(
     if issuer.is_empty() {
         return Err(Error::validation("MORN_EVIDENCE_ISSUER must not be empty"));
     }
+    identity_refs.push(build_identity_ref.to_string());
     identity_refs.extend(health_refs.iter().cloned());
     identity_refs.extend(environment_evidence_refs.iter().cloned());
     identity_refs.sort();
@@ -89,7 +101,7 @@ fn real_runtime_claim(
         EvidenceClass::RealRuntime,
         identity_refs,
         issuer,
-        "authenticated provider smoke passed on the exact attested runtime, route and execution environment with a fresh Healthy lease",
+        "authenticated provider smoke passed on the exact Morn build, attested runtime, route and execution environment with a fresh Healthy lease",
     )
     .map(Some)
 }
@@ -208,6 +220,7 @@ fn run_gate() -> Result<Value> {
                 "wire_server_version": wire_server_version,
                 "route_attestation_ref": route_attestation_ref,
                 "required_real_runtime_claim_refs": required_claim_refs,
+                "morn_build_identity_ref": std::env::var("MORN_BUILD_IDENTITY_REF").ok(),
                 "evidence_claim": evidence_claim,
                 "execution_environment_ref": attestation.environment_ref,
                 "execution_environment_runtime_identities": attestation.runtime_identities,
@@ -303,6 +316,7 @@ fn run_gate() -> Result<Value> {
                 "runtime_digest": runtime_digest,
                 "route_attestation_ref": route_attestation_ref,
                 "required_real_runtime_claim_refs": required_claim_refs,
+                "morn_build_identity_ref": std::env::var("MORN_BUILD_IDENTITY_REF").ok(),
                 "evidence_claim": evidence_claim,
                 "execution_environment_ref": attestation.environment_ref,
                 "execution_environment_runtime_identities": attestation.runtime_identities,
