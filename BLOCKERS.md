@@ -44,8 +44,8 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are verified at implementation checkpoint
-`eed9ada351f470c6e4113c999dbf29e2d79375bf` by exact-head Actions run
-`39044227292` (**5/5 SUCCESS**). This checkpoint includes the DSH-SDK ↔ Pi-RPC
+`d1c8bf11e373ae04b56c21d166fcb45f226ac254` by exact-head Actions run
+`39252110666` (**5/5 SUCCESS**). This checkpoint includes provider-ingress evidence minimization, deployment-coherent RealSite/ProductionWrite readiness, the protected build-bound customer evidence handoff, the DSH-SDK ↔ Pi-RPC
 adapter-wire semantic-neutrality, Work/acceptance trust hardening, owned desktop
 backend lifecycle/security boundary, the DSH `0.2.1-rc.2` distribution
 qualification gate, a full-resolution Cargo.lock gate, Windows-portable provider
@@ -62,6 +62,14 @@ private `#[cfg(test)]` protocol-fixture path may use synthetic runtime
 identities. None of these controls manufactures external evidence. Every blocker
 above remains external and must not be promoted by fixture/CI, desktop-reference
 or runner-binding results.
+
+## 2026-10-19 deployment-evidence coherence hardening
+
+- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** remains the current v11.5 reference-scope result at verified implementation checkpoint `d1c8bf11e373ae04b56c21d166fcb45f226ac254`; exact-head Actions `39252110666` passed **5/5**.
+- DSH SDK, DSH ACP and Pi evidence streams now discard private reasoning, raw tool arguments/results and free-form tool names/titles at transport ingress while retaining only the visible assistant/correlation/settlement/policy facts required by the governed E0 boundary.
+- RealSite and ProductionWrite remain independent categorical evidence classes and append-only history. When used for **current deployment readiness**, however, their exact site-scoped claim must also cite the running `MORN_BUILD_IDENTITY_REF`; an old-build customer/write claim is auditable history, not readiness for a different build.
+- `live-customer-evidence.yml` carries the exact build identity through plan and verify; `evidence_claim_verify` rejects claims without it; the normalized report exposes the verified build; and the external-entrypoint audit locks that contract into CI.
+- This does **not** mint customer truth, grant production-write authority, reinterpret provider success as Outcome/Acceptance, or change any external blocker below.
 
 ## External blocker local entrypoints — 2026-10-17
 
