@@ -73,6 +73,11 @@ MATRIX = {
         "runner": None,
         "environment": "morn-customer-evidence",
         "cleanup": ["Remove protected source claim", "MORN_EVIDENCE_CLAIM_FILE"],
+        "required_tokens": [
+            "build_identity_ref:",
+            "INPUT_BUILD_IDENTITY_REF",
+            "MORN_EVIDENCE_EXPECTED_BUILD_REF",
+        ],
     },
 }
 
@@ -140,6 +145,10 @@ def audit(name: str, expectations: dict[str, object]) -> list[str]:
     for token in expectations["cleanup"]:
         if str(token) not in text:
             violations.append(f"{name}: cleanup marker {token!r} is missing")
+
+    for token in expectations.get("required_tokens", []):
+        if str(token) not in text:
+            violations.append(f"{name}: required contract token {token!r} is missing")
 
     plan_lines = [index for index, line in enumerate(lines) if plan_gate in line]
     if not plan_lines:
