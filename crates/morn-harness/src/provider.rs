@@ -143,9 +143,16 @@ impl HarnessRuntimeHealth {
     }
 
     pub fn mark_initialized(&mut self, reason: impl Into<String>, evidence_ref: impl Into<String>) {
+        let evidence_ref = evidence_ref.into();
+        if evidence_ref.trim().is_empty() {
+            self.mark_degraded(
+                "runtime initialization cannot establish a lease without an auditable evidence reference",
+            );
+            return;
+        }
         self.state = HarnessRuntimeHealthState::Initialized;
         self.reason = reason.into();
-        self.evidence_refs = vec![evidence_ref.into()];
+        self.evidence_refs = vec![evidence_ref];
         self.observed_at = Timestamp::now();
         self.health_valid_until = Some(Timestamp::from_millis(
             self.observed_at
@@ -167,10 +174,17 @@ impl HarnessRuntimeHealth {
     }
 
     pub fn mark_live_turn(&mut self, reason: impl Into<String>, evidence_ref: impl Into<String>) {
+        let evidence_ref = evidence_ref.into();
+        if evidence_ref.trim().is_empty() {
+            self.mark_degraded(
+                "settled runtime turn cannot establish Healthy without an auditable evidence reference",
+            );
+            return;
+        }
         self.state = HarnessRuntimeHealthState::Healthy;
         self.settled_turns = self.settled_turns.saturating_add(1);
         self.reason = reason.into();
-        self.evidence_refs = vec![evidence_ref.into()];
+        self.evidence_refs = vec![evidence_ref];
         self.observed_at = Timestamp::now();
         self.health_valid_until = Some(Timestamp::from_millis(
             self.observed_at
@@ -1863,6 +1877,22 @@ mod dsh_provider_tests {
         health.mark_closed("runtime closed");
         assert_eq!(health.state, HarnessRuntimeHealthState::Closed);
         assert!(health.evidence_refs.is_empty());
+    }
+
+    #[test]
+    fn runtime_health_cannot_become_initialized_or_healthy_without_a_witness() {
+        let mut health = HarnessRuntimeHealth::configured("configured");
+
+        health.mark_initialized("initialized", "   ");
+        assert_eq!(health.state, HarnessRuntimeHealthState::Degraded);
+        assert!(health.evidence_refs.is_empty());
+        assert!(!health.ready_for_new_turn_at(Timestamp::now()));
+
+        health.mark_live_turn("settled", "");
+        assert_eq!(health.state, HarnessRuntimeHealthState::Degraded);
+        assert_eq!(health.settled_turns, 0);
+        assert!(health.evidence_refs.is_empty());
+        assert!(!health.selectable_at(Timestamp::now()));
     }
 
     #[test]
