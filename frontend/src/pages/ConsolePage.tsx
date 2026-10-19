@@ -269,7 +269,7 @@ export default function ConsolePage() {
             </article>
           </div>
           <p className="release-readiness-footnote">
-            Running build identity: {v115.release_readiness.build_identity_ref ?? "not configured — CI axis cannot be proven"}.
+            Running build identity: {v115.release_readiness.build_identity_ref ?? "not configured — CI and RealRuntime axes cannot be proven"}.
             {" "}Deployment site: {v115.release_readiness.deployment_site_ref ?? "not configured — customer/production gates remain blocked"}.
             {" "}{v115.release_readiness.semantics.reason}
           </p>
