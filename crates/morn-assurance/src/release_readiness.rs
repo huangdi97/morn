@@ -301,15 +301,17 @@ fn runtime_axis(
     axis
 }
 
-/// Current independent readiness axes. This intentionally has no aggregate
-/// "production ready" boolean because a deployment chooses which providers and
-/// effect classes are in scope. Callers must inspect the exact required axes.
+/// Build-unscoped compatibility projection. It intentionally remains
+/// fail-closed for RealRuntime: without an exact running build identity, a
+/// Proven runtime claim cannot be reported as current deployment readiness.
+/// Callers evaluating a concrete deployment should use the build/site-aware
+/// projections below.
 pub fn release_readiness_axes(
     ledger: &EvidenceLedger,
     dsh_runtime: RuntimeReadinessEvidence,
     pi_runtime: RuntimeReadinessEvidence,
 ) -> Vec<ReleaseReadinessAxis> {
-    release_readiness_axes_internal(ledger, dsh_runtime, pi_runtime, None, None, false, false)
+    release_readiness_axes_internal(ledger, dsh_runtime, pi_runtime, None, None, true, false)
 }
 
 pub fn release_readiness_axes_for_build(
@@ -863,6 +865,22 @@ pub fn evaluate_deployment_readiness_for_target(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn runtime_identity_test_axes(
+        ledger: &EvidenceLedger,
+        dsh_runtime: RuntimeReadinessEvidence,
+        pi_runtime: RuntimeReadinessEvidence,
+    ) -> Vec<ReleaseReadinessAxis> {
+        release_readiness_axes_internal(
+            ledger,
+            dsh_runtime,
+            pi_runtime,
+            None,
+            None,
+            false,
+            false,
+        )
+    }
     use crate::evidence_class::{reference_evidence_ledger, EvidenceClaim};
 
     #[test]
@@ -1524,6 +1542,40 @@ mod tests {
     }
 
     #[test]
+    fn public_buildless_projection_never_proves_real_runtime() {
+        let runtime = "runtime://deepseek-harness/v1#sha256:artifact";
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "deepseek-harness",
+                    EvidenceClass::RealRuntime,
+                    vec![runtime.to_string()],
+                    "deployment-attestor",
+                    "authenticated runtime proof without deployment build scope",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let axes = release_readiness_axes(
+            &ledger,
+            RuntimeReadinessEvidence::healthy_for_identity(
+                vec!["health://dsh/settled-turn".to_string()],
+                runtime,
+                "fresh health",
+            ),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+        );
+        let dsh = axes
+            .iter()
+            .find(|axis| axis.id == "deepseek-live-runtime")
+            .unwrap();
+        assert_eq!(dsh.state, ReadinessState::MissingEvidence);
+        assert!(dsh.reason.contains("no exact build identity configured"));
+    }
+
+    #[test]
     fn runtime_proof_must_bind_the_exact_active_provider_artifact() {
         let mut ledger = reference_evidence_ledger();
         ledger
@@ -1542,7 +1594,7 @@ mod tests {
             )
             .unwrap();
 
-        let axes = release_readiness_axes(
+        let axes = runtime_identity_test_axes(
             &ledger,
             RuntimeReadinessEvidence::healthy_for_identity(
                 vec!["runtime://deepseek-harness/session/new/settled-turn".to_string()],
@@ -1578,7 +1630,7 @@ mod tests {
             )
             .unwrap();
 
-        let axes = release_readiness_axes(
+        let axes = runtime_identity_test_axes(
             &ledger,
             RuntimeReadinessEvidence::healthy_for_identities(
                 vec!["health://dsh/settled-turn".to_string()],
@@ -1616,7 +1668,7 @@ mod tests {
             )
             .unwrap();
 
-        let axes = release_readiness_axes(
+        let axes = runtime_identity_test_axes(
             &ledger,
             RuntimeReadinessEvidence::healthy_for_identities(
                 vec!["health://dsh/settled-turn".to_string()],
@@ -1650,7 +1702,7 @@ mod tests {
             )
             .unwrap();
 
-        let axes = release_readiness_axes(
+        let axes = runtime_identity_test_axes(
             &ledger,
             RuntimeReadinessEvidence::unavailable("health lease expired"),
             RuntimeReadinessEvidence::unavailable("not configured"),
@@ -1679,7 +1731,7 @@ mod tests {
             )
             .unwrap();
 
-        let axes = release_readiness_axes(
+        let axes = runtime_identity_test_axes(
             &ledger,
             RuntimeReadinessEvidence::healthy_for_identity(
                 vec!["health://dsh/lease-2".to_string()],
@@ -1712,7 +1764,7 @@ mod tests {
                 .unwrap(),
             )
             .unwrap();
-        let axes = release_readiness_axes(
+        let axes = runtime_identity_test_axes(
             &ledger,
             RuntimeReadinessEvidence::healthy(
                 vec!["health://dsh/live".to_string()],
@@ -1752,7 +1804,7 @@ mod tests {
             )
             .unwrap();
 
-        let axes = release_readiness_axes(
+        let axes = runtime_identity_test_axes(
             &ledger,
             RuntimeReadinessEvidence::unavailable("not configured"),
             RuntimeReadinessEvidence::healthy(
