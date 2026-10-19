@@ -201,17 +201,37 @@ fn configured_dsh_acp_lifecycle(
 
 fn configured_execution_environments() -> morn_kernel::Result<AttestedExecutionEnvironmentProvider>
 {
-    let provider_name = std::env::var("MORN_EXECUTION_ATTESTOR")
-        .unwrap_or_else(|_| "deployment-attestor".to_string());
-    let mut provider = AttestedExecutionEnvironmentProvider::new(provider_name)?;
-    let Ok(path) = std::env::var("MORN_EXECUTION_ATTESTATION_FILE") else {
-        return Ok(provider);
+    let attestation_file = std::env::var("MORN_EXECUTION_ATTESTATION_FILE");
+    let path = match attestation_file {
+        Err(std::env::VarError::NotPresent) => {
+            let provider_name = std::env::var("MORN_EXECUTION_ATTESTOR")
+                .unwrap_or_else(|_| "deployment-attestor".to_string());
+            return AttestedExecutionEnvironmentProvider::new(provider_name);
+        }
+        Ok(path) => path,
+        Err(error) => {
+            return Err(morn_kernel::error::Error::validation(format!(
+                "cannot read MORN_EXECUTION_ATTESTATION_FILE: {error}"
+            )));
+        }
     };
     if path.trim().is_empty() {
         return Err(morn_kernel::error::Error::validation(
             "MORN_EXECUTION_ATTESTATION_FILE must not be empty when set",
         ));
     }
+    let provider_name = std::env::var("MORN_EXECUTION_ATTESTOR").map_err(|_| {
+        morn_kernel::error::Error::validation(
+            "MORN_EXECUTION_ATTESTOR is required when MORN_EXECUTION_ATTESTATION_FILE is configured",
+        )
+    })?;
+    let provider_name = provider_name.trim();
+    if provider_name.is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_EXECUTION_ATTESTOR must not be empty when execution attestation evidence is configured",
+        ));
+    }
+    let mut provider = AttestedExecutionEnvironmentProvider::new(provider_name)?;
     let raw = std::fs::read_to_string(&path).map_err(|error| {
         morn_kernel::error::Error::external(format!(
             "cannot read execution attestation file {path:?}: {error}"
