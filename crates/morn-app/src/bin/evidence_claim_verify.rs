@@ -26,10 +26,16 @@ fn main() -> Result<()> {
         &std::env::var("MORN_EVIDENCE_EXPECTED_CLASS")
             .map_err(|_| Error::validation("MORN_EVIDENCE_EXPECTED_CLASS is required"))?,
     )?;
+    let expected_build_ref = std::env::var("MORN_EVIDENCE_EXPECTED_BUILD_REF")
+        .map_err(|_| Error::validation("MORN_EVIDENCE_EXPECTED_BUILD_REF is required"))?;
 
-    if path.trim().is_empty() || issuer.trim().is_empty() || expected_subject.trim().is_empty() {
+    if path.trim().is_empty()
+        || issuer.trim().is_empty()
+        || expected_subject.trim().is_empty()
+        || expected_build_ref.trim().is_empty()
+    {
         return Err(Error::validation(
-            "evidence file, issuer and expected subject must be non-empty",
+            "evidence file, issuer, expected subject and expected build ref must be non-empty",
         ));
     }
 
@@ -64,6 +70,21 @@ fn main() -> Result<()> {
             "future-dated customer/deployment evidence cannot be admitted",
         ));
     }
+    let expected_build_ref = expected_build_ref.trim();
+    if !expected_build_ref.contains("://") {
+        return Err(Error::validation(
+            "expected build ref must be an explicit evidence URI",
+        ));
+    }
+    if !claim
+        .evidence_refs
+        .iter()
+        .any(|reference| reference == expected_build_ref)
+    {
+        return Err(Error::validation(format!(
+            "claim does not reference the exact deployment build identity {expected_build_ref}"
+        )));
+    }
 
     // Match normal deployment startup exactly: external claims are appended
     // after repository/reference baseline claims, so duplicate ids or history
@@ -80,11 +101,12 @@ fn main() -> Result<()> {
             "claims": {
                 "schema_and_semantics_validated": true,
                 "issuer_identity_pinned": true,
+                "deployment_build_identity_pinned": true,
                 "external_evidence_cryptographically_verified_by_morn": false,
                 "customer_fact_minted_by_morn": false,
                 "production_write_authority_granted": false
             },
-            "note": "This gate validates the protected deployment envelope and exact subject/class only. The external governance system remains responsible for the evidence referenced by the claim."
+            "note": "This gate validates the protected deployment envelope, exact subject/class, and exact deployment build reference only. The external governance system remains responsible for the evidence referenced by the claim."
         }))
         .map_err(|error| Error::internal(error.to_string()))?
     );
