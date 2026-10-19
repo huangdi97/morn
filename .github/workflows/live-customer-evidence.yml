@@ -23,6 +23,10 @@ on:
         description: "Exact deployment/customer site identity"
         type: string
         required: true
+      build_identity_ref:
+        description: "Exact deployment build identity URI that the customer evidence must cite"
+        type: string
+        required: true
       acknowledge_external_truth:
         description: "I understand Morn validates the envelope only and does not mint/cryptographically prove the referenced customer fact"
         type: boolean
@@ -45,6 +49,7 @@ jobs:
     env:
       INPUT_EVIDENCE_CLASS: ${{ inputs.evidence_class }}
       INPUT_SITE_REF: ${{ inputs.site_ref }}
+      INPUT_BUILD_IDENTITY_REF: ${{ inputs.build_identity_ref }}
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -61,6 +66,13 @@ jobs:
           site = os.environ["INPUT_SITE_REF"]
           if not site.strip() or any(ord(ch) < 32 for ch in site):
               raise SystemExit("site_ref must be a non-empty single-line identity")
+          build_ref = os.environ["INPUT_BUILD_IDENTITY_REF"]
+          if (
+              not build_ref.strip()
+              or any(ord(ch) < 32 for ch in build_ref)
+              or "://" not in build_ref
+          ):
+              raise SystemExit("build_identity_ref must be a non-empty single-line evidence URI")
 
           evidence_class = os.environ["INPUT_EVIDENCE_CLASS"]
           if evidence_class not in ("real-site", "production-write"):
@@ -74,7 +86,9 @@ jobs:
           print("PLAN ONLY - no secrets read and no customer evidence validated or minted.")
           print(f"evidence_class={evidence_class}")
           print(f"site_ref={site}")
+          print(f"build_identity_ref={build_ref}")
           print(f"expected_subject={expected}")
+          print("claim requirement: evidence_refs must contain the exact build_identity_ref")
           print("required environment: morn-customer-evidence")
           print(
               "required secrets: MORN_CUSTOMER_EVIDENCE_CLAIM_JSON, MORN_EVIDENCE_ISSUER"
@@ -91,6 +105,7 @@ jobs:
     env:
       INPUT_EVIDENCE_CLASS: ${{ inputs.evidence_class }}
       INPUT_SITE_REF: ${{ inputs.site_ref }}
+      INPUT_BUILD_IDENTITY_REF: ${{ inputs.build_identity_ref }}
       INPUT_ACK_EXTERNAL: ${{ inputs.acknowledge_external_truth }}
 
     steps:
@@ -123,10 +138,12 @@ jobs:
           fi
           python - <<'PY'
           import os
-          for name in ("INPUT_SITE_REF", "TRUSTED_EVIDENCE_ISSUER"):
+          for name in ("INPUT_SITE_REF", "TRUSTED_EVIDENCE_ISSUER", "INPUT_BUILD_IDENTITY_REF"):
               value = os.environ[name]
               if not value.strip() or any(ord(ch) < 32 for ch in value):
                   raise SystemExit(f"{name} must be a non-empty single-line identity")
+          if "://" not in os.environ["INPUT_BUILD_IDENTITY_REF"]:
+              raise SystemExit("INPUT_BUILD_IDENTITY_REF must be an explicit evidence URI")
           PY
           mkdir -p target/live-customer-evidence
           claim_file="$RUNNER_TEMP/morn-customer-evidence-claim-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
@@ -138,6 +155,7 @@ jobs:
           printf '%s' "$EVIDENCE_CLAIM_JSON" > "$claim_file"
           printf 'MORN_EVIDENCE_CLAIM_FILE=%s\n' "$claim_file" >> "$GITHUB_ENV"
           printf 'MORN_EVIDENCE_EXPECTED_CLASS=%s\n' "$INPUT_EVIDENCE_CLASS" >> "$GITHUB_ENV"
+          printf 'MORN_EVIDENCE_EXPECTED_BUILD_REF=%s\n' "$INPUT_BUILD_IDENTITY_REF" >> "$GITHUB_ENV"
           if [[ "$INPUT_EVIDENCE_CLASS" == "real-site" ]]; then
             expected="factory-customer:$INPUT_SITE_REF"
           else
