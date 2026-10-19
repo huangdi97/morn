@@ -214,6 +214,7 @@ fn runtime_axis(
     id: &str,
     subject: &str,
     runtime: RuntimeReadinessEvidence,
+    build_identity_ref: Option<&str>,
 ) -> ReleaseReadinessAxis {
     let mut axis = evidence_axis(
         ledger,
@@ -225,8 +226,27 @@ fn runtime_axis(
 
     // Real runtime readiness is conjunctive: a deployment proof without a
     // current health lease is stale, while a healthy process without explicit
-    // RealRuntime evidence remains unproven.
+    // RealRuntime evidence remains unproven. When a running build identity is
+    // configured, the live-provider proof must also name that exact Morn build:
+    // a smoke from an older adapter/control-plane build cannot be replayed into
+    // a newer deployment merely because the provider artifact stayed constant.
     if axis.state == ReadinessState::Proven {
+        if let Some(build_identity_ref) = build_identity_ref
+            .map(str::trim)
+            .filter(|reference| !reference.is_empty())
+        {
+            if !axis
+                .evidence_refs
+                .iter()
+                .any(|reference| reference == build_identity_ref)
+            {
+                axis.state = ReadinessState::IdentityMismatch;
+                axis.reason = format!(
+                    "real-runtime proof does not reference the running Morn build identity {build_identity_ref}"
+                );
+                return axis;
+            }
+        }
         if runtime.fresh_healthy {
             let Some(runtime_identity_ref) = runtime
                 .runtime_identity_ref
@@ -332,8 +352,15 @@ pub fn release_readiness_axes_for_deployment(
             "deepseek-live-runtime",
             "deepseek-harness",
             dsh_runtime,
+            build_identity_ref,
         ),
-        runtime_axis(ledger, "pi-live-runtime", "pi-harness", pi_runtime),
+        runtime_axis(
+            ledger,
+            "pi-live-runtime",
+            "pi-harness",
+            pi_runtime,
+            build_identity_ref,
+        ),
         build_bound_evidence_axis(
             ledger,
             "customer-real-site",
@@ -514,10 +541,11 @@ fn acquisition_step(
         "deepseek-live-runtime" => EvidenceAcquisitionStep {
             axis_id: axis.id.clone(),
             external_required: true,
-            acquisition: "Run authenticated E0 DSH smoke on the attested provider runner, then load the emitted RealRuntime claim and start the exact same pinned runtime route to obtain a fresh Healthy lease.".to_string(),
+            acquisition: "Run authenticated E0 DSH smoke for the exact Morn build on the attested provider runner, then load the emitted RealRuntime claim and start the exact same pinned runtime route to obtain a fresh Healthy lease.".to_string(),
             workflow_ref: Some(".github/workflows/live-dsh-evidence.yml".to_string()),
-            artifact_or_input: "real-runtime-evidence-claim.json + fresh DSH Healthy lease".to_string(),
+            artifact_or_input: "real-runtime-evidence-claim.json citing the exact MORN_BUILD_IDENTITY_REF + fresh DSH Healthy lease".to_string(),
             deployment_inputs: vec![
+                "MORN_BUILD_IDENTITY_REF".to_string(),
                 "MORN_EVIDENCE_CLAIMS_FILE".to_string(),
                 "MORN_EVIDENCE_ISSUER".to_string(),
                 "MORN_DSH_MODE=real".to_string(),
@@ -528,10 +556,11 @@ fn acquisition_step(
         "pi-live-runtime" => EvidenceAcquisitionStep {
             axis_id: axis.id.clone(),
             external_required: true,
-            acquisition: "Run authenticated E0 Pi smoke on the attested provider runner, then load the emitted RealRuntime claim and start the exact same pinned runtime route to obtain a fresh Healthy lease.".to_string(),
+            acquisition: "Run authenticated E0 Pi smoke for the exact Morn build on the attested provider runner, then load the emitted RealRuntime claim and start the exact same pinned runtime route to obtain a fresh Healthy lease.".to_string(),
             workflow_ref: Some(".github/workflows/live-pi-evidence.yml".to_string()),
-            artifact_or_input: "real-runtime-evidence-claim.json + fresh Pi Healthy lease".to_string(),
+            artifact_or_input: "real-runtime-evidence-claim.json citing the exact MORN_BUILD_IDENTITY_REF + fresh Pi Healthy lease".to_string(),
             deployment_inputs: vec![
+                "MORN_BUILD_IDENTITY_REF".to_string(),
                 "MORN_EVIDENCE_CLAIMS_FILE".to_string(),
                 "MORN_EVIDENCE_ISSUER".to_string(),
                 "MORN_PI_MODE=real".to_string(),
@@ -1301,6 +1330,73 @@ mod tests {
                 ReadinessState::Proven
             );
         }
+    }
+
+    #[test]
+    fn runtime_proof_cannot_be_reused_across_morn_builds() {
+        let runtime = "runtime://deepseek-harness/v1#sha256:artifact";
+        let old_build = "build://morn/old";
+        let current_build = "build://morn/current";
+        let mut ledger = reference_evidence_ledger();
+        ledger
+            .append(
+                EvidenceClaim::proven(
+                    "deepseek-harness",
+                    EvidenceClass::RealRuntime,
+                    vec![runtime.to_string(), old_build.to_string()],
+                    "deployment-attestor",
+                    "authenticated provider smoke passed on the old Morn build",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let stale = release_readiness_axes_for_build(
+            &ledger,
+            RuntimeReadinessEvidence::healthy_for_identity(
+                vec!["health://dsh/settled-turn".to_string()],
+                runtime,
+                "fresh provider health on the current deployment",
+            ),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            Some(current_build),
+        );
+        let dsh = stale
+            .iter()
+            .find(|axis| axis.id == "deepseek-live-runtime")
+            .unwrap();
+        assert_eq!(dsh.state, ReadinessState::IdentityMismatch);
+        assert!(dsh.reason.contains(current_build));
+
+        let mut current = EvidenceClaim::proven(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec![runtime.to_string(), current_build.to_string()],
+            "deployment-attestor",
+            "authenticated provider smoke repeated on the current Morn build",
+        )
+        .unwrap();
+        current.observed_at = Timestamp::from_millis(Timestamp::now().millis() + 1);
+        ledger.append(current).unwrap();
+
+        let fresh = release_readiness_axes_for_build(
+            &ledger,
+            RuntimeReadinessEvidence::healthy_for_identity(
+                vec!["health://dsh/settled-turn".to_string()],
+                runtime,
+                "fresh provider health on the current deployment",
+            ),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            Some(current_build),
+        );
+        assert_eq!(
+            fresh
+                .iter()
+                .find(|axis| axis.id == "deepseek-live-runtime")
+                .unwrap()
+                .state,
+            ReadinessState::Proven
+        );
     }
 
     #[test]
