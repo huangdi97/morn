@@ -170,6 +170,45 @@ fn ci_axis(ledger: &EvidenceLedger, build_identity_ref: Option<&str>) -> Release
     axis
 }
 
+fn build_bound_evidence_axis(
+    ledger: &EvidenceLedger,
+    id: &str,
+    subject: &str,
+    class: EvidenceClass,
+    missing_reason: &str,
+    build_identity_ref: Option<&str>,
+) -> ReleaseReadinessAxis {
+    let mut axis = evidence_axis(ledger, id, subject, class, missing_reason);
+    if axis.state != ReadinessState::Proven {
+        return axis;
+    }
+
+    let Some(build_identity_ref) = build_identity_ref
+        .map(str::trim)
+        .filter(|reference| !reference.is_empty())
+    else {
+        axis.state = ReadinessState::MissingEvidence;
+        axis.reason = format!(
+            "{} proof exists, but the running deployment has no exact build identity configured",
+            class.key()
+        );
+        return axis;
+    };
+
+    if !axis
+        .evidence_refs
+        .iter()
+        .any(|reference| reference == build_identity_ref)
+    {
+        axis.state = ReadinessState::IdentityMismatch;
+        axis.reason = format!(
+            "{} proof does not reference the running build identity {build_identity_ref}",
+            class.key()
+        );
+    }
+    axis
+}
+
 fn runtime_axis(
     ledger: &EvidenceLedger,
     id: &str,
@@ -255,8 +294,9 @@ pub fn release_readiness_axes_for_build(
 }
 
 /// Project readiness for one explicit deployment site. RealSite and
-/// ProductionWrite evidence is site-scoped so proof from plant-a can never make
-/// plant-b ready.
+/// ProductionWrite evidence is site-scoped and build-bound so proof from
+/// plant-a or from an older deployment build can never make a different target
+/// ready.
 pub fn release_readiness_axes_for_deployment(
     ledger: &EvidenceLedger,
     dsh_runtime: RuntimeReadinessEvidence,
@@ -294,19 +334,21 @@ pub fn release_readiness_axes_for_deployment(
             dsh_runtime,
         ),
         runtime_axis(ledger, "pi-live-runtime", "pi-harness", pi_runtime),
-        evidence_axis(
+        build_bound_evidence_axis(
             ledger,
             "customer-real-site",
             &customer_subject,
             EvidenceClass::RealSite,
             "no authorized real-site evidence exists",
+            build_identity_ref,
         ),
-        evidence_axis(
+        build_bound_evidence_axis(
             ledger,
             "production-write",
             &write_subject,
             EvidenceClass::ProductionWrite,
             "no explicit production-write evidence exists",
+            build_identity_ref,
         ),
     ]
 }
@@ -506,9 +548,12 @@ fn acquisition_step(
                 external_required: true,
                 acquisition: "Obtain deployment/customer-owned real-site evidence for the exact site and load it through the trusted evidence-claim file.".to_string(),
                 workflow_ref: Some(".github/workflows/live-customer-evidence.yml".to_string()),
-                artifact_or_input: format!("RealSite EvidenceClaim subject={subject}"),
+                artifact_or_input: format!(
+                    "RealSite EvidenceClaim subject={subject} citing the exact MORN_BUILD_IDENTITY_REF"
+                ),
                 deployment_inputs: vec![
                     "MORN_DEPLOYMENT_SITE_REF".to_string(),
+                    "MORN_BUILD_IDENTITY_REF".to_string(),
                     "MORN_EVIDENCE_CLAIMS_FILE".to_string(),
                     "MORN_EVIDENCE_ISSUER".to_string(),
                 ],
@@ -524,9 +569,12 @@ fn acquisition_step(
                 external_required: true,
                 acquisition: "Load deployment-owned ProductionWrite evidence for the exact site; each real action still needs an independent Work/Profile/Authority/Permit decision.".to_string(),
                 workflow_ref: Some(".github/workflows/live-customer-evidence.yml".to_string()),
-                artifact_or_input: format!("ProductionWrite EvidenceClaim subject={subject}"),
+                artifact_or_input: format!(
+                    "ProductionWrite EvidenceClaim subject={subject} citing the exact MORN_BUILD_IDENTITY_REF"
+                ),
                 deployment_inputs: vec![
                     "MORN_DEPLOYMENT_SITE_REF".to_string(),
+                    "MORN_BUILD_IDENTITY_REF".to_string(),
                     "MORN_EVIDENCE_CLAIMS_FILE".to_string(),
                     "MORN_EVIDENCE_ISSUER".to_string(),
                 ],
@@ -1166,6 +1214,96 @@ mod tests {
         assert!(site
             .safety_boundary
             .contains("cannot mint customer/site truth"));
+    }
+
+    #[test]
+    fn site_and_write_proofs_cannot_be_reused_across_deployment_builds() {
+        let old_build = "build://morn/old";
+        let current_build = "build://morn/current";
+        let mut ledger = reference_evidence_ledger();
+
+        let mut site = EvidenceClaim::proven(
+            "factory-customer:plant-a",
+            EvidenceClass::RealSite,
+            vec![
+                "site://plant-a/pilot-1".to_string(),
+                old_build.to_string(),
+            ],
+            "deployment-attestor",
+            "plant-a pilot on the old build",
+        )
+        .unwrap();
+        site.observed_at = Timestamp::from_millis(10);
+        ledger.append(site).unwrap();
+
+        let mut write = EvidenceClaim::proven(
+            "factory-production-write:plant-a",
+            EvidenceClass::ProductionWrite,
+            vec![
+                "write://plant-a/change-1".to_string(),
+                old_build.to_string(),
+            ],
+            "deployment-attestor",
+            "plant-a write evidence on the old build",
+        )
+        .unwrap();
+        write.observed_at = Timestamp::from_millis(10);
+        ledger.append(write).unwrap();
+
+        let stale = release_readiness_axes_for_deployment(
+            &ledger,
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            Some(current_build),
+            Some("plant-a"),
+        );
+        for id in ["customer-real-site", "production-write"] {
+            let axis = stale.iter().find(|axis| axis.id == id).unwrap();
+            assert_eq!(axis.state, ReadinessState::IdentityMismatch);
+            assert!(axis.reason.contains(current_build));
+        }
+
+        let mut fresh_site = EvidenceClaim::proven(
+            "factory-customer:plant-a",
+            EvidenceClass::RealSite,
+            vec![
+                "site://plant-a/pilot-2".to_string(),
+                current_build.to_string(),
+            ],
+            "deployment-attestor",
+            "plant-a pilot repeated on the current build",
+        )
+        .unwrap();
+        fresh_site.observed_at = Timestamp::from_millis(20);
+        ledger.append(fresh_site).unwrap();
+
+        let mut fresh_write = EvidenceClaim::proven(
+            "factory-production-write:plant-a",
+            EvidenceClass::ProductionWrite,
+            vec![
+                "write://plant-a/change-2".to_string(),
+                current_build.to_string(),
+            ],
+            "deployment-attestor",
+            "plant-a write evidence repeated on the current build",
+        )
+        .unwrap();
+        fresh_write.observed_at = Timestamp::from_millis(20);
+        ledger.append(fresh_write).unwrap();
+
+        let fresh = release_readiness_axes_for_deployment(
+            &ledger,
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            Some(current_build),
+            Some("plant-a"),
+        );
+        for id in ["customer-real-site", "production-write"] {
+            assert_eq!(
+                fresh.iter().find(|axis| axis.id == id).unwrap().state,
+                ReadinessState::Proven
+            );
+        }
     }
 
     #[test]
