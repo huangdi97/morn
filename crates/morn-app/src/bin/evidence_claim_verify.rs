@@ -98,6 +98,7 @@ fn main() -> Result<()> {
             "gate": "MORN_DEPLOYMENT_EVIDENCE_CLAIM_VERIFY",
             "status": "PASS",
             "claim": claim,
+            "expected_build_identity_ref": expected_build_ref,
             "claims": {
                 "schema_and_semantics_validated": true,
                 "issuer_identity_pinned": true,
