@@ -57,9 +57,10 @@ Canonical invariants:
 - Reviewer attestations are append-only/versioned by principal + observation time, so identity evidence can rotate without rewriting historical decisions.
 - Accepted outcome/value records cannot borrow evidence from another Work/generation/workspace.
 - Harness output and assistant text never directly create ObservedOutcome or AcceptanceDecision.
-- Deployment evidence files require a deployment-pinned issuer identity; payloads cannot self-select a trusted issuer.
-- Customer RealSite and ProductionWrite facts remain append-only evidence history, but **current deployment readiness** additionally requires the exact `MORN_DEPLOYMENT_SITE_REF` and exact `MORN_BUILD_IDENTITY_REF`; evidence from another site or older build cannot be spliced into a different running deployment.
-- RealRuntime proof must cite the exact running Morn build plus the exact active DSH/Pi runtime artifact and profile/route/environment identities, in addition to a fresh Healthy lease; neither an older Morn adapter build nor replacement-provider health can reuse an old smoke claim.
+- Deployment evidence files require a deployment-pinned issuer identity; payloads cannot self-select a trusted issuer. Loading execution-environment attestation evidence additionally requires an explicit non-empty `MORN_EXECUTION_ATTESTOR`; the reference-only default is never accepted as the trust selector for an external attestation file.
+- Customer RealSite and ProductionWrite facts remain append-only evidence history, but **current deployment readiness** additionally requires the exact `MORN_DEPLOYMENT_SITE_REF` and exact `MORN_BUILD_IDENTITY_REF`; evidence from another site or older build cannot be spliced into a different running deployment. Missing build/site identity is fail-closed at the individual readiness-axis level, not only at the aggregate scope.
+- RealRuntime proof must cite the exact running Morn build plus the exact active DSH/Pi runtime artifact and profile/route/environment identities, in addition to a fresh Healthy lease; neither an older Morn adapter build nor replacement-provider health can reuse an old smoke claim. A configured runtime build identity must exactly match the build identity compiled into the running `morn-app` binary, so a newer binary cannot be relabeled at runtime as an older proven build.
+- App bootstrap validates deployment/build/site/evidence/provider/trust configuration before opening or mutating durable storage. Invalid deployment identity, attestation or provider configuration therefore cannot leave a newly created workspace or partially persisted startup trust configuration behind.
 - Evidence history is time-aware: equal-time conflicting subject/class claims are rejected, and future-dated claims are not current proof for readiness or CustomerValidated value.
 
 ### Capability supply chain
@@ -81,6 +82,7 @@ Canonical invariants:
 A green reference CI may prove only repository-local engineering gates.
 
 Required exact-HEAD CI:
+- PR CI explicitly checks out `pull_request.head.sha` (or `github.sha` outside PRs), verifies `git rev-parse HEAD`, disables checkout credential persistence, and names reference artifacts with that tested source SHA; the repository audit fails if this source-identity contract drifts.
 - Rust fmt
 - Clippy with `-D warnings`
 - workspace tests, all features
@@ -109,20 +111,22 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `c307ba70c357c31669c2b8d78f1d728939ec7741`.
-- Exact-head GitHub Actions: `39255039214` — **5/5 SUCCESS**.
-- Covered gates: privileged-workflow and external-evidence-entrypoint audits; full Cargo.lock resolution; Rust fmt; Clippy `-D warnings`; workspace all-features tests; domain-boundary guard; zero-domain Core build/tests; developer CLI smoke; frontend typecheck/lint/test/build; Playwright/BioLab/zero-domain browser E2E; Cordis reference runtime; and the Windows desktop reference build with owned-backend, foreign-port/protocol-mismatch and single-instance-lock probes.
-- Provider evidence minimization is now provider-neutral across qualified DSH SDK, DSH ACP and Pi paths: private reasoning and raw tool payload/free-form tool metadata are removed at ingress without weakening tool-activity fail-closed detection or settlement correlation.
-- Deployment-readiness coherence now rejects cross-epoch evidence splicing across **RealRuntime, RealSite and ProductionWrite**: current runtime proof must cite the exact running Morn build, and current customer/write axes must use the exact site subject and cite that same build identity. Historical evidence remains auditable rather than rewritten.
-- The protected customer/production evidence handoff requires `build_identity_ref`, the verifier requires the same exact build in the claim's evidence refs, the normalized report exposes the verified build identity, and the repository entrypoint audit fails if that contract is removed.
+- Verified implementation checkpoint: `5287de6c915dde49fce110c897d3ef938191d535`.
+- Exact-source-head GitHub Actions: `39262476902` — **5/5 SUCCESS**. Every PR job explicitly checked out `pull_request.head.sha`; Backend additionally verified the checkout against `git rev-parse HEAD`, so this result is evidence for the feature/source HEAD rather than GitHub's synthetic `refs/pull/<n>/merge` commit.
+- Covered gates: privileged-workflow, external-evidence-entrypoint and CI-source-identity audits; full Cargo.lock resolution; Rust fmt; Clippy `-D warnings`; workspace all-features tests; domain-boundary guard; zero-domain Core build/tests; developer CLI smoke; frontend typecheck/lint/test/build; Playwright/BioLab/zero-domain browser E2E; Cordis reference runtime; and the Windows desktop reference build with owned-backend, foreign-port/protocol-mismatch and single-instance-lock probes.
+- Provider evidence minimization remains provider-neutral across qualified DSH SDK, DSH ACP and Pi paths: private reasoning and raw tool payload/free-form tool metadata are removed at ingress without weakening tool-activity fail-closed detection or settlement correlation.
+- Deployment-readiness coherence now rejects cross-epoch evidence splicing across **RealRuntime, RealSite and ProductionWrite** at the axis itself: current runtime proof requires an explicit exact running build, and current customer/write proof requires an explicit exact site plus that same build. Historical evidence remains auditable rather than rewritten.
+- Runtime build identity is binary-anchored: if `MORN_BUILD_IDENTITY_REF` is configured, it must exactly match the value embedded at compile time in `morn-app`; reusable provider smoke claims read the already-validated AppState identity rather than reparsing a second ambient label.
+- Loading an execution-environment attestation file requires an explicit `MORN_EXECUTION_ATTESTOR`. All deployment/provider/trust configuration is validated before `MornStore::open` or startup trust persistence, so configuration failure is fail-closed before durable state mutation.
+- The protected customer/production evidence handoff still requires `build_identity_ref`, the verifier requires the same exact build in the claim's evidence refs, the normalized report exposes the verified build identity, and the repository entrypoint audit fails if that contract is removed.
 - ProductionWrite evidence remains distinct from action authority: no readiness claim can grant Profile/Authority permission or replace the exact Work-generation/action/resource/site ExternalActionPermit path.
-- RealRuntime readiness is independently pinned to the exact Morn build + active provider artifact + profile/route/environment identities plus a fresh Healthy lease. `live-dsh-evidence.yml` and `live-pi-evidence.yml` derive `MORN_BUILD_IDENTITY_REF` from the exact checked-out GitHub SHA rather than accepting a caller-selected build label, and CI audits lock that contract.
+- RealRuntime readiness remains independently pinned to the exact Morn build + active provider artifact + profile/route/environment identities plus a fresh Healthy lease. `live-dsh-evidence.yml` and `live-pi-evidence.yml` derive `MORN_BUILD_IDENTITY_REF` from the exact checked-out GitHub SHA rather than accepting a caller-selected build label.
 - Protected live-provider, supply-chain, execution-environment, real BioLab and customer evidence remain independently external. No local gate above converts B-001/B-002/B-003/B-004/G4-B-002/G12 or production/physical write to PASS.
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `c307ba70c357c31669c2b8d78f1d728939ec7741` and Actions `39255039214`.**
-- The verified checkpoint includes the Work/acceptance trust chain, real DSH/Pi adapter boundaries, provider-ingress evidence minimization, exact DSH distribution qualification, deployment-coherent runtime/customer/write readiness, owned desktop-backend lifecycle, Tauri security hardening, four-surface UI smoke and zero-domain gates.
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `5287de6c915dde49fce110c897d3ef938191d535` and exact-source-head Actions `39262476902`.**
+- The verified checkpoint includes the Work/acceptance trust chain, real DSH/Pi adapter boundaries, provider-ingress evidence minimization, exact DSH distribution qualification, binary-anchored build identity, exact build/site deployment-readiness coherence, explicit execution-attestor trust, pre-storage deployment configuration validation, exact-source CI identity, owned desktop-backend lifecycle, Tauri security hardening, four-surface UI smoke and zero-domain gates.
 - PR #1 remains draft because repository-local engineering evidence is not authenticated provider/customer/production evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.
 - Any later code SHA must obtain its own full exact-head CI before inheriting `ALL_LOCAL_GATES_PASS`; documentation-only commits do not inherit the prior SHA's green status automatically.
