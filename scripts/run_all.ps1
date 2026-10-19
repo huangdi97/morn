@@ -30,6 +30,7 @@ Run-Step "cargo test" { cargo test --workspace --all-features }
 Run-Step "domain boundary guard" { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check_domain_boundary.ps1 }
 Run-Step "privileged workflow audit" { python scripts\audit_privileged_workflows.py }
 Run-Step "external evidence entrypoint audit" { python scripts\audit_external_evidence_entrypoints.py }
+Run-Step "CI source identity audit" { python scripts\audit_ci_source_identity.py }
 Run-Step "zero-domain Core build" { cargo check -p morn-app }
 Run-Step "core-tests (zero-domain: migration/security/chaos/conformance/pure-core E2E)" { cargo test -p morn-core-tests }
 Run-Step "developer CLI smoke" {
