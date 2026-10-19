@@ -177,7 +177,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, pathlib
+          import json, os, pathlib
           report_path = pathlib.Path("target/live-customer-evidence/verification-report.json")
           report = json.loads(report_path.read_text(encoding="utf-8"))
           if report.get("status") != "PASS":
@@ -185,6 +185,9 @@ jobs:
           claim = report.get("claim")
           if not isinstance(claim, dict):
               raise SystemExit("PASS report missing normalized EvidenceClaim")
+          expected_build = report.get("expected_build_identity_ref")
+          if expected_build != os.environ["INPUT_BUILD_IDENTITY_REF"]:
+              raise SystemExit("PASS report build identity differs from workflow input")
           claims = report.get("claims", {})
           if claims.get("customer_fact_minted_by_morn") is not False:
               raise SystemExit("gate must never claim Morn minted customer truth")
