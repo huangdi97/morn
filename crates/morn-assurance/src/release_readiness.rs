@@ -309,7 +309,7 @@ pub fn release_readiness_axes(
     dsh_runtime: RuntimeReadinessEvidence,
     pi_runtime: RuntimeReadinessEvidence,
 ) -> Vec<ReleaseReadinessAxis> {
-    release_readiness_axes_for_build(ledger, dsh_runtime, pi_runtime, None)
+    release_readiness_axes_internal(ledger, dsh_runtime, pi_runtime, None, None, false)
 }
 
 pub fn release_readiness_axes_for_build(
@@ -318,7 +318,14 @@ pub fn release_readiness_axes_for_build(
     pi_runtime: RuntimeReadinessEvidence,
     build_identity_ref: Option<&str>,
 ) -> Vec<ReleaseReadinessAxis> {
-    release_readiness_axes_for_deployment(ledger, dsh_runtime, pi_runtime, build_identity_ref, None)
+    release_readiness_axes_internal(
+        ledger,
+        dsh_runtime,
+        pi_runtime,
+        build_identity_ref,
+        None,
+        true,
+    )
 }
 
 /// Project readiness for one explicit deployment site. RealSite and
@@ -331,6 +338,24 @@ pub fn release_readiness_axes_for_deployment(
     pi_runtime: RuntimeReadinessEvidence,
     build_identity_ref: Option<&str>,
     site_ref: Option<&str>,
+) -> Vec<ReleaseReadinessAxis> {
+    release_readiness_axes_internal(
+        ledger,
+        dsh_runtime,
+        pi_runtime,
+        build_identity_ref,
+        site_ref,
+        true,
+    )
+}
+
+fn release_readiness_axes_internal(
+    ledger: &EvidenceLedger,
+    dsh_runtime: RuntimeReadinessEvidence,
+    pi_runtime: RuntimeReadinessEvidence,
+    build_identity_ref: Option<&str>,
+    site_ref: Option<&str>,
+    require_runtime_build_identity: bool,
 ) -> Vec<ReleaseReadinessAxis> {
     let site_ref = site_ref.map(str::trim).filter(|value| !value.is_empty());
     let customer_subject = site_ref
@@ -361,7 +386,7 @@ pub fn release_readiness_axes_for_deployment(
             "deepseek-harness",
             dsh_runtime,
             build_identity_ref,
-            true,
+            require_runtime_build_identity,
         ),
         runtime_axis(
             ledger,
@@ -369,7 +394,7 @@ pub fn release_readiness_axes_for_deployment(
             "pi-harness",
             pi_runtime,
             build_identity_ref,
-            true,
+            require_runtime_build_identity,
         ),
         build_bound_evidence_axis(
             ledger,
