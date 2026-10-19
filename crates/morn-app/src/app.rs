@@ -808,6 +808,14 @@ pub struct AppState(pub Arc<Mutex<AppInner>>);
 impl AppState {
     /// Build a fresh application with a demo BioLab workspace and harness providers.
     pub fn new(db_path: &str) -> morn_kernel::Result<Self> {
+        // Validate deployment identity/evidence inputs before opening or mutating
+        // durable state. A mismatched build/site/evidence envelope must fail
+        // without creating a workspace or persisting trust records.
+        let build_identity_ref = configured_build_identity_ref()?;
+        let deployment_site_ref = configured_deployment_site_ref()?;
+        let evidence_ledger = configured_evidence_ledger()?;
+        let supply_chain_verifications = configured_supply_chain_verifications()?;
+
         let store = MornStore::open(db_path)?;
         // Reuse the persisted workspace on restart so workspace-scoped records hydrate.
         let workspace = store
@@ -842,10 +850,6 @@ impl AppState {
         let customer_value_attestations = configured_customer_value_attestations()?;
         let executor_reconciliation_authorizations =
             configured_executor_reconciliation_authorizations()?;
-        let build_identity_ref = configured_build_identity_ref()?;
-        let deployment_site_ref = configured_deployment_site_ref()?;
-        let evidence_ledger = configured_evidence_ledger()?;
-        let supply_chain_verifications = configured_supply_chain_verifications()?;
         let mut inner = AppInner {
             store,
             workspace,
