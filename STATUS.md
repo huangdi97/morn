@@ -1,6 +1,6 @@
 # STATUS — Morn v11.5 Control Plane Convergence
 
-Updated: 2026-10-17  
+Updated: 2026-10-19  
 Branch: `feat/v11.5-control-plane-convergence`  
 PR: #1 (draft)
 
@@ -47,6 +47,7 @@ Canonical invariants:
 - Provider health uses bounded leases after a successful settled real turn; initialized/configured alone are not Healthy.
 - Official DSH distribution identity is independent of `serverInfo.version`: live launch is fail-closed unless the deployment-attested distribution version equals the currently qualified `0.2.1-rc.2`; test-only protocol fixtures cannot weaken that production gate.
 - DSH SDK `session/resume` / `session/wait` / working-directory methods are used only within their documented transport semantics; Work-facing durable lifecycle ownership remains generation/binding-scoped and is not inferred from a DSH session id.
+- DSH SDK, DSH ACP and Pi provider streams are minimized at transport ingress: private reasoning/transcript bodies, raw tool arguments/results and free-form tool names/titles are discarded before Morn buffering; only visible assistant output plus correlation/settlement/policy facts needed by the governed E0 boundary are retained.
 
 ### Trust and truth
 - Deployment-backed execution-environment attestations.
@@ -57,8 +58,8 @@ Canonical invariants:
 - Accepted outcome/value records cannot borrow evidence from another Work/generation/workspace.
 - Harness output and assistant text never directly create ObservedOutcome or AcceptanceDecision.
 - Deployment evidence files require a deployment-pinned issuer identity; payloads cannot self-select a trusted issuer.
-- Customer RealSite and ProductionWrite readiness is bound to the exact `MORN_DEPLOYMENT_SITE_REF`; evidence from one site cannot make another site ready.
-- RealRuntime proof must cite the exact active DSH/Pi runtime version+digest in addition to a fresh Healthy lease.
+- Customer RealSite and ProductionWrite facts remain append-only evidence history, but **current deployment readiness** additionally requires the exact `MORN_DEPLOYMENT_SITE_REF` and exact `MORN_BUILD_IDENTITY_REF`; evidence from another site or older build cannot be spliced into a different running deployment.
+- RealRuntime proof must cite the exact active DSH/Pi runtime artifact plus profile/route/environment identities in addition to a fresh Healthy lease; replacement-provider health cannot reuse an old smoke claim.
 - Evidence history is time-aware: equal-time conflicting subject/class claims are rejected, and future-dated claims are not current proof for readiness or CustomerValidated value.
 
 ### Capability supply chain
@@ -108,23 +109,20 @@ These are not converted to PASS by fixtures, protocol fakes, screenshots or docu
 
 ## Latest local verification
 
-- Verified implementation checkpoint: `eed9ada351f470c6e4113c999dbf29e2d79375bf`.
-- Exact-head GitHub Actions: `39044227292` — **5/5 SUCCESS**.
-- Covered gates: Rust fmt; Clippy `-D warnings`; workspace tests with all features; domain-boundary guard; zero-domain Core build/tests; zero-domain HTTP/browser runtime smoke (no domain packs, BioLab routes 404, no BioLab DOM); developer CLI smoke; frontend typecheck/lint/tests/build; Playwright four-surface + reference flows plus explicit loading/reconciling/rejected/error, Console/Hub loading and canonical-failure evidence, and multi-Work selection sync; Cordis reference runtime; Windows desktop reference build, owned-backend lifecycle smoke, foreign-port/protocol-mismatch fail-closed probe and single-instance lock probe; privileged-workflow audit plus the automated external-evidence entrypoint matrix (plan/verify, attested runner, protected environment, cleanup) for every live workflow.
-- Local Windows re-verification for this checkpoint: 670 Rust tests across 73 suites, all 12 developer CLI subcommands, frontend 28 tests + build, Cordis 2/2, nine browser state scenarios with screenshots, a real zero-domain server/browser run, `morn-desktop --probe-sidecar`, `--probe-foreign-port` and `--probe-instance-lock`, and seven valid/invalid plan-validation cases. The lockfile gate performs full dependency resolution, three Windows-only test-portability defects were fixed without weakening assertions, terminal/reconciling journeys no longer point at an impossible next step, Console no longer hides canonical failures, and the Workbench journey and governed executor share one selected Work.
-- The external-effect recovery path is crash-consistent: a write-like `Authorized` ActionAttempt and its one-shot ExternalActionPermit consumption commit atomically; dispatch is persisted before connector execution; an authoritative reconciliation atomically advances the Attempt and appends its immutable ReconciliationRecord.
-- The Factory read-only vertical slice follows that exact durable ordering through `Authorized -> Dispatched -> OutcomeUnknown -> Reconciliation -> Observed -> Verified`; ambiguous effects cannot be blindly redispatched.
-- ExecutionBinding/Work/business-key/resource/site/authority/permit/effect identity remains immutable across persisted Attempt snapshots, with CAS preventing stale projection overwrite.
-- DSH SDK/ACP integration has been re-checked against official DeepSeek Harness `0.2.1-rc.2`. Production configs require that exact qualified distribution plus deployment-attested digest/profile/route/environment identity. The only qualification bypass is the private `#[cfg(test)]` protocol-fixture transport and is not serializable or available to production builds.
-- SDK `session/resume`, `session/wait` and working-directory methods are treated as executor-transport controls only. Morn does not widen HarnessProvider lifecycle semantics or reconstruct Work ownership from a DSH session id.
-- For real providers without per-session close, the Morn E0 execution boundary constructs and persists a Work/generation/binding/scope/runtime-pinned `ExecutionReceipt` after each turn. A lost settlement or policy escape becomes an unsettled `outcome-unknown` receipt and requires explicit reconciliation; it never becomes an ObservedOutcome or AcceptanceDecision.
-- Protected live-provider, supply-chain, execution-environment, real BioLab and customer evidence handoffs remain independently external. No fixture, protocol fake, screenshot or local CI result converts those blockers to PASS.
-- Current repository-local required-design gap audit remains closed for the v11.5 reference scope at this implementation checkpoint; any later code SHA requires its own exact-head CI before inheriting this conclusion.
+- Verified implementation checkpoint: `d1c8bf11e373ae04b56c21d166fcb45f226ac254`.
+- Exact-head GitHub Actions: `39252110666` — **5/5 SUCCESS**.
+- Covered gates: privileged-workflow and external-evidence-entrypoint audits; full Cargo.lock resolution; Rust fmt; Clippy `-D warnings`; workspace all-features tests; domain-boundary guard; zero-domain Core build/tests; developer CLI smoke; frontend typecheck/lint/test/build; Playwright/BioLab/zero-domain browser E2E; Cordis reference runtime; and the Windows desktop reference build with owned-backend, foreign-port/protocol-mismatch and single-instance-lock probes.
+- Provider evidence minimization is now provider-neutral across qualified DSH SDK, DSH ACP and Pi paths: private reasoning and raw tool payload/free-form tool metadata are removed at ingress without weakening tool-activity fail-closed detection or settlement correlation.
+- Deployment-readiness coherence now rejects cross-epoch evidence splicing: a current RealSite or ProductionWrite readiness axis must use the exact site subject **and** cite the running build identity. Historical evidence remains auditable rather than rewritten.
+- The protected customer/production evidence handoff requires `build_identity_ref`, the verifier requires the same exact build in the claim's evidence refs, the normalized report exposes the verified build identity, and the repository entrypoint audit fails if that contract is removed.
+- ProductionWrite evidence remains distinct from action authority: no readiness claim can grant Profile/Authority permission or replace the exact Work-generation/action/resource/site ExternalActionPermit path.
+- RealRuntime readiness remains independently pinned to the active provider artifact + profile/route/environment identities plus fresh Healthy lease; provider replacement does not reinterpret old Work/binding/receipt history.
+- Protected live-provider, supply-chain, execution-environment, real BioLab and customer evidence remain independently external. No local gate above converts B-001/B-002/B-003/B-004/G4-B-002/G12 or production/physical write to PASS.
 
 ## Release posture
 
-- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `eed9ada351f470c6e4113c999dbf29e2d79375bf` and Actions `39044227292`.**
-- The verified checkpoint includes the Work/acceptance trust chain, real DSH/Pi adapter boundaries, exact DSH distribution qualification, owned desktop-backend lifecycle, Tauri security hardening, four-surface UI smoke and zero-domain gates.
+- **ALL_LOCAL_GATES_PASS = YES for verified implementation checkpoint `d1c8bf11e373ae04b56c21d166fcb45f226ac254` and Actions `39252110666`.**
+- The verified checkpoint includes the Work/acceptance trust chain, real DSH/Pi adapter boundaries, provider-ingress evidence minimization, exact DSH distribution qualification, deployment-coherent customer/write readiness, owned desktop-backend lifecycle, Tauri security hardening, four-surface UI smoke and zero-domain gates.
 - PR #1 remains draft because repository-local engineering evidence is not authenticated provider/customer/production evidence.
 - PRODUCTION_READY / CUSTOMER_G12 / LIVE_DSH / LIVE_PI remain false until their independent external evidence exists.
 - Any later code SHA must obtain its own full exact-head CI before inheriting `ALL_LOCAL_GATES_PASS`; documentation-only commits do not inherit the prior SHA's green status automatically.
