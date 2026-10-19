@@ -76,7 +76,7 @@ paths keep their protected environment, secrets, attestation and cleanup.
 | B-003 environment | deployment-owned attestation file supplied to DSH/Pi smoke | smoke aborts without a valid runtime-attested file | attestation file removed on exit; Morn never infers containment from caller labels |
 | B-004 supply chain | `live-supply-chain-evidence.yml` `plan` | `verify` with deployment registry auth | digest-pinned publication receipt plus independent Cosign/SLSA evidence |
 | G4-B-002 BioLab | `live-biolab-evidence.yml` `plan` | `verify` on `morn-attested-biolab` | byte-digest provenance report; protected provenance source removed |
-| G12 / production write | `live-customer-evidence.yml` `plan` | `verify` with deployment claim and issuer | normalized evidence envelope only; Morn never mints customer truth or write authority |
+| G12 / production write | `live-customer-evidence.yml` `plan` | `verify` with deployment claim, issuer and exact build identity | normalized build-bound evidence envelope only; Morn never mints customer truth or write authority |
 
 Plan validation rejects absolute/traversal dataset paths, multiline identities and
 unknown evidence classes. These entrypoints are local engineering only and do not
@@ -95,8 +95,8 @@ convert any blocker to PASS.
 
 - **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** under the current v11.5 reference scope at verified checkpoint `f121c0804cdc4b289636ac2cf44a227aa1403c58`, including the Work-bound ACP lifecycle/controller path and the owned local desktop-backend lifecycle/security boundary.
 - Release readiness no longer trusts a deployment claim merely because its payload names an issuer; `MORN_EVIDENCE_ISSUER` pins the deployment-owned issuer.
-- RealSite and ProductionWrite readiness are exact-site scoped through `MORN_DEPLOYMENT_SITE_REF`.
-- RealRuntime readiness requires the current provider version/digest identity and a fresh Healthy lease; an old smoke claim cannot be combined with a replacement runtime.
+- RealSite and ProductionWrite readiness are exact-site scoped through `MORN_DEPLOYMENT_SITE_REF` and, when used for current deployment readiness, must cite the exact `MORN_BUILD_IDENTITY_REF`; historical customer/write evidence remains auditable but cannot be combined with a different running build.
+- RealRuntime readiness requires the current provider version/digest/profile/route/environment identity and a fresh Healthy lease; an old smoke claim cannot be combined with a replacement runtime.
 - Equal-time conflicting evidence is rejected and future-dated evidence cannot satisfy readiness or customer-value support.
 - These are local trust/control-plane completions only. They do **not** change B-001/B-002/B-003/B-004/G4-B-002/G12 or authorize production/physical write.
 
@@ -288,7 +288,8 @@ The gate accepts only a deployment/customer-governance supplied `EvidenceClaim`
 from the protected `morn-customer-evidence` Environment, pins the exact
 `factory-customer:<site>` or `factory-production-write:<site>` subject,
 requires the expected evidence class, `Proven` state, non-future timestamp,
-non-empty evidence/reason and the deployment-pinned issuer, then exports a
+non-empty evidence/reason, the deployment-pinned issuer, and an evidence
+reference to the exact deployment `MORN_BUILD_IDENTITY_REF`, then exports a
 normalized claim suitable for `MORN_EVIDENCE_CLAIMS_FILE`.
 
 This **does not clear G12 or ProductionWrite by itself**. It does not mint the
