@@ -60,3 +60,27 @@ do not define inheritance. In particular:
 - ProductionWrite evidence does not retroactively prove design/CI claims.
 
 A report that needs several classes must require every class explicitly.
+
+## Deployment-coherence rule
+
+Evidence-class semantics remain categorical and append-only; this rule does not
+rewrite historical RealSite or ProductionWrite facts. However, when those
+classes are used to make a **current deployment-readiness** decision, Morn also
+requires identity coherence with the deployment being evaluated.
+
+- RealSite and ProductionWrite readiness use an exact site-scoped subject.
+- A Proven RealSite or ProductionWrite claim used by release readiness must cite
+  the exact `MORN_BUILD_IDENTITY_REF` of the running deployment.
+- A claim from an older build remains auditable history, but is projected as an
+  identity mismatch for a different running build until fresh deployment-owned
+  evidence is appended.
+- RealRuntime coherence remains stricter and independent: the current provider
+  artifact plus its profile/route/environment identities and a fresh Healthy
+  lease must all match.
+- ProductionWrite evidence still does not grant action authority. The exact
+  Work generation/action/resource/site must independently pass Profile /
+  Authority and consume its one-action ExternalActionPermit.
+
+This prevents a readiness result from being assembled out of individually valid
+but deployment-incoherent evidence epochs without turning EvidenceClass into an
+inheritance or maturity ladder.
