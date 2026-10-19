@@ -42,6 +42,8 @@ jobs:
         run: python3 scripts/audit_privileged_workflows.py
       - name: Audit external evidence entrypoints
         run: python3 scripts/audit_external_evidence_entrypoints.py
+      - name: Audit CI source identity
+        run: python3 scripts/audit_ci_source_identity.py
       - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
         with:
           components: rustfmt, clippy
