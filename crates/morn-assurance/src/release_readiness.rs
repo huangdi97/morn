@@ -256,6 +256,18 @@ fn runtime_axis(
             }
         }
         if runtime.fresh_healthy {
+            if runtime.evidence_refs.is_empty()
+                || runtime
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference.trim().is_empty())
+            {
+                axis.state = ReadinessState::MissingEvidence;
+                axis.reason =
+                    "fresh provider health has no auditable non-empty evidence references"
+                        .to_string();
+                return axis;
+            }
             let Some(runtime_identity_ref) = runtime
                 .runtime_identity_ref
                 .as_deref()
@@ -1739,6 +1751,40 @@ mod tests {
         assert!(axes[3]
             .evidence_refs
             .contains(&"health://dsh/lease-2".to_string()));
+    }
+
+    #[test]
+    fn healthy_boolean_without_health_witness_cannot_prove_real_runtime() {
+        let runtime_identity = "runtime://deepseek-harness/v1#sha256:current";
+        let build = "build://morn/current";
+        let mut ledger = reference_evidence_ledger();
+        let mut claim = EvidenceClaim::proven(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec![runtime_identity.to_string(), build.to_string()],
+            "deployment-attestor",
+            "authenticated runtime proof",
+        )
+        .unwrap();
+        claim.observed_at = Timestamp::from_millis(10);
+        ledger.append(claim).unwrap();
+
+        let axes = release_readiness_axes_for_build(
+            &ledger,
+            RuntimeReadinessEvidence::healthy_for_identity(
+                vec![],
+                runtime_identity,
+                "caller asserted a fresh health boolean without a witness",
+            ),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            Some(build),
+        );
+        let dsh = axes
+            .iter()
+            .find(|axis| axis.id == "deepseek-live-runtime")
+            .unwrap();
+        assert_eq!(dsh.state, ReadinessState::MissingEvidence);
+        assert!(dsh.reason.contains("no auditable non-empty evidence references"));
     }
 
     #[test]
