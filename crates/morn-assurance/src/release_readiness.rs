@@ -871,15 +871,7 @@ mod tests {
         dsh_runtime: RuntimeReadinessEvidence,
         pi_runtime: RuntimeReadinessEvidence,
     ) -> Vec<ReleaseReadinessAxis> {
-        release_readiness_axes_internal(
-            ledger,
-            dsh_runtime,
-            pi_runtime,
-            None,
-            None,
-            false,
-            false,
-        )
+        release_readiness_axes_internal(ledger, dsh_runtime, pi_runtime, None, None, false, false)
     }
     use crate::evidence_class::{reference_evidence_ledger, EvidenceClaim};
 
