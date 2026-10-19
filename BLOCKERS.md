@@ -44,8 +44,8 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are verified at implementation checkpoint
-`d1c8bf11e373ae04b56c21d166fcb45f226ac254` by exact-head Actions run
-`39252110666` (**5/5 SUCCESS**). This checkpoint includes provider-ingress evidence minimization, deployment-coherent RealSite/ProductionWrite readiness, the protected build-bound customer evidence handoff, the DSH-SDK ↔ Pi-RPC
+`c307ba70c357c31669c2b8d78f1d728939ec7741` by exact-head Actions run
+`39255039214` (**5/5 SUCCESS**). This checkpoint includes provider-ingress evidence minimization, build-bound RealRuntime/RealSite/ProductionWrite readiness, the protected build-bound provider/customer evidence handoffs, the DSH-SDK ↔ Pi-RPC
 adapter-wire semantic-neutrality, Work/acceptance trust hardening, owned desktop
 backend lifecycle/security boundary, the DSH `0.2.1-rc.2` distribution
 qualification gate, a full-resolution Cargo.lock gate, Windows-portable provider
@@ -65,10 +65,10 @@ or runner-binding results.
 
 ## 2026-10-19 deployment-evidence coherence hardening
 
-- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** remains the current v11.5 reference-scope result at verified implementation checkpoint `d1c8bf11e373ae04b56c21d166fcb45f226ac254`; exact-head Actions `39252110666` passed **5/5**.
+- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** remains the current v11.5 reference-scope result at verified implementation checkpoint `c307ba70c357c31669c2b8d78f1d728939ec7741`; exact-head Actions `39255039214` passed **5/5**.
 - DSH SDK, DSH ACP and Pi evidence streams now discard private reasoning, raw tool arguments/results and free-form tool names/titles at transport ingress while retaining only the visible assistant/correlation/settlement/policy facts required by the governed E0 boundary.
-- RealSite and ProductionWrite remain independent categorical evidence classes and append-only history. When used for **current deployment readiness**, however, their exact site-scoped claim must also cite the running `MORN_BUILD_IDENTITY_REF`; an old-build customer/write claim is auditable history, not readiness for a different build.
-- `live-customer-evidence.yml` carries the exact build identity through plan and verify; `evidence_claim_verify` rejects claims without it; the normalized report exposes the verified build; and the external-entrypoint audit locks that contract into CI.
+- RealRuntime, RealSite and ProductionWrite remain independent categorical evidence classes and append-only history. For **current deployment readiness**, RealRuntime must cite the exact running `MORN_BUILD_IDENTITY_REF` in addition to the active provider/runtime/route/environment identities and fresh health, while RealSite/ProductionWrite must use the exact site subject and cite that same build. Old-build proof remains auditable history, not readiness for a different build.
+- `live-dsh-evidence.yml` and `live-pi-evidence.yml` derive the canonical build identity as `git://huangdi97/morn/<github.sha>` from the exact checkout, include it in reusable RealRuntime claims and evidence artifacts, and the external-entrypoint audit fails if that binding disappears. `live-customer-evidence.yml` independently carries the deployment build identity through plan/verify and `evidence_claim_verify` rejects customer/write claims without it.
 - This does **not** mint customer truth, grant production-write authority, reinterpret provider success as Outcome/Acceptance, or change any external blocker below.
 
 ## External blocker local entrypoints — 2026-10-17
@@ -79,8 +79,8 @@ paths keep their protected environment, secrets, attestation and cleanup.
 
 | Blocker | Plan entrypoint | Live/verify entrypoint | Evidence and cleanup |
 |---|---|---|---|
-| B-001 DSH | `live-dsh-evidence.yml` `plan-sdk` / `plan-acp` | `smoke-sdk` / `smoke-acp` on `morn-attested-provider` | RealRuntime claim; always-cleanup of one-shot workspace, DSH home, venv and attestation file |
-| B-002 Pi | `live-pi-evidence.yml` `plan` | `smoke` on `morn-attested-provider` | RealRuntime claim; always-cleanup of workspace and attestation file |
+| B-001 DSH | `live-dsh-evidence.yml` `plan-sdk` / `plan-acp` | `smoke-sdk` / `smoke-acp` on `morn-attested-provider` | SHA-derived build-bound RealRuntime claim; always-cleanup of one-shot workspace, DSH home, venv and attestation file |
+| B-002 Pi | `live-pi-evidence.yml` `plan` | `smoke` on `morn-attested-provider` | SHA-derived build-bound RealRuntime claim; always-cleanup of workspace and attestation file |
 | B-003 environment | deployment-owned attestation file supplied to DSH/Pi smoke | smoke aborts without a valid runtime-attested file | attestation file removed on exit; Morn never infers containment from caller labels |
 | B-004 supply chain | `live-supply-chain-evidence.yml` `plan` | `verify` with deployment registry auth | digest-pinned publication receipt plus independent Cosign/SLSA evidence |
 | G4-B-002 BioLab | `live-biolab-evidence.yml` `plan` | `verify` on `morn-attested-biolab` | byte-digest provenance report; protected provenance source removed |
@@ -104,7 +104,7 @@ convert any blocker to PASS.
 - **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** under the current v11.5 reference scope at verified checkpoint `f121c0804cdc4b289636ac2cf44a227aa1403c58`, including the Work-bound ACP lifecycle/controller path and the owned local desktop-backend lifecycle/security boundary.
 - Release readiness no longer trusts a deployment claim merely because its payload names an issuer; `MORN_EVIDENCE_ISSUER` pins the deployment-owned issuer.
 - RealSite and ProductionWrite readiness are exact-site scoped through `MORN_DEPLOYMENT_SITE_REF` and, when used for current deployment readiness, must cite the exact `MORN_BUILD_IDENTITY_REF`; historical customer/write evidence remains auditable but cannot be combined with a different running build.
-- RealRuntime readiness requires the current provider version/digest/profile/route/environment identity and a fresh Healthy lease; an old smoke claim cannot be combined with a replacement runtime.
+- RealRuntime readiness requires the exact running Morn build, current provider version/digest/profile/route/environment identity and a fresh Healthy lease; an old-build smoke claim cannot be combined with a newer Morn adapter build even when the provider artifact is unchanged.
 - Equal-time conflicting evidence is rejected and future-dated evidence cannot satisfy readiness or customer-value support.
 - These are local trust/control-plane completions only. They do **not** change B-001/B-002/B-003/B-004/G4-B-002/G12 or authorize production/physical write.
 
