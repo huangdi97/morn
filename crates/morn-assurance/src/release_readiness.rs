@@ -1225,10 +1225,7 @@ mod tests {
         let mut site = EvidenceClaim::proven(
             "factory-customer:plant-a",
             EvidenceClass::RealSite,
-            vec![
-                "site://plant-a/pilot-1".to_string(),
-                old_build.to_string(),
-            ],
+            vec!["site://plant-a/pilot-1".to_string(), old_build.to_string()],
             "deployment-attestor",
             "plant-a pilot on the old build",
         )
@@ -1239,10 +1236,7 @@ mod tests {
         let mut write = EvidenceClaim::proven(
             "factory-production-write:plant-a",
             EvidenceClass::ProductionWrite,
-            vec![
-                "write://plant-a/change-1".to_string(),
-                old_build.to_string(),
-            ],
+            vec!["write://plant-a/change-1".to_string(), old_build.to_string()],
             "deployment-attestor",
             "plant-a write evidence on the old build",
         )
