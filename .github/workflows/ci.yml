@@ -15,12 +15,29 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # PR workflows otherwise default to refs/pull/<n>/merge. Repository-local
+  # engineering checkpoints are claims about the exact feature/source HEAD.
+  MORN_CI_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   backend:
     name: Backend (fmt / clippy / tests / zero-domain)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.MORN_CI_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify exact source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$MORN_CI_SOURCE_SHA" || {
+            echo "CI checkout mismatch: expected $MORN_CI_SOURCE_SHA, got $actual"
+            exit 2
+          }
       - name: Audit privileged live-evidence workflows
         run: python3 scripts/audit_privileged_workflows.py
       - name: Audit external evidence entrypoints
@@ -83,6 +100,9 @@ jobs:
         working-directory: runtime/cordis-host
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.MORN_CI_SOURCE_SHA }}
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
@@ -99,6 +119,9 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.MORN_CI_SOURCE_SHA }}
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
@@ -115,6 +138,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.MORN_CI_SOURCE_SHA }}
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -194,7 +220,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: morn-ui-reference-${{ github.sha }}
+          name: morn-ui-reference-${{ env.MORN_CI_SOURCE_SHA }}
           path: artifacts/ci-ui-screenshots
           if-no-files-found: warn
           retention-days: 14
@@ -207,6 +233,9 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.MORN_CI_SOURCE_SHA }}
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -245,7 +274,7 @@ jobs:
       - name: Publish unsigned Windows reference bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: morn-windows-reference-${{ github.sha }}
+          name: morn-windows-reference-${{ env.MORN_CI_SOURCE_SHA }}
           path: |
             target/debug/morn-desktop.exe
             target/debug/server.exe
