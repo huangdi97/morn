@@ -614,8 +614,9 @@ fn validate_build_identity_ref(
 fn configured_build_identity_ref() -> morn_kernel::Result<Option<String>> {
     match std::env::var("MORN_BUILD_IDENTITY_REF") {
         Err(std::env::VarError::NotPresent) => Ok(None),
-        Ok(value) => validate_build_identity_ref(&value, option_env!("MORN_BUILD_IDENTITY_REF"))
-            .map(Some),
+        Ok(value) => {
+            validate_build_identity_ref(&value, option_env!("MORN_BUILD_IDENTITY_REF")).map(Some)
+        }
         Err(error) => Err(morn_kernel::error::Error::validation(format!(
             "cannot read MORN_BUILD_IDENTITY_REF: {error}"
         ))),
