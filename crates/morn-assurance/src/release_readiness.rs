@@ -215,6 +215,7 @@ fn runtime_axis(
     subject: &str,
     runtime: RuntimeReadinessEvidence,
     build_identity_ref: Option<&str>,
+    require_build_identity: bool,
 ) -> ReleaseReadinessAxis {
     let mut axis = evidence_axis(
         ledger,
@@ -226,15 +227,22 @@ fn runtime_axis(
 
     // Real runtime readiness is conjunctive: a deployment proof without a
     // current health lease is stale, while a healthy process without explicit
-    // RealRuntime evidence remains unproven. When a running build identity is
-    // configured, the live-provider proof must also name that exact Morn build:
-    // a smoke from an older adapter/control-plane build cannot be replayed into
-    // a newer deployment merely because the provider artifact stayed constant.
+    // RealRuntime evidence remains unproven. Deployment-facing projections
+    // require an explicit running-build identity; absence is not a wildcard.
+    // Legacy/reference callers may opt out only when they are not projecting a
+    // concrete deployment.
     if axis.state == ReadinessState::Proven {
-        if let Some(build_identity_ref) = build_identity_ref
+        let configured_build_identity = build_identity_ref
             .map(str::trim)
-            .filter(|reference| !reference.is_empty())
-        {
+            .filter(|reference| !reference.is_empty());
+        if require_build_identity && configured_build_identity.is_none() {
+            axis.state = ReadinessState::MissingEvidence;
+            axis.reason =
+                "real-runtime proof exists, but the running deployment has no exact build identity configured"
+                    .to_string();
+            return axis;
+        }
+        if let Some(build_identity_ref) = configured_build_identity {
             if !axis
                 .evidence_refs
                 .iter()
@@ -353,6 +361,7 @@ pub fn release_readiness_axes_for_deployment(
             "deepseek-harness",
             dsh_runtime,
             build_identity_ref,
+            true,
         ),
         runtime_axis(
             ledger,
@@ -360,6 +369,7 @@ pub fn release_readiness_axes_for_deployment(
             "pi-harness",
             pi_runtime,
             build_identity_ref,
+            true,
         ),
         build_bound_evidence_axis(
             ledger,
@@ -1330,6 +1340,40 @@ mod tests {
                 ReadinessState::Proven
             );
         }
+    }
+
+    #[test]
+    fn deployment_runtime_axis_requires_explicit_running_build_identity() {
+        let runtime = "runtime://deepseek-harness/v1#sha256:artifact";
+        let mut ledger = reference_evidence_ledger();
+        let mut proof = EvidenceClaim::proven(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec![runtime.to_string(), "build://morn/smoke".to_string()],
+            "deployment-attestor",
+            "authenticated provider smoke passed",
+        )
+        .unwrap();
+        proof.observed_at = Timestamp::from_millis(10);
+        ledger.append(proof).unwrap();
+
+        let axes = release_readiness_axes_for_deployment(
+            &ledger,
+            RuntimeReadinessEvidence::healthy_for_identity(
+                vec!["health://dsh/settled-turn".to_string()],
+                runtime,
+                "fresh provider health",
+            ),
+            RuntimeReadinessEvidence::unavailable("not configured"),
+            None,
+            None,
+        );
+        let dsh = axes
+            .iter()
+            .find(|axis| axis.id == "deepseek-live-runtime")
+            .unwrap();
+        assert_eq!(dsh.state, ReadinessState::MissingEvidence);
+        assert!(dsh.reason.contains("no exact build identity configured"));
     }
 
     #[test]
