@@ -1338,18 +1338,16 @@ mod tests {
         let old_build = "build://morn/old";
         let current_build = "build://morn/current";
         let mut ledger = reference_evidence_ledger();
-        ledger
-            .append(
-                EvidenceClaim::proven(
-                    "deepseek-harness",
-                    EvidenceClass::RealRuntime,
-                    vec![runtime.to_string(), old_build.to_string()],
-                    "deployment-attestor",
-                    "authenticated provider smoke passed on the old Morn build",
-                )
-                .unwrap(),
-            )
-            .unwrap();
+        let mut old = EvidenceClaim::proven(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec![runtime.to_string(), old_build.to_string()],
+            "deployment-attestor",
+            "authenticated provider smoke passed on the old Morn build",
+        )
+        .unwrap();
+        old.observed_at = Timestamp::from_millis(10);
+        ledger.append(old).unwrap();
 
         let stale = release_readiness_axes_for_build(
             &ledger,
@@ -1376,7 +1374,7 @@ mod tests {
             "authenticated provider smoke repeated on the current Morn build",
         )
         .unwrap();
-        current.observed_at = Timestamp::from_millis(Timestamp::now().millis() + 1);
+        current.observed_at = Timestamp::from_millis(20);
         ledger.append(current).unwrap();
 
         let fresh = release_readiness_axes_for_build(
