@@ -64,6 +64,14 @@ MATRIX = {
         "runner": "morn-attested-release",
         "environment": "morn-supply-chain-verification",
         "cleanup": ["Remove ephemeral registry credentials", "morn-registry-auth-"],
+        "required_tokens": [
+            "secrets.MORN_COSIGN_CERTIFICATE_IDENTITY",
+            "secrets.MORN_COSIGN_OIDC_ISSUER",
+            "MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF",
+            "MORN_SUPPLY_CHAIN_COSIGN_DIGEST",
+            "morn-supply-chain://release-runner?value=",
+            "morn-supply-chain://cosign-binary?value=",
+        ],
     },
     "live-biolab-evidence.yml": {
         "operations": ["plan", "verify"],
