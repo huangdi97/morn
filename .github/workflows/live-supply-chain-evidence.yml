@@ -73,6 +73,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Verify exact supply-chain verifier checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$GITHUB_SHA" || {
+            echo "supply-chain verifier checkout mismatch: expected $GITHUB_SHA, got $actual"
+            exit 2
+          }
+
       - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
@@ -279,6 +289,7 @@ jobs:
           MORN_COSIGN_OIDC_ISSUER: ${{ secrets.MORN_COSIGN_OIDC_ISSUER }}
           MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF: ${{ inputs.release_runner_ref }}
           MORN_SUPPLY_CHAIN_COSIGN_DIGEST: ${{ inputs.cosign_digest }}
+          MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF: git://huangdi97/morn/${{ github.sha }}
         run: |
           set -euo pipefail
           cargo run --quiet -p morn-app --bin supply_chain_verify \
@@ -344,9 +355,14 @@ jobs:
               "morn-supply-chain://cosign-binary?value="
               + os.environ["INPUT_COSIGN_DIGEST"].strip()
           )
+          expected_verifier_build = (
+              "morn-supply-chain://verifier-build?value=git://huangdi97/morn/"
+              + os.environ["GITHUB_SHA"].strip()
+          )
           for required_ref in (
               expected_runner,
               expected_cosign,
+              expected_verifier_build,
               expected_signature_ref,
               expected_provenance_ref,
           ):
