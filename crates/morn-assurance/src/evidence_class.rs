@@ -257,6 +257,11 @@ impl EvidenceLedger {
                 claim.issuer, trusted_issuer
             )));
         }
+        if claim.observed_at > Timestamp::now() {
+            return Err(Error::validation(
+                "future-dated deployment evidence cannot be admitted",
+            ));
+        }
         self.append(claim)
     }
 
@@ -501,6 +506,58 @@ mod tests {
             .append_from_trusted_issuer(trusted, "deployment-attestor")
             .unwrap();
         assert!(ledger.satisfies("factory-customer:plant-a", EvidenceClass::RealSite));
+    }
+
+    #[test]
+    fn trusted_deployment_evidence_rejects_future_timeline_poisoning() {
+        let mut ledger = EvidenceLedger::default();
+
+        let mut initial = EvidenceClaim::proven(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec!["runtime://current".to_string()],
+            "deployment-attestor",
+            "current runtime proof",
+        )
+        .unwrap();
+        initial.observed_at = Timestamp::from_millis(10);
+        ledger
+            .append_from_trusted_issuer(initial, "deployment-attestor")
+            .unwrap();
+
+        let mut future = EvidenceClaim::revoked(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec!["incident://future".to_string()],
+            "deployment-attestor",
+            "future-dated revocation must not occupy the current timeline",
+        )
+        .unwrap();
+        future.observed_at = Timestamp::from_millis(Timestamp::now().millis() + 60_000);
+        let error = ledger
+            .append_from_trusted_issuer(future, "deployment-attestor")
+            .unwrap_err();
+        assert!(format!("{error}").contains("future-dated deployment evidence"));
+
+        let mut current = EvidenceClaim::revoked(
+            "deepseek-harness",
+            EvidenceClass::RealRuntime,
+            vec!["incident://current".to_string()],
+            "deployment-attestor",
+            "current revocation",
+        )
+        .unwrap();
+        current.observed_at = Timestamp::from_millis(20);
+        ledger
+            .append_from_trusted_issuer(current, "deployment-attestor")
+            .unwrap();
+
+        let latest = ledger
+            .current_claim("deepseek-harness", EvidenceClass::RealRuntime)
+            .unwrap();
+        assert_eq!(latest.state, EvidenceClaimState::Revoked);
+        assert_eq!(latest.observed_at, Timestamp::from_millis(20));
+        assert_eq!(ledger.claims().len(), 2);
     }
 
     #[test]
