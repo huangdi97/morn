@@ -8,7 +8,10 @@ use std::collections::BTreeMap;
 use std::env;
 use std::process::ExitCode;
 
-use morn_package::{CosignCliVerifier, OciPublishReceipt, SigstoreIdentityPolicy};
+use morn_package::{
+    supply_chain_verification_context_ref, CosignCliVerifier, OciPublishReceipt,
+    SigstoreIdentityPolicy,
+};
 use serde_json::{json, Value};
 
 fn required(name: &str) -> Result<String, String> {
@@ -27,10 +30,6 @@ fn canonical_sha256(value: &str) -> bool {
     hex.len() == 64
         && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
         && hex.bytes().all(|byte| !byte.is_ascii_uppercase())
-}
-
-fn supply_chain_context_ref(kind: &str, value: &str) -> String {
-    format!("morn-supply-chain://{kind}?value={value}")
 }
 
 fn valid_env_name(name: &str) -> bool {
@@ -116,8 +115,8 @@ fn run_gate() -> Result<Value, String> {
     let provenance = verifier.verify_slsa_provenance(&receipt, &policy)?;
     let mut merged = signature.merge(&provenance)?;
     for reference in [
-        supply_chain_context_ref("release-runner", &release_runner_ref),
-        supply_chain_context_ref("cosign-binary", &cosign_digest),
+        supply_chain_verification_context_ref("release-runner", &release_runner_ref)?,
+        supply_chain_verification_context_ref("cosign-binary", &cosign_digest)?,
     ] {
         if !merged.evidence_refs.contains(&reference) {
             merged.evidence_refs.push(reference);
@@ -189,7 +188,7 @@ mod tests {
         assert!(!canonical_sha256(&format!("sha256:{}", "A".repeat(64))));
         assert!(!canonical_sha256("sha256:not-a-digest"));
         assert_eq!(
-            supply_chain_context_ref("release-runner", "runner://release-1"),
+            supply_chain_verification_context_ref("release-runner", "runner://release-1").unwrap(),
             "morn-supply-chain://release-runner?value=runner://release-1"
         );
     }
