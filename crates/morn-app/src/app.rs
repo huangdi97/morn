@@ -808,8 +808,14 @@ fn validate_supply_chain_verification_trust(
     let verifier_build_context =
         supply_chain_verification_context_ref("verifier-build", verifier_build_ref)
             .map_err(morn_kernel::error::Error::validation)?;
-    if !evidence.evidence_refs.iter().any(|reference| reference == &runner_ref)
-        || !evidence.evidence_refs.iter().any(|reference| reference == &cosign_ref)
+    if !evidence
+        .evidence_refs
+        .iter()
+        .any(|reference| reference == &runner_ref)
+        || !evidence
+            .evidence_refs
+            .iter()
+            .any(|reference| reference == &cosign_ref)
         || !evidence
             .evidence_refs
             .iter()
@@ -839,16 +845,14 @@ fn configured_supply_chain_verifications(
     policy
         .validate()
         .map_err(morn_kernel::error::Error::validation)?;
-    let release_runner_ref =
-        required_single_line_env("MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF")?;
+    let release_runner_ref = required_single_line_env("MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF")?;
     let cosign_digest = required_single_line_env("MORN_SUPPLY_CHAIN_COSIGN_DIGEST")?;
     if !canonical_sha256(&cosign_digest) {
         return Err(morn_kernel::error::Error::validation(
             "MORN_SUPPLY_CHAIN_COSIGN_DIGEST must be canonical sha256:<64-lowercase-hex>",
         ));
     }
-    let verifier_build_ref =
-        required_single_line_env("MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF")?;
+    let verifier_build_ref = required_single_line_env("MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF")?;
     validate_supply_chain_verifier_build_ref(&verifier_build_ref)
         .map_err(morn_kernel::error::Error::validation)?;
 
@@ -921,18 +925,17 @@ mod supply_chain_trust_tests {
 
     fn policy() -> SigstoreIdentityPolicy {
         SigstoreIdentityPolicy {
-            certificate_identity: "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main".to_string(),
+            certificate_identity:
+                "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main"
+                    .to_string(),
             certificate_oidc_issuer: "https://token.actions.githubusercontent.com".to_string(),
         }
     }
 
     fn context_refs() -> Vec<String> {
         vec![
-            supply_chain_verification_context_ref(
-                "release-runner",
-                "runner://attested-release-1",
-            )
-            .unwrap(),
+            supply_chain_verification_context_ref("release-runner", "runner://attested-release-1")
+                .unwrap(),
             supply_chain_verification_context_ref(
                 "cosign-binary",
                 &format!("sha256:{}", "a".repeat(64)),
@@ -965,7 +968,8 @@ mod supply_chain_trust_tests {
         )
         .unwrap();
 
-        evidence.verifier_ref = "sigstore://cosign?identity=attacker&issuer=https://issuer".to_string();
+        evidence.verifier_ref =
+            "sigstore://cosign?identity=attacker&issuer=https://issuer".to_string();
         assert!(validate_supply_chain_verification_trust(
             &evidence,
             &policy,
