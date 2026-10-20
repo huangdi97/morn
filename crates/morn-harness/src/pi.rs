@@ -130,35 +130,15 @@ impl PiHarnessProvider {
                 "Pi runtime preflight requires real provider mode",
             ));
         }
-        self.ensure_real_client()?;
         let now = Timestamp::now();
-        if !self.runtime_health.ready_for_new_turn_at(now) {
-            let client = self
-                .real_client
-                .as_mut()
-                .ok_or_else(|| Error::internal("Pi RPC client missing during preflight refresh"))?;
-            if let Err(error) = client.get_state() {
-                self.runtime_health
-                    .mark_degraded(format!("Pi RPC preflight refresh failed: {error}"));
-                return Err(error);
-            }
-            let version = self
-                .real_config
-                .as_ref()
-                .and_then(|config| config.runtime_version.as_deref())
-                .ok_or_else(|| Error::validation("Pi runtime version missing after validation"))?;
-            let digest = self
-                .real_config
-                .as_ref()
-                .and_then(|config| config.runtime_digest.as_deref())
-                .ok_or_else(|| Error::validation("Pi runtime digest missing after validation"))?;
-            self.runtime_health.mark_initialized(
-                format!(
-                    "Pi RPC get_state preflight refreshed; deployment pins distribution {version} ({digest}); no newly settled live turn yet"
-                ),
-                format!("runtime://pi/{version}#{digest}"),
-            );
+        if self.real_client.is_some() && !self.runtime_health.ready_for_new_turn_at(now) {
+            // Do not let a liveness-only get_state call refresh an expired
+            // settled-turn lease on the same process. Once a real runtime's
+            // initialization/health lease expires, preflight establishes a new
+            // runtime epoch and old sessions remain bound to the reaped process.
+            self.shutdown_real_runtime()?;
         }
+        self.ensure_real_client()?;
         self.real_config
             .as_ref()
             .and_then(|config| config.runtime_version.clone())
@@ -1220,7 +1200,7 @@ mod tests {
         assert_eq!(snapshot.last_event, "pi_prompt_not_executor_settlement");
     }
     #[test]
-    fn real_pi_preflight_refreshes_expired_initialization_with_get_state() {
+    fn real_pi_preflight_restarts_expired_runtime_instead_of_refreshing_same_process() {
         let (mut provider, _ctx, _handle) = real_pi_wire_fixture_provider();
         assert_eq!(provider.preflight_real_runtime().unwrap(), "1.0.0");
         let first_observed = provider.runtime_health().observed_at;
@@ -1239,10 +1219,12 @@ mod tests {
             provider.runtime_health().state,
             crate::provider::HarnessRuntimeHealthState::Initialized
         );
+        assert_eq!(provider.runtime_health().settled_turns, 0);
         assert!(provider
             .runtime_health()
             .ready_for_new_turn_at(morn_kernel::time::Timestamp::now()));
         assert!(provider.runtime_health().observed_at >= first_observed);
+        assert!(provider.active_session.is_none());
         provider.shutdown_real_runtime().unwrap();
     }
 
@@ -1266,22 +1248,36 @@ mod tests {
     }
 
     #[test]
-    fn real_pi_expired_health_lease_blocks_until_get_state_preflight_refresh() {
+    fn real_pi_expired_health_lease_requires_new_runtime_and_new_session() {
         let (mut provider, ctx, _handle) = real_pi_wire_fixture_provider();
-        let session = provider.start(&ctx).unwrap();
+        let old_session = provider.start(&ctx).unwrap();
         provider.runtime_health.health_valid_until = Some(Timestamp::from_millis(
             Timestamp::now().millis().saturating_sub(1),
         ));
-        let error = provider.send(&session.id, "must-not-dispatch").unwrap_err();
+        let error = provider
+            .send(&old_session.id, "must-not-dispatch")
+            .unwrap_err();
         assert!(format!("{error}").contains("health lease expired"));
-        assert_eq!(provider.inspect(&session.id).unwrap().current_step, "0");
+        assert_eq!(
+            provider.inspect(&old_session.id).unwrap().current_step,
+            "0"
+        );
 
         provider.preflight_real_runtime().unwrap();
         assert_eq!(
             provider.runtime_health().state,
             crate::provider::HarnessRuntimeHealthState::Initialized
         );
-        let output = provider.send(&session.id, "hello").unwrap();
+        assert_eq!(
+            provider.inspect(&old_session.id).unwrap().status,
+            "runtime-closed"
+        );
+        assert!(provider
+            .send(&old_session.id, "old session must stay closed")
+            .is_err());
+
+        let new_session = provider.start(&ctx).unwrap();
+        let output = provider.send(&new_session.id, "hello").unwrap();
         assert_eq!(output.text, "hello from fake pi");
         provider.shutdown_real_runtime().unwrap();
     }
