@@ -110,6 +110,15 @@ fn run_gate() -> Result<Value, String> {
                 .to_string(),
         );
     }
+    let verifier_build_ref = required("MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF")?;
+    if !verifier_build_ref.starts_with("git://")
+        || verifier_build_ref.chars().any(char::is_control)
+    {
+        return Err(
+            "MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF must be a single-line git:// identity"
+                .to_string(),
+        );
+    }
 
     let signature = verifier.verify_signature_with_proof(&receipt, &policy)?;
     let provenance = verifier.verify_slsa_provenance_with_proof(&receipt, &policy)?;
@@ -117,6 +126,7 @@ fn run_gate() -> Result<Value, String> {
     for reference in [
         supply_chain_verification_context_ref("release-runner", &release_runner_ref)?,
         supply_chain_verification_context_ref("cosign-binary", &cosign_digest)?,
+        supply_chain_verification_context_ref("verifier-build", &verifier_build_ref)?,
     ] {
         if !merged.evidence_refs.contains(&reference) {
             merged.evidence_refs.push(reference);
