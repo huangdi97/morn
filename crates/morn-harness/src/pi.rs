@@ -1323,10 +1323,12 @@ mod tests {
         );
         assert_eq!(provider.runtime_health().settled_turns, 1);
         assert_eq!(provider.runtime_health().evidence_refs.len(), 1);
-        assert!(provider.runtime_health().evidence_refs[0].starts_with(&format!(
-            "runtime://pi/session/{}/request/morn-prompt-",
-            session.id
-        )));
+        assert!(
+            provider.runtime_health().evidence_refs[0].starts_with(&format!(
+                "runtime://pi/session/{}/request/morn-prompt-",
+                session.id
+            ))
+        );
         assert!(provider.runtime_health().evidence_refs[0].ends_with("/settled-turn"));
         assert_eq!(provider.inspect(&session.id).unwrap().status, "idle");
 
