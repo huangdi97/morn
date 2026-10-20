@@ -101,7 +101,9 @@ fn run_gate() -> Result<Value, String> {
 
     let release_runner_ref = required("MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF")?;
     if release_runner_ref.chars().any(char::is_control) {
-        return Err("MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF must be a single-line identity".to_string());
+        return Err(
+            "MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF must be a single-line identity".to_string(),
+        );
     }
     let cosign_digest = required("MORN_SUPPLY_CHAIN_COSIGN_DIGEST")?;
     if !canonical_sha256(&cosign_digest) {
