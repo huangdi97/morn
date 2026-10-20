@@ -20,6 +20,19 @@ fn required(name: &str) -> Result<String, String> {
     Ok(value)
 }
 
+fn canonical_sha256(value: &str) -> bool {
+    let Some(hex) = value.strip_prefix("sha256:") else {
+        return false;
+    };
+    hex.len() == 64
+        && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && hex.bytes().all(|byte| !byte.is_ascii_uppercase())
+}
+
+fn supply_chain_context_ref(kind: &str, value: &str) -> String {
+    format!("morn-supply-chain://{kind}?value={value}")
+}
+
 fn valid_env_name(name: &str) -> bool {
     let mut chars = name.chars();
     let Some(first) = chars.next() else {
@@ -87,9 +100,29 @@ fn run_gate() -> Result<Value, String> {
         return Err("MORN_COSIGN_COMMAND must not be empty".to_string());
     }
 
+    let release_runner_ref = required("MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF")?;
+    if release_runner_ref.chars().any(char::is_control) {
+        return Err("MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF must be a single-line identity".to_string());
+    }
+    let cosign_digest = required("MORN_SUPPLY_CHAIN_COSIGN_DIGEST")?;
+    if !canonical_sha256(&cosign_digest) {
+        return Err(
+            "MORN_SUPPLY_CHAIN_COSIGN_DIGEST must be canonical sha256:<64-lowercase-hex>"
+                .to_string(),
+        );
+    }
+
     let signature = verifier.verify_signature(&receipt, &policy)?;
     let provenance = verifier.verify_slsa_provenance(&receipt, &policy)?;
-    let merged = signature.merge(&provenance)?;
+    let mut merged = signature.merge(&provenance)?;
+    for reference in [
+        supply_chain_context_ref("release-runner", &release_runner_ref),
+        supply_chain_context_ref("cosign-binary", &cosign_digest),
+    ] {
+        if !merged.evidence_refs.contains(&reference) {
+            merged.evidence_refs.push(reference);
+        }
+    }
     merged.validate_subject_digest(&receipt.content_digest, true, true)?;
 
     Ok(json!({
@@ -149,6 +182,17 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verification_context_requires_canonical_cosign_digest() {
+        assert!(canonical_sha256(&format!("sha256:{}", "a".repeat(64))));
+        assert!(!canonical_sha256(&format!("sha256:{}", "A".repeat(64))));
+        assert!(!canonical_sha256("sha256:not-a-digest"));
+        assert_eq!(
+            supply_chain_context_ref("release-runner", "runner://release-1"),
+            "morn-supply-chain://release-runner?value=runner://release-1"
+        );
+    }
 
     #[test]
     fn environment_passthrough_names_are_strict_tokens() {
