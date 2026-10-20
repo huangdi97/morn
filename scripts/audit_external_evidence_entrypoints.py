@@ -71,6 +71,9 @@ MATRIX = {
             "MORN_SUPPLY_CHAIN_COSIGN_DIGEST",
             "morn-supply-chain://release-runner?value=",
             "morn-supply-chain://cosign-binary?value=",
+            "proof_payloads",
+            "cosign-signature-proof.json",
+            "cosign-slsa-provenance-proof.json",
         ],
     },
     "live-biolab-evidence.yml": {
