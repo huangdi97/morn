@@ -1694,6 +1694,13 @@ mod dsh_provider_tests {
         );
         assert_eq!(provider.runtime_health().settled_turns, 1);
         assert!(provider.runtime_health().selectable_at(Timestamp::now()));
+        assert_eq!(
+            provider.runtime_health().evidence_refs,
+            vec![format!(
+                "runtime://deepseek-harness/session/{}/message/message-1/settled-turn",
+                session.id
+            )]
+        );
 
         let snapshot = provider.inspect(&session.id).unwrap();
         assert_eq!(snapshot.status, "idle");
