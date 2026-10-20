@@ -91,6 +91,8 @@ def cross_step_secret_violations(path: Path, lines: list[str]) -> list[str]:
         "MORN_EVIDENCE_ISSUER",
         "MORN_BIOLAB_DATASET_PROVENANCE_ISSUER",
         "MORN_EXECUTION_ATTESTOR",
+        "MORN_COSIGN_CERTIFICATE_IDENTITY",
+        "MORN_COSIGN_OIDC_ISSUER",
         "DEEPSEEK_API_KEY",
         "MORN_PI_PROVIDER_API_KEY",
         "MORN_REGISTRY_AUTH_JSON",
