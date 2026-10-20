@@ -297,6 +297,9 @@ impl SigstoreIdentityPolicy {
                     .to_string(),
             );
         }
+        if !self.certificate_oidc_issuer.starts_with("https://") {
+            return Err("Sigstore certificate OIDC issuer must use https://".to_string());
+        }
         Ok(())
     }
 
@@ -701,6 +704,12 @@ mod tests {
         let mut invalid = policy;
         invalid.certificate_identity.push('\n');
         assert!(invalid.trusted_verifier_refs().is_err());
+
+        let insecure = SigstoreIdentityPolicy {
+            certificate_identity: "https://github.com/acme/morn/release".to_string(),
+            certificate_oidc_issuer: "http://issuer.example".to_string(),
+        };
+        assert!(insecure.trusted_verifier_refs().is_err());
     }
 
     #[test]
