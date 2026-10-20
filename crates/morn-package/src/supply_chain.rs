@@ -16,6 +16,26 @@ pub struct ArtifactLayer {
     pub annotations: Vec<(String, String)>,
 }
 
+pub fn validate_supply_chain_verifier_build_ref(value: &str) -> Result<(), String> {
+    let value = value.trim();
+    let Some(sha) = value.strip_prefix("git://huangdi97/morn/") else {
+        return Err(
+            "supply-chain verifier build must use git://huangdi97/morn/<40-hex-sha>"
+                .to_string(),
+        );
+    };
+    if sha.len() != 40
+        || !sha.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || sha.bytes().any(|byte| byte.is_ascii_uppercase())
+    {
+        return Err(
+            "supply-chain verifier build must use git://huangdi97/morn/<40-lowercase-hex-sha>"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
 pub fn supply_chain_verification_context_ref(
     kind: &str,
     value: &str,
@@ -232,6 +252,25 @@ mod tests {
 
         descriptor.oci_ref = format!("oci://registry.example/cap@{}", digest('a'));
         assert!(descriptor.validate(false, false).is_ok());
+    }
+
+    #[test]
+    fn verifier_build_ref_is_exact_repository_source_sha() {
+        assert!(validate_supply_chain_verifier_build_ref(
+            "git://huangdi97/morn/0123456789abcdef0123456789abcdef01234567"
+        )
+        .is_ok());
+        for invalid in [
+            "git://other/morn/0123456789abcdef0123456789abcdef01234567",
+            "git://huangdi97/morn/main",
+            "git://huangdi97/morn/ABCDEF0123456789abcdef0123456789abcdef01",
+            "git://huangdi97/morn/0123456789abcdef0123456789abcdef0123456",
+        ] {
+            assert!(
+                validate_supply_chain_verifier_build_ref(invalid).is_err(),
+                "{invalid}"
+            );
+        }
     }
 
     #[test]
