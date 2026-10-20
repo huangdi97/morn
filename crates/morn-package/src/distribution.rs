@@ -289,7 +289,38 @@ impl SigstoreIdentityPolicy {
                 "Sigstore verification requires certificate identity and OIDC issuer".to_string(),
             );
         }
+        if self.certificate_identity.chars().any(char::is_control)
+            || self.certificate_oidc_issuer.chars().any(char::is_control)
+        {
+            return Err(
+                "Sigstore certificate identity and OIDC issuer must be single-line values"
+                    .to_string(),
+            );
+        }
         Ok(())
+    }
+
+    pub fn signature_verifier_ref(&self) -> Result<String, String> {
+        self.validate()?;
+        Ok(format!(
+            "sigstore://cosign?identity={}&issuer={}",
+            self.certificate_identity, self.certificate_oidc_issuer
+        ))
+    }
+
+    pub fn provenance_verifier_ref(&self) -> Result<String, String> {
+        self.validate()?;
+        Ok(format!(
+            "slsa://cosign?identity={}&issuer={}",
+            self.certificate_identity, self.certificate_oidc_issuer
+        ))
+    }
+
+    pub fn trusted_verifier_refs(&self) -> Result<[String; 2], String> {
+        Ok([
+            self.signature_verifier_ref()?,
+            self.provenance_verifier_ref()?,
+        ])
     }
 }
 
@@ -372,10 +403,7 @@ impl CosignCliVerifier {
         let proof_digest = format!("sha256:{:x}", digest.finalize());
         Ok(SupplyChainVerificationEvidence {
             subject_digest: receipt.content_digest.clone(),
-            verifier_ref: format!(
-                "sigstore://cosign?identity={}&issuer={}",
-                policy.certificate_identity, policy.certificate_oidc_issuer
-            ),
+            verifier_ref: policy.signature_verifier_ref()?,
             signature_verified: true,
             provenance_verified: false,
             evidence_refs: vec![format!("cosign-verify-output://{proof_digest}")],
@@ -447,10 +475,7 @@ impl CosignCliVerifier {
         let proof_digest = format!("sha256:{:x}", digest.finalize());
         Ok(SupplyChainVerificationEvidence {
             subject_digest: receipt.content_digest.clone(),
-            verifier_ref: format!(
-                "slsa://cosign?identity={}&issuer={}",
-                policy.certificate_identity, policy.certificate_oidc_issuer
-            ),
+            verifier_ref: policy.provenance_verifier_ref()?,
             signature_verified: false,
             provenance_verified: true,
             evidence_refs: vec![format!("cosign-attestation-output://{proof_digest}")],
@@ -557,6 +582,27 @@ mod tests {
             .args
             .windows(2)
             .any(|pair| pair == ["--output", "json"]));
+    }
+
+    #[test]
+    fn sigstore_policy_derives_stable_supply_chain_verifier_refs() {
+        let policy = SigstoreIdentityPolicy {
+            certificate_identity: "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main".to_string(),
+            certificate_oidc_issuer: "https://token.actions.githubusercontent.com".to_string(),
+        };
+        let refs = policy.trusted_verifier_refs().unwrap();
+        assert_eq!(
+            refs[0],
+            "sigstore://cosign?identity=https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main&issuer=https://token.actions.githubusercontent.com"
+        );
+        assert_eq!(
+            refs[1],
+            "slsa://cosign?identity=https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main&issuer=https://token.actions.githubusercontent.com"
+        );
+
+        let mut invalid = policy;
+        invalid.certificate_identity.push('\n');
+        assert!(invalid.trusted_verifier_refs().is_err());
     }
 
     #[test]
