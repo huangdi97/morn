@@ -71,7 +71,6 @@ MATRIX = {
             "MORN_SUPPLY_CHAIN_COSIGN_DIGEST",
             "MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF",
             "git://huangdi97/morn/${{ github.sha }}",
-            "slsaprovenance1",
             "Verify exact supply-chain verifier checkout",
             "morn-supply-chain://release-runner?value=",
             "morn-supply-chain://cosign-binary?value=",
