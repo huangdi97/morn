@@ -327,6 +327,72 @@ impl SigstoreIdentityPolicy {
 /// Cosign verification is deliberately separate from ORAS publication. A
 /// registry push does not imply signature trust, and a signature does not prove
 /// SLSA provenance. This verifier only upgrades the signature axis.
+const SLSA_PROVENANCE_V1_PREDICATE_TYPE: &str = "https://slsa.dev/provenance/v1";
+
+fn object_field<'a>(value: &'a Value, names: &[&str]) -> Option<&'a Value> {
+    let object = value.as_object()?;
+    names.iter().find_map(|name| object.get(*name))
+}
+
+fn cosign_json_entries(stdout: &str) -> Result<Vec<Value>, String> {
+    let mut entries = Vec::new();
+    for value in serde_json::Deserializer::from_str(stdout).into_iter::<Value>() {
+        let value = value
+            .map_err(|error| format!("cosign verification output was not JSON: {error}"))?;
+        match value {
+            Value::Array(items) => entries.extend(items),
+            other => entries.push(other),
+        }
+    }
+    if entries.is_empty() {
+        return Err("cosign verification returned no JSON entries".to_string());
+    }
+    Ok(entries)
+}
+
+fn validate_slsa_v1_verification_output(
+    stdout: &str,
+    expected_digest: &str,
+) -> Result<(), String> {
+    if !valid_digest(expected_digest) {
+        return Err("expected SLSA subject digest must be sha256:<64 hex>".to_string());
+    }
+
+    for entry in cosign_json_entries(stdout)? {
+        let critical = object_field(&entry, &["critical", "Critical"]).ok_or_else(|| {
+            "cosign SLSA verification output is missing critical claims".to_string()
+        })?;
+        let image = object_field(critical, &["image", "Image"]).ok_or_else(|| {
+            "cosign SLSA verification output is missing image claims".to_string()
+        })?;
+        let digest = object_field(
+            image,
+            &["docker-manifest-digest", "Docker-manifest-digest"],
+        )
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            "cosign SLSA verification output is missing the subject manifest digest".to_string()
+        })?;
+        let predicate_type = object_field(critical, &["type", "Type"])
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                "cosign SLSA verification output is missing the predicate type".to_string()
+            })?;
+
+        if !digest.eq_ignore_ascii_case(expected_digest) {
+            return Err(format!(
+                "SLSA provenance subject digest mismatch: expected {expected_digest}, got {digest}"
+            ));
+        }
+        if predicate_type != SLSA_PROVENANCE_V1_PREDICATE_TYPE {
+            return Err(format!(
+                "SLSA provenance predicate type mismatch: expected {SLSA_PROVENANCE_V1_PREDICATE_TYPE}, got {predicate_type}"
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CosignVerificationResult {
     pub evidence: SupplyChainVerificationEvidence,
@@ -450,7 +516,7 @@ impl CosignCliVerifier {
                 "verify-attestation".to_string(),
                 target.to_string(),
                 "--type".to_string(),
-                "slsaprovenance".to_string(),
+                "slsaprovenance1".to_string(),
                 "--certificate-identity".to_string(),
                 policy.certificate_identity.clone(),
                 "--certificate-oidc-issuer".to_string(),
@@ -487,8 +553,7 @@ impl CosignCliVerifier {
         if stdout.trim().is_empty() {
             return Err("cosign verify-attestation returned no evidence".to_string());
         }
-        serde_json::from_str::<Value>(&stdout)
-            .map_err(|error| format!("cosign attestation output was not JSON: {error}"))?;
+        validate_slsa_v1_verification_output(&stdout, &receipt.content_digest)?;
 
         let mut digest = Sha256::new();
         digest.update(stdout.as_bytes());
@@ -639,6 +704,37 @@ mod tests {
     }
 
     #[test]
+    fn slsa_v1_output_requires_exact_subject_digest_and_predicate_type() {
+        let expected = digest('d');
+        let valid = serde_json::json!({
+            "critical": {
+                "image": {"docker-manifest-digest": expected},
+                "type": SLSA_PROVENANCE_V1_PREDICATE_TYPE
+            }
+        })
+        .to_string();
+        assert!(validate_slsa_v1_verification_output(&valid, &digest('d')).is_ok());
+
+        let wrong_digest = serde_json::json!({
+            "Critical": {
+                "Image": {"Docker-manifest-digest": digest('e')},
+                "Type": SLSA_PROVENANCE_V1_PREDICATE_TYPE
+            }
+        })
+        .to_string();
+        assert!(validate_slsa_v1_verification_output(&wrong_digest, &digest('d')).is_err());
+
+        let wrong_type = serde_json::json!({
+            "critical": {
+                "image": {"docker-manifest-digest": digest('d')},
+                "type": "https://slsa.dev/provenance/v0.2"
+            }
+        })
+        .to_string();
+        assert!(validate_slsa_v1_verification_output(&wrong_type, &digest('d')).is_err());
+    }
+
+    #[test]
     fn slsa_verification_is_digest_pinned_and_identity_scoped() {
         let digest = digest('d');
         let receipt = OciPublishReceipt {
@@ -661,7 +757,7 @@ mod tests {
         assert!(spec
             .args
             .windows(2)
-            .any(|pair| pair == ["--type", "slsaprovenance"]));
+            .any(|pair| pair == ["--type", "slsaprovenance1"]));
         assert!(spec.args.contains(&"--certificate-identity".to_string()));
         assert!(spec.args.contains(&"--certificate-oidc-issuer".to_string()));
     }
