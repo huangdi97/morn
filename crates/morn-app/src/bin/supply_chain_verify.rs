@@ -111,9 +111,9 @@ fn run_gate() -> Result<Value, String> {
         );
     }
 
-    let signature = verifier.verify_signature(&receipt, &policy)?;
-    let provenance = verifier.verify_slsa_provenance(&receipt, &policy)?;
-    let mut merged = signature.merge(&provenance)?;
+    let signature = verifier.verify_signature_with_proof(&receipt, &policy)?;
+    let provenance = verifier.verify_slsa_provenance_with_proof(&receipt, &policy)?;
+    let mut merged = signature.evidence.merge(&provenance.evidence)?;
     for reference in [
         supply_chain_verification_context_ref("release-runner", &release_runner_ref)?,
         supply_chain_verification_context_ref("cosign-binary", &cosign_digest)?,
@@ -132,6 +132,10 @@ fn run_gate() -> Result<Value, String> {
         "manifest_media_type": receipt.manifest_media_type,
         "artifact_type": receipt.artifact_type,
         "verification_evidence": merged,
+        "proof_payloads": {
+            "signature": signature.raw_output,
+            "slsa_provenance": provenance.raw_output,
+        },
         "claims": {
             "remote_digest_pinned_artifact_verified": true,
             "signature_verified": true,
