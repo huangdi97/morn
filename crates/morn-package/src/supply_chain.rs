@@ -16,6 +16,22 @@ pub struct ArtifactLayer {
     pub annotations: Vec<(String, String)>,
 }
 
+pub fn supply_chain_verification_context_ref(
+    kind: &str,
+    value: &str,
+) -> Result<String, String> {
+    let kind = kind.trim();
+    let value = value.trim();
+    if kind.is_empty()
+        || value.is_empty()
+        || kind.chars().any(char::is_control)
+        || value.chars().any(char::is_control)
+    {
+        return Err("supply-chain verification context requires single-line kind and value".to_string());
+    }
+    Ok(format!("morn-supply-chain://{kind}?value={value}"))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SupplyChainVerificationEvidence {
     /// Exact published OCI manifest digest that was verified.
@@ -216,6 +232,16 @@ mod tests {
 
         descriptor.oci_ref = format!("oci://registry.example/cap@{}", digest('a'));
         assert!(descriptor.validate(false, false).is_ok());
+    }
+
+    #[test]
+    fn verification_context_refs_are_explicit_and_single_line() {
+        assert_eq!(
+            supply_chain_verification_context_ref("release-runner", "runner://release-1").unwrap(),
+            "morn-supply-chain://release-runner?value=runner://release-1"
+        );
+        assert!(supply_chain_verification_context_ref("release-runner", "runner\nother").is_err());
+        assert!(supply_chain_verification_context_ref("", "runner").is_err());
     }
 
     #[test]
