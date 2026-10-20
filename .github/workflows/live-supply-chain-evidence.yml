@@ -293,7 +293,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, pathlib
+          import hashlib, json, os, pathlib
           path = pathlib.Path("target/live-supply-chain-evidence/verification-report.json")
           report = json.loads(path.read_text(encoding="utf-8"))
           if report.get("status") != "PASS":
@@ -303,6 +303,23 @@ jobs:
               raise SystemExit("PASS report is missing verification_evidence")
           if not evidence.get("signature_verified") or not evidence.get("provenance_verified"):
               raise SystemExit("verification evidence did not prove both required trust axes")
+
+          proof_payloads = report.get("proof_payloads")
+          if not isinstance(proof_payloads, dict):
+              raise SystemExit("PASS report is missing retained Cosign proof payloads")
+          signature_raw = proof_payloads.get("signature")
+          provenance_raw = proof_payloads.get("slsa_provenance")
+          if not isinstance(signature_raw, str) or not signature_raw.strip():
+              raise SystemExit("signature proof payload is missing")
+          if not isinstance(provenance_raw, str) or not provenance_raw.strip():
+              raise SystemExit("SLSA provenance proof payload is missing")
+
+          signature_digest = hashlib.sha256(signature_raw.encode("utf-8")).hexdigest()
+          provenance_digest = hashlib.sha256(provenance_raw.encode("utf-8")).hexdigest()
+          expected_signature_ref = f"cosign-verify-output://sha256:{signature_digest}"
+          expected_provenance_ref = (
+              f"cosign-attestation-output://sha256:{provenance_digest}"
+          )
 
           identity = os.environ["TRUSTED_CERTIFICATE_IDENTITY"].strip()
           issuer = os.environ["TRUSTED_CERTIFICATE_OIDC_ISSUER"].strip()
@@ -327,10 +344,25 @@ jobs:
               "morn-supply-chain://cosign-binary?value="
               + os.environ["INPUT_COSIGN_DIGEST"].strip()
           )
-          if expected_runner not in refs or expected_cosign not in refs:
-              raise SystemExit("verification evidence is missing release-runner/Cosign handoff context")
+          for required_ref in (
+              expected_runner,
+              expected_cosign,
+              expected_signature_ref,
+              expected_provenance_ref,
+          ):
+              if required_ref not in refs:
+                  raise SystemExit(
+                      f"verification evidence is missing required proof/context ref {required_ref}"
+                  )
 
-          pathlib.Path("target/live-supply-chain-evidence/supply-chain-verification.json").write_text(
+          output_dir = pathlib.Path("target/live-supply-chain-evidence")
+          (output_dir / "cosign-signature-proof.json").write_text(
+              signature_raw, encoding="utf-8"
+          )
+          (output_dir / "cosign-slsa-provenance-proof.json").write_text(
+              provenance_raw, encoding="utf-8"
+          )
+          (output_dir / "supply-chain-verification.json").write_text(
               json.dumps(evidence, indent=2), encoding="utf-8"
           )
           PY
