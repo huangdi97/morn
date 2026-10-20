@@ -771,6 +771,16 @@ fn required_single_line_env(name: &str) -> morn_kernel::Result<String> {
     Ok(value.to_string())
 }
 
+fn has_canonical_supply_chain_proof_ref(
+    evidence: &SupplyChainVerificationEvidence,
+    prefix: &str,
+) -> bool {
+    evidence
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.strip_prefix(prefix).is_some_and(canonical_sha256))
+}
+
 fn validate_supply_chain_verification_trust(
     evidence: &SupplyChainVerificationEvidence,
     policy: &SigstoreIdentityPolicy,
@@ -823,6 +833,20 @@ fn validate_supply_chain_verification_trust(
     {
         return Err(morn_kernel::error::Error::validation(
             "supply-chain verification evidence is missing the deployment-pinned release runner, Cosign binary or verifier-build witness",
+        ));
+    }
+    if evidence.signature_verified
+        && !has_canonical_supply_chain_proof_ref(evidence, "cosign-verify-output://")
+    {
+        return Err(morn_kernel::error::Error::validation(
+            "signature verification evidence is missing the retained Cosign verify-output proof digest",
+        ));
+    }
+    if evidence.provenance_verified
+        && !has_canonical_supply_chain_proof_ref(evidence, "cosign-attestation-output://")
+    {
+        return Err(morn_kernel::error::Error::validation(
+            "provenance verification evidence is missing the retained Cosign attestation-output proof digest",
         ));
     }
     Ok(())
@@ -946,6 +970,8 @@ mod supply_chain_trust_tests {
                 "git://huangdi97/morn/verifier-1",
             )
             .unwrap(),
+            format!("cosign-verify-output://sha256:{}", "b".repeat(64)),
+            format!("cosign-attestation-output://sha256:{}", "c".repeat(64)),
         ]
     }
 
@@ -983,6 +1009,48 @@ mod supply_chain_trust_tests {
         evidence.evidence_refs.pop();
         assert!(validate_supply_chain_verification_trust(
             &evidence,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn supply_chain_trust_requires_axis_specific_retained_proof_witnesses() {
+        let policy = policy();
+        let mut signature = SupplyChainVerificationEvidence {
+            subject_digest: digest('d'),
+            verifier_ref: policy.signature_verifier_ref().unwrap(),
+            signature_verified: true,
+            provenance_verified: false,
+            evidence_refs: context_refs(),
+        };
+        signature
+            .evidence_refs
+            .retain(|reference| !reference.starts_with("cosign-verify-output://"));
+        assert!(validate_supply_chain_verification_trust(
+            &signature,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
+        )
+        .is_err());
+
+        let mut provenance = SupplyChainVerificationEvidence {
+            subject_digest: digest('e'),
+            verifier_ref: policy.provenance_verifier_ref().unwrap(),
+            signature_verified: false,
+            provenance_verified: true,
+            evidence_refs: context_refs(),
+        };
+        provenance
+            .evidence_refs
+            .retain(|reference| !reference.starts_with("cosign-attestation-output://"));
+        assert!(validate_supply_chain_verification_trust(
+            &provenance,
             &policy,
             "runner://attested-release-1",
             &format!("sha256:{}", "a".repeat(64)),
