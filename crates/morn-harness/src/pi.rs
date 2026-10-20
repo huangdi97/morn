@@ -1258,10 +1258,7 @@ mod tests {
             .send(&old_session.id, "must-not-dispatch")
             .unwrap_err();
         assert!(format!("{error}").contains("health lease expired"));
-        assert_eq!(
-            provider.inspect(&old_session.id).unwrap().current_step,
-            "0"
-        );
+        assert_eq!(provider.inspect(&old_session.id).unwrap().current_step, "0");
 
         provider.preflight_real_runtime().unwrap();
         assert_eq!(
