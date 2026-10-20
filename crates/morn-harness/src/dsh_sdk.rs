@@ -1105,8 +1105,15 @@ impl DshSdkStdioClient {
         result
             .get("messageId")
             .and_then(Value::as_str)
+            .filter(|message_id| {
+                !message_id.trim().is_empty() && !message_id.chars().any(char::is_control)
+            })
             .map(str::to_string)
-            .ok_or_else(|| Error::external("DSH session/prompt result missing messageId"))
+            .ok_or_else(|| {
+                Error::external(
+                    "DSH session/prompt result missing an auditable non-empty messageId",
+                )
+            })
     }
 
     /// Restore a DSH-persisted session on this exact SDK runtime/home.
