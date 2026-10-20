@@ -775,6 +775,7 @@ fn validate_supply_chain_verification_trust(
     policy: &SigstoreIdentityPolicy,
     release_runner_ref: &str,
     cosign_digest: &str,
+    verifier_build_ref: &str,
 ) -> morn_kernel::Result<()> {
     let [signature_ref, provenance_ref] = policy
         .trusted_verifier_refs()
@@ -803,11 +804,18 @@ fn validate_supply_chain_verification_trust(
         .map_err(morn_kernel::error::Error::validation)?;
     let cosign_ref = supply_chain_verification_context_ref("cosign-binary", cosign_digest)
         .map_err(morn_kernel::error::Error::validation)?;
+    let verifier_build_context =
+        supply_chain_verification_context_ref("verifier-build", verifier_build_ref)
+            .map_err(morn_kernel::error::Error::validation)?;
     if !evidence.evidence_refs.iter().any(|reference| reference == &runner_ref)
         || !evidence.evidence_refs.iter().any(|reference| reference == &cosign_ref)
+        || !evidence
+            .evidence_refs
+            .iter()
+            .any(|reference| reference == &verifier_build_context)
     {
         return Err(morn_kernel::error::Error::validation(
-            "supply-chain verification evidence is missing the deployment-pinned release runner or Cosign binary witness",
+            "supply-chain verification evidence is missing the deployment-pinned release runner, Cosign binary or verifier-build witness",
         ));
     }
     Ok(())
@@ -836,6 +844,13 @@ fn configured_supply_chain_verifications(
     if !canonical_sha256(&cosign_digest) {
         return Err(morn_kernel::error::Error::validation(
             "MORN_SUPPLY_CHAIN_COSIGN_DIGEST must be canonical sha256:<64-lowercase-hex>",
+        ));
+    }
+    let verifier_build_ref =
+        required_single_line_env("MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF")?;
+    if !verifier_build_ref.starts_with("git://") {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF must be an explicit git:// identity",
         ));
     }
 
@@ -881,6 +896,7 @@ fn configured_supply_chain_verifications(
             &policy,
             &release_runner_ref,
             &cosign_digest,
+            &verifier_build_ref,
         )?;
         if let Some(existing) = merged.iter_mut().find(|current| {
             current
@@ -924,6 +940,11 @@ mod supply_chain_trust_tests {
                 &format!("sha256:{}", "a".repeat(64)),
             )
             .unwrap(),
+            supply_chain_verification_context_ref(
+                "verifier-build",
+                "git://huangdi97/morn/verifier-1",
+            )
+            .unwrap(),
         ]
     }
 
@@ -942,6 +963,7 @@ mod supply_chain_trust_tests {
             &policy,
             "runner://attested-release-1",
             &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
         )
         .unwrap();
 
@@ -951,6 +973,7 @@ mod supply_chain_trust_tests {
             &policy,
             "runner://attested-release-1",
             &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
         )
         .is_err());
 
@@ -961,6 +984,7 @@ mod supply_chain_trust_tests {
             &policy,
             "runner://attested-release-1",
             &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
         )
         .is_err());
     }
@@ -981,6 +1005,7 @@ mod supply_chain_trust_tests {
             &policy,
             "runner://attested-release-1",
             &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
         )
         .unwrap();
     }
