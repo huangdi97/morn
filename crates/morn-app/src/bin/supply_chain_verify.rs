@@ -9,8 +9,8 @@ use std::env;
 use std::process::ExitCode;
 
 use morn_package::{
-    supply_chain_verification_context_ref, CosignCliVerifier, OciPublishReceipt,
-    SigstoreIdentityPolicy,
+    supply_chain_verification_context_ref, validate_supply_chain_verifier_build_ref,
+    CosignCliVerifier, OciPublishReceipt, SigstoreIdentityPolicy,
 };
 use serde_json::{json, Value};
 
@@ -111,14 +111,7 @@ fn run_gate() -> Result<Value, String> {
         );
     }
     let verifier_build_ref = required("MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF")?;
-    if !verifier_build_ref.starts_with("git://")
-        || verifier_build_ref.chars().any(char::is_control)
-    {
-        return Err(
-            "MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF must be a single-line git:// identity"
-                .to_string(),
-        );
-    }
+    validate_supply_chain_verifier_build_ref(&verifier_build_ref)?;
 
     let signature = verifier.verify_signature_with_proof(&receipt, &policy)?;
     let provenance = verifier.verify_slsa_provenance_with_proof(&receipt, &policy)?;
