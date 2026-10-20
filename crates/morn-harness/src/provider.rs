@@ -221,10 +221,12 @@ impl HarnessRuntimeHealth {
     /// turn. After that, only a live settled-turn health lease can authorize
     /// another turn. Both proofs are time-bounded.
     pub fn ready_for_new_turn_at(&self, now: Timestamp) -> bool {
-        matches!(
-            self.state,
-            HarnessRuntimeHealthState::Initialized | HarnessRuntimeHealthState::Healthy
-        ) && self.health_valid_until.is_some_and(|until| now <= until)
+        let state_allows_new_turn = match self.state {
+            HarnessRuntimeHealthState::Initialized => self.settled_turns == 0,
+            HarnessRuntimeHealthState::Healthy => true,
+            _ => false,
+        };
+        state_allows_new_turn && self.health_valid_until.is_some_and(|until| now <= until)
     }
 
     pub fn remaining_lease_ms(&self, now: Timestamp) -> Option<i64> {
@@ -1874,12 +1876,17 @@ mod dsh_provider_tests {
         assert!(health.evidence_refs.is_empty());
         assert!(!health.selectable_at(Timestamp::now()));
 
-        // A health refresh on the same runtime may preserve historical turns.
+        // A liveness-only refresh on the same runtime may preserve historical
+        // turns, but it must never recover new-turn admission after a settled
+        // turn lease expires.
         health.mark_initialized("same runtime refreshed", "runtime://dsh/refreshed");
         assert_eq!(health.settled_turns, 1);
-        // A newly spawned process starts a new settled-turn counter.
+        assert!(!health.ready_for_new_turn_at(health.observed_at));
+        // A newly spawned process starts a new runtime epoch and resets the
+        // settled-turn counter, so its first governed turn may be admitted.
         health.mark_new_runtime_initialized("restarted", "runtime://dsh/restarted");
         assert_eq!(health.settled_turns, 0);
+        assert!(health.ready_for_new_turn_at(health.observed_at));
         assert_eq!(
             health.evidence_refs,
             vec!["runtime://dsh/restarted".to_string()]
