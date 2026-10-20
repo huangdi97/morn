@@ -328,6 +328,15 @@ impl SigstoreIdentityPolicy {
 /// registry push does not imply signature trust, and a signature does not prove
 /// SLSA provenance. This verifier only upgrades the signature axis.
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CosignVerificationResult {
+    pub evidence: SupplyChainVerificationEvidence,
+    /// Exact UTF-8 JSON emitted by the pinned Cosign process. The corresponding
+    /// evidence_ref is the SHA-256 of these exact bytes so audit artifacts can
+    /// later recompute and verify the proof reference.
+    pub raw_output: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CosignCliVerifier {
     pub command: String,
     pub env: BTreeMap<String, String>,
@@ -373,11 +382,11 @@ impl CosignCliVerifier {
         })
     }
 
-    pub fn verify_signature(
+    pub fn verify_signature_with_proof(
         &self,
         receipt: &OciPublishReceipt,
         policy: &SigstoreIdentityPolicy,
-    ) -> Result<SupplyChainVerificationEvidence, String> {
+    ) -> Result<CosignVerificationResult, String> {
         let spec = self.command_spec(receipt, policy)?;
         let output = Command::new(&spec.program)
             .args(&spec.args)
@@ -401,13 +410,24 @@ impl CosignCliVerifier {
         let mut digest = Sha256::new();
         digest.update(stdout.as_bytes());
         let proof_digest = format!("sha256:{:x}", digest.finalize());
-        Ok(SupplyChainVerificationEvidence {
-            subject_digest: receipt.content_digest.clone(),
-            verifier_ref: policy.signature_verifier_ref()?,
-            signature_verified: true,
-            provenance_verified: false,
-            evidence_refs: vec![format!("cosign-verify-output://{proof_digest}")],
+        Ok(CosignVerificationResult {
+            evidence: SupplyChainVerificationEvidence {
+                subject_digest: receipt.content_digest.clone(),
+                verifier_ref: policy.signature_verifier_ref()?,
+                signature_verified: true,
+                provenance_verified: false,
+                evidence_refs: vec![format!("cosign-verify-output://{proof_digest}")],
+            },
+            raw_output: stdout,
         })
+    }
+
+    pub fn verify_signature(
+        &self,
+        receipt: &OciPublishReceipt,
+        policy: &SigstoreIdentityPolicy,
+    ) -> Result<SupplyChainVerificationEvidence, String> {
+        Ok(self.verify_signature_with_proof(receipt, policy)?.evidence)
     }
 
     pub fn provenance_command_spec(
@@ -442,11 +462,11 @@ impl CosignCliVerifier {
         })
     }
 
-    pub fn verify_slsa_provenance(
+    pub fn verify_slsa_provenance_with_proof(
         &self,
         receipt: &OciPublishReceipt,
         policy: &SigstoreIdentityPolicy,
-    ) -> Result<SupplyChainVerificationEvidence, String> {
+    ) -> Result<CosignVerificationResult, String> {
         let spec = self.provenance_command_spec(receipt, policy)?;
         let output = Command::new(&spec.program)
             .args(&spec.args)
@@ -473,13 +493,26 @@ impl CosignCliVerifier {
         let mut digest = Sha256::new();
         digest.update(stdout.as_bytes());
         let proof_digest = format!("sha256:{:x}", digest.finalize());
-        Ok(SupplyChainVerificationEvidence {
-            subject_digest: receipt.content_digest.clone(),
-            verifier_ref: policy.provenance_verifier_ref()?,
-            signature_verified: false,
-            provenance_verified: true,
-            evidence_refs: vec![format!("cosign-attestation-output://{proof_digest}")],
+        Ok(CosignVerificationResult {
+            evidence: SupplyChainVerificationEvidence {
+                subject_digest: receipt.content_digest.clone(),
+                verifier_ref: policy.provenance_verifier_ref()?,
+                signature_verified: false,
+                provenance_verified: true,
+                evidence_refs: vec![format!("cosign-attestation-output://{proof_digest}")],
+            },
+            raw_output: stdout,
         })
+    }
+
+    pub fn verify_slsa_provenance(
+        &self,
+        receipt: &OciPublishReceipt,
+        policy: &SigstoreIdentityPolicy,
+    ) -> Result<SupplyChainVerificationEvidence, String> {
+        Ok(self
+            .verify_slsa_provenance_with_proof(receipt, policy)?
+            .evidence)
     }
 }
 
