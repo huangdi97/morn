@@ -381,6 +381,11 @@ impl AttestedExecutionEnvironmentProvider {
                 "execution environment attestation belongs to another provider",
             ));
         }
+        if attestation.observed_at > Timestamp::now() {
+            return Err(Error::validation(
+                "future-dated execution environment attestation cannot be admitted",
+            ));
+        }
         attestation.attested_spec.required_guarantees.sort();
         attestation.attested_spec.required_guarantees.dedup();
         attestation.runtime_identities.sort();
@@ -727,6 +732,55 @@ mod tests {
             provider.attestation("env://sandbox/a").unwrap().observed_at,
             refreshed.observed_at
         );
+    }
+
+    #[test]
+    fn future_execution_attestation_cannot_poison_environment_timeline() {
+        let mut provider = AttestedExecutionEnvironmentProvider::new("sandbox-fleet").unwrap();
+        let mut initial = attestation(
+            "sandbox-fleet",
+            "env://sandbox/a",
+            vec![ExecutionGuarantee::ProcessBoundary],
+        );
+        initial.observed_at = Timestamp::from_millis(10);
+        initial.valid_until = Timestamp::from_millis(Timestamp::now().millis() + 120_000);
+        provider.register_attestation(initial).unwrap();
+
+        let mut future = attestation(
+            "sandbox-fleet",
+            "env://sandbox/a",
+            vec![
+                ExecutionGuarantee::ProcessBoundary,
+                ExecutionGuarantee::NetworkEgressPolicy,
+            ],
+        );
+        future.observed_at = Timestamp::from_millis(Timestamp::now().millis() + 60_000);
+        future.valid_until = Timestamp::from_millis(Timestamp::now().millis() + 120_000);
+        let error = provider.register_attestation(future).unwrap_err();
+        assert!(format!("{error}").contains("future-dated execution environment attestation"));
+
+        let mut current = attestation(
+            "sandbox-fleet",
+            "env://sandbox/a",
+            vec![
+                ExecutionGuarantee::ProcessBoundary,
+                ExecutionGuarantee::SecretIndirection,
+            ],
+        );
+        current.observed_at = Timestamp::from_millis(20);
+        current.valid_until = Timestamp::from_millis(Timestamp::now().millis() + 120_000);
+        provider.register_attestation(current).unwrap();
+
+        let latest = provider.attestation("env://sandbox/a").unwrap();
+        assert_eq!(latest.observed_at, Timestamp::from_millis(20));
+        assert!(latest
+            .attested_spec
+            .required_guarantees
+            .contains(&ExecutionGuarantee::SecretIndirection));
+        assert!(!latest
+            .attested_spec
+            .required_guarantees
+            .contains(&ExecutionGuarantee::NetworkEgressPolicy));
     }
 
     #[test]
