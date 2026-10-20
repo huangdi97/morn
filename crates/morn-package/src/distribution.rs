@@ -340,8 +340,8 @@ fn object_field<'a>(value: &'a Value, names: &[&str]) -> Option<&'a Value> {
 fn cosign_json_entries(stdout: &str) -> Result<Vec<Value>, String> {
     let mut entries = Vec::new();
     for value in serde_json::Deserializer::from_str(stdout).into_iter::<Value>() {
-        let value = value
-            .map_err(|error| format!("cosign verification output was not JSON: {error}"))?;
+        let value =
+            value.map_err(|error| format!("cosign verification output was not JSON: {error}"))?;
         match value {
             Value::Array(items) => entries.extend(items),
             other => entries.push(other),
@@ -353,10 +353,7 @@ fn cosign_json_entries(stdout: &str) -> Result<Vec<Value>, String> {
     Ok(entries)
 }
 
-fn validate_slsa_v1_verification_output(
-    stdout: &str,
-    expected_digest: &str,
-) -> Result<(), String> {
+fn validate_slsa_v1_verification_output(stdout: &str, expected_digest: &str) -> Result<(), String> {
     if !valid_digest(expected_digest) {
         return Err("expected SLSA subject digest must be sha256:<64 hex>".to_string());
     }
@@ -365,17 +362,13 @@ fn validate_slsa_v1_verification_output(
         let critical = object_field(&entry, &["critical", "Critical"]).ok_or_else(|| {
             "cosign SLSA verification output is missing critical claims".to_string()
         })?;
-        let image = object_field(critical, &["image", "Image"]).ok_or_else(|| {
-            "cosign SLSA verification output is missing image claims".to_string()
-        })?;
-        let digest = object_field(
-            image,
-            &["docker-manifest-digest", "Docker-manifest-digest"],
-        )
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            "cosign SLSA verification output is missing the subject manifest digest".to_string()
-        })?;
+        let image = object_field(critical, &["image", "Image"])
+            .ok_or_else(|| "cosign SLSA verification output is missing image claims".to_string())?;
+        let digest = object_field(image, &["docker-manifest-digest", "Docker-manifest-digest"])
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                "cosign SLSA verification output is missing the subject manifest digest".to_string()
+            })?;
         let predicate_type = object_field(critical, &["type", "Type"])
             .and_then(Value::as_str)
             .ok_or_else(|| {
@@ -688,7 +681,9 @@ mod tests {
     #[test]
     fn sigstore_policy_derives_stable_supply_chain_verifier_refs() {
         let policy = SigstoreIdentityPolicy {
-            certificate_identity: "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main".to_string(),
+            certificate_identity:
+                "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main"
+                    .to_string(),
             certificate_oidc_issuer: "https://token.actions.githubusercontent.com".to_string(),
         };
         let refs = policy.trusted_verifier_refs().unwrap();
