@@ -1784,7 +1784,9 @@ mod tests {
             .find(|axis| axis.id == "deepseek-live-runtime")
             .unwrap();
         assert_eq!(dsh.state, ReadinessState::MissingEvidence);
-        assert!(dsh.reason.contains("no auditable non-empty evidence references"));
+        assert!(dsh
+            .reason
+            .contains("no auditable non-empty evidence references"));
     }
 
     #[test]
