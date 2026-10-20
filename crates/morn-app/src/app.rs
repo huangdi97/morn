@@ -39,7 +39,9 @@ use morn_kernel::workspace::{Workspace, WorkspaceKind};
 use morn_opint::dataset::OutcomeDataset;
 use morn_opint::episode::EpisodeAssembler;
 use morn_opint::predictor::PredictorRegistry;
-use morn_package::SupplyChainVerificationEvidence;
+use morn_package::{
+    supply_chain_verification_context_ref, SigstoreIdentityPolicy, SupplyChainVerificationEvidence,
+};
 use morn_runtime::{AttestedExecutionEnvironmentProvider, ExecutionEnvironmentAttestation};
 use morn_store::store::MornStore;
 use morn_work::acceptance::{AcceptanceReviewAuthorization, AcceptanceReviewerAttestation};
@@ -744,6 +746,73 @@ fn configured_evidence_ledger() -> morn_kernel::Result<EvidenceLedger> {
     Ok(ledger)
 }
 
+fn canonical_sha256(value: &str) -> bool {
+    let Some(hex) = value.strip_prefix("sha256:") else {
+        return false;
+    };
+    hex.len() == 64
+        && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && hex.bytes().all(|byte| !byte.is_ascii_uppercase())
+}
+
+fn required_single_line_env(name: &str) -> morn_kernel::Result<String> {
+    let value = std::env::var(name).map_err(|_| {
+        morn_kernel::error::Error::validation(format!(
+            "{name} is required when MORN_SUPPLY_CHAIN_VERIFICATIONS_FILE is configured"
+        ))
+    })?;
+    let value = value.trim();
+    if value.is_empty() || value.chars().any(char::is_control) {
+        return Err(morn_kernel::error::Error::validation(format!(
+            "{name} must be a non-empty single-line value"
+        )));
+    }
+    Ok(value.to_string())
+}
+
+fn validate_supply_chain_verification_trust(
+    evidence: &SupplyChainVerificationEvidence,
+    policy: &SigstoreIdentityPolicy,
+    release_runner_ref: &str,
+    cosign_digest: &str,
+) -> morn_kernel::Result<()> {
+    let [signature_ref, provenance_ref] = policy
+        .trusted_verifier_refs()
+        .map_err(morn_kernel::error::Error::validation)?;
+
+    let actual_refs = evidence
+        .verifier_ref
+        .split(" + ")
+        .map(str::trim)
+        .filter(|reference| !reference.is_empty())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut expected_refs = std::collections::BTreeSet::new();
+    if evidence.signature_verified {
+        expected_refs.insert(signature_ref.as_str());
+    }
+    if evidence.provenance_verified {
+        expected_refs.insert(provenance_ref.as_str());
+    }
+    if actual_refs != expected_refs {
+        return Err(morn_kernel::error::Error::validation(
+            "supply-chain verification evidence verifier_ref does not match the deployment-pinned Sigstore policy",
+        ));
+    }
+
+    let runner_ref = supply_chain_verification_context_ref("release-runner", release_runner_ref)
+        .map_err(morn_kernel::error::Error::validation)?;
+    let cosign_ref = supply_chain_verification_context_ref("cosign-binary", cosign_digest)
+        .map_err(morn_kernel::error::Error::validation)?;
+    if !evidence.evidence_refs.iter().any(|reference| reference == &runner_ref)
+        || !evidence.evidence_refs.iter().any(|reference| reference == &cosign_ref)
+    {
+        return Err(morn_kernel::error::Error::validation(
+            "supply-chain verification evidence is missing the deployment-pinned release runner or Cosign binary witness",
+        ));
+    }
+    Ok(())
+}
+
 fn configured_supply_chain_verifications(
 ) -> morn_kernel::Result<Vec<SupplyChainVerificationEvidence>> {
     let Ok(path) = std::env::var("MORN_SUPPLY_CHAIN_VERIFICATIONS_FILE") else {
@@ -754,6 +823,22 @@ fn configured_supply_chain_verifications(
             "MORN_SUPPLY_CHAIN_VERIFICATIONS_FILE must not be empty when set",
         ));
     }
+    let policy = SigstoreIdentityPolicy {
+        certificate_identity: required_single_line_env("MORN_COSIGN_CERTIFICATE_IDENTITY")?,
+        certificate_oidc_issuer: required_single_line_env("MORN_COSIGN_OIDC_ISSUER")?,
+    };
+    policy
+        .validate()
+        .map_err(morn_kernel::error::Error::validation)?;
+    let release_runner_ref =
+        required_single_line_env("MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF")?;
+    let cosign_digest = required_single_line_env("MORN_SUPPLY_CHAIN_COSIGN_DIGEST")?;
+    if !canonical_sha256(&cosign_digest) {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_SUPPLY_CHAIN_COSIGN_DIGEST must be canonical sha256:<64-lowercase-hex>",
+        ));
+    }
+
     let raw = std::fs::read_to_string(&path).map_err(|error| {
         morn_kernel::error::Error::external(format!(
             "cannot read supply-chain verification file {path:?}: {error}"
@@ -791,6 +876,12 @@ fn configured_supply_chain_verifications(
                 "supply-chain verification entry must prove signature or provenance",
             ));
         }
+        validate_supply_chain_verification_trust(
+            &evidence,
+            &policy,
+            &release_runner_ref,
+            &cosign_digest,
+        )?;
         if let Some(existing) = merged.iter_mut().find(|current| {
             current
                 .subject_digest
@@ -804,6 +895,95 @@ fn configured_supply_chain_verifications(
         }
     }
     Ok(merged)
+}
+
+#[cfg(test)]
+mod supply_chain_trust_tests {
+    use super::*;
+
+    fn digest(ch: char) -> String {
+        format!("sha256:{}", ch.to_string().repeat(64))
+    }
+
+    fn policy() -> SigstoreIdentityPolicy {
+        SigstoreIdentityPolicy {
+            certificate_identity: "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main".to_string(),
+            certificate_oidc_issuer: "https://token.actions.githubusercontent.com".to_string(),
+        }
+    }
+
+    fn context_refs() -> Vec<String> {
+        vec![
+            supply_chain_verification_context_ref(
+                "release-runner",
+                "runner://attested-release-1",
+            )
+            .unwrap(),
+            supply_chain_verification_context_ref(
+                "cosign-binary",
+                &format!("sha256:{}", "a".repeat(64)),
+            )
+            .unwrap(),
+        ]
+    }
+
+    #[test]
+    fn supply_chain_trust_requires_exact_policy_and_verification_environment() {
+        let policy = policy();
+        let mut evidence = SupplyChainVerificationEvidence {
+            subject_digest: digest('f'),
+            verifier_ref: policy.signature_verifier_ref().unwrap(),
+            signature_verified: true,
+            provenance_verified: false,
+            evidence_refs: context_refs(),
+        };
+        validate_supply_chain_verification_trust(
+            &evidence,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+        )
+        .unwrap();
+
+        evidence.verifier_ref = "sigstore://cosign?identity=attacker&issuer=https://issuer".to_string();
+        assert!(validate_supply_chain_verification_trust(
+            &evidence,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+        )
+        .is_err());
+
+        evidence.verifier_ref = policy.signature_verifier_ref().unwrap();
+        evidence.evidence_refs.pop();
+        assert!(validate_supply_chain_verification_trust(
+            &evidence,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn merged_supply_chain_axes_require_both_expected_verifier_refs() {
+        let policy = policy();
+        let [signature_ref, provenance_ref] = policy.trusted_verifier_refs().unwrap();
+        let evidence = SupplyChainVerificationEvidence {
+            subject_digest: digest('e'),
+            verifier_ref: format!("{signature_ref} + {provenance_ref}"),
+            signature_verified: true,
+            provenance_verified: true,
+            evidence_refs: context_refs(),
+        };
+        validate_supply_chain_verification_trust(
+            &evidence,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+        )
+        .unwrap();
+    }
 }
 
 fn configured_pi_harness() -> morn_kernel::Result<PiHarnessProvider> {
