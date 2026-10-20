@@ -1164,7 +1164,10 @@ impl HarnessProvider for DeepSeekHarnessProvider {
                     Ok(run) if run.completed_successfully() => {
                         self.runtime_health.mark_live_turn(
                             "live DSH SDK turn completed successfully",
-                            format!("runtime://deepseek-harness/session/{session_id}/settled-turn"),
+                            format!(
+                                "runtime://deepseek-harness/session/{session_id}/message/{}/settled-turn",
+                                run.message_id
+                            ),
                         );
                         state.status = "idle".to_string();
                         state.events.push(ExecutionEvent::new(
