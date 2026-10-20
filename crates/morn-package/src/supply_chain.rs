@@ -20,8 +20,7 @@ pub fn validate_supply_chain_verifier_build_ref(value: &str) -> Result<(), Strin
     let value = value.trim();
     let Some(sha) = value.strip_prefix("git://huangdi97/morn/") else {
         return Err(
-            "supply-chain verifier build must use git://huangdi97/morn/<40-hex-sha>"
-                .to_string(),
+            "supply-chain verifier build must use git://huangdi97/morn/<40-hex-sha>".to_string(),
         );
     };
     if sha.len() != 40
@@ -36,10 +35,7 @@ pub fn validate_supply_chain_verifier_build_ref(value: &str) -> Result<(), Strin
     Ok(())
 }
 
-pub fn supply_chain_verification_context_ref(
-    kind: &str,
-    value: &str,
-) -> Result<String, String> {
+pub fn supply_chain_verification_context_ref(kind: &str, value: &str) -> Result<String, String> {
     let kind = kind.trim();
     let value = value.trim();
     if kind.is_empty()
@@ -47,7 +43,9 @@ pub fn supply_chain_verification_context_ref(
         || kind.chars().any(char::is_control)
         || value.chars().any(char::is_control)
     {
-        return Err("supply-chain verification context requires single-line kind and value".to_string());
+        return Err(
+            "supply-chain verification context requires single-line kind and value".to_string(),
+        );
     }
     Ok(format!("morn-supply-chain://{kind}?value={value}"))
 }
