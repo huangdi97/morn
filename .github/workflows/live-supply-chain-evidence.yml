@@ -66,8 +66,6 @@ jobs:
       INPUT_USE_REGISTRY_AUTH: ${{ inputs.use_environment_registry_auth }}
       INPUT_ACK_VERIFY_ONLY: ${{ inputs.acknowledge_verify_only }}
       MORN_OCI_REF: ${{ inputs.oci_ref }}
-      MORN_COSIGN_CERTIFICATE_IDENTITY: ${{ inputs.certificate_identity }}
-      MORN_COSIGN_OIDC_ISSUER: ${{ inputs.certificate_oidc_issuer }}
       MORN_COSIGN_COMMAND: /usr/local/bin/cosign
 
     steps:
@@ -139,6 +137,44 @@ jobs:
         shell: bash
         run: |
           echo "Verification plan emitted. No registry access or Cosign execution occurred."
+
+      - name: Bind requested identity to protected Sigstore policy
+        if: inputs.operation == 'verify'
+        shell: bash
+        env:
+          TRUSTED_CERTIFICATE_IDENTITY: ${{ secrets.MORN_COSIGN_CERTIFICATE_IDENTITY }}
+          TRUSTED_CERTIFICATE_OIDC_ISSUER: ${{ secrets.MORN_COSIGN_OIDC_ISSUER }}
+        run: |
+          set -euo pipefail
+          test -n "${TRUSTED_CERTIFICATE_IDENTITY:-}" || {
+            echo "protected Environment secret MORN_COSIGN_CERTIFICATE_IDENTITY is required"
+            exit 2
+          }
+          test -n "${TRUSTED_CERTIFICATE_OIDC_ISSUER:-}" || {
+            echo "protected Environment secret MORN_COSIGN_OIDC_ISSUER is required"
+            exit 2
+          }
+          python - <<'PY'
+          import os
+
+          requested_identity = os.environ["INPUT_CERTIFICATE_IDENTITY"].strip()
+          requested_issuer = os.environ["INPUT_CERTIFICATE_OIDC_ISSUER"].strip()
+          trusted_identity = os.environ["TRUSTED_CERTIFICATE_IDENTITY"].strip()
+          trusted_issuer = os.environ["TRUSTED_CERTIFICATE_OIDC_ISSUER"].strip()
+
+          for name, value in (
+              ("TRUSTED_CERTIFICATE_IDENTITY", trusted_identity),
+              ("TRUSTED_CERTIFICATE_OIDC_ISSUER", trusted_issuer),
+          ):
+              if not value or any(ord(ch) < 32 for ch in value):
+                  raise SystemExit(f"{name} must be a non-empty single-line value")
+          if not trusted_issuer.startswith("https://"):
+              raise SystemExit("trusted certificate OIDC issuer must use https://")
+          if requested_identity != trusted_identity or requested_issuer != trusted_issuer:
+              raise SystemExit(
+                  "workflow-dispatch certificate identity/OIDC issuer do not match protected Sigstore policy"
+              )
+          PY
 
       - name: Bind verification to attested release runner and pinned Cosign
         if: inputs.operation == 'verify'
@@ -238,17 +274,26 @@ jobs:
       - name: Verify exact signature and SLSA provenance
         if: inputs.operation == 'verify'
         shell: bash
+        env:
+          MORN_COSIGN_CERTIFICATE_IDENTITY: ${{ secrets.MORN_COSIGN_CERTIFICATE_IDENTITY }}
+          MORN_COSIGN_OIDC_ISSUER: ${{ secrets.MORN_COSIGN_OIDC_ISSUER }}
+          MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF: ${{ inputs.release_runner_ref }}
+          MORN_SUPPLY_CHAIN_COSIGN_DIGEST: ${{ inputs.cosign_digest }}
         run: |
           set -euo pipefail
-          cargo run --quiet -p morn-app --bin supply_chain_verify             | tee target/live-supply-chain-evidence/verification-report.json
+          cargo run --quiet -p morn-app --bin supply_chain_verify \
+            | tee target/live-supply-chain-evidence/verification-report.json
 
       - name: Export Morn-loadable supply-chain evidence
         if: inputs.operation == 'verify'
         shell: bash
+        env:
+          TRUSTED_CERTIFICATE_IDENTITY: ${{ secrets.MORN_COSIGN_CERTIFICATE_IDENTITY }}
+          TRUSTED_CERTIFICATE_OIDC_ISSUER: ${{ secrets.MORN_COSIGN_OIDC_ISSUER }}
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, pathlib
+          import json, os, pathlib
           path = pathlib.Path("target/live-supply-chain-evidence/verification-report.json")
           report = json.loads(path.read_text(encoding="utf-8"))
           if report.get("status") != "PASS":
@@ -258,6 +303,33 @@ jobs:
               raise SystemExit("PASS report is missing verification_evidence")
           if not evidence.get("signature_verified") or not evidence.get("provenance_verified"):
               raise SystemExit("verification evidence did not prove both required trust axes")
+
+          identity = os.environ["TRUSTED_CERTIFICATE_IDENTITY"].strip()
+          issuer = os.environ["TRUSTED_CERTIFICATE_OIDC_ISSUER"].strip()
+          expected_verifiers = {
+              f"sigstore://cosign?identity={identity}&issuer={issuer}",
+              f"slsa://cosign?identity={identity}&issuer={issuer}",
+          }
+          actual_verifiers = {
+              item.strip()
+              for item in str(evidence.get("verifier_ref", "")).split(" + ")
+              if item.strip()
+          }
+          if actual_verifiers != expected_verifiers:
+              raise SystemExit("verification evidence verifier_ref does not match protected Sigstore policy")
+
+          refs = set(evidence.get("evidence_refs") or [])
+          expected_runner = (
+              "morn-supply-chain://release-runner?value="
+              + os.environ["INPUT_RELEASE_RUNNER_REF"].strip()
+          )
+          expected_cosign = (
+              "morn-supply-chain://cosign-binary?value="
+              + os.environ["INPUT_COSIGN_DIGEST"].strip()
+          )
+          if expected_runner not in refs or expected_cosign not in refs:
+              raise SystemExit("verification evidence is missing release-runner/Cosign handoff context")
+
           pathlib.Path("target/live-supply-chain-evidence/supply-chain-verification.json").write_text(
               json.dumps(evidence, indent=2), encoding="utf-8"
           )
