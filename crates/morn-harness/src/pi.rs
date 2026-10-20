@@ -709,7 +709,10 @@ impl HarnessProvider for PiHarnessProvider {
                                 "live Pi RPC turn settled with disposition {}",
                                 run.disposition
                             ),
-                            format!("runtime://pi/session/{session_id}/settled-turn"),
+                            format!(
+                                "runtime://pi/session/{session_id}/request/{}/settled-turn",
+                                run.request_id
+                            ),
                         );
                         let state = self
                             .sessions
