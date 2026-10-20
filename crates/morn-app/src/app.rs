@@ -40,7 +40,8 @@ use morn_opint::dataset::OutcomeDataset;
 use morn_opint::episode::EpisodeAssembler;
 use morn_opint::predictor::PredictorRegistry;
 use morn_package::{
-    supply_chain_verification_context_ref, SigstoreIdentityPolicy, SupplyChainVerificationEvidence,
+    supply_chain_verification_context_ref, validate_supply_chain_verifier_build_ref,
+    SigstoreIdentityPolicy, SupplyChainVerificationEvidence,
 };
 use morn_runtime::{AttestedExecutionEnvironmentProvider, ExecutionEnvironmentAttestation};
 use morn_store::store::MornStore;
@@ -848,11 +849,8 @@ fn configured_supply_chain_verifications(
     }
     let verifier_build_ref =
         required_single_line_env("MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF")?;
-    if !verifier_build_ref.starts_with("git://") {
-        return Err(morn_kernel::error::Error::validation(
-            "MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF must be an explicit git:// identity",
-        ));
-    }
+    validate_supply_chain_verifier_build_ref(&verifier_build_ref)
+        .map_err(morn_kernel::error::Error::validation)?;
 
     let raw = std::fs::read_to_string(&path).map_err(|error| {
         morn_kernel::error::Error::external(format!(
