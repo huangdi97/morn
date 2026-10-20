@@ -463,23 +463,22 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
         )
     };
     let now = morn_kernel::time::Timestamp::now();
-    let mut project_runtime_health = |provider_id: &str,
-                                      health: &morn_harness::HarnessRuntimeHealth|
-     -> Result<(), Error> {
-        let Some((status, reason, evidence_refs, ttl_ms)) =
-            runtime_health_catalog_projection(health, now)
-        else {
-            return Ok(());
+    let mut project_runtime_health =
+        |provider_id: &str, health: &morn_harness::HarnessRuntimeHealth| -> Result<(), Error> {
+            let Some((status, reason, evidence_refs, ttl_ms)) =
+                runtime_health_catalog_projection(health, now)
+            else {
+                return Ok(());
+            };
+            provider_catalog.observe_status_with_ttl(
+                provider_id,
+                status,
+                reason,
+                evidence_refs,
+                ttl_ms,
+            )?;
+            Ok(())
         };
-        provider_catalog.observe_status_with_ttl(
-            provider_id,
-            status,
-            reason,
-            evidence_refs,
-            ttl_ms,
-        )?;
-        Ok(())
-    };
     project_runtime_health("deepseek-harness", &dsh_health)?;
     project_runtime_health("pi", &pi_health)?;
     drop(project_runtime_health);
@@ -6448,7 +6447,11 @@ mod workspace_boundary_tests {
         let mut health = morn_harness::HarnessRuntimeHealth::configured("configured");
         health.mark_live_turn("settled", "health://pi/request-1");
         let expired_at = morn_kernel::time::Timestamp::from_millis(
-            health.health_valid_until.unwrap().millis().saturating_add(1),
+            health
+                .health_valid_until
+                .unwrap()
+                .millis()
+                .saturating_add(1),
         );
 
         let (status, reason, evidence_refs, ttl_ms) =
