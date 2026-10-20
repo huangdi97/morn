@@ -2173,6 +2173,42 @@ mod tests {
     }
 
     #[test]
+    fn real_sdk_transport_rejects_empty_upstream_message_id() {
+        let executable = std::env::current_exe().unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        let config = DshSdkConfig {
+            command: executable.to_string_lossy().to_string(),
+            args: vec![
+                "--exact".to_string(),
+                "dsh_sdk::tests::fake_sdk_runtime".to_string(),
+                "--ignored".to_string(),
+                "--nocapture".to_string(),
+            ],
+            cwd: cwd.to_string_lossy().to_string(),
+            provider: "fixture-provider".to_string(),
+            model: "fixture-model".to_string(),
+            reasoning_effort: None,
+            max_tokens: Some(64),
+            dsh_home: None,
+            execution_environment_ref: None,
+            profile_configuration_ref: None,
+            runtime_version: None,
+            runtime_digest: None,
+            request_timeout_ms: 10_000,
+            turn_timeout_ms: 10_000,
+            enforce_morn_e0_tool_policy: false,
+        };
+        let mut client = DshSdkStdioClient::spawn(&config).unwrap();
+        client.initialize(&config).unwrap();
+
+        let error = client
+            .run_text_prompt("session-1", "__bad_message_id__")
+            .unwrap_err();
+        assert!(format!("{error}").contains("auditable non-empty messageId"));
+        client.shutdown().unwrap();
+    }
+
+    #[test]
     fn current_sdk_resume_wire_restores_only_executor_session_state() {
         let executable = std::env::current_exe().unwrap();
         let cwd = std::env::current_dir().unwrap();
@@ -2337,10 +2373,18 @@ mod tests {
                     } else {
                         "completed"
                     };
+                    let message_id = if prompt_text == "__bad_message_id__" {
+                        ""
+                    } else {
+                        "message-1"
+                    };
                     write(
                         &mut stdout,
-                        json!({"jsonrpc":"2.0","id":id,"result":{"messageId":"message-1"}}),
+                        json!({"jsonrpc":"2.0","id":id,"result":{"messageId":message_id}}),
                     );
+                    if prompt_text == "__bad_message_id__" {
+                        continue;
+                    }
                     write(
                         &mut stdout,
                         json!({
