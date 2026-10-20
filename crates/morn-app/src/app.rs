@@ -1006,7 +1006,14 @@ mod supply_chain_trust_tests {
         .is_err());
 
         evidence.verifier_ref = policy.signature_verifier_ref().unwrap();
-        evidence.evidence_refs.pop();
+        let verifier_build_context = supply_chain_verification_context_ref(
+            "verifier-build",
+            "git://huangdi97/morn/verifier-1",
+        )
+        .unwrap();
+        evidence
+            .evidence_refs
+            .retain(|reference| reference != &verifier_build_context);
         assert!(validate_supply_chain_verification_trust(
             &evidence,
             &policy,
