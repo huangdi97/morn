@@ -320,6 +320,66 @@ async fn v115_ui_extensions() -> ApiResult {
     })))
 }
 
+fn runtime_health_catalog_projection(
+    health: &morn_harness::HarnessRuntimeHealth,
+    now: morn_kernel::time::Timestamp,
+) -> Option<(
+    morn_runtime::provider_registry::ProviderStatus,
+    String,
+    Vec<String>,
+    Option<i64>,
+)> {
+    use morn_harness::HarnessRuntimeHealthState;
+    use morn_runtime::provider_registry::ProviderStatus;
+
+    match health.state {
+        HarnessRuntimeHealthState::Fixture | HarnessRuntimeHealthState::Unconfigured => None,
+        HarnessRuntimeHealthState::Configured => Some((
+            ProviderStatus::Registered,
+            health.reason.clone(),
+            Vec::new(),
+            None,
+        )),
+        HarnessRuntimeHealthState::Initialized if health.ready_for_new_turn_at(now) => Some((
+            ProviderStatus::Registered,
+            health.reason.clone(),
+            health.evidence_refs.clone(),
+            health.remaining_lease_ms(now),
+        )),
+        HarnessRuntimeHealthState::Initialized => Some((
+            ProviderStatus::Degraded,
+            "runtime initialization lease expired before a settled live turn; fresh preflight is required"
+                .to_string(),
+            Vec::new(),
+            None,
+        )),
+        HarnessRuntimeHealthState::Healthy if health.selectable_at(now) => Some((
+            ProviderStatus::Healthy,
+            health.reason.clone(),
+            health.evidence_refs.clone(),
+            health.remaining_lease_ms(now),
+        )),
+        HarnessRuntimeHealthState::Healthy => Some((
+            ProviderStatus::Degraded,
+            "live runtime health lease expired; a fresh settled turn is required".to_string(),
+            Vec::new(),
+            None,
+        )),
+        HarnessRuntimeHealthState::Degraded => Some((
+            ProviderStatus::Degraded,
+            health.reason.clone(),
+            Vec::new(),
+            None,
+        )),
+        HarnessRuntimeHealthState::Closed => Some((
+            ProviderStatus::Unavailable,
+            health.reason.clone(),
+            Vec::new(),
+            None,
+        )),
+    }
+}
+
 async fn v115_status(State(state): State<AppState>) -> ApiResult {
     let protocol = morn_kernel::protocol::ProtocolSnapshot::v11_5();
     let profile = morn_profile::DomainProfile::factory_readonly_v1();
@@ -406,48 +466,16 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
     let mut project_runtime_health = |provider_id: &str,
                                       health: &morn_harness::HarnessRuntimeHealth|
      -> Result<(), Error> {
-        use morn_harness::HarnessRuntimeHealthState;
-        use morn_runtime::provider_registry::ProviderStatus;
-
-        let (status, reason, ttl_ms) = match health.state {
-            HarnessRuntimeHealthState::Fixture | HarnessRuntimeHealthState::Unconfigured => {
-                return Ok(());
-            }
-            HarnessRuntimeHealthState::Configured => {
-                (ProviderStatus::Registered, health.reason.clone(), None)
-            }
-            HarnessRuntimeHealthState::Initialized if health.ready_for_new_turn_at(now) => (
-                ProviderStatus::Registered,
-                health.reason.clone(),
-                health.remaining_lease_ms(now),
-            ),
-            HarnessRuntimeHealthState::Initialized => (
-                ProviderStatus::Degraded,
-                "runtime initialization lease expired before a settled live turn; fresh preflight is required".to_string(),
-                None,
-            ),
-            HarnessRuntimeHealthState::Healthy if health.selectable_at(now) => (
-                ProviderStatus::Healthy,
-                health.reason.clone(),
-                health.remaining_lease_ms(now),
-            ),
-            HarnessRuntimeHealthState::Healthy => (
-                ProviderStatus::Degraded,
-                "live runtime health lease expired; a fresh settled turn is required".to_string(),
-                None,
-            ),
-            HarnessRuntimeHealthState::Degraded => {
-                (ProviderStatus::Degraded, health.reason.clone(), None)
-            }
-            HarnessRuntimeHealthState::Closed => {
-                (ProviderStatus::Unavailable, health.reason.clone(), None)
-            }
+        let Some((status, reason, evidence_refs, ttl_ms)) =
+            runtime_health_catalog_projection(health, now)
+        else {
+            return Ok(());
         };
         provider_catalog.observe_status_with_ttl(
             provider_id,
             status,
             reason,
-            health.evidence_refs.clone(),
+            evidence_refs,
             ttl_ms,
         )?;
         Ok(())
@@ -6414,6 +6442,41 @@ mod workspace_boundary_tests {
     use super::*;
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
     use morn_work::control::{WorkResource, WorkSpec};
+
+    #[test]
+    fn runtime_health_projection_drops_stale_success_witness_after_expiry() {
+        let mut health = morn_harness::HarnessRuntimeHealth::configured("configured");
+        health.mark_live_turn("settled", "health://pi/request-1");
+        let expired_at = morn_kernel::time::Timestamp::from_millis(
+            health.health_valid_until.unwrap().millis().saturating_add(1),
+        );
+
+        let (status, reason, evidence_refs, ttl_ms) =
+            runtime_health_catalog_projection(&health, expired_at).unwrap();
+        assert_eq!(
+            status,
+            morn_runtime::provider_registry::ProviderStatus::Degraded
+        );
+        assert!(reason.contains("health lease expired"));
+        assert!(evidence_refs.is_empty());
+        assert!(ttl_ms.is_none());
+    }
+
+    #[test]
+    fn runtime_health_projection_keeps_current_witness_while_fresh() {
+        let mut health = morn_harness::HarnessRuntimeHealth::configured("configured");
+        health.mark_live_turn("settled", "health://dsh/message-1");
+        let now = health.observed_at;
+
+        let (status, _reason, evidence_refs, ttl_ms) =
+            runtime_health_catalog_projection(&health, now).unwrap();
+        assert_eq!(
+            status,
+            morn_runtime::provider_registry::ProviderStatus::Healthy
+        );
+        assert_eq!(evidence_refs, vec!["health://dsh/message-1".to_string()]);
+        assert!(ttl_ms.is_some());
+    }
 
     #[test]
     fn reviewer_rotation_uses_latest_effective_attestation_without_stale_fallback() {
