@@ -708,6 +708,28 @@ async fn v115_status(State(state): State<AppState>) -> ApiResult {
     })))
 }
 
+fn resolution_candidate_catalog(
+    capabilities: &[morn_capability::CapabilityRecord],
+    admissions: &morn_assurance::AdmissionService,
+    site_ref: Option<&str>,
+    profile_ref: &str,
+    require_active_admission: bool,
+    now: morn_kernel::time::Timestamp,
+) -> std::result::Result<Vec<morn_capability::CapabilityRecord>, Error> {
+    if !require_active_admission {
+        return Ok(capabilities.to_vec());
+    }
+    let site_ref =
+        site_ref.ok_or_else(|| Error::validation("governed Work requires site_ref"))?;
+    Ok(capabilities
+        .iter()
+        .filter(|capability| {
+            admissions.site_profile_admission_active_at(capability, site_ref, profile_ref, now)
+        })
+        .cloned()
+        .collect())
+}
+
 async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_capability::{CapabilityResolver, EffectClass, WorkcellRequest};
     use morn_control_plane::{
@@ -825,7 +847,15 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
         unavailable_providers,
         ..Default::default()
     };
-    let plan = CapabilityResolver.resolve_minimum_workcell(&request, &guard.v115_capabilities);
+    let resolution_catalog = resolution_candidate_catalog(
+        &guard.v115_capabilities,
+        &guard.v115_admission,
+        work.spec.site_ref.as_deref(),
+        &work.spec.profile_ref,
+        strict_admission,
+        now,
+    )?;
+    let plan = CapabilityResolver.resolve_minimum_workcell(&request, &resolution_catalog);
     if !plan.is_complete() {
         return Ok(Json(json!({
             "resolved": false,
@@ -840,8 +870,7 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
         .members
         .iter()
         .map(|member| {
-            guard
-                .v115_capabilities
+            resolution_catalog
                 .iter()
                 .find(|record| record.manifest.id == member.capability.manifest_id)
                 .cloned()
@@ -6479,6 +6508,148 @@ mod workspace_boundary_tests {
         );
         assert_eq!(evidence_refs, vec!["health://dsh/message-1".to_string()]);
         assert!(ttl_ms.is_some());
+    }
+
+    #[test]
+    fn strict_resolution_catalog_drops_stale_admission_projection() {
+        use morn_assurance::{
+            AdmissionService, QualificationEvidence, StrictQualificationRequest,
+            VerifiedReleaseRequest,
+        };
+        use morn_capability::{
+            CapabilityAdmissionRef, CapabilityKind, CapabilityManifest, CapabilityRecord,
+            CapabilityStage, EffectClass,
+        };
+        use morn_kernel::ids::CapabilityId;
+        use morn_package::{supply_chain_subject_ref, SupplyChainVerificationEvidence};
+        use morn_profile::{
+            evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel,
+        };
+        use std::collections::BTreeSet;
+
+        let profile = DomainProfile::factory_readonly_v1();
+        let mut semantics = BTreeSet::new();
+        semantics.extend(
+            profile
+                .requirements
+                .iter()
+                .filter(|item| item.level == RequirementLevel::Required)
+                .map(|item| item.semantic.clone()),
+        );
+        let report = evaluate_profile(
+            &profile,
+            &ConformanceEvidence {
+                satisfied_semantics: semantics,
+                isolation: profile.minimum_isolation.clone(),
+                execution_guarantees: profile
+                    .required_execution_guarantees
+                    .iter()
+                    .copied()
+                    .collect(),
+                durable_work_state: profile.durable_work_state_required,
+                source_of_truth_bound: profile.source_of_truth_binding_required,
+                provenance_ready: profile.provenance_required,
+                ..Default::default()
+            },
+        );
+        assert!(report.passed);
+
+        let mut valid = CapabilityRecord::new(CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            "valid",
+            "provider-valid",
+            CapabilityKind::Program,
+            EffectClass::E0LifecycleReversible,
+        ));
+        valid.manifest.provides = vec!["inspect".to_string()];
+        valid.manifest.economics.estimated_cost_micros = Some(100);
+        let mut admissions = AdmissionService::default();
+        admissions
+            .observe(&mut valid, vec!["eval:observation".to_string()], "evaluator")
+            .unwrap();
+        let qualification = admissions
+            .qualify_with_evidence(
+                &mut valid,
+                StrictQualificationRequest {
+                    candidate_ref: "candidate:valid".to_string(),
+                    decision_ref: "decision:valid".to_string(),
+                    evidence_refs: vec!["eval:valid".to_string()],
+                    qualification_evidence: QualificationEvidence {
+                        test_suite_refs: vec!["suite:valid".to_string()],
+                        environment_digest: Some("sha256:env".to_string()),
+                        expected_properties: vec!["works".to_string()],
+                        evaluator_identity: Some("evaluator".to_string()),
+                        ..Default::default()
+                    },
+                    context_of_use: vec!["factory-readonly".to_string()],
+                    valid_until: None,
+                },
+            )
+            .unwrap();
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let package_ref = format!("oci://fixture/valid@{digest}");
+        admissions
+            .record_verified_release(
+                &mut valid,
+                &qualification,
+                VerifiedReleaseRequest::new(
+                    package_ref.clone(),
+                    digest.clone(),
+                    "sigstore://fixture/valid",
+                    "slsa://fixture/valid",
+                    SupplyChainVerificationEvidence {
+                        subject_digest: digest,
+                        verifier_ref: "fixture://supply-chain-verifier".to_string(),
+                        signature_verified: true,
+                        provenance_verified: true,
+                        evidence_refs: vec![
+                            supply_chain_subject_ref(&package_ref).unwrap(),
+                            "fixture://supply-chain-proof".to_string(),
+                        ],
+                    },
+                ),
+            )
+            .unwrap();
+        admissions
+            .admit(
+                &mut valid,
+                &qualification,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .unwrap();
+
+        let mut stale = CapabilityRecord::new(CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            "stale",
+            "provider-stale",
+            CapabilityKind::Program,
+            EffectClass::E0LifecycleReversible,
+        ));
+        stale.manifest.provides = vec!["inspect".to_string()];
+        stale.manifest.economics.estimated_cost_micros = Some(1);
+        stale.stage = CapabilityStage::Admitted;
+        stale.admitted_sites.push("plant-a".to_string());
+        stale.qualification_refs.push("qualification:stale".to_string());
+        stale.admission_refs.push(CapabilityAdmissionRef {
+            admission_ref: "admission:stale".to_string(),
+            site_ref: "plant-a".to_string(),
+            profile_ref: report.profile_ref.clone(),
+        });
+
+        let filtered = resolution_candidate_catalog(
+            &[stale, valid.clone()],
+            &admissions,
+            Some("plant-a"),
+            &report.profile_ref,
+            true,
+            morn_kernel::time::Timestamp::now(),
+        )
+        .unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].manifest.id, valid.manifest.id);
     }
 
     #[test]
