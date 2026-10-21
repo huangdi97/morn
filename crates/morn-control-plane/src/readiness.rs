@@ -534,13 +534,23 @@ mod tests {
             .contains(&stale_admission.id.to_string()));
 
         evidence.observed_at = observed_at;
+        let mut resolution = capability_resolution_evidence(&work, &decision).unwrap();
+        resolution.observed_at = observed_at;
         assert!(
-            derive_controller_inputs(&work, &[evidence.clone()], Timestamp::from_millis(150))
-                .capability_qualified
+            derive_controller_inputs(
+                &work,
+                &[resolution.clone(), evidence.clone()],
+                Timestamp::from_millis(150),
+            )
+            .capability_qualified
         );
         assert!(
-            !derive_controller_inputs(&work, &[evidence], Timestamp::from_millis(201))
-                .capability_qualified
+            !derive_controller_inputs(
+                &work,
+                &[resolution, evidence],
+                Timestamp::from_millis(201),
+            )
+            .capability_qualified
         );
     }
 
