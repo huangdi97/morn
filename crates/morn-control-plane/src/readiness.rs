@@ -270,6 +270,7 @@ mod tests {
             QualificationRecordId, QualificationStatus, SiteAdmission, SiteAdmissionId,
             SiteAdmissionStatus,
         };
+        use morn_package::{supply_chain_subject_ref, SupplyChainVerificationEvidence};
         use morn_kernel::version::Version;
 
         let mut spec = WorkSpec::new(
@@ -313,15 +314,26 @@ mod tests {
             valid_until: None,
             created_at: Timestamp::now(),
         };
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let package_ref = format!("oci://fixture/morn/first@{digest}");
         let release = CapabilityDistributionRelease {
             id: CapabilityDistributionReleaseId::generate_with("release"),
             manifest_id: first.manifest.id.clone(),
             qualification_id: qualification.id.clone(),
-            package_ref: "package://first".to_string(),
-            content_digest: format!("sha256:{}", "a".repeat(64)),
-            signature_ref: None,
-            provenance_ref: Some("build://first".to_string()),
-            supply_chain_verification: None,
+            package_ref: package_ref.clone(),
+            content_digest: digest.clone(),
+            signature_ref: Some("sigstore://fixture/signature".to_string()),
+            provenance_ref: Some("slsa://fixture/provenance".to_string()),
+            supply_chain_verification: Some(SupplyChainVerificationEvidence {
+                subject_digest: digest,
+                verifier_ref: "fixture://supply-chain-verifier".to_string(),
+                signature_verified: true,
+                provenance_verified: true,
+                evidence_refs: vec![
+                    supply_chain_subject_ref(&package_ref).unwrap(),
+                    "fixture://supply-chain-proof".to_string(),
+                ],
+            }),
             status: CapabilityDistributionReleaseStatus::Released,
             created_at: Timestamp::now(),
         };
