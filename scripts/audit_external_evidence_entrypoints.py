@@ -75,6 +75,7 @@ MATRIX = {
             "morn-supply-chain://release-runner?value=",
             "morn-supply-chain://cosign-binary?value=",
             "morn-supply-chain://verifier-build?value=git://huangdi97/morn/",
+            "morn-supply-chain://oci-subject?value=",
             "proof_payloads",
             "cosign-signature-proof.json",
             "cosign-slsa-provenance-proof.json",
