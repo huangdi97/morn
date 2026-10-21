@@ -17,7 +17,9 @@ use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
 use morn_work::control::{ConditionStatus, WorkCondition, WorkPhase, WorkResource};
 use morn_world::ObservedOutcome;
 
-use crate::condition_evidence::active_resolution_decision_ref;
+use crate::condition_evidence::{
+    active_resolution_decision_ref, latest_capability_condition_evidence,
+};
 use crate::readiness::capability_resolution_decision_ref;
 use crate::{
     derive_controller_inputs, require_attested_outcome_provenance,
@@ -99,15 +101,8 @@ pub fn current_durable_resolution_contains_capability(
     capability_manifest_id: &str,
     now: Timestamp,
 ) -> bool {
-    let resolved = evidence
-        .iter()
-        .filter(|item| item.condition_type == "CapabilityResolved" && item.active_for(work, now))
-        .max_by_key(|item| {
-            (
-                item.observed_at.millis(),
-                !(item.satisfied && !item.evidence_refs.is_empty()),
-            )
-        });
+    let resolved =
+        latest_capability_condition_evidence(work, evidence, "CapabilityResolved", now);
     let Some(resolved) = resolved else {
         return false;
     };
