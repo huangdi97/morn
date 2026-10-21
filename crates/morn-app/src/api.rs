@@ -1719,14 +1719,10 @@ fn require_current_durable_binding_readiness(
         CapabilityResolutionDecision, ConditionEvidence, WorkController,
     };
 
-    let evidence: Vec<ConditionEvidence> = store.load_records_in_workspace(
-        "condition_evidence_v115",
-        work.workspace_id.as_str(),
-    )?;
-    let decisions: Vec<CapabilityResolutionDecision> = store.load_records_in_workspace(
-        "capability_resolution_v115",
-        work.workspace_id.as_str(),
-    )?;
+    let evidence: Vec<ConditionEvidence> =
+        store.load_records_in_workspace("condition_evidence_v115", work.workspace_id.as_str())?;
+    let decisions: Vec<CapabilityResolutionDecision> = store
+        .load_records_in_workspace("capability_resolution_v115", work.workspace_id.as_str())?;
     let inputs = derive_durable_controller_inputs(work, &evidence, &decisions, now);
 
     let mut projected = work.clone();
@@ -7569,7 +7565,9 @@ mod workspace_boundary_tests {
         };
         use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
         use morn_kernel::ids::CapabilityId;
-        use morn_work::control::{ConditionStatus, WorkCondition, WorkPhase, WorkResource, WorkSpec};
+        use morn_work::control::{
+            ConditionStatus, WorkCondition, WorkPhase, WorkResource, WorkSpec,
+        };
 
         let state = AppState::new(":memory:").unwrap();
         let (work_id, capability_id) = {
@@ -7608,10 +7606,7 @@ mod workspace_boundary_tests {
                 ],
             )
             .unwrap();
-            guard
-                .store
-                .save_condition_evidence(&work, &orphan)
-                .unwrap();
+            guard.store.save_condition_evidence(&work, &orphan).unwrap();
 
             work.status.phase = WorkPhase::Ready;
             let mut condition = WorkCondition::new("CapabilityResolved", ConditionStatus::True);
