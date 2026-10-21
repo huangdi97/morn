@@ -100,9 +100,11 @@ impl DurableWorkControllerRuntime {
         self.reconcile_internal(store, work_id, profile, None, now)
     }
 
-    /// Reference/fixture entry point for explicit controller inputs. Production
-    /// API routes use reconcile_from_evidence, not caller-provided readiness.
-    pub fn reconcile_once(
+    /// Reference/fixture entry point for explicit controller inputs. This
+    /// bypass is test-only so production builds cannot reconcile caller-provided
+    /// readiness booleans around durable evidence validation.
+    #[cfg(test)]
+    fn reconcile_once(
         &self,
         store: &MornStore,
         work_id: &str,
