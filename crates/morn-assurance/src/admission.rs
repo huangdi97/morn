@@ -908,6 +908,32 @@ mod tests {
             .unwrap();
     }
 
+    fn strict_fixture_qualification(
+        service: &mut AdmissionService,
+        capability: &mut CapabilityRecord,
+    ) -> QualificationRecord {
+        observe_candidate(service, capability);
+        service
+            .qualify_with_evidence(
+                capability,
+                StrictQualificationRequest {
+                    candidate_ref: "candidate:strict-fixture".to_string(),
+                    decision_ref: "decision:strict-fixture".to_string(),
+                    evidence_refs: vec!["eval:strict-fixture".to_string()],
+                    qualification_evidence: QualificationEvidence {
+                        test_suite_refs: vec!["suite:factory".to_string()],
+                        environment_digest: Some("sha256:env".to_string()),
+                        expected_properties: vec!["safe-reconcile".to_string()],
+                        evaluator_identity: Some("evaluator:independent".to_string()),
+                        ..Default::default()
+                    },
+                    context_of_use: vec!["factory-readonly".to_string()],
+                    valid_until: None,
+                },
+            )
+            .unwrap()
+    }
+
     fn record_fixture_release(
         service: &mut AdmissionService,
         capability: &mut CapabilityRecord,
@@ -1036,6 +1062,81 @@ mod tests {
         assert_eq!(admission.status, SiteAdmissionStatus::Admitted);
         assert_eq!(capability.stage, CapabilityStage::Admitted);
         assert_eq!(capability.admitted_sites, vec!["plant-a".to_string()]);
+    }
+
+    #[test]
+    fn verified_release_rejects_proof_from_different_oci_repository() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        let qualification = strict_fixture_qualification(&mut service, &mut capability);
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let target_ref = format!("oci://fixture/target/capability@{digest}");
+        let foreign_ref = format!("oci://fixture/foreign/capability@{digest}");
+
+        let error = service
+            .record_verified_release(
+                &mut capability,
+                &qualification,
+                VerifiedReleaseRequest::new(
+                    target_ref,
+                    digest.clone(),
+                    "sigstore://fixture/signature",
+                    "slsa://fixture/provenance",
+                    SupplyChainVerificationEvidence {
+                        subject_digest: digest,
+                        verifier_ref: "fixture://supply-chain-verifier".to_string(),
+                        signature_verified: true,
+                        provenance_verified: true,
+                        evidence_refs: vec![
+                            morn_package::supply_chain_subject_ref(&foreign_ref).unwrap(),
+                            "fixture://supply-chain-proof".to_string(),
+                        ],
+                    },
+                ),
+            )
+            .unwrap_err();
+        assert!(format!("{error}").contains("exact OCI repository subject"));
+        assert!(service.releases.is_empty());
+    }
+
+    #[test]
+    fn site_admission_revalidates_release_oci_subject_witness() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        let qualification = strict_fixture_qualification(&mut service, &mut capability);
+        let release = record_fixture_release(&mut service, &mut capability, &qualification);
+        let digest = release.content_digest.clone();
+        let stored = service
+            .releases
+            .iter_mut()
+            .find(|candidate| candidate.id == release.id)
+            .unwrap();
+        let verification = stored.supply_chain_verification.as_mut().unwrap();
+        verification.evidence_refs.retain(|reference| {
+            !reference.starts_with("morn-supply-chain://oci-subject?value=")
+        });
+        verification.evidence_refs.push(
+            morn_package::supply_chain_subject_ref(&format!(
+                "oci://fixture/foreign/capability@{digest}"
+            ))
+            .unwrap(),
+        );
+
+        let profile = DomainProfile::factory_readonly_v1();
+        let report = passing_conformance(&profile);
+        let error = service
+            .admit(
+                &mut capability,
+                &qualification,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .unwrap_err();
+        assert!(format!("{error}").contains("exact OCI repository subject"));
+        assert!(service.admissions.is_empty());
+        assert!(capability.admitted_sites.is_empty());
     }
 
     #[test]
