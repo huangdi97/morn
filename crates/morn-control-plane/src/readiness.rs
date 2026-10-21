@@ -88,11 +88,18 @@ pub fn capability_resolution_evidence(
 
 pub fn capability_qualification_evidence(
     work: &WorkResource,
+    decision: &CapabilityResolutionDecision,
     capability: &CapabilityRecord,
     admissions: &AdmissionService,
     now: Timestamp,
 ) -> Result<ConditionEvidence> {
-    workcell_qualification_evidence(work, std::slice::from_ref(capability), admissions, now)
+    workcell_qualification_evidence(
+        work,
+        decision,
+        std::slice::from_ref(capability),
+        admissions,
+        now,
+    )
 }
 
 /// Qualification readiness is a Workcell property. Every capability selected
@@ -101,13 +108,38 @@ pub fn capability_qualification_evidence(
 /// make a partially admitted Workcell Ready.
 pub fn workcell_qualification_evidence(
     work: &WorkResource,
+    decision: &CapabilityResolutionDecision,
     capabilities: &[CapabilityRecord],
     admissions: &AdmissionService,
     now: Timestamp,
 ) -> Result<ConditionEvidence> {
+    if !decision.matches_work(work) {
+        return Err(Error::validation(
+            "CapabilityQualified requires the current Work generation/solution resolution decision",
+        ));
+    }
     if capabilities.is_empty() {
         return Err(Error::validation(
             "CapabilityQualified requires at least one resolved capability",
+        ));
+    }
+    let mut resolved_ids = decision
+        .plan
+        .members
+        .iter()
+        .map(|member| member.capability.manifest_id.to_string())
+        .collect::<Vec<_>>();
+    resolved_ids.sort();
+    resolved_ids.dedup();
+    let mut supplied_ids = capabilities
+        .iter()
+        .map(|capability| capability.manifest.id.to_string())
+        .collect::<Vec<_>>();
+    supplied_ids.sort();
+    supplied_ids.dedup();
+    if supplied_ids != resolved_ids || supplied_ids.len() != capabilities.len() {
+        return Err(Error::validation(
+            "CapabilityQualified capability set must exactly match the current resolution decision",
         ));
     }
     let site = work
@@ -163,6 +195,7 @@ pub fn workcell_qualification_evidence(
             (None, None) => None,
         };
     }
+    refs.push(decision.id.to_string());
     refs.sort();
     refs.dedup();
     let mut evidence = ConditionEvidence::new(
@@ -421,15 +454,39 @@ mod tests {
         service.admissions.push(admission.clone());
 
         let observed_at = Timestamp::from_millis(100);
+        let single_plan = WorkcellPlan {
+            members: vec![WorkcellMember {
+                capability: ResolvedCapability {
+                    manifest_id: first.manifest.id.clone(),
+                    provider_ref: first.manifest.provider_ref.clone(),
+                    kind: first.manifest.kind,
+                    estimated_cost_micros: None,
+                    maximum_effect: first.manifest.effect.maximum,
+                    compensation_ref: first.manifest.effect.compensation_ref.clone(),
+                    idempotency_key_required: first.manifest.effect.idempotency_key_required,
+                    required_execution_class: first.manifest.execution.minimum_isolation,
+                    required_execution_guarantees: first.manifest.execution.required_guarantees.clone(),
+                    score: 1,
+                    rationale: vec![],
+                },
+                covers: vec!["x".to_string()],
+            }],
+            uncovered: vec![],
+            total_estimated_cost_micros: 0,
+            rationale: vec![],
+        };
+        let decision = CapabilityResolutionDecision::new(&work, single_plan).unwrap();
         assert!(workcell_qualification_evidence(
             &work,
+            &decision,
             &[first.clone(), second],
             &service,
             observed_at
         )
         .is_err());
         let mut evidence =
-            workcell_qualification_evidence(&work, &[first], &service, observed_at).unwrap();
+            workcell_qualification_evidence(&work, &decision, &[first], &service, observed_at)
+                .unwrap();
         assert_eq!(evidence.condition_type, "CapabilityQualified");
         assert_eq!(evidence.valid_until, Some(qualification_expires_at));
         assert!(evidence.evidence_refs.contains(&admission.id.to_string()));
@@ -446,6 +503,134 @@ mod tests {
             !derive_controller_inputs(&work, &[evidence], Timestamp::from_millis(201))
                 .capability_qualified
         );
+    }
+
+    #[test]
+    fn qualification_cannot_use_capabilities_outside_current_resolution_decision() {
+        use morn_assurance::{
+            CapabilityDistributionRelease, CapabilityDistributionReleaseId,
+            CapabilityDistributionReleaseStatus, QualificationEvidence, QualificationRecord,
+            QualificationRecordId, QualificationStatus, SiteAdmission, SiteAdmissionId,
+            SiteAdmissionStatus,
+        };
+        use morn_kernel::version::Version;
+        use morn_package::{supply_chain_subject_ref, SupplyChainVerificationEvidence};
+
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "review",
+            "morn.factory.readonly@1.0.0",
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+
+        let resolved_manifest = CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            "resolved",
+            "provider-a",
+            CapabilityKind::Program,
+            EffectClass::E0LifecycleReversible,
+        );
+        let resolved_plan = WorkcellPlan {
+            members: vec![WorkcellMember {
+                capability: ResolvedCapability {
+                    manifest_id: resolved_manifest.id,
+                    provider_ref: "provider-a".to_string(),
+                    kind: CapabilityKind::Program,
+                    estimated_cost_micros: None,
+                    maximum_effect: EffectClass::E0LifecycleReversible,
+                    compensation_ref: None,
+                    idempotency_key_required: false,
+                    required_execution_class: morn_kernel::ExecutionClass::NoIsolation,
+                    required_execution_guarantees: vec![],
+                    score: 1,
+                    rationale: vec![],
+                },
+                covers: vec!["x".to_string()],
+            }],
+            uncovered: vec![],
+            total_estimated_cost_micros: 0,
+            rationale: vec![],
+        };
+        let decision = CapabilityResolutionDecision::new(&work, resolved_plan).unwrap();
+
+        let mut foreign = CapabilityRecord::new(CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            "foreign",
+            "provider-b",
+            CapabilityKind::Program,
+            EffectClass::E0LifecycleReversible,
+        ));
+        let qualification = QualificationRecord {
+            id: QualificationRecordId::generate_with("qual"),
+            manifest_id: foreign.manifest.id.clone(),
+            qualification_version: Version::v1(),
+            candidate_ref: "candidate://foreign".to_string(),
+            decision_ref: "decision://foreign".to_string(),
+            evidence_refs: vec!["test://foreign".to_string()],
+            qualification_evidence: QualificationEvidence {
+                test_suite_refs: vec!["test://suite".to_string()],
+                environment_digest: Some("sha256:fixture".to_string()),
+                expected_properties: vec!["safe".to_string()],
+                evaluator_identity: Some("evaluator".to_string()),
+                ..Default::default()
+            },
+            context_of_use: vec![],
+            status: QualificationStatus::Qualified,
+            valid_until: None,
+            created_at: Timestamp::from_millis(1),
+        };
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let package_ref = format!("oci://fixture/morn/foreign@{digest}");
+        let release = CapabilityDistributionRelease {
+            id: CapabilityDistributionReleaseId::generate_with("release"),
+            manifest_id: foreign.manifest.id.clone(),
+            qualification_id: qualification.id.clone(),
+            package_ref: package_ref.clone(),
+            content_digest: digest.clone(),
+            signature_ref: Some("sigstore://fixture/signature".to_string()),
+            provenance_ref: Some("slsa://fixture/provenance".to_string()),
+            supply_chain_verification: Some(SupplyChainVerificationEvidence {
+                subject_digest: digest,
+                verifier_ref: "fixture://supply-chain-verifier".to_string(),
+                signature_verified: true,
+                provenance_verified: true,
+                evidence_refs: vec![supply_chain_subject_ref(&package_ref).unwrap()],
+            }),
+            status: CapabilityDistributionReleaseStatus::Released,
+            created_at: Timestamp::from_millis(1),
+        };
+        let admission = SiteAdmission {
+            id: SiteAdmissionId::generate_with("admit"),
+            manifest_id: foreign.manifest.id.clone(),
+            qualification_id: qualification.id.clone(),
+            release_id: release.id.clone(),
+            site_ref: "plant-a".to_string(),
+            profile_ref: work.spec.profile_ref.clone(),
+            conformance_ref: "conformance://foreign".to_string(),
+            approved_by: "owner".to_string(),
+            status: SiteAdmissionStatus::Admitted,
+            created_at: Timestamp::from_millis(1),
+        };
+        foreign.admission_refs.push(morn_capability::CapabilityAdmissionRef {
+            admission_ref: admission.id.to_string(),
+            site_ref: "plant-a".to_string(),
+            profile_ref: work.spec.profile_ref.clone(),
+        });
+        let mut service = AdmissionService::default();
+        service.qualifications.push(qualification);
+        service.releases.push(release);
+        service.admissions.push(admission);
+
+        let error = workcell_qualification_evidence(
+            &work,
+            &decision,
+            &[foreign],
+            &service,
+            Timestamp::from_millis(10),
+        )
+        .unwrap_err();
+        assert!(format!("{error}").contains("exactly match"));
     }
 
     #[test]
