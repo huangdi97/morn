@@ -17,9 +17,12 @@ use morn_work::acceptance_decision::{AcceptanceDecision, AcceptanceDisposition};
 use morn_work::control::{ConditionStatus, WorkCondition, WorkPhase, WorkResource};
 use morn_world::ObservedOutcome;
 
+use crate::condition_evidence::active_resolution_decision_ref;
+use crate::readiness::capability_resolution_decision_ref;
 use crate::{
     derive_controller_inputs, require_attested_outcome_provenance,
-    require_attested_review_authority, ConditionEvidence, ControllerInputs, WorkController,
+    require_attested_review_authority, CapabilityResolutionDecision, ConditionEvidence,
+    ControllerInputs, WorkController,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,6 +34,40 @@ pub struct ControllerTickResult {
     pub next_revision: u64,
     pub fencing_token: u64,
     pub event_id: String,
+}
+
+fn capability_readiness_evidence_has_durable_resolution_backing(
+    work: &WorkResource,
+    evidence: &ConditionEvidence,
+    decisions: &[CapabilityResolutionDecision],
+) -> bool {
+    if !evidence.satisfied
+        || !matches!(
+            evidence.condition_type.as_str(),
+            "CapabilityResolved" | "CapabilityQualified" | "ProvenanceReady"
+        )
+    {
+        return true;
+    }
+
+    let Some(witness_ref) = active_resolution_decision_ref(Some(evidence)) else {
+        return false;
+    };
+
+    decisions.iter().any(|decision| {
+        decision.matches_work(work)
+            && capability_resolution_decision_ref(decision) == witness_ref
+            && evidence
+                .evidence_refs
+                .iter()
+                .any(|reference| reference == decision.id.as_str())
+            && decision.plan.members.iter().all(|member| {
+                evidence
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference == member.capability.manifest_id.as_str())
+            })
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -130,9 +167,27 @@ impl DurableWorkControllerRuntime {
         // under the controller lease. A concurrent Work mutation after reload
         // is still rejected by the fenced CAS at commit time.
         let derived_inputs = if provided_inputs.is_none() {
+            let decisions: Vec<CapabilityResolutionDecision> = store.load_records_in_workspace(
+                "capability_resolution_v115",
+                work.workspace_id.as_str(),
+            )?;
             let evidence: Vec<ConditionEvidence> = store
                 .load_records_in_workspace("condition_evidence_v115", work.workspace_id.as_str())?;
-            Some(derive_controller_inputs(&work, &evidence, now))
+            let projection_evidence = evidence
+                .into_iter()
+                .map(|mut item| {
+                    if !capability_readiness_evidence_has_durable_resolution_backing(
+                        &work, &item, &decisions,
+                    ) {
+                        // Preserve the immutable historical evidence record, but
+                        // project an orphaned/inconsistent positive witness as
+                        // fail-closed for this reconciliation tick.
+                        item.satisfied = false;
+                    }
+                    item
+                })
+                .collect::<Vec<_>>();
+            Some(derive_controller_inputs(&work, &projection_evidence, now))
         } else {
             None
         };
