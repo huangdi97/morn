@@ -6789,13 +6789,14 @@ mod workspace_boundary_tests {
     #[test]
     fn release_revocation_invalidates_ready_projection_without_rewriting_running_work() {
         use morn_capability::{
-            CapabilityKind, EffectClass, ResolvedCapability, WorkcellMember, WorkcellPlan,
+            CapabilityKind, CapabilityManifestId, EffectClass, ResolvedCapability, WorkcellMember,
+            WorkcellPlan,
         };
         use morn_control_plane::{
             capability_resolution_evidence, CapabilityResolutionDecision, ConditionEvidence,
             ControlPlaneStore, DurableWorkControllerRuntime,
         };
-        use morn_kernel::ids::{CapabilityManifestId, WorkPackageId};
+        use morn_kernel::ids::WorkPackageId;
         use morn_kernel::time::Timestamp;
         use morn_kernel::ExecutionClass;
         use morn_profile::DomainProfile;
@@ -7322,15 +7323,8 @@ mod workspace_boundary_tests {
                             kind: capability.manifest.kind,
                             estimated_cost_micros: None,
                             maximum_effect: capability.manifest.authority.maximum_effect,
-                            compensation_ref: capability
-                                .manifest
-                                .authority
-                                .compensation_action
-                                .clone(),
-                            idempotency_key_required: capability
-                                .manifest
-                                .authority
-                                .idempotency_key_required,
+                            compensation_ref: capability.manifest.compensation_ref.clone(),
+                            idempotency_key_required: capability.manifest.idempotency_key_required,
                             required_execution_class: ExecutionClass::NoIsolation,
                             required_execution_guarantees: vec![],
                             score: 1,
