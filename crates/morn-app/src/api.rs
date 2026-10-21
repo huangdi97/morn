@@ -883,10 +883,7 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
         .collect::<Result<Vec<_>, _>>()?;
 
     let decision = CapabilityResolutionDecision::new(&work, plan.clone())?;
-    let mut resolution = capability_resolution_evidence(&work, &plan)?;
-    resolution.evidence_refs.push(decision.id.to_string());
-    resolution.evidence_refs.sort();
-    resolution.evidence_refs.dedup();
+    let resolution = capability_resolution_evidence(&work, &decision)?;
 
     let mut additional = Vec::new();
     let mut blockers = Vec::new();
