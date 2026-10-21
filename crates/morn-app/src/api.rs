@@ -3852,10 +3852,9 @@ async fn v115_work_reconcile_business_evidence(
             "controller_holder is deployment-owned control-plane identity and cannot be supplied by the caller",
         )));
     }
-    let runtime =
-        DurableBusinessEvidenceControllerRuntime::new(
-            guard.business_evidence_controller_holder.clone(),
-        );
+    let runtime = DurableBusinessEvidenceControllerRuntime::new(
+        guard.business_evidence_controller_holder.clone(),
+    );
     let tick = runtime.reconcile_from_persisted_business_evidence(
         &guard.store,
         work_id,
@@ -4695,13 +4694,12 @@ fn invalidate_capability_qualification_readiness(
                     work.spec.profile_ref
                 ))
             })?;
-        DurableWorkControllerRuntime::new(controller_holder)
-            .reconcile_from_evidence(
-                store,
-                work.id.as_str(),
-                &profile,
-                morn_kernel::time::Timestamp::now(),
-            )?;
+        DurableWorkControllerRuntime::new(controller_holder).reconcile_from_evidence(
+            store,
+            work.id.as_str(),
+            &profile,
+            morn_kernel::time::Timestamp::now(),
+        )?;
         invalidated.push(work.id.to_string());
     }
 
