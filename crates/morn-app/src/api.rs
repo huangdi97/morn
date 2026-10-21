@@ -51,9 +51,6 @@ impl IntoResponse for AppError {
 
 type ApiResult = Result<Json<Value>, AppError>;
 
-const API_WORK_CONTROLLER_HOLDER: &str = "morn-app-api";
-const API_BUSINESS_EVIDENCE_CONTROLLER_HOLDER: &str = "morn-app-business-evidence-recovery";
-
 fn approved_local_origin(value: &HeaderValue) -> bool {
     matches!(
         value.to_str().ok(),
@@ -915,7 +912,7 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
     // after persistence with a fresh clock so newly-created evidence is never
     // rejected as future-dated merely because provider/catalog checks ran first.
     let reconcile_at = Timestamp::now();
-    let tick = DurableWorkControllerRuntime::new(API_WORK_CONTROLLER_HOLDER)
+    let tick = DurableWorkControllerRuntime::new(guard.work_controller_holder.clone())
         .reconcile_from_evidence(&guard.store, work.id.as_str(), &profile, reconcile_at)?;
     let current = guard
         .store
@@ -1020,7 +1017,7 @@ async fn v115_work_bind_source_of_truth(
                 work.spec.profile_ref
             )))
         })?;
-    let tick = DurableWorkControllerRuntime::new(API_WORK_CONTROLLER_HOLDER)
+    let tick = DurableWorkControllerRuntime::new(guard.work_controller_holder.clone())
         .reconcile_from_evidence(&guard.store, work.id.as_str(), &profile, Timestamp::now())?;
     let current = guard
         .store
@@ -3783,7 +3780,7 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
             "controller_holder is deployment-owned control-plane identity and cannot be supplied by the caller",
         )));
     }
-    let runtime = DurableWorkControllerRuntime::new(API_WORK_CONTROLLER_HOLDER);
+    let runtime = DurableWorkControllerRuntime::new(guard.work_controller_holder.clone());
     for forbidden in [
         "capability_resolved",
         "capability_qualified",
@@ -3853,7 +3850,9 @@ async fn v115_work_reconcile_business_evidence(
         )));
     }
     let runtime =
-        DurableBusinessEvidenceControllerRuntime::new(API_BUSINESS_EVIDENCE_CONTROLLER_HOLDER);
+        DurableBusinessEvidenceControllerRuntime::new(
+            guard.business_evidence_controller_holder.clone(),
+        );
     let tick = runtime.reconcile_from_persisted_business_evidence(
         &guard.store,
         work_id,
@@ -4622,6 +4621,7 @@ async fn v115_capability_admit(
 fn invalidate_capability_qualification_readiness(
     store: &morn_store::store::MornStore,
     workspace_id: &morn_kernel::ids::WorkspaceId,
+    controller_holder: &str,
     revoked_release_ref: &str,
     affected_admission_refs: &[String],
     now: morn_kernel::time::Timestamp,
@@ -4692,7 +4692,7 @@ fn invalidate_capability_qualification_readiness(
                     work.spec.profile_ref
                 ))
             })?;
-        DurableWorkControllerRuntime::new(API_WORK_CONTROLLER_HOLDER)
+        DurableWorkControllerRuntime::new(controller_holder)
             .reconcile_from_evidence(
                 store,
                 work.id.as_str(),
@@ -4758,6 +4758,7 @@ async fn v115_capability_revoke_release(
     let readiness_invalidated_work_refs = invalidate_capability_qualification_readiness(
         &guard.store,
         &guard.workspace.id,
+        &guard.work_controller_holder,
         release_id.as_str(),
         &affected_admission_refs,
         morn_kernel::time::Timestamp::now(),
@@ -6786,6 +6787,7 @@ mod workspace_boundary_tests {
         fn seed_ready_work(
             store: &morn_store::store::MornStore,
             workspace_id: &morn_kernel::ids::WorkspaceId,
+            controller_holder: &str,
             profile: &DomainProfile,
             admission_ref: &str,
             goal: &str,
@@ -6816,7 +6818,7 @@ mod workspace_boundary_tests {
                 store.save_condition_evidence(&work, &evidence).unwrap();
             }
 
-            DurableWorkControllerRuntime::new(API_WORK_CONTROLLER_HOLDER)
+            DurableWorkControllerRuntime::new(controller_holder)
                 .reconcile_from_evidence(store, work.id.as_str(), profile, Timestamp::now())
                 .unwrap();
             let current: WorkResource = store
@@ -6834,6 +6836,7 @@ mod workspace_boundary_tests {
         let ready = seed_ready_work(
             &guard.store,
             &guard.workspace.id,
+            &guard.work_controller_holder,
             &profile,
             admission_ref,
             "ready work",
@@ -6841,6 +6844,7 @@ mod workspace_boundary_tests {
         let mut running = seed_ready_work(
             &guard.store,
             &guard.workspace.id,
+            &guard.work_controller_holder,
             &profile,
             admission_ref,
             "running work",
@@ -6851,6 +6855,7 @@ mod workspace_boundary_tests {
         let invalidated = invalidate_capability_qualification_readiness(
             &guard.store,
             &guard.workspace.id,
+            &guard.work_controller_holder,
             "release:revoked",
             &[admission_ref.to_string()],
             Timestamp::now(),
