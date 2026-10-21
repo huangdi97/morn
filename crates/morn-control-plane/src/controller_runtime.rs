@@ -576,6 +576,35 @@ mod tests {
     use morn_kernel::ids::{WorkPackageId, WorkspaceId};
     use morn_work::control::WorkSpec;
 
+    fn fixture_resolution_decision(work: &WorkResource) -> CapabilityResolutionDecision {
+        CapabilityResolutionDecision::new(
+            work,
+            morn_capability::WorkcellPlan {
+                members: vec![morn_capability::WorkcellMember {
+                    capability: morn_capability::ResolvedCapability {
+                        manifest_id:
+                            morn_capability::CapabilityManifestId::generate_with("manifest"),
+                        provider_ref: "morn-native".to_string(),
+                        kind: morn_capability::CapabilityKind::Program,
+                        estimated_cost_micros: None,
+                        maximum_effect: morn_capability::EffectClass::E0LifecycleReversible,
+                        compensation_ref: None,
+                        idempotency_key_required: false,
+                        required_execution_class: morn_kernel::ExecutionClass::NoIsolation,
+                        required_execution_guarantees: vec![],
+                        score: 1,
+                        rationale: vec![],
+                    },
+                    covers: vec!["fixture".to_string()],
+                }],
+                uncovered: vec![],
+                total_estimated_cost_micros: 0,
+                rationale: vec!["fixture".to_string()],
+            },
+        )
+        .unwrap()
+    }
+
     #[test]
     fn durable_tick_uses_lease_cas_and_atomic_outbox() {
         let store = MornStore::open_in_memory().unwrap();
@@ -644,14 +673,9 @@ mod tests {
         let mut work = WorkResource::new(WorkspaceId::generate(), spec);
         store.save_work_resource_cas(&mut work).unwrap();
 
-        let evidence = ConditionEvidence::new(
-            &work,
-            "CapabilityResolved",
-            true,
-            "resolver://fixture",
-            vec!["capability://fixture".to_string()],
-        )
-        .unwrap();
+        let decision = fixture_resolution_decision(&work);
+        store.save_capability_resolution(&work, &decision).unwrap();
+        let evidence = crate::capability_resolution_evidence(&work, &decision).unwrap();
         store.save_condition_evidence(&work, &evidence).unwrap();
 
         let runtime = DurableWorkControllerRuntime::new("node-evidence");
@@ -683,6 +707,44 @@ mod tests {
             )
             .unwrap();
         assert_eq!(blocked.next_phase, WorkPhase::Blocked);
+    }
+
+    #[test]
+    fn durable_recovery_rejects_orphaned_resolution_witness() {
+        let store = MornStore::open_in_memory().unwrap();
+        let profile = DomainProfile::lite_v1();
+        let spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "recover only from durable resolution truth",
+            profile.canonical_ref(),
+        );
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let evidence = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            true,
+            "resolver://fixture",
+            vec![
+                "manifest:fixture".to_string(),
+                "cap-resolution-orphan".to_string(),
+                "capability-resolution-decision://cap-resolution-orphan".to_string(),
+            ],
+        )
+        .unwrap();
+        store.save_condition_evidence(&work, &evidence).unwrap();
+
+        let runtime = DurableWorkControllerRuntime::new("node-orphan-resolution");
+        let tick = runtime
+            .reconcile_from_evidence(
+                &store,
+                work.id.as_str(),
+                &profile,
+                Timestamp::from_millis(evidence.observed_at.millis() + 1),
+            )
+            .unwrap();
+        assert_eq!(tick.next_phase, WorkPhase::Blocked);
     }
 
     #[test]
