@@ -7282,9 +7282,13 @@ mod workspace_boundary_tests {
     async fn bind_e0_requires_current_resolution_evidence_and_never_starts_execution() {
         use morn_capability::{
             CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass,
+            ResolvedCapability, WorkcellMember, WorkcellPlan,
         };
-        use morn_control_plane::ControlPlaneStore;
+        use morn_control_plane::{
+            capability_resolution_evidence, CapabilityResolutionDecision, ControlPlaneStore,
+        };
         use morn_kernel::ids::CapabilityId;
+        use morn_kernel::ExecutionClass;
         use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
 
         let state = AppState::new(":memory:").unwrap();
@@ -7312,14 +7316,43 @@ mod workspace_boundary_tests {
             guard.persist_all().unwrap();
             guard.store.save_work_resource_cas(&mut work).unwrap();
 
-            let evidence = ConditionEvidence::new(
+            let decision = CapabilityResolutionDecision::new(
                 &work,
-                "CapabilityResolved",
-                true,
-                "controller://resolver",
-                vec![capability.manifest.id.to_string()],
+                WorkcellPlan {
+                    members: vec![WorkcellMember {
+                        capability: ResolvedCapability {
+                            manifest_id: capability.manifest.id.clone(),
+                            provider_ref: capability.manifest.provider_ref.clone(),
+                            kind: capability.manifest.kind,
+                            estimated_cost_micros: None,
+                            maximum_effect: capability.manifest.authority.maximum_effect,
+                            compensation_ref: capability
+                                .manifest
+                                .authority
+                                .compensation_action
+                                .clone(),
+                            idempotency_key_required: capability
+                                .manifest
+                                .authority
+                                .idempotency_key_required,
+                            required_execution_class: ExecutionClass::NoIsolation,
+                            required_execution_guarantees: vec![],
+                            score: 1,
+                            rationale: vec![],
+                        },
+                        covers: vec!["draft".to_string()],
+                    }],
+                    uncovered: vec![],
+                    total_estimated_cost_micros: 0,
+                    rationale: vec!["test resolution".to_string()],
+                },
             )
             .unwrap();
+            guard
+                .store
+                .save_capability_resolution(&work, &decision)
+                .unwrap();
+            let evidence = capability_resolution_evidence(&work, &decision).unwrap();
             guard
                 .store
                 .save_condition_evidence(&work, &evidence)
@@ -7329,7 +7362,7 @@ mod workspace_boundary_tests {
                 condition_type: "CapabilityResolved".to_string(),
                 status: morn_work::control::ConditionStatus::True,
                 reason: "resolved from durable evidence".to_string(),
-                evidence_refs: vec![capability.manifest.id.to_string()],
+                evidence_refs: evidence.evidence_refs.clone(),
                 observed_at: morn_kernel::time::Timestamp::now(),
             });
             guard.store.save_work_resource_cas(&mut work).unwrap();
@@ -7527,6 +7560,87 @@ mod workspace_boundary_tests {
             .unwrap()
             .unwrap();
         assert!(!work.condition_is_true("CapabilityResolved"));
+    }
+
+    #[tokio::test]
+    async fn bind_e0_rejects_orphaned_resolution_even_if_work_projection_says_ready() {
+        use morn_capability::{
+            CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass,
+        };
+        use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
+        use morn_kernel::ids::CapabilityId;
+        use morn_work::control::{ConditionStatus, WorkCondition, WorkPhase, WorkResource, WorkSpec};
+
+        let state = AppState::new(":memory:").unwrap();
+        let (work_id, capability_id) = {
+            let mut guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "reject orphaned resolution",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            work.spec.required_conditions = vec!["CapabilityResolved".to_string()];
+            let mut capability = CapabilityRecord::new(CapabilityManifest::new(
+                CapabilityId::generate_with("capability"),
+                "fixture-agent",
+                "deepseek-harness",
+                CapabilityKind::Agent,
+                EffectClass::E0LifecycleReversible,
+            ));
+            capability.manifest.provenance.source_ref = "repo://fixture-agent".to_string();
+            capability.stage = CapabilityStage::Qualified;
+            guard.v115_capabilities.push(capability.clone());
+            guard.persist_all().unwrap();
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+
+            let orphan = ConditionEvidence::new(
+                &work,
+                "CapabilityResolved",
+                true,
+                "controller://legacy-resolver",
+                vec![
+                    capability.manifest.id.to_string(),
+                    "cap-resolution-orphan".to_string(),
+                    "capability-resolution-decision://cap-resolution-orphan".to_string(),
+                ],
+            )
+            .unwrap();
+            guard
+                .store
+                .save_condition_evidence(&work, &orphan)
+                .unwrap();
+
+            work.status.phase = WorkPhase::Ready;
+            let mut condition = WorkCondition::new("CapabilityResolved", ConditionStatus::True);
+            condition.reason = "legacy projection that lacks durable decision backing".to_string();
+            condition.evidence_refs = orphan.evidence_refs.clone();
+            work.set_condition(condition);
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+            (work.id.to_string(), capability.manifest.id.to_string())
+        };
+
+        let result = v115_work_bind_e0(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work_id,
+                "capability_manifest_id": capability_id
+            })),
+        )
+        .await;
+        assert!(result.is_err());
+
+        let guard = state.lock();
+        assert!(guard
+            .store
+            .load_records_in_workspace::<morn_runtime::ExecutionBinding>(
+                "execution_binding_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]
