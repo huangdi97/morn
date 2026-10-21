@@ -51,6 +51,9 @@ impl IntoResponse for AppError {
 
 type ApiResult = Result<Json<Value>, AppError>;
 
+const API_WORK_CONTROLLER_HOLDER: &str = "morn-app-api";
+const API_BUSINESS_EVIDENCE_CONTROLLER_HOLDER: &str = "morn-app-business-evidence-recovery";
+
 fn approved_local_origin(value: &HeaderValue) -> bool {
     matches!(
         value.to_str().ok(),
@@ -912,7 +915,7 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
     // after persistence with a fresh clock so newly-created evidence is never
     // rejected as future-dated merely because provider/catalog checks ran first.
     let reconcile_at = Timestamp::now();
-    let tick = DurableWorkControllerRuntime::new("api-v115-capability-resolver")
+    let tick = DurableWorkControllerRuntime::new(API_WORK_CONTROLLER_HOLDER)
         .reconcile_from_evidence(&guard.store, work.id.as_str(), &profile, reconcile_at)?;
     let current = guard
         .store
@@ -1017,7 +1020,7 @@ async fn v115_work_bind_source_of_truth(
                 work.spec.profile_ref
             )))
         })?;
-    let tick = DurableWorkControllerRuntime::new("api-v115-source-of-truth")
+    let tick = DurableWorkControllerRuntime::new(API_WORK_CONTROLLER_HOLDER)
         .reconcile_from_evidence(&guard.store, work.id.as_str(), &profile, Timestamp::now())?;
     let current = guard
         .store
@@ -3775,11 +3778,12 @@ async fn v115_work_reconcile(State(state): State<AppState>, Json(body): Json<Val
                 work.spec.profile_ref
             )))
         })?;
-    let holder = body
-        .get("controller_holder")
-        .and_then(Value::as_str)
-        .unwrap_or("morn-app-api");
-    let runtime = DurableWorkControllerRuntime::new(holder);
+    if body.get("controller_holder").is_some() {
+        return Err(AppError(Error::validation(
+            "controller_holder is deployment-owned control-plane identity and cannot be supplied by the caller",
+        )));
+    }
+    let runtime = DurableWorkControllerRuntime::new(API_WORK_CONTROLLER_HOLDER);
     for forbidden in [
         "capability_resolved",
         "capability_qualified",
@@ -3843,12 +3847,13 @@ async fn v115_work_reconcile_business_evidence(
             "WorkResource {work_id}"
         ))));
     }
-    let holder = body
-        .get("controller_holder")
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or("morn-app-business-evidence-recovery");
-    let runtime = DurableBusinessEvidenceControllerRuntime::new(holder);
+    if body.get("controller_holder").is_some() {
+        return Err(AppError(Error::validation(
+            "controller_holder is deployment-owned control-plane identity and cannot be supplied by the caller",
+        )));
+    }
+    let runtime =
+        DurableBusinessEvidenceControllerRuntime::new(API_BUSINESS_EVIDENCE_CONTROLLER_HOLDER);
     let tick = runtime.reconcile_from_persisted_business_evidence(
         &guard.store,
         work_id,
@@ -4687,7 +4692,7 @@ fn invalidate_capability_qualification_readiness(
                     work.spec.profile_ref
                 ))
             })?;
-        DurableWorkControllerRuntime::new("api-v115-capability-release-revocation")
+        DurableWorkControllerRuntime::new(API_WORK_CONTROLLER_HOLDER)
             .reconcile_from_evidence(
                 store,
                 work.id.as_str(),
@@ -6811,7 +6816,7 @@ mod workspace_boundary_tests {
                 store.save_condition_evidence(&work, &evidence).unwrap();
             }
 
-            DurableWorkControllerRuntime::new(format!("test-ready-{}", work.id))
+            DurableWorkControllerRuntime::new(API_WORK_CONTROLLER_HOLDER)
                 .reconcile_from_evidence(store, work.id.as_str(), profile, Timestamp::now())
                 .unwrap();
             let current: WorkResource = store
