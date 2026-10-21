@@ -888,7 +888,13 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
     let mut additional = Vec::new();
     let mut blockers = Vec::new();
     if profile.requires("CapabilityQualification") {
-        match workcell_qualification_evidence(&work, &selected, &guard.v115_admission, now) {
+        match workcell_qualification_evidence(
+            &work,
+            &decision,
+            &selected,
+            &guard.v115_admission,
+            now,
+        ) {
             Ok(evidence) => additional.push(evidence),
             Err(error) => blockers.push(error.to_string()),
         }
