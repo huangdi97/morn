@@ -198,6 +198,25 @@ pub fn authority_condition_evidence(
             "authority decision is not bound to this Work generation",
         ));
     }
+    if authority.decision.provider.trim().is_empty() {
+        return Err(Error::validation(
+            "authority decision requires a non-empty provider identity",
+        ));
+    }
+    if authority.decision.decided_at > now
+        || authority
+            .request
+            .not_before
+            .is_some_and(|start| authority.decision.decided_at < start)
+        || authority
+            .request
+            .expires_at
+            .is_some_and(|end| authority.decision.decided_at > end)
+    {
+        return Err(Error::validation(
+            "authority decision timestamp is outside the request validity window",
+        ));
+    }
     if authority.request.site_ref != work.spec.site_ref {
         return Err(Error::validation(
             "authority decision site does not match Work site",
@@ -467,6 +486,56 @@ mod tests {
             authority_condition_evidence(&work, &authority, Timestamp::from_millis(101))
                 .unwrap_err();
         assert!(format!("{error}").contains("Work generation"));
+    }
+
+    #[test]
+    fn authority_decision_must_be_decided_inside_request_window() {
+        use morn_runtime::{AuthorityDecisionId, AuthorityDecisionRecord, AuthorityRequest};
+
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "authorized review",
+            "morn.lite@1.0.0",
+        );
+        spec.site_ref = Some("site-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+
+        let mut request = AuthorityRequest::new("principal-a", "read", "resource-a");
+        request.work_ref = Some(work.id.to_string());
+        request.work_generation = Some(work.generation);
+        request.site_ref = work.spec.site_ref.clone();
+        request.not_before = Some(Timestamp::from_millis(100));
+        request.expires_at = Some(Timestamp::from_millis(200));
+
+        for decided_at in [Timestamp::from_millis(99), Timestamp::from_millis(151)] {
+            let authority = BoundAuthorityDecision {
+                request: request.clone(),
+                decision: AuthorityDecisionRecord {
+                    id: AuthorityDecisionId::generate_with("authz"),
+                    provider: "fixture-authority".to_string(),
+                    allowed: true,
+                    reason: "fixture allow".to_string(),
+                    evidence_refs: vec!["policy://fixture".to_string()],
+                    decided_at,
+                },
+            };
+            let now = Timestamp::from_millis(150);
+            let error = authority_condition_evidence(&work, &authority, now).unwrap_err();
+            assert!(format!("{error}").contains("timestamp"));
+        }
+
+        let valid = BoundAuthorityDecision {
+            request,
+            decision: AuthorityDecisionRecord {
+                id: AuthorityDecisionId::generate_with("authz"),
+                provider: "fixture-authority".to_string(),
+                allowed: true,
+                reason: "fixture allow".to_string(),
+                evidence_refs: vec!["policy://fixture".to_string()],
+                decided_at: Timestamp::from_millis(120),
+            },
+        };
+        assert!(authority_condition_evidence(&work, &valid, Timestamp::from_millis(150)).is_ok());
     }
 
     #[test]
