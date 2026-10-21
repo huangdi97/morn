@@ -50,6 +50,33 @@ pub fn supply_chain_verification_context_ref(kind: &str, value: &str) -> Result<
     Ok(format!("morn-supply-chain://{kind}?value={value}"))
 }
 
+pub fn supply_chain_subject_ref(oci_ref: &str) -> Result<String, String> {
+    let oci_ref = oci_ref.trim();
+    if oci_ref.is_empty()
+        || oci_ref.chars().any(char::is_control)
+        || oci_ref.chars().any(char::is_whitespace)
+        || !oci_ref.starts_with("oci://")
+    {
+        return Err(
+            "supply-chain subject must be a non-empty single-line digest-pinned oci:// reference"
+                .to_string(),
+        );
+    }
+    let (repository, digest) = oci_ref
+        .rsplit_once('@')
+        .ok_or_else(|| "supply-chain subject must be pinned to a content digest".to_string())?;
+    if repository.trim_start_matches("oci://").is_empty()
+        || repository.contains('@')
+        || !valid_digest(digest)
+    {
+        return Err(
+            "supply-chain subject must be an exact digest-pinned OCI repository reference"
+                .to_string(),
+        );
+    }
+    supply_chain_verification_context_ref("oci-subject", oci_ref)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SupplyChainVerificationEvidence {
     /// Exact published OCI manifest digest that was verified.
@@ -97,11 +124,62 @@ impl SupplyChainVerificationEvidence {
         require_provenance: bool,
     ) -> Result<(), String> {
         descriptor.validate(require_signature, require_provenance)?;
-        self.validate_subject_digest(
+        self.validate_for_oci_subject(
+            &descriptor.oci_ref,
             &descriptor.content_digest,
             require_signature,
             require_provenance,
         )
+    }
+
+    pub fn validate_bound_subject_ref(&self) -> Result<&str, String> {
+        let prefix = "morn-supply-chain://oci-subject?value=";
+        let subject_refs = self
+            .evidence_refs
+            .iter()
+            .filter_map(|reference| reference.strip_prefix(prefix))
+            .collect::<Vec<_>>();
+        if subject_refs.len() != 1 {
+            return Err(
+                "supply-chain verification evidence requires exactly one OCI subject witness"
+                    .to_string(),
+            );
+        }
+        let oci_ref = subject_refs[0];
+        let expected = supply_chain_subject_ref(oci_ref)?;
+        if !self.evidence_refs.iter().any(|reference| reference == &expected) {
+            return Err("supply-chain OCI subject witness is not canonical".to_string());
+        }
+        let digest = oci_ref
+            .rsplit_once('@')
+            .map(|(_, digest)| digest)
+            .ok_or_else(|| "supply-chain OCI subject witness is not digest-pinned".to_string())?;
+        if !digest.eq_ignore_ascii_case(&self.subject_digest) {
+            return Err(
+                "supply-chain OCI subject witness digest does not match verification subject"
+                    .to_string(),
+            );
+        }
+        Ok(oci_ref)
+    }
+
+    pub fn validate_for_oci_subject(
+        &self,
+        oci_ref: &str,
+        subject_digest: &str,
+        require_signature: bool,
+        require_provenance: bool,
+    ) -> Result<(), String> {
+        self.validate_subject_digest(subject_digest, require_signature, require_provenance)?;
+        let expected = supply_chain_subject_ref(oci_ref)?;
+        let actual = self.validate_bound_subject_ref()?;
+        let actual_ref = supply_chain_subject_ref(actual)?;
+        if actual_ref != expected {
+            return Err(
+                "verification evidence must bind the exact OCI repository subject".to_string(),
+            );
+        }
+        Ok(())
     }
 
     pub fn merge(&self, other: &Self) -> Result<Self, String> {
@@ -111,6 +189,14 @@ impl SupplyChainVerificationEvidence {
         {
             return Err(
                 "cannot merge supply-chain evidence for different artifact digests".to_string(),
+            );
+        }
+        let self_subject = self.validate_bound_subject_ref()?;
+        let other_subject = other.validate_bound_subject_ref()?;
+        if self_subject != other_subject {
+            return Err(
+                "cannot merge supply-chain evidence verified against different OCI subjects"
+                    .to_string(),
             );
         }
         let mut evidence_refs = self.evidence_refs.clone();
