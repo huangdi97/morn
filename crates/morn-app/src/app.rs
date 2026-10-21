@@ -34,7 +34,9 @@ use morn_harness::{
 use morn_integration::{SourceObservationAttestation, SourceOfTruthBinding};
 #[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;
-use morn_kernel::ids::{RuntimeBindingId, WorkPackageId, WorkspaceId as KernelWorkspaceId};
+use morn_kernel::ids::{
+    ActorInstanceId, RuntimeBindingId, WorkPackageId, WorkspaceId as KernelWorkspaceId,
+};
 use morn_kernel::workspace::{Workspace, WorkspaceKind};
 use morn_opint::dataset::OutcomeDataset;
 use morn_opint::episode::EpisodeAssembler;
@@ -80,6 +82,12 @@ impl WorkBoundAcpSessionControl {
 pub struct AppInner {
     pub store: MornStore,
     pub workspace: Workspace,
+    /// Process-instance-unique controller lease holders. API callers cannot
+    /// supply or override these identities; all Work readiness routes in this
+    /// App instance share the same holder while separate server processes fence
+    /// one another with distinct holders.
+    pub work_controller_holder: String,
+    pub business_evidence_controller_holder: String,
     /// Generic (domain-neutral) world/work/artifact services used by the
     /// product surfaces. Domain packs provide their own instances.
     pub world: WorldService,
@@ -1137,6 +1145,11 @@ impl AppState {
         let dsh_harness = configured_dsh_harness()?;
         let pi_harness = configured_pi_harness()?;
 
+        let controller_instance = ActorInstanceId::generate_with("morn-app-controller");
+        let work_controller_holder = format!("morn-app-api:{}", controller_instance);
+        let business_evidence_controller_holder =
+            format!("morn-app-business-evidence-recovery:{}", controller_instance);
+
         let store = MornStore::open(db_path)?;
         // Reuse the persisted workspace on restart so workspace-scoped records hydrate.
         let workspace = store
@@ -1165,6 +1178,8 @@ impl AppState {
         let mut inner = AppInner {
             store,
             workspace,
+            work_controller_holder,
+            business_evidence_controller_holder,
             world: WorldService::new(),
             work: WorkService::new(),
             artifacts: ArtifactService::new(),
