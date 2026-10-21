@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-use crate::supply_chain::SupplyChainVerificationEvidence;
+use crate::supply_chain::{supply_chain_subject_ref, SupplyChainVerificationEvidence};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OciLayerInput {
@@ -478,7 +478,10 @@ impl CosignCliVerifier {
                 verifier_ref: policy.signature_verifier_ref()?,
                 signature_verified: true,
                 provenance_verified: false,
-                evidence_refs: vec![format!("cosign-verify-output://{proof_digest}")],
+                evidence_refs: vec![
+                    supply_chain_subject_ref(&receipt.oci_ref)?,
+                    format!("cosign-verify-output://{proof_digest}"),
+                ],
             },
             raw_output: stdout,
         })
@@ -560,7 +563,10 @@ impl CosignCliVerifier {
                 verifier_ref: policy.provenance_verifier_ref()?,
                 signature_verified: false,
                 provenance_verified: true,
-                evidence_refs: vec![format!("cosign-attestation-output://{proof_digest}")],
+                evidence_refs: vec![
+                    supply_chain_subject_ref(&receipt.oci_ref)?,
+                    format!("cosign-attestation-output://{proof_digest}"),
+                ],
             },
             raw_output: stdout,
         })
