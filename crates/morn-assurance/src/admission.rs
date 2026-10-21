@@ -776,6 +776,19 @@ impl AdmissionService {
                     && release.manifest_id == capability.manifest.id
                     && release.qualification_id == qualification.id
                     && release.active()
+                    && release
+                        .supply_chain_verification
+                        .as_ref()
+                        .is_some_and(|verification| {
+                            verification
+                                .validate_for_oci_subject(
+                                    &release.package_ref,
+                                    &release.content_digest,
+                                    true,
+                                    true,
+                                )
+                                .is_ok()
+                        })
             })
         })
     }
@@ -1390,6 +1403,66 @@ mod tests {
         assert!(capability.admission_refs.is_empty());
         assert!(capability.admitted_sites.is_empty());
         assert_eq!(capability.stage, CapabilityStage::Suspended);
+    }
+
+    #[test]
+    fn selection_time_rejects_admission_when_release_verification_is_missing_or_spliced() {
+        let mut capability = candidate();
+        let mut service = AdmissionService::default();
+        let qualification = strict_fixture_qualification(&mut service, &mut capability);
+        let release = record_fixture_release(&mut service, &mut capability, &qualification);
+        let profile = DomainProfile::factory_readonly_v1();
+        let report = passing_conformance(&profile);
+        service
+            .admit(
+                &mut capability,
+                &qualification,
+                "plant-a",
+                report.profile_ref.clone(),
+                &report,
+                "site-owner",
+            )
+            .unwrap();
+
+        let now = Timestamp::now();
+        assert!(service.site_profile_admission_active_at(
+            &capability,
+            "plant-a",
+            &report.profile_ref,
+            now,
+        ));
+
+        let stored = service
+            .releases
+            .iter_mut()
+            .find(|candidate| candidate.id == release.id)
+            .unwrap();
+        let original = stored.supply_chain_verification.take();
+        assert!(!service.site_profile_admission_active_at(
+            &capability,
+            "plant-a",
+            &report.profile_ref,
+            now,
+        ));
+
+        stored.supply_chain_verification = original;
+        let verification = stored.supply_chain_verification.as_mut().unwrap();
+        verification.evidence_refs.retain(|reference| {
+            !reference.starts_with("morn-supply-chain://oci-subject?value=")
+        });
+        verification.evidence_refs.push(
+            morn_package::supply_chain_subject_ref(&format!(
+                "oci://fixture/foreign/capability@{}",
+                stored.content_digest
+            ))
+            .unwrap(),
+        );
+        assert!(!service.site_profile_admission_active_at(
+            &capability,
+            "plant-a",
+            &report.profile_ref,
+            now,
+        ));
     }
 
     #[test]
