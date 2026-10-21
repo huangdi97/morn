@@ -644,11 +644,13 @@ mod tests {
             status: SiteAdmissionStatus::Admitted,
             created_at: Timestamp::from_millis(1),
         };
-        foreign.admission_refs.push(morn_capability::CapabilityAdmissionRef {
-            admission_ref: admission.id.to_string(),
-            site_ref: "plant-a".to_string(),
-            profile_ref: work.spec.profile_ref.clone(),
-        });
+        foreign
+            .admission_refs
+            .push(morn_capability::CapabilityAdmissionRef {
+                admission_ref: admission.id.to_string(),
+                site_ref: "plant-a".to_string(),
+                profile_ref: work.spec.profile_ref.clone(),
+            });
         let mut service = AdmissionService::default();
         service.qualifications.push(qualification);
         service.releases.push(release);
@@ -697,9 +699,8 @@ mod tests {
         next.goal = "changed scope".to_string();
         work.replace_spec(next);
 
-        let error =
-            authority_condition_evidence(&work, &authority, Timestamp::from_millis(101))
-                .unwrap_err();
+        let error = authority_condition_evidence(&work, &authority, Timestamp::from_millis(101))
+            .unwrap_err();
         assert!(format!("{error}").contains("Work generation"));
     }
 
@@ -938,8 +939,7 @@ mod tests {
             rationale: vec![],
         };
         let decision = CapabilityResolutionDecision::new(&work, plan).unwrap();
-        let evidence =
-            provenance_condition_evidence(&work, &decision, &[capability]).unwrap();
+        let evidence = provenance_condition_evidence(&work, &decision, &[capability]).unwrap();
         assert_eq!(evidence.condition_type, "ProvenanceReady");
         assert!(evidence.evidence_refs.contains(&decision.id.to_string()));
         assert!(evidence
