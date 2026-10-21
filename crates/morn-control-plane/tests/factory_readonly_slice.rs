@@ -192,8 +192,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         )
         .unwrap();
     let release_digest = format!("sha256:{}", "a".repeat(64));
-    let release_package_ref =
-        format!("oci://fixture/morn/equipment-investigator@{release_digest}");
+    let release_package_ref = format!("oci://fixture/morn/equipment-investigator@{release_digest}");
     let release = admission
         .record_verified_release(
             &mut capability,

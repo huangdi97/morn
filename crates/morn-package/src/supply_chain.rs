@@ -147,7 +147,11 @@ impl SupplyChainVerificationEvidence {
         }
         let oci_ref = subject_refs[0];
         let expected = supply_chain_subject_ref(oci_ref)?;
-        if !self.evidence_refs.iter().any(|reference| reference == &expected) {
+        if !self
+            .evidence_refs
+            .iter()
+            .any(|reference| reference == &expected)
+        {
             return Err("supply-chain OCI subject witness is not canonical".to_string());
         }
         let digest = oci_ref
@@ -395,11 +399,9 @@ mod tests {
         assert!(signature.merge(&wrong_digest).is_err());
 
         let mut wrong_repository = provenance;
-        wrong_repository.evidence_refs[0] = supply_chain_subject_ref(&format!(
-            "oci://registry.example/other/cap@{}",
-            digest('f')
-        ))
-        .unwrap();
+        wrong_repository.evidence_refs[0] =
+            supply_chain_subject_ref(&format!("oci://registry.example/other/cap@{}", digest('f')))
+                .unwrap();
         assert!(signature.merge(&wrong_repository).is_err());
     }
 

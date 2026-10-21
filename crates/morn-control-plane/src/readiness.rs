@@ -270,8 +270,8 @@ mod tests {
             QualificationRecordId, QualificationStatus, SiteAdmission, SiteAdmissionId,
             SiteAdmissionStatus,
         };
-        use morn_package::{supply_chain_subject_ref, SupplyChainVerificationEvidence};
         use morn_kernel::version::Version;
+        use morn_package::{supply_chain_subject_ref, SupplyChainVerificationEvidence};
 
         let mut spec = WorkSpec::new(
             WorkPackageId::generate_with("work"),

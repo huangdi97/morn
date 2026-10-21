@@ -650,12 +650,7 @@ impl AdmissionService {
                 )
             })?;
         verification
-            .validate_for_oci_subject(
-                &release.package_ref,
-                &release.content_digest,
-                true,
-                true,
-            )
+            .validate_for_oci_subject(&release.package_ref, &release.content_digest, true, true)
             .map_err(Error::validation)?;
         if capability.stage != CapabilityStage::Qualified
             && capability.stage != CapabilityStage::Admitted
@@ -1125,9 +1120,9 @@ mod tests {
             .find(|candidate| candidate.id == release.id)
             .unwrap();
         let verification = stored.supply_chain_verification.as_mut().unwrap();
-        verification.evidence_refs.retain(|reference| {
-            !reference.starts_with("morn-supply-chain://oci-subject?value=")
-        });
+        verification
+            .evidence_refs
+            .retain(|reference| !reference.starts_with("morn-supply-chain://oci-subject?value="));
         verification.evidence_refs.push(
             morn_package::supply_chain_subject_ref(&format!(
                 "oci://fixture/foreign/capability@{digest}"
@@ -1450,10 +1445,7 @@ mod tests {
         service.releases[release_index].supply_chain_verification = original;
         {
             let stored = &mut service.releases[release_index];
-            let foreign_ref = format!(
-                "oci://fixture/foreign/capability@{}",
-                stored.content_digest
-            );
+            let foreign_ref = format!("oci://fixture/foreign/capability@{}", stored.content_digest);
             let verification = stored.supply_chain_verification.as_mut().unwrap();
             verification.evidence_refs.retain(|reference| {
                 !reference.starts_with("morn-supply-chain://oci-subject?value=")
