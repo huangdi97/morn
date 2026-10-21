@@ -359,10 +359,15 @@ jobs:
               "morn-supply-chain://verifier-build?value=git://huangdi97/morn/"
               + os.environ["GITHUB_SHA"].strip()
           )
+          expected_oci_subject = (
+              "morn-supply-chain://oci-subject?value="
+              + os.environ["INPUT_OCI_REF"].strip()
+          )
           for required_ref in (
               expected_runner,
               expected_cosign,
               expected_verifier_build,
+              expected_oci_subject,
               expected_signature_ref,
               expected_provenance_ref,
           ):
