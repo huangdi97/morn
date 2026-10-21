@@ -61,24 +61,22 @@ impl CapabilityResolutionDecision {
 
 pub fn capability_resolution_evidence(
     work: &WorkResource,
-    plan: &WorkcellPlan,
+    decision: &CapabilityResolutionDecision,
 ) -> Result<ConditionEvidence> {
-    if !plan.is_complete() {
-        return Err(Error::invalid_state(format!(
-            "Workcell plan is incomplete: {:?}",
-            plan.uncovered
-        )));
-    }
-    if plan.members.is_empty() {
-        return Err(Error::invalid_state(
-            "CapabilityResolved requires at least one selected executor capability",
+    if !decision.matches_work(work) {
+        return Err(Error::validation(
+            "capability resolution decision is not bound to this Work generation/solution",
         ));
     }
-    let refs = plan
+    let mut refs = decision
+        .plan
         .members
         .iter()
         .map(|member| member.capability.manifest_id.to_string())
-        .collect();
+        .collect::<Vec<_>>();
+    refs.push(decision.id.to_string());
+    refs.sort();
+    refs.dedup();
     ConditionEvidence::new(
         work,
         "CapabilityResolved",
@@ -629,6 +627,55 @@ mod tests {
     }
 
     #[test]
+    fn prior_generation_resolution_decision_cannot_be_rebound_to_current_work() {
+        let mut work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "resolve",
+                "morn.lite@1.0.0",
+            ),
+        );
+        work.spec.source_solution_ref = Some("solution://one@1.0.0".to_string());
+        let manifest = CapabilityManifest::new(
+            CapabilityId::generate_with("cap"),
+            "rule",
+            "provider",
+            CapabilityKind::Rule,
+            EffectClass::E0LifecycleReversible,
+        );
+        let plan = WorkcellPlan {
+            members: vec![WorkcellMember {
+                capability: ResolvedCapability {
+                    manifest_id: manifest.id,
+                    provider_ref: "provider".to_string(),
+                    kind: CapabilityKind::Rule,
+                    estimated_cost_micros: None,
+                    maximum_effect: EffectClass::E0LifecycleReversible,
+                    compensation_ref: None,
+                    idempotency_key_required: false,
+                    required_execution_class: morn_kernel::ExecutionClass::NoIsolation,
+                    required_execution_guarantees: vec![],
+                    score: 1,
+                    rationale: vec![],
+                },
+                covers: vec!["x".to_string()],
+            }],
+            uncovered: vec![],
+            total_estimated_cost_micros: 0,
+            rationale: vec![],
+        };
+        let decision = CapabilityResolutionDecision::new(&work, plan).unwrap();
+
+        let mut next = work.spec.clone();
+        next.goal = "changed generation".to_string();
+        work.replace_spec(next);
+
+        let error = capability_resolution_evidence(&work, &decision).unwrap_err();
+        assert!(format!("{error}").contains("generation/solution"));
+    }
+
+    #[test]
     fn provenance_readiness_does_not_depend_on_future_execution_binding() {
         let work = WorkResource::new(
             WorkspaceId::generate(),
@@ -672,7 +719,7 @@ mod tests {
             total_estimated_cost_micros: 0,
             rationale: vec![],
         };
-        assert!(capability_resolution_evidence(&work, &plan).is_err());
+        assert!(CapabilityResolutionDecision::new(&work, plan).is_err());
     }
 
     #[test]
@@ -714,8 +761,9 @@ mod tests {
             total_estimated_cost_micros: 1,
             rationale: vec![],
         };
-        let evidence = capability_resolution_evidence(&work, &plan).unwrap();
+        let decision = CapabilityResolutionDecision::new(&work, plan).unwrap();
+        let evidence = capability_resolution_evidence(&work, &decision).unwrap();
         assert_eq!(evidence.condition_type, "CapabilityResolved");
-        assert!(!evidence.evidence_refs.is_empty());
+        assert!(evidence.evidence_refs.contains(&decision.id.to_string()));
     }
 }
