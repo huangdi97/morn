@@ -582,8 +582,9 @@ mod tests {
             morn_capability::WorkcellPlan {
                 members: vec![morn_capability::WorkcellMember {
                     capability: morn_capability::ResolvedCapability {
-                        manifest_id:
-                            morn_capability::CapabilityManifestId::generate_with("manifest"),
+                        manifest_id: morn_capability::CapabilityManifestId::generate_with(
+                            "manifest",
+                        ),
                         provider_ref: "morn-native".to_string(),
                         kind: morn_capability::CapabilityKind::Program,
                         estimated_cost_micros: None,
