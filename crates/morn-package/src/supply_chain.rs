@@ -368,29 +368,39 @@ mod tests {
     }
 
     #[test]
-    fn verification_axes_merge_only_for_the_same_subject_digest() {
+    fn verification_axes_merge_only_for_the_same_exact_oci_subject() {
+        let subject = format!("oci://registry.example/morn/cap@{}", digest('f'));
+        let subject_ref = supply_chain_subject_ref(&subject).unwrap();
         let signature = SupplyChainVerificationEvidence {
             subject_digest: digest('f'),
             verifier_ref: "cosign://signature".to_string(),
             signature_verified: true,
             provenance_verified: false,
-            evidence_refs: vec!["proof://signature".to_string()],
+            evidence_refs: vec![subject_ref.clone(), "proof://signature".to_string()],
         };
         let provenance = SupplyChainVerificationEvidence {
             subject_digest: digest('f'),
             verifier_ref: "cosign://slsa".to_string(),
             signature_verified: false,
             provenance_verified: true,
-            evidence_refs: vec!["proof://provenance".to_string()],
+            evidence_refs: vec![subject_ref, "proof://provenance".to_string()],
         };
         let merged = signature.merge(&provenance).unwrap();
         assert!(merged.signature_verified);
         assert!(merged.provenance_verified);
-        assert_eq!(merged.evidence_refs.len(), 2);
+        assert_eq!(merged.evidence_refs.len(), 3);
 
-        let mut wrong = provenance;
-        wrong.subject_digest = digest('e');
-        assert!(signature.merge(&wrong).is_err());
+        let mut wrong_digest = provenance.clone();
+        wrong_digest.subject_digest = digest('e');
+        assert!(signature.merge(&wrong_digest).is_err());
+
+        let mut wrong_repository = provenance;
+        wrong_repository.evidence_refs[0] = supply_chain_subject_ref(&format!(
+            "oci://registry.example/other/cap@{}",
+            digest('f')
+        ))
+        .unwrap();
+        assert!(signature.merge(&wrong_repository).is_err());
     }
 
     #[test]
@@ -414,7 +424,10 @@ mod tests {
             verifier_ref: "cosign://policy/github-oidc".to_string(),
             signature_verified: true,
             provenance_verified: true,
-            evidence_refs: vec!["sigstore://bundle/ref".to_string()],
+            evidence_refs: vec![
+                supply_chain_subject_ref(&descriptor.oci_ref).unwrap(),
+                "sigstore://bundle/ref".to_string(),
+            ],
         };
         assert!(evidence.validate_for(&descriptor, true, true).is_ok());
 
