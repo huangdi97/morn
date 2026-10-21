@@ -94,9 +94,7 @@ fn condition_is_satisfied(item: Option<&ConditionEvidence>) -> bool {
     item.is_some_and(|item| item.satisfied && !item.evidence_refs.is_empty())
 }
 
-pub(crate) fn active_resolution_decision_ref(
-    item: Option<&ConditionEvidence>,
-) -> Option<&str> {
+pub(crate) fn active_resolution_decision_ref(item: Option<&ConditionEvidence>) -> Option<&str> {
     const PREFIX: &str = "capability-resolution-decision://";
     let item = item?;
     let mut refs = item
