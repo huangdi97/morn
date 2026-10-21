@@ -193,6 +193,11 @@ pub fn authority_condition_evidence(
             "authority decision is not bound to this Work",
         ));
     }
+    if authority.request.work_generation != Some(work.generation) {
+        return Err(Error::validation(
+            "authority decision is not bound to this Work generation",
+        ));
+    }
     if authority.request.site_ref != work.spec.site_ref {
         return Err(Error::validation(
             "authority decision site does not match Work site",
@@ -424,6 +429,44 @@ mod tests {
             !derive_controller_inputs(&work, &[evidence], Timestamp::from_millis(201))
                 .capability_qualified
         );
+    }
+
+    #[test]
+    fn authority_from_prior_work_generation_cannot_be_rebound_to_current_readiness() {
+        use morn_runtime::{AuthorityDecisionId, AuthorityDecisionRecord, AuthorityRequest};
+
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "authorized review",
+            "morn.lite@1.0.0",
+        );
+        spec.site_ref = Some("site-a".to_string());
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+
+        let mut request = AuthorityRequest::new("principal-a", "read", "resource-a");
+        request.work_ref = Some(work.id.to_string());
+        request.work_generation = Some(work.generation);
+        request.site_ref = work.spec.site_ref.clone();
+        let authority = BoundAuthorityDecision {
+            request,
+            decision: AuthorityDecisionRecord {
+                id: AuthorityDecisionId::generate_with("authz"),
+                provider: "fixture-authority".to_string(),
+                allowed: true,
+                reason: "fixture allow".to_string(),
+                evidence_refs: vec!["policy://fixture".to_string()],
+                decided_at: Timestamp::from_millis(100),
+            },
+        };
+
+        let mut next = work.spec.clone();
+        next.goal = "changed scope".to_string();
+        work.replace_spec(next);
+
+        let error =
+            authority_condition_evidence(&work, &authority, Timestamp::from_millis(101))
+                .unwrap_err();
+        assert!(format!("{error}").contains("Work generation"));
     }
 
     #[test]
