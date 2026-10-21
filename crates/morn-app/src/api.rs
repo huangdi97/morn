@@ -803,6 +803,20 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
                 work.spec.profile_ref
             )))
         })?;
+    require_current_durable_binding_readiness(
+        &guard.store,
+        &work,
+        &profile,
+        capability.manifest.id.as_str(),
+        now,
+    )?;
+    require_current_durable_binding_readiness(
+        &guard.store,
+        &work,
+        &profile,
+        capability.manifest.id.as_str(),
+        now,
+    )?;
 
     let mut unavailable_providers = Vec::new();
     {
@@ -1708,12 +1722,55 @@ fn ensure_live_environment_for_binding(
     Ok(())
 }
 
+fn require_current_durable_binding_readiness(
+    store: &morn_store::MornStore,
+    work: &morn_work::control::WorkResource,
+    profile: &morn_profile::DomainProfile,
+    capability_manifest_id: &str,
+    now: morn_kernel::time::Timestamp,
+) -> morn_kernel::Result<()> {
+    use morn_control_plane::{
+        current_durable_resolution_contains_capability, derive_durable_controller_inputs,
+        CapabilityResolutionDecision, ConditionEvidence, WorkController,
+    };
+
+    let evidence: Vec<ConditionEvidence> = store.load_records_in_workspace(
+        "condition_evidence_v115",
+        work.workspace_id.as_str(),
+    )?;
+    let decisions: Vec<CapabilityResolutionDecision> = store.load_records_in_workspace(
+        "capability_resolution_v115",
+        work.workspace_id.as_str(),
+    )?;
+    let inputs = derive_durable_controller_inputs(work, &evidence, &decisions, now);
+
+    let mut projected = work.clone();
+    WorkController.reconcile(&mut projected, profile, &inputs);
+    if projected.status.phase != morn_work::control::WorkPhase::Ready {
+        return Err(Error::invalid_state(
+            "binding requires current durable readiness; persisted Ready state is stale or no longer supported by active evidence",
+        ));
+    }
+    if !current_durable_resolution_contains_capability(
+        work,
+        &evidence,
+        &decisions,
+        capability_manifest_id,
+        now,
+    ) {
+        return Err(Error::invalid_state(
+            "binding capability is not a member of the current durable capability resolution decision",
+        ));
+    }
+    Ok(())
+}
+
 async fn v115_work_bind_attested_e0(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> ApiResult {
     use morn_capability::{CapabilityStage, EffectClass};
-    use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
+    use morn_control_plane::ControlPlaneStore;
     use morn_kernel::time::Timestamp;
     use morn_runtime::{CompositionRuntimeRef, ExecutionBinding, ExecutionManifest};
     use morn_work::control::WorkPhase;
@@ -1784,28 +1841,6 @@ async fn v115_work_bind_attested_e0(
     if capability.manifest.authority.maximum_effect != EffectClass::E0LifecycleReversible {
         return Err(AppError(Error::not_authorized(
             "bind-attested-e0 only permits an E0 lifecycle-reversible capability",
-        )));
-    }
-
-    let resolved_evidence = guard
-        .store
-        .load_records_in_workspace::<ConditionEvidence>(
-            "condition_evidence_v115",
-            guard.workspace.id.as_str(),
-        )?
-        .into_iter()
-        .any(|evidence| {
-            evidence.condition_type == "CapabilityResolved"
-                && evidence.satisfied
-                && evidence.active_for(&work, now)
-                && evidence
-                    .evidence_refs
-                    .iter()
-                    .any(|reference| reference == capability.manifest.id.as_str())
-        });
-    if !resolved_evidence {
-        return Err(AppError(Error::invalid_state(
-            "capability is not witnessed by current-generation CapabilityResolved evidence",
         )));
     }
 
@@ -2119,7 +2154,7 @@ async fn v115_work_bind_attested_e0(
 
 async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_capability::{CapabilityStage, EffectClass};
-    use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
+    use morn_control_plane::ControlPlaneStore;
     use morn_kernel::time::Timestamp;
     use morn_runtime::{CompositionRuntimeRef, ExecutionBinding, ExecutionManifest};
     use morn_work::control::WorkPhase;
@@ -2175,28 +2210,6 @@ async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value
     if capability.manifest.authority.maximum_effect != EffectClass::E0LifecycleReversible {
         return Err(AppError(Error::not_authorized(
             "work/bind-e0 only accepts capabilities whose declared maximum effect is E0",
-        )));
-    }
-
-    let resolved_evidence = guard
-        .store
-        .load_records_in_workspace::<ConditionEvidence>(
-            "condition_evidence_v115",
-            guard.workspace.id.as_str(),
-        )?
-        .into_iter()
-        .any(|evidence| {
-            evidence.condition_type == "CapabilityResolved"
-                && evidence.satisfied
-                && evidence.active_for(&work, now)
-                && evidence
-                    .evidence_refs
-                    .iter()
-                    .any(|reference| reference == capability.manifest.id.as_str())
-        });
-    if !resolved_evidence {
-        return Err(AppError(Error::invalid_state(
-            "capability is not witnessed by current-generation CapabilityResolved evidence",
         )));
     }
 
@@ -7221,7 +7234,7 @@ mod workspace_boundary_tests {
         use morn_capability::{
             CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass,
         };
-        use morn_control_plane::{ConditionEvidence, ControlPlaneStore};
+        use morn_control_plane::ControlPlaneStore;
         use morn_kernel::ids::CapabilityId;
         use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
 
