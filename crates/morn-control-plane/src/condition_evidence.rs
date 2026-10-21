@@ -71,12 +71,12 @@ impl ConditionEvidence {
     }
 }
 
-fn condition_value(
+fn latest_condition_evidence<'a>(
     work: &WorkResource,
-    evidence: &[ConditionEvidence],
+    evidence: &'a [ConditionEvidence],
     condition_type: &str,
     now: Timestamp,
-) -> bool {
+) -> Option<&'a ConditionEvidence> {
     evidence
         .iter()
         .filter(|item| item.condition_type == condition_type && item.active_for(work, now))
@@ -88,7 +88,18 @@ fn condition_value(
                 !(item.satisfied && !item.evidence_refs.is_empty()),
             )
         })
-        .is_some_and(|item| item.satisfied && !item.evidence_refs.is_empty())
+}
+
+fn condition_is_satisfied(item: Option<&ConditionEvidence>) -> bool {
+    item.is_some_and(|item| item.satisfied && !item.evidence_refs.is_empty())
+}
+
+fn active_resolution_decision_ref(item: Option<&ConditionEvidence>) -> Option<&str> {
+    item?
+        .evidence_refs
+        .iter()
+        .find(|reference| reference.starts_with("capability-resolution-decision://"))
+        .map(String::as_str)
 }
 
 pub fn derive_controller_inputs(
@@ -96,12 +107,35 @@ pub fn derive_controller_inputs(
     evidence: &[ConditionEvidence],
     now: Timestamp,
 ) -> ControllerInputs {
+    let resolved = latest_condition_evidence(work, evidence, "CapabilityResolved", now);
+    let qualified = latest_condition_evidence(work, evidence, "CapabilityQualified", now);
+    let provenance = latest_condition_evidence(work, evidence, "ProvenanceReady", now);
+    let resolution_ref = active_resolution_decision_ref(resolved);
+
+    let capability_resolved = condition_is_satisfied(resolved) && resolution_ref.is_some();
+    let capability_qualified = condition_is_satisfied(qualified)
+        && resolution_ref.is_some()
+        && active_resolution_decision_ref(qualified) == resolution_ref;
+    let provenance_ready = condition_is_satisfied(provenance)
+        && resolution_ref.is_some()
+        && active_resolution_decision_ref(provenance) == resolution_ref;
+
     ControllerInputs {
-        capability_resolved: condition_value(work, evidence, "CapabilityResolved", now),
-        capability_qualified: condition_value(work, evidence, "CapabilityQualified", now),
-        authority_satisfied: condition_value(work, evidence, "AuthoritySatisfied", now),
-        source_of_truth_bound: condition_value(work, evidence, "SourceOfTruthBound", now),
-        provenance_ready: condition_value(work, evidence, "ProvenanceReady", now),
+        capability_resolved,
+        capability_qualified,
+        authority_satisfied: condition_is_satisfied(latest_condition_evidence(
+            work,
+            evidence,
+            "AuthoritySatisfied",
+            now,
+        )),
+        source_of_truth_bound: condition_is_satisfied(latest_condition_evidence(
+            work,
+            evidence,
+            "SourceOfTruthBound",
+            now,
+        )),
+        provenance_ready,
     }
 }
 
@@ -228,6 +262,65 @@ mod tests {
                 .capability_resolved
         );
         assert!(!derive_controller_inputs(&work, &[denial, positive], now).capability_resolved);
+    }
+
+    #[test]
+    fn readiness_cannot_splice_capability_conditions_across_resolution_decisions() {
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "review",
+                "morn.factory.readonly@1.0.0",
+            ),
+        );
+        let mut resolved = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            true,
+            "resolver://fixture",
+            vec![
+                "capability://a".to_string(),
+                "capability-resolution-decision://decision-a".to_string(),
+            ],
+        )
+        .unwrap();
+        resolved.observed_at = Timestamp::from_millis(10);
+
+        let mut qualified = ConditionEvidence::new(
+            &work,
+            "CapabilityQualified",
+            true,
+            "admission://fixture",
+            vec![
+                "capability://a".to_string(),
+                "capability-resolution-decision://decision-b".to_string(),
+            ],
+        )
+        .unwrap();
+        qualified.observed_at = Timestamp::from_millis(11);
+
+        let mut provenance = ConditionEvidence::new(
+            &work,
+            "ProvenanceReady",
+            true,
+            "provenance://fixture",
+            vec![
+                "capability://a".to_string(),
+                "capability-resolution-decision://decision-b".to_string(),
+            ],
+        )
+        .unwrap();
+        provenance.observed_at = Timestamp::from_millis(12);
+
+        let inputs = derive_controller_inputs(
+            &work,
+            &[resolved, qualified, provenance],
+            Timestamp::from_millis(20),
+        );
+        assert!(inputs.capability_resolved);
+        assert!(!inputs.capability_qualified);
+        assert!(!inputs.provenance_ready);
     }
 
     #[test]
