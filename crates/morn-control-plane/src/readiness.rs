@@ -493,7 +493,11 @@ mod tests {
                     compensation_ref: first.manifest.compensation_ref.clone(),
                     idempotency_key_required: first.manifest.idempotency_key_required,
                     required_execution_class: first.manifest.execution.minimum_isolation,
-                    required_execution_guarantees: first.manifest.execution.required_guarantees.clone(),
+                    required_execution_guarantees: first
+                        .manifest
+                        .execution
+                        .required_guarantees
+                        .clone(),
                     score: 1,
                     rationale: vec![],
                 },
