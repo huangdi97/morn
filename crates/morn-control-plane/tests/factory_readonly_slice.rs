@@ -20,8 +20,9 @@ use morn_control_plane::{
     begin_external_attempt_for_work_with_effect, capability_qualification_evidence,
     capability_resolution_evidence, issue_external_action_permit,
     issue_external_action_permit_for_work, provenance_condition_evidence,
-    source_of_truth_condition_evidence, CapabilityEligibilityGate, ControlPlaneStore,
-    DurableBusinessEvidenceControllerRuntime, DurableWorkControllerRuntime, ExternalActionMode,
+    source_of_truth_condition_evidence, CapabilityEligibilityGate, CapabilityResolutionDecision,
+    ControlPlaneStore, DurableBusinessEvidenceControllerRuntime, DurableWorkControllerRuntime,
+    ExternalActionMode,
     ReconciliationController, WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
@@ -357,11 +358,25 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         total_estimated_cost_micros: resolved[0].estimated_cost_micros.unwrap_or(0),
         rationale: vec!["single capability closes investigation requirement".to_string()],
     };
+    let resolution_decision =
+        CapabilityResolutionDecision::new(&work, workcell_plan).unwrap();
     let readiness = vec![
-        capability_resolution_evidence(&work, &workcell_plan).unwrap(),
-        capability_qualification_evidence(&work, &capability, &admission, now).unwrap(),
+        capability_resolution_evidence(&work, &resolution_decision).unwrap(),
+        capability_qualification_evidence(
+            &work,
+            &resolution_decision,
+            &capability,
+            &admission,
+            now,
+        )
+        .unwrap(),
         source_of_truth_condition_evidence(&work, &source_binding).unwrap(),
-        provenance_condition_evidence(&work, &[capability.clone()]).unwrap(),
+        provenance_condition_evidence(
+            &work,
+            &resolution_decision,
+            &[capability.clone()],
+        )
+        .unwrap(),
     ];
 
     let store = MornStore::open_in_memory().unwrap();
