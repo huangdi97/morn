@@ -6763,6 +6763,151 @@ mod workspace_boundary_tests {
     }
 
     #[test]
+    fn release_revocation_invalidates_ready_projection_without_rewriting_running_work() {
+        use morn_control_plane::{
+            ConditionEvidence, ControlPlaneStore, DurableWorkControllerRuntime,
+        };
+        use morn_kernel::ids::WorkPackageId;
+        use morn_kernel::time::Timestamp;
+        use morn_profile::DomainProfile;
+        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+
+        fn seed_ready_work(
+            store: &morn_store::store::MornStore,
+            workspace_id: &morn_kernel::ids::WorkspaceId,
+            profile: &DomainProfile,
+            admission_ref: &str,
+            goal: &str,
+        ) -> WorkResource {
+            let mut spec = WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                goal,
+                profile.canonical_ref(),
+            );
+            spec.site_ref = Some("plant-a".to_string());
+            spec.required_conditions = profile.pre_execution_work_conditions();
+            let mut work = WorkResource::new(workspace_id.clone(), spec);
+            store.save_work_resource_cas(&mut work).unwrap();
+
+            for (condition_type, refs) in [
+                (
+                    "CapabilityResolved",
+                    vec!["capability:fixture".to_string()],
+                ),
+                (
+                    "CapabilityQualified",
+                    vec!["capability:fixture".to_string(), admission_ref.to_string()],
+                ),
+                (
+                    "AuthoritySatisfied",
+                    vec!["authority:fixture".to_string()],
+                ),
+                (
+                    "SourceOfTruthBound",
+                    vec!["source:fixture".to_string()],
+                ),
+                ("ProvenanceReady", vec!["provenance:fixture".to_string()]),
+            ] {
+                let evidence = ConditionEvidence::new(
+                    &work,
+                    condition_type,
+                    true,
+                    "test://readiness",
+                    refs,
+                )
+                .unwrap();
+                store.save_condition_evidence(&work, &evidence).unwrap();
+            }
+
+            DurableWorkControllerRuntime::new(format!("test-ready-{}", work.id))
+                .reconcile_from_evidence(
+                    store,
+                    work.id.as_str(),
+                    profile,
+                    Timestamp::now(),
+                )
+                .unwrap();
+            let current: WorkResource = store
+                .load_record("work_resource_v115", work.id.as_str())
+                .unwrap()
+                .unwrap();
+            assert_eq!(current.status.phase, WorkPhase::Ready);
+            current
+        }
+
+        let state = AppState::new(":memory:").unwrap();
+        let guard = state.lock();
+        let profile = DomainProfile::factory_readonly_v1();
+        let admission_ref = "admission:revoked";
+        let ready = seed_ready_work(
+            &guard.store,
+            &guard.workspace.id,
+            &profile,
+            admission_ref,
+            "ready work",
+        );
+        let mut running = seed_ready_work(
+            &guard.store,
+            &guard.workspace.id,
+            &profile,
+            admission_ref,
+            "running work",
+        );
+        running.status.phase = WorkPhase::Running;
+        guard.store.save_work_resource_cas(&mut running).unwrap();
+
+        let invalidated = invalidate_capability_qualification_readiness(
+            &guard.store,
+            &guard.workspace.id,
+            "release:revoked",
+            &[admission_ref.to_string()],
+            Timestamp::now(),
+        )
+        .unwrap();
+        assert_eq!(invalidated, vec![ready.id.to_string()]);
+
+        let ready_after: WorkResource = guard
+            .store
+            .load_record("work_resource_v115", ready.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(ready_after.status.phase, WorkPhase::Blocked);
+        assert!(!ready_after.condition_is_true("CapabilityQualified"));
+
+        let running_after: WorkResource = guard
+            .store
+            .load_record("work_resource_v115", running.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(running_after.status.phase, WorkPhase::Running);
+
+        let evidence: Vec<ConditionEvidence> = guard
+            .store
+            .load_records_in_workspace(
+                "condition_evidence_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap();
+        assert!(evidence.iter().any(|item| {
+            item.work_ref == ready.id.to_string()
+                && item.work_generation == ready.generation
+                && item.condition_type == "CapabilityQualified"
+                && !item.satisfied
+                && item.evidence_refs.iter().any(|reference| reference == admission_ref)
+                && item
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference == "release:revoked")
+        }));
+        assert!(!evidence.iter().any(|item| {
+            item.work_ref == running.id.to_string()
+                && item.work_generation == running.generation
+                && item.condition_type == "CapabilityQualified"
+                && !item.satisfied
+        }));
+    }
+
+    #[test]
     fn reviewer_rotation_uses_latest_effective_attestation_without_stale_fallback() {
         use morn_kernel::ids::PrincipalId;
         use morn_kernel::time::Timestamp;
