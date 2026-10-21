@@ -912,6 +912,9 @@ fn configured_supply_chain_verifications(
         evidence
             .validate_subject_digest(&evidence.subject_digest, false, false)
             .map_err(morn_kernel::error::Error::validation)?;
+        evidence
+            .validate_bound_subject_ref()
+            .map_err(morn_kernel::error::Error::validation)?;
         if !evidence.signature_verified && !evidence.provenance_verified {
             return Err(morn_kernel::error::Error::validation(
                 "supply-chain verification entry must prove signature or provenance",
