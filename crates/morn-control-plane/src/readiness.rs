@@ -20,6 +20,12 @@ use crate::ConditionEvidence;
 pub struct CapabilityResolutionDecisionTag;
 pub type CapabilityResolutionDecisionId = Id<CapabilityResolutionDecisionTag>;
 
+pub fn capability_resolution_decision_ref(
+    decision: &CapabilityResolutionDecision,
+) -> String {
+    format!("capability-resolution-decision://{}", decision.id)
+}
+
 /// Durable record of which exact capabilities satisfied one Work generation.
 /// The planner output is evidence for resolution; it does not grant authority
 /// and it is not an ExecutionBinding.
@@ -75,6 +81,7 @@ pub fn capability_resolution_evidence(
         .map(|member| member.capability.manifest_id.to_string())
         .collect::<Vec<_>>();
     refs.push(decision.id.to_string());
+    refs.push(capability_resolution_decision_ref(decision));
     refs.sort();
     refs.dedup();
     ConditionEvidence::new(
@@ -196,6 +203,7 @@ pub fn workcell_qualification_evidence(
         };
     }
     refs.push(decision.id.to_string());
+    refs.push(capability_resolution_decision_ref(decision));
     refs.sort();
     refs.dedup();
     let mut evidence = ConditionEvidence::new(
@@ -344,6 +352,7 @@ pub fn provenance_condition_evidence(
         refs.push(source_digest.to_string());
     }
     refs.push(decision.id.to_string());
+    refs.push(capability_resolution_decision_ref(decision));
     if let Some(solution) = &work.spec.source_solution_ref {
         refs.push(solution.clone());
     }
