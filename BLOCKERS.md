@@ -46,8 +46,8 @@ current implementation state.
   success, Provider health lease, or CI run upgrades this state.
 
 Repository-local engineering gates are verified at implementation checkpoint
-`34b9a35ca47a81cc75f4b439a28186858ed60ff5` by exact-source-head Actions run
-`39430336091` (**5/5 SUCCESS**). Every PR job checked out the exact feature/source HEAD rather than GitHub's synthetic merge ref, and the Backend source-identity audit verified that contract. This checkpoint includes provider-ingress evidence minimization, build/site fail-closed RealRuntime/RealSite/ProductionWrite readiness, binary-anchored Morn build identity, explicit execution-attestor trust, pre-storage deployment/provider/trust configuration validation, turn-unique DSH/Pi runtime-health witnesses, the protected build-bound provider/customer evidence handoffs, the DSH-SDK ↔ Pi-RPC
+`babfd05d07c34cbf3a1c8e4d7e41cb533c08fbb3` by exact-source-head Actions run
+`39558206976` (**5/5 SUCCESS**). Every PR job checked out the exact feature/source HEAD rather than GitHub's synthetic merge ref, and the Backend source-identity audit verified that contract. This checkpoint includes provider-ingress evidence minimization, build/site fail-closed RealRuntime/RealSite/ProductionWrite readiness, binary-anchored Morn build identity, explicit execution-attestor trust, pre-storage deployment/provider/trust configuration validation, turn-unique DSH/Pi runtime-health witnesses, the protected build-bound provider/customer evidence handoffs, the DSH-SDK ↔ Pi-RPC
 adapter-wire semantic-neutrality, Work/acceptance trust hardening, owned desktop
 backend lifecycle/security boundary, the DSH `0.2.1-rc.2` distribution
 qualification gate, a full-resolution Cargo.lock gate, Windows-portable provider
@@ -67,7 +67,7 @@ or runner-binding results.
 
 ## 2026-10-19 deployment-evidence coherence hardening
 
-- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** remains the current v11.5 reference-scope result at verified implementation checkpoint `34b9a35ca47a81cc75f4b439a28186858ed60ff5`; exact-source-head Actions `39430336091` passed **5/5**.
+- **REPOSITORY_LOCAL_REQUIRED_DESIGN_GAPS = 0** remains the current v11.5 reference-scope result at verified implementation checkpoint `babfd05d07c34cbf3a1c8e4d7e41cb533c08fbb3`; exact-source-head Actions `39558206976` passed **5/5**.
 - DSH SDK, DSH ACP and Pi evidence streams discard private reasoning, raw tool arguments/results and free-form tool names/titles at transport ingress while retaining only the visible assistant/correlation/settlement/policy facts required by the governed E0 boundary.
 - RealRuntime, RealSite and ProductionWrite remain independent categorical evidence classes and append-only history. For **current deployment readiness**, missing build identity fails the RealRuntime axis itself; missing site identity fails RealSite/ProductionWrite axes themselves. Current RealRuntime proof also requires fresh **witness-bearing** health: a bare health boolean or empty ref cannot satisfy readiness, DSH health is correlated to the exact settled message, and Pi health is correlated to the exact Morn request. Expired health cannot be resurrected by a same-runtime liveness refresh: Pi creates a new runtime epoch, initialized state with historical settled turns cannot admit another governed turn, and provider status drops stale success witnesses after expiry. Old-build/site/runtime-health proof remains auditable history rather than readiness for a different deployment.
 - `MORN_BUILD_IDENTITY_REF` is no longer accepted as a free runtime label: when configured it must equal the value embedded at compile time in the running `morn-app` binary, and provider smoke exports the AppState-validated identity. This prevents relabeling a newer binary as an older proven build; supply-chain authenticity of the builder/artifact remains the independent B-004 responsibility.
@@ -76,6 +76,14 @@ or runner-binding results.
 - `live-dsh-evidence.yml` and `live-pi-evidence.yml` derive the canonical build identity as `git://huangdi97/morn/<github.sha>` from the exact checkout, include it in reusable RealRuntime claims and evidence artifacts, and the external-entrypoint audit fails if that binding disappears. `live-customer-evidence.yml` independently carries the deployment build identity through plan/verify and `evidence_claim_verify` rejects customer/write claims without it.
 - B-004 loader trust is now witness-bearing per axis: `signature_verified=true` requires a canonical retained `cosign-verify-output://sha256:<digest>` evidence ref and `provenance_verified=true` requires a canonical retained `cosign-attestation-output://sha256:<digest>` ref, in addition to the exact deployment-pinned release runner, Cosign binary digest and verifier-build context. A boolean-only verification envelope cannot be loaded as trusted supply-chain evidence.
 - This does **not** mint customer truth, grant production-write authority, reinterpret provider success as Outcome/Acceptance, or change any external blocker below.
+
+## 2026-10-21 exact OCI subject and active-admission hardening
+
+- Supply-chain verification evidence now carries exactly one canonical digest-pinned OCI subject witness in addition to the manifest digest. Signature and provenance evidence can merge only when both the digest **and exact OCI subject** match; the deployment loader groups by exact subject, and the capability-release API selects proof by exact `package_ref + content_digest` rather than digest alone. Same-content copies in different registries/repositories therefore cannot borrow each other's verification.
+- The protected live supply-chain handoff now requires the exact OCI-subject witness in exported verification evidence, and the repository external-evidence audit locks that handoff contract.
+- `SiteAdmission` is no longer trusted solely because an immutable historical row says `Admitted`. Every selection-time gate revalidates the referenced active release's exact OCI subject, digest, signature axis and provenance axis; missing or spliced verification fails closed for new Work resolution/binding/send/ACP lifecycle activity while historical records remain auditable.
+- Strict-profile capability resolution now filters the catalog through canonical active site/profile admission **before** semantic minimum-workcell planning. A stale projected admission cannot out-rank a valid alternative or create a positive resolution witness that is later discovered to be unusable.
+- These are repository-local trust-closure controls only. **B-004 remains EXTERNAL_BLOCKED** until an authorized real registry plus deployment OIDC/signing/build provenance produces live evidence; no local fixture, CI run or historical verification row clears that blocker.
 
 ## External blocker local entrypoints — 2026-10-17
 
