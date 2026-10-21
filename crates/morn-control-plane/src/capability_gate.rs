@@ -167,12 +167,13 @@ mod tests {
             )
             .unwrap();
         let release_digest = format!("sha256:{}", "a".repeat(64));
+        let package_ref = format!("oci://fixture/cap@{release_digest}");
         service
             .record_verified_release(
                 &mut capability,
                 &qualification,
                 VerifiedReleaseRequest::new(
-                    format!("oci://fixture/cap@{release_digest}"),
+                    package_ref.clone(),
                     release_digest.clone(),
                     "sigstore://fixture",
                     "slsa://fixture",
@@ -181,7 +182,10 @@ mod tests {
                         verifier_ref: "fixture://supply-chain".to_string(),
                         signature_verified: true,
                         provenance_verified: true,
-                        evidence_refs: vec!["fixture://supply-chain/proof".to_string()],
+                        evidence_refs: vec![
+                            morn_package::supply_chain_subject_ref(&package_ref).unwrap(),
+                            "fixture://supply-chain/proof".to_string(),
+                        ],
                     },
                 ),
             )
