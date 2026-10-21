@@ -13,7 +13,7 @@ use morn_kernel::history::{HistoricalFact, HistoricalFactLog, HistoricalFactStat
 use morn_kernel::ids::{CapabilityId, RuntimeBindingId, WorkPackageId, WorkspaceId};
 use morn_kernel::protocol::{HistoryMutation, HistoryMutationKind, ProtocolSnapshot};
 use morn_kernel::time::Timestamp;
-use morn_package::SupplyChainVerificationEvidence;
+use morn_package::{supply_chain_subject_ref, SupplyChainVerificationEvidence};
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
     ActionAttempt, AttemptState, BindingMigrationReason, BindingMigrationRequest,
@@ -261,12 +261,13 @@ fn site_admission_requires_strict_nonexpired_qualification() {
         )
         .unwrap();
     let release_digest = format!("sha256:{}", "b".repeat(64));
+    let package_ref = format!("oci://fixture/morn/investigator@{release_digest}");
     service
         .record_verified_release(
             &mut capability,
             &qualification,
             VerifiedReleaseRequest::new(
-                format!("oci://fixture/morn/investigator@{release_digest}"),
+                package_ref.clone(),
                 release_digest.clone(),
                 "sigstore://fixture/investigator",
                 "slsa://fixture/investigator",
@@ -275,7 +276,10 @@ fn site_admission_requires_strict_nonexpired_qualification() {
                     verifier_ref: "fixture://core-conformance-supply-chain".to_string(),
                     signature_verified: true,
                     provenance_verified: true,
-                    evidence_refs: vec!["fixture://core-conformance-supply-chain/proof".to_string()],
+                    evidence_refs: vec![
+                        supply_chain_subject_ref(&package_ref).unwrap(),
+                        "fixture://core-conformance-supply-chain/proof".to_string(),
+                    ],
                 },
             ),
         )
