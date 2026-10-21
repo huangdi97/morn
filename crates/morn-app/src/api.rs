@@ -8008,9 +8008,13 @@ mod workspace_boundary_tests {
     async fn execute_e0_persists_harness_receipt_without_inventing_outcome_or_acceptance() {
         use morn_capability::{
             CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass,
+            ResolvedCapability, WorkcellMember, WorkcellPlan,
         };
-        use morn_control_plane::ControlPlaneStore;
+        use morn_control_plane::{
+            capability_resolution_evidence, CapabilityResolutionDecision, ControlPlaneStore,
+        };
         use morn_kernel::ids::CapabilityId;
+        use morn_kernel::ExecutionClass;
         use morn_runtime::ExecutionBinding;
         use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
 
@@ -8038,8 +8042,44 @@ mod workspace_boundary_tests {
             capability.manifest.provenance.source_ref = "repo://fixture-agent".to_string();
             capability.stage = CapabilityStage::Qualified;
             let manifest_id = capability.manifest.id.to_string();
+            let resolved = ResolvedCapability {
+                manifest_id: capability.manifest.id.clone(),
+                provider_ref: capability.manifest.provider_ref.clone(),
+                kind: capability.manifest.kind,
+                estimated_cost_micros: None,
+                maximum_effect: capability.manifest.authority.maximum_effect,
+                compensation_ref: capability.manifest.authority.compensation_action.clone(),
+                idempotency_key_required: capability.manifest.authority.idempotency_key_required,
+                required_execution_class: ExecutionClass::NoIsolation,
+                required_execution_guarantees: vec![],
+                score: 1,
+                rationale: vec![],
+            };
             guard.v115_capabilities.push(capability);
             guard.persist_all().unwrap();
+
+            let decision = CapabilityResolutionDecision::new(
+                &work,
+                WorkcellPlan {
+                    members: vec![WorkcellMember {
+                        capability: resolved,
+                        covers: vec!["draft".to_string()],
+                    }],
+                    uncovered: vec![],
+                    total_estimated_cost_micros: 0,
+                    rationale: vec!["fixture resolution".to_string()],
+                },
+            )
+            .unwrap();
+            guard
+                .store
+                .save_capability_resolution(&work, &decision)
+                .unwrap();
+            let evidence = capability_resolution_evidence(&work, &decision).unwrap();
+            guard
+                .store
+                .save_condition_evidence(&work, &evidence)
+                .unwrap();
 
             let mut binding =
                 ExecutionBinding::for_work(&work, manifest_id, "deepseek-harness", "fixture");
@@ -8090,6 +8130,155 @@ mod workspace_boundary_tests {
             .store
             .load_records_in_workspace::<Value>(
                 "acceptance_decision_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn execute_e0_rejects_binding_from_superseded_same_generation_resolution() {
+        use morn_capability::{
+            CapabilityKind, CapabilityManifest, CapabilityRecord, CapabilityStage, EffectClass,
+            ResolvedCapability, WorkcellMember, WorkcellPlan,
+        };
+        use morn_control_plane::{
+            capability_resolution_evidence, CapabilityResolutionDecision, ControlPlaneStore,
+        };
+        use morn_kernel::ids::CapabilityId;
+        use morn_kernel::time::Timestamp;
+        use morn_kernel::ExecutionClass;
+        use morn_runtime::ExecutionBinding;
+        use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
+
+        let state = AppState::new(":memory:").unwrap();
+        let (work, stale_binding) = {
+            let mut guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "re-resolve before execution",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            work.status.phase = WorkPhase::Ready;
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+
+            let mut first = CapabilityRecord::new(CapabilityManifest::new(
+                CapabilityId::generate_with("capability"),
+                "first-agent",
+                "deepseek-harness",
+                CapabilityKind::Agent,
+                EffectClass::E0LifecycleReversible,
+            ));
+            first.manifest.provenance.source_ref = "repo://first-agent".to_string();
+            first.stage = CapabilityStage::Qualified;
+            let mut second = CapabilityRecord::new(CapabilityManifest::new(
+                CapabilityId::generate_with("capability"),
+                "second-agent",
+                "deepseek-harness",
+                CapabilityKind::Agent,
+                EffectClass::E0LifecycleReversible,
+            ));
+            second.manifest.provenance.source_ref = "repo://second-agent".to_string();
+            second.stage = CapabilityStage::Qualified;
+            guard.v115_capabilities.push(first.clone());
+            guard.v115_capabilities.push(second.clone());
+            guard.persist_all().unwrap();
+
+            let resolved = |capability: &CapabilityRecord| ResolvedCapability {
+                manifest_id: capability.manifest.id.clone(),
+                provider_ref: capability.manifest.provider_ref.clone(),
+                kind: capability.manifest.kind,
+                estimated_cost_micros: None,
+                maximum_effect: capability.manifest.authority.maximum_effect,
+                compensation_ref: capability.manifest.authority.compensation_action.clone(),
+                idempotency_key_required: capability.manifest.authority.idempotency_key_required,
+                required_execution_class: ExecutionClass::NoIsolation,
+                required_execution_guarantees: vec![],
+                score: 1,
+                rationale: vec![],
+            };
+            let first_decision = CapabilityResolutionDecision::new(
+                &work,
+                WorkcellPlan {
+                    members: vec![WorkcellMember {
+                        capability: resolved(&first),
+                        covers: vec!["draft".to_string()],
+                    }],
+                    uncovered: vec![],
+                    total_estimated_cost_micros: 0,
+                    rationale: vec!["first resolution".to_string()],
+                },
+            )
+            .unwrap();
+            guard
+                .store
+                .save_capability_resolution(&work, &first_decision)
+                .unwrap();
+            let mut first_evidence = capability_resolution_evidence(&work, &first_decision).unwrap();
+            first_evidence.observed_at = Timestamp::from_millis(100);
+            guard
+                .store
+                .save_condition_evidence(&work, &first_evidence)
+                .unwrap();
+
+            let mut stale_binding = ExecutionBinding::for_work(
+                &work,
+                first.manifest.id.to_string(),
+                "deepseek-harness",
+                "fixture",
+            );
+            stale_binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
+            guard
+                .store
+                .save_execution_binding(&work, &stale_binding)
+                .unwrap();
+
+            let second_decision = CapabilityResolutionDecision::new(
+                &work,
+                WorkcellPlan {
+                    members: vec![WorkcellMember {
+                        capability: resolved(&second),
+                        covers: vec!["draft".to_string()],
+                    }],
+                    uncovered: vec![],
+                    total_estimated_cost_micros: 0,
+                    rationale: vec!["replacement resolution".to_string()],
+                },
+            )
+            .unwrap();
+            guard
+                .store
+                .save_capability_resolution(&work, &second_decision)
+                .unwrap();
+            let mut second_evidence =
+                capability_resolution_evidence(&work, &second_decision).unwrap();
+            second_evidence.observed_at = Timestamp::from_millis(200);
+            guard
+                .store
+                .save_condition_evidence(&work, &second_evidence)
+                .unwrap();
+            (work, stale_binding)
+        };
+
+        let result = v115_work_execute_e0(
+            State(state.clone()),
+            Json(json!({
+                "work_id": work.id.to_string(),
+                "binding_id": stale_binding.id.to_string(),
+                "input": "must not execute through superseded resolution"
+            })),
+        )
+        .await;
+        assert!(result.is_err());
+
+        let guard = state.lock();
+        assert!(guard
+            .store
+            .load_records_in_workspace::<morn_harness::ExecutionReceipt>(
+                "execution_receipt_v115",
                 guard.workspace.id.as_str(),
             )
             .unwrap()
