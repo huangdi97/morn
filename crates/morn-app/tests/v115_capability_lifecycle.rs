@@ -113,13 +113,14 @@ fn capability_lifecycle_survives_restart_and_revocation_keeps_history() {
         let release = {
             let inner = &mut *guard;
             let digest = format!("sha256:{}", "c".repeat(64));
+            let package_ref = format!("oci://registry.example/morn/cmms-read@{digest}");
             inner
                 .v115_admission
                 .record_verified_release(
                     &mut inner.v115_capabilities[index],
                     &qualification,
                     VerifiedReleaseRequest::new(
-                        format!("oci://registry.example/morn/cmms-read@{digest}"),
+                        package_ref.clone(),
                         digest.clone(),
                         "sigstore://rekor/cmms-read",
                         "slsa://provenance/cmms-read",
@@ -128,7 +129,10 @@ fn capability_lifecycle_survives_restart_and_revocation_keeps_history() {
                             verifier_ref: "fixture://release-verifier".to_string(),
                             signature_verified: true,
                             provenance_verified: true,
-                            evidence_refs: vec!["fixture://release-verifier/proof".to_string()],
+                            evidence_refs: vec![
+                                morn_package::supply_chain_subject_ref(&package_ref).unwrap(),
+                                "fixture://release-verifier/proof".to_string(),
+                            ],
                         },
                     ),
                 )
