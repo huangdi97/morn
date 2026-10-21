@@ -32,7 +32,7 @@ use morn_integration::{
 use morn_kernel::error::Result;
 use morn_kernel::ids::{ActorInstanceId, CapabilityId, PrincipalId, WorkspaceId};
 use morn_kernel::policy::{Policy, PolicyRule};
-use morn_package::SupplyChainVerificationEvidence;
+use morn_package::{supply_chain_subject_ref, SupplyChainVerificationEvidence};
 use morn_profile::{evaluate_profile, ConformanceEvidence, DomainProfile, RequirementLevel};
 use morn_runtime::{
     decide_bound, enforce_authority, ActionAttempt, AttemptState, AuthorityProvider,
@@ -192,12 +192,14 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         )
         .unwrap();
     let release_digest = format!("sha256:{}", "a".repeat(64));
+    let release_package_ref =
+        format!("oci://fixture/morn/equipment-investigator@{release_digest}");
     let release = admission
         .record_verified_release(
             &mut capability,
             &qualification,
             VerifiedReleaseRequest::new(
-                format!("oci://fixture/morn/equipment-investigator@{release_digest}"),
+                release_package_ref.clone(),
                 release_digest.clone(),
                 "sigstore://fixture/equipment-investigator",
                 "slsa://fixture/equipment-investigator",
@@ -206,7 +208,10 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
                     verifier_ref: "fixture://supply-chain-verifier".to_string(),
                     signature_verified: true,
                     provenance_verified: true,
-                    evidence_refs: vec!["fixture://supply-chain-verifier/proof".to_string()],
+                    evidence_refs: vec![
+                        supply_chain_subject_ref(&release_package_ref).unwrap(),
+                        "fixture://supply-chain-verifier/proof".to_string(),
+                    ],
                 },
             ),
         )
@@ -469,12 +474,14 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         )
         .unwrap();
     let cmms_release_digest = format!("sha256:{}", "b".repeat(64));
+    let cmms_release_package_ref =
+        format!("oci://fixture/morn/cmms-sandbox-create-order@{cmms_release_digest}");
     admission
         .record_verified_release(
             &mut cmms_capability,
             &cmms_qualification,
             VerifiedReleaseRequest::new(
-                format!("oci://fixture/morn/cmms-sandbox-create-order@{cmms_release_digest}"),
+                cmms_release_package_ref.clone(),
                 cmms_release_digest.clone(),
                 "sigstore://fixture/cmms",
                 "slsa://fixture/cmms",
@@ -483,7 +490,10 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
                     verifier_ref: "fixture://cmms-supply-chain-verifier".to_string(),
                     signature_verified: true,
                     provenance_verified: true,
-                    evidence_refs: vec!["fixture://cmms-supply-chain-verifier/proof".to_string()],
+                    evidence_refs: vec![
+                        supply_chain_subject_ref(&cmms_release_package_ref).unwrap(),
+                        "fixture://cmms-supply-chain-verifier/proof".to_string(),
+                    ],
                 },
             ),
         )
