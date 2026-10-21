@@ -468,7 +468,7 @@ impl AdmissionService {
             ));
         }
         verification
-            .validate_subject_digest(&content_digest, true, true)
+            .validate_for_oci_subject(&package_ref, &content_digest, true, true)
             .map_err(Error::validation)?;
         self.record_release_internal(
             capability,
@@ -650,7 +650,12 @@ impl AdmissionService {
                 )
             })?;
         verification
-            .validate_subject_digest(&release.content_digest, true, true)
+            .validate_for_oci_subject(
+                &release.package_ref,
+                &release.content_digest,
+                true,
+                true,
+            )
             .map_err(Error::validation)?;
         if capability.stage != CapabilityStage::Qualified
             && capability.stage != CapabilityStage::Admitted
