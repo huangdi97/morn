@@ -1147,8 +1147,10 @@ impl AppState {
 
         let controller_instance = ActorInstanceId::generate_with("morn-app-controller");
         let work_controller_holder = format!("morn-app-api:{}", controller_instance);
-        let business_evidence_controller_holder =
-            format!("morn-app-business-evidence-recovery:{}", controller_instance);
+        let business_evidence_controller_holder = format!(
+            "morn-app-business-evidence-recovery:{}",
+            controller_instance
+        );
 
         let store = MornStore::open(db_path)?;
         // Reuse the persisted workspace on restart so workspace-scoped records hydrate.
