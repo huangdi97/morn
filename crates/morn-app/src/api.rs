@@ -2393,6 +2393,13 @@ fn validate_current_acp_lifecycle_binding(
             )))
         })?;
     let now = morn_kernel::time::Timestamp::now();
+    require_current_durable_binding_readiness(
+        &guard.store,
+        &work,
+        &profile,
+        binding.capability_manifest_ref.as_str(),
+        now,
+    )?;
     if profile.requires("CapabilityQualification") {
         let site = work
             .spec
@@ -3177,6 +3184,13 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                 )))
             })?;
         let now = morn_kernel::time::Timestamp::now();
+        require_current_durable_binding_readiness(
+            &guard.store,
+            &work,
+            &profile,
+            binding.capability_manifest_ref.as_str(),
+            now,
+        )?;
         if profile.requires("CapabilityQualification") {
             let site =
                 work.spec.site_ref.as_deref().ok_or_else(|| {
