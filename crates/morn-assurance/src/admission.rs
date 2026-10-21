@@ -729,6 +729,67 @@ impl AdmissionService {
     /// and release are active *now*. This prevents an expired qualification or
     /// revoked release from remaining selectable because a cached projection
     /// still says "Admitted".
+    pub fn active_site_profile_admissions_at<'a>(
+        &'a self,
+        capability: &CapabilityRecord,
+        site_ref: &str,
+        profile_ref: &str,
+        now: Timestamp,
+    ) -> Vec<&'a SiteAdmission> {
+        capability
+            .admission_refs
+            .iter()
+            .filter(|reference| {
+                reference.site_ref == site_ref && reference.profile_ref == profile_ref
+            })
+            .filter_map(|reference| {
+                self.admissions
+                    .iter()
+                    .find(|item| item.id.to_string() == reference.admission_ref)
+            })
+            .filter(|admission| {
+                if admission.status != SiteAdmissionStatus::Admitted
+                    || admission.manifest_id != capability.manifest.id
+                    || admission.site_ref != site_ref
+                    || admission.profile_ref != profile_ref
+                {
+                    return false;
+                }
+                let Some(qualification) = self
+                    .qualifications
+                    .iter()
+                    .find(|item| item.id == admission.qualification_id)
+                else {
+                    return false;
+                };
+                if !qualification.is_active_at(now)
+                    || qualification.manifest_id != capability.manifest.id
+                {
+                    return false;
+                }
+                self.releases.iter().any(|release| {
+                    release.id == admission.release_id
+                        && release.manifest_id == capability.manifest.id
+                        && release.qualification_id == qualification.id
+                        && release.active()
+                        && release
+                            .supply_chain_verification
+                            .as_ref()
+                            .is_some_and(|verification| {
+                                verification
+                                    .validate_for_oci_subject(
+                                        &release.package_ref,
+                                        &release.content_digest,
+                                        true,
+                                        true,
+                                    )
+                                    .is_ok()
+                            })
+                })
+            })
+            .collect()
+    }
+
     pub fn site_profile_admission_active_at(
         &self,
         capability: &CapabilityRecord,
@@ -736,56 +797,9 @@ impl AdmissionService {
         profile_ref: &str,
         now: Timestamp,
     ) -> bool {
-        capability.admission_refs.iter().any(|reference| {
-            if reference.site_ref != site_ref || reference.profile_ref != profile_ref {
-                return false;
-            }
-            let Some(admission) = self
-                .admissions
-                .iter()
-                .find(|item| item.id.to_string() == reference.admission_ref)
-            else {
-                return false;
-            };
-            if admission.status != SiteAdmissionStatus::Admitted
-                || admission.manifest_id != capability.manifest.id
-                || admission.site_ref != site_ref
-                || admission.profile_ref != profile_ref
-            {
-                return false;
-            }
-            let Some(qualification) = self
-                .qualifications
-                .iter()
-                .find(|item| item.id == admission.qualification_id)
-            else {
-                return false;
-            };
-            if !qualification.is_active_at(now)
-                || qualification.manifest_id != capability.manifest.id
-            {
-                return false;
-            }
-            self.releases.iter().any(|release| {
-                release.id == admission.release_id
-                    && release.manifest_id == capability.manifest.id
-                    && release.qualification_id == qualification.id
-                    && release.active()
-                    && release
-                        .supply_chain_verification
-                        .as_ref()
-                        .is_some_and(|verification| {
-                            verification
-                                .validate_for_oci_subject(
-                                    &release.package_ref,
-                                    &release.content_digest,
-                                    true,
-                                    true,
-                                )
-                                .is_ok()
-                        })
-            })
-        })
+        !self
+            .active_site_profile_admissions_at(capability, site_ref, profile_ref, now)
+            .is_empty()
     }
 
     pub fn revoke_release(
