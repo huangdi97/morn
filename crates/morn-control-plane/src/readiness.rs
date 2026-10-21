@@ -200,13 +200,15 @@ pub fn authority_condition_evidence(
     }
     let mut refs = vec![authority.decision.id.to_string()];
     refs.extend(authority.decision.evidence_refs.clone());
-    ConditionEvidence::new(
+    let mut evidence = ConditionEvidence::new(
         work,
         "AuthoritySatisfied",
         true,
         format!("authority://{}", authority.decision.provider),
         refs,
-    )
+    )?;
+    evidence.valid_until = authority.request.expires_at;
+    Ok(evidence)
 }
 
 pub fn source_of_truth_condition_evidence(
@@ -425,6 +427,53 @@ mod tests {
             Timestamp::from_millis(201)
         )
         .capability_qualified);
+    }
+
+    #[test]
+    fn authority_readiness_expires_with_authority_request() {
+        use morn_runtime::{AuthorityDecisionId, AuthorityDecisionRecord, AuthorityRequest};
+
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "authorized review",
+            "morn.lite@1.0.0",
+        );
+        spec.site_ref = Some("site-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let expires_at = Timestamp::from_millis(200);
+        let mut request = AuthorityRequest::new("principal-a", "read", "resource-a");
+        request.work_ref = Some(work.id.to_string());
+        request.work_generation = Some(work.generation);
+        request.site_ref = work.spec.site_ref.clone();
+        request.expires_at = Some(expires_at);
+        let authority = BoundAuthorityDecision {
+            request,
+            decision: AuthorityDecisionRecord {
+                id: AuthorityDecisionId::generate_with("authz"),
+                provider: "fixture-authority".to_string(),
+                allowed: true,
+                reason: "fixture allow".to_string(),
+                evidence_refs: vec!["policy://fixture".to_string()],
+                decided_at: Timestamp::from_millis(100),
+            },
+        };
+
+        let mut evidence =
+            authority_condition_evidence(&work, &authority, Timestamp::from_millis(100)).unwrap();
+        assert_eq!(evidence.valid_until, Some(expires_at));
+        evidence.observed_at = Timestamp::from_millis(100);
+        assert!(derive_controller_inputs(
+            &work,
+            &[evidence.clone()],
+            Timestamp::from_millis(150)
+        )
+        .authority_satisfied);
+        assert!(!derive_controller_inputs(
+            &work,
+            &[evidence],
+            Timestamp::from_millis(201)
+        )
+        .authority_satisfied);
     }
 
     #[test]
