@@ -20,9 +20,7 @@ use crate::ConditionEvidence;
 pub struct CapabilityResolutionDecisionTag;
 pub type CapabilityResolutionDecisionId = Id<CapabilityResolutionDecisionTag>;
 
-pub fn capability_resolution_decision_ref(
-    decision: &CapabilityResolutionDecision,
-) -> String {
+pub fn capability_resolution_decision_ref(decision: &CapabilityResolutionDecision) -> String {
     format!("capability-resolution-decision://{}", decision.id)
 }
 
