@@ -278,6 +278,7 @@ pub fn provenance_condition_evidence(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::condition_evidence::derive_controller_inputs;
     use morn_capability::{
         CapabilityKind, CapabilityManifest, EffectClass, ResolvedCapability, WorkcellMember,
     };
