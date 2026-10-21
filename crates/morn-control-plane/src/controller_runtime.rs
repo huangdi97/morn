@@ -70,6 +70,74 @@ fn capability_readiness_evidence_has_durable_resolution_backing(
     })
 }
 
+pub fn derive_durable_controller_inputs(
+    work: &WorkResource,
+    evidence: &[ConditionEvidence],
+    decisions: &[CapabilityResolutionDecision],
+    now: Timestamp,
+) -> ControllerInputs {
+    let projection_evidence = evidence
+        .iter()
+        .cloned()
+        .map(|mut item| {
+            if !capability_readiness_evidence_has_durable_resolution_backing(
+                work, &item, decisions,
+            ) {
+                // Preserve immutable history, but never project orphaned or
+                // cross-decision capability readiness as current truth.
+                item.satisfied = false;
+            }
+            item
+        })
+        .collect::<Vec<_>>();
+    derive_controller_inputs(work, &projection_evidence, now)
+}
+
+pub fn current_durable_resolution_contains_capability(
+    work: &WorkResource,
+    evidence: &[ConditionEvidence],
+    decisions: &[CapabilityResolutionDecision],
+    capability_manifest_id: &str,
+    now: Timestamp,
+) -> bool {
+    let resolved = evidence
+        .iter()
+        .filter(|item| {
+            item.condition_type == "CapabilityResolved" && item.active_for(work, now)
+        })
+        .max_by_key(|item| {
+            (
+                item.observed_at.millis(),
+                !(item.satisfied && !item.evidence_refs.is_empty()),
+            )
+        });
+    let Some(resolved) = resolved else {
+        return false;
+    };
+    if !capability_readiness_evidence_has_durable_resolution_backing(
+        work, resolved, decisions,
+    ) {
+        return false;
+    }
+    let Some(witness_ref) = active_resolution_decision_ref(Some(resolved)) else {
+        return false;
+    };
+
+    let mut matches = decisions.iter().filter(|decision| {
+        decision.matches_work(work)
+            && capability_resolution_decision_ref(decision) == witness_ref
+            && decision
+                .plan
+                .members
+                .iter()
+                .any(|member| member.capability.manifest_id.as_str() == capability_manifest_id)
+    });
+    let Some(_) = matches.next() else {
+        return false;
+    };
+    matches.next().is_none()
+}
+
 #[derive(Debug, Clone)]
 pub struct DurableWorkControllerRuntime {
     pub holder: String,
@@ -175,21 +243,12 @@ impl DurableWorkControllerRuntime {
             )?;
             let evidence: Vec<ConditionEvidence> = store
                 .load_records_in_workspace("condition_evidence_v115", work.workspace_id.as_str())?;
-            let projection_evidence = evidence
-                .into_iter()
-                .map(|mut item| {
-                    if !capability_readiness_evidence_has_durable_resolution_backing(
-                        &work, &item, &decisions,
-                    ) {
-                        // Preserve the immutable historical evidence record, but
-                        // project an orphaned/inconsistent positive witness as
-                        // fail-closed for this reconciliation tick.
-                        item.satisfied = false;
-                    }
-                    item
-                })
-                .collect::<Vec<_>>();
-            Some(derive_controller_inputs(&work, &projection_evidence, now))
+            Some(derive_durable_controller_inputs(
+                &work,
+                &evidence,
+                &decisions,
+                now,
+            ))
         } else {
             None
         };
