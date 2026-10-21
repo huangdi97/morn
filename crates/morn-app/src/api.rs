@@ -4680,12 +4680,13 @@ fn invalidate_capability_qualification_readiness(
         )?;
         store.save_condition_evidence(&work, &denial)?;
 
-        let profile = morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
-            Error::validation(format!(
-                "unsupported Work profile {} while invalidating revoked capability readiness",
-                work.spec.profile_ref
-            ))
-        })?;
+        let profile =
+            morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+                Error::validation(format!(
+                    "unsupported Work profile {} while invalidating revoked capability readiness",
+                    work.spec.profile_ref
+                ))
+            })?;
         DurableWorkControllerRuntime::new("api-v115-capability-release-revocation")
             .reconcile_from_evidence(
                 store,
@@ -6790,42 +6791,23 @@ mod workspace_boundary_tests {
             store.save_work_resource_cas(&mut work).unwrap();
 
             for (condition_type, refs) in [
-                (
-                    "CapabilityResolved",
-                    vec!["capability:fixture".to_string()],
-                ),
+                ("CapabilityResolved", vec!["capability:fixture".to_string()]),
                 (
                     "CapabilityQualified",
                     vec!["capability:fixture".to_string(), admission_ref.to_string()],
                 ),
-                (
-                    "AuthoritySatisfied",
-                    vec!["authority:fixture".to_string()],
-                ),
-                (
-                    "SourceOfTruthBound",
-                    vec!["source:fixture".to_string()],
-                ),
+                ("AuthoritySatisfied", vec!["authority:fixture".to_string()]),
+                ("SourceOfTruthBound", vec!["source:fixture".to_string()]),
                 ("ProvenanceReady", vec!["provenance:fixture".to_string()]),
             ] {
-                let evidence = ConditionEvidence::new(
-                    &work,
-                    condition_type,
-                    true,
-                    "test://readiness",
-                    refs,
-                )
-                .unwrap();
+                let evidence =
+                    ConditionEvidence::new(&work, condition_type, true, "test://readiness", refs)
+                        .unwrap();
                 store.save_condition_evidence(&work, &evidence).unwrap();
             }
 
             DurableWorkControllerRuntime::new(format!("test-ready-{}", work.id))
-                .reconcile_from_evidence(
-                    store,
-                    work.id.as_str(),
-                    profile,
-                    Timestamp::now(),
-                )
+                .reconcile_from_evidence(store, work.id.as_str(), profile, Timestamp::now())
                 .unwrap();
             let current: WorkResource = store
                 .load_record("work_resource_v115", work.id.as_str())
@@ -6883,17 +6865,17 @@ mod workspace_boundary_tests {
 
         let evidence: Vec<ConditionEvidence> = guard
             .store
-            .load_records_in_workspace(
-                "condition_evidence_v115",
-                guard.workspace.id.as_str(),
-            )
+            .load_records_in_workspace("condition_evidence_v115", guard.workspace.id.as_str())
             .unwrap();
         assert!(evidence.iter().any(|item| {
             item.work_ref == ready.id.to_string()
                 && item.work_generation == ready.generation
                 && item.condition_type == "CapabilityQualified"
                 && !item.satisfied
-                && item.evidence_refs.iter().any(|reference| reference == admission_ref)
+                && item
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference == admission_ref)
                 && item
                     .evidence_refs
                     .iter()
