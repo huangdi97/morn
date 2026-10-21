@@ -6792,11 +6792,16 @@ mod workspace_boundary_tests {
 
     #[test]
     fn release_revocation_invalidates_ready_projection_without_rewriting_running_work() {
-        use morn_control_plane::{
-            ConditionEvidence, ControlPlaneStore, DurableWorkControllerRuntime,
+        use morn_capability::{
+            CapabilityKind, EffectClass, ResolvedCapability, WorkcellMember, WorkcellPlan,
         };
-        use morn_kernel::ids::WorkPackageId;
+        use morn_control_plane::{
+            capability_resolution_evidence, CapabilityResolutionDecision, ConditionEvidence,
+            ControlPlaneStore, DurableWorkControllerRuntime,
+        };
+        use morn_kernel::ids::{CapabilityManifestId, WorkPackageId};
         use morn_kernel::time::Timestamp;
+        use morn_kernel::ExecutionClass;
         use morn_profile::DomainProfile;
         use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
 
@@ -6818,15 +6823,60 @@ mod workspace_boundary_tests {
             let mut work = WorkResource::new(workspace_id.clone(), spec);
             store.save_work_resource_cas(&mut work).unwrap();
 
+            let manifest_id = CapabilityManifestId::generate_with("fixture-manifest");
+            let decision = CapabilityResolutionDecision::new(
+                &work,
+                WorkcellPlan {
+                    members: vec![WorkcellMember {
+                        capability: ResolvedCapability {
+                            manifest_id: manifest_id.clone(),
+                            provider_ref: "morn-native".to_string(),
+                            kind: CapabilityKind::Program,
+                            estimated_cost_micros: None,
+                            maximum_effect: EffectClass::E0LifecycleReversible,
+                            compensation_ref: None,
+                            idempotency_key_required: false,
+                            required_execution_class: ExecutionClass::NoIsolation,
+                            required_execution_guarantees: vec![],
+                            score: 1,
+                            rationale: vec![],
+                        },
+                        covers: vec!["fixture".to_string()],
+                    }],
+                    uncovered: vec![],
+                    total_estimated_cost_micros: 0,
+                    rationale: vec!["fixture".to_string()],
+                },
+            )
+            .unwrap();
+            store.save_capability_resolution(&work, &decision).unwrap();
+            let resolution = capability_resolution_evidence(&work, &decision).unwrap();
+            store.save_condition_evidence(&work, &resolution).unwrap();
+
+            let decision_ref = format!("capability-resolution-decision://{}", decision.id);
+            let decision_id = decision.id.to_string();
+            let manifest_ref = manifest_id.to_string();
             for (condition_type, refs) in [
-                ("CapabilityResolved", vec!["capability:fixture".to_string()]),
                 (
                     "CapabilityQualified",
-                    vec!["capability:fixture".to_string(), admission_ref.to_string()],
+                    vec![
+                        manifest_ref.clone(),
+                        admission_ref.to_string(),
+                        decision_id.clone(),
+                        decision_ref.clone(),
+                    ],
                 ),
                 ("AuthoritySatisfied", vec!["authority:fixture".to_string()]),
                 ("SourceOfTruthBound", vec!["source:fixture".to_string()]),
-                ("ProvenanceReady", vec!["provenance:fixture".to_string()]),
+                (
+                    "ProvenanceReady",
+                    vec![
+                        manifest_ref,
+                        "provenance:fixture".to_string(),
+                        decision_id,
+                        decision_ref,
+                    ],
+                ),
             ] {
                 let evidence =
                     ConditionEvidence::new(&work, condition_type, true, "test://readiness", refs)
