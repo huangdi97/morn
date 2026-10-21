@@ -7554,6 +7554,52 @@ mod workspace_boundary_tests {
     }
 
     #[tokio::test]
+    async fn controller_holder_is_deployment_owned_across_reconcile_apis() {
+        use morn_control_plane::ControlPlaneStore;
+        use morn_kernel::ids::WorkPackageId;
+        use morn_work::control::{WorkResource, WorkSpec};
+
+        let state = AppState::new(":memory:").unwrap();
+        let work_id = {
+            let guard = state.lock();
+            let mut work = WorkResource::new(
+                guard.workspace.id.clone(),
+                WorkSpec::new(
+                    WorkPackageId::generate_with("work"),
+                    "verify controller identity ownership",
+                    morn_profile::DomainProfile::lite_v1().canonical_ref(),
+                ),
+            );
+            guard.store.save_work_resource_cas(&mut work).unwrap();
+            work.id.to_string()
+        };
+
+        for result in [
+            v115_work_reconcile(
+                State(state.clone()),
+                Json(json!({
+                    "work_id": work_id,
+                    "controller_holder": "caller-controlled-holder"
+                })),
+            )
+            .await,
+            v115_work_reconcile_business_evidence(
+                State(state.clone()),
+                Json(json!({
+                    "work_id": work_id,
+                    "controller_holder": "caller-controlled-holder"
+                })),
+            )
+            .await,
+        ] {
+            assert_eq!(
+                result.unwrap_err().into_response().status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn readiness_reconcile_cannot_escape_executor_outcome_reconciliation() {
         use morn_control_plane::ControlPlaneStore;
         use morn_work::control::{WorkPhase, WorkResource, WorkSpec};
