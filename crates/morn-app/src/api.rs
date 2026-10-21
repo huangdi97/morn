@@ -4438,7 +4438,7 @@ async fn v115_capability_release(
         .iter()
         .find(|evidence| {
             evidence
-                .validate_subject_digest(content_digest, true, true)
+                .validate_for_oci_subject(package_ref, content_digest, true, true)
                 .is_ok()
         })
         .cloned();
