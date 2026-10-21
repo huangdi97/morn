@@ -759,6 +759,47 @@ mod tests {
     }
 
     #[test]
+    fn durable_recovery_rejects_equal_time_conflicting_resolution_decisions() {
+        let store = MornStore::open_in_memory().unwrap();
+        let profile = DomainProfile::lite_v1();
+        let spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "reject ambiguous durable resolution truth",
+            profile.canonical_ref(),
+        );
+        let mut work = WorkResource::new(WorkspaceId::generate(), spec);
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let first = fixture_resolution_decision(&work);
+        let second = fixture_resolution_decision(&work);
+        store.save_capability_resolution(&work, &first).unwrap();
+        store.save_capability_resolution(&work, &second).unwrap();
+
+        let observed_at = Timestamp::from_millis(100);
+        let mut first_evidence = crate::capability_resolution_evidence(&work, &first).unwrap();
+        first_evidence.observed_at = observed_at;
+        let mut second_evidence = crate::capability_resolution_evidence(&work, &second).unwrap();
+        second_evidence.observed_at = observed_at;
+        store
+            .save_condition_evidence(&work, &first_evidence)
+            .unwrap();
+        store
+            .save_condition_evidence(&work, &second_evidence)
+            .unwrap();
+
+        let runtime = DurableWorkControllerRuntime::new("node-ambiguous-resolution");
+        let tick = runtime
+            .reconcile_from_evidence(
+                &store,
+                work.id.as_str(),
+                &profile,
+                Timestamp::from_millis(101),
+            )
+            .unwrap();
+        assert_eq!(tick.next_phase, WorkPhase::Blocked);
+    }
+
+    #[test]
     fn durable_recovery_rejects_orphaned_resolution_witness() {
         let store = MornStore::open_in_memory().unwrap();
         let profile = DomainProfile::lite_v1();
