@@ -900,7 +900,7 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
         }
     }
     if profile.requires("Provenance") {
-        match provenance_condition_evidence(&work, &selected) {
+        match provenance_condition_evidence(&work, &decision, &selected) {
             Ok(evidence) => additional.push(evidence),
             Err(error) => blockers.push(error.to_string()),
         }
