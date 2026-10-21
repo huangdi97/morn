@@ -4614,6 +4614,93 @@ async fn v115_capability_admit(
     })))
 }
 
+fn invalidate_capability_qualification_readiness(
+    store: &morn_store::store::MornStore,
+    workspace_id: &morn_kernel::ids::WorkspaceId,
+    revoked_release_ref: &str,
+    affected_admission_refs: &[String],
+    now: morn_kernel::time::Timestamp,
+) -> morn_kernel::Result<Vec<String>> {
+    use morn_control_plane::{ConditionEvidence, ControlPlaneStore, DurableWorkControllerRuntime};
+    use morn_work::control::WorkResource;
+
+    if affected_admission_refs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let affected = affected_admission_refs
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::HashSet<_>>();
+    let evidence: Vec<ConditionEvidence> =
+        store.load_records_in_workspace("condition_evidence_v115", workspace_id.as_str())?;
+    let works: Vec<WorkResource> =
+        store.load_records_in_workspace("work_resource_v115", workspace_id.as_str())?;
+    let mut invalidated = Vec::new();
+
+    for work in works {
+        if !work_phase_allows_requirement_resolution(work.status.phase) {
+            continue;
+        }
+        let latest = evidence
+            .iter()
+            .filter(|item| {
+                item.condition_type == "CapabilityQualified" && item.active_for(&work, now)
+            })
+            .max_by_key(|item| {
+                (
+                    item.observed_at.millis(),
+                    !(item.satisfied && !item.evidence_refs.is_empty()),
+                )
+            });
+        let Some(latest) = latest else {
+            continue;
+        };
+        if !latest.satisfied {
+            continue;
+        }
+        let mut revoked_refs = latest
+            .evidence_refs
+            .iter()
+            .filter(|reference| affected.contains(reference.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        if revoked_refs.is_empty() {
+            continue;
+        }
+
+        revoked_refs.push(revoked_release_ref.to_string());
+        revoked_refs.sort();
+        revoked_refs.dedup();
+        let denial = ConditionEvidence::new(
+            &work,
+            "CapabilityQualified",
+            false,
+            "controller://capability-release-revocation",
+            revoked_refs,
+        )?;
+        store.save_condition_evidence(&work, &denial)?;
+
+        let profile = morn_profile::DomainProfile::from_ref(&work.spec.profile_ref).ok_or_else(|| {
+            Error::validation(format!(
+                "unsupported Work profile {} while invalidating revoked capability readiness",
+                work.spec.profile_ref
+            ))
+        })?;
+        DurableWorkControllerRuntime::new("api-v115-capability-release-revocation")
+            .reconcile_from_evidence(
+                store,
+                work.id.as_str(),
+                &profile,
+                morn_kernel::time::Timestamp::now(),
+            )?;
+        invalidated.push(work.id.to_string());
+    }
+
+    invalidated.sort();
+    invalidated.dedup();
+    Ok(invalidated)
+}
+
 async fn v115_capability_revoke_release(
     State(state): State<AppState>,
     Json(body): Json<Value>,
@@ -4639,20 +4726,38 @@ async fn v115_capability_revoke_release(
                 "CapabilityManifest {manifest_id}"
             )))
         })?;
+    let release_id = CapabilityDistributionReleaseId::new(release_id);
+    let affected_admission_refs = guard
+        .v115_admission
+        .admissions
+        .iter()
+        .filter(|admission| {
+            admission.release_id == release_id
+                && admission.status == morn_assurance::SiteAdmissionStatus::Admitted
+        })
+        .map(|admission| admission.id.to_string())
+        .collect::<Vec<_>>();
     {
         let inner = &mut *guard;
         let capability = &mut inner.v115_capabilities[index];
-        inner.v115_admission.revoke_release(
-            capability,
-            &CapabilityDistributionReleaseId::new(release_id),
-        )?;
+        inner
+            .v115_admission
+            .revoke_release(capability, &release_id)?;
     }
     guard.persist_all()?;
+    let readiness_invalidated_work_refs = invalidate_capability_qualification_readiness(
+        &guard.store,
+        &guard.workspace.id,
+        release_id.as_str(),
+        &affected_admission_refs,
+        morn_kernel::time::Timestamp::now(),
+    )?;
     Ok(Json(json!({
         "revoked": true,
         "release_id": release_id,
         "stage": guard.v115_capabilities[index].stage,
-        "admission_refs": guard.v115_capabilities[index].admission_refs
+        "admission_refs": guard.v115_capabilities[index].admission_refs,
+        "readiness_invalidated_work_refs": readiness_invalidated_work_refs
     })))
 }
 
