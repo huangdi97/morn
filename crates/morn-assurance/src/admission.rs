@@ -1432,12 +1432,14 @@ mod tests {
             now,
         ));
 
-        let stored = service
+        let release_index = service
             .releases
-            .iter_mut()
-            .find(|candidate| candidate.id == release.id)
+            .iter()
+            .position(|candidate| candidate.id == release.id)
             .unwrap();
-        let original = stored.supply_chain_verification.take();
+        let original = service.releases[release_index]
+            .supply_chain_verification
+            .take();
         assert!(!service.site_profile_admission_active_at(
             &capability,
             "plant-a",
@@ -1445,18 +1447,21 @@ mod tests {
             now,
         ));
 
-        stored.supply_chain_verification = original;
-        let verification = stored.supply_chain_verification.as_mut().unwrap();
-        verification.evidence_refs.retain(|reference| {
-            !reference.starts_with("morn-supply-chain://oci-subject?value=")
-        });
-        verification.evidence_refs.push(
-            morn_package::supply_chain_subject_ref(&format!(
+        service.releases[release_index].supply_chain_verification = original;
+        {
+            let stored = &mut service.releases[release_index];
+            let foreign_ref = format!(
                 "oci://fixture/foreign/capability@{}",
                 stored.content_digest
-            ))
-            .unwrap(),
-        );
+            );
+            let verification = stored.supply_chain_verification.as_mut().unwrap();
+            verification.evidence_refs.retain(|reference| {
+                !reference.starts_with("morn-supply-chain://oci-subject?value=")
+            });
+            verification
+                .evidence_refs
+                .push(morn_package::supply_chain_subject_ref(&foreign_ref).unwrap());
+        }
         assert!(!service.site_profile_admission_active_at(
             &capability,
             "plant-a",
