@@ -1511,6 +1511,41 @@ impl AppInner {
         Ok(())
     }
 }
+#[cfg(test)]
+mod controller_holder_tests {
+    use super::AppState;
+
+    #[test]
+    fn controller_holders_are_stable_per_app_and_unique_across_app_instances() {
+        let first = AppState::new(":memory:").unwrap();
+        let second = AppState::new(":memory:").unwrap();
+
+        let (first_work, first_business) = {
+            let guard = first.lock();
+            (
+                guard.work_controller_holder.clone(),
+                guard.business_evidence_controller_holder.clone(),
+            )
+        };
+        let (second_work, second_business) = {
+            let guard = second.lock();
+            (
+                guard.work_controller_holder.clone(),
+                guard.business_evidence_controller_holder.clone(),
+            )
+        };
+
+        assert!(first_work.starts_with("morn-app-api:"));
+        assert!(first_business.starts_with("morn-app-business-evidence-recovery:"));
+        assert_ne!(first_work, second_work);
+        assert_ne!(first_business, second_business);
+
+        let guard = first.lock();
+        assert_eq!(guard.work_controller_holder, first_work);
+        assert_eq!(guard.business_evidence_controller_holder, first_business);
+    }
+}
+
 /// Persist an immutable record, treating "already exists" as idempotent no-op.
 fn persist_immutable<T: serde::Serialize>(
     store: &morn_store::store::MornStore,
