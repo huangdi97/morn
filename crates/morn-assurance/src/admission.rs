@@ -914,12 +914,13 @@ mod tests {
         qualification: &QualificationRecord,
     ) -> CapabilityDistributionRelease {
         let digest = format!("sha256:{}", "a".repeat(64));
+        let package_ref = format!("oci://fixture/morn/capability@{digest}");
         service
             .record_verified_release(
                 capability,
                 qualification,
                 VerifiedReleaseRequest::new(
-                    format!("oci://fixture/morn/capability@{digest}"),
+                    package_ref.clone(),
                     digest.clone(),
                     "sigstore://fixture/signature",
                     "slsa://fixture/provenance",
@@ -928,7 +929,10 @@ mod tests {
                         verifier_ref: "fixture://supply-chain-verifier".to_string(),
                         signature_verified: true,
                         provenance_verified: true,
-                        evidence_refs: vec!["fixture://supply-chain-proof".to_string()],
+                        evidence_refs: vec![
+                            morn_package::supply_chain_subject_ref(&package_ref).unwrap(),
+                            "fixture://supply-chain-proof".to_string(),
+                        ],
                     },
                 ),
             )
