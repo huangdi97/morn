@@ -80,9 +80,8 @@ pub fn derive_durable_controller_inputs(
         .iter()
         .cloned()
         .map(|mut item| {
-            if !capability_readiness_evidence_has_durable_resolution_backing(
-                work, &item, decisions,
-            ) {
+            if !capability_readiness_evidence_has_durable_resolution_backing(work, &item, decisions)
+            {
                 // Preserve immutable history, but never project orphaned or
                 // cross-decision capability readiness as current truth.
                 item.satisfied = false;
@@ -102,9 +101,7 @@ pub fn current_durable_resolution_contains_capability(
 ) -> bool {
     let resolved = evidence
         .iter()
-        .filter(|item| {
-            item.condition_type == "CapabilityResolved" && item.active_for(work, now)
-        })
+        .filter(|item| item.condition_type == "CapabilityResolved" && item.active_for(work, now))
         .max_by_key(|item| {
             (
                 item.observed_at.millis(),
@@ -114,9 +111,7 @@ pub fn current_durable_resolution_contains_capability(
     let Some(resolved) = resolved else {
         return false;
     };
-    if !capability_readiness_evidence_has_durable_resolution_backing(
-        work, resolved, decisions,
-    ) {
+    if !capability_readiness_evidence_has_durable_resolution_backing(work, resolved, decisions) {
         return false;
     }
     let Some(witness_ref) = active_resolution_decision_ref(Some(resolved)) else {
@@ -244,10 +239,7 @@ impl DurableWorkControllerRuntime {
             let evidence: Vec<ConditionEvidence> = store
                 .load_records_in_workspace("condition_evidence_v115", work.workspace_id.as_str())?;
             Some(derive_durable_controller_inputs(
-                &work,
-                &evidence,
-                &decisions,
-                now,
+                &work, &evidence, &decisions, now,
             ))
         } else {
             None
