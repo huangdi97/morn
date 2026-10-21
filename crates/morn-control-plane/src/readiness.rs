@@ -315,6 +315,7 @@ mod tests {
             EffectClass::E0LifecycleReversible,
         ));
 
+        let qualification_expires_at = Timestamp::from_millis(200);
         let qualification = QualificationRecord {
             id: QualificationRecordId::generate_with("qual"),
             manifest_id: first.manifest.id.clone(),
@@ -331,8 +332,8 @@ mod tests {
             },
             context_of_use: vec![],
             status: QualificationStatus::Qualified,
-            valid_until: None,
-            created_at: Timestamp::now(),
+            valid_until: Some(qualification_expires_at),
+            created_at: Timestamp::from_millis(1),
         };
         let digest = format!("sha256:{}", "a".repeat(64));
         let package_ref = format!("oci://fixture/morn/first@{digest}");
@@ -367,8 +368,20 @@ mod tests {
             conformance_ref: "conformance://first".to_string(),
             approved_by: "owner".to_string(),
             status: SiteAdmissionStatus::Admitted,
-            created_at: Timestamp::now(),
+            created_at: Timestamp::from_millis(1),
         };
+        let stale_admission = SiteAdmission {
+            id: SiteAdmissionId::generate_with("admit-stale"),
+            status: SiteAdmissionStatus::Suspended,
+            ..admission.clone()
+        };
+        first
+            .admission_refs
+            .push(morn_capability::CapabilityAdmissionRef {
+                admission_ref: stale_admission.id.to_string(),
+                site_ref: "plant-a".to_string(),
+                profile_ref: work.spec.profile_ref.clone(),
+            });
         first
             .admission_refs
             .push(morn_capability::CapabilityAdmissionRef {
@@ -379,18 +392,39 @@ mod tests {
         let mut service = AdmissionService::default();
         service.qualifications.push(qualification);
         service.releases.push(release);
-        service.admissions.push(admission);
+        service.admissions.push(stale_admission.clone());
+        service.admissions.push(admission.clone());
 
+        let observed_at = Timestamp::from_millis(100);
         assert!(workcell_qualification_evidence(
             &work,
             &[first.clone(), second],
             &service,
-            Timestamp::now()
+            observed_at
         )
         .is_err());
-        let evidence =
-            workcell_qualification_evidence(&work, &[first], &service, Timestamp::now()).unwrap();
+        let mut evidence =
+            workcell_qualification_evidence(&work, &[first], &service, observed_at).unwrap();
         assert_eq!(evidence.condition_type, "CapabilityQualified");
+        assert_eq!(evidence.valid_until, Some(qualification_expires_at));
+        assert!(evidence.evidence_refs.contains(&admission.id.to_string()));
+        assert!(!evidence
+            .evidence_refs
+            .contains(&stale_admission.id.to_string()));
+
+        evidence.observed_at = observed_at;
+        assert!(derive_controller_inputs(
+            &work,
+            &[evidence.clone()],
+            Timestamp::from_millis(150)
+        )
+        .capability_qualified);
+        assert!(!derive_controller_inputs(
+            &work,
+            &[evidence],
+            Timestamp::from_millis(201)
+        )
+        .capability_qualified);
     }
 
     #[test]
