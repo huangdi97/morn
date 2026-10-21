@@ -95,11 +95,16 @@ fn condition_is_satisfied(item: Option<&ConditionEvidence>) -> bool {
 }
 
 fn active_resolution_decision_ref(item: Option<&ConditionEvidence>) -> Option<&str> {
-    item?
+    let item = item?;
+    let mut refs = item
         .evidence_refs
         .iter()
-        .find(|reference| reference.starts_with("capability-resolution-decision://"))
-        .map(String::as_str)
+        .filter(|reference| reference.starts_with("capability-resolution-decision://"));
+    let first = refs.next()?;
+    if refs.next().is_some() || first.trim() == "capability-resolution-decision://" {
+        return None;
+    }
+    Some(first.as_str())
 }
 
 pub fn derive_controller_inputs(
@@ -215,7 +220,10 @@ mod tests {
             "CapabilityResolved",
             true,
             "resolver://fixture",
-            vec!["capability://fixture".to_string()],
+            vec![
+                "capability://fixture".to_string(),
+                "capability-resolution-decision://fixture".to_string(),
+            ],
         )
         .unwrap();
         positive.observed_at = Timestamp::from_millis(200);
@@ -262,6 +270,32 @@ mod tests {
                 .capability_resolved
         );
         assert!(!derive_controller_inputs(&work, &[denial, positive], now).capability_resolved);
+    }
+
+    #[test]
+    fn capability_resolution_with_ambiguous_decision_witness_is_fail_closed() {
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "review",
+                "morn.lite@1.0.0",
+            ),
+        );
+        let evidence = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            true,
+            "resolver://fixture",
+            vec![
+                "capability-resolution-decision://decision-a".to_string(),
+                "capability-resolution-decision://decision-b".to_string(),
+            ],
+        )
+        .unwrap();
+
+        let inputs = derive_controller_inputs(&work, &[evidence], Timestamp::now());
+        assert!(!inputs.capability_resolved);
     }
 
     #[test]
