@@ -415,18 +415,14 @@ mod tests {
             .contains(&stale_admission.id.to_string()));
 
         evidence.observed_at = observed_at;
-        assert!(derive_controller_inputs(
-            &work,
-            &[evidence.clone()],
-            Timestamp::from_millis(150)
-        )
-        .capability_qualified);
-        assert!(!derive_controller_inputs(
-            &work,
-            &[evidence],
-            Timestamp::from_millis(201)
-        )
-        .capability_qualified);
+        assert!(
+            derive_controller_inputs(&work, &[evidence.clone()], Timestamp::from_millis(150))
+                .capability_qualified
+        );
+        assert!(
+            !derive_controller_inputs(&work, &[evidence], Timestamp::from_millis(201))
+                .capability_qualified
+        );
     }
 
     #[test]
@@ -462,18 +458,14 @@ mod tests {
             authority_condition_evidence(&work, &authority, Timestamp::from_millis(100)).unwrap();
         assert_eq!(evidence.valid_until, Some(expires_at));
         evidence.observed_at = Timestamp::from_millis(100);
-        assert!(derive_controller_inputs(
-            &work,
-            &[evidence.clone()],
-            Timestamp::from_millis(150)
-        )
-        .authority_satisfied);
-        assert!(!derive_controller_inputs(
-            &work,
-            &[evidence],
-            Timestamp::from_millis(201)
-        )
-        .authority_satisfied);
+        assert!(
+            derive_controller_inputs(&work, &[evidence.clone()], Timestamp::from_millis(150))
+                .authority_satisfied
+        );
+        assert!(
+            !derive_controller_inputs(&work, &[evidence], Timestamp::from_millis(201))
+                .authority_satisfied
+        );
     }
 
     #[test]
