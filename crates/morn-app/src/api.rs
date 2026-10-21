@@ -4745,7 +4745,11 @@ async fn v115_capability_revoke_release(
             .v115_admission
             .revoke_release(capability, &release_id)?;
     }
-    guard.persist_all()?;
+    // Fail closed before persisting the release revocation. If readiness
+    // invalidation fails part-way, affected Work is never left durably Ready
+    // against a release that has already been durably revoked. A later
+    // persist_all failure may over-block Work, which is the safer recovery
+    // direction and remains auditable through the denial evidence.
     let readiness_invalidated_work_refs = invalidate_capability_qualification_readiness(
         &guard.store,
         &guard.workspace.id,
@@ -4753,6 +4757,7 @@ async fn v115_capability_revoke_release(
         &affected_admission_refs,
         morn_kernel::time::Timestamp::now(),
     )?;
+    guard.persist_all()?;
     Ok(Json(json!({
         "revoked": true,
         "release_id": release_id,
