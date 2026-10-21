@@ -927,10 +927,14 @@ fn configured_supply_chain_verifications(
             &cosign_digest,
             &verifier_build_ref,
         )?;
+        let evidence_subject = evidence
+            .validate_bound_subject_ref()
+            .map_err(morn_kernel::error::Error::validation)?
+            .to_string();
         if let Some(existing) = merged.iter_mut().find(|current| {
             current
-                .subject_digest
-                .eq_ignore_ascii_case(&evidence.subject_digest)
+                .validate_bound_subject_ref()
+                .is_ok_and(|current_subject| current_subject == evidence_subject)
         }) {
             *existing = existing
                 .merge(&evidence)
