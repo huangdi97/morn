@@ -383,6 +383,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         )
         .unwrap();
     store.save_work_resource_cas(&mut work).unwrap();
+    store
+        .save_capability_resolution(&work, &resolution_decision)
+        .unwrap();
     for evidence in &readiness {
         store.save_condition_evidence(&work, evidence).unwrap();
     }
