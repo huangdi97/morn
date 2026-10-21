@@ -95,13 +95,18 @@ fn condition_is_satisfied(item: Option<&ConditionEvidence>) -> bool {
 }
 
 fn active_resolution_decision_ref(item: Option<&ConditionEvidence>) -> Option<&str> {
+    const PREFIX: &str = "capability-resolution-decision://";
     let item = item?;
     let mut refs = item
         .evidence_refs
         .iter()
-        .filter(|reference| reference.starts_with("capability-resolution-decision://"));
+        .filter(|reference| reference.starts_with(PREFIX));
     let first = refs.next()?;
-    if refs.next().is_some() || first.trim() == "capability-resolution-decision://" {
+    if refs.next().is_some() {
+        return None;
+    }
+    let payload = first.strip_prefix(PREFIX)?;
+    if payload.trim().is_empty() || payload.chars().any(char::is_control) {
         return None;
     }
     Some(first.as_str())
