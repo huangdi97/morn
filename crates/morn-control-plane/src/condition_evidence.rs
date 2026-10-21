@@ -112,14 +112,69 @@ pub(crate) fn active_resolution_decision_ref(item: Option<&ConditionEvidence>) -
     Some(first.as_str())
 }
 
+pub(crate) fn latest_capability_condition_evidence<'a>(
+    work: &WorkResource,
+    evidence: &'a [ConditionEvidence],
+    condition_type: &str,
+    now: Timestamp,
+) -> Option<&'a ConditionEvidence> {
+    let latest_at = evidence
+        .iter()
+        .filter(|item| item.condition_type == condition_type && item.active_for(work, now))
+        .map(|item| item.observed_at.millis())
+        .max()?;
+    let latest = evidence
+        .iter()
+        .filter(|item| {
+            item.condition_type == condition_type
+                && item.active_for(work, now)
+                && item.observed_at.millis() == latest_at
+        })
+        .collect::<Vec<_>>();
+
+    if let Some(blocking) = latest
+        .iter()
+        .copied()
+        .find(|item| !item.satisfied || item.evidence_refs.is_empty())
+    {
+        return Some(blocking);
+    }
+
+    let first = latest.first().copied()?;
+    let witness = active_resolution_decision_ref(Some(first))?;
+    if latest
+        .iter()
+        .skip(1)
+        .any(|item| active_resolution_decision_ref(Some(*item)) != Some(witness))
+    {
+        return None;
+    }
+    Some(first)
+}
+
 pub fn derive_controller_inputs(
     work: &WorkResource,
     evidence: &[ConditionEvidence],
     now: Timestamp,
 ) -> ControllerInputs {
-    let resolved = latest_condition_evidence(work, evidence, "CapabilityResolved", now);
-    let qualified = latest_condition_evidence(work, evidence, "CapabilityQualified", now);
-    let provenance = latest_condition_evidence(work, evidence, "ProvenanceReady", now);
+    let resolved = latest_capability_condition_evidence(
+        work,
+        evidence,
+        "CapabilityResolved",
+        now,
+    );
+    let qualified = latest_capability_condition_evidence(
+        work,
+        evidence,
+        "CapabilityQualified",
+        now,
+    );
+    let provenance = latest_capability_condition_evidence(
+        work,
+        evidence,
+        "ProvenanceReady",
+        now,
+    );
     let resolution_ref = active_resolution_decision_ref(resolved);
 
     let capability_resolved = condition_is_satisfied(resolved) && resolution_ref.is_some();
@@ -275,6 +330,47 @@ mod tests {
                 .capability_resolved
         );
         assert!(!derive_controller_inputs(&work, &[denial, positive], now).capability_resolved);
+    }
+
+    #[test]
+    fn equal_timestamp_conflicting_resolution_decisions_are_fail_closed_regardless_of_row_order() {
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "review",
+                "morn.lite@1.0.0",
+            ),
+        );
+        let mut first = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            true,
+            "resolver://fixture",
+            vec![
+                "capability://a".to_string(),
+                "capability-resolution-decision://decision-a".to_string(),
+            ],
+        )
+        .unwrap();
+        first.observed_at = Timestamp::from_millis(100);
+        let mut second = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            true,
+            "resolver://fixture",
+            vec![
+                "capability://b".to_string(),
+                "capability-resolution-decision://decision-b".to_string(),
+            ],
+        )
+        .unwrap();
+        second.observed_at = Timestamp::from_millis(100);
+        let now = Timestamp::from_millis(101);
+
+        assert!(!derive_controller_inputs(&work, &[first.clone(), second.clone()], now)
+            .capability_resolved);
+        assert!(!derive_controller_inputs(&work, &[second, first], now).capability_resolved);
     }
 
     #[test]
