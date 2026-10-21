@@ -16,8 +16,9 @@ use morn_kernel::time::Timestamp;
 use morn_kernel::version::Version;
 pub use morn_kernel::version::Version as PackVersion;
 pub use supply_chain::{
-    supply_chain_verification_context_ref, validate_supply_chain_verifier_build_ref, ArtifactLayer,
-    CapabilityArtifactDescriptor, SupplyChainVerificationEvidence,
+    supply_chain_subject_ref, supply_chain_verification_context_ref,
+    validate_supply_chain_verifier_build_ref, ArtifactLayer, CapabilityArtifactDescriptor,
+    SupplyChainVerificationEvidence,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
