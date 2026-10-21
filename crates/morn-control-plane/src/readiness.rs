@@ -118,44 +118,64 @@ pub fn workcell_qualification_evidence(
         .as_deref()
         .ok_or_else(|| Error::validation("qualified governed Work requires site_ref"))?;
     let mut refs = Vec::new();
+    let mut workcell_valid_until: Option<Timestamp> = None;
     for capability in capabilities {
-        if !admissions.site_profile_admission_active_at(
+        let active_admissions = admissions.active_site_profile_admissions_at(
             capability,
             site,
             &work.spec.profile_ref,
             now,
-        ) {
+        );
+        let Some((selected_admission, selected_qualification)) = active_admissions
+            .into_iter()
+            .filter_map(|admission| {
+                admissions
+                    .qualifications
+                    .iter()
+                    .find(|qualification| qualification.id == admission.qualification_id)
+                    .map(|qualification| (admission, qualification))
+            })
+            .max_by_key(|(admission, qualification)| {
+                (
+                    qualification.valid_until.is_none(),
+                    qualification
+                        .valid_until
+                        .map(|until| until.millis())
+                        .unwrap_or(i64::MAX),
+                    admission.id.to_string(),
+                )
+            })
+        else {
             return Err(Error::invalid_state(format!(
                 "capability {} lacks active qualification/release/admission for site {} profile {}",
                 capability.manifest.id, site, work.spec.profile_ref
             )));
-        }
-        let admissions_for_member = capability
-            .admission_refs
-            .iter()
-            .filter(|reference| {
-                reference.site_ref == site && reference.profile_ref == work.spec.profile_ref
-            })
-            .map(|reference| reference.admission_ref.clone())
-            .collect::<Vec<_>>();
-        if admissions_for_member.is_empty() {
-            return Err(Error::invalid_state(format!(
-                "capability {} has no exact site/profile admission reference",
-                capability.manifest.id
-            )));
-        }
+        };
+
         refs.push(capability.manifest.id.to_string());
-        refs.extend(admissions_for_member);
+        refs.push(selected_admission.id.to_string());
+        workcell_valid_until = match (workcell_valid_until, selected_qualification.valid_until) {
+            (Some(current), Some(candidate)) => Some(if current <= candidate {
+                current
+            } else {
+                candidate
+            }),
+            (None, Some(candidate)) => Some(candidate),
+            (Some(current), None) => Some(current),
+            (None, None) => None,
+        };
     }
     refs.sort();
     refs.dedup();
-    ConditionEvidence::new(
+    let mut evidence = ConditionEvidence::new(
         work,
         "CapabilityQualified",
         true,
         "controller://workcell-admission",
         refs,
-    )
+    )?;
+    evidence.valid_until = workcell_valid_until;
+    Ok(evidence)
 }
 
 pub fn authority_condition_evidence(
