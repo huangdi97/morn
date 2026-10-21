@@ -719,8 +719,7 @@ fn resolution_candidate_catalog(
     if !require_active_admission {
         return Ok(capabilities.to_vec());
     }
-    let site_ref =
-        site_ref.ok_or_else(|| Error::validation("governed Work requires site_ref"))?;
+    let site_ref = site_ref.ok_or_else(|| Error::validation("governed Work requires site_ref"))?;
     Ok(capabilities
         .iter()
         .filter(|capability| {
@@ -6565,7 +6564,11 @@ mod workspace_boundary_tests {
         valid.manifest.economics.estimated_cost_micros = Some(100);
         let mut admissions = AdmissionService::default();
         admissions
-            .observe(&mut valid, vec!["eval:observation".to_string()], "evaluator")
+            .observe(
+                &mut valid,
+                vec!["eval:observation".to_string()],
+                "evaluator",
+            )
             .unwrap();
         let qualification = admissions
             .qualify_with_evidence(
@@ -6632,7 +6635,9 @@ mod workspace_boundary_tests {
         stale.manifest.economics.estimated_cost_micros = Some(1);
         stale.stage = CapabilityStage::Admitted;
         stale.admitted_sites.push("plant-a".to_string());
-        stale.qualification_refs.push("qualification:stale".to_string());
+        stale
+            .qualification_refs
+            .push("qualification:stale".to_string());
         stale.admission_refs.push(CapabilityAdmissionRef {
             admission_ref: "admission:stale".to_string(),
             site_ref: "plant-a".to_string(),
