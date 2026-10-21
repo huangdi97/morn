@@ -291,11 +291,36 @@ pub fn source_of_truth_condition_evidence(
 /// the separate ExecutionManifest path after Work becomes Ready.
 pub fn provenance_condition_evidence(
     work: &WorkResource,
+    decision: &CapabilityResolutionDecision,
     capabilities: &[CapabilityRecord],
 ) -> Result<ConditionEvidence> {
+    if !decision.matches_work(work) {
+        return Err(Error::validation(
+            "ProvenanceReady requires the current Work generation/solution resolution decision",
+        ));
+    }
     if capabilities.is_empty() {
         return Err(Error::validation(
             "ProvenanceReady requires at least one selected capability",
+        ));
+    }
+    let mut resolved_ids = decision
+        .plan
+        .members
+        .iter()
+        .map(|member| member.capability.manifest_id.to_string())
+        .collect::<Vec<_>>();
+    resolved_ids.sort();
+    resolved_ids.dedup();
+    let mut supplied_ids = capabilities
+        .iter()
+        .map(|capability| capability.manifest.id.to_string())
+        .collect::<Vec<_>>();
+    supplied_ids.sort();
+    supplied_ids.dedup();
+    if supplied_ids != resolved_ids || supplied_ids.len() != capabilities.len() {
+        return Err(Error::validation(
+            "ProvenanceReady capability set must exactly match the current resolution decision",
         ));
     }
     let mut refs = Vec::new();
@@ -318,9 +343,12 @@ pub fn provenance_condition_evidence(
         refs.push(capability.manifest.provenance.source_ref.clone());
         refs.push(source_digest.to_string());
     }
+    refs.push(decision.id.to_string());
     if let Some(solution) = &work.spec.source_solution_ref {
         refs.push(solution.clone());
     }
+    refs.sort();
+    refs.dedup();
     ConditionEvidence::new(
         work,
         "ProvenanceReady",
@@ -880,8 +908,36 @@ mod tests {
         manifest.provenance.source_ref = "repo://reader".to_string();
         manifest.provenance.source_digest = Some("sha256:fixture".to_string());
         let capability = CapabilityRecord::new(manifest);
-        let evidence = provenance_condition_evidence(&work, &[capability]).unwrap();
+        let plan = WorkcellPlan {
+            members: vec![WorkcellMember {
+                capability: ResolvedCapability {
+                    manifest_id: capability.manifest.id.clone(),
+                    provider_ref: capability.manifest.provider_ref.clone(),
+                    kind: capability.manifest.kind,
+                    estimated_cost_micros: None,
+                    maximum_effect: capability.manifest.authority.maximum_effect,
+                    compensation_ref: capability.manifest.compensation_ref.clone(),
+                    idempotency_key_required: capability.manifest.idempotency_key_required,
+                    required_execution_class: capability.manifest.execution.minimum_isolation,
+                    required_execution_guarantees: capability
+                        .manifest
+                        .execution
+                        .required_guarantees
+                        .clone(),
+                    score: 1,
+                    rationale: vec![],
+                },
+                covers: vec!["x".to_string()],
+            }],
+            uncovered: vec![],
+            total_estimated_cost_micros: 0,
+            rationale: vec![],
+        };
+        let decision = CapabilityResolutionDecision::new(&work, plan).unwrap();
+        let evidence =
+            provenance_condition_evidence(&work, &decision, &[capability]).unwrap();
         assert_eq!(evidence.condition_type, "ProvenanceReady");
+        assert!(evidence.evidence_refs.contains(&decision.id.to_string()));
         assert!(evidence
             .evidence_refs
             .iter()
