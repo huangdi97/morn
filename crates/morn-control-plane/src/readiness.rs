@@ -545,12 +545,8 @@ mod tests {
             .capability_qualified
         );
         assert!(
-            !derive_controller_inputs(
-                &work,
-                &[resolution, evidence],
-                Timestamp::from_millis(201),
-            )
-            .capability_qualified
+            !derive_controller_inputs(&work, &[resolution, evidence], Timestamp::from_millis(201),)
+                .capability_qualified
         );
     }
 
