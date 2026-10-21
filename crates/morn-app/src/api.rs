@@ -803,21 +803,6 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
                 work.spec.profile_ref
             )))
         })?;
-    require_current_durable_binding_readiness(
-        &guard.store,
-        &work,
-        &profile,
-        capability.manifest.id.as_str(),
-        now,
-    )?;
-    require_current_durable_binding_readiness(
-        &guard.store,
-        &work,
-        &profile,
-        capability.manifest.id.as_str(),
-        now,
-    )?;
-
     let mut unavailable_providers = Vec::new();
     {
         let dsh = guard
@@ -1851,6 +1836,13 @@ async fn v115_work_bind_attested_e0(
                 work.spec.profile_ref
             )))
         })?;
+    require_current_durable_binding_readiness(
+        &guard.store,
+        &work,
+        &profile,
+        capability.manifest.id.as_str(),
+        now,
+    )?;
     if profile.requires("CapabilityQualification") {
         let site = work
             .spec
@@ -2220,6 +2212,13 @@ async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value
                 work.spec.profile_ref
             )))
         })?;
+    require_current_durable_binding_readiness(
+        &guard.store,
+        &work,
+        &profile,
+        capability.manifest.id.as_str(),
+        now,
+    )?;
     if profile.requires("CapabilityQualification") {
         let site = work
             .spec
