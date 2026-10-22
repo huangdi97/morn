@@ -1356,6 +1356,7 @@ impl ControlPlaneStore for MornStore {
         if !binding.matches_work_generation(work)
             || binding.profile_ref != permit.profile_ref
             || binding.site_ref != permit.site_ref
+            || binding.resolution_decision_ref != permit.resolution_decision_ref
         {
             return Err(Error::validation(
                 "external-action permit binding is stale or belongs to another Work scope",
@@ -1809,6 +1810,7 @@ impl ControlPlaneStore for MornStore {
             if permit.work_ref != work.id.to_string()
                 || permit.work_generation != work.generation
                 || permit.binding_ref != binding.id.to_string()
+                || permit.resolution_decision_ref != binding.resolution_decision_ref
                 || permit.action != attempt.action
                 || Some(permit.resource.as_str()) != attempt.resource_ref.as_deref()
                 || permit.site_ref != attempt.site_ref
