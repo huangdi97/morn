@@ -738,9 +738,10 @@ mod tests {
         store.save_work_resource_cas(&mut work).unwrap();
 
         let decision = fixture_resolution_decision(&work);
-        store.save_capability_resolution(&work, &decision).unwrap();
         let evidence = crate::capability_resolution_evidence(&work, &decision).unwrap();
-        store.save_condition_evidence(&work, &evidence).unwrap();
+        store
+            .save_capability_resolution_with_evidence(&work, &decision, &evidence)
+            .unwrap();
 
         let runtime = DurableWorkControllerRuntime::new("node-evidence");
         let ready = runtime
@@ -833,12 +834,19 @@ mod tests {
         first_evidence.observed_at = observed_at;
         let mut second_evidence = crate::capability_resolution_evidence(&work, &second).unwrap();
         second_evidence.observed_at = observed_at;
-        store
-            .save_condition_evidence(&work, &first_evidence)
-            .unwrap();
-        store
-            .save_condition_evidence(&work, &second_evidence)
-            .unwrap();
+        // Simulate legacy/corrupt pre-atomic durable truth. New semantic
+        // writes cannot create two positive CapabilityResolved witnesses this way.
+        for evidence in [&first_evidence, &second_evidence] {
+            store
+                .save_record_immutable(
+                    "condition_evidence_v115",
+                    evidence.id.as_str(),
+                    work.workspace_id.as_str(),
+                    evidence.observed_at.millis(),
+                    evidence,
+                )
+                .unwrap();
+        }
 
         let runtime = DurableWorkControllerRuntime::new("node-ambiguous-resolution");
         let tick = runtime
@@ -876,7 +884,18 @@ mod tests {
             ],
         )
         .unwrap();
-        store.save_condition_evidence(&work, &evidence).unwrap();
+        // Deliberately inject a legacy/corrupt orphan below the semantic
+        // Store API. The current API rejects positive CapabilityResolved
+        // evidence unless its decision is committed atomically.
+        store
+            .save_record_immutable(
+                "condition_evidence_v115",
+                evidence.id.as_str(),
+                work.workspace_id.as_str(),
+                evidence.observed_at.millis(),
+                &evidence,
+            )
+            .unwrap();
 
         let runtime = DurableWorkControllerRuntime::new("node-orphan-resolution");
         let tick = runtime
