@@ -3043,6 +3043,62 @@ mod control_plane_persistence_scope_tests {
     }
 
     #[test]
+    fn atomic_resolution_truth_rolls_back_decision_when_witness_conflicts() {
+        use morn_capability::{
+            CapabilityKind, EffectClass, ResolvedCapability, WorkcellMember, WorkcellPlan,
+        };
+        use morn_kernel::ExecutionClass;
+
+        let store = MornStore::open_in_memory().unwrap();
+        let mut work = fixture_work();
+        work.spec.source_solution_ref = Some("solution://fixture@1.0.0".to_string());
+        store.save_work_resource_cas(&mut work).unwrap();
+
+        let decision = CapabilityResolutionDecision::new(
+            &work,
+            WorkcellPlan {
+                members: vec![WorkcellMember {
+                    capability: ResolvedCapability {
+                        manifest_id: morn_capability::CapabilityManifestId::generate_with(
+                            "manifest",
+                        ),
+                        provider_ref: "morn-native".to_string(),
+                        kind: CapabilityKind::Program,
+                        estimated_cost_micros: None,
+                        maximum_effect: EffectClass::E0LifecycleReversible,
+                        compensation_ref: None,
+                        idempotency_key_required: false,
+                        required_execution_class: ExecutionClass::NoIsolation,
+                        required_execution_guarantees: vec![],
+                        score: 1,
+                        rationale: vec![],
+                    },
+                    covers: vec!["draft".to_string()],
+                }],
+                uncovered: vec![],
+                total_estimated_cost_micros: 0,
+                rationale: vec!["atomic fixture".to_string()],
+            },
+        )
+        .unwrap();
+        let evidence = capability_resolution_evidence(&work, &decision).unwrap();
+
+        // Pre-existing witness forces the second immutable insert to conflict.
+        // The resolution decision inserted earlier in the transaction must roll back.
+        store.save_condition_evidence(&work, &evidence).unwrap();
+        assert!(store
+            .save_capability_resolution_with_evidence(&work, &decision, &evidence)
+            .is_err());
+        assert!(store
+            .load_record::<CapabilityResolutionDecision>(
+                "capability_resolution_v115",
+                decision.id.as_str(),
+            )
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
     fn persisted_binding_and_manifest_cannot_cross_work_generation_or_profile() {
         let store = MornStore::open_in_memory().unwrap();
         let work = fixture_work();
