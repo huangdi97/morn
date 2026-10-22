@@ -757,6 +757,40 @@ fn require_canonical_work_workspace(store: &MornStore, work: &WorkResource) -> R
     Ok(())
 }
 
+fn require_current_resolution_for_binding(
+    store: &MornStore,
+    work: &WorkResource,
+    binding: &ExecutionBinding,
+    now: Timestamp,
+) -> Result<String> {
+    let evidence: Vec<ConditionEvidence> = store.load_records_in_workspace(
+        "condition_evidence_v115",
+        work.workspace_id.as_str(),
+    )?;
+    let decisions: Vec<CapabilityResolutionDecision> = store.load_records_in_workspace(
+        "capability_resolution_v115",
+        work.workspace_id.as_str(),
+    )?;
+    let current = current_durable_resolution_decision_ref_for_capability(
+        work,
+        &evidence,
+        &decisions,
+        &binding.capability_manifest_ref,
+        now,
+    )
+    .ok_or_else(|| {
+        Error::invalid_state(
+            "binding has no unique positive current durable capability-resolution epoch",
+        )
+    })?;
+    if binding.resolution_decision_ref.as_deref() != Some(current.as_str()) {
+        return Err(Error::conflict(
+            "binding resolution epoch is superseded by current durable capability resolution",
+        ));
+    }
+    Ok(current)
+}
+
 fn source_ref_within_authority(binding_root: &str, observed_ref: &str) -> bool {
     let root = binding_root.trim_end_matches('/');
     observed_ref == root
@@ -1330,6 +1364,21 @@ impl ControlPlaneStore for MornStore {
                 "external-action permit binding is stale or belongs to another Work scope",
             ));
         }
+        let permit_is_write_like = matches!(
+            permit.mode,
+            ExternalActionMode::SandboxWrite
+                | ExternalActionMode::ShadowWrite
+                | ExternalActionMode::ProductionWrite
+                | ExternalActionMode::PhysicalControl
+        );
+        if binding.resolution_decision_ref.is_some() || permit_is_write_like {
+            require_current_resolution_for_binding(
+                self,
+                work,
+                &binding,
+                morn_kernel::time::Timestamp::now(),
+            )?;
+        }
         let authority: BoundAuthorityDecision = self
             .load_record("authority_decision_v115", &permit.authority_decision_ref)?
             .ok_or_else(|| Error::not_found("external-action permit authority decision"))?;
@@ -1743,6 +1792,13 @@ impl ControlPlaneStore for MornStore {
             .record_revision(kind, attempt.id.as_str())?
             .unwrap_or(0);
         let previous: Option<ActionAttempt> = self.load_record(kind, attempt.id.as_str())?;
+
+        // Current resolution is an admission requirement for a *new* attempt.
+        // Once an attempt exists, later persistence is consequence accounting
+        // and must remain possible after re-resolution/revocation.
+        if previous.is_none() && (binding.resolution_decision_ref.is_some() || write_like) {
+            require_current_resolution_for_binding(self, work, &binding, now)?;
+        }
 
         if write_like && previous.is_none() && attempt.state != AttemptState::Authorized {
             return Err(Error::invalid_state(
