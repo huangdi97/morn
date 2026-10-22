@@ -2403,7 +2403,8 @@ fn validate_current_acp_lifecycle_binding(
         binding.capability_manifest_ref.as_str(),
         now,
     )?;
-    if binding.resolution_decision_ref.as_deref() != Some(current_resolution_decision_ref.as_str()) {
+    if binding.resolution_decision_ref.as_deref() != Some(current_resolution_decision_ref.as_str())
+    {
         return Err(AppError(Error::invalid_state(
             "ACP lifecycle binding belongs to a superseded capability resolution decision",
         )));
@@ -8100,8 +8101,7 @@ mod workspace_boundary_tests {
 
             let mut binding =
                 ExecutionBinding::for_work(&work, manifest_id, "deepseek-harness", "fixture");
-            binding.resolution_decision_ref =
-                Some(capability_resolution_decision_ref(&decision));
+            binding.resolution_decision_ref = Some(capability_resolution_decision_ref(&decision));
             binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
             guard.store.save_execution_binding(&work, &binding).unwrap();
             (work, binding)
