@@ -230,6 +230,17 @@ pub fn issue_external_action_permit(
             | ExternalActionMode::ProductionWrite
             | ExternalActionMode::PhysicalControl
     );
+    if write_like
+        && binding
+            .resolution_decision_ref
+            .as_deref()
+            .map(str::trim)
+            .is_none_or(str::is_empty)
+    {
+        return Err(Error::invalid_state(
+            "write-like external-action permit requires a resolution-epoch-pinned ExecutionBinding",
+        ));
+    }
     if write_like && !binding.autonomy_posture.permits_write_like() {
         return Err(Error::not_authorized(
             "Assist autonomy posture cannot issue write-like external-action permits",
@@ -461,6 +472,33 @@ mod tests {
     }
 
     #[test]
+    fn write_like_permit_requires_resolution_epoch_pinned_binding() {
+        let profile = DomainProfile::factory_readonly_v1();
+        let mut spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "epoch-less write fixture",
+            profile.canonical_ref(),
+        );
+        spec.site_ref = Some("plant-a".to_string());
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let mut binding =
+            ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        binding.effect_ceiling = Some(morn_capability::EffectClass::E2Compensatable);
+        binding.compensation_ref = Some("cmms.cancel".to_string());
+        let authority =
+            bound_authority(&work, &binding, "cmms.sandbox.write", "CMMS-fixture");
+
+        let error = issue_external_action_permit(
+            &profile,
+            ExternalActionMode::SandboxWrite,
+            &authority,
+            &binding,
+        )
+        .unwrap_err();
+        assert!(format!("{error}").contains("resolution-epoch-pinned"));
+    }
+
+    #[test]
     fn factory_fixture_can_exercise_sandbox_write_without_claiming_production_write() {
         let profile = DomainProfile::factory_readonly_v1();
         let decision = evaluate_profile_action(&profile, ExternalActionMode::SandboxWrite);
@@ -486,6 +524,8 @@ mod tests {
         spec.site_ref = Some("plant-a".to_string());
         let mut work = WorkResource::new(WorkspaceId::generate(), spec);
         let mut binding = ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        binding.resolution_decision_ref =
+            Some("capability-resolution-decision://fixture".to_string());
         binding.effect_ceiling = Some(morn_capability::EffectClass::E2Compensatable);
         binding.compensation_ref = Some("cmms.cancel".to_string());
         let authority = bound_authority(&work, &binding, "cmms.sandbox.write", "CMMS-fixture");
@@ -578,7 +618,9 @@ mod tests {
         );
         spec.site_ref = Some("plant-a".to_string());
         let work = WorkResource::new(WorkspaceId::generate(), spec);
-        let binding = ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        let mut binding = ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        binding.resolution_decision_ref =
+            Some("capability-resolution-decision://fixture".to_string());
         let authority = bound_authority(&work, &binding, "cmms.sandbox.write", "CMMS-fixture");
 
         assert!(issue_external_action_permit(
