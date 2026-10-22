@@ -2816,6 +2816,97 @@ mod v115_revision_tests {
     }
 
     #[test]
+    fn stale_record_watermark_blocks_cas_without_mutating_projection() {
+        let store = MornStore::open_in_memory().unwrap();
+        store
+            .save_record_cas(
+                "attempt",
+                "a-watermark",
+                "ws-1",
+                10,
+                0,
+                &json!({"state":"authorized"}),
+            )
+            .unwrap();
+        let watermark = store
+            .record_kind_watermark("condition_evidence_v115", "ws-1")
+            .unwrap();
+        store
+            .save_record_immutable(
+                "condition_evidence_v115",
+                "e-new",
+                "ws-1",
+                11,
+                &json!({"condition_type":"CapabilityResolved","satisfied":false}),
+            )
+            .unwrap();
+
+        assert!(store
+            .save_record_cas_with_watermarks(
+                MutableRecordCommit {
+                    kind: "attempt",
+                    id: "a-watermark",
+                    workspace_id: "ws-1",
+                    created_at: 10,
+                    expected_revision: 1,
+                    record: &json!({"state":"dispatched"}),
+                },
+                &[watermark],
+            )
+            .is_err());
+        assert_eq!(store.record_revision("attempt", "a-watermark").unwrap(), Some(1));
+        let attempt: serde_json::Value =
+            store.load_record("attempt", "a-watermark").unwrap().unwrap();
+        assert_eq!(attempt["state"], "authorized");
+    }
+
+    #[test]
+    fn stale_record_watermark_rolls_back_cas_and_companion_immutable_fact() {
+        let store = MornStore::open_in_memory().unwrap();
+        let watermark = store
+            .record_kind_watermark("capability_resolution_v115", "ws-1")
+            .unwrap();
+        store
+            .save_record_immutable(
+                "capability_resolution_v115",
+                "resolution-new",
+                "ws-1",
+                11,
+                &json!({"epoch":"new"}),
+            )
+            .unwrap();
+
+        assert!(store
+            .save_record_cas_with_immutable_and_watermarks(
+                MutableRecordCommit {
+                    kind: "attempt",
+                    id: "a-new",
+                    workspace_id: "ws-1",
+                    created_at: 12,
+                    expected_revision: 0,
+                    record: &json!({"state":"authorized"}),
+                },
+                ImmutableRecordCommit {
+                    kind: "permit_consumed",
+                    id: "p-new",
+                    workspace_id: "ws-1",
+                    created_at: 12,
+                    record: &json!({"attempt":"a-new"}),
+                },
+                &[watermark],
+            )
+            .is_err());
+        assert!(store
+            .load_record::<serde_json::Value>("attempt", "a-new")
+            .unwrap()
+            .is_none());
+        assert!(store
+            .load_record::<serde_json::Value>("permit_consumed", "p-new")
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
     fn atomic_projection_and_outbox_commit_share_one_transaction() {
         use morn_kernel::{EventEnvelope, EventSemanticClass, EventSemanticDescriptor};
 
