@@ -66,7 +66,9 @@ use morn_runtime::{
     BoundAuthorityDecision, DurableWorkflowBinding, DurableWorkflowEvidence, ExecutionBinding,
     ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
 };
-use morn_store::{ImmutableRecordCommit, MornStore, MutableRecordCommit};
+use morn_store::{
+    ImmutableRecordCommit, MornStore, MutableRecordCommit, RecordKindWatermark,
+};
 use morn_work::acceptance::{
     AcceptanceReviewAuthorization, AcceptanceReviewerAttestation,
     ConsumedAcceptanceReviewAuthorization,
@@ -756,6 +758,19 @@ fn require_canonical_work_workspace(store: &MornStore, work: &WorkResource) -> R
         ));
     }
     Ok(())
+}
+
+fn capture_resolution_admission_watermarks(
+    store: &MornStore,
+    work: &WorkResource,
+) -> Result<Vec<RecordKindWatermark>> {
+    Ok(vec![
+        store.record_kind_watermark(
+            "capability_resolution_v115",
+            work.workspace_id.as_str(),
+        )?,
+        store.record_kind_watermark("condition_evidence_v115", work.workspace_id.as_str())?,
+    ])
 }
 
 fn require_current_resolution_for_binding(
@@ -1796,20 +1811,22 @@ impl ControlPlaneStore for MornStore {
 
         // Current resolution is required both when an attempt first enters
         // durable admission and again at the irreversible boundary where an
-        // Authorized attempt becomes Dispatched. Authorized is still
-        // pre-dispatch/local state; after Dispatched, later persistence is
-        // consequence accounting and must remain possible after re-resolution
-        // or revocation so real-world effects are never stranded.
-        let entering_dispatch = previous
-            .as_ref()
-            .is_some_and(|prior| {
-                prior.state == AttemptState::Authorized && attempt.state == AttemptState::Dispatched
-            });
-        if (previous.is_none() || entering_dispatch)
-            && (binding.resolution_decision_ref.is_some() || write_like)
-        {
+        // Authorized attempt becomes Dispatched. Capture the append-only
+        // resolution/evidence stream watermarks *before* deriving currentness;
+        // the final CAS transaction rechecks them so a concurrent same-generation
+        // re-resolution cannot land between preflight and commit.
+        let entering_dispatch = previous.as_ref().is_some_and(|prior| {
+            prior.state == AttemptState::Authorized && attempt.state == AttemptState::Dispatched
+        });
+        let requires_resolution_admission = (previous.is_none() || entering_dispatch)
+            && (binding.resolution_decision_ref.is_some() || write_like);
+        let resolution_watermarks = if requires_resolution_admission {
+            let watermarks = capture_resolution_admission_watermarks(self, work)?;
             require_current_resolution_for_binding(self, work, &binding, now)?;
-        }
+            watermarks
+        } else {
+            Vec::new()
+        };
 
         if write_like && previous.is_none() && attempt.state != AttemptState::Authorized {
             return Err(Error::invalid_state(
@@ -1939,24 +1956,31 @@ impl ControlPlaneStore for MornStore {
         // consumption are one crash-consistent commit. A conflict on either
         // side rolls back both rows.
         if let Some(consumed) = pending_permit_consumption {
-            self.save_record_cas_with_immutable(
-                MutableRecordCommit {
-                    kind,
-                    id: attempt.id.as_str(),
-                    workspace_id: work.workspace_id.as_str(),
-                    created_at: attempt.created_at.millis(),
-                    expected_revision: expected,
-                    record: attempt,
-                },
-                ImmutableRecordCommit {
-                    kind: "external_action_permit_consumed_v115",
-                    id: consumed.permit_id.as_str(),
-                    workspace_id: work.workspace_id.as_str(),
-                    created_at: consumed.consumed_at.millis(),
-                    record: &consumed,
-                },
-            )?;
-        } else {
+            let mutable = MutableRecordCommit {
+                kind,
+                id: attempt.id.as_str(),
+                workspace_id: work.workspace_id.as_str(),
+                created_at: attempt.created_at.millis(),
+                expected_revision: expected,
+                record: attempt,
+            };
+            let immutable = ImmutableRecordCommit {
+                kind: "external_action_permit_consumed_v115",
+                id: consumed.permit_id.as_str(),
+                workspace_id: work.workspace_id.as_str(),
+                created_at: consumed.consumed_at.millis(),
+                record: &consumed,
+            };
+            if resolution_watermarks.is_empty() {
+                self.save_record_cas_with_immutable(mutable, immutable)?;
+            } else {
+                self.save_record_cas_with_immutable_and_watermarks(
+                    mutable,
+                    immutable,
+                    &resolution_watermarks,
+                )?;
+            }
+        } else if resolution_watermarks.is_empty() {
             // CAS rejects a concurrent update after our revision snapshot.
             self.save_record_cas(
                 kind,
@@ -1965,6 +1989,18 @@ impl ControlPlaneStore for MornStore {
                 attempt.created_at.millis(),
                 expected,
                 attempt,
+            )?;
+        } else {
+            self.save_record_cas_with_watermarks(
+                MutableRecordCommit {
+                    kind,
+                    id: attempt.id.as_str(),
+                    workspace_id: work.workspace_id.as_str(),
+                    created_at: attempt.created_at.millis(),
+                    expected_revision: expected,
+                    record: attempt,
+                },
+                &resolution_watermarks,
             )?;
         }
         Ok(())
