@@ -8,4 +8,5 @@ pub mod store;
 pub use morn_kernel::error::Error as StoreError;
 pub use store::{
     ControllerLease, ImmutableRecordCommit, MornStore, MutableRecordCommit, OutboxEvent,
+    RecordKindWatermark,
 };
