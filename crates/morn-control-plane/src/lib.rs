@@ -66,9 +66,7 @@ use morn_runtime::{
     BoundAuthorityDecision, DurableWorkflowBinding, DurableWorkflowEvidence, ExecutionBinding,
     ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
 };
-use morn_store::{
-    ImmutableRecordCommit, MornStore, MutableRecordCommit, RecordKindWatermark,
-};
+use morn_store::{ImmutableRecordCommit, MornStore, MutableRecordCommit, RecordKindWatermark};
 use morn_work::acceptance::{
     AcceptanceReviewAuthorization, AcceptanceReviewerAttestation,
     ConsumedAcceptanceReviewAuthorization,
@@ -765,10 +763,7 @@ fn capture_resolution_admission_watermarks(
     work: &WorkResource,
 ) -> Result<Vec<RecordKindWatermark>> {
     Ok(vec![
-        store.record_kind_watermark(
-            "capability_resolution_v115",
-            work.workspace_id.as_str(),
-        )?,
+        store.record_kind_watermark("capability_resolution_v115", work.workspace_id.as_str())?,
         store.record_kind_watermark("condition_evidence_v115", work.workspace_id.as_str())?,
     ])
 }
