@@ -42,6 +42,11 @@ pub struct ExecutionManifest {
     pub site_ref: Option<String>,
     pub source_solution_ref: Option<String>,
     pub execution_binding_ref: String,
+    /// Exact capability-resolution epoch inherited from the immutable binding.
+    /// Work generation alone does not identify the selected composition because
+    /// the same generation may be re-resolved before later execution.
+    #[serde(default)]
+    pub resolution_decision_ref: Option<String>,
     pub capability_manifest_ref: String,
     pub provider_ref: String,
     pub provider_version: String,
@@ -107,6 +112,7 @@ impl ExecutionManifest {
             site_ref: work.spec.site_ref.clone(),
             source_solution_ref: work.spec.source_solution_ref.clone(),
             execution_binding_ref: binding.id.to_string(),
+            resolution_decision_ref: binding.resolution_decision_ref.clone(),
             capability_manifest_ref: binding.capability_manifest_ref.clone(),
             provider_ref: binding.provider_ref.clone(),
             provider_version: binding.provider_version.clone(),
@@ -142,6 +148,7 @@ impl ExecutionManifest {
             && !self.composition_runtime.id.trim().is_empty()
             && !self.composition_runtime.version.trim().is_empty()
             && self.execution_binding_ref == binding.id.to_string()
+            && self.resolution_decision_ref == binding.resolution_decision_ref
             && self.capability_manifest_ref == binding.capability_manifest_ref
             && self.provider_ref == binding.provider_ref
             && self.provider_version == binding.provider_version
@@ -169,6 +176,8 @@ mod tests {
             ExecutionBinding::for_work(&work, "cmanifest:1", "deepseek-harness", "0.2.0-rc.2");
         binding.provider_digest = Some(format!("sha256:{}", "a".repeat(64)));
         binding.runtime_ref = Some("runtime://dsh/session-1".to_string());
+        binding.resolution_decision_ref =
+            Some("capability-resolution-decision://epoch-1".to_string());
         binding.authority_decision_ref = Some("authz:1".to_string());
 
         let manifest = ExecutionManifest::from_binding(
@@ -183,6 +192,10 @@ mod tests {
             .protocol_invariants
             .contains(&"work-truth-independent-of-executor".to_string()));
         assert_eq!(manifest.profile_ref, "morn.factory.readonly@1.0.0");
+        assert_eq!(
+            manifest.resolution_decision_ref.as_deref(),
+            Some("capability-resolution-decision://epoch-1")
+        );
         assert_eq!(manifest.provider_ref, "deepseek-harness");
         assert_eq!(manifest.composition_runtime.id, "cordis-reference");
         assert!(manifest.validates_against(&work, &binding));
@@ -227,6 +240,11 @@ mod tests {
 
         let mut forged = manifest.clone();
         forged.runtime_ref = Some("runtime://unrelated-session".to_string());
+        assert!(!forged.validates_against(&work, &binding));
+
+        let mut forged = manifest.clone();
+        forged.resolution_decision_ref =
+            Some("capability-resolution-decision://other-epoch".to_string());
         assert!(!forged.validates_against(&work, &binding));
 
         let mut forged = manifest.clone();
