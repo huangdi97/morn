@@ -6876,9 +6876,10 @@ mod workspace_boundary_tests {
                 },
             )
             .unwrap();
-            store.save_capability_resolution(&work, &decision).unwrap();
             let resolution = capability_resolution_evidence(&work, &decision).unwrap();
-            store.save_condition_evidence(&work, &resolution).unwrap();
+            store
+                .save_capability_resolution_with_evidence(&work, &decision, &resolution)
+                .unwrap();
 
             let decision_ref = format!("capability-resolution-decision://{}", decision.id);
             let decision_id = decision.id.to_string();
@@ -7368,14 +7369,10 @@ mod workspace_boundary_tests {
                 },
             )
             .unwrap();
-            guard
-                .store
-                .save_capability_resolution(&work, &decision)
-                .unwrap();
             let evidence = capability_resolution_evidence(&work, &decision).unwrap();
             guard
                 .store
-                .save_condition_evidence(&work, &evidence)
+                .save_capability_resolution_with_evidence(&work, &decision, &evidence)
                 .unwrap();
             work.status.phase = WorkPhase::Ready;
             work.set_condition(morn_work::control::WorkCondition {
@@ -7630,7 +7627,20 @@ mod workspace_boundary_tests {
                 ],
             )
             .unwrap();
-            guard.store.save_condition_evidence(&work, &orphan).unwrap();
+            // Deliberately bypass the domain-level ControlPlaneStore API to
+            // simulate a legacy/corrupt pre-invariant database. New code cannot
+            // create this orphan because positive CapabilityResolved evidence
+            // must be atomically committed with its immutable resolution.
+            guard
+                .store
+                .save_record_immutable(
+                    "condition_evidence_v115",
+                    orphan.id.as_str(),
+                    work.workspace_id.as_str(),
+                    orphan.observed_at.millis(),
+                    &orphan,
+                )
+                .unwrap();
 
             work.status.phase = WorkPhase::Ready;
             let mut condition = WorkCondition::new("CapabilityResolved", ConditionStatus::True);
@@ -8088,14 +8098,10 @@ mod workspace_boundary_tests {
                 },
             )
             .unwrap();
-            guard
-                .store
-                .save_capability_resolution(&work, &decision)
-                .unwrap();
             let evidence = capability_resolution_evidence(&work, &decision).unwrap();
             guard
                 .store
-                .save_condition_evidence(&work, &evidence)
+                .save_capability_resolution_with_evidence(&work, &decision, &evidence)
                 .unwrap();
 
             let mut binding =
@@ -8222,16 +8228,16 @@ mod workspace_boundary_tests {
                 },
             )
             .unwrap();
-            guard
-                .store
-                .save_capability_resolution(&work, &first_decision)
-                .unwrap();
             let mut first_evidence =
                 capability_resolution_evidence(&work, &first_decision).unwrap();
             first_evidence.observed_at = Timestamp::from_millis(100);
             guard
                 .store
-                .save_condition_evidence(&work, &first_evidence)
+                .save_capability_resolution_with_evidence(
+                    &work,
+                    &first_decision,
+                    &first_evidence,
+                )
                 .unwrap();
 
             let mut stale_binding = ExecutionBinding::for_work(
@@ -8261,16 +8267,16 @@ mod workspace_boundary_tests {
                 },
             )
             .unwrap();
-            guard
-                .store
-                .save_capability_resolution(&work, &second_decision)
-                .unwrap();
             let mut second_evidence =
                 capability_resolution_evidence(&work, &second_decision).unwrap();
             second_evidence.observed_at = Timestamp::from_millis(200);
             guard
                 .store
-                .save_condition_evidence(&work, &second_evidence)
+                .save_capability_resolution_with_evidence(
+                    &work,
+                    &second_decision,
+                    &second_evidence,
+                )
                 .unwrap();
             (work, stale_binding)
         };
