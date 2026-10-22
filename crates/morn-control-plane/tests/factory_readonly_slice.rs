@@ -358,7 +358,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         rationale: vec!["single capability closes investigation requirement".to_string()],
     };
     let resolution_decision = CapabilityResolutionDecision::new(&work, workcell_plan).unwrap();
-    let readiness = vec![
+    let readiness = [
         capability_resolution_evidence(&work, &resolution_decision).unwrap(),
         capability_qualification_evidence(
             &work,
