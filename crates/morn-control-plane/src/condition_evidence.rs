@@ -354,8 +354,10 @@ mod tests {
         second.observed_at = Timestamp::from_millis(100);
         let now = Timestamp::from_millis(101);
 
-        assert!(!derive_controller_inputs(&work, &[first.clone(), second.clone()], now)
-            .capability_resolved);
+        assert!(
+            !derive_controller_inputs(&work, &[first.clone(), second.clone()], now)
+                .capability_resolved
+        );
         assert!(!derive_controller_inputs(&work, &[second, first], now).capability_resolved);
     }
 
