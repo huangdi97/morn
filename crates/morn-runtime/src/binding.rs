@@ -30,6 +30,11 @@ pub enum BindingMigrationReason {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BindingMigrationRequest {
     pub capability_manifest_ref: String,
+    /// Exact capability-resolution decision that authorized this immutable
+    /// binding. Work generation alone is too coarse: the same generation may
+    /// be re-resolved before execution, invalidating an older composition.
+    #[serde(default)]
+    pub resolution_decision_ref: Option<String>,
     pub provider_ref: String,
     pub provider_version: String,
     pub reason: BindingMigrationReason,
@@ -50,6 +55,7 @@ impl BindingMigrationRequest {
     ) -> Self {
         Self {
             capability_manifest_ref: capability_manifest_ref.into(),
+            resolution_decision_ref: None,
             provider_ref: provider_ref.into(),
             provider_version: provider_version.into(),
             reason,
