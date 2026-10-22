@@ -102,7 +102,10 @@ pub fn current_durable_resolution_decision_ref_for_capability(
     now: Timestamp,
 ) -> Option<String> {
     let resolved = latest_capability_condition_evidence(work, evidence, "CapabilityResolved", now)?;
-    if !capability_readiness_evidence_has_durable_resolution_backing(work, resolved, decisions) {
+    if !resolved.satisfied
+        || resolved.evidence_refs.is_empty()
+        || !capability_readiness_evidence_has_durable_resolution_backing(work, resolved, decisions)
+    {
         return None;
     }
     let witness_ref = active_resolution_decision_ref(Some(resolved))?;
@@ -768,6 +771,46 @@ mod tests {
             )
             .unwrap();
         assert_eq!(blocked.next_phase, WorkPhase::Blocked);
+    }
+
+    #[test]
+    fn current_resolution_helper_never_promotes_a_newer_denial() {
+        let profile = DomainProfile::lite_v1();
+        let spec = WorkSpec::new(
+            WorkPackageId::generate_with("work"),
+            "deny superseded resolution",
+            profile.canonical_ref(),
+        );
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let decision = fixture_resolution_decision(&work);
+        let manifest_id = decision.plan.members[0].capability.manifest_id.to_string();
+
+        let mut positive = crate::capability_resolution_evidence(&work, &decision).unwrap();
+        positive.observed_at = Timestamp::from_millis(100);
+        let mut denial = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            false,
+            "resolver://fixture",
+            vec![
+                manifest_id.clone(),
+                decision.id.to_string(),
+                capability_resolution_decision_ref(&decision),
+            ],
+        )
+        .unwrap();
+        denial.observed_at = Timestamp::from_millis(200);
+
+        assert!(
+            current_durable_resolution_decision_ref_for_capability(
+                &work,
+                &[positive, denial],
+                &[decision],
+                &manifest_id,
+                Timestamp::from_millis(201),
+            )
+            .is_none()
+        );
     }
 
     #[test]
