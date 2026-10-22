@@ -1832,7 +1832,7 @@ async fn v115_work_bind_attested_e0(
                 work.spec.profile_ref
             )))
         })?;
-    require_current_durable_binding_readiness(
+    let resolution_decision_ref = require_current_durable_binding_readiness(
         &guard.store,
         &work,
         &profile,
@@ -2094,8 +2094,10 @@ async fn v115_work_bind_attested_e0(
         provider_ref,
         provider_version,
     );
+    binding.resolution_decision_ref = Some(resolution_decision_ref);
     binding.provider_digest = provider_digest;
     binding.runtime_ref = Some(runtime_ref);
+    binding.resolution_decision_ref = Some(resolution_decision_ref);
     binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
     binding.compensation_ref = capability.manifest.compensation_ref.clone();
     binding.idempotency_key_required = capability.manifest.idempotency_key_required;
@@ -2208,7 +2210,7 @@ async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value
                 work.spec.profile_ref
             )))
         })?;
-    require_current_durable_binding_readiness(
+    let resolution_decision_ref = require_current_durable_binding_readiness(
         &guard.store,
         &work,
         &profile,
@@ -2393,13 +2395,18 @@ fn validate_current_acp_lifecycle_binding(
             )))
         })?;
     let now = morn_kernel::time::Timestamp::now();
-    require_current_durable_binding_readiness(
+    let current_resolution_decision_ref = require_current_durable_binding_readiness(
         &guard.store,
         &work,
         &profile,
         binding.capability_manifest_ref.as_str(),
         now,
     )?;
+    if binding.resolution_decision_ref.as_deref() != Some(current_resolution_decision_ref.as_str()) {
+        return Err(AppError(Error::invalid_state(
+            "ACP lifecycle binding belongs to a superseded capability resolution decision",
+        )));
+    }
     if profile.requires("CapabilityQualification") {
         let site = work
             .spec
@@ -3184,13 +3191,20 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                 )))
             })?;
         let now = morn_kernel::time::Timestamp::now();
-        require_current_durable_binding_readiness(
+        let current_resolution_decision_ref = require_current_durable_binding_readiness(
             &guard.store,
             &work,
             &profile,
             binding.capability_manifest_ref.as_str(),
             now,
         )?;
+        if binding.resolution_decision_ref.as_deref()
+            != Some(current_resolution_decision_ref.as_str())
+        {
+            return Err(AppError(Error::invalid_state(
+                "ExecutionBinding belongs to a superseded capability resolution decision",
+            )));
+        }
         if profile.requires("CapabilityQualification") {
             let site =
                 work.spec.site_ref.as_deref().ok_or_else(|| {
