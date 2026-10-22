@@ -3868,6 +3868,16 @@ mod control_plane_persistence_scope_tests {
             &binding,
         )
         .unwrap();
+        assert_eq!(
+            permit.resolution_decision_ref,
+            binding.resolution_decision_ref
+        );
+        let mut forged_epoch = permit.clone();
+        forged_epoch.resolution_decision_ref =
+            Some("capability-resolution-decision://forged".to_string());
+        assert!(store
+            .save_external_action_permit(&work, &forged_epoch)
+            .is_err());
         store.save_external_action_permit(&work, &permit).unwrap();
 
         let mut first = begin_external_attempt_for_work_with_effect(
@@ -3898,6 +3908,10 @@ mod control_plane_persistence_scope_tests {
             .unwrap();
         assert_eq!(consumed.attempt_id, first.id);
         assert_eq!(consumed.business_key, "order:create:1");
+        assert_eq!(
+            consumed.resolution_decision_ref,
+            binding.resolution_decision_ref
+        );
 
         first.transition(AttemptState::Dispatched).unwrap();
         store.save_action_attempt(&work, &first).unwrap();
