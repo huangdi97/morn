@@ -62,6 +62,20 @@ pub struct ImmutableRecordCommit<'a, T: serde::Serialize> {
     pub record: &'a T,
 }
 
+/// Snapshot of the append-only record stream for one kind/workspace.
+///
+/// This is an operational concurrency fence, not business truth. Callers may
+/// derive semantic state from immutable records, capture the relevant
+/// watermarks before that derivation, and then require the same watermarks
+/// inside the final write transaction. Any concurrent append forces a retry
+/// rather than allowing a stale semantic snapshot to authorize a new effect.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordKindWatermark {
+    pub kind: String,
+    pub workspace_id: String,
+    pub max_seq: i64,
+}
+
 /// Lease fence checked in the same transaction as a durable projection commit.
 pub struct ControllerFence<'a> {
     pub lease_name: &'a str,
@@ -582,6 +596,61 @@ impl MornStore {
             .transpose()
     }
 
+    pub fn record_kind_watermark(
+        &self,
+        kind: &str,
+        workspace_id: &str,
+    ) -> Result<RecordKindWatermark> {
+        if kind.trim().is_empty() || workspace_id.trim().is_empty() {
+            return Err(Error::validation(
+                "record watermark requires non-empty kind and workspace identity",
+            ));
+        }
+        let max_seq = self
+            .conn
+            .query_row(
+                "SELECT COALESCE(MAX(seq), 0) FROM morn_records WHERE kind = ?1 AND workspace_id = ?2",
+                params![kind, workspace_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Ok(RecordKindWatermark {
+            kind: kind.to_string(),
+            workspace_id: workspace_id.to_string(),
+            max_seq,
+        })
+    }
+
+    fn require_record_watermarks_current(
+        tx: &rusqlite::Transaction<'_>,
+        watermarks: &[RecordKindWatermark],
+    ) -> Result<()> {
+        for watermark in watermarks {
+            if watermark.kind.trim().is_empty()
+                || watermark.workspace_id.trim().is_empty()
+                || watermark.max_seq < 0
+            {
+                return Err(Error::validation(
+                    "record watermark fence contains an invalid identity or sequence",
+                ));
+            }
+            let current = tx
+                .query_row(
+                    "SELECT COALESCE(MAX(seq), 0) FROM morn_records WHERE kind = ?1 AND workspace_id = ?2",
+                    params![watermark.kind, watermark.workspace_id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .map_err(|e| Error::internal(e.to_string()))?;
+            if current != watermark.max_seq {
+                return Err(Error::conflict(format!(
+                    "record stream {}/{} changed during semantic admission: expected watermark {}, current {}",
+                    watermark.kind, watermark.workspace_id, watermark.max_seq, current
+                )));
+            }
+        }
+        Ok(())
+    }
+
     /// Compare-and-swap save for mutable control-plane projections.
     ///
     /// expected_revision = 0 means "create only". Existing immutable records
@@ -652,6 +721,100 @@ impl MornStore {
         }
     }
 
+    /// CAS save guarded by append-only record-stream watermarks.
+    ///
+    /// The watermark checks and mutable write share one SQLite transaction.
+    /// If another connection appends evidence after the caller derived semantic
+    /// state, this call fails closed instead of committing against that stale
+    /// snapshot.
+    pub fn save_record_cas_with_watermarks<T: serde::Serialize>(
+        &self,
+        mutable: MutableRecordCommit<'_, T>,
+        watermarks: &[RecordKindWatermark],
+    ) -> Result<u64> {
+        let MutableRecordCommit {
+            kind,
+            id,
+            workspace_id,
+            created_at,
+            expected_revision,
+            record,
+        } = mutable;
+        let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
+        let expected_i64 = i64::try_from(expected_revision)
+            .map_err(|_| Error::validation("expected revision is too large"))?;
+
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Self::require_record_watermarks_current(&tx, watermarks)?;
+
+        let current: Option<i64> = tx
+            .query_row(
+                "SELECT revision FROM morn_records WHERE kind = ?1 AND id = ?2",
+                params![kind, id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        let next_revision = match current {
+            None => {
+                if expected_revision != 0 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} does not exist at expected revision {expected_revision}"
+                    )));
+                }
+                tx.execute(
+                    "INSERT INTO morn_records
+                     (kind, id, workspace_id, payload, created_at, immutable, revision)
+                     VALUES (?1, ?2, ?3, ?4, ?5, 0, 1)",
+                    params![kind, id, workspace_id, payload, created_at],
+                )
+                .map_err(|e| {
+                    if e.to_string().contains("UNIQUE") {
+                        Error::conflict(format!("record {kind}/{id} was created concurrently"))
+                    } else {
+                        Error::internal(e.to_string())
+                    }
+                })?;
+                1
+            }
+            Some(actual_i64) => {
+                let actual = u64::try_from(actual_i64)
+                    .map_err(|_| Error::internal("record revision must be non-negative"))?;
+                if actual != expected_revision {
+                    return Err(Error::conflict(format!(
+                        "stale record {kind}/{id}: expected revision {expected_revision}, actual {actual}"
+                    )));
+                }
+                let updated = tx
+                    .execute(
+                        "UPDATE morn_records
+                         SET payload = ?3,
+                             workspace_id = ?4,
+                             revision = revision + 1
+                         WHERE kind = ?1
+                           AND id = ?2
+                           AND immutable = 0
+                           AND revision = ?5",
+                        params![kind, id, payload, workspace_id, expected_i64],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if updated != 1 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} changed concurrently or is immutable"
+                    )));
+                }
+                actual + 1
+            }
+        };
+
+        tx.commit().map_err(|e| Error::internal(e.to_string()))?;
+        Ok(next_revision)
+    }
+
     /// Atomically persist one mutable CAS projection and one immutable fact.
     ///
     /// This is used when the immutable fact is the authorization/consumption
@@ -680,6 +843,126 @@ impl MornStore {
             .conn
             .unchecked_transaction()
             .map_err(|e| Error::internal(e.to_string()))?;
+
+        let current: Option<i64> = tx
+            .query_row(
+                "SELECT revision FROM morn_records WHERE kind = ?1 AND id = ?2",
+                params![kind, id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        let next_revision = match current {
+            None => {
+                if expected_revision != 0 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} does not exist at expected revision {expected_revision}"
+                    )));
+                }
+                tx.execute(
+                    "INSERT INTO morn_records
+                     (kind, id, workspace_id, payload, created_at, immutable, revision)
+                     VALUES (?1, ?2, ?3, ?4, ?5, 0, 1)",
+                    params![kind, id, workspace_id, payload, created_at],
+                )
+                .map_err(|e| {
+                    if e.to_string().contains("UNIQUE") {
+                        Error::conflict(format!("record {kind}/{id} was created concurrently"))
+                    } else {
+                        Error::internal(e.to_string())
+                    }
+                })?;
+                1
+            }
+            Some(actual_i64) => {
+                let actual = u64::try_from(actual_i64)
+                    .map_err(|_| Error::internal("record revision must be non-negative"))?;
+                if actual != expected_revision {
+                    return Err(Error::conflict(format!(
+                        "stale record {kind}/{id}: expected revision {expected_revision}, actual {actual}"
+                    )));
+                }
+                let updated = tx
+                    .execute(
+                        "UPDATE morn_records
+                         SET payload = ?3,
+                             workspace_id = ?4,
+                             revision = revision + 1
+                         WHERE kind = ?1
+                           AND id = ?2
+                           AND immutable = 0
+                           AND revision = ?5",
+                        params![kind, id, payload, workspace_id, expected_i64],
+                    )
+                    .map_err(|e| Error::internal(e.to_string()))?;
+                if updated != 1 {
+                    return Err(Error::conflict(format!(
+                        "record {kind}/{id} changed concurrently or is immutable"
+                    )));
+                }
+                actual + 1
+            }
+        };
+
+        tx.execute(
+            "INSERT INTO morn_records
+             (kind, id, workspace_id, payload, created_at, immutable, revision)
+             VALUES (?1, ?2, ?3, ?4, ?5, 1, 1)",
+            params![
+                immutable.kind,
+                immutable.id,
+                immutable.workspace_id,
+                immutable_payload,
+                immutable.created_at
+            ],
+        )
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                Error::conflict(format!(
+                    "immutable record {}/{} already exists",
+                    immutable.kind, immutable.id
+                ))
+            } else {
+                Error::internal(e.to_string())
+            }
+        })?;
+
+        tx.commit().map_err(|e| Error::internal(e.to_string()))?;
+        Ok(next_revision)
+    }
+
+    /// Atomically persist one mutable CAS projection and one immutable fact,
+    /// guarded by append-only record-stream watermarks captured before semantic
+    /// admission.
+    pub fn save_record_cas_with_immutable_and_watermarks<
+        T: serde::Serialize,
+        U: serde::Serialize,
+    >(
+        &self,
+        mutable: MutableRecordCommit<'_, T>,
+        immutable: ImmutableRecordCommit<'_, U>,
+        watermarks: &[RecordKindWatermark],
+    ) -> Result<u64> {
+        let MutableRecordCommit {
+            kind,
+            id,
+            workspace_id,
+            created_at,
+            expected_revision,
+            record,
+        } = mutable;
+        let payload = serde_json::to_string(record).map_err(|e| Error::internal(e.to_string()))?;
+        let immutable_payload =
+            serde_json::to_string(immutable.record).map_err(|e| Error::internal(e.to_string()))?;
+        let expected_i64 = i64::try_from(expected_revision)
+            .map_err(|_| Error::validation("expected revision is too large"))?;
+
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Self::require_record_watermarks_current(&tx, watermarks)?;
 
         let current: Option<i64> = tx
             .query_row(
