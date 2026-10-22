@@ -94,23 +94,18 @@ pub fn derive_durable_controller_inputs(
     derive_controller_inputs(work, &projection_evidence, now)
 }
 
-pub fn current_durable_resolution_contains_capability(
+pub fn current_durable_resolution_decision_ref_for_capability(
     work: &WorkResource,
     evidence: &[ConditionEvidence],
     decisions: &[CapabilityResolutionDecision],
     capability_manifest_id: &str,
     now: Timestamp,
-) -> bool {
-    let resolved = latest_capability_condition_evidence(work, evidence, "CapabilityResolved", now);
-    let Some(resolved) = resolved else {
-        return false;
-    };
+) -> Option<String> {
+    let resolved = latest_capability_condition_evidence(work, evidence, "CapabilityResolved", now)?;
     if !capability_readiness_evidence_has_durable_resolution_backing(work, resolved, decisions) {
-        return false;
+        return None;
     }
-    let Some(witness_ref) = active_resolution_decision_ref(Some(resolved)) else {
-        return false;
-    };
+    let witness_ref = active_resolution_decision_ref(Some(resolved))?;
 
     let mut matches = decisions.iter().filter(|decision| {
         decision.matches_work(work)
@@ -121,10 +116,28 @@ pub fn current_durable_resolution_contains_capability(
                 .iter()
                 .any(|member| member.capability.manifest_id.as_str() == capability_manifest_id)
     });
-    let Some(_) = matches.next() else {
-        return false;
-    };
-    matches.next().is_none()
+    matches.next()?;
+    if matches.next().is_some() {
+        return None;
+    }
+    Some(witness_ref.to_string())
+}
+
+pub fn current_durable_resolution_contains_capability(
+    work: &WorkResource,
+    evidence: &[ConditionEvidence],
+    decisions: &[CapabilityResolutionDecision],
+    capability_manifest_id: &str,
+    now: Timestamp,
+) -> bool {
+    current_durable_resolution_decision_ref_for_capability(
+        work,
+        evidence,
+        decisions,
+        capability_manifest_id,
+        now,
+    )
+    .is_some()
 }
 
 #[derive(Debug, Clone)]
