@@ -2912,6 +2912,57 @@ mod control_plane_persistence_scope_tests {
             .is_err());
     }
 
+    fn persist_resolution_for_manifest(
+        store: &MornStore,
+        work: &WorkResource,
+        manifest_id: morn_capability::CapabilityManifestId,
+        provider_ref: &str,
+        maximum_effect: morn_capability::EffectClass,
+    ) -> String {
+        use morn_capability::{
+            CapabilityKind, ResolvedCapability, WorkcellMember, WorkcellPlan,
+        };
+
+        let decision = CapabilityResolutionDecision::new(
+            work,
+            WorkcellPlan {
+                members: vec![WorkcellMember {
+                    capability: ResolvedCapability {
+                        manifest_id,
+                        provider_ref: provider_ref.to_string(),
+                        kind: CapabilityKind::Program,
+                        estimated_cost_micros: None,
+                        maximum_effect,
+                        compensation_ref: if maximum_effect
+                            == morn_capability::EffectClass::E2Compensatable
+                        {
+                            Some("cmms.cancel-order".to_string())
+                        } else {
+                            None
+                        },
+                        idempotency_key_required: maximum_effect
+                            != morn_capability::EffectClass::E0LifecycleReversible,
+                        required_execution_class: morn_kernel::ExecutionClass::NoIsolation,
+                        required_execution_guarantees: vec![],
+                        score: 1,
+                        rationale: vec!["persistence-test".to_string()],
+                    },
+                    covers: vec!["fixture-requirement".to_string()],
+                }],
+                uncovered: vec![],
+                total_estimated_cost_micros: 0,
+                rationale: vec!["persistence-test".to_string()],
+            },
+        )
+        .unwrap();
+        let evidence = capability_resolution_evidence(work, &decision).unwrap();
+        let decision_ref = capability_resolution_decision_ref(&decision);
+        store
+            .save_capability_resolution_with_evidence(work, &decision, &evidence)
+            .unwrap();
+        decision_ref
+    }
+
     fn attest_test_outcome(store: &MornStore, work: &WorkResource, outcome: &mut ObservedOutcome) {
         let binding = morn_integration::SourceOfTruthBinding {
             id: morn_integration::SourceOfTruthBindingId::generate_with("sot"),
@@ -3788,7 +3839,17 @@ mod control_plane_persistence_scope_tests {
         let work = fixture_work();
         store.save_work_resource(&work).unwrap();
 
-        let mut binding = ExecutionBinding::for_work(&work, "cap:write", "provider:a", "v1");
+        let manifest_id = morn_capability::CapabilityManifestId::generate_with("cap");
+        let resolution_ref = persist_resolution_for_manifest(
+            &store,
+            &work,
+            manifest_id.clone(),
+            "provider:a",
+            morn_capability::EffectClass::E2Compensatable,
+        );
+        let mut binding =
+            ExecutionBinding::for_work(&work, manifest_id.to_string(), "provider:a", "v1");
+        binding.resolution_decision_ref = Some(resolution_ref);
         binding.effect_ceiling = Some(morn_capability::EffectClass::E2Compensatable);
         binding.compensation_ref = Some("cmms.cancel-order".to_string());
         store.save_execution_binding(&work, &binding).unwrap();
@@ -3848,6 +3909,82 @@ mod control_plane_persistence_scope_tests {
 
         first.transition(AttemptState::Dispatched).unwrap();
         store.save_action_attempt(&work, &first).unwrap();
+    }
+
+    #[test]
+    fn issued_write_permit_cannot_start_a_new_attempt_after_same_generation_reresolution() {
+        use morn_kernel::policy::{Policy, PolicyRule};
+        use morn_runtime::{decide_bound, AuthorityRequest, NativePolicyAuthority};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+
+        let manifest_id = morn_capability::CapabilityManifestId::generate_with("cap");
+        let old_resolution_ref = persist_resolution_for_manifest(
+            &store,
+            &work,
+            manifest_id.clone(),
+            "provider:a",
+            morn_capability::EffectClass::E2Compensatable,
+        );
+        let mut binding =
+            ExecutionBinding::for_work(&work, manifest_id.to_string(), "provider:a", "v1");
+        binding.resolution_decision_ref = Some(old_resolution_ref);
+        binding.effect_ceiling = Some(morn_capability::EffectClass::E2Compensatable);
+        binding.compensation_ref = Some("cmms.cancel-order".to_string());
+        store.save_execution_binding(&work, &binding).unwrap();
+
+        let policy = Policy::new(
+            work.workspace_id.clone(),
+            "external-write",
+            vec![PolicyRule::allow("cmms.sandbox.write")],
+        );
+        let provider = NativePolicyAuthority::new(policy);
+        let mut request = AuthorityRequest::new("controller", "cmms.sandbox.write", "CMMS-fixture");
+        request.work_ref = Some(work.id.to_string());
+        request.work_generation = Some(work.generation);
+        request.site_ref = work.spec.site_ref.clone();
+        let authority = decide_bound(&provider, &request).unwrap();
+        store
+            .save_bound_authority_decision(&work, &authority)
+            .unwrap();
+        let permit = issue_external_action_permit(
+            &DomainProfile::factory_readonly_v1(),
+            ExternalActionMode::SandboxWrite,
+            &authority,
+            &binding,
+        )
+        .unwrap();
+        store.save_external_action_permit(&work, &permit).unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let new_resolution_ref = persist_resolution_for_manifest(
+            &store,
+            &work,
+            manifest_id,
+            "provider:a",
+            morn_capability::EffectClass::E2Compensatable,
+        );
+        assert_ne!(
+            binding.resolution_decision_ref.as_deref(),
+            Some(new_resolution_ref.as_str())
+        );
+
+        let attempt = begin_external_attempt_for_work_with_effect(
+            &work,
+            &permit,
+            &binding,
+            morn_capability::EffectContract::e2("cmms.cancel-order"),
+            "order:create:stale-resolution",
+            "cmms.sandbox.write",
+        )
+        .unwrap();
+        assert!(store.save_action_attempt(&work, &attempt).is_err());
+        assert!(store
+            .load_record::<ActionAttempt>("action_attempt_v115", attempt.id.as_str())
+            .unwrap()
+            .is_none());
     }
 
     #[test]
