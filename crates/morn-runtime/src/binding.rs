@@ -91,6 +91,13 @@ pub struct BindingMigrationDecision {
     pub work_id: WorkPackageId,
     pub from_binding: RuntimeBindingId,
     pub to_binding: RuntimeBindingId,
+    /// Resolution epochs are part of the migration identity. Keeping both sides
+    /// makes the immutable migration fact independently auditable instead of
+    /// requiring callers to infer epoch changes from mutable/current state.
+    #[serde(default)]
+    pub from_resolution_decision_ref: Option<String>,
+    #[serde(default)]
+    pub to_resolution_decision_ref: Option<String>,
     pub reason: BindingMigrationReason,
     pub requested_by: String,
     pub evidence_refs: Vec<String>,
@@ -288,6 +295,8 @@ impl ExecutionBinding {
             work_id: work.id.clone(),
             from_binding: self.id.clone(),
             to_binding: replacement.id.clone(),
+            from_resolution_decision_ref: self.resolution_decision_ref.clone(),
+            to_resolution_decision_ref: replacement.resolution_decision_ref.clone(),
             reason: request.reason,
             requested_by: request.requested_by,
             evidence_refs: request.evidence_refs,
@@ -414,6 +423,11 @@ mod tests {
         assert_eq!(next.profile_ref, "factory/v2");
         assert_eq!(decision.from_binding, old.id);
         assert_eq!(decision.to_binding, next.id);
+        assert_eq!(decision.from_resolution_decision_ref, None);
+        assert_eq!(
+            decision.to_resolution_decision_ref.as_deref(),
+            Some("capability-resolution-decision://profile-v2")
+        );
         assert_eq!(decision.from_provider, "dsh");
         assert_eq!(decision.to_provider, "pi");
         assert_eq!(decision.from_profile, "factory/v1");
