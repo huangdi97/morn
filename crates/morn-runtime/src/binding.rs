@@ -307,10 +307,11 @@ impl ExecutionBinding {
         replacement.provider_ref = provider_ref.into();
         replacement.provider_version = provider_version.into();
         replacement.provider_digest = None;
-        // Provider replacement invalidates every provider/runtime/environment
-        // identity and prior per-action authority decision. The capability and
-        // Work semantics may remain the same, but execution must be resolved
-        // again against the new provider.
+        // Provider replacement invalidates the resolution epoch as well as every
+        // provider/runtime/environment identity. A capability-resolution decision
+        // names the selected provider route; cloning that witness across provider
+        // migration would make a superseded composition look current.
+        replacement.resolution_decision_ref = None;
         replacement.runtime_ref = None;
         replacement.execution_environment_ref = None;
         replacement.execution_class = None;
@@ -406,6 +407,20 @@ mod tests {
         assert_eq!(decision.to_profile, "factory/v2");
         assert_eq!(decision.from_site_ref.as_deref(), Some("plant-a"));
         assert_eq!(decision.to_site_ref.as_deref(), Some("plant-a"));
+    }
+
+    #[test]
+    fn legacy_provider_migration_clears_resolution_epoch() {
+        let work_id = WorkPackageId::generate_with("wp");
+        let spec = WorkSpec::new(work_id, "investigate", "factory/v1");
+        let work = WorkResource::new(WorkspaceId::generate(), spec);
+        let mut old = ExecutionBinding::for_work(&work, "manifest:a", "dsh", "1");
+        old.resolution_decision_ref =
+            Some("capability-resolution-decision://decision-a".to_string());
+
+        let migrated = old.migrate_to_provider("pi", "2");
+        assert!(migrated.resolution_decision_ref.is_none());
+        assert_eq!(migrated.migration_from, Some(old.id));
     }
 
     #[test]
