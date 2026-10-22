@@ -16,7 +16,8 @@ pub mod provider_gate;
 pub mod readiness;
 
 pub use binding_guard::{
-    BindingOperationalGate, BindingValidityDecision, BindingValidityDecisionId,
+    BindingOperationalContext, BindingOperationalGate, BindingValidityDecision,
+    BindingValidityDecisionId,
 };
 pub use capability_gate::{
     CapabilityEligibilityBlock, CapabilityEligibilityGate, CapabilityEligibilityReport,
