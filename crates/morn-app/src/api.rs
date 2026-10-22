@@ -905,8 +905,9 @@ async fn v115_work_resolve(State(state): State<AppState>, Json(body): Json<Value
         }
     }
 
-    guard.store.save_capability_resolution(&work, &decision)?;
-    guard.store.save_condition_evidence(&work, &resolution)?;
+    guard
+        .store
+        .save_capability_resolution_with_evidence(&work, &decision, &resolution)?;
     for evidence in &additional {
         guard.store.save_condition_evidence(&work, evidence)?;
     }
