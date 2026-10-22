@@ -4004,6 +4004,98 @@ mod control_plane_persistence_scope_tests {
     }
 
     #[test]
+    fn authorized_attempt_must_revalidate_resolution_before_first_dispatch() {
+        use morn_kernel::policy::{Policy, PolicyRule};
+        use morn_runtime::{decide_bound, AuthorityRequest, NativePolicyAuthority};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+
+        let manifest_id = morn_capability::CapabilityManifestId::generate_with("cap");
+        let old_resolution_ref = persist_resolution_for_manifest(
+            &store,
+            &work,
+            manifest_id.clone(),
+            "provider:a",
+            morn_capability::EffectClass::E2Compensatable,
+        );
+        let mut binding =
+            ExecutionBinding::for_work(&work, manifest_id.to_string(), "provider:a", "v1");
+        binding.resolution_decision_ref = Some(old_resolution_ref);
+        binding.effect_ceiling = Some(morn_capability::EffectClass::E2Compensatable);
+        binding.compensation_ref = Some("cmms.cancel-order".to_string());
+        store.save_execution_binding(&work, &binding).unwrap();
+
+        let policy = Policy::new(
+            work.workspace_id.clone(),
+            "external-write",
+            vec![PolicyRule::allow("cmms.sandbox.write")],
+        );
+        let provider = NativePolicyAuthority::new(policy);
+        let mut request = AuthorityRequest::new("controller", "cmms.sandbox.write", "CMMS-fixture");
+        request.work_ref = Some(work.id.to_string());
+        request.work_generation = Some(work.generation);
+        request.site_ref = work.spec.site_ref.clone();
+        let authority = decide_bound(&provider, &request).unwrap();
+        store
+            .save_bound_authority_decision(&work, &authority)
+            .unwrap();
+        let permit = issue_external_action_permit(
+            &DomainProfile::factory_readonly_v1(),
+            ExternalActionMode::SandboxWrite,
+            &authority,
+            &binding,
+        )
+        .unwrap();
+        store.save_external_action_permit(&work, &permit).unwrap();
+
+        let attempt = begin_external_attempt_for_work_with_effect(
+            &work,
+            &permit,
+            &binding,
+            morn_capability::EffectContract::e2("cmms.cancel-order"),
+            "order:create:authorized-before-reresolution",
+            "cmms.sandbox.write",
+        )
+        .unwrap();
+        assert_eq!(attempt.state, AttemptState::Authorized);
+        store.save_action_attempt(&work, &attempt).unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let new_resolution_ref = persist_resolution_for_manifest(
+            &store,
+            &work,
+            manifest_id,
+            "provider:a",
+            morn_capability::EffectClass::E2Compensatable,
+        );
+        assert_ne!(
+            binding.resolution_decision_ref.as_deref(),
+            Some(new_resolution_ref.as_str())
+        );
+
+        let mut dispatched = attempt.clone();
+        dispatched.transition(AttemptState::Dispatched).unwrap();
+        assert!(store.save_action_attempt(&work, &dispatched).is_err());
+
+        let persisted: ActionAttempt = store
+            .load_record("action_attempt_v115", attempt.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.state, AttemptState::Authorized);
+
+        let mut cancelled = persisted;
+        cancelled.transition(AttemptState::Cancelled).unwrap();
+        store.save_action_attempt(&work, &cancelled).unwrap();
+        let persisted: ActionAttempt = store
+            .load_record("action_attempt_v115", attempt.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.state, AttemptState::Cancelled);
+    }
+
+    #[test]
     fn handcrafted_write_attempt_without_durable_permit_cannot_be_persisted() {
         let store = MornStore::open_in_memory().unwrap();
         let work = fixture_work();
