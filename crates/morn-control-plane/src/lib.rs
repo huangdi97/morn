@@ -1170,6 +1170,11 @@ impl ControlPlaneStore for MornStore {
                 "stored readiness evidence requires a condition, producer and positive witness",
             ));
         }
+        if evidence.condition_type == "CapabilityResolved" && evidence.satisfied {
+            return Err(Error::invalid_state(
+                "positive CapabilityResolved evidence must be committed atomically with its immutable resolution decision",
+            ));
+        }
         if evidence.work_ref != work.id.to_string() || evidence.work_generation != work.generation {
             return Err(Error::validation(
                 "condition evidence must match the exact Work generation",
