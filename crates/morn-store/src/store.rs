@@ -2854,9 +2854,14 @@ mod v115_revision_tests {
                 &[watermark],
             )
             .is_err());
-        assert_eq!(store.record_revision("attempt", "a-watermark").unwrap(), Some(1));
-        let attempt: serde_json::Value =
-            store.load_record("attempt", "a-watermark").unwrap().unwrap();
+        assert_eq!(
+            store.record_revision("attempt", "a-watermark").unwrap(),
+            Some(1)
+        );
+        let attempt: serde_json::Value = store
+            .load_record("attempt", "a-watermark")
+            .unwrap()
+            .unwrap();
         assert_eq!(attempt["state"], "authorized");
     }
 
