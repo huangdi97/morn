@@ -8026,7 +8026,8 @@ mod workspace_boundary_tests {
             ResolvedCapability, WorkcellMember, WorkcellPlan,
         };
         use morn_control_plane::{
-            capability_resolution_evidence, CapabilityResolutionDecision, ControlPlaneStore,
+            capability_resolution_decision_ref, capability_resolution_evidence,
+            CapabilityResolutionDecision, ControlPlaneStore,
         };
         use morn_kernel::ids::CapabilityId;
         use morn_kernel::ExecutionClass;
@@ -8098,6 +8099,8 @@ mod workspace_boundary_tests {
 
             let mut binding =
                 ExecutionBinding::for_work(&work, manifest_id, "deepseek-harness", "fixture");
+            binding.resolution_decision_ref =
+                Some(capability_resolution_decision_ref(&decision));
             binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
             guard.store.save_execution_binding(&work, &binding).unwrap();
             (work, binding)
