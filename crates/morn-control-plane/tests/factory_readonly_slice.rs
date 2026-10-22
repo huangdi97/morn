@@ -18,7 +18,7 @@ use morn_capability::{
 };
 use morn_control_plane::{
     begin_external_attempt_for_work_with_effect, capability_qualification_evidence,
-    capability_resolution_evidence, issue_external_action_permit,
+    capability_resolution_decision_ref, capability_resolution_evidence, issue_external_action_permit,
     issue_external_action_permit_for_work, provenance_condition_evidence,
     source_of_truth_condition_evidence, CapabilityEligibilityGate, CapabilityResolutionDecision,
     ControlPlaneStore, DurableBusinessEvidenceControllerRuntime, DurableWorkControllerRuntime,
@@ -556,8 +556,38 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         &cmms_gate.selectable,
     );
     assert_eq!(cmms_resolved.len(), 1);
+    // This write capability is a new same-generation composition decision, not
+    // an extension of the earlier read-only investigator resolution. Persist a
+    // fresh resolution epoch before creating a write-like binding so permit,
+    // attempt and dispatch fencing all name the exact decision that selected
+    // the CMMS capability.
+    let cmms_resolution_decision = CapabilityResolutionDecision::new(
+        &work,
+        WorkcellPlan {
+            members: vec![WorkcellMember {
+                capability: cmms_resolved[0].clone(),
+                covers: vec!["cmms.sandbox.create-order".to_string()],
+            }],
+            uncovered: vec![],
+            total_estimated_cost_micros: cmms_resolved[0].estimated_cost_micros.unwrap_or(0),
+            rationale: vec!["sandbox write connector resolution".to_string()],
+        },
+    )
+    .unwrap();
+    let cmms_resolution_evidence =
+        capability_resolution_evidence(&work, &cmms_resolution_decision).unwrap();
+    store
+        .save_capability_resolution_with_evidence(
+            &work,
+            &cmms_resolution_decision,
+            &cmms_resolution_evidence,
+        )
+        .unwrap();
+
     let mut cmms_binding =
         ExecutionBinding::for_resolved_capability(&work, &cmms_resolved[0], "fixture-v1");
+    cmms_binding.resolution_decision_ref =
+        Some(capability_resolution_decision_ref(&cmms_resolution_decision));
     cmms_binding.provider_digest = Some("sha256:cmms-fixture-provider".to_string());
     cmms_binding.runtime_ref = Some(environment.runtime_ref.clone());
     work.record_active_binding(cmms_binding.id.clone());
