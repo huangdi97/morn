@@ -23,7 +23,8 @@ pub use capability_gate::{
 };
 pub use condition_evidence::{derive_controller_inputs, ConditionEvidence, ConditionEvidenceId};
 pub use controller_runtime::{
-    current_durable_resolution_contains_capability, derive_durable_controller_inputs,
+    current_durable_resolution_contains_capability,
+    current_durable_resolution_decision_ref_for_capability, derive_durable_controller_inputs,
     ControllerTickResult, DurableBusinessEvidenceControllerRuntime, DurableWorkControllerRuntime,
 };
 pub use external_action::{
