@@ -111,6 +111,11 @@ pub struct ExecutionBinding {
     pub work_id: WorkPackageId,
     pub work_generation: u64,
     pub capability_manifest_ref: String,
+    /// Exact capability-resolution decision/epoch that authorized this
+    /// immutable binding. A Work generation may be re-resolved without a spec
+    /// change, so generation alone cannot prove that a binding is current.
+    #[serde(default)]
+    pub resolution_decision_ref: Option<String>,
     pub provider_ref: String,
     pub provider_version: String,
     pub provider_digest: Option<String>,
@@ -151,6 +156,7 @@ impl ExecutionBinding {
             work_id: work.id.clone(),
             work_generation: work.generation,
             capability_manifest_ref: capability_manifest_ref.into(),
+            resolution_decision_ref: None,
             provider_ref: provider_ref.into(),
             provider_version: provider_version.into(),
             provider_digest: None,
