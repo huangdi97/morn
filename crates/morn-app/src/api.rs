@@ -7310,7 +7310,8 @@ mod workspace_boundary_tests {
             ResolvedCapability, WorkcellMember, WorkcellPlan,
         };
         use morn_control_plane::{
-            capability_resolution_evidence, CapabilityResolutionDecision, ControlPlaneStore,
+            capability_resolution_decision_ref, capability_resolution_evidence,
+            CapabilityResolutionDecision, ControlPlaneStore,
         };
         use morn_kernel::ids::CapabilityId;
         use morn_kernel::ExecutionClass;
@@ -8188,17 +8189,7 @@ mod workspace_boundary_tests {
             ));
             first.manifest.provenance.source_ref = "repo://first-agent".to_string();
             first.stage = CapabilityStage::Qualified;
-            let mut second = CapabilityRecord::new(CapabilityManifest::new(
-                CapabilityId::generate_with("capability"),
-                "second-agent",
-                "deepseek-harness",
-                CapabilityKind::Agent,
-                EffectClass::E0LifecycleReversible,
-            ));
-            second.manifest.provenance.source_ref = "repo://second-agent".to_string();
-            second.stage = CapabilityStage::Qualified;
             guard.v115_capabilities.push(first.clone());
-            guard.v115_capabilities.push(second.clone());
             guard.persist_all().unwrap();
 
             let resolved = |capability: &CapabilityRecord| ResolvedCapability {
@@ -8245,6 +8236,8 @@ mod workspace_boundary_tests {
                 "deepseek-harness",
                 "fixture",
             );
+            stale_binding.resolution_decision_ref =
+                Some(capability_resolution_decision_ref(&first_decision));
             stale_binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
             guard
                 .store
@@ -8255,12 +8248,12 @@ mod workspace_boundary_tests {
                 &work,
                 WorkcellPlan {
                     members: vec![WorkcellMember {
-                        capability: resolved(&second),
+                        capability: resolved(&first),
                         covers: vec!["draft".to_string()],
                     }],
                     uncovered: vec![],
                     total_estimated_cost_micros: 0,
-                    rationale: vec!["replacement resolution".to_string()],
+                    rationale: vec!["same capability, new resolution epoch".to_string()],
                 },
             )
             .unwrap();
