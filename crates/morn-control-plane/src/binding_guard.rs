@@ -12,6 +12,7 @@ use morn_kernel::error::{Error, Result};
 use morn_kernel::ids::Id;
 use morn_kernel::time::Timestamp;
 use morn_runtime::{ExecutionBinding, ProviderRegistry};
+use morn_work::control::WorkResource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct BindingValidityDecisionTag;
@@ -25,6 +26,10 @@ pub struct BindingValidityDecision {
     pub provider_ref: String,
     pub site_ref: Option<String>,
     pub profile_ref: String,
+    #[serde(default)]
+    pub work_identity_matches: bool,
+    #[serde(default)]
+    pub resolution_epoch_matches: bool,
     pub admission_active: bool,
     pub provider_selectable: bool,
     pub provider_identity_matches: bool,
@@ -69,13 +74,39 @@ impl BindingOperationalGate {
     /// identity before a *new* effect can be issued.
     pub fn evaluate(
         &self,
+        work: &WorkResource,
         binding: &ExecutionBinding,
+        current_resolution_decision_ref: Option<&str>,
         capability: &CapabilityRecord,
         admissions: &AdmissionService,
         providers: &ProviderRegistry,
         now: Timestamp,
     ) -> BindingValidityDecision {
         let mut reasons = Vec::new();
+
+        let work_identity_matches = binding.work_id == work.id
+            && binding.work_generation == work.generation
+            && binding.profile_ref == work.spec.profile_ref
+            && binding.site_ref == work.spec.site_ref
+            && binding.autonomy_posture == work.spec.autonomy_posture;
+        if !work_identity_matches {
+            reasons.push(
+                "binding no longer matches the exact current Work generation/profile/site/autonomy"
+                    .to_string(),
+            );
+        }
+
+        let current_resolution_decision_ref = current_resolution_decision_ref
+            .map(str::trim)
+            .filter(|reference| !reference.is_empty());
+        let resolution_epoch_matches = current_resolution_decision_ref.is_some()
+            && binding.resolution_decision_ref.as_deref() == current_resolution_decision_ref;
+        if !resolution_epoch_matches {
+            reasons.push(
+                "binding is not pinned to the exact current capability-resolution epoch"
+                    .to_string(),
+            );
+        }
 
         let capability_matches =
             binding.capability_manifest_ref == capability.manifest.id.to_string();
@@ -129,8 +160,10 @@ impl BindingOperationalGate {
         // revocation; otherwise revocation could strand an unknown real-world
         // effect forever. The reconciler itself may use a separate eligible
         // source-of-truth provider.
-        let allow_reconciliation = capability_matches;
-        let allow_new_effect = capability_matches
+        let allow_reconciliation = binding.work_id == work.id && capability_matches;
+        let allow_new_effect = work_identity_matches
+            && resolution_epoch_matches
+            && capability_matches
             && admission_active
             && provider_selectable
             && provider_identity_matches;
@@ -142,6 +175,8 @@ impl BindingOperationalGate {
             provider_ref: binding.provider_ref.clone(),
             site_ref: binding.site_ref.clone(),
             profile_ref: binding.profile_ref.clone(),
+            work_identity_matches,
+            resolution_epoch_matches,
             admission_active,
             provider_selectable,
             provider_identity_matches,
@@ -176,18 +211,20 @@ mod tests {
             CapabilityKind::Program,
             EffectClass::E0LifecycleReversible,
         ));
-        let binding = ExecutionBinding::for_work(
+        let mut binding = ExecutionBinding::for_work(
             &work,
             capability.manifest.id.to_string(),
             "provider-a",
             "1",
         );
+        binding.resolution_decision_ref =
+            Some("capability-resolution-decision://current".to_string());
         (work, capability, binding)
     }
 
     #[test]
     fn missing_admission_blocks_new_effect_but_not_consequence_accounting() {
-        let (_work, capability, binding) = fixture();
+        let (work, capability, binding) = fixture();
         let admissions = AdmissionService::default();
         let mut providers = ProviderRegistry::default();
         let mut provider = ProviderDescriptor::new("provider-a", ProviderFamily::Runtime, "1");
@@ -195,7 +232,9 @@ mod tests {
         providers.register(provider).unwrap();
 
         let decision = BindingOperationalGate.evaluate(
+            &work,
             &binding,
+            Some("capability-resolution-decision://current"),
             &capability,
             &admissions,
             &providers,
@@ -208,8 +247,29 @@ mod tests {
     }
 
     #[test]
+    fn superseded_resolution_epoch_blocks_new_effect_but_not_reconciliation() {
+        let (work, capability, binding) = fixture();
+        let decision = BindingOperationalGate.evaluate(
+            &work,
+            &binding,
+            Some("capability-resolution-decision://newer"),
+            &capability,
+            &AdmissionService::default(),
+            &ProviderRegistry::default(),
+            Timestamp::now(),
+        );
+        assert!(!decision.resolution_epoch_matches);
+        assert!(!decision.allow_new_effect);
+        assert!(decision.allow_reconciliation);
+        assert!(decision
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("capability-resolution epoch")));
+    }
+
+    #[test]
     fn provider_upgrade_requires_explicit_rebind_before_new_effect() {
-        let (_work, capability, binding) = fixture();
+        let (work, capability, binding) = fixture();
         let admissions = AdmissionService::default();
         let mut providers = ProviderRegistry::default();
         let mut provider = ProviderDescriptor::new("provider-a", ProviderFamily::Runtime, "2");
@@ -217,7 +277,9 @@ mod tests {
         providers.register(provider).unwrap();
 
         let decision = BindingOperationalGate.evaluate(
+            &work,
             &binding,
+            Some("capability-resolution-decision://current"),
             &capability,
             &admissions,
             &providers,
@@ -230,7 +292,7 @@ mod tests {
 
     #[test]
     fn wrong_capability_blocks_both_new_effect_and_reconciliation() {
-        let (_work, _capability, binding) = fixture();
+        let (work, _capability, binding) = fixture();
         let other = CapabilityRecord::new(CapabilityManifest::new(
             CapabilityId::generate_with("cap"),
             "other",
@@ -239,7 +301,9 @@ mod tests {
             EffectClass::E0LifecycleReversible,
         ));
         let decision = BindingOperationalGate.evaluate(
+            &work,
             &binding,
+            Some("capability-resolution-decision://current"),
             &other,
             &AdmissionService::default(),
             &ProviderRegistry::default(),
