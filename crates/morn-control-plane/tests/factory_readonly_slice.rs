@@ -18,11 +18,12 @@ use morn_capability::{
 };
 use morn_control_plane::{
     begin_external_attempt_for_work_with_effect, capability_qualification_evidence,
-    capability_resolution_decision_ref, capability_resolution_evidence, issue_external_action_permit,
-    issue_external_action_permit_for_work, provenance_condition_evidence,
-    source_of_truth_condition_evidence, CapabilityEligibilityGate, CapabilityResolutionDecision,
-    ControlPlaneStore, DurableBusinessEvidenceControllerRuntime, DurableWorkControllerRuntime,
-    ExternalActionMode, ReconciliationController, WorkProgressController, WorkProgressInputs,
+    capability_resolution_decision_ref, capability_resolution_evidence,
+    issue_external_action_permit, issue_external_action_permit_for_work,
+    provenance_condition_evidence, source_of_truth_condition_evidence, CapabilityEligibilityGate,
+    CapabilityResolutionDecision, ControlPlaneStore, DurableBusinessEvidenceControllerRuntime,
+    DurableWorkControllerRuntime, ExternalActionMode, ReconciliationController,
+    WorkProgressController, WorkProgressInputs,
 };
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode};
 use morn_harness::{run_harness_neutrality, PiHarnessProvider, PiMode, RuntimeContext};
@@ -586,8 +587,9 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
 
     let mut cmms_binding =
         ExecutionBinding::for_resolved_capability(&work, &cmms_resolved[0], "fixture-v1");
-    cmms_binding.resolution_decision_ref =
-        Some(capability_resolution_decision_ref(&cmms_resolution_decision));
+    cmms_binding.resolution_decision_ref = Some(capability_resolution_decision_ref(
+        &cmms_resolution_decision,
+    ));
     cmms_binding.provider_digest = Some("sha256:cmms-fixture-provider".to_string());
     cmms_binding.runtime_ref = Some(environment.runtime_ref.clone());
     work.record_active_binding(cmms_binding.id.clone());
