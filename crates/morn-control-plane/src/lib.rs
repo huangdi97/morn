@@ -1789,10 +1789,20 @@ impl ControlPlaneStore for MornStore {
             .unwrap_or(0);
         let previous: Option<ActionAttempt> = self.load_record(kind, attempt.id.as_str())?;
 
-        // Current resolution is an admission requirement for a *new* attempt.
-        // Once an attempt exists, later persistence is consequence accounting
-        // and must remain possible after re-resolution/revocation.
-        if previous.is_none() && (binding.resolution_decision_ref.is_some() || write_like) {
+        // Current resolution is required both when an attempt first enters
+        // durable admission and again at the irreversible boundary where an
+        // Authorized attempt becomes Dispatched. Authorized is still
+        // pre-dispatch/local state; after Dispatched, later persistence is
+        // consequence accounting and must remain possible after re-resolution
+        // or revocation so real-world effects are never stranded.
+        let entering_dispatch = previous
+            .as_ref()
+            .is_some_and(|prior| {
+                prior.state == AttemptState::Authorized && attempt.state == AttemptState::Dispatched
+            });
+        if (previous.is_none() || entering_dispatch)
+            && (binding.resolution_decision_ref.is_some() || write_like)
+        {
             require_current_resolution_for_binding(self, work, &binding, now)?;
         }
 
