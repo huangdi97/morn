@@ -54,6 +54,7 @@ use morn_integration::{
     SourceOfTruthBinding,
 };
 use morn_kernel::error::{Error, Result};
+use morn_kernel::time::Timestamp;
 use morn_kernel::protocol::{
     plan_protocol_migration, ProtocolCompatibility, ProtocolMigrationPlan, ProtocolSnapshot,
 };
@@ -763,14 +764,10 @@ fn require_current_resolution_for_binding(
     binding: &ExecutionBinding,
     now: Timestamp,
 ) -> Result<String> {
-    let evidence: Vec<ConditionEvidence> = store.load_records_in_workspace(
-        "condition_evidence_v115",
-        work.workspace_id.as_str(),
-    )?;
-    let decisions: Vec<CapabilityResolutionDecision> = store.load_records_in_workspace(
-        "capability_resolution_v115",
-        work.workspace_id.as_str(),
-    )?;
+    let evidence: Vec<ConditionEvidence> =
+        store.load_records_in_workspace("condition_evidence_v115", work.workspace_id.as_str())?;
+    let decisions: Vec<CapabilityResolutionDecision> = store
+        .load_records_in_workspace("capability_resolution_v115", work.workspace_id.as_str())?;
     let current = current_durable_resolution_decision_ref_for_capability(
         work,
         &evidence,
@@ -1660,10 +1657,8 @@ impl ControlPlaneStore for MornStore {
         // Migration history is a derived immutable fact, not caller-authored
         // narration. Resolve both binding endpoints from the canonical workspace
         // and require every identity dimension recorded by the decision to match.
-        let bindings: Vec<ExecutionBinding> = self.load_records_in_workspace(
-            "execution_binding_v115",
-            work.workspace_id.as_str(),
-        )?;
+        let bindings: Vec<ExecutionBinding> =
+            self.load_records_in_workspace("execution_binding_v115", work.workspace_id.as_str())?;
         let from = bindings
             .iter()
             .find(|binding| binding.id == decision.from_binding)
@@ -2869,8 +2864,7 @@ mod control_plane_persistence_scope_tests {
         let work = fixture_work();
         store.save_work_resource(&work).unwrap();
 
-        let mut from =
-            ExecutionBinding::for_work(&work, "manifest:old", "deepseek-harness", "1");
+        let mut from = ExecutionBinding::for_work(&work, "manifest:old", "deepseek-harness", "1");
         from.resolution_decision_ref =
             Some("capability-resolution-decision://epoch-old".to_string());
         store.save_execution_binding(&work, &from).unwrap();
@@ -2901,9 +2895,7 @@ mod control_plane_persistence_scope_tests {
         let mut forged_epoch = decision.clone();
         forged_epoch.to_resolution_decision_ref =
             Some("capability-resolution-decision://forged".to_string());
-        assert!(store
-            .save_binding_migration(&work, &forged_epoch)
-            .is_err());
+        assert!(store.save_binding_migration(&work, &forged_epoch).is_err());
 
         let mut forged_provider = decision.clone();
         forged_provider.from_provider = "forged-provider".to_string();
@@ -2919,9 +2911,7 @@ mod control_plane_persistence_scope_tests {
         provider_ref: &str,
         maximum_effect: morn_capability::EffectClass,
     ) -> String {
-        use morn_capability::{
-            CapabilityKind, ResolvedCapability, WorkcellMember, WorkcellPlan,
-        };
+        use morn_capability::{CapabilityKind, ResolvedCapability, WorkcellMember, WorkcellPlan};
 
         let decision = CapabilityResolutionDecision::new(
             work,
