@@ -1713,9 +1713,9 @@ fn require_current_durable_binding_readiness(
     profile: &morn_profile::DomainProfile,
     capability_manifest_id: &str,
     now: morn_kernel::time::Timestamp,
-) -> morn_kernel::Result<()> {
+) -> morn_kernel::Result<String> {
     use morn_control_plane::{
-        current_durable_resolution_contains_capability, derive_durable_controller_inputs,
+        current_durable_resolution_decision_ref_for_capability, derive_durable_controller_inputs,
         CapabilityResolutionDecision, ConditionEvidence, WorkController,
     };
 
@@ -1732,18 +1732,18 @@ fn require_current_durable_binding_readiness(
             "binding requires current durable readiness; persisted Ready state is stale or no longer supported by active evidence",
         ));
     }
-    if !current_durable_resolution_contains_capability(
+    current_durable_resolution_decision_ref_for_capability(
         work,
         &evidence,
         &decisions,
         capability_manifest_id,
         now,
-    ) {
-        return Err(Error::invalid_state(
-            "binding capability is not a member of the current durable capability resolution decision",
-        ));
-    }
-    Ok(())
+    )
+    .ok_or_else(|| {
+        Error::invalid_state(
+            "binding capability is not a uniquely-backed member of the current durable capability resolution decision",
+        )
+    })
 }
 
 async fn v115_work_bind_attested_e0(
