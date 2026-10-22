@@ -255,6 +255,7 @@ impl ExecutionBinding {
             request.provider_version,
         );
         replacement.provider_digest = None;
+        replacement.resolution_decision_ref = request.resolution_decision_ref;
         replacement.runtime_ref = None;
         replacement.execution_environment_ref = None;
         replacement.execution_class = None;
@@ -392,18 +393,27 @@ mod tests {
 
         let (next, decision) = old.rebind_for_work(
             &next_work,
-            BindingMigrationRequest::new(
-                "manifest:b",
-                "pi",
-                "2",
-                BindingMigrationReason::ProfileUpgrade,
-                "operator",
-            )
-            .with_evidence(vec!["evaluation:profile-v2".to_string()]),
+            {
+                let mut request = BindingMigrationRequest::new(
+                    "manifest:b",
+                    "pi",
+                    "2",
+                    BindingMigrationReason::ProfileUpgrade,
+                    "operator",
+                )
+                .with_evidence(vec!["evaluation:profile-v2".to_string()]);
+                request.resolution_decision_ref =
+                    Some("capability-resolution-decision://profile-v2".to_string());
+                request
+            },
         );
 
         assert_eq!(next.migration_from, Some(old.id.clone()));
         assert_eq!(next.work_generation, next_work.generation);
+        assert_eq!(
+            next.resolution_decision_ref.as_deref(),
+            Some("capability-resolution-decision://profile-v2")
+        );
         assert_eq!(next.profile_ref, "factory/v2");
         assert_eq!(decision.from_binding, old.id);
         assert_eq!(decision.to_binding, next.id);
