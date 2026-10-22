@@ -383,10 +383,21 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         )
         .unwrap();
     store.save_work_resource_cas(&mut work).unwrap();
+    let resolution_evidence = readiness
+        .iter()
+        .find(|evidence| evidence.condition_type == "CapabilityResolved")
+        .expect("Factory slice must include CapabilityResolved evidence");
     store
-        .save_capability_resolution(&work, &resolution_decision)
+        .save_capability_resolution_with_evidence(
+            &work,
+            &resolution_decision,
+            resolution_evidence,
+        )
         .unwrap();
-    for evidence in &readiness {
+    for evidence in readiness
+        .iter()
+        .filter(|evidence| evidence.condition_type != "CapabilityResolved")
+    {
         store.save_condition_evidence(&work, evidence).unwrap();
     }
     let controller = DurableWorkControllerRuntime::new("factory-slice-controller");
