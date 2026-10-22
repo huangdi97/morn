@@ -7312,8 +7312,7 @@ mod workspace_boundary_tests {
             ResolvedCapability, WorkcellMember, WorkcellPlan,
         };
         use morn_control_plane::{
-            capability_resolution_decision_ref, capability_resolution_evidence,
-            CapabilityResolutionDecision, ControlPlaneStore,
+            capability_resolution_evidence, CapabilityResolutionDecision, ControlPlaneStore,
         };
         use morn_kernel::ids::CapabilityId;
         use morn_kernel::ExecutionClass;
