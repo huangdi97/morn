@@ -37,8 +37,7 @@ pub use readiness::{
     authority_condition_evidence, capability_qualification_evidence,
     capability_resolution_decision_ref, capability_resolution_evidence,
     provenance_condition_evidence, source_of_truth_condition_evidence,
-    workcell_qualification_evidence, CapabilityResolutionDecision,
-    CapabilityResolutionDecisionId,
+    workcell_qualification_evidence, CapabilityResolutionDecision, CapabilityResolutionDecisionId,
 };
 
 pub use profile_guard::{
