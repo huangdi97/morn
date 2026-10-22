@@ -1607,6 +1607,45 @@ impl ControlPlaneStore for MornStore {
                 "binding migration decision belongs to another Work",
             ));
         }
+
+        // Migration history is a derived immutable fact, not caller-authored
+        // narration. Resolve both binding endpoints from the canonical workspace
+        // and require every identity dimension recorded by the decision to match.
+        let bindings: Vec<ExecutionBinding> = self.load_records_in_workspace(
+            "execution_binding_v115",
+            work.workspace_id.as_str(),
+        )?;
+        let from = bindings
+            .iter()
+            .find(|binding| binding.id == decision.from_binding)
+            .ok_or_else(|| Error::not_found("binding migration source ExecutionBinding"))?;
+        let to = bindings
+            .iter()
+            .find(|binding| binding.id == decision.to_binding)
+            .ok_or_else(|| Error::not_found("binding migration target ExecutionBinding"))?;
+
+        if from.work_id != work.id
+            || to.work_id != work.id
+            || to.migration_from.as_ref() != Some(&from.id)
+        {
+            return Err(Error::validation(
+                "binding migration endpoints do not form one canonical Work migration chain",
+            ));
+        }
+        if decision.from_provider != from.provider_ref
+            || decision.to_provider != to.provider_ref
+            || decision.from_profile != from.profile_ref
+            || decision.to_profile != to.profile_ref
+            || decision.from_site_ref != from.site_ref
+            || decision.to_site_ref != to.site_ref
+            || decision.from_resolution_decision_ref != from.resolution_decision_ref
+            || decision.to_resolution_decision_ref != to.resolution_decision_ref
+        {
+            return Err(Error::validation(
+                "binding migration decision identities do not match the immutable endpoint bindings",
+            ));
+        }
+
         self.save_record_immutable(
             "binding_migration_v115",
             decision.id.as_str(),
