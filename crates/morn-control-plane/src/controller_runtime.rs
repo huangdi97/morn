@@ -101,8 +101,7 @@ pub fn current_durable_resolution_contains_capability(
     capability_manifest_id: &str,
     now: Timestamp,
 ) -> bool {
-    let resolved =
-        latest_capability_condition_evidence(work, evidence, "CapabilityResolved", now);
+    let resolved = latest_capability_condition_evidence(work, evidence, "CapabilityResolved", now);
     let Some(resolved) = resolved else {
         return false;
     };
