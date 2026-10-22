@@ -685,6 +685,14 @@ pub trait ControlPlaneStore {
         work: &WorkResource,
         decision: &CapabilityResolutionDecision,
     ) -> Result<()>;
+    /// Atomically persist a resolution decision and the positive
+    /// CapabilityResolved witness that makes that exact decision current.
+    fn save_capability_resolution_with_evidence(
+        &self,
+        work: &WorkResource,
+        decision: &CapabilityResolutionDecision,
+        evidence: &ConditionEvidence,
+    ) -> Result<()>;
     fn save_execution_manifest(
         &self,
         work: &WorkResource,
@@ -1162,6 +1170,68 @@ impl ControlPlaneStore for MornStore {
             work.workspace_id.as_str(),
             decision.created_at.millis(),
             decision,
+        )
+    }
+
+    fn save_capability_resolution_with_evidence(
+        &self,
+        work: &WorkResource,
+        decision: &CapabilityResolutionDecision,
+        evidence: &ConditionEvidence,
+    ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
+        if !decision.matches_work(work) {
+            return Err(Error::validation(
+                "capability resolution decision must match the exact Work generation and source solution",
+            ));
+        }
+        if evidence.condition_type != "CapabilityResolved"
+            || !evidence.satisfied
+            || evidence.producer_ref.trim().is_empty()
+            || evidence.evidence_refs.is_empty()
+            || evidence.work_ref != work.id.to_string()
+            || evidence.work_generation != work.generation
+        {
+            return Err(Error::validation(
+                "atomic capability resolution requires a positive exact-generation CapabilityResolved witness",
+            ));
+        }
+
+        let decision_ref = capability_resolution_decision_ref(decision);
+        if !evidence
+            .evidence_refs
+            .iter()
+            .any(|reference| reference == decision.id.as_str())
+            || !evidence
+                .evidence_refs
+                .iter()
+                .any(|reference| reference == &decision_ref)
+            || !decision.plan.members.iter().all(|member| {
+                evidence.evidence_refs.iter().any(|reference| {
+                    reference == member.capability.manifest_id.as_str()
+                })
+            })
+        {
+            return Err(Error::validation(
+                "CapabilityResolved witness must cite the exact resolution decision and every resolved capability",
+            ));
+        }
+
+        self.save_immutable_pair(
+            ImmutableRecordCommit {
+                kind: "capability_resolution_v115",
+                id: decision.id.as_str(),
+                workspace_id: work.workspace_id.as_str(),
+                created_at: decision.created_at.millis(),
+                record: decision,
+            },
+            ImmutableRecordCommit {
+                kind: "condition_evidence_v115",
+                id: evidence.id.as_str(),
+                workspace_id: work.workspace_id.as_str(),
+                created_at: evidence.observed_at.millis(),
+                record: evidence,
+            },
         )
     }
 
