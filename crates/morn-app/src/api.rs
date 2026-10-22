@@ -2097,7 +2097,6 @@ async fn v115_work_bind_attested_e0(
     binding.resolution_decision_ref = Some(resolution_decision_ref);
     binding.provider_digest = provider_digest;
     binding.runtime_ref = Some(runtime_ref);
-    binding.resolution_decision_ref = Some(resolution_decision_ref);
     binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
     binding.compensation_ref = capability.manifest.compensation_ref.clone();
     binding.idempotency_key_required = capability.manifest.idempotency_key_required;
@@ -2299,6 +2298,7 @@ async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value
         provider_ref,
         provider_version,
     );
+    binding.resolution_decision_ref = Some(resolution_decision_ref);
     binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
     binding.compensation_ref = capability.manifest.compensation_ref.clone();
     binding.idempotency_key_required = capability.manifest.idempotency_key_required;
@@ -2314,7 +2314,7 @@ async fn v115_work_bind_e0(State(state): State<AppState>, Json(body): Json<Value
         "binding": binding,
         "execution_manifest": manifest,
         "execution_started": false,
-        "note": "Binding is immutable and generation-scoped. No Harness session, business outcome or acceptance was created."
+        "note": "Binding is immutable and generation+resolution-scoped. No Harness session, business outcome or acceptance was created."
     })))
 }
 
