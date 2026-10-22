@@ -1053,6 +1053,58 @@ impl MornStore {
         Ok(next_revision)
     }
 
+    /// Atomically persist two immutable facts.
+    ///
+    /// Use this when the second fact is the evidence/witness that makes the
+    /// first immutable decision current. A crash or insert conflict must never
+    /// expose only half of that truth pair.
+    pub fn save_immutable_pair<T: serde::Serialize, U: serde::Serialize>(
+        &self,
+        first: ImmutableRecordCommit<'_, T>,
+        second: ImmutableRecordCommit<'_, U>,
+    ) -> Result<()> {
+        let first_payload =
+            serde_json::to_string(first.record).map_err(|e| Error::internal(e.to_string()))?;
+        let second_payload =
+            serde_json::to_string(second.record).map_err(|e| Error::internal(e.to_string()))?;
+
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|e| Error::internal(e.to_string()))?;
+
+        for (kind, id, workspace_id, created_at, payload) in [
+            (
+                first.kind,
+                first.id,
+                first.workspace_id,
+                first.created_at,
+                first_payload.as_str(),
+            ),
+            (
+                second.kind,
+                second.id,
+                second.workspace_id,
+                second.created_at,
+                second_payload.as_str(),
+            ),
+        ] {
+            tx.execute(
+                "INSERT INTO morn_records (kind, id, workspace_id, payload, created_at, immutable, revision) VALUES (?1, ?2, ?3, ?4, ?5, 1, 1)",
+                params![kind, id, workspace_id, payload, created_at],
+            )
+            .map_err(|e| {
+                if e.to_string().contains("UNIQUE") {
+                    Error::conflict(format!("immutable record {kind}/{id} already exists"))
+                } else {
+                    Error::internal(e.to_string())
+                }
+            })?;
+        }
+
+        tx.commit().map_err(|e| Error::internal(e.to_string()))
+    }
+
     /// Save an immutable record (receipts, release history, decisions).
     /// Re-saving the same (kind, id) is rejected instead of silently overwritten.
     pub fn save_record_immutable<T: serde::Serialize>(
@@ -1968,6 +2020,49 @@ mod tests {
         assert!(!restarted
             .claim_inbound_event("shared-id", "mes://plant-a", 14)
             .unwrap());
+    }
+
+    #[test]
+    fn immutable_pair_commits_or_rolls_back_together() {
+        let store = MornStore::open_in_memory().unwrap();
+        store
+            .save_record_immutable(
+                "second_fact",
+                "existing",
+                "ws-1",
+                1,
+                &serde_json::json!({"v": "existing"}),
+            )
+            .unwrap();
+
+        let result = store.save_immutable_pair(
+            ImmutableRecordCommit {
+                kind: "first_fact",
+                id: "new",
+                workspace_id: "ws-1",
+                created_at: 2,
+                record: &serde_json::json!({"v": "must-roll-back"}),
+            },
+            ImmutableRecordCommit {
+                kind: "second_fact",
+                id: "existing",
+                workspace_id: "ws-1",
+                created_at: 3,
+                record: &serde_json::json!({"v": "conflict"}),
+            },
+        );
+        assert!(result.is_err());
+        assert!(store
+            .load_record::<serde_json::Value>("first_fact", "new")
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            store
+                .load_record::<serde_json::Value>("second_fact", "existing")
+                .unwrap()
+                .unwrap()["v"],
+            "existing"
+        );
     }
 
     #[test]
