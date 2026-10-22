@@ -157,24 +157,10 @@ pub fn derive_controller_inputs(
     evidence: &[ConditionEvidence],
     now: Timestamp,
 ) -> ControllerInputs {
-    let resolved = latest_capability_condition_evidence(
-        work,
-        evidence,
-        "CapabilityResolved",
-        now,
-    );
-    let qualified = latest_capability_condition_evidence(
-        work,
-        evidence,
-        "CapabilityQualified",
-        now,
-    );
-    let provenance = latest_capability_condition_evidence(
-        work,
-        evidence,
-        "ProvenanceReady",
-        now,
-    );
+    let resolved = latest_capability_condition_evidence(work, evidence, "CapabilityResolved", now);
+    let qualified =
+        latest_capability_condition_evidence(work, evidence, "CapabilityQualified", now);
+    let provenance = latest_capability_condition_evidence(work, evidence, "ProvenanceReady", now);
     let resolution_ref = active_resolution_decision_ref(resolved);
 
     let capability_resolved = condition_is_satisfied(resolved) && resolution_ref.is_some();
