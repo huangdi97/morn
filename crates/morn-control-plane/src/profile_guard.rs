@@ -66,6 +66,11 @@ pub struct ExternalActionPermit {
     #[serde(default)]
     pub work_generation: u64,
     pub binding_ref: String,
+    /// Exact capability-resolution epoch under which this immutable permit was
+    /// issued. This is audit identity, not a substitute for the Store's current
+    /// resolution check at durable admission/consumption time.
+    #[serde(default)]
+    pub resolution_decision_ref: Option<String>,
     pub not_before: Option<Timestamp>,
     pub expires_at: Option<Timestamp>,
     pub issued_at: Timestamp,
@@ -77,6 +82,8 @@ pub struct ConsumedExternalActionPermit {
     pub work_ref: String,
     pub work_generation: u64,
     pub binding_ref: String,
+    #[serde(default)]
+    pub resolution_decision_ref: Option<String>,
     pub attempt_id: ActionAttemptId,
     pub business_key: String,
     pub action: String,
@@ -131,11 +138,22 @@ impl ConsumedExternalActionPermit {
                 "external-action permit cannot be consumed outside its issuance/validity window",
             ));
         }
+        if permit
+            .resolution_decision_ref
+            .as_deref()
+            .map(str::trim)
+            .is_none_or(str::is_empty)
+        {
+            return Err(Error::invalid_state(
+                "write-like permit consumption requires an explicit resolution epoch",
+            ));
+        }
         Ok(Self {
             permit_id: permit.id.clone(),
             work_ref: permit.work_ref.clone(),
             work_generation: permit.work_generation,
             binding_ref: permit.binding_ref.clone(),
+            resolution_decision_ref: permit.resolution_decision_ref.clone(),
             attempt_id: attempt.id.clone(),
             business_key: attempt.business_key.clone(),
             action: attempt.action.clone(),
@@ -151,6 +169,7 @@ impl ConsumedExternalActionPermit {
             && self.work_ref == permit.work_ref
             && self.work_generation == permit.work_generation
             && self.binding_ref == permit.binding_ref
+            && self.resolution_decision_ref == permit.resolution_decision_ref
             && self.attempt_id == attempt.id
             && self.business_key == attempt.business_key
             && self.action == attempt.action
@@ -291,6 +310,7 @@ pub fn issue_external_action_permit(
         work_ref: binding.work_id.to_string(),
         work_generation: binding.work_generation,
         binding_ref: binding.id.to_string(),
+        resolution_decision_ref: binding.resolution_decision_ref.clone(),
         not_before: authority.request.not_before,
         expires_at: authority.request.expires_at,
         issued_at: Timestamp::now(),
