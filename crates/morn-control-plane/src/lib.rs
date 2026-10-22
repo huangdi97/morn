@@ -3288,9 +3288,19 @@ mod control_plane_persistence_scope_tests {
         .unwrap();
         let evidence = capability_resolution_evidence(&work, &decision).unwrap();
 
-        // Pre-existing witness forces the second immutable insert to conflict.
+        // Pre-existing low-level row forces the second immutable insert to
+        // conflict. Bypass the semantic save API deliberately: positive
+        // CapabilityResolved witnesses are no longer allowed through that API.
         // The resolution decision inserted earlier in the transaction must roll back.
-        store.save_condition_evidence(&work, &evidence).unwrap();
+        store
+            .save_record_immutable(
+                "condition_evidence_v115",
+                evidence.id.as_str(),
+                work.workspace_id.as_str(),
+                evidence.observed_at.millis(),
+                &evidence,
+            )
+            .unwrap();
         assert!(store
             .save_capability_resolution_with_evidence(&work, &decision, &evidence)
             .is_err());
@@ -3301,6 +3311,58 @@ mod control_plane_persistence_scope_tests {
             )
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn positive_capability_resolved_witness_cannot_bypass_atomic_resolution_commit() {
+        use morn_capability::{
+            CapabilityKind, EffectClass, ResolvedCapability, WorkcellMember, WorkcellPlan,
+        };
+        use morn_kernel::ExecutionClass;
+
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+
+        let decision = CapabilityResolutionDecision::new(
+            &work,
+            WorkcellPlan {
+                members: vec![WorkcellMember {
+                    capability: ResolvedCapability {
+                        manifest_id: morn_capability::CapabilityManifestId::generate_with(
+                            "manifest",
+                        ),
+                        provider_ref: "morn-native".to_string(),
+                        kind: CapabilityKind::Program,
+                        estimated_cost_micros: None,
+                        maximum_effect: EffectClass::E0LifecycleReversible,
+                        compensation_ref: None,
+                        idempotency_key_required: false,
+                        required_execution_class: ExecutionClass::NoIsolation,
+                        required_execution_guarantees: vec![],
+                        score: 1,
+                        rationale: vec![],
+                    },
+                    covers: vec!["draft".to_string()],
+                }],
+                uncovered: vec![],
+                total_estimated_cost_micros: 0,
+                rationale: vec!["atomic-only".to_string()],
+            },
+        )
+        .unwrap();
+        let positive = capability_resolution_evidence(&work, &decision).unwrap();
+        assert!(store.save_condition_evidence(&work, &positive).is_err());
+
+        let negative = ConditionEvidence::new(
+            &work,
+            "CapabilityResolved",
+            false,
+            "controller://resolution-revocation",
+            vec![],
+        )
+        .unwrap();
+        store.save_condition_evidence(&work, &negative).unwrap();
     }
 
     #[test]
