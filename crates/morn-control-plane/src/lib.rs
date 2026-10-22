@@ -1207,9 +1207,10 @@ impl ControlPlaneStore for MornStore {
                 .iter()
                 .any(|reference| reference == &decision_ref)
             || !decision.plan.members.iter().all(|member| {
-                evidence.evidence_refs.iter().any(|reference| {
-                    reference == member.capability.manifest_id.as_str()
-                })
+                evidence
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| reference == member.capability.manifest_id.as_str())
             })
         {
             return Err(Error::validation(
