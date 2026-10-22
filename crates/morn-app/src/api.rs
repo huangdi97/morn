@@ -8233,11 +8233,7 @@ mod workspace_boundary_tests {
             first_evidence.observed_at = Timestamp::from_millis(100);
             guard
                 .store
-                .save_capability_resolution_with_evidence(
-                    &work,
-                    &first_decision,
-                    &first_evidence,
-                )
+                .save_capability_resolution_with_evidence(&work, &first_decision, &first_evidence)
                 .unwrap();
 
             let mut stale_binding = ExecutionBinding::for_work(
@@ -8272,11 +8268,7 @@ mod workspace_boundary_tests {
             second_evidence.observed_at = Timestamp::from_millis(200);
             guard
                 .store
-                .save_capability_resolution_with_evidence(
-                    &work,
-                    &second_decision,
-                    &second_evidence,
-                )
+                .save_capability_resolution_with_evidence(&work, &second_decision, &second_evidence)
                 .unwrap();
             (work, stale_binding)
         };
