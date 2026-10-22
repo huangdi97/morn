@@ -54,10 +54,10 @@ use morn_integration::{
     SourceOfTruthBinding,
 };
 use morn_kernel::error::{Error, Result};
-use morn_kernel::time::Timestamp;
 use morn_kernel::protocol::{
     plan_protocol_migration, ProtocolCompatibility, ProtocolMigrationPlan, ProtocolSnapshot,
 };
+use morn_kernel::time::Timestamp;
 use morn_profile::{
     plan_profile_migration, DomainProfile, ProfileCompatibility, ProfileMigrationPlan,
 };
