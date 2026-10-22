@@ -391,22 +391,19 @@ mod tests {
         next_spec.profile_ref = "factory/v2".to_string();
         next_work.replace_spec(next_spec);
 
-        let (next, decision) = old.rebind_for_work(
-            &next_work,
-            {
-                let mut request = BindingMigrationRequest::new(
-                    "manifest:b",
-                    "pi",
-                    "2",
-                    BindingMigrationReason::ProfileUpgrade,
-                    "operator",
-                )
-                .with_evidence(vec!["evaluation:profile-v2".to_string()]);
-                request.resolution_decision_ref =
-                    Some("capability-resolution-decision://profile-v2".to_string());
-                request
-            },
-        );
+        let (next, decision) = old.rebind_for_work(&next_work, {
+            let mut request = BindingMigrationRequest::new(
+                "manifest:b",
+                "pi",
+                "2",
+                BindingMigrationReason::ProfileUpgrade,
+                "operator",
+            )
+            .with_evidence(vec!["evaluation:profile-v2".to_string()]);
+            request.resolution_decision_ref =
+                Some("capability-resolution-decision://profile-v2".to_string());
+            request
+        });
 
         assert_eq!(next.migration_from, Some(old.id.clone()));
         assert_eq!(next.work_generation, next_work.generation);
