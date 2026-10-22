@@ -801,16 +801,14 @@ mod tests {
         .unwrap();
         denial.observed_at = Timestamp::from_millis(200);
 
-        assert!(
-            current_durable_resolution_decision_ref_for_capability(
-                &work,
-                &[positive, denial],
-                &[decision],
-                &manifest_id,
-                Timestamp::from_millis(201),
-            )
-            .is_none()
-        );
+        assert!(current_durable_resolution_decision_ref_for_capability(
+            &work,
+            &[positive, denial],
+            &[decision],
+            &manifest_id,
+            Timestamp::from_millis(201),
+        )
+        .is_none());
     }
 
     #[test]
