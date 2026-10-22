@@ -2805,6 +2805,57 @@ mod control_plane_persistence_scope_tests {
         WorkResource::new(WorkspaceId::generate(), spec)
     }
 
+    #[test]
+    fn binding_migration_persistence_verifies_endpoint_identity_and_resolution_epochs() {
+        use morn_runtime::{BindingMigrationReason, BindingMigrationRequest};
+
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+
+        let mut from =
+            ExecutionBinding::for_work(&work, "manifest:old", "deepseek-harness", "1");
+        from.resolution_decision_ref =
+            Some("capability-resolution-decision://epoch-old".to_string());
+        store.save_execution_binding(&work, &from).unwrap();
+
+        let mut request = BindingMigrationRequest::new(
+            "manifest:new",
+            "pi",
+            "2",
+            BindingMigrationReason::ManualRebind,
+            "operator",
+        )
+        .with_evidence(vec!["evaluation://provider-migration".to_string()]);
+        request.resolution_decision_ref =
+            Some("capability-resolution-decision://epoch-new".to_string());
+        let (to, decision) = from.rebind_for_work(&work, request);
+        store.save_execution_binding(&work, &to).unwrap();
+
+        store.save_binding_migration(&work, &decision).unwrap();
+        assert_eq!(
+            decision.from_resolution_decision_ref.as_deref(),
+            Some("capability-resolution-decision://epoch-old")
+        );
+        assert_eq!(
+            decision.to_resolution_decision_ref.as_deref(),
+            Some("capability-resolution-decision://epoch-new")
+        );
+
+        let mut forged_epoch = decision.clone();
+        forged_epoch.to_resolution_decision_ref =
+            Some("capability-resolution-decision://forged".to_string());
+        assert!(store
+            .save_binding_migration(&work, &forged_epoch)
+            .is_err());
+
+        let mut forged_provider = decision.clone();
+        forged_provider.from_provider = "forged-provider".to_string();
+        assert!(store
+            .save_binding_migration(&work, &forged_provider)
+            .is_err());
+    }
+
     fn attest_test_outcome(store: &MornStore, work: &WorkResource, outcome: &mut ObservedOutcome) {
         let binding = morn_integration::SourceOfTruthBinding {
             id: morn_integration::SourceOfTruthBindingId::generate_with("sot"),
