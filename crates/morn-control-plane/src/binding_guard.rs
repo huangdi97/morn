@@ -65,6 +65,17 @@ impl BindingValidityDecision {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct BindingOperationalContext<'a> {
+    pub work: &'a WorkResource,
+    pub binding: &'a ExecutionBinding,
+    pub current_resolution_decision_ref: Option<&'a str>,
+    pub capability: &'a CapabilityRecord,
+    pub admissions: &'a AdmissionService,
+    pub providers: &'a ProviderRegistry,
+    pub now: Timestamp,
+}
+
 #[derive(Debug, Default)]
 pub struct BindingOperationalGate;
 
@@ -72,16 +83,16 @@ impl BindingOperationalGate {
     /// Strict Enterprise/Factory check. A site-scoped binding must still have an
     /// active exact site/profile admission and an exact selectable provider
     /// identity before a *new* effect can be issued.
-    pub fn evaluate(
-        &self,
-        work: &WorkResource,
-        binding: &ExecutionBinding,
-        current_resolution_decision_ref: Option<&str>,
-        capability: &CapabilityRecord,
-        admissions: &AdmissionService,
-        providers: &ProviderRegistry,
-        now: Timestamp,
-    ) -> BindingValidityDecision {
+    pub fn evaluate(&self, context: BindingOperationalContext<'_>) -> BindingValidityDecision {
+        let BindingOperationalContext {
+            work,
+            binding,
+            current_resolution_decision_ref,
+            capability,
+            admissions,
+            providers,
+            now,
+        } = context;
         let mut reasons = Vec::new();
 
         let work_identity_matches = binding.work_id == work.id
@@ -231,15 +242,15 @@ mod tests {
         provider.status = ProviderStatus::Healthy;
         providers.register(provider).unwrap();
 
-        let decision = BindingOperationalGate.evaluate(
-            &work,
-            &binding,
-            Some("capability-resolution-decision://current"),
-            &capability,
-            &admissions,
-            &providers,
-            Timestamp::now(),
-        );
+        let decision = BindingOperationalGate.evaluate(BindingOperationalContext {
+            work: &work,
+            binding: &binding,
+            current_resolution_decision_ref: Some("capability-resolution-decision://current"),
+            capability: &capability,
+            admissions: &admissions,
+            providers: &providers,
+            now: Timestamp::now(),
+        });
         assert!(!decision.allow_new_effect);
         assert!(decision.allow_reconciliation);
         assert!(decision.enforce_new_effect().is_err());
@@ -249,15 +260,17 @@ mod tests {
     #[test]
     fn superseded_resolution_epoch_blocks_new_effect_but_not_reconciliation() {
         let (work, capability, binding) = fixture();
-        let decision = BindingOperationalGate.evaluate(
-            &work,
-            &binding,
-            Some("capability-resolution-decision://newer"),
-            &capability,
-            &AdmissionService::default(),
-            &ProviderRegistry::default(),
-            Timestamp::now(),
-        );
+        let admissions = AdmissionService::default();
+        let providers = ProviderRegistry::default();
+        let decision = BindingOperationalGate.evaluate(BindingOperationalContext {
+            work: &work,
+            binding: &binding,
+            current_resolution_decision_ref: Some("capability-resolution-decision://newer"),
+            capability: &capability,
+            admissions: &admissions,
+            providers: &providers,
+            now: Timestamp::now(),
+        });
         assert!(!decision.resolution_epoch_matches);
         assert!(!decision.allow_new_effect);
         assert!(decision.allow_reconciliation);
@@ -276,15 +289,15 @@ mod tests {
         provider.status = ProviderStatus::Healthy;
         providers.register(provider).unwrap();
 
-        let decision = BindingOperationalGate.evaluate(
-            &work,
-            &binding,
-            Some("capability-resolution-decision://current"),
-            &capability,
-            &admissions,
-            &providers,
-            Timestamp::now(),
-        );
+        let decision = BindingOperationalGate.evaluate(BindingOperationalContext {
+            work: &work,
+            binding: &binding,
+            current_resolution_decision_ref: Some("capability-resolution-decision://current"),
+            capability: &capability,
+            admissions: &admissions,
+            providers: &providers,
+            now: Timestamp::now(),
+        });
         assert!(!decision.provider_identity_matches);
         assert!(!decision.allow_new_effect);
         assert!(decision.allow_reconciliation);
@@ -300,15 +313,17 @@ mod tests {
             CapabilityKind::Program,
             EffectClass::E0LifecycleReversible,
         ));
-        let decision = BindingOperationalGate.evaluate(
-            &work,
-            &binding,
-            Some("capability-resolution-decision://current"),
-            &other,
-            &AdmissionService::default(),
-            &ProviderRegistry::default(),
-            Timestamp::now(),
-        );
+        let admissions = AdmissionService::default();
+        let providers = ProviderRegistry::default();
+        let decision = BindingOperationalGate.evaluate(BindingOperationalContext {
+            work: &work,
+            binding: &binding,
+            current_resolution_decision_ref: Some("capability-resolution-decision://current"),
+            capability: &other,
+            admissions: &admissions,
+            providers: &providers,
+            now: Timestamp::now(),
+        });
         assert!(!decision.allow_new_effect);
         assert!(!decision.allow_reconciliation);
     }
