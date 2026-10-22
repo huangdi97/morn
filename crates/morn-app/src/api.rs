@@ -8217,7 +8217,8 @@ mod workspace_boundary_tests {
                 .store
                 .save_capability_resolution(&work, &first_decision)
                 .unwrap();
-            let mut first_evidence = capability_resolution_evidence(&work, &first_decision).unwrap();
+            let mut first_evidence =
+                capability_resolution_evidence(&work, &first_decision).unwrap();
             first_evidence.observed_at = Timestamp::from_millis(100);
             guard
                 .store
