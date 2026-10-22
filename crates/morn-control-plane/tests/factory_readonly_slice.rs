@@ -388,11 +388,7 @@ fn factory_readonly_wedge_closes_without_agent_becoming_business_truth() {
         .find(|evidence| evidence.condition_type == "CapabilityResolved")
         .expect("Factory slice must include CapabilityResolved evidence");
     store
-        .save_capability_resolution_with_evidence(
-            &work,
-            &resolution_decision,
-            resolution_evidence,
-        )
+        .save_capability_resolution_with_evidence(&work, &resolution_decision, resolution_evidence)
         .unwrap();
     for evidence in readiness
         .iter()
