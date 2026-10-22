@@ -481,12 +481,10 @@ mod tests {
         );
         spec.site_ref = Some("plant-a".to_string());
         let work = WorkResource::new(WorkspaceId::generate(), spec);
-        let mut binding =
-            ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
+        let mut binding = ExecutionBinding::for_work(&work, "capability:a", "provider:a", "1");
         binding.effect_ceiling = Some(morn_capability::EffectClass::E2Compensatable);
         binding.compensation_ref = Some("cmms.cancel".to_string());
-        let authority =
-            bound_authority(&work, &binding, "cmms.sandbox.write", "CMMS-fixture");
+        let authority = bound_authority(&work, &binding, "cmms.sandbox.write", "CMMS-fixture");
 
         let error = issue_external_action_permit(
             &profile,
