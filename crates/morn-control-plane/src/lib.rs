@@ -2378,6 +2378,47 @@ mod tests {
 
     struct CmmsLookup;
 
+    fn persist_test_e0_resolution(
+        store: &MornStore,
+        work: &WorkResource,
+        manifest_id: morn_capability::CapabilityManifestId,
+        provider_ref: &str,
+    ) -> String {
+        use morn_capability::{CapabilityKind, ResolvedCapability, WorkcellMember, WorkcellPlan};
+
+        let decision = CapabilityResolutionDecision::new(
+            work,
+            WorkcellPlan {
+                members: vec![WorkcellMember {
+                    capability: ResolvedCapability {
+                        manifest_id,
+                        provider_ref: provider_ref.to_string(),
+                        kind: CapabilityKind::Program,
+                        estimated_cost_micros: None,
+                        maximum_effect: morn_capability::EffectClass::E0LifecycleReversible,
+                        compensation_ref: None,
+                        idempotency_key_required: false,
+                        required_execution_class: morn_kernel::ExecutionClass::NoIsolation,
+                        required_execution_guarantees: vec![],
+                        score: 1,
+                        rationale: vec!["control-plane-test".to_string()],
+                    },
+                    covers: vec!["fixture-requirement".to_string()],
+                }],
+                uncovered: vec![],
+                total_estimated_cost_micros: 0,
+                rationale: vec!["control-plane-test".to_string()],
+            },
+        )
+        .unwrap();
+        let evidence = capability_resolution_evidence(work, &decision).unwrap();
+        let decision_ref = capability_resolution_decision_ref(&decision);
+        store
+            .save_capability_resolution_with_evidence(work, &decision, &evidence)
+            .unwrap();
+        decision_ref
+    }
+
     impl OutcomeReconciler for CmmsLookup {
         fn reconcile(&self, attempt: &ActionAttempt) -> Result<ReconciliationObservation> {
             Ok(ReconciliationObservation {
@@ -2739,7 +2780,16 @@ mod tests {
         );
         assert_eq!(work.status.phase, WorkPhase::Ready);
 
-        let binding = ExecutionBinding::for_work(&work, "cap@sha256:abc", "dsh", "sdk");
+        let store = MornStore::open_in_memory().unwrap();
+        store.save_work_resource(&work).unwrap();
+        let manifest_id = morn_capability::CapabilityManifestId::generate_with("cap");
+        let resolution_ref =
+            persist_test_e0_resolution(&store, &work, manifest_id.clone(), "dsh");
+        let mut binding =
+            ExecutionBinding::for_work(&work, manifest_id.to_string(), "dsh", "sdk");
+        binding.resolution_decision_ref = Some(resolution_ref);
+        store.save_execution_binding(&work, &binding).unwrap();
+
         let mut attempt = ActionAttempt::new(
             binding.id.clone(),
             "work-1042:maintenance",
@@ -2750,10 +2800,6 @@ mod tests {
         attempt
             .mark_outcome_unknown("client timed out after remote commit")
             .unwrap();
-
-        let store = MornStore::open_in_memory().unwrap();
-        store.save_work_resource(&work).unwrap();
-        store.save_execution_binding(&work, &binding).unwrap();
         // Persist the ambiguous state before asking the authority source to
         // reconcile it. The reconciliation commit will atomically advance the
         // attempt and append its immutable evidence record.
