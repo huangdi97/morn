@@ -3672,7 +3672,17 @@ mod control_plane_persistence_scope_tests {
         let other = fixture_work();
         store.save_work_resource(&work).unwrap();
         store.save_work_resource(&other).unwrap();
-        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        let manifest_id = morn_capability::CapabilityManifestId::generate_with("cap");
+        let resolution_ref = persist_resolution_for_manifest(
+            &store,
+            &work,
+            manifest_id.clone(),
+            "provider:a",
+            morn_capability::EffectClass::E0LifecycleReversible,
+        );
+        let mut binding =
+            ExecutionBinding::for_work(&work, manifest_id.to_string(), "provider:a", "v1");
+        binding.resolution_decision_ref = Some(resolution_ref);
         store.save_execution_binding(&work, &binding).unwrap();
         let mut attempt = ActionAttempt::new(binding.id.clone(), "work-a:create", "create");
         attempt.transition(AttemptState::Authorized).unwrap();
@@ -4316,7 +4326,17 @@ mod control_plane_persistence_scope_tests {
         let store = MornStore::open_in_memory().unwrap();
         let work = fixture_work();
         store.save_work_resource(&work).unwrap();
-        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        let manifest_id = morn_capability::CapabilityManifestId::generate_with("cap");
+        let resolution_ref = persist_resolution_for_manifest(
+            &store,
+            &work,
+            manifest_id.clone(),
+            "provider:a",
+            morn_capability::EffectClass::E0LifecycleReversible,
+        );
+        let mut binding =
+            ExecutionBinding::for_work(&work, manifest_id.to_string(), "provider:a", "v1");
+        binding.resolution_decision_ref = Some(resolution_ref);
         store.save_execution_binding(&work, &binding).unwrap();
 
         let mut attempt = ActionAttempt::new(binding.id.clone(), "work:create", "create");
