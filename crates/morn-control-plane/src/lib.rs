@@ -4375,6 +4375,67 @@ mod control_plane_persistence_scope_tests {
     }
 
     #[test]
+    fn e0_dispatch_admission_cannot_be_reused_after_same_generation_reresolution() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+
+        let manifest_id = morn_capability::CapabilityManifestId::generate_with("cap");
+        let old_resolution_ref = persist_resolution_for_manifest(
+            &store,
+            &work,
+            manifest_id.clone(),
+            "provider:a",
+            morn_capability::EffectClass::E0LifecycleReversible,
+        );
+        let mut binding =
+            ExecutionBinding::for_work(&work, manifest_id.clone().to_string(), "provider:a", "v1");
+        binding.resolution_decision_ref = Some(old_resolution_ref);
+        binding.effect_ceiling = Some(morn_capability::EffectClass::E0LifecycleReversible);
+        store.save_execution_binding(&work, &binding).unwrap();
+
+        let admission = ExecutionDispatchAdmission::for_e0(
+            &work,
+            &binding,
+            format!("sha256:{}", "a".repeat(64)),
+        )
+        .unwrap();
+        store
+            .save_execution_dispatch_admission(&work, &admission)
+            .unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let new_resolution_ref = persist_resolution_for_manifest(
+            &store,
+            &work,
+            manifest_id,
+            "provider:a",
+            morn_capability::EffectClass::E0LifecycleReversible,
+        );
+        assert_ne!(
+            binding.resolution_decision_ref.as_deref(),
+            Some(new_resolution_ref.as_str())
+        );
+
+        let stale = ExecutionDispatchAdmission::for_e0(
+            &work,
+            &binding,
+            format!("sha256:{}", "b".repeat(64)),
+        )
+        .unwrap();
+        assert!(store
+            .save_execution_dispatch_admission(&work, &stale)
+            .is_err());
+        assert!(store
+            .load_record::<ExecutionDispatchAdmission>(
+                "execution_dispatch_admission_v115",
+                stale.id.as_str(),
+            )
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
     fn read_only_dispatch_cannot_bypass_current_resolution_epoch() {
         let store = MornStore::open_in_memory().unwrap();
         let work = fixture_work();
