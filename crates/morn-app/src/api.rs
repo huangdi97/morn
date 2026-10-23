@@ -8068,7 +8068,7 @@ mod workspace_boundary_tests {
         };
         use morn_control_plane::{
             capability_resolution_decision_ref, capability_resolution_evidence,
-            CapabilityResolutionDecision, ControlPlaneStore,
+            CapabilityResolutionDecision, ControlPlaneStore, ExecutionDispatchAdmission,
         };
         use morn_kernel::ids::CapabilityId;
         use morn_kernel::ExecutionClass;
@@ -8172,6 +8172,35 @@ mod workspace_boundary_tests {
             Some(&binding.id)
         );
         assert_eq!(receipts[0].outcome, "completed");
+
+        let admissions = guard
+            .store
+            .load_records_in_workspace::<ExecutionDispatchAdmission>(
+                "execution_dispatch_admission_v115",
+                guard.workspace.id.as_str(),
+            )
+            .unwrap();
+        assert_eq!(admissions.len(), 1);
+        assert_eq!(admissions[0].binding_ref, binding.id);
+        assert_eq!(
+            admissions[0].resolution_decision_ref,
+            binding.resolution_decision_ref.clone().unwrap()
+        );
+        assert!(admissions[0].input_sha256.starts_with("sha256:"));
+        assert_eq!(admissions[0].input_sha256.len(), "sha256:".len() + 64);
+        assert!(!serde_json::to_string(&admissions[0])
+            .unwrap()
+            .contains("produce a draft only"));
+        let admission_ref = format!("execution-dispatch-admission://{}", admissions[0].id);
+        assert!(receipts[0]
+            .trace_refs
+            .iter()
+            .any(|reference| reference == &admission_ref));
+        assert_eq!(
+            response["dispatch_admission"]["id"].as_str(),
+            Some(admissions[0].id.as_str())
+        );
+
         assert!(guard
             .store
             .load_records_in_workspace::<Value>(
