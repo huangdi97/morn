@@ -1814,8 +1814,22 @@ impl ControlPlaneStore for MornStore {
         let entering_dispatch = previous.as_ref().is_some_and(|prior| {
             prior.state == AttemptState::Authorized && attempt.state == AttemptState::Dispatched
         });
-        let requires_resolution_admission = (previous.is_none() || entering_dispatch)
+        let first_persisted_after_dispatch = previous.is_none()
+            && matches!(
+                attempt.state,
+                AttemptState::Dispatched
+                    | AttemptState::Acknowledged
+                    | AttemptState::Committed
+                    | AttemptState::OutcomeUnknown
+                    | AttemptState::Reconciling
+                    | AttemptState::Observed
+                    | AttemptState::Verified
+                    | AttemptState::Failed
+            );
+        let first_persisted_resolution_scoped = previous.is_none()
             && (binding.resolution_decision_ref.is_some() || write_like);
+        let requires_resolution_admission =
+            entering_dispatch || first_persisted_after_dispatch || first_persisted_resolution_scoped;
         let resolution_watermarks = if requires_resolution_admission {
             let watermarks = capture_resolution_admission_watermarks(self, work)?;
             require_current_resolution_for_binding(self, work, &binding, now)?;
@@ -4218,6 +4232,39 @@ mod control_plane_persistence_scope_tests {
         assert!(store.save_action_attempt(&work, &attempt).is_err());
         assert!(store
             .load_record::<ActionAttempt>("action_attempt_v115", attempt.id.as_str())
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn read_only_dispatch_cannot_bypass_current_resolution_epoch() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = fixture_work();
+        store.save_work_resource(&work).unwrap();
+        let binding = ExecutionBinding::for_work(&work, "cap:a", "provider:a", "v1");
+        assert!(binding.resolution_decision_ref.is_none());
+        store.save_execution_binding(&work, &binding).unwrap();
+
+        let mut attempt = ActionAttempt::new(binding.id.clone(), "work:read", "read");
+        store.save_action_attempt(&work, &attempt).unwrap();
+        attempt.transition(AttemptState::Authorized).unwrap();
+        store.save_action_attempt(&work, &attempt).unwrap();
+
+        attempt.transition(AttemptState::Dispatched).unwrap();
+        assert!(store.save_action_attempt(&work, &attempt).is_err());
+        let stored: ActionAttempt = store
+            .load_record("action_attempt_v115", attempt.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.state, AttemptState::Authorized);
+
+        let mut first_snapshot =
+            ActionAttempt::new(binding.id.clone(), "work:read-direct", "read");
+        first_snapshot.transition(AttemptState::Authorized).unwrap();
+        first_snapshot.transition(AttemptState::Dispatched).unwrap();
+        assert!(store.save_action_attempt(&work, &first_snapshot).is_err());
+        assert!(store
+            .load_record::<ActionAttempt>("action_attempt_v115", first_snapshot.id.as_str())
             .unwrap()
             .is_none());
     }
