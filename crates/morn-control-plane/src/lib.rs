@@ -1042,6 +1042,24 @@ fn require_persisted_work_projection_evidence(
     Ok(())
 }
 
+/// Whether an attempt state proves that external dispatch has already happened
+/// or may already have happened. Durable snapshots are allowed to skip
+/// intermediate in-memory states, so admission must reason about this semantic
+/// boundary rather than only the adjacent Authorized -> Dispatched edge.
+fn attempt_state_crossed_dispatch_boundary(state: AttemptState) -> bool {
+    matches!(
+        state,
+        AttemptState::Dispatched
+            | AttemptState::Acknowledged
+            | AttemptState::Committed
+            | AttemptState::OutcomeUnknown
+            | AttemptState::Reconciling
+            | AttemptState::Observed
+            | AttemptState::Verified
+            | AttemptState::Failed
+    )
+}
+
 /// A persisted action snapshot may skip intermediate in-memory transitions,
 /// but must never regress to an earlier, redispatchable state.
 fn persisted_attempt_state_reachable(from: AttemptState, target: AttemptState) -> bool {
@@ -1811,25 +1829,17 @@ impl ControlPlaneStore for MornStore {
         // resolution/evidence stream watermarks *before* deriving currentness;
         // the final CAS transaction rechecks them so a concurrent same-generation
         // re-resolution cannot land between preflight and commit.
-        let entering_dispatch = previous.as_ref().is_some_and(|prior| {
-            prior.state == AttemptState::Authorized && attempt.state == AttemptState::Dispatched
+        let crossing_dispatch_boundary = previous.as_ref().is_some_and(|prior| {
+            !attempt_state_crossed_dispatch_boundary(prior.state)
+                && attempt_state_crossed_dispatch_boundary(attempt.state)
         });
-        let first_persisted_after_dispatch = previous.is_none()
-            && matches!(
-                attempt.state,
-                AttemptState::Dispatched
-                    | AttemptState::Acknowledged
-                    | AttemptState::Committed
-                    | AttemptState::OutcomeUnknown
-                    | AttemptState::Reconciling
-                    | AttemptState::Observed
-                    | AttemptState::Verified
-                    | AttemptState::Failed
-            );
+        let first_persisted_after_dispatch =
+            previous.is_none() && attempt_state_crossed_dispatch_boundary(attempt.state);
         let first_persisted_resolution_scoped = previous.is_none()
             && (binding.resolution_decision_ref.is_some() || write_like);
-        let requires_resolution_admission =
-            entering_dispatch || first_persisted_after_dispatch || first_persisted_resolution_scoped;
+        let requires_resolution_admission = crossing_dispatch_boundary
+            || first_persisted_after_dispatch
+            || first_persisted_resolution_scoped;
         let resolution_watermarks = if requires_resolution_admission {
             let watermarks = capture_resolution_admission_watermarks(self, work)?;
             require_current_resolution_for_binding(self, work, &binding, now)?;
@@ -4267,6 +4277,17 @@ mod control_plane_persistence_scope_tests {
             .load_record::<ActionAttempt>("action_attempt_v115", first_snapshot.id.as_str())
             .unwrap()
             .is_none());
+
+        let mut skipped = ActionAttempt::new(binding.id.clone(), "work:read-skipped", "read");
+        store.save_action_attempt(&work, &skipped).unwrap();
+        skipped.transition(AttemptState::Authorized).unwrap();
+        skipped.transition(AttemptState::Dispatched).unwrap();
+        assert!(store.save_action_attempt(&work, &skipped).is_err());
+        let stored: ActionAttempt = store
+            .load_record("action_attempt_v115", skipped.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.state, AttemptState::Proposed);
     }
 
     #[test]
