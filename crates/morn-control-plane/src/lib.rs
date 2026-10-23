@@ -1521,9 +1521,43 @@ impl ControlPlaneStore for MornStore {
         // final immutable insert checks these watermarks and the mutable Work
         // revision in the same SQLite transaction.
         let watermarks = capture_resolution_admission_watermarks(self, &canonical)?;
-        let current =
-            require_current_resolution_for_binding(self, &canonical, &binding, Timestamp::now())?;
-        if admission.resolution_decision_ref != current {
+        let now = Timestamp::now();
+        let evidence: Vec<ConditionEvidence> = self
+            .load_records_in_workspace("condition_evidence_v115", canonical.workspace_id.as_str())?;
+        let decisions: Vec<CapabilityResolutionDecision> = self.load_records_in_workspace(
+            "capability_resolution_v115",
+            canonical.workspace_id.as_str(),
+        )?;
+        let profile = DomainProfile::from_ref(&canonical.spec.profile_ref).ok_or_else(|| {
+            Error::validation(format!(
+                "unsupported Work profile {} for E0 dispatch admission",
+                canonical.spec.profile_ref
+            ))
+        })?;
+        let inputs = derive_durable_controller_inputs(&canonical, &evidence, &decisions, now);
+        let mut projected = canonical.clone();
+        WorkController.reconcile(&mut projected, &profile, &inputs);
+        if projected.status.phase != WorkPhase::Ready {
+            return Err(Error::invalid_state(
+                "E0 dispatch admission requires current durable evidence to project Work Ready",
+            ));
+        }
+
+        let current = current_durable_resolution_decision_ref_for_capability(
+            &canonical,
+            &evidence,
+            &decisions,
+            &binding.capability_manifest_ref,
+            now,
+        )
+        .ok_or_else(|| {
+            Error::invalid_state(
+                "E0 dispatch admission has no unique positive current durable capability-resolution epoch",
+            )
+        })?;
+        if binding.resolution_decision_ref.as_deref() != Some(current.as_str())
+            || admission.resolution_decision_ref != current
+        {
             return Err(Error::conflict(
                 "E0 dispatch admission belongs to a superseded capability resolution epoch",
             ));
