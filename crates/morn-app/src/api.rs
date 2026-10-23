@@ -3121,7 +3121,10 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
 
 async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Value>) -> ApiResult {
     use morn_capability::EffectClass;
-    use morn_control_plane::{ControlPlaneStore, WorkProgressController, WorkProgressInputs};
+    use morn_control_plane::{
+        ControlPlaneStore, ExecutionDispatchAdmission, WorkProgressController, WorkProgressInputs,
+    };
+    use sha2::{Digest, Sha256};
 
     let work_id = body
         .get("work_id")
@@ -3139,8 +3142,16 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| AppError(Error::validation("input is required")))?
         .to_string();
+    let input_digest = Sha256::digest(input.as_bytes());
+    let input_sha256 = format!(
+        "sha256:{}",
+        input_digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    );
 
-    let (work, binding, native, dsh, pi) = {
+    let (work, binding, dispatch_admission, native, dsh, pi) = {
         let guard = state.lock();
         let work = guard
             .store
@@ -3222,6 +3233,29 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
                     "bound capability admission was revoked or expired; new execution is blocked",
                 )));
             }
+        }
+
+        if !work_phase_allows_new_e0_execution(work.status.phase)
+            || !work.required_conditions_satisfied()
+        {
+            return Err(AppError(Error::invalid_state(format!(
+                "Work {} is not execution-ready in phase {:?}",
+                work.id, work.status.phase
+            ))));
+        }
+        if !binding.matches_work_generation(&work)
+            || binding.profile_ref != work.spec.profile_ref
+            || binding.site_ref != work.spec.site_ref
+            || binding.autonomy_posture != work.spec.autonomy_posture
+        {
+            return Err(AppError(Error::validation(
+                "ExecutionBinding does not match the exact canonical Work generation/profile/site/autonomy",
+            )));
+        }
+        if binding.effect_ceiling != Some(EffectClass::E0LifecycleReversible) {
+            return Err(AppError(Error::not_authorized(
+                "work/execute-e0 only permits an E0 lifecycle-reversible binding; E1/E2/E3 must use ExternalAction",
+            )));
         }
 
         match binding.provider_ref.as_str() {
@@ -3361,42 +3395,26 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
             }
         }
 
+        let dispatch_admission =
+            ExecutionDispatchAdmission::for_e0(&work, &binding, input_sha256.clone())?;
+        guard
+            .store
+            .save_execution_dispatch_admission(&work, &dispatch_admission)?;
+
         (
             work,
             binding,
+            dispatch_admission,
             guard.native_harness.clone(),
             guard.dsh_harness.clone(),
             guard.pi_harness.clone(),
         )
     };
 
-    if !work_phase_allows_new_e0_execution(work.status.phase)
-        || !work.required_conditions_satisfied()
-    {
-        return Err(AppError(Error::invalid_state(format!(
-            "Work {} is not execution-ready in phase {:?}",
-            work.id, work.status.phase
-        ))));
-    }
-    if !binding.matches_work_generation(&work)
-        || binding.profile_ref != work.spec.profile_ref
-        || binding.site_ref != work.spec.site_ref
-        || binding.autonomy_posture != work.spec.autonomy_posture
-    {
-        return Err(AppError(Error::validation(
-            "ExecutionBinding does not match the exact canonical Work generation/profile/site/autonomy",
-        )));
-    }
-    if binding.effect_ceiling != Some(EffectClass::E0LifecycleReversible) {
-        return Err(AppError(Error::not_authorized(
-            "work/execute-e0 only permits an E0 lifecycle-reversible binding; E1/E2/E3 must use ExternalAction",
-        )));
-    }
-
     let work_for_turn = work.clone();
     let binding_for_turn = binding.clone();
     let provider_ref = binding.provider_ref.clone();
-    let turn = match provider_ref.as_str() {
+    let mut turn = match provider_ref.as_str() {
         "morn-native" => tokio::task::spawn_blocking(move || {
             let mut provider = native
                 .lock()
@@ -3433,6 +3451,17 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
             ))))
         }
     };
+
+    let dispatch_admission_ref =
+        format!("execution-dispatch-admission://{}", dispatch_admission.id);
+    if !turn
+        .receipt
+        .trace_refs
+        .iter()
+        .any(|reference| reference == &dispatch_admission_ref)
+    {
+        turn.receipt.trace_refs.push(dispatch_admission_ref.clone());
+    }
 
     let current = {
         let guard = state.lock();
@@ -3472,12 +3501,13 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
         "executor_error": turn.error,
         "scope_cleanup_error": turn.cleanup_error,
         "snapshot_status": turn.snapshot_status,
+        "dispatch_admission": dispatch_admission,
         "receipt": turn.receipt,
         "normalized_events": turn.events,
         "work": current,
         "business_outcome_observed": false,
         "independent_acceptance": false,
-        "note": "E0 Harness execution evidence only. Provider completion never creates ObservedOutcome or AcceptanceDecision."
+        "note": "Turn-scoped E0 dispatch admission plus Harness execution evidence only. Provider completion never creates ObservedOutcome or AcceptanceDecision."
     })))
 }
 
