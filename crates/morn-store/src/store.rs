@@ -815,6 +815,50 @@ impl MornStore {
         Ok(next_revision)
     }
 
+    /// Persist one immutable semantic fact guarded by append-only record-stream
+    /// watermarks captured before admission.
+    ///
+    /// The watermark checks and immutable insert share one SQLite transaction.
+    /// A concurrent semantic append therefore fails closed instead of allowing a
+    /// stale read to authorize a new immutable dispatch/admission fact.
+    pub fn save_record_immutable_with_watermarks<T: serde::Serialize>(
+        &self,
+        immutable: ImmutableRecordCommit<'_, T>,
+        watermarks: &[RecordKindWatermark],
+    ) -> Result<()> {
+        let payload =
+            serde_json::to_string(immutable.record).map_err(|e| Error::internal(e.to_string()))?;
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|e| Error::internal(e.to_string()))?;
+        Self::require_record_watermarks_current(&tx, watermarks)?;
+        tx.execute(
+            "INSERT INTO morn_records
+             (kind, id, workspace_id, payload, created_at, immutable, revision)
+             VALUES (?1, ?2, ?3, ?4, ?5, 1, 1)",
+            params![
+                immutable.kind,
+                immutable.id,
+                immutable.workspace_id,
+                payload,
+                immutable.created_at
+            ],
+        )
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                Error::conflict(format!(
+                    "immutable record {}/{} already exists",
+                    immutable.kind, immutable.id
+                ))
+            } else {
+                Error::internal(e.to_string())
+            }
+        })?;
+        tx.commit().map_err(|e| Error::internal(e.to_string()))?;
+        Ok(())
+    }
+
     /// Atomically persist one mutable CAS projection and one immutable fact.
     ///
     /// This is used when the immutable fact is the authorization/consumption
@@ -2863,6 +2907,58 @@ mod v115_revision_tests {
             .unwrap()
             .unwrap();
         assert_eq!(attempt["state"], "authorized");
+    }
+
+    #[test]
+    fn immutable_semantic_fact_commits_only_against_current_watermarks() {
+        let store = MornStore::open_in_memory().unwrap();
+        let current = store
+            .record_kind_watermark("capability_resolution_v115", "ws-1")
+            .unwrap();
+        store
+            .save_record_immutable_with_watermarks(
+                ImmutableRecordCommit {
+                    kind: "execution_dispatch_admission_v115",
+                    id: "dispatch-current",
+                    workspace_id: "ws-1",
+                    created_at: 10,
+                    record: &json!({"binding":"binding-1"}),
+                },
+                std::slice::from_ref(&current),
+            )
+            .unwrap();
+
+        let stale = store
+            .record_kind_watermark("condition_evidence_v115", "ws-1")
+            .unwrap();
+        store
+            .save_record_immutable(
+                "condition_evidence_v115",
+                "e-new",
+                "ws-1",
+                11,
+                &json!({"condition_type":"CapabilityResolved","satisfied":false}),
+            )
+            .unwrap();
+        assert!(store
+            .save_record_immutable_with_watermarks(
+                ImmutableRecordCommit {
+                    kind: "execution_dispatch_admission_v115",
+                    id: "dispatch-stale",
+                    workspace_id: "ws-1",
+                    created_at: 12,
+                    record: &json!({"binding":"binding-1"}),
+                },
+                &[stale],
+            )
+            .is_err());
+        assert!(store
+            .load_record::<serde_json::Value>(
+                "execution_dispatch_admission_v115",
+                "dispatch-stale",
+            )
+            .unwrap()
+            .is_none());
     }
 
     #[test]
