@@ -10,6 +10,7 @@ pub mod binding_guard;
 pub mod capability_gate;
 pub mod condition_evidence;
 pub mod controller_runtime;
+pub mod dispatch_admission;
 pub mod external_action;
 pub mod profile_guard;
 pub mod provider_gate;
@@ -28,6 +29,7 @@ pub use controller_runtime::{
     current_durable_resolution_decision_ref_for_capability, derive_durable_controller_inputs,
     ControllerTickResult, DurableBusinessEvidenceControllerRuntime, DurableWorkControllerRuntime,
 };
+pub use dispatch_admission::{ExecutionDispatchAdmission, ExecutionDispatchAdmissionId};
 pub use external_action::{
     begin_external_attempt, begin_external_attempt_for_work_with_effect,
     begin_external_attempt_with_effect,
@@ -67,7 +69,10 @@ use morn_runtime::{
     BoundAuthorityDecision, DurableWorkflowBinding, DurableWorkflowEvidence, ExecutionBinding,
     ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
 };
-use morn_store::{ImmutableRecordCommit, MornStore, MutableRecordCommit, RecordKindWatermark};
+use morn_store::{
+    ImmutableRecordCommit, MornStore, MutableRecordCommit, RecordKindWatermark,
+    RecordRevisionFence,
+};
 use morn_work::acceptance::{
     AcceptanceReviewAuthorization, AcceptanceReviewerAttestation,
     ConsumedAcceptanceReviewAuthorization,
@@ -699,6 +704,11 @@ pub trait ControlPlaneStore {
         &self,
         work: &WorkResource,
         manifest: &ExecutionManifest,
+    ) -> Result<()>;
+    fn save_execution_dispatch_admission(
+        &self,
+        work: &WorkResource,
+        admission: &ExecutionDispatchAdmission,
     ) -> Result<()>;
     fn save_execution_event(&self, work: &WorkResource, event: &ExecutionEvent) -> Result<()>;
     fn save_execution_receipt(&self, work: &WorkResource, receipt: &ExecutionReceipt)
@@ -1471,6 +1481,68 @@ impl ControlPlaneStore for MornStore {
             work.workspace_id.as_str(),
             manifest.created_at.millis(),
             manifest,
+        )
+    }
+
+    fn save_execution_dispatch_admission(
+        &self,
+        work: &WorkResource,
+        admission: &ExecutionDispatchAdmission,
+    ) -> Result<()> {
+        require_canonical_work_workspace(self, work)?;
+        let work_revision = self
+            .record_revision("work_resource_v115", work.id.as_str())?
+            .ok_or_else(|| Error::not_found("canonical Work resource revision"))?;
+        let canonical: WorkResource = self
+            .load_record("work_resource_v115", work.id.as_str())?
+            .ok_or_else(|| Error::not_found("canonical Work resource"))?;
+        if canonical.workspace_id != work.workspace_id
+            || canonical.generation != work.generation
+            || canonical.spec != work.spec
+        {
+            return Err(Error::conflict(
+                "E0 dispatch admission requires the exact current canonical Work generation/spec",
+            ));
+        }
+
+        let binding: ExecutionBinding = self
+            .load_record("execution_binding_v115", admission.binding_ref.as_str())?
+            .ok_or_else(|| Error::not_found("execution binding for dispatch admission"))?;
+        if !admission.validates_against(&canonical, &binding)
+            || admission.admitted_at < canonical.created_at
+            || admission.admitted_at > Timestamp::now()
+        {
+            return Err(Error::validation(
+                "E0 dispatch admission does not match its canonical Work/binding identity",
+            ));
+        }
+
+        // Capture append-only semantic streams before deriving currentness. The
+        // final immutable insert checks these watermarks and the mutable Work
+        // revision in the same SQLite transaction.
+        let watermarks = capture_resolution_admission_watermarks(self, &canonical)?;
+        let current =
+            require_current_resolution_for_binding(self, &canonical, &binding, Timestamp::now())?;
+        if admission.resolution_decision_ref != current {
+            return Err(Error::conflict(
+                "E0 dispatch admission belongs to a superseded capability resolution epoch",
+            ));
+        }
+
+        self.save_record_immutable_with_semantic_fences(
+            ImmutableRecordCommit {
+                kind: "execution_dispatch_admission_v115",
+                id: admission.id.as_str(),
+                workspace_id: canonical.workspace_id.as_str(),
+                created_at: admission.admitted_at.millis(),
+                record: admission,
+            },
+            &watermarks,
+            &[RecordRevisionFence {
+                kind: "work_resource_v115".to_string(),
+                id: canonical.id.to_string(),
+                expected_revision: work_revision,
+            }],
         )
     }
 
