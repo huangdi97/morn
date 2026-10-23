@@ -131,8 +131,12 @@ impl ExecutionDispatchAdmission {
             && self.provider_digest == binding.provider_digest
             && self.runtime_ref == binding.runtime_ref
             && self.execution_environment_ref == binding.execution_environment_ref
-            && self.input_sha256.starts_with("sha256:")
-            && self.input_sha256.len() == "sha256:".len() + 64
+            && self
+                .input_sha256
+                .strip_prefix("sha256:")
+                .is_some_and(|digest| {
+                    digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+                })
             && binding.effect_ceiling == Some(EffectClass::E0LifecycleReversible)
     }
 }
