@@ -76,6 +76,15 @@ pub struct RecordKindWatermark {
     pub max_seq: i64,
 }
 
+/// Snapshot of one mutable record revision used to fence semantic admission
+/// against concurrent Work/spec/projection changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordRevisionFence {
+    pub kind: String,
+    pub id: String,
+    pub expected_revision: u64,
+}
+
 /// Lease fence checked in the same transaction as a durable projection commit.
 pub struct ControllerFence<'a> {
     pub lease_name: &'a str,
@@ -651,6 +660,42 @@ impl MornStore {
         Ok(())
     }
 
+    fn require_record_revisions_current(
+        tx: &rusqlite::Transaction<'_>,
+        revisions: &[RecordRevisionFence],
+    ) -> Result<()> {
+        for revision in revisions {
+            if revision.kind.trim().is_empty() || revision.id.trim().is_empty() {
+                return Err(Error::validation(
+                    "record revision fence contains an empty kind or id",
+                ));
+            }
+            let current: Option<i64> = tx
+                .query_row(
+                    "SELECT revision FROM morn_records WHERE kind = ?1 AND id = ?2",
+                    params![revision.kind, revision.id],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|e| Error::internal(e.to_string()))?;
+            let Some(current) = current else {
+                return Err(Error::conflict(format!(
+                    "record {}/{} disappeared during semantic admission",
+                    revision.kind, revision.id
+                )));
+            };
+            let current = u64::try_from(current)
+                .map_err(|_| Error::internal("record revision must be non-negative"))?;
+            if current != revision.expected_revision {
+                return Err(Error::conflict(format!(
+                    "record {}/{} changed during semantic admission: expected revision {}, current {}",
+                    revision.kind, revision.id, revision.expected_revision, current
+                )));
+            }
+        }
+        Ok(())
+    }
+
     /// Compare-and-swap save for mutable control-plane projections.
     ///
     /// expected_revision = 0 means "create only". Existing immutable records
@@ -817,14 +862,24 @@ impl MornStore {
 
     /// Persist one immutable semantic fact guarded by append-only record-stream
     /// watermarks captured before admission.
-    ///
-    /// The watermark checks and immutable insert share one SQLite transaction.
-    /// A concurrent semantic append therefore fails closed instead of allowing a
-    /// stale read to authorize a new immutable dispatch/admission fact.
     pub fn save_record_immutable_with_watermarks<T: serde::Serialize>(
         &self,
         immutable: ImmutableRecordCommit<'_, T>,
         watermarks: &[RecordKindWatermark],
+    ) -> Result<()> {
+        self.save_record_immutable_with_semantic_fences(immutable, watermarks, &[])
+    }
+
+    /// Persist one immutable semantic fact while atomically verifying both
+    /// append-only stream watermarks and mutable-record revisions.
+    ///
+    /// This is the commit primitive for new execution/effect admission derived
+    /// from a current Work projection plus append-only semantic evidence.
+    pub fn save_record_immutable_with_semantic_fences<T: serde::Serialize>(
+        &self,
+        immutable: ImmutableRecordCommit<'_, T>,
+        watermarks: &[RecordKindWatermark],
+        revisions: &[RecordRevisionFence],
     ) -> Result<()> {
         let payload =
             serde_json::to_string(immutable.record).map_err(|e| Error::internal(e.to_string()))?;
@@ -833,6 +888,7 @@ impl MornStore {
             .unchecked_transaction()
             .map_err(|e| Error::internal(e.to_string()))?;
         Self::require_record_watermarks_current(&tx, watermarks)?;
+        Self::require_record_revisions_current(&tx, revisions)?;
         tx.execute(
             "INSERT INTO morn_records
              (kind, id, workspace_id, payload, created_at, immutable, revision)
@@ -2956,6 +3012,49 @@ mod v115_revision_tests {
             .load_record::<serde_json::Value>(
                 "execution_dispatch_admission_v115",
                 "dispatch-stale",
+            )
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn immutable_semantic_fact_rejects_stale_mutable_record_revision() {
+        let store = MornStore::open_in_memory().unwrap();
+        assert_eq!(
+            store
+                .save_record_cas("work_resource_v115", "work-1", "ws-1", 10, 0, &json!({"generation":1}))
+                .unwrap(),
+            1
+        );
+        let fence = RecordRevisionFence {
+            kind: "work_resource_v115".to_string(),
+            id: "work-1".to_string(),
+            expected_revision: 1,
+        };
+        assert_eq!(
+            store
+                .save_record_cas("work_resource_v115", "work-1", "ws-1", 11, 1, &json!({"generation":2}))
+                .unwrap(),
+            2
+        );
+
+        assert!(store
+            .save_record_immutable_with_semantic_fences(
+                ImmutableRecordCommit {
+                    kind: "execution_dispatch_admission_v115",
+                    id: "dispatch-stale-work",
+                    workspace_id: "ws-1",
+                    created_at: 12,
+                    record: &json!({"work":"work-1","generation":1}),
+                },
+                &[],
+                &[fence],
+            )
+            .is_err());
+        assert!(store
+            .load_record::<serde_json::Value>(
+                "execution_dispatch_admission_v115",
+                "dispatch-stale-work",
             )
             .unwrap()
             .is_none());
