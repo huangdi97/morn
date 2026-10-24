@@ -1644,6 +1644,43 @@ impl ControlPlaneStore for MornStore {
                 "execution receipt provider/version/digest/environment does not match its persisted Work binding",
             ));
         }
+
+        // Governed E0 execution with a resolution epoch must prove the exact
+        // durable dispatch admission that existed before provider.start(). A
+        // post-hoc trace string is insufficient: the typed receipt fields must
+        // resolve to an immutable admission whose Work/binding/input identity
+        // exactly matches this executor turn.
+        let governed_e0 = binding.resolution_decision_ref.is_some()
+            && binding.effect_ceiling
+                == Some(morn_capability::EffectClass::E0LifecycleReversible);
+        if governed_e0 {
+            if !receipt.proves_dispatch_admission() {
+                return Err(Error::validation(
+                    "governed E0 execution receipt requires typed durable dispatch-admission provenance",
+                ));
+            }
+            let admission_ref = receipt
+                .dispatch_admission_ref
+                .as_deref()
+                .ok_or_else(|| Error::validation("execution receipt dispatch admission is required"))?;
+            let admission_id = admission_ref
+                .strip_prefix("execution-dispatch-admission://")
+                .filter(|id| !id.trim().is_empty())
+                .ok_or_else(|| Error::validation("execution receipt dispatch admission reference is malformed"))?;
+            let admission: ExecutionDispatchAdmission = self
+                .load_record("execution_dispatch_admission_v115", admission_id)?
+                .ok_or_else(|| Error::not_found("execution receipt durable dispatch admission"))?;
+            if !admission.validates_against(work, &binding)
+                || receipt.dispatch_input_sha256.as_deref()
+                    != Some(admission.input_sha256.as_str())
+                || admission.admitted_at > receipt.started_at
+            {
+                return Err(Error::validation(
+                    "execution receipt does not exactly match its durable pre-dispatch admission",
+                ));
+            }
+        }
+
         if receipt.ended_at.is_some()
             && (receipt.event_ids.is_empty() || receipt.trace_refs.is_empty())
         {
