@@ -4518,6 +4518,89 @@ mod control_plane_persistence_scope_tests {
     }
 
     #[test]
+    fn governed_e0_receipt_requires_exact_durable_dispatch_admission() {
+        let store = MornStore::open_in_memory().unwrap();
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "prove durable E0 turn admission",
+                "morn.lite@1.0.0",
+            ),
+        );
+        store.save_work_resource(&work).unwrap();
+
+        let manifest_id = morn_capability::CapabilityManifestId::generate_with("cap");
+        let resolution_ref = persist_resolution_for_manifest(
+            &store,
+            &work,
+            manifest_id.clone(),
+            "provider:a",
+            morn_capability::EffectClass::E0LifecycleReversible,
+        );
+        let mut binding =
+            ExecutionBinding::for_work(&work, manifest_id.to_string(), "provider:a", "v1");
+        binding.resolution_decision_ref = Some(resolution_ref);
+        binding.effect_ceiling = Some(morn_capability::EffectClass::E0LifecycleReversible);
+        store.save_execution_binding(&work, &binding).unwrap();
+
+        let admission = ExecutionDispatchAdmission::for_e0(
+            &work,
+            &binding,
+            format!("sha256:{}", "a".repeat(64)),
+        )
+        .unwrap();
+        store
+            .save_execution_dispatch_admission(&work, &admission)
+            .unwrap();
+        let admission_ref = format!("execution-dispatch-admission://{}", admission.id);
+
+        let event = ExecutionEvent::new(
+            work.workspace_id.clone(),
+            "session-e0",
+            morn_harness::ExecutionEventKind::Checkpoint,
+            "executor settled under durable dispatch admission",
+        );
+        store.save_execution_event(&work, &event).unwrap();
+
+        let ctx = morn_harness::RuntimeContext::new(
+            work.workspace_id.clone(),
+            morn_kernel::ids::ActorInstanceId::generate_with("actor"),
+            work.id.clone(),
+        )
+        .with_work_binding(work.generation, binding.id.clone())
+        .unwrap()
+        .with_scope_id("scope://e0-admission-test")
+        .unwrap()
+        .with_dispatch_admission(admission_ref.clone(), admission.input_sha256.clone())
+        .unwrap();
+        let mut receipt =
+            ExecutionReceipt::from_runtime_context(&ctx, "provider:a", "session-e0");
+        receipt.started_at = event.created_at;
+        receipt.ended_at = Some(event.created_at);
+        receipt.outcome = "completed".to_string();
+        receipt.event_ids.push(event.id.to_string());
+        receipt.trace_refs.push(event.id.to_string());
+        store.save_execution_receipt(&work, &receipt).unwrap();
+
+        let mut missing = receipt.clone();
+        missing.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
+        missing.dispatch_admission_ref = None;
+        missing.dispatch_input_sha256 = None;
+        missing
+            .trace_refs
+            .retain(|reference| reference != &admission_ref);
+        assert!(store.save_execution_receipt(&work, &missing).is_err());
+
+        let mut wrong_input = receipt.clone();
+        wrong_input.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
+        wrong_input.dispatch_input_sha256 = Some(format!("sha256:{}", "b".repeat(64)));
+        assert!(store
+            .save_execution_receipt(&work, &wrong_input)
+            .is_err());
+    }
+
+    #[test]
     fn read_only_dispatch_cannot_bypass_current_resolution_epoch() {
         let store = MornStore::open_in_memory().unwrap();
         let work = fixture_work();
