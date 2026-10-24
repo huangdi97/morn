@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use morn_capability::EffectClass;
 use morn_kernel::error::{Error, Result};
-use morn_kernel::ids::{Id, RuntimeBindingId, WorkPackageId, WorkspaceId};
+use morn_kernel::ids::{
+    ExecutionReceiptId, Id, RuntimeBindingId, WorkPackageId, WorkspaceId,
+};
 use morn_kernel::time::Timestamp;
 use morn_runtime::ExecutionBinding;
 use morn_work::control::WorkResource;
@@ -38,6 +40,42 @@ pub struct ExecutionDispatchAdmission {
     /// control plane stores the digest, never a second copy of prompt content.
     pub input_sha256: String,
     pub admitted_at: Timestamp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConsumedExecutionDispatchAdmission {
+    pub admission_id: ExecutionDispatchAdmissionId,
+    pub receipt_id: ExecutionReceiptId,
+    pub workspace_id: WorkspaceId,
+    pub work_id: WorkPackageId,
+    pub work_generation: u64,
+    pub binding_ref: RuntimeBindingId,
+    pub input_sha256: String,
+    pub consumed_at: Timestamp,
+}
+
+impl ConsumedExecutionDispatchAdmission {
+    pub fn from_admission(
+        admission: &ExecutionDispatchAdmission,
+        receipt_id: ExecutionReceiptId,
+        consumed_at: Timestamp,
+    ) -> Result<Self> {
+        if consumed_at < admission.admitted_at {
+            return Err(Error::validation(
+                "dispatch admission cannot be consumed before it was admitted",
+            ));
+        }
+        Ok(Self {
+            admission_id: admission.id.clone(),
+            receipt_id,
+            workspace_id: admission.workspace_id.clone(),
+            work_id: admission.work_id.clone(),
+            work_generation: admission.work_generation,
+            binding_ref: admission.binding_ref.clone(),
+            input_sha256: admission.input_sha256.clone(),
+            consumed_at,
+        })
+    }
 }
 
 impl ExecutionDispatchAdmission {
@@ -177,6 +215,40 @@ mod tests {
             "capability-resolution-decision://epoch-1"
         );
         assert_eq!(admission.provider_ref, "deepseek-harness");
+    }
+
+    #[test]
+    fn consumed_dispatch_admission_preserves_exact_turn_identity() {
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "draft",
+                "morn.lite@1.0.0",
+            ),
+        );
+        let mut binding =
+            ExecutionBinding::for_work(&work, "capability:1", "deepseek-harness", "1");
+        binding.resolution_decision_ref =
+            Some("capability-resolution-decision://epoch-1".to_string());
+        binding.effect_ceiling = Some(EffectClass::E0LifecycleReversible);
+        let admission = ExecutionDispatchAdmission::for_e0(
+            &work,
+            &binding,
+            format!("sha256:{}", "a".repeat(64)),
+        )
+        .unwrap();
+        let receipt_id = ExecutionReceiptId::generate_with("receipt");
+        let consumed = ConsumedExecutionDispatchAdmission::from_admission(
+            &admission,
+            receipt_id.clone(),
+            admission.admitted_at,
+        )
+        .unwrap();
+        assert_eq!(consumed.admission_id, admission.id);
+        assert_eq!(consumed.receipt_id, receipt_id);
+        assert_eq!(consumed.binding_ref, binding.id);
+        assert_eq!(consumed.input_sha256, admission.input_sha256);
     }
 
     #[test]
