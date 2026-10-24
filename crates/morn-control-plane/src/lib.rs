@@ -4546,6 +4546,42 @@ mod control_plane_persistence_scope_tests {
             .save_execution_dispatch_admission(&work, &admission)
             .unwrap();
 
+        // Consume the first admission before re-resolution so the later
+        // rejection proves stale resolution epoch semantics rather than merely
+        // tripping the unresolved-dispatch slot.
+        let event = ExecutionEvent::new(
+            work.workspace_id.clone(),
+            "session-old-resolution",
+            morn_harness::ExecutionEventKind::Checkpoint,
+            "first resolution turn settled",
+        );
+        store.save_execution_event(&work, &event).unwrap();
+        let ctx = morn_harness::RuntimeContext::new(
+            work.workspace_id.clone(),
+            morn_kernel::ids::ActorInstanceId::generate_with("actor"),
+            work.id.clone(),
+        )
+        .with_work_binding(work.generation, binding.id.clone())
+        .unwrap()
+        .with_scope_id("scope://old-resolution")
+        .unwrap()
+        .with_dispatch_admission(
+            format!("execution-dispatch-admission://{}", admission.id),
+            admission.input_sha256.clone(),
+        )
+        .unwrap();
+        let mut receipt = ExecutionReceipt::from_runtime_context(
+            &ctx,
+            binding.provider_ref.clone(),
+            "session-old-resolution",
+        );
+        receipt.started_at = event.created_at;
+        receipt.ended_at = Some(event.created_at);
+        receipt.outcome = "completed".to_string();
+        receipt.event_ids.push(event.id.to_string());
+        receipt.trace_refs.push(event.id.to_string());
+        store.save_execution_receipt(&work, &receipt).unwrap();
+
         std::thread::sleep(std::time::Duration::from_millis(2));
         let new_resolution_ref = persist_resolution_for_manifest(
             &store,
