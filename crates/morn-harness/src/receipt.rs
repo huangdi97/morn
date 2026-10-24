@@ -137,6 +137,10 @@ pub struct ExecutionReceipt {
     #[serde(default)]
     pub execution_binding_ref: Option<RuntimeBindingId>,
     #[serde(default)]
+    pub dispatch_admission_ref: Option<String>,
+    #[serde(default)]
+    pub dispatch_input_sha256: Option<String>,
+    #[serde(default)]
     pub provider_ref: Option<String>,
     #[serde(default)]
     pub scope_ref: Option<String>,
@@ -162,6 +166,8 @@ impl ExecutionReceipt {
             work_package_id: None,
             work_generation: None,
             execution_binding_ref: None,
+            dispatch_admission_ref: None,
+            dispatch_input_sha256: None,
             provider_ref: None,
             scope_ref: None,
             execution_environment_ref: None,
@@ -186,6 +192,11 @@ impl ExecutionReceipt {
         receipt.work_package_id = Some(ctx.work_package_id.clone());
         receipt.work_generation = ctx.work_generation;
         receipt.execution_binding_ref = ctx.execution_binding_ref.clone();
+        receipt.dispatch_admission_ref = ctx.dispatch_admission_ref.clone();
+        receipt.dispatch_input_sha256 = ctx.dispatch_input_sha256.clone();
+        if let Some(admission_ref) = &receipt.dispatch_admission_ref {
+            receipt.trace_refs.push(admission_ref.clone());
+        }
         receipt.provider_ref = Some(provider_ref.into());
         receipt.scope_ref = ctx.scope_id.clone();
         receipt.execution_environment_ref = ctx.execution_environment_ref.clone();
@@ -206,6 +217,33 @@ impl ExecutionReceipt {
                 .scope_ref
                 .as_deref()
                 .is_some_and(|scope| !scope.trim().is_empty())
+    }
+
+    pub fn proves_dispatch_admission(&self) -> bool {
+        match (
+            self.dispatch_admission_ref.as_deref(),
+            self.dispatch_input_sha256.as_deref(),
+        ) {
+            (Some(admission_ref), Some(input_sha256)) => {
+                self.trace_refs
+                    .iter()
+                    .any(|reference| reference == admission_ref)
+                    && admission_ref
+                        .strip_prefix("execution-dispatch-admission://")
+                        .is_some_and(|id| {
+                            !id.trim().is_empty()
+                                && id == id.trim()
+                                && !id.chars().any(char::is_control)
+                        })
+                    && input_sha256
+                        .strip_prefix("sha256:")
+                        .is_some_and(|digest| {
+                            digest.len() == 64
+                                && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+                        })
+            }
+            _ => false,
+        }
     }
 }
 
@@ -278,6 +316,21 @@ mod tests {
             .unwrap();
         let receipt = ExecutionReceipt::from_runtime_context(&pinned, "dsh", "s");
         assert!(receipt.is_pinned_work_evidence());
+        assert!(!receipt.proves_dispatch_admission());
         assert_eq!(receipt.work_generation, Some(3));
+
+        let dispatched = pinned
+            .with_dispatch_admission(
+                "execution-dispatch-admission://dispatch-1",
+                format!("sha256:{}", "c".repeat(64)),
+            )
+            .unwrap();
+        let dispatched_receipt =
+            ExecutionReceipt::from_runtime_context(&dispatched, "dsh", "session-dispatched");
+        assert!(dispatched_receipt.proves_dispatch_admission());
+        assert_eq!(
+            dispatched_receipt.dispatch_input_sha256.as_deref(),
+            Some(format!("sha256:{}", "c".repeat(64)).as_str())
+        );
     }
 }
