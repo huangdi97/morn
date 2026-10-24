@@ -15,6 +15,13 @@ pub struct RuntimeContext {
     pub work_generation: Option<u64>,
     #[serde(default)]
     pub execution_binding_ref: Option<RuntimeBindingId>,
+    /// Exact durable E0 dispatch admission consumed by this runtime turn.
+    /// This is intentionally separate from free-form provenance_refs.
+    #[serde(default)]
+    pub dispatch_admission_ref: Option<String>,
+    /// SHA-256 of the exact turn input admitted by dispatch_admission_ref.
+    #[serde(default)]
+    pub dispatch_input_sha256: Option<String>,
     /// Exact provider semantic identity admitted by the immutable ExecutionBinding.
     /// Binding id equality alone must never permit runtime/route reinterpretation.
     #[serde(default)]
@@ -48,6 +55,8 @@ impl RuntimeContext {
             work_package_id,
             work_generation: None,
             execution_binding_ref: None,
+            dispatch_admission_ref: None,
+            dispatch_input_sha256: None,
             provider_ref: None,
             provider_version: None,
             provider_digest: None,
@@ -81,6 +90,62 @@ impl RuntimeContext {
                 .execution_binding_ref
                 .as_ref()
                 .is_some_and(|binding| !binding.as_str().trim().is_empty())
+    }
+
+    pub fn with_dispatch_admission(
+        mut self,
+        admission_ref: impl Into<String>,
+        input_sha256: impl Into<String>,
+    ) -> Result<Self, String> {
+        let admission_ref = admission_ref.into();
+        let input_sha256 = input_sha256.into();
+        let admission_id = admission_ref
+            .strip_prefix("execution-dispatch-admission://")
+            .filter(|id| !id.trim().is_empty() && !id.chars().any(char::is_control))
+            .ok_or_else(|| {
+                "runtime dispatch admission must be an explicit execution-dispatch-admission:// reference"
+                    .to_string()
+            })?;
+        if admission_id != admission_id.trim() {
+            return Err("runtime dispatch admission id must not contain surrounding whitespace".to_string());
+        }
+        let digest = input_sha256
+            .strip_prefix("sha256:")
+            .filter(|digest| {
+                digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+            .ok_or_else(|| {
+                "runtime dispatch input digest must be sha256:<64 hexadecimal characters>"
+                    .to_string()
+            })?;
+        debug_assert_eq!(digest.len(), 64);
+        self.dispatch_admission_ref = Some(admission_ref);
+        self.dispatch_input_sha256 = Some(input_sha256);
+        Ok(self)
+    }
+
+    pub fn proves_dispatch_admission(&self) -> bool {
+        match (
+            self.dispatch_admission_ref.as_deref(),
+            self.dispatch_input_sha256.as_deref(),
+        ) {
+            (Some(admission_ref), Some(input_sha256)) => {
+                admission_ref
+                    .strip_prefix("execution-dispatch-admission://")
+                    .is_some_and(|id| {
+                        !id.trim().is_empty()
+                            && id == id.trim()
+                            && !id.chars().any(char::is_control)
+                    })
+                    && input_sha256
+                        .strip_prefix("sha256:")
+                        .is_some_and(|digest| {
+                            digest.len() == 64
+                                && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+                        })
+            }
+            _ => false,
+        }
     }
 
     pub fn with_provider_identity(
@@ -214,6 +279,26 @@ mod tests {
             )
             .unwrap();
         assert!(pinned.proves_pinned_work_execution());
+        assert!(!pinned.proves_dispatch_admission());
+        let dispatched = pinned
+            .clone()
+            .with_dispatch_admission(
+                "execution-dispatch-admission://dispatch-1",
+                format!("sha256:{}", "b".repeat(64)),
+            )
+            .unwrap();
+        assert!(dispatched.proves_dispatch_admission());
+        assert!(pinned
+            .clone()
+            .with_dispatch_admission("dispatch-1", format!("sha256:{}", "b".repeat(64)))
+            .is_err());
+        assert!(pinned
+            .clone()
+            .with_dispatch_admission(
+                "execution-dispatch-admission://dispatch-1",
+                "sha256:not-a-digest",
+            )
+            .is_err());
         assert!(pinned.proves_provider_identity(
             "deepseek-harness",
             "1.2.3",
