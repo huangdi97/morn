@@ -1536,8 +1536,8 @@ impl ControlPlaneStore for MornStore {
             "execution_dispatch_admission_v115",
             canonical.workspace_id.as_str(),
         )?;
-        let consumed_admissions: Vec<ConsumedExecutionDispatchAdmission> =
-            self.load_records_in_workspace(
+        let consumed_admissions: Vec<ConsumedExecutionDispatchAdmission> = self
+            .load_records_in_workspace(
                 "execution_dispatch_admission_consumed_v115",
                 canonical.workspace_id.as_str(),
             )?;
@@ -1685,28 +1685,27 @@ impl ControlPlaneStore for MornStore {
         // resolve to an immutable admission whose Work/binding/input identity
         // exactly matches this executor turn.
         let governed_e0 = binding.resolution_decision_ref.is_some()
-            && binding.effect_ceiling
-                == Some(morn_capability::EffectClass::E0LifecycleReversible);
+            && binding.effect_ceiling == Some(morn_capability::EffectClass::E0LifecycleReversible);
         let consumed_admission = if governed_e0 {
             if !receipt.proves_dispatch_admission() {
                 return Err(Error::validation(
                     "governed E0 execution receipt requires typed durable dispatch-admission provenance",
                 ));
             }
-            let admission_ref = receipt
-                .dispatch_admission_ref
-                .as_deref()
-                .ok_or_else(|| Error::validation("execution receipt dispatch admission is required"))?;
+            let admission_ref = receipt.dispatch_admission_ref.as_deref().ok_or_else(|| {
+                Error::validation("execution receipt dispatch admission is required")
+            })?;
             let admission_id = admission_ref
                 .strip_prefix("execution-dispatch-admission://")
                 .filter(|id| !id.trim().is_empty())
-                .ok_or_else(|| Error::validation("execution receipt dispatch admission reference is malformed"))?;
+                .ok_or_else(|| {
+                    Error::validation("execution receipt dispatch admission reference is malformed")
+                })?;
             let admission: ExecutionDispatchAdmission = self
                 .load_record("execution_dispatch_admission_v115", admission_id)?
                 .ok_or_else(|| Error::not_found("execution receipt durable dispatch admission"))?;
             if !admission.validates_against(work, &binding)
-                || receipt.dispatch_input_sha256.as_deref()
-                    != Some(admission.input_sha256.as_str())
+                || receipt.dispatch_input_sha256.as_deref() != Some(admission.input_sha256.as_str())
                 || admission.admitted_at > receipt.started_at
             {
                 return Err(Error::validation(
@@ -4687,8 +4686,7 @@ mod control_plane_persistence_scope_tests {
         .unwrap()
         .with_dispatch_admission(admission_ref.clone(), admission.input_sha256.clone())
         .unwrap();
-        let mut receipt =
-            ExecutionReceipt::from_runtime_context(&ctx, "provider:a", "session-e0");
+        let mut receipt = ExecutionReceipt::from_runtime_context(&ctx, "provider:a", "session-e0");
         receipt.started_at = event.created_at;
         receipt.ended_at = Some(event.created_at);
         receipt.outcome = "completed".to_string();
@@ -4727,9 +4725,7 @@ mod control_plane_persistence_scope_tests {
         let mut wrong_input = receipt.clone();
         wrong_input.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
         wrong_input.dispatch_input_sha256 = Some(format!("sha256:{}", "b".repeat(64)));
-        assert!(store
-            .save_execution_receipt(&work, &wrong_input)
-            .is_err());
+        assert!(store.save_execution_receipt(&work, &wrong_input).is_err());
 
         let next = ExecutionDispatchAdmission::for_e0(
             &work,
