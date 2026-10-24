@@ -8229,6 +8229,15 @@ mod workspace_boundary_tests {
             .unwrap()
             .contains("produce a draft only"));
         let admission_ref = format!("execution-dispatch-admission://{}", admissions[0].id);
+        assert!(receipts[0].proves_dispatch_admission());
+        assert_eq!(
+            receipts[0].dispatch_admission_ref.as_deref(),
+            Some(admission_ref.as_str())
+        );
+        assert_eq!(
+            receipts[0].dispatch_input_sha256.as_deref(),
+            Some(admissions[0].input_sha256.as_str())
+        );
         assert!(receipts[0]
             .trace_refs
             .iter()
