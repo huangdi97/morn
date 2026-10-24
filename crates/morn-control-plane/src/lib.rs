@@ -777,6 +777,14 @@ fn capture_resolution_admission_watermarks(
     Ok(vec![
         store.record_kind_watermark("capability_resolution_v115", work.workspace_id.as_str())?,
         store.record_kind_watermark("condition_evidence_v115", work.workspace_id.as_str())?,
+        store.record_kind_watermark(
+            "execution_dispatch_admission_v115",
+            work.workspace_id.as_str(),
+        )?,
+        store.record_kind_watermark(
+            "execution_dispatch_admission_consumed_v115",
+            work.workspace_id.as_str(),
+        )?,
     ])
 }
 
@@ -1520,8 +1528,32 @@ impl ControlPlaneStore for MornStore {
 
         // Capture append-only semantic streams before deriving currentness. The
         // final immutable insert checks these watermarks and the mutable Work
-        // revision in the same SQLite transaction.
+        // revision in the same SQLite transaction. Admission/consumption
+        // streams are part of the fence so two concurrent dispatch requests
+        // cannot both observe an idle Work execution slot and commit.
         let watermarks = capture_resolution_admission_watermarks(self, &canonical)?;
+        let prior_admissions: Vec<ExecutionDispatchAdmission> = self.load_records_in_workspace(
+            "execution_dispatch_admission_v115",
+            canonical.workspace_id.as_str(),
+        )?;
+        let consumed_admissions: Vec<ConsumedExecutionDispatchAdmission> =
+            self.load_records_in_workspace(
+                "execution_dispatch_admission_consumed_v115",
+                canonical.workspace_id.as_str(),
+            )?;
+        let unresolved = prior_admissions.iter().find(|prior| {
+            prior.work_id == canonical.id
+                && !consumed_admissions
+                    .iter()
+                    .any(|consumed| consumed.admission_id == prior.id)
+        });
+        if let Some(unresolved) = unresolved {
+            return Err(Error::invalid_state(format!(
+                "Work {} has unresolved E0 dispatch admission {}; receipt/reconciliation is required before another turn",
+                canonical.id, unresolved.id
+            )));
+        }
+
         let now = Timestamp::now();
         let evidence: Vec<ConditionEvidence> = self.load_records_in_workspace(
             "condition_evidence_v115",
