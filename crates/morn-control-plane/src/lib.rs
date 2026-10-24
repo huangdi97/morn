@@ -4611,6 +4611,25 @@ mod control_plane_persistence_scope_tests {
         receipt.trace_refs.push(event.id.to_string());
         store.save_execution_receipt(&work, &receipt).unwrap();
 
+        let consumed: ConsumedExecutionDispatchAdmission = store
+            .load_record(
+                "execution_dispatch_admission_consumed_v115",
+                admission.id.as_str(),
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(consumed.admission_id, admission.id);
+        assert_eq!(consumed.receipt_id, receipt.id);
+        assert_eq!(consumed.input_sha256, admission.input_sha256);
+
+        let mut replay = receipt.clone();
+        replay.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
+        assert!(store.save_execution_receipt(&work, &replay).is_err());
+        assert!(store
+            .load_record::<ExecutionReceipt>("execution_receipt_v115", replay.id.as_str())
+            .unwrap()
+            .is_none());
+
         let mut missing = receipt.clone();
         missing.id = morn_kernel::ids::ExecutionReceiptId::generate_with("rcpt");
         missing.dispatch_admission_ref = None;
