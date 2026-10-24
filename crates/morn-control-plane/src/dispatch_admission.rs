@@ -120,7 +120,10 @@ impl ExecutionDispatchAdmission {
             && self.work_generation == work.generation
             && self.binding_ref == binding.id
             && self.resolution_decision_ref
-                == binding.resolution_decision_ref.as_deref().unwrap_or_default()
+                == binding
+                    .resolution_decision_ref
+                    .as_deref()
+                    .unwrap_or_default()
             && self.capability_manifest_ref == binding.capability_manifest_ref
             && self.profile_ref == work.spec.profile_ref
             && self.profile_ref == binding.profile_ref
@@ -198,7 +201,8 @@ mod tests {
 
         binding.resolution_decision_ref =
             Some("capability-resolution-decision://epoch-1".to_string());
-        assert!(ExecutionDispatchAdmission::for_e0(&work, &binding, "sha256:not-a-digest")
-            .is_err());
+        assert!(
+            ExecutionDispatchAdmission::for_e0(&work, &binding, "sha256:not-a-digest").is_err()
+        );
     }
 }
