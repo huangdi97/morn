@@ -29,7 +29,9 @@ pub use controller_runtime::{
     current_durable_resolution_decision_ref_for_capability, derive_durable_controller_inputs,
     ControllerTickResult, DurableBusinessEvidenceControllerRuntime, DurableWorkControllerRuntime,
 };
-pub use dispatch_admission::{ExecutionDispatchAdmission, ExecutionDispatchAdmissionId};
+pub use dispatch_admission::{
+    ConsumedExecutionDispatchAdmission, ExecutionDispatchAdmission, ExecutionDispatchAdmissionId,
+};
 pub use external_action::{
     begin_external_attempt, begin_external_attempt_for_work_with_effect,
     begin_external_attempt_with_effect,
@@ -1653,7 +1655,7 @@ impl ControlPlaneStore for MornStore {
         let governed_e0 = binding.resolution_decision_ref.is_some()
             && binding.effect_ceiling
                 == Some(morn_capability::EffectClass::E0LifecycleReversible);
-        if governed_e0 {
+        let consumed_admission = if governed_e0 {
             if !receipt.proves_dispatch_admission() {
                 return Err(Error::validation(
                     "governed E0 execution receipt requires typed durable dispatch-admission provenance",
@@ -1679,7 +1681,14 @@ impl ControlPlaneStore for MornStore {
                     "execution receipt does not exactly match its durable pre-dispatch admission",
                 ));
             }
-        }
+            Some(ConsumedExecutionDispatchAdmission::from_admission(
+                &admission,
+                receipt.id.clone(),
+                Timestamp::now(),
+            )?)
+        } else {
+            None
+        };
 
         if receipt.ended_at.is_some()
             && (receipt.event_ids.is_empty() || receipt.trace_refs.is_empty())
@@ -1715,13 +1724,32 @@ impl ControlPlaneStore for MornStore {
                 ));
             }
         }
-        self.save_record_immutable(
-            "execution_receipt_v115",
-            receipt.id.as_str(),
-            work.workspace_id.as_str(),
-            receipt.started_at.millis(),
-            receipt,
-        )
+        if let Some(consumed) = consumed_admission {
+            self.save_immutable_pair(
+                ImmutableRecordCommit {
+                    kind: "execution_receipt_v115",
+                    id: receipt.id.as_str(),
+                    workspace_id: work.workspace_id.as_str(),
+                    created_at: receipt.started_at.millis(),
+                    record: receipt,
+                },
+                ImmutableRecordCommit {
+                    kind: "execution_dispatch_admission_consumed_v115",
+                    id: consumed.admission_id.as_str(),
+                    workspace_id: work.workspace_id.as_str(),
+                    created_at: consumed.consumed_at.millis(),
+                    record: &consumed,
+                },
+            )
+        } else {
+            self.save_record_immutable(
+                "execution_receipt_v115",
+                receipt.id.as_str(),
+                work.workspace_id.as_str(),
+                receipt.started_at.millis(),
+                receipt,
+            )
+        }
     }
 
     fn save_interop_binding(&self, work: &WorkResource, binding: &InteropBinding) -> Result<()> {
