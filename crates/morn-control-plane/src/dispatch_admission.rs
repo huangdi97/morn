@@ -9,9 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use morn_capability::EffectClass;
 use morn_kernel::error::{Error, Result};
-use morn_kernel::ids::{
-    ExecutionReceiptId, Id, RuntimeBindingId, WorkPackageId, WorkspaceId,
-};
+use morn_kernel::ids::{ExecutionReceiptId, Id, RuntimeBindingId, WorkPackageId, WorkspaceId};
 use morn_kernel::time::Timestamp;
 use morn_runtime::ExecutionBinding;
 use morn_work::control::WorkResource;
