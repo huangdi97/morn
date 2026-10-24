@@ -12,6 +12,7 @@ morn-work = { workspace = true }
 morn-organization = { workspace = true }
 morn-actor = { workspace = true }
 morn-capability = { workspace = true }
+morn-profile = { workspace = true }
 morn-harness = { workspace = true }
 morn-artifact = { workspace = true }
 serde = { workspace = true }

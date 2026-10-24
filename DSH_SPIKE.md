@@ -1,5 +1,14 @@
 # DSH_SPIKE.md — DeepSeek Harness / Cordis Architecture Spike
 
+> **Historical planning document (2026-10-08 scope).** The spike questions and
+> provider-contract sketch below are retained as design history. Current
+> implementation truth is authoritative in `STATUS.md`, and later decisions
+> supersede plan-level statements where they differ: **D-031** makes Cordis a
+> pinned reference composition runtime (not merely a one-off spike), and
+> **D-032** records the real DSH SDK/ACP adapters plus the exact `0.2.1-rc.2`
+> distribution qualification. Authenticated live DSH evidence remains
+> `EXTERNAL_BLOCKED` in `BLOCKERS.md`; this file does not upgrade it.
+
 ## 目标
 
 验证 DeepSeek Harness 是 Morn 的 Provider，而不是 Morn 的 Source of Truth。
@@ -96,3 +105,10 @@ DSH Tool Request
 - Morn contract tests 是否仍过
 
 不得把 fixture 测试写成“真实 DSH 已集成”。
+
+## 2026-10-09 SDK safety convergence
+
+- The real DSH SDK adapter is intentionally **E0-only** at the HarnessProvider seam because the current SDK wire has no Morn-controlled permission callback for internal tool calls.
+- A real DSH execution scope must carry `morn.effects<=E0`. E1/E2/E3 actions remain governed Morn ExternalAction operations; provider output cannot bypass Authority/permit/reconciliation.
+- Public durable DSH `session.event` records are normalized into Morn ExecutionEvents for model request/response summaries, tool proposal/result and turn checkpoints. Assistant text, tool arguments/results and private reasoning are not copied into audit summaries.
+- This restriction is a control-plane admission rule, **not a sandbox attestation**. Real deployments still require an execution environment that independently confines the DSH process/workspace.

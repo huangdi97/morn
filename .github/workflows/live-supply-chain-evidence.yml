@@ -1,0 +1,404 @@
+name: Live supply-chain evidence (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Plan verification identities only, or verify an existing digest-pinned OCI artifact"
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - verify
+      oci_ref:
+        description: "Digest-pinned OCI reference: oci://registry/repository@sha256:<64-hex>"
+        type: string
+        required: true
+      certificate_identity:
+        description: "Exact Fulcio certificate identity expected from Cosign verification"
+        type: string
+        required: true
+      certificate_oidc_issuer:
+        description: "Exact OIDC issuer expected from Cosign verification"
+        type: string
+        required: true
+      release_runner_ref:
+        description: "Deployment-owned identity of the attested release-verification runner"
+        type: string
+        required: true
+      cosign_digest:
+        description: "For verify: SHA-256 of the pinned Cosign verifier binary (sha256:<64-lowercase-hex>)"
+        type: string
+        required: false
+        default: ""
+      use_environment_registry_auth:
+        description: "Materialize protected Environment secret MORN_REGISTRY_AUTH_JSON as an ephemeral DOCKER_CONFIG"
+        type: boolean
+        required: true
+        default: false
+      acknowledge_verify_only:
+        description: "Required for verify: this verifies existing signature/provenance only; it does not publish, sign, admit a site, or authorize production"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-supply-chain-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  supply-chain-evidence:
+    name: Supply chain ${{ inputs.operation }}
+    environment: morn-supply-chain-verification
+    runs-on: ${{ inputs.operation == 'verify' && 'morn-attested-release' || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    env:
+      INPUT_OPERATION: ${{ inputs.operation }}
+      INPUT_OCI_REF: ${{ inputs.oci_ref }}
+      INPUT_CERTIFICATE_IDENTITY: ${{ inputs.certificate_identity }}
+      INPUT_CERTIFICATE_OIDC_ISSUER: ${{ inputs.certificate_oidc_issuer }}
+      INPUT_RELEASE_RUNNER_REF: ${{ inputs.release_runner_ref }}
+      INPUT_COSIGN_DIGEST: ${{ inputs.cosign_digest }}
+      INPUT_USE_REGISTRY_AUTH: ${{ inputs.use_environment_registry_auth }}
+      INPUT_ACK_VERIFY_ONLY: ${{ inputs.acknowledge_verify_only }}
+      MORN_OCI_REF: ${{ inputs.oci_ref }}
+      MORN_COSIGN_COMMAND: /usr/local/bin/cosign
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Verify exact supply-chain verifier checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$GITHUB_SHA" || {
+            echo "supply-chain verifier checkout mismatch: expected $GITHUB_SHA, got $actual"
+            exit 2
+          }
+
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Validate verification identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/live-supply-chain-evidence
+          python - <<'PY'
+          import json, os, pathlib, re
+
+          oci = os.environ["INPUT_OCI_REF"].strip()
+          identity = os.environ["INPUT_CERTIFICATE_IDENTITY"].strip()
+          issuer = os.environ["INPUT_CERTIFICATE_OIDC_ISSUER"].strip()
+          runner_ref = os.environ["INPUT_RELEASE_RUNNER_REF"].strip()
+          operation = os.environ["INPUT_OPERATION"]
+          digest = os.environ.get("INPUT_COSIGN_DIGEST", "").strip()
+
+          if not re.fullmatch(r"oci://[^\s@]+@sha256:[0-9a-fA-F]{64}", oci):
+              raise SystemExit("oci_ref must be a digest-pinned oci://...@sha256:<64-hex> reference")
+          if not identity or any(ord(ch) < 32 for ch in identity):
+              raise SystemExit("certificate_identity must be a non-empty single-line value")
+          if not issuer.startswith("https://") or any(ord(ch) < 32 for ch in issuer):
+              raise SystemExit("certificate_oidc_issuer must be an explicit https:// issuer")
+          if not runner_ref or any(ord(ch) < 32 for ch in runner_ref):
+              raise SystemExit("release_runner_ref must be a non-empty single-line value")
+          if operation == "verify":
+              if os.environ["INPUT_ACK_VERIFY_ONLY"] != "true":
+                  raise SystemExit("verify requires acknowledge_verify_only=true")
+              if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                  raise SystemExit("verify requires canonical cosign_digest sha256:<64-lowercase-hex>")
+
+          plan = {
+              "gate": "MORN_SUPPLY_CHAIN_VERIFICATION_PLAN",
+              "status": "PLANNED",
+              "operation": operation,
+              "oci_ref": oci,
+              "certificate_identity": identity,
+              "certificate_oidc_issuer": issuer,
+              "release_runner_ref": runner_ref,
+              "cosign_digest": digest or None,
+              "claims": {
+                  "artifact_published": False,
+                  "signature_verified": False,
+                  "slsa_provenance_verified": False,
+                  "site_admitted": False,
+                  "production_write": False,
+              },
+          }
+          pathlib.Path("target/live-supply-chain-evidence/verification-plan.json").write_text(
+              json.dumps(plan, indent=2), encoding="utf-8"
+          )
+          PY
+
+      - name: Stop after planning
+        if: inputs.operation == 'plan'
+        shell: bash
+        run: |
+          echo "Verification plan emitted. No registry access or Cosign execution occurred."
+
+      - name: Bind requested identity to protected Sigstore policy
+        if: inputs.operation == 'verify'
+        shell: bash
+        env:
+          TRUSTED_CERTIFICATE_IDENTITY: ${{ secrets.MORN_COSIGN_CERTIFICATE_IDENTITY }}
+          TRUSTED_CERTIFICATE_OIDC_ISSUER: ${{ secrets.MORN_COSIGN_OIDC_ISSUER }}
+        run: |
+          set -euo pipefail
+          test -n "${TRUSTED_CERTIFICATE_IDENTITY:-}" || {
+            echo "protected Environment secret MORN_COSIGN_CERTIFICATE_IDENTITY is required"
+            exit 2
+          }
+          test -n "${TRUSTED_CERTIFICATE_OIDC_ISSUER:-}" || {
+            echo "protected Environment secret MORN_COSIGN_OIDC_ISSUER is required"
+            exit 2
+          }
+          python - <<'PY'
+          import os
+
+          requested_identity = os.environ["INPUT_CERTIFICATE_IDENTITY"].strip()
+          requested_issuer = os.environ["INPUT_CERTIFICATE_OIDC_ISSUER"].strip()
+          trusted_identity = os.environ["TRUSTED_CERTIFICATE_IDENTITY"].strip()
+          trusted_issuer = os.environ["TRUSTED_CERTIFICATE_OIDC_ISSUER"].strip()
+
+          for name, value in (
+              ("TRUSTED_CERTIFICATE_IDENTITY", trusted_identity),
+              ("TRUSTED_CERTIFICATE_OIDC_ISSUER", trusted_issuer),
+          ):
+              if not value or any(ord(ch) < 32 for ch in value):
+                  raise SystemExit(f"{name} must be a non-empty single-line value")
+          if not trusted_issuer.startswith("https://"):
+              raise SystemExit("trusted certificate OIDC issuer must use https://")
+          if requested_identity != trusted_identity or requested_issuer != trusted_issuer:
+              raise SystemExit(
+                  "workflow-dispatch certificate identity/OIDC issuer do not match protected Sigstore policy"
+              )
+          PY
+
+      - name: Bind verification to attested release runner and pinned Cosign
+        if: inputs.operation == 'verify'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, pathlib, stat
+
+          identity_file = pathlib.Path("/etc/morn/release-runner-ref")
+          if not identity_file.exists():
+              raise SystemExit("release runner is missing /etc/morn/release-runner-ref")
+          st = identity_file.lstat()
+          if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+              raise SystemExit("release runner identity must be a regular non-symlink file")
+          if st.st_uid != 0 or st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+              raise SystemExit("release runner identity must be root-owned and not group/world writable")
+          actual_runner = identity_file.read_text(encoding="utf-8").strip()
+          expected_runner = os.environ["INPUT_RELEASE_RUNNER_REF"].strip()
+          if actual_runner != expected_runner:
+              raise SystemExit(
+                  f"release runner identity mismatch: expected {expected_runner!r}, got {actual_runner!r}"
+              )
+
+          cosign = pathlib.Path("/usr/local/bin/cosign")
+          if not cosign.exists():
+              raise SystemExit("pinned Cosign binary is missing at /usr/local/bin/cosign")
+          cs = cosign.lstat()
+          if stat.S_ISLNK(cs.st_mode) or not stat.S_ISREG(cs.st_mode):
+              raise SystemExit("Cosign verifier must be a regular non-symlink file")
+          if cs.st_uid != 0 or cs.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+              raise SystemExit("Cosign verifier must be root-owned and not group/world writable")
+          digest = "sha256:" + hashlib.sha256(cosign.read_bytes()).hexdigest()
+          if digest != os.environ["INPUT_COSIGN_DIGEST"]:
+              raise SystemExit(
+                  f"Cosign verifier digest mismatch: expected {os.environ['INPUT_COSIGN_DIGEST']}, got {digest}"
+              )
+
+          report = {
+              "gate": "MORN_ATTESTED_RELEASE_RUNNER_BINDING",
+              "status": "PASS",
+              "release_runner_ref": actual_runner,
+              "cosign_digest": digest,
+              "runner_name": os.environ.get("RUNNER_NAME"),
+              "runner_os": os.environ.get("RUNNER_OS"),
+              "runner_arch": os.environ.get("RUNNER_ARCH"),
+              "github_run_id": os.environ.get("GITHUB_RUN_ID"),
+              "github_sha": os.environ.get("GITHUB_SHA"),
+              "claims": {
+                  "runner_identity_bound": True,
+                  "verifier_binary_pinned": True,
+                  "artifact_published": False,
+                  "signature_verified": False,
+                  "slsa_provenance_verified": False,
+                  "site_admitted": False,
+                  "production_write": False,
+              },
+          }
+          pathlib.Path("target/live-supply-chain-evidence/runner-binding.json").write_text(
+              json.dumps(report, indent=2), encoding="utf-8"
+          )
+          PY
+
+      - name: Materialize optional protected registry credentials
+        if: inputs.operation == 'verify' && inputs.use_environment_registry_auth
+        shell: bash
+        env:
+          REGISTRY_AUTH_JSON: ${{ secrets.MORN_REGISTRY_AUTH_JSON }}
+        run: |
+          set -euo pipefail
+          test -n "${REGISTRY_AUTH_JSON:-}" || {
+            echo "MORN_REGISTRY_AUTH_JSON Environment secret is required"
+            exit 2
+          }
+          umask 077
+          auth_dir="$RUNNER_TEMP/morn-registry-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [[ -e "$auth_dir" || -L "$auth_dir" ]]; then
+            echo "refusing to reuse pre-existing registry auth directory"
+            exit 2
+          fi
+          mkdir -m 700 "$auth_dir"
+          AUTH_DIR="$auth_dir" python - <<'PY'
+          import json, os, pathlib
+
+          raw = os.environ["REGISTRY_AUTH_JSON"]
+          value = json.loads(raw)
+          if not isinstance(value, dict):
+              raise SystemExit("MORN_REGISTRY_AUTH_JSON must be a Docker config JSON object")
+          path = pathlib.Path(os.environ["AUTH_DIR"]) / "config.json"
+          path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
+          path.chmod(0o600)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"DOCKER_CONFIG={path.parent}\n")
+              fh.write("MORN_COSIGN_ENV_PASSTHROUGH=DOCKER_CONFIG\n")
+          PY
+
+      - name: Verify exact signature and SLSA provenance
+        if: inputs.operation == 'verify'
+        shell: bash
+        env:
+          MORN_COSIGN_CERTIFICATE_IDENTITY: ${{ secrets.MORN_COSIGN_CERTIFICATE_IDENTITY }}
+          MORN_COSIGN_OIDC_ISSUER: ${{ secrets.MORN_COSIGN_OIDC_ISSUER }}
+          MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF: ${{ inputs.release_runner_ref }}
+          MORN_SUPPLY_CHAIN_COSIGN_DIGEST: ${{ inputs.cosign_digest }}
+          MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF: git://huangdi97/morn/${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo run --quiet -p morn-app --bin supply_chain_verify \
+            | tee target/live-supply-chain-evidence/verification-report.json
+
+      - name: Export Morn-loadable supply-chain evidence
+        if: inputs.operation == 'verify'
+        shell: bash
+        env:
+          TRUSTED_CERTIFICATE_IDENTITY: ${{ secrets.MORN_COSIGN_CERTIFICATE_IDENTITY }}
+          TRUSTED_CERTIFICATE_OIDC_ISSUER: ${{ secrets.MORN_COSIGN_OIDC_ISSUER }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          path = pathlib.Path("target/live-supply-chain-evidence/verification-report.json")
+          report = json.loads(path.read_text(encoding="utf-8"))
+          if report.get("status") != "PASS":
+              raise SystemExit("supply-chain verification did not PASS")
+          evidence = report.get("verification_evidence")
+          if not isinstance(evidence, dict):
+              raise SystemExit("PASS report is missing verification_evidence")
+          if not evidence.get("signature_verified") or not evidence.get("provenance_verified"):
+              raise SystemExit("verification evidence did not prove both required trust axes")
+
+          proof_payloads = report.get("proof_payloads")
+          if not isinstance(proof_payloads, dict):
+              raise SystemExit("PASS report is missing retained Cosign proof payloads")
+          signature_raw = proof_payloads.get("signature")
+          provenance_raw = proof_payloads.get("slsa_provenance")
+          if not isinstance(signature_raw, str) or not signature_raw.strip():
+              raise SystemExit("signature proof payload is missing")
+          if not isinstance(provenance_raw, str) or not provenance_raw.strip():
+              raise SystemExit("SLSA provenance proof payload is missing")
+
+          signature_digest = hashlib.sha256(signature_raw.encode("utf-8")).hexdigest()
+          provenance_digest = hashlib.sha256(provenance_raw.encode("utf-8")).hexdigest()
+          expected_signature_ref = f"cosign-verify-output://sha256:{signature_digest}"
+          expected_provenance_ref = (
+              f"cosign-attestation-output://sha256:{provenance_digest}"
+          )
+
+          identity = os.environ["TRUSTED_CERTIFICATE_IDENTITY"].strip()
+          issuer = os.environ["TRUSTED_CERTIFICATE_OIDC_ISSUER"].strip()
+          expected_verifiers = {
+              f"sigstore://cosign?identity={identity}&issuer={issuer}",
+              f"slsa://cosign?identity={identity}&issuer={issuer}",
+          }
+          actual_verifiers = {
+              item.strip()
+              for item in str(evidence.get("verifier_ref", "")).split(" + ")
+              if item.strip()
+          }
+          if actual_verifiers != expected_verifiers:
+              raise SystemExit("verification evidence verifier_ref does not match protected Sigstore policy")
+
+          refs = set(evidence.get("evidence_refs") or [])
+          expected_runner = (
+              "morn-supply-chain://release-runner?value="
+              + os.environ["INPUT_RELEASE_RUNNER_REF"].strip()
+          )
+          expected_cosign = (
+              "morn-supply-chain://cosign-binary?value="
+              + os.environ["INPUT_COSIGN_DIGEST"].strip()
+          )
+          expected_verifier_build = (
+              "morn-supply-chain://verifier-build?value=git://huangdi97/morn/"
+              + os.environ["GITHUB_SHA"].strip()
+          )
+          expected_oci_subject = (
+              "morn-supply-chain://oci-subject?value="
+              + os.environ["INPUT_OCI_REF"].strip()
+          )
+          for required_ref in (
+              expected_runner,
+              expected_cosign,
+              expected_verifier_build,
+              expected_oci_subject,
+              expected_signature_ref,
+              expected_provenance_ref,
+          ):
+              if required_ref not in refs:
+                  raise SystemExit(
+                      f"verification evidence is missing required proof/context ref {required_ref}"
+                  )
+
+          output_dir = pathlib.Path("target/live-supply-chain-evidence")
+          (output_dir / "cosign-signature-proof.json").write_text(
+              signature_raw, encoding="utf-8"
+          )
+          (output_dir / "cosign-slsa-provenance-proof.json").write_text(
+              provenance_raw, encoding="utf-8"
+          )
+          (output_dir / "supply-chain-verification.json").write_text(
+              json.dumps(evidence, indent=2), encoding="utf-8"
+          )
+          PY
+
+      - name: Remove ephemeral registry credentials
+        if: always() && inputs.operation == 'verify'
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/morn-registry-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+      - name: Upload evidence reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-supply-chain-evidence-${{ github.sha }}-${{ inputs.operation }}-${{ github.run_attempt }}
+          path: target/live-supply-chain-evidence
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,100 @@
+{
+  "manifest": {
+    "id": "cmanifest-equipment-investigator-v1",
+    "definition_id": "cap-equipment-investigator",
+    "name": "equipment-investigator",
+    "version": {
+      "major": 1,
+      "minor": 0,
+      "patch": 0
+    },
+    "digest": "sha256:fixture",
+    "provider_ref": "harness://dsh",
+    "kind": "Agent",
+    "provides": [
+      "equipment.anomaly.investigate"
+    ],
+    "requires": [
+      "historian.read"
+    ],
+    "preconditions": [],
+    "postconditions": [],
+    "interfaces": [
+      {
+        "protocol": "json-rpc",
+        "input_schema_ref": "morn://schemas/equipment-investigation/input/v1",
+        "output_schema_ref": "morn://schemas/equipment-investigation/output/v1"
+      }
+    ],
+    "idempotency_key_required": false,
+    "compensation_ref": null,
+    "execution": {
+      "minimum_isolation": "container",
+      "os": "linux",
+      "runtime_kinds": [
+        "node"
+      ],
+      "harness_compatibility": [
+        "dsh"
+      ],
+      "required_guarantees": [
+        "network-egress-policy",
+        "secret-indirection"
+      ],
+      "network_allowlist": [
+        "historian.internal"
+      ],
+      "writable_paths": [],
+      "secret_refs": [
+        "credential://historian-read"
+      ],
+      "cpu_millis": 500,
+      "memory_mb": 512,
+      "gpu_count": null,
+      "persistence_scope": "attempt",
+      "timeout_ms": 45000,
+      "side_effect_policy": "profile-governed"
+    },
+    "authority": {
+      "allow": [
+        "historian.read"
+      ],
+      "deny": [
+        "plc.write"
+      ],
+      "maximum_effect": "E0LifecycleReversible"
+    },
+    "economics": {
+      "latency_p95_ms": 30000,
+      "estimated_cost_micros": 5000,
+      "throughput_per_minute": 10
+    },
+    "provenance": {
+      "source_ref": "repo://factory/equipment-investigator",
+      "source_digest": "sha256:source-fixture",
+      "build_provenance_ref": "slsa://fixture",
+      "sbom_ref": "oci://fixture/sbom",
+      "signature_ref": "sigstore://fixture"
+    },
+    "owner": "factory-solution-team",
+    "license": "MIT",
+    "declared_at": "2026-10-08T04:00:00Z"
+  },
+  "stage": "Admitted",
+  "qualification_refs": [
+    "qual-1"
+  ],
+  "release_refs": [
+    "release-1"
+  ],
+  "admitted_sites": [
+    "plant-a"
+  ],
+  "admission_refs": [
+    {
+      "admission_ref": "admission-1",
+      "site_ref": "plant-a",
+      "profile_ref": "morn.factory.readonly@1.0.0"
+    }
+  ]
+}

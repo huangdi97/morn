@@ -451,12 +451,44 @@ impl SolutionCompiler {
                 "cannot compile: unresolved capability gaps exist; resolve or explicitly accept them",
             ));
         }
+        let constraint_values: Vec<String> = problem
+            .constraints
+            .iter()
+            .map(|constraint| constraint.value.clone())
+            .collect();
+        let profile_ref = constraint_values
+            .iter()
+            .find_map(|value| value.strip_prefix("profile=").map(str::to_string));
+        let site_ref = constraint_values
+            .iter()
+            .find_map(|value| value.strip_prefix("site=").map(str::to_string));
+        let acceptance_criteria: Vec<String> = constraint_values
+            .iter()
+            .filter_map(|value| value.strip_prefix("acceptance=").map(str::to_string))
+            .collect();
+        let required_capabilities: Vec<String> = proposed
+            .capability_resolutions
+            .iter()
+            .filter(|resolution| resolution.status == "Resolved")
+            .map(|resolution| resolution.capability.clone())
+            .collect();
+        let production_write_allowed = !constraint_values
+            .iter()
+            .any(|value| value == "forbid=ProductionWrite");
+
         let manifest = json!({
+            "schema": "morn.solution-package/v11.5",
+            "profile_ref": profile_ref,
+            "site_ref": site_ref,
+            "acceptance_criteria": acceptance_criteria,
+            "required_capabilities": required_capabilities,
+            "harness_policy": "provider-neutral",
+            "production_write_allowed": production_write_allowed,
             "morn": { "goal2": "solution-factory", "domain": problem.domain, "version": "1.0" },
             "problem": {
                 "objective": problem.objective,
                 "success_definition": problem.success_definition,
-                "constraints": problem.constraints.iter().map(|c| c.value.clone()).collect::<Vec<_>>(),
+                "constraints": constraint_values,
             },
             "work_packages": proposed.work_packages.iter().map(|w| w.to_string()).collect::<Vec<_>>(),
             "member_type_plans": proposed.member_type_plans.iter().map(|m| json!({
@@ -644,6 +676,37 @@ mod tests {
             report.issues
         );
     }
+    #[test]
+    fn compiled_v115_manifest_pins_profile_scope_without_pinning_harness_provider() {
+        let ws = morn_kernel::ids::WorkspaceId::generate();
+        let mut req = SolutionRequest::new(ws, "Deliver a reviewed report", "generic");
+        req.constraints = vec![
+            "profile=morn.factory.readonly@1.0.0".to_string(),
+            "site=plant-a".to_string(),
+            "acceptance=delivery-impact-review".to_string(),
+            "forbid=ProductionWrite".to_string(),
+        ];
+        req.available_capabilities.push("*".to_string());
+        req.available_harnesses = vec!["deepseek-harness".to_string(), "pi".to_string()];
+        let mut compiler = SolutionCompiler::new();
+        let (problem, graph) = compiler.analyze(&req).unwrap();
+        let proposed = compiler.propose(&problem, &graph, &req).unwrap();
+        let approved = compiler.approve(proposed.id.clone(), "reviewer");
+        let pkg = compiler.compile(&approved, &proposed, &problem).unwrap();
+        let policy = pkg.policy_v115().unwrap();
+        assert_eq!(
+            policy.profile_ref.as_deref(),
+            Some("morn.factory.readonly@1.0.0")
+        );
+        assert_eq!(policy.site_ref.as_deref(), Some("plant-a"));
+        assert!(!policy.production_write_allowed);
+        assert_eq!(policy.harness_policy, "provider-neutral");
+        assert_eq!(
+            policy.acceptance_criteria,
+            vec!["delivery-impact-review".to_string()]
+        );
+    }
+
     #[test]
     fn compile_requires_approval_and_produces_manifest() {
         let ws = morn_kernel::ids::WorkspaceId::generate();

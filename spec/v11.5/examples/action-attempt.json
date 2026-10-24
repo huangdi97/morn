@@ -1,0 +1,26 @@
+{
+  "id": "attempt-1042-cmms",
+  "binding_id": "binding-1042-cmms",
+  "business_key": "work-1042:maintenance-order",
+  "action": "create-maintenance-order",
+  "resource_ref": "machine:CNC-17",
+  "site_ref": "plant-a",
+  "authority_decision_ref": "authz-1042-cmms",
+  "external_action_permit_ref": "permit-1042-cmms",
+  "effect_contract": {
+    "class": "E2Compensatable",
+    "compensation_action": "cmms.cancel-order",
+    "irreversible_reason": null,
+    "preview_required": true,
+    "approval_required": false,
+    "verification_required": true
+  },
+  "state": "OutcomeUnknown",
+  "external_ref": null,
+  "evidence_refs": [
+    "dispatch:1042"
+  ],
+  "last_error": "client timeout after possible remote commit",
+  "created_at": "2026-10-08T05:02:00Z",
+  "updated_at": "2026-10-08T05:02:15Z"
+}

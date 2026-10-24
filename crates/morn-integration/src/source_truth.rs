@@ -1,0 +1,420 @@
+//! Explicit binding to an authoritative external source for a class of facts.
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use morn_kernel::error::{Error, Result};
+use morn_kernel::ids::{Id, OutcomeRecordId, WorkPackageId, WorkspaceId};
+use morn_kernel::time::Timestamp;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct SourceOfTruthBindingTag;
+pub type SourceOfTruthBindingId = Id<SourceOfTruthBindingTag>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum TruthAuthorityKind {
+    SystemOfRecord,
+    Sensor,
+    HumanAuthority,
+    ValidatedComputation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum ConflictPolicy {
+    ExternalWins,
+    HumanReview,
+    ReconcileBeforeUse,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SourceObservationAttestation {
+    pub attestation_id: String,
+    pub workspace_id: WorkspaceId,
+    pub work_package_id: WorkPackageId,
+    pub work_generation: u64,
+    pub source_binding_id: SourceOfTruthBindingId,
+    pub fact_type: String,
+    pub objective: String,
+    pub source_ref: String,
+    pub observed_facts: Value,
+    pub evidence_refs: Vec<String>,
+    pub observed_at: Timestamp,
+    pub valid_until: Option<Timestamp>,
+}
+
+impl SourceObservationAttestation {
+    pub fn validate(&self) -> Result<()> {
+        if self.attestation_id.trim().is_empty()
+            || self.workspace_id.as_str().trim().is_empty()
+            || self.work_package_id.as_str().trim().is_empty()
+            || self.source_binding_id.as_str().trim().is_empty()
+            || self.work_generation == 0
+            || self.fact_type.trim().is_empty()
+            || self.objective.trim().is_empty()
+            || self.source_ref.trim().is_empty()
+            || !self.observed_facts.is_object()
+            || self.evidence_refs.is_empty()
+        {
+            return Err(Error::validation(
+                "source observation attestation requires id, fact type, objective, source ref, object facts and evidence",
+            ));
+        }
+        if self
+            .valid_until
+            .is_some_and(|until| until < self.observed_at)
+        {
+            return Err(Error::validation(
+                "source observation attestation validity cannot end before observation",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn active_for(
+        &self,
+        workspace_id: &WorkspaceId,
+        work_package_id: &WorkPackageId,
+        work_generation: u64,
+        source_binding_id: &SourceOfTruthBindingId,
+        fact_type: &str,
+        now: Timestamp,
+    ) -> bool {
+        self.validate().is_ok()
+            && &self.workspace_id == workspace_id
+            && &self.work_package_id == work_package_id
+            && self.work_generation == work_generation
+            && &self.source_binding_id == source_binding_id
+            && self.fact_type == fact_type
+            && self.observed_at <= now
+            && self.valid_until.is_none_or(|until| now <= until)
+    }
+}
+
+/// Durable proof that one deployment-owned source observation attestation
+/// was consumed exactly once to materialize one Morn ObservedOutcome.
+///
+/// This is intentionally a full copy of the attested world fact, not a loose
+/// JSON marker. Control-plane persistence can therefore verify that the
+/// resulting Outcome did not change Work generation, authority, source,
+/// objective, facts, evidence or observation time after admission.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConsumedSourceObservationAttestation {
+    pub attestation_id: String,
+    pub workspace_id: WorkspaceId,
+    pub work_package_id: WorkPackageId,
+    pub work_generation: u64,
+    pub source_binding_id: SourceOfTruthBindingId,
+    pub fact_type: String,
+    pub objective: String,
+    pub source_ref: String,
+    pub observed_facts: Value,
+    pub evidence_refs: Vec<String>,
+    pub observed_at: Timestamp,
+    pub valid_until: Option<Timestamp>,
+    pub outcome_id: OutcomeRecordId,
+    pub consumed_at: Timestamp,
+}
+
+impl ConsumedSourceObservationAttestation {
+    pub fn from_attestation(
+        attestation: &SourceObservationAttestation,
+        outcome_id: OutcomeRecordId,
+        consumed_at: Timestamp,
+    ) -> Result<Self> {
+        attestation.validate()?;
+        let record = Self {
+            attestation_id: attestation.attestation_id.clone(),
+            workspace_id: attestation.workspace_id.clone(),
+            work_package_id: attestation.work_package_id.clone(),
+            work_generation: attestation.work_generation,
+            source_binding_id: attestation.source_binding_id.clone(),
+            fact_type: attestation.fact_type.clone(),
+            objective: attestation.objective.clone(),
+            source_ref: attestation.source_ref.clone(),
+            observed_facts: attestation.observed_facts.clone(),
+            evidence_refs: attestation.evidence_refs.clone(),
+            observed_at: attestation.observed_at,
+            valid_until: attestation.valid_until,
+            outcome_id,
+            consumed_at,
+        };
+        record.validate()?;
+        Ok(record)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.attestation_id.trim().is_empty()
+            || self.workspace_id.as_str().trim().is_empty()
+            || self.work_package_id.as_str().trim().is_empty()
+            || self.source_binding_id.as_str().trim().is_empty()
+            || self.outcome_id.as_str().trim().is_empty()
+            || self.work_generation == 0
+            || self.fact_type.trim().is_empty()
+            || self.objective.trim().is_empty()
+            || self.source_ref.trim().is_empty()
+            || !self.observed_facts.is_object()
+            || self.evidence_refs.is_empty()
+        {
+            return Err(Error::validation(
+                "consumed source observation requires exact attestation, Work, source fact and evidence",
+            ));
+        }
+        if self.consumed_at < self.observed_at
+            || self
+                .valid_until
+                .is_some_and(|until| self.consumed_at > until || until < self.observed_at)
+        {
+            return Err(Error::validation(
+                "source observation must be consumed inside its attested validity window",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceOfTruthBinding {
+    pub id: SourceOfTruthBindingId,
+    pub site_ref: Option<String>,
+    pub source_ref: String,
+    pub authority_kind: TruthAuthorityKind,
+    pub authoritative_fact_types: Vec<String>,
+    pub key_mapping_ref: String,
+    pub query_capability_ref: String,
+    pub freshness_sla_ms: Option<u64>,
+    pub conflict_policy: ConflictPolicy,
+    pub version_ref: String,
+    pub created_at: Timestamp,
+}
+
+impl SourceOfTruthBinding {
+    pub fn validate(&self) -> Result<()> {
+        if self.id.as_str().trim().is_empty()
+            || self
+                .site_ref
+                .as_deref()
+                .is_some_and(|site| site.trim().is_empty())
+            || self.source_ref.trim().is_empty()
+            || self.authoritative_fact_types.is_empty()
+            || self
+                .authoritative_fact_types
+                .iter()
+                .any(|fact| fact.trim().is_empty())
+            || self.key_mapping_ref.trim().is_empty()
+            || self.query_capability_ref.trim().is_empty()
+            || self.version_ref.trim().is_empty()
+        {
+            return Err(Error::validation(
+                "source-of-truth binding requires source, fact types, key mapping, query capability and version",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn authoritative_for(&self, fact_type: &str) -> bool {
+        self.authoritative_fact_types
+            .iter()
+            .any(|item| item == fact_type)
+    }
+
+    /// Freshness is a property of the bound source contract, independent of an
+    /// attestation's own validity window. A deployment cannot extend the
+    /// source-of-truth SLA by issuing a long-lived attestation over stale data.
+    pub fn observation_is_fresh(&self, observed_at: Timestamp, now: Timestamp) -> bool {
+        if observed_at > now {
+            return false;
+        }
+        self.freshness_sla_ms.is_none_or(|sla_ms| {
+            let age_ms = now.millis().saturating_sub(observed_at.millis());
+            let sla_ms = i64::try_from(sla_ms).unwrap_or(i64::MAX);
+            age_ms <= sla_ms
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_observation_attestation_is_exact_and_time_bounded() {
+        let workspace = WorkspaceId::generate();
+        let work = WorkPackageId::generate_with("work");
+        let binding = SourceOfTruthBindingId::generate_with("sot");
+        let attestation = SourceObservationAttestation {
+            attestation_id: "obs-attest-1".to_string(),
+            workspace_id: workspace.clone(),
+            work_package_id: work.clone(),
+            work_generation: 2,
+            source_binding_id: binding.clone(),
+            fact_type: "maintenance.order".to_string(),
+            objective: "maintenance order completed".to_string(),
+            source_ref: "cmms://plant-a/orders/1".to_string(),
+            observed_facts: serde_json::json!({"status":"complete"}),
+            evidence_refs: vec!["cmms://plant-a/orders/1/receipt".to_string()],
+            observed_at: Timestamp::from_millis(10),
+            valid_until: Some(Timestamp::from_millis(20)),
+        };
+        attestation.validate().unwrap();
+        assert!(attestation.active_for(
+            &workspace,
+            &work,
+            2,
+            &binding,
+            "maintenance.order",
+            Timestamp::from_millis(15),
+        ));
+        assert!(!attestation.active_for(
+            &workspace,
+            &work,
+            2,
+            &binding,
+            "machine.temperature",
+            Timestamp::from_millis(15),
+        ));
+        assert!(!attestation.active_for(
+            &workspace,
+            &work,
+            2,
+            &binding,
+            "maintenance.order",
+            Timestamp::from_millis(21),
+        ));
+    }
+
+    #[test]
+    fn consumed_observation_is_a_full_typed_copy_of_the_admitted_fact() {
+        let workspace = WorkspaceId::generate();
+        let work = WorkPackageId::generate_with("work");
+        let binding = SourceOfTruthBindingId::generate_with("sot");
+        let attestation = SourceObservationAttestation {
+            attestation_id: "obs-attest-consume-1".to_string(),
+            workspace_id: workspace.clone(),
+            work_package_id: work.clone(),
+            work_generation: 3,
+            source_binding_id: binding.clone(),
+            fact_type: "delivery.status".to_string(),
+            objective: "delivery confirmed".to_string(),
+            source_ref: "erp://deliveries/42".to_string(),
+            observed_facts: serde_json::json!({"status":"delivered"}),
+            evidence_refs: vec!["erp://deliveries/42/receipt".to_string()],
+            observed_at: Timestamp::from_millis(10),
+            valid_until: Some(Timestamp::from_millis(20)),
+        };
+        let outcome = OutcomeRecordId::generate_with("out");
+        let consumed = ConsumedSourceObservationAttestation::from_attestation(
+            &attestation,
+            outcome.clone(),
+            Timestamp::from_millis(15),
+        )
+        .unwrap();
+        assert_eq!(consumed.workspace_id, workspace);
+        assert_eq!(consumed.work_package_id, work);
+        assert_eq!(consumed.work_generation, 3);
+        assert_eq!(consumed.source_binding_id, binding);
+        assert_eq!(consumed.outcome_id, outcome);
+        assert_eq!(
+            consumed.observed_facts,
+            serde_json::json!({"status":"delivered"})
+        );
+
+        assert!(ConsumedSourceObservationAttestation::from_attestation(
+            &attestation,
+            OutcomeRecordId::generate_with("out"),
+            Timestamp::from_millis(21),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn source_freshness_sla_cannot_be_extended_by_attestation_validity() {
+        let binding = SourceOfTruthBinding {
+            id: SourceOfTruthBindingId::generate_with("sot"),
+            site_ref: None,
+            source_ref: "erp://orders".to_string(),
+            authority_kind: TruthAuthorityKind::SystemOfRecord,
+            authoritative_fact_types: vec!["order.status".to_string()],
+            key_mapping_ref: "mapping://orders@1".to_string(),
+            query_capability_ref: "capability://orders.read@1".to_string(),
+            freshness_sla_ms: Some(30_000),
+            conflict_policy: ConflictPolicy::ReconcileBeforeUse,
+            version_ref: "binding:v1".to_string(),
+            created_at: Timestamp::from_millis(1),
+        };
+        assert!(binding.observation_is_fresh(
+            Timestamp::from_millis(70_000),
+            Timestamp::from_millis(100_000),
+        ));
+        assert!(!binding.observation_is_fresh(
+            Timestamp::from_millis(69_999),
+            Timestamp::from_millis(100_000),
+        ));
+        assert!(!binding.observation_is_fresh(
+            Timestamp::from_millis(100_001),
+            Timestamp::from_millis(100_000),
+        ));
+
+        let mut unbounded = binding.clone();
+        unbounded.freshness_sla_ms = None;
+        assert!(unbounded
+            .observation_is_fresh(Timestamp::from_millis(1), Timestamp::from_millis(100_000),));
+    }
+
+    #[test]
+    fn source_truth_records_reject_empty_typed_identities_and_blank_site_scope() {
+        let mut attestation = SourceObservationAttestation {
+            attestation_id: "obs-1".to_string(),
+            workspace_id: WorkspaceId::new(""),
+            work_package_id: WorkPackageId::generate_with("work"),
+            work_generation: 1,
+            source_binding_id: SourceOfTruthBindingId::generate_with("sot"),
+            fact_type: "delivery.status".to_string(),
+            objective: "delivery status".to_string(),
+            source_ref: "erp://delivery/1".to_string(),
+            observed_facts: serde_json::json!({"status":"delivered"}),
+            evidence_refs: vec!["erp://delivery/1/receipt".to_string()],
+            observed_at: Timestamp::from_millis(1),
+            valid_until: None,
+        };
+        assert!(attestation.validate().is_err());
+
+        attestation.workspace_id = WorkspaceId::generate();
+        let mut binding = SourceOfTruthBinding {
+            id: SourceOfTruthBindingId::generate_with("sot"),
+            site_ref: Some(" ".to_string()),
+            source_ref: "erp://delivery".to_string(),
+            authority_kind: TruthAuthorityKind::SystemOfRecord,
+            authoritative_fact_types: vec!["delivery.status".to_string()],
+            key_mapping_ref: "mapping://delivery@1".to_string(),
+            query_capability_ref: "capability://delivery.read@1".to_string(),
+            freshness_sla_ms: None,
+            conflict_policy: ConflictPolicy::ReconcileBeforeUse,
+            version_ref: "binding:v1".to_string(),
+            created_at: Timestamp::from_millis(1),
+        };
+        assert!(binding.validate().is_err());
+        binding.site_ref = None;
+        binding.id = SourceOfTruthBindingId::new("");
+        assert!(binding.validate().is_err());
+    }
+
+    #[test]
+    fn source_of_truth_is_explicit_and_fact_scoped() {
+        let binding = SourceOfTruthBinding {
+            id: SourceOfTruthBindingId::generate_with("sot"),
+            site_ref: Some("plant-a".to_string()),
+            source_ref: "cmms://plant-a".to_string(),
+            authority_kind: TruthAuthorityKind::SystemOfRecord,
+            authoritative_fact_types: vec!["maintenance.order".to_string()],
+            key_mapping_ref: "mapping://cmms-order-key@1".to_string(),
+            query_capability_ref: "capability://cmms.read-order@1".to_string(),
+            freshness_sla_ms: Some(30_000),
+            conflict_policy: ConflictPolicy::ReconcileBeforeUse,
+            version_ref: "binding:v1".to_string(),
+            created_at: Timestamp::now(),
+        };
+        binding.validate().unwrap();
+        assert!(binding.authoritative_for("maintenance.order"));
+        assert!(!binding.authoritative_for("machine.temperature"));
+    }
+}

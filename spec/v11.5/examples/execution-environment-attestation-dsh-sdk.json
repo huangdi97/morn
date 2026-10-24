@@ -1,0 +1,46 @@
+{
+  "environment_ref": "env://container/dsh-runtime-a",
+  "provider": "deployment-attestor",
+  "isolation": "container",
+  "attested_spec": {
+    "minimum_isolation": "container",
+    "os": "linux",
+    "runtime": "deepseek-harness",
+    "required_guarantees": [
+      "filesystem-read-policy",
+      "filesystem-write-policy",
+      "process-boundary",
+      "resource-limits",
+      "network-egress-policy",
+      "secret-indirection",
+      "runtime-attestation",
+      "tool-mediation"
+    ],
+    "cpu_millis": 2000,
+    "memory_mb": 4096,
+    "gpu_count": 0,
+    "network_allowlist": [
+      "api.deepseek.com"
+    ],
+    "writable_paths": [
+      "/tmp/morn-dsh-workspace"
+    ],
+    "secret_refs": [
+      "secret://deepseek/api-key"
+    ],
+    "persistence_scope": "attempt",
+    "timeout_ms": 300000,
+    "side_effect_policy": "morn-e0-only"
+  },
+  "evidence_refs": [
+    "attestation://sandbox-fleet/dsh-runtime-a",
+    "artifact-attestation://deepseek-harness/example"
+  ],
+  "observed_at": "2026-10-13T00:00:00Z",
+  "valid_until": "2026-10-14T00:00:00Z",
+  "runtime_identities": [
+    "deepseek-harness@0.0.0#sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "deepseek-harness-profile@morn-e0-v1#sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "deepseek-harness-route@v1#sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  ]
+}

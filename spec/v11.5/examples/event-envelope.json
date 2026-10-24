@@ -1,0 +1,18 @@
+{
+  "specversion": "1.0",
+  "id": "evt-1042-receipt",
+  "source": "morn://plant-a/cmms",
+  "type": "io.morn.action.receipt.v1",
+  "subject": "work/work-1042",
+  "time": "2026-10-08T05:03:00Z",
+  "dataschema": "morn://schemas/action-receipt/v1",
+  "mornworkid": "work-1042",
+  "mornattemptid": "attempt-1042-cmms",
+  "mornbindingid": "binding-1042-cmms",
+  "mornprofile": "morn.factory.readonly@1.0.0",
+  "traceid": "trace-1042",
+  "data": {
+    "external_ref": "MO-88273",
+    "status": "observed"
+  }
+}

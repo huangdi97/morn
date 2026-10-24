@@ -1,0 +1,26 @@
+{
+  "id": "binding-1042-agent",
+  "work_id": "work-1042",
+  "work_generation": 1,
+  "capability_manifest_ref": "cmanifest-equipment-investigator-v1",
+  "provider_ref": "harness://dsh",
+  "provider_version": "fixture-v1",
+  "provider_digest": "sha256:provider-fixture",
+  "runtime_ref": "runtime://dsh/session-contract",
+  "effect_ceiling": "E0LifecycleReversible",
+  "compensation_ref": null,
+  "idempotency_key_required": false,
+  "authority_decision_ref": "authz-1042-read",
+  "autonomy_posture": "governed",
+  "profile_ref": "morn.factory.readonly@1.0.0",
+  "site_ref": "plant-a",
+  "migration_from": null,
+  "created_at": "2026-10-08T05:01:00Z",
+  "execution_environment_ref": "env://fixture/container-a",
+  "execution_class": "container",
+  "execution_guarantees": [
+    "filesystem-write-policy",
+    "network-egress-policy",
+    "secret-indirection"
+  ]
+}

@@ -177,6 +177,24 @@ fn domain(args: &[String]) -> ExitCode {
     }
 }
 
+fn explicit_registry_env() -> std::collections::BTreeMap<String, String> {
+    let mut env = std::collections::BTreeMap::new();
+    if let Ok(path) = std::env::var("MORN_REGISTRY_DOCKER_CONFIG") {
+        if !path.trim().is_empty() {
+            env.insert("DOCKER_CONFIG".to_string(), path);
+        }
+    }
+    env
+}
+
+fn required_external_bin(name: &str) -> Result<String, String> {
+    let value = std::env::var(name).map_err(|_| format!("{name} is required"))?;
+    if value.trim().is_empty() {
+        return Err(format!("{name} must not be empty"));
+    }
+    Ok(value)
+}
+
 fn package(args: &[String]) -> ExitCode {
     let sub = args.get(2).map(String::as_str).unwrap_or("inspect");
     let mut lc = morn_package::PackLifecycle::new();
@@ -203,8 +221,133 @@ fn package(args: &[String]) -> ExitCode {
                 }
             }
         }
+        "publish" => {
+            let Some(repository_ref) = args.get(3) else {
+                eprintln!(
+                    "usage: morn package publish <oci://repository> <tag> <artifact-type> <file> <layer-media-type>"
+                );
+                return ExitCode::FAILURE;
+            };
+            let Some(tag) = args.get(4) else {
+                eprintln!("package publish requires tag");
+                return ExitCode::FAILURE;
+            };
+            let Some(artifact_type) = args.get(5) else {
+                eprintln!("package publish requires artifact-type");
+                return ExitCode::FAILURE;
+            };
+            let Some(file) = args.get(6) else {
+                eprintln!("package publish requires file");
+                return ExitCode::FAILURE;
+            };
+            let Some(layer_media_type) = args.get(7) else {
+                eprintln!("package publish requires layer-media-type");
+                return ExitCode::FAILURE;
+            };
+            let command = match required_external_bin("MORN_ORAS_BIN") {
+                Ok(value) => value,
+                Err(error) => {
+                    eprintln!("{error}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            let publisher = morn_package::OrasCliPublisher {
+                command,
+                env: explicit_registry_env(),
+            };
+            let request = morn_package::OciPublishRequest {
+                repository_ref: repository_ref.clone(),
+                tag: tag.clone(),
+                artifact_type: artifact_type.clone(),
+                layers: vec![morn_package::OciLayerInput {
+                    path: std::path::PathBuf::from(file),
+                    media_type: layer_media_type.clone(),
+                }],
+                annotations: std::collections::BTreeMap::new(),
+            };
+            match morn_package::OciArtifactPublisher::publish(&publisher, &request) {
+                Ok(receipt) => match serde_json::to_string_pretty(&receipt) {
+                    Ok(value) => {
+                        println!("{value}");
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("serialize publication receipt: {error}");
+                        ExitCode::FAILURE
+                    }
+                },
+                Err(error) => {
+                    eprintln!("package publication failed: {error}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        "verify-supply-chain" => {
+            let Some(oci_ref) = args.get(3) else {
+                eprintln!(
+                    "usage: morn package verify-supply-chain <oci://ref@sha256> <sha256> <certificate-identity> <oidc-issuer>"
+                );
+                return ExitCode::FAILURE;
+            };
+            let Some(content_digest) = args.get(4) else {
+                eprintln!("verify-supply-chain requires content digest");
+                return ExitCode::FAILURE;
+            };
+            let Some(identity) = args.get(5) else {
+                eprintln!("verify-supply-chain requires certificate identity");
+                return ExitCode::FAILURE;
+            };
+            let Some(issuer) = args.get(6) else {
+                eprintln!("verify-supply-chain requires OIDC issuer");
+                return ExitCode::FAILURE;
+            };
+            let command = match required_external_bin("MORN_COSIGN_BIN") {
+                Ok(value) => value,
+                Err(error) => {
+                    eprintln!("{error}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            let verifier = morn_package::CosignCliVerifier {
+                command,
+                env: explicit_registry_env(),
+            };
+            let receipt = morn_package::OciPublishReceipt {
+                oci_ref: oci_ref.clone(),
+                content_digest: content_digest.clone(),
+                manifest_media_type: "application/vnd.oci.image.manifest.v1+json".to_string(),
+                artifact_type: None,
+            };
+            let policy = morn_package::SigstoreIdentityPolicy {
+                certificate_identity: identity.clone(),
+                certificate_oidc_issuer: issuer.clone(),
+            };
+            let result = verifier
+                .verify_signature(&receipt, &policy)
+                .and_then(|signature| {
+                    verifier
+                        .verify_slsa_provenance(&receipt, &policy)
+                        .and_then(|provenance| signature.merge(&provenance))
+                });
+            match result {
+                Ok(evidence) => match serde_json::to_string_pretty(&evidence) {
+                    Ok(value) => {
+                        println!("{value}");
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("serialize verification evidence: {error}");
+                        ExitCode::FAILURE
+                    }
+                },
+                Err(error) => {
+                    eprintln!("supply-chain verification failed: {error}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         _ => {
-            eprintln!("package subcommand: inspect|init");
+            eprintln!("package subcommand: inspect|init|publish|verify-supply-chain");
             ExitCode::FAILURE
         }
     }

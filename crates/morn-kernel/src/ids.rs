@@ -102,6 +102,7 @@ id_types!(
     GoalTag,
     MetricTag,
     OutcomeRecordTag,
+    ValueAssessmentTag,
     ArtifactTag,
     ArtifactVersionTag,
     ReviewTag,
@@ -240,6 +241,7 @@ pub type ActionId = Id<ActionTag>;
 pub type GoalId = Id<GoalTag>;
 pub type MetricId = Id<MetricTag>;
 pub type OutcomeRecordId = Id<OutcomeRecordTag>;
+pub type ValueAssessmentId = Id<ValueAssessmentTag>;
 pub type ArtifactId = Id<ArtifactTag>;
 pub type ArtifactVersionId = Id<ArtifactVersionTag>;
 pub type ReviewId = Id<ReviewTag>;

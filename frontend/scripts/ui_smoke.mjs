@@ -2,28 +2,670 @@
 // runs the BioLab E2E, and fails on any console/page error or uncaught exception.
 
 import { chromium } from "playwright";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 
 const BASE = process.env.UI_BASE ?? "http://127.0.0.1:5173";
 
 const routes = ["/workbench", "/studio", "/console", "/hub"];
 const L = (s) => s.toLowerCase();
 
+const screenshotsDir = process.env.UI_SCREENSHOT_DIR;
+if (screenshotsDir) await mkdir(screenshotsDir, { recursive: true });
+
 const browser = await chromium.launch();
-const page = await browser.newPage();
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errors = [];
+
+async function expandReferenceDiagnostics() {
+  const details = page.locator("details.workbench-reference");
+  if (await details.count()) {
+    await details.locator("summary").click();
+  }
+}
 
 page.on("console", (msg) => {
   if (msg.type() === "error") errors.push(`console.error: ${msg.text()}`);
 });
 page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
 
+async function runCanonicalAcceptanceUiContract() {
+  const fixturePage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const fixtureErrors = [];
+  fixturePage.on("console", (msg) => {
+    if (msg.type() === "error") fixtureErrors.push(`console.error: ${msg.text()}`);
+  });
+  fixturePage.on("pageerror", (err) => fixtureErrors.push(`pageerror: ${err.message}`));
+
+  // This browser contract proves only that the production UI preserves the
+  // deployment-owned trust boundary through the full Work journey. All
+  // authority/observation/reviewer material below is explicitly fixture data;
+  // it never becomes RealSite, CustomerValidated or production evidence.
+  const workId = "work:ui-acceptance-fixture";
+  const sourceCatalogId = "source-catalog:ui-fixture";
+  const sourceBindingId = "source-binding:ui-fixture";
+  const observationId = "observation-attestation:ui-fixture";
+  const outcomeId = "outcome:ui-fixture";
+  const reviewerId = "principal:ui-independent-reviewer";
+  const reviewAuthorizationId = "review-auth:ui-fixture";
+  let sourceBound = false;
+  let observed = false;
+  let accepted = false;
+
+  const json = (route, body, status = 200) =>
+    route.fulfill({
+      status,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+
+  const work = () => ({
+    id: workId,
+    generation: 1,
+    spec: {
+      goal: "Reference UI acceptance contract",
+      profile_ref: "morn.lite@1.0.0",
+      site_ref: null,
+      required_conditions: [],
+    },
+    status: {
+      phase: accepted ? "Accepted" : observed ? "Delivered" : "Running",
+      observed_generation: 1,
+      conditions: sourceBound
+        ? [{ condition_type: "SourceOfTruthBound", status: "True", reason: "deployment fixture witness" }]
+        : [],
+      active_binding: null,
+      active_bindings: [],
+    },
+  });
+
+  const outcome = () => ({
+    id: outcomeId,
+    work_package_id: workId,
+    work_generation: 1,
+    objective: "Reference delivery outcome observed",
+    source_kind: "ExternalSystem",
+    source_ref: "fixture-authority://orders/42",
+    source_binding_ref: sourceBindingId,
+    source_attestation_ref: observationId,
+    fact_type: "delivery.status",
+    observed_facts: { status: "complete" },
+    evidence_refs: ["fixture-authority://orders/42/receipt"],
+  });
+
+  const control = () => ({
+    work: [work()],
+    condition_evidence: sourceBound
+      ? [{
+          id: "condition:source-bound-ui-fixture",
+          work_ref: workId,
+          work_generation: 1,
+          condition_type: "SourceOfTruthBound",
+          satisfied: true,
+          producer_ref: "fixture-deployment://source-authority",
+          evidence_refs: [sourceBindingId],
+        }]
+      : [],
+    capability_resolutions: [],
+    profile_conformance_attestations: [],
+    source_of_truth_bindings: sourceBound
+      ? [{ id: sourceBindingId, source_ref: "fixture-authority://orders", site_ref: null }]
+      : [],
+    execution_bindings: [],
+    execution_manifests: [],
+    execution_receipts: [],
+    execution_events: [],
+    executor_outcome_reconciliations: [],
+    interop_bindings: [],
+    external_task_observations: [],
+    binding_migrations: [],
+    durable_workflow_bindings: [],
+    attempts: [],
+    reconciliations: [],
+    outcomes: observed ? [outcome()] : [],
+    acceptance_decisions: accepted
+      ? [{
+          id: "acceptance:ui-fixture",
+          work_package_id: workId,
+          work_generation: 1,
+          disposition: "Accept",
+          outcome_refs: [outcomeId],
+          evidence_refs: [
+            "fixture-iam://reviewer",
+            "fixture-iam://review-authorization",
+            "fixture-review://ticket-42",
+          ],
+          decided_by: reviewerId,
+          acting_role: "independent-reviewer",
+          reason: "reference UI contract accepted source-attested fixture outcome",
+        }]
+      : [],
+    value_assessments: [],
+    value_assessment_support: [],
+    note: "Playwright fixture contract only; never RealSite or CustomerValidated evidence",
+  });
+
+  await fixturePage.route("**/api/v115/control-plane", (route) => json(route, control()));
+  await fixturePage.route("**/api/v115/status", (route) =>
+    json(route, {
+      provider_catalog: [],
+      provider_observations: [],
+      provider_status_semantics: { registered: "registered", healthy: "healthy" },
+      harness_runtime: {
+        dsh: {
+          mode: "fixture",
+          health: "fixture",
+          configured_execution_environment_ref: null,
+          profile_configuration_ref: null,
+          runtime_version: null,
+          runtime_digest: null,
+          route_attestation_ref: null,
+          wire_server_version: null,
+        },
+        pi: {
+          mode: "fixture",
+          health: "fixture",
+          configured_execution_environment_ref: null,
+          runtime_version: null,
+          runtime_digest: null,
+          route_attestation_ref: null,
+        },
+      },
+      execution_environment_attestations: [],
+      architecture: {
+        definition: "fixture",
+        protocol_version: { major: 11, minor: 5, patch: 0 },
+        semantic_slots: [],
+        semantic_invariants: [],
+        control_model: "fixture",
+        composition_runtime: { name: "fixture", role: "test", reference_version: "fixture", business_truth: false },
+      },
+      providers: { harness: [], execution_environment: [], authority: "fixture" },
+      profiles: [],
+      capability_supply_chain: {
+        stages: [],
+        artifact_compilers: [],
+        qualification_is_not_admission: true,
+        site_admission_requires_verified_signature_and_provenance: true,
+        caller_can_self_assert_verification: false,
+        verification_evidence: [],
+      },
+      factory_profile: {
+        id: "morn.factory.readonly",
+        version: { major: 1, minor: 0, patch: 0 },
+        minimum_isolation: "container",
+        required_execution_guarantees: [],
+        required_guarantees: [],
+        production_write: false,
+        first_wedge: "fixture",
+      },
+      evidence_policy: { classes: [], classes_are_categorical: true, no_implicit_promotion: true, claims: [] },
+      release_readiness: {
+        build_identity_ref: null,
+        deployment_site_ref: null,
+        axes: [],
+        deployment_scopes: [],
+        semantics: { aggregate_ready: false, reason: "fixture only" },
+      },
+      claims: {
+        local_engineering: "fixture",
+        real_dsh: "not-claimed",
+        real_pi: "not-claimed",
+        real_factory: "not-claimed",
+        production_write: "not-claimed",
+      },
+    }),
+  );
+  await fixturePage.route("**/api/v115/ui/extensions", (route) => json(route, { extensions: [] }));
+  await fixturePage.route("**/api/v115/capabilities", (route) => json(route, { capabilities: [] }));
+  await fixturePage.route("**/api/v115/source-of-truth/catalog", (route) =>
+    json(route, {
+      bindings: [{
+        id: sourceCatalogId,
+        site_ref: null,
+        source_ref: "fixture-authority://orders",
+        authority_kind: "SystemOfRecord",
+        authoritative_fact_types: ["delivery.status"],
+        key_mapping_ref: "fixture://mapping/orders",
+        query_capability_ref: "fixture://capability/orders.read",
+        freshness_sla_ms: 60000,
+        conflict_policy: "system-of-record-wins",
+        version_ref: "fixture-authority@1",
+      }],
+      deployment_owned: true,
+      caller_can_create_authority: false,
+      note: "fixture deployment-owned source catalog",
+    }),
+  );
+  await fixturePage.route("**/api/v115/source-of-truth/observations", (route) =>
+    json(route, {
+      observations: sourceBound && !observed
+        ? [{
+            attestation_id: observationId,
+            work_package_id: workId,
+            work_generation: 1,
+            source_binding_id: sourceBindingId,
+            fact_type: "delivery.status",
+            objective: "Reference delivery outcome observed",
+            source_ref: "fixture-authority://orders/42",
+            observed_facts: { status: "complete" },
+            evidence_refs: ["fixture-authority://orders/42/receipt"],
+            observed_at: Date.now(),
+            valid_until: null,
+          }]
+        : [],
+      deployment_attested: true,
+      caller_can_submit_world_facts: false,
+      consumed_attestations_are_listed: false,
+    }),
+  );
+  await fixturePage.route("**/api/v115/acceptance/reviewers", (route) =>
+    json(route, {
+      reviewers: [{
+        principal_id: reviewerId,
+        acting_roles: ["independent-reviewer"],
+        evidence_refs: ["fixture-iam://reviewer"],
+        observed_at: Date.now(),
+        valid_until: null,
+      }],
+      deployment_attested: true,
+      caller_can_self_assert_identity: false,
+      final_review_requires_exact_out_of_band_authorization: true,
+      authorization_ids_are_listed: false,
+    }),
+  );
+
+  await fixturePage.route("**/api/v115/work/bind-source-of-truth", async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.work_id !== workId || body.catalog_binding_id !== sourceCatalogId) {
+      fixtureErrors.push("canonical acceptance fixture: source binding request lost exact Work/catalog identity");
+      return json(route, { error: "fixture contract mismatch" }, 400);
+    }
+    sourceBound = true;
+    return json(route, {
+      binding: { id: sourceBindingId, source_ref: "fixture-authority://orders" },
+      condition_evidence: { condition_type: "SourceOfTruthBound", satisfied: true },
+      note: "fixture deployment authority attached",
+    });
+  });
+  await fixturePage.route("**/api/v115/work/observe-outcome", async (route) => {
+    const body = route.request().postDataJSON();
+    if (
+      body.work_id !== workId ||
+      body.observation_attestation_id !== observationId ||
+      "observed_facts" in body ||
+      "source_ref" in body ||
+      "evidence_refs" in body
+    ) {
+      fixtureErrors.push("canonical acceptance fixture: browser attempted to self-assert world truth");
+      return json(route, { error: "fixture trust-boundary mismatch" }, 400);
+    }
+    observed = true;
+    return json(route, {
+      work: work(),
+      outcome: outcome(),
+      business_outcome_source_grounded: true,
+      caller_supplied_world_facts: false,
+      independent_acceptance: false,
+    });
+  });
+  await fixturePage.route("**/api/v115/work/assess-value", async (route) => {
+    fixtureErrors.push("canonical acceptance fixture: acceptance journey attempted to fabricate value evidence");
+    return json(route, { error: "value assessment is outside this acceptance-only contract" }, 400);
+  });
+
+  await fixturePage.route("**/api/v115/work/review-outcome", async (route) => {
+    const body = route.request().postDataJSON();
+    if (
+      body.work_id !== workId ||
+      body.outcome_id !== outcomeId ||
+      body.review_authorization_id !== reviewAuthorizationId ||
+      body.reviewer_principal_id !== reviewerId ||
+      body.acting_role !== "independent-reviewer" ||
+      body.disposition !== "accept" ||
+      !Array.isArray(body.evidence_refs) ||
+      body.evidence_refs.length !== 1
+    ) {
+      fixtureErrors.push("canonical acceptance fixture: review request lost exact deployment-bound identity");
+      return json(route, { error: "fixture review-boundary mismatch" }, 400);
+    }
+    accepted = true;
+    return json(route, {
+      work: work(),
+      decision: {
+        id: "acceptance:ui-fixture",
+        disposition: "Accept",
+        work_package_id: workId,
+        work_generation: 1,
+        outcome_refs: [outcomeId],
+      },
+      business_outcome_source_grounded: true,
+    });
+  });
+
+  try {
+    await fixturePage.goto(BASE + "/workbench", { waitUntil: "networkidle", timeout: 30000 });
+    await fixturePage.getByTestId("work-lifecycle-guide").waitFor({ state: "visible" });
+    await fixturePage
+      .locator("h3.card-title", { hasText: "Authoritative outcome observation" })
+      .waitFor({ state: "visible" });
+
+    await fixturePage.getByRole("button", { name: "Attach authoritative source" }).click();
+    await fixturePage.getByLabel("Deployment-attested observation").waitFor({ state: "visible" });
+    await fixturePage.getByRole("button", { name: "Persist attested authoritative Outcome" }).click();
+
+    await fixturePage.getByRole("heading", { name: "Independent outcome review" }).waitFor();
+    await fixturePage
+      .getByLabel("Out-of-band review authorization ID")
+      .fill(reviewAuthorizationId);
+    await fixturePage
+      .getByLabel("Review reason")
+      .fill("Independent fixture review of deployment-attested reference evidence");
+    await fixturePage
+      .getByLabel("Independent review evidence reference")
+      .fill("fixture-review://ticket-42");
+    await fixturePage.getByRole("button", { name: "Persist independent review" }).click();
+
+    const journey = fixturePage.locator('[data-testid="work-lifecycle-guide"]');
+    await journey.getByText("Accepted", { exact: true }).waitFor({ state: "visible" });
+    await fixturePage.getByRole("heading", { name: "Accepted outcome value" }).waitFor();
+    const body = await fixturePage.locator("body").innerText();
+    if (!accepted || !body.includes("Reference UI acceptance contract")) {
+      fixtureErrors.push("canonical acceptance fixture: Accepted state was not projected back into Workbench");
+    }
+    if (screenshotsDir) {
+      await fixturePage.screenshot({
+        path: join(screenshotsDir, "workbench-canonical-acceptance-fixture.png"),
+        fullPage: true,
+      });
+    }
+  } finally {
+    await fixturePage.close();
+  }
+
+  if (fixtureErrors.length > 0) {
+    throw new Error(`canonical acceptance UI contract failed: ${fixtureErrors.join(" | ")}`);
+  }
+  console.log(
+    "OK canonical acceptance UI contract: source authority -> attested Outcome -> independent Accept; fixture evidence only",
+  );
+}
+
 try {
   for (const route of routes) {
     errors.length = 0;
     await page.goto(`${BASE}${route}`, { waitUntil: "networkidle", timeout: 30000 });
     await page.waitForTimeout(500);
+    if (screenshotsDir) {
+      const surface = route.slice(1);
+      await page.screenshot({ path: join(screenshotsDir, `${surface}-desktop.png`), fullPage: true });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.screenshot({ path: join(screenshotsDir, `${surface}-mobile.png`), fullPage: true });
+      const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      if (documentWidth > 390) errors.push(`route ${route}: mobile horizontal overflow ${documentWidth}px > 390px`);
+      await page.setViewportSize({ width: 1280, height: 800 });
+    }
     const bodyText = await page.locator("body").innerText();
     if (!bodyText.includes("Morn")) errors.push(`route ${route}: missing Morn shell`);
+    if (route === "/console" && !(await page.getByRole("heading", { name: "Release readiness" }).isVisible())) {
+      errors.push("console: evidence-aware release readiness summary is not visible");
+    }
+    if (route === "/console") {
+      const productionWrite = page.locator(".readiness-item", { hasText: "Production-write evidence" });
+      if (!(await productionWrite.count()) || !(await productionWrite.first().evaluate((node) => node.classList.contains("readiness-blocked")))) {
+        errors.push("console: production-write evidence must remain visibly blocked without deployment proof");
+      }
+      const factoryWriteAuthority = page.locator(".readiness-item", { hasText: "Factory profile write ceiling" });
+      if (
+        !(await factoryWriteAuthority.count()) ||
+        !(await factoryWriteAuthority.first().evaluate((node) => node.classList.contains("readiness-blocked")))
+      ) {
+        errors.push("console: factory read-only profile must keep write authority visibly forbidden");
+      }
+      const ciConformance = page.locator(".readiness-item", { hasText: "CI conformance" });
+      if (
+        !(await ciConformance.count()) ||
+        !(await ciConformance.first().evaluate((node) => node.classList.contains("readiness-blocked")))
+      ) {
+        errors.push("console: current deployment CI must not be inferred from historical repository success");
+      }
+      const dshLive = page.locator(".readiness-item", { hasText: "DeepSeek live runtime" });
+      if (
+        !(await dshLive.count()) ||
+        !(await dshLive.first().evaluate((node) => node.classList.contains("readiness-blocked")))
+      ) {
+        errors.push("console: fixture/default DSH must not appear as real-runtime ready");
+      }
+      const readinessText = await page.locator('[data-testid="release-readiness"]').innerText();
+      if (!readinessText.includes("Deployment site: not configured")) {
+        errors.push("console: missing deployment site must remain explicit in release readiness");
+      }
+      const deploymentScopes = page.locator('[data-testid="deployment-readiness-scopes"]');
+      if (!(await deploymentScopes.count())) {
+        errors.push("console: named deployment readiness gates are missing");
+      } else {
+        const expandedScopeDetails = deploymentScopes.locator("details.readiness-scope-details[open]");
+        if (await expandedScopeDetails.count()) {
+          errors.push("console: deployment blocker details must be collapsed by default");
+        }
+        const localRelease = deploymentScopes.locator(".readiness-item", { hasText: "Local reference release" });
+        if (
+          !(await localRelease.count()) ||
+          !(await localRelease.first().evaluate((node) => node.classList.contains("readiness-blocked")))
+        ) {
+          errors.push("console: local reference release must remain blocked without exact build-bound CI evidence");
+        }
+        const production = deploymentScopes.locator(".readiness-item", { hasText: "Production write · DSH" });
+        if (
+          !(await production.count()) ||
+          !(await production.first().evaluate((node) => node.classList.contains("readiness-blocked")))
+        ) {
+          errors.push("console: production-write deployment gate must remain blocked under factory read-only profile");
+        }
+        if (await production.count()) {
+          const details = production.first().locator("details.readiness-scope-details");
+          await details.locator("summary").click();
+          const text = await details.innerText();
+          if (
+            !text.includes("Deployment target site") ||
+            !text.includes("Action-level write authority") ||
+            !text.includes("MORN_DEPLOYMENT_SITE_REF") ||
+            !text.includes("no permit means no write")
+          ) {
+            errors.push("console: production-write blockers must expose site targeting and action-level authority remediation");
+          }
+          await details.locator("summary").click();
+        }
+        const dshReadOnly = deploymentScopes.locator(".readiness-item", { hasText: "DSH real-runtime read-only" });
+        if (await dshReadOnly.count()) {
+          const details = dshReadOnly.first().locator("details.readiness-scope-details");
+          await details.locator("summary").click();
+          const text = await details.innerText();
+          if (
+            !text.includes("Evidence acquisition plan") ||
+            !text.includes(".github/workflows/live-dsh-evidence.yml") ||
+            !text.includes("MORN_EVIDENCE_CLAIMS_FILE")
+          ) {
+            errors.push("console: blocked DSH scope must expose executable evidence acquisition guidance");
+          }
+          await details.locator("summary").click();
+        }
+      }
+    }
+    if (route === "/hub" && !(await page.getByRole("heading", { name: "v11.5 Capability Supply Chain" }).isVisible())) {
+      errors.push("hub: governed capability supply-chain section is not visible");
+    }
+    if (route === "/hub" && !(await page.getByRole("heading", { name: "Provider Fabric" }).isVisible())) {
+      errors.push("hub: canonical Provider Fabric registry is not visible");
+    }
+    if (route === "/hub") {
+      const registrySummary = page.locator('[data-testid="hub-registry-summary"]');
+      if (!(await registrySummary.count())) {
+        errors.push("hub: availability summary is missing");
+      } else {
+        const summaryText = (await registrySummary.innerText()).toLowerCase();
+        if (
+          !summaryText.includes("selectable providers now") ||
+          !summaryText.includes("site-admitted capabilities") ||
+          !summaryText.includes("candidate / non-admitted")
+        ) {
+          errors.push("hub: availability summary does not distinguish selectable/admitted state");
+        }
+      }
+    }
+    if (route === "/hub" && !(await page.getByRole("heading", { name: "Registry projections" }).isVisible())) {
+      errors.push("hub: declared-only registry projections are not visible");
+    }
+    if (route === "/hub") {
+      const hubText = await page.locator(".hub-provider-fabric").innerText();
+      if (!hubText.includes("deepseek-harness") || !hubText.includes("pi")) {
+        errors.push("hub: DSH/Pi provider registry entries are missing");
+      }
+      const compactProviderDetails = page.locator(".hub-provider-fabric details.hub-card-details");
+      if (!(await compactProviderDetails.count())) {
+        errors.push("hub: provider technical detail disclosure is missing");
+      } else {
+        const openCount = await compactProviderDetails.evaluateAll((nodes) =>
+          nodes.filter((node) => node.open).length,
+        );
+        if (openCount !== 0) {
+          errors.push("hub: provider technical detail should be collapsed by default");
+        }
+        await compactProviderDetails.first().locator("summary").click();
+        if (!(await compactProviderDetails.first().innerText()).includes("Evidence")) {
+          errors.push("hub: provider evidence is not inspectable after expansion");
+        }
+        await compactProviderDetails.first().locator("summary").click();
+      }
+      const discoveryText = await page.locator(".hub-discovery").innerText();
+      const discoveryTextNormalized = discoveryText.toLowerCase();
+      if (!discoveryTextNormalized.includes("declared metadata") || !discoveryTextNormalized.includes("business truth")) {
+        errors.push("hub: discovery projection boundary is not explicit");
+      }
+      const legacy = page.locator("details.hub-reference-details");
+      if (!(await legacy.count())) {
+        errors.push("hub: reference catalog disclosure is missing");
+      } else if (await legacy.evaluate((node) => node.open)) {
+        errors.push("hub: legacy/reference catalogs should be collapsed by default");
+      }
+    }
+    if (route === "/console") {
+      const legacy = page.locator("details.console-reference-details");
+      if (!(await legacy.count())) {
+        errors.push("console: legacy diagnostics disclosure is missing");
+      } else if (await legacy.evaluate((node) => node.open)) {
+        errors.push("console: legacy/reference diagnostics should be collapsed by default");
+      }
+
+      const posture = page.locator(".console-ops-summary");
+      if (!(await posture.count())) {
+        errors.push("console: current control-plane posture summary is missing");
+      } else {
+        const postureText = (await posture.innerText()).toLowerCase();
+        if (!postureText.includes("canonical work") || !postureText.includes("provider posture")) {
+          errors.push("console: operational summary does not expose Work/provider posture");
+        }
+      }
+
+      const technical = page.locator("details.console-control-details");
+      if (!(await technical.count())) {
+        errors.push("console: canonical technical-detail disclosure is missing");
+      } else {
+        if (await technical.evaluate((node) => node.open)) {
+          errors.push("console: technical control-plane details should be collapsed by default");
+        }
+        await technical.locator("summary").click();
+        try {
+          await page.getByText("Harness / Runtime Health", { exact: true }).waitFor({
+            state: "visible",
+            timeout: 5000,
+          });
+          await page.getByText("v11.5 Persisted Control Records", { exact: true }).waitFor({
+            state: "visible",
+            timeout: 5000,
+          });
+        } catch {
+          errors.push("console: canonical v11.5 provider/control detail must remain inspectable");
+        }
+        await technical.locator("summary").click();
+      }
+    }
+    if (route === "/studio") {
+      const compilerGoal = page.locator(".studio-compiler-goal");
+      if (!(await compilerGoal.count()) || !(await compilerGoal.innerText()).includes("Deliver a reviewed report")) {
+        errors.push("studio: compiler must reuse the goal defined in the primary creator step");
+      }
+      const advanced = page.locator("details.studio-capability-details");
+      if (!(await advanced.count())) {
+        errors.push("studio: governed advanced capability importer is missing");
+      } else {
+        if (await advanced.evaluate((node) => node.open)) {
+          errors.push("studio: advanced raw asset imports must be collapsed by default");
+        }
+        await advanced.locator("summary").click();
+        if (!(await page.getByRole("button", { name: "Compile OpenAPI" }).isVisible())) {
+          errors.push("studio: expanded artifact candidate compiler is unavailable");
+        }
+        if (!(await page.getByRole("button", { name: "Compile Model Manifest" }).isVisible())) {
+          errors.push("studio: model artifact compiler is unavailable");
+        }
+        if (!(await page.getByRole("button", { name: "Compile Workflow Manifest" }).isVisible())) {
+          errors.push("studio: workflow artifact compiler is unavailable");
+        }
+        await page.getByRole("button", { name: "Compile Model Manifest" }).click();
+        await page.getByText("Model stage").waitFor({ state: "visible", timeout: 10000 });
+        if (!(await page.locator("body").innerText()).includes("Declared")) {
+          errors.push("studio: model compiler did not preserve Declared candidate state");
+        }
+        await page.getByRole("button", { name: "Compile Workflow Manifest" }).click();
+        await page.getByText("Workflow stage").waitFor({ state: "visible", timeout: 10000 });
+        if (!(await page.locator("body").innerText()).includes("Workflow admission")) {
+          errors.push("studio: workflow compiler did not return governed admission state");
+        }
+        await advanced.locator("summary").click();
+      }
+    }
+    if (route === "/workbench" && !(await page.getByRole("heading", { name: "Work is the unit of coordination" }).isVisible())) {
+      errors.push("workbench: canonical Work-first overview is not visible");
+    }
+    if (route === "/workbench") {
+      const canonicalWorkCount = await page.locator('[data-work-id]').count();
+      const lifecycleGuide = page.locator('[data-testid="work-lifecycle-guide"]');
+      const governedExecution = page.getByRole("heading", { name: "Governed E0 execution" });
+      const authoritativeOutcome = page.getByRole("heading", { name: "Authoritative outcome observation" });
+      const advancedAcp = page.locator("details.workbench-advanced-control");
+
+      if (canonicalWorkCount === 0) {
+        if (await lifecycleGuide.count()) {
+          errors.push("workbench: empty state must not fabricate a Work lifecycle");
+        }
+        if (await governedExecution.count()) {
+          errors.push("workbench: executor controls must not render without canonical Work");
+        }
+        if (await authoritativeOutcome.count()) {
+          errors.push("workbench: outcome controls must not render without canonical Work");
+        }
+        if (await advancedAcp.count()) {
+          errors.push("workbench: disabled ACP infrastructure must not dominate an empty Workbench");
+        }
+      } else {
+        if (!(await lifecycleGuide.count())) {
+          errors.push("workbench: canonical Work must render a lifecycle journey");
+        }
+        if ((await governedExecution.count()) && !(await page.locator(".governed-execution-binding select").count())) {
+          errors.push("workbench: rendered governed execution must expose explicit binding selection");
+        }
+        if ((await advancedAcp.count()) && await advancedAcp.evaluate((node) => node.open)) {
+          errors.push("workbench: advanced ACP lifecycle controls must be collapsed by default");
+        }
+      }
+      if (await page.getByLabel("Observed facts (JSON)").count()) {
+        errors.push("workbench: callers must not be able to self-assert authoritative world facts");
+      }
+    }
+    if (route === "/workbench" && await page.locator("details.workbench-reference").evaluate((node) => node.open)) {
+      errors.push("workbench: legacy diagnostics should be collapsed by default");
+    }
     if (errors.length > 0) {
       console.error(`FAILED ${route}:`, errors.join(" | "));
       process.exitCode = 1;
@@ -36,8 +678,12 @@ try {
     // BioLab E2E via the real backend through the UI button.
     errors.length = 0;
     await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
+    await expandReferenceDiagnostics();
     await page.getByRole("button", { name: /Run BioLab E2E/i }).click();
     await page.waitForTimeout(2500);
+    if (screenshotsDir) {
+      await page.screenshot({ path: join(screenshotsDir, "workbench-biolab-after.png"), fullPage: true });
+    }
     const body = (await page.locator("body").innerText()).toLowerCase();
     if (!body.includes("biolab e2e") || !body.includes("outcome")) {
       errors.push("BioLab E2E section not rendered after run");
@@ -51,7 +697,7 @@ try {
 
     // Goal 2 v0.2 interactions: durable run, replay/shadow/eval, loops.
     const buttons = [
-      { name: /Start Durable Run/i, check: (t) => t.includes("durable work runtime") && t.includes("running") },
+      { name: /Start Durable Run/i, check: (t) => t.includes("durable workflow provider") && t.includes("running") },
       { name: /Run Replay \(drift\)/i, check: (t) => t.includes("replay reproduced") && t.includes("no") },
       { name: "Shadow Compare", exact: true, check: (t) => t.includes("shadow readiness") },
       { name: /Evaluate \(approval missing\)/i, check: (t) => t.includes("evaluation decision") },
@@ -60,6 +706,7 @@ try {
     for (const btn of buttons) {
       errors.length = 0;
       await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
+      await expandReferenceDiagnostics();
       const opts = btn.exact ? { name: btn.name, exact: true } : { name: btn.name };
       await page.getByRole("button", opts).click();
       await page.waitForTimeout(3000);
@@ -83,6 +730,7 @@ try {
     for (const btn of g3buttons) {
       errors.length = 0;
       await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
+      await expandReferenceDiagnostics();
       await page.getByRole("button", { name: btn.name }).click();
       await page.waitForTimeout(2500);
       const t = (await page.locator("body").innerText()).toLowerCase();
@@ -106,13 +754,90 @@ try {
       await page.getByRole("button", { name: /Approve & Compile/i }).click();
       await page.waitForTimeout(1500);
       t = (await page.locator("body").innerText()).toLowerCase();
+      if (screenshotsDir) {
+        await page.screenshot({ path: join(screenshotsDir, "studio-compiled-after.png"), fullPage: true });
+      }
       if (!t.includes("solutionpackage manifest")) errors.push("studio manifest missing");
+      if (!t.includes("reviewed outcome exists")) {
+        errors.push("studio: reviewed acceptance criterion was not preserved into SolutionPackage");
+      }
+      if (!t.includes('"production_write_allowed": false')) {
+        errors.push("studio: default Work creation must not silently enable ProductionWrite");
+      }
+      const reviewedPolicy = page.locator('[data-testid="reviewed-solution-policy"]');
+      if (!(await reviewedPolicy.count())) {
+        errors.push("studio: approved v11.5 package policy is not projected before Work instantiation");
+      } else {
+        const reviewedText = await reviewedPolicy.innerText();
+        if (!reviewedText.includes("morn.lite@1.0.0") || !reviewedText.includes("reviewed outcome exists")) {
+          errors.push("studio: reviewed profile/acceptance policy is not preserved in step 3");
+        }
+        if (await page.locator("#work-profile").count()) {
+          errors.push("studio: reviewed v11.5 profile must not remain silently editable in step 3");
+        }
+      }
+      await page.getByRole("button", { name: "Instantiate Work", exact: true }).click();
+      await page.locator('[role="status"]').filter({ hasText: "Readiness gates" }).waitFor();
+      t = (await page.locator("body").innerText()).toLowerCase();
+      if (!t.includes("no — explicit gates remain")) {
+        errors.push("Studio: Work instantiation skipped execution readiness gates");
+      }
+      const instantiatedWork = await page.evaluate(async (expectedGoal) => {
+        const response = await fetch("/api/v115/control-plane");
+        if (!response.ok) throw new Error(`control-plane fetch failed: ${response.status}`);
+        const control = await response.json();
+        const work = control.work.find((item) => item?.spec?.goal === expectedGoal);
+        return work ? { id: work.id, phase: work.status?.phase, goal: work.spec?.goal } : null;
+      }, "Deliver a reviewed report");
+      if (!instantiatedWork) {
+        throw new Error("Studio instantiate returned, but canonical store has no matching Work");
+      }
+      if (instantiatedWork.phase !== "Proposed") {
+        errors.push(`Studio: new canonical Work phase is ${instantiatedWork.phase}, expected Proposed`);
+      }
+      await page.goto(`${BASE}/workbench`, { waitUntil: "networkidle", timeout: 30000 });
+      const canonicalWork = page.locator('section[aria-label="Canonical Work overview"]');
+      const workCard = canonicalWork.locator(`[data-work-id="${instantiatedWork.id}"]`);
+      await workCard.waitFor({ state: "visible", timeout: 10000 });
+      const focusText = await workCard.innerText();
+      if (!focusText.includes(instantiatedWork.goal) || !focusText.includes("Proposed")) {
+        errors.push("Workbench: exact Studio-instantiated Work is not shown as canonical state");
+      }
+      const lifecycleGuide = page.locator('[data-testid="work-lifecycle-guide"]');
+      if (!(await lifecycleGuide.count())) {
+        errors.push("Workbench: Studio-instantiated Work has no guided lifecycle surface");
+      } else {
+        const journeyText = await lifecycleGuide.innerText();
+        if (!journeyText.includes("Work defined") || !journeyText.includes("Ready & bound")) {
+          errors.push("Workbench: lifecycle guide does not expose the canonical progression");
+        }
+      }
+      if (!(await page.getByRole("heading", { name: "Governed E0 execution" }).count())) {
+        errors.push("Workbench: active proposed Work has no governed execution controls");
+      }
+      const capabilitySelect = page.locator(".governed-execution-grid select").nth(1);
+      if ((await capabilitySelect.count()) && (await capabilitySelect.inputValue()) === "") {
+        const blocker = page.getByRole("status").filter({ hasText: "No selectable E0 capability for this Work." });
+        if (!(await blocker.count()) || !(await blocker.getByRole("link", { name: /Review providers and admitted capabilities in Hub/ }).count())) {
+          errors.push("Workbench: missing-capability state must route users to Hub without weakening admission gates");
+        }
+      }
+      if (await page.getByRole("heading", { name: "Authoritative outcome observation" }).count()) {
+        errors.push("Workbench: Proposed Work must not expose outcome observation before execution begins");
+      }
+      if (screenshotsDir) {
+        await page.screenshot({ path: join(screenshotsDir, "workbench-after-studio-instantiation.png"), fullPage: true });
+      }
       if (errors.length > 0) {
         console.error("FAILED studio compiler:", errors.join(" | "));
         process.exitCode = 1;
       } else {
         console.log("OK studio compiler flow (run -> approve -> manifest)");
       }
+    }
+
+    if (process.exitCode !== 1) {
+      await runCanonicalAcceptanceUiContract();
     }
   }
 } finally {

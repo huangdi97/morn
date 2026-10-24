@@ -1,5 +1,6 @@
 //! Application state: one shared backend for Workbench/Studio/Console/Hub.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use morn_artifact::service::ArtifactService;
@@ -10,10 +11,15 @@ use morn_assurance::replacement::ReplacementPilot;
 use morn_assurance::replay::ReplayRunner;
 use morn_assurance::rollback::RollbackService;
 use morn_assurance::shadow::ShadowRunner;
+use morn_assurance::{
+    reference_evidence_ledger, AdmissionService, CustomerValueAttestation, EvidenceClaim,
+    EvidenceLedger,
+};
 #[cfg(feature = "domain-biolab")]
 use morn_biolab_reference::dream_factory::{LoopAResult, LoopCResult};
 #[cfg(feature = "domain-biolab")]
 use morn_biolab_reference::service::{BioLabService, E2eResult};
+use morn_capability::CapabilityRecord;
 use morn_evolution::distillation::DistillationService;
 use morn_evolution::engine::EvolutionEngine;
 use morn_evolution::flywheel::EvolutionFlywheel;
@@ -21,21 +27,67 @@ use morn_foundry::compiler::SolutionCompiler;
 use morn_foundry::manifest::ManifestService;
 use morn_foundry::solution::{ApprovedSolution, ProposedSolution, SolutionPackage};
 use morn_harness::provider::{DeepSeekHarnessProvider, DshMode, MornNativeHarness};
+use morn_harness::{
+    DshAcpControlHandle, DshAcpLifecycleController, ExecutorOutcomeReconciliationAuthorization,
+    PiHarnessProvider, PiMode,
+};
+use morn_integration::{SourceObservationAttestation, SourceOfTruthBinding};
 #[cfg(feature = "domain-biolab")]
 use morn_kernel::ids::WorkspaceId;
+use morn_kernel::ids::{
+    ActorInstanceId, RuntimeBindingId, WorkPackageId, WorkspaceId as KernelWorkspaceId,
+};
 use morn_kernel::workspace::{Workspace, WorkspaceKind};
 use morn_opint::dataset::OutcomeDataset;
 use morn_opint::episode::EpisodeAssembler;
 use morn_opint::predictor::PredictorRegistry;
+use morn_package::{
+    supply_chain_verification_context_ref, validate_supply_chain_verifier_build_ref,
+    SigstoreIdentityPolicy, SupplyChainVerificationEvidence,
+};
+use morn_runtime::{AttestedExecutionEnvironmentProvider, ExecutionEnvironmentAttestation};
 use morn_store::store::MornStore;
+use morn_work::acceptance::{AcceptanceReviewAuthorization, AcceptanceReviewerAttestation};
 use morn_work::durable::DurableRuntime;
 use morn_work::service::{DurableWorkService, WorkService};
 use morn_world::service::WorldService;
+
+#[derive(Debug, Clone)]
+pub struct WorkBoundAcpSessionControl {
+    pub session_id: String,
+    pub workspace_id: KernelWorkspaceId,
+    pub work_id: WorkPackageId,
+    pub work_generation: u64,
+    pub execution_binding_ref: RuntimeBindingId,
+    pub scope_ref: String,
+    pub handle: Option<DshAcpControlHandle>,
+}
+
+impl WorkBoundAcpSessionControl {
+    pub fn matches(
+        &self,
+        workspace_id: &KernelWorkspaceId,
+        work_id: &WorkPackageId,
+        work_generation: u64,
+        binding_ref: &RuntimeBindingId,
+    ) -> bool {
+        &self.workspace_id == workspace_id
+            && &self.work_id == work_id
+            && self.work_generation == work_generation
+            && &self.execution_binding_ref == binding_ref
+    }
+}
 
 /// The shared application backend state.
 pub struct AppInner {
     pub store: MornStore,
     pub workspace: Workspace,
+    /// Process-instance-unique controller lease holders. API callers cannot
+    /// supply or override these identities; all Work readiness routes in this
+    /// App instance share the same holder while separate server processes fence
+    /// one another with distinct holders.
+    pub work_controller_holder: String,
+    pub business_evidence_controller_holder: String,
     /// Generic (domain-neutral) world/work/artifact services used by the
     /// product surfaces. Domain packs provide their own instances.
     pub world: WorldService,
@@ -43,8 +95,53 @@ pub struct AppInner {
     pub artifacts: ArtifactService,
     #[cfg(feature = "domain-biolab")]
     pub biolab: BioLabService,
-    pub native_harness: MornNativeHarness,
-    pub dsh_harness: DeepSeekHarnessProvider,
+    /// Provider runtimes use independent locks. A long model turn must not hold
+    /// the global application-state mutex and block unrelated Work/Console reads.
+    pub native_harness: Arc<Mutex<MornNativeHarness>>,
+    pub dsh_harness: Arc<Mutex<DeepSeekHarnessProvider>>,
+    pub pi_harness: Arc<Mutex<PiHarnessProvider>>,
+    /// ACP lifecycle/control is a separate concurrency domain from the blocking
+    /// SDK executor path. It is opt-in and never upgrades HarnessProvider
+    /// interrupt/resume feature bits.
+    pub dsh_acp_lifecycle: Option<Arc<Mutex<DshAcpLifecycleController>>>,
+    /// Session-scoped cancel handles remain reachable while prompt_text holds
+    /// the lifecycle controller mutex in another blocking worker.
+    pub dsh_acp_controls: Arc<Mutex<HashMap<String, WorkBoundAcpSessionControl>>>,
+    /// Deployment-owned execution environment attestations. HTTP callers may
+    /// select only from this startup-loaded trust set; they cannot self-attest.
+    pub execution_environments: AttestedExecutionEnvironmentProvider,
+    /// Deployment-owned authoritative read bindings. HTTP callers may attach
+    /// these reviewed bindings to Work, but cannot manufacture a new authority.
+    pub source_of_truth_catalog: Vec<SourceOfTruthBinding>,
+    /// Deployment/connector-originated observations. HTTP callers may select
+    /// these immutable attestations but cannot submit world facts themselves.
+    pub source_observation_attestations: Vec<SourceObservationAttestation>,
+    /// Deployment-attested reviewer identities. UI/API callers may select a
+    /// reviewer but cannot self-assert principal identity or reviewer role.
+    pub acceptance_reviewers: Vec<AcceptanceReviewerAttestation>,
+    /// Deployment-issued, exact Work/Outcome/disposition review authorizations.
+    /// IDs are bearer references delivered out-of-band and are never listed by the API.
+    pub acceptance_review_authorizations: Vec<AcceptanceReviewAuthorization>,
+    /// Deployment-issued proof for exact customer-validated baselines/KPIs.
+    /// Bearer IDs are supplied out-of-band; callers cannot mint KPI truth.
+    pub customer_value_attestations: Vec<CustomerValueAttestation>,
+    /// Deployment-issued exact authorizations for resolving one ambiguous
+    /// executor receipt. Bearer IDs are delivered out-of-band and consumed once.
+    pub executor_reconciliation_authorizations: Vec<ExecutorOutcomeReconciliationAuthorization>,
+    /// Exact identity of the running build/artifact. Release-readiness CI
+    /// evidence must cite this same reference; historical CI cannot be reused
+    /// for a different binary/commit.
+    pub build_identity_ref: Option<String>,
+    /// Exact customer/site target for deployment readiness. Real-site and
+    /// production-write evidence is never reusable across different sites.
+    pub deployment_site_ref: Option<String>,
+    /// Deployment-owned evidence claims. Repository/reference claims are loaded
+    /// first; external RealSite/ProductionWrite proof may only come from the
+    /// explicit deployment file, never from an HTTP self-assertion.
+    pub evidence_ledger: EvidenceLedger,
+    /// Deployment-generated signature/provenance verification evidence. HTTP
+    /// callers may reference package digests but cannot self-assert these axes.
+    pub supply_chain_verifications: Vec<SupplyChainVerificationEvidence>,
     pub evolution: EvolutionEngine,
     pub durable: DurableWorkService,
     pub durable_v2: DurableRuntime,
@@ -54,6 +151,10 @@ pub struct AppInner {
     pub shadow: ShadowRunner,
     pub replay: ReplayRunner,
     pub certification: CertificationService,
+    /// v11.5 capability supply-chain state. These are semantic lifecycle
+    /// records, separate from the legacy certification service.
+    pub v115_admission: AdmissionService,
+    pub v115_capabilities: Vec<CapabilityRecord>,
     pub managed: ManagedWorkService,
     pub replacement: ReplacementPilot,
     pub flywheel: EvolutionFlywheel,
@@ -74,6 +175,950 @@ pub struct AppInner {
     pub e2e_result: Option<E2eResult>,
 }
 
+fn configured_dsh_harness() -> morn_kernel::Result<DeepSeekHarnessProvider> {
+    match std::env::var("MORN_DSH_MODE") {
+        Err(std::env::VarError::NotPresent) => Ok(DeepSeekHarnessProvider::new(DshMode::Fixture)),
+        Ok(mode) if mode.eq_ignore_ascii_case("fixture") => {
+            Ok(DeepSeekHarnessProvider::new(DshMode::Fixture))
+        }
+        Ok(mode) if mode.eq_ignore_ascii_case("real") => DeepSeekHarnessProvider::from_real_env(),
+        Ok(mode) => Err(morn_kernel::error::Error::validation(format!(
+            "unsupported MORN_DSH_MODE {mode:?}; expected fixture or real"
+        ))),
+        Err(error) => Err(morn_kernel::error::Error::validation(format!(
+            "cannot read MORN_DSH_MODE: {error}"
+        ))),
+    }
+}
+
+fn configured_dsh_acp_lifecycle(
+) -> morn_kernel::Result<Option<Arc<Mutex<DshAcpLifecycleController>>>> {
+    match std::env::var("MORN_DSH_ACP_MODE") {
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Ok(mode) if mode.eq_ignore_ascii_case("disabled") || mode.eq_ignore_ascii_case("off") => {
+            Ok(None)
+        }
+        Ok(mode) if mode.eq_ignore_ascii_case("real") => Ok(Some(Arc::new(Mutex::new(
+            DshAcpLifecycleController::from_env()?,
+        )))),
+        Ok(mode) => Err(morn_kernel::error::Error::validation(format!(
+            "unsupported MORN_DSH_ACP_MODE {mode:?}; expected real or disabled"
+        ))),
+        Err(error) => Err(morn_kernel::error::Error::validation(format!(
+            "cannot read MORN_DSH_ACP_MODE: {error}"
+        ))),
+    }
+}
+
+fn configured_execution_environments() -> morn_kernel::Result<AttestedExecutionEnvironmentProvider>
+{
+    let attestation_file = std::env::var("MORN_EXECUTION_ATTESTATION_FILE");
+    let path = match attestation_file {
+        Err(std::env::VarError::NotPresent) => {
+            let provider_name = std::env::var("MORN_EXECUTION_ATTESTOR")
+                .unwrap_or_else(|_| "deployment-attestor".to_string());
+            return AttestedExecutionEnvironmentProvider::new(provider_name);
+        }
+        Ok(path) => path,
+        Err(error) => {
+            return Err(morn_kernel::error::Error::validation(format!(
+                "cannot read MORN_EXECUTION_ATTESTATION_FILE: {error}"
+            )));
+        }
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_EXECUTION_ATTESTATION_FILE must not be empty when set",
+        ));
+    }
+    let provider_name = std::env::var("MORN_EXECUTION_ATTESTOR").map_err(|_| {
+        morn_kernel::error::Error::validation(
+            "MORN_EXECUTION_ATTESTOR is required when MORN_EXECUTION_ATTESTATION_FILE is configured",
+        )
+    })?;
+    let provider_name = provider_name.trim();
+    if provider_name.is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_EXECUTION_ATTESTOR must not be empty when execution attestation evidence is configured",
+        ));
+    }
+    let mut provider = AttestedExecutionEnvironmentProvider::new(provider_name)?;
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read execution attestation file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid execution attestation JSON in {path:?}: {error}"
+        ))
+    })?;
+    let attestations: Vec<ExecutionEnvironmentAttestation> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid execution attestation entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid execution attestation entry: {error}"
+            ))
+        })?],
+    };
+    for attestation in attestations {
+        provider.register_attestation(attestation)?;
+    }
+    Ok(provider)
+}
+
+fn configured_source_of_truth_bindings() -> morn_kernel::Result<Vec<SourceOfTruthBinding>> {
+    let Ok(path) = std::env::var("MORN_SOURCE_OF_TRUTH_BINDINGS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_SOURCE_OF_TRUTH_BINDINGS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read source-of-truth binding file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid source-of-truth binding JSON in {path:?}: {error}"
+        ))
+    })?;
+    let bindings: Vec<SourceOfTruthBinding> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid source-of-truth binding entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid source-of-truth binding entry: {error}"
+            ))
+        })?],
+    };
+
+    let mut ids = std::collections::BTreeSet::new();
+    for binding in &bindings {
+        binding.validate()?;
+        if !ids.insert(binding.id.to_string()) {
+            return Err(morn_kernel::error::Error::validation(
+                "source-of-truth binding ids must be unique",
+            ));
+        }
+    }
+    Ok(bindings)
+}
+
+fn configured_source_observation_attestations(
+) -> morn_kernel::Result<Vec<SourceObservationAttestation>> {
+    let Ok(path) = std::env::var("MORN_SOURCE_OBSERVATION_ATTESTATIONS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_SOURCE_OBSERVATION_ATTESTATIONS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read source observation attestation file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid source observation attestation JSON in {path:?}: {error}"
+        ))
+    })?;
+    let attestations: Vec<SourceObservationAttestation> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid source observation attestation entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid source observation attestation entry: {error}"
+            ))
+        })?],
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    for attestation in &attestations {
+        attestation.validate()?;
+        if !ids.insert(attestation.attestation_id.clone()) {
+            return Err(morn_kernel::error::Error::validation(
+                "source observation attestation ids must be unique",
+            ));
+        }
+    }
+    Ok(attestations)
+}
+
+fn configured_acceptance_reviewers() -> morn_kernel::Result<Vec<AcceptanceReviewerAttestation>> {
+    let Ok(path) = std::env::var("MORN_ACCEPTANCE_REVIEWERS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_ACCEPTANCE_REVIEWERS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read acceptance reviewer file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid acceptance reviewer JSON in {path:?}: {error}"
+        ))
+    })?;
+    let reviewers: Vec<AcceptanceReviewerAttestation> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid acceptance reviewer entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid acceptance reviewer entry: {error}"
+            ))
+        })?],
+    };
+    let mut references = std::collections::BTreeSet::new();
+    for reviewer in &reviewers {
+        reviewer.validate()?;
+        // Reviewer trust is append-only and versioned by observation time.
+        // The same principal may legitimately rotate roles/evidence through a
+        // later attestation; only the immutable attestation reference must be unique.
+        if !references.insert(reviewer.reference()) {
+            return Err(morn_kernel::error::Error::validation(
+                "acceptance reviewer attestation references must be unique",
+            ));
+        }
+    }
+    Ok(reviewers)
+}
+
+fn persist_acceptance_trust_records(
+    store: &MornStore,
+    workspace_id: &KernelWorkspaceId,
+    reviewers: &[AcceptanceReviewerAttestation],
+    authorizations: &[AcceptanceReviewAuthorization],
+) -> morn_kernel::Result<()> {
+    for reviewer in reviewers {
+        let kind = "acceptance_reviewer_attestation_v115";
+        let id = reviewer.reference();
+        match store.load_record::<AcceptanceReviewerAttestation>(kind, &id)? {
+            Some(existing) if existing == *reviewer => {}
+            Some(_) => {
+                return Err(morn_kernel::error::Error::conflict(format!(
+                    "deployment reviewer attestation {id} conflicts with persisted trust evidence"
+                )))
+            }
+            None => store.save_record_immutable(
+                kind,
+                &id,
+                workspace_id.as_str(),
+                reviewer.observed_at.millis(),
+                reviewer,
+            )?,
+        }
+    }
+    for authorization in authorizations {
+        let kind = "acceptance_review_authorization_v115";
+        let id = authorization.authorization_id.as_str();
+        match store.load_record::<AcceptanceReviewAuthorization>(kind, id)? {
+            Some(existing) if existing == *authorization => {}
+            Some(_) => {
+                return Err(morn_kernel::error::Error::conflict(format!(
+                    "deployment review authorization {id} conflicts with persisted trust evidence"
+                )))
+            }
+            None => store.save_record_immutable(
+                kind,
+                id,
+                workspace_id.as_str(),
+                authorization.issued_at.millis(),
+                authorization,
+            )?,
+        }
+    }
+    Ok(())
+}
+
+fn configured_acceptance_review_authorizations(
+) -> morn_kernel::Result<Vec<AcceptanceReviewAuthorization>> {
+    let Ok(path) = std::env::var("MORN_ACCEPTANCE_REVIEW_AUTHORIZATIONS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_ACCEPTANCE_REVIEW_AUTHORIZATIONS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read acceptance review authorization file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid acceptance review authorization JSON in {path:?}: {error}"
+        ))
+    })?;
+    let authorizations: Vec<AcceptanceReviewAuthorization> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid acceptance review authorization entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid acceptance review authorization entry: {error}"
+            ))
+        })?],
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    for authorization in &authorizations {
+        authorization.validate()?;
+        if !ids.insert(authorization.authorization_id.clone()) {
+            return Err(morn_kernel::error::Error::validation(
+                "acceptance review authorization ids must be unique",
+            ));
+        }
+    }
+    Ok(authorizations)
+}
+
+fn configured_customer_value_attestations() -> morn_kernel::Result<Vec<CustomerValueAttestation>> {
+    let Ok(path) = std::env::var("MORN_CUSTOMER_VALUE_ATTESTATIONS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_CUSTOMER_VALUE_ATTESTATIONS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read customer value attestation file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid customer value attestation JSON in {path:?}: {error}"
+        ))
+    })?;
+    let attestations: Vec<CustomerValueAttestation> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid customer value attestation entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid customer value attestation entry: {error}"
+            ))
+        })?],
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    for attestation in &attestations {
+        attestation.validate()?;
+        if !ids.insert(attestation.attestation_id.clone()) {
+            return Err(morn_kernel::error::Error::validation(
+                "customer value attestation ids must be unique",
+            ));
+        }
+    }
+    Ok(attestations)
+}
+
+fn configured_executor_reconciliation_authorizations(
+) -> morn_kernel::Result<Vec<ExecutorOutcomeReconciliationAuthorization>> {
+    let Ok(path) = std::env::var("MORN_EXECUTOR_RECONCILIATION_AUTHORIZATIONS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_EXECUTOR_RECONCILIATION_AUTHORIZATIONS_FILE must not be empty when set",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read executor reconciliation authorization file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid executor reconciliation authorization JSON in {path:?}: {error}"
+        ))
+    })?;
+    let authorizations: Vec<ExecutorOutcomeReconciliationAuthorization> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid executor reconciliation authorization entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid executor reconciliation authorization entry: {error}"
+            ))
+        })?],
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    for authorization in &authorizations {
+        authorization.validate()?;
+        if !ids.insert(authorization.authorization_id.clone()) {
+            return Err(morn_kernel::error::Error::validation(
+                "executor reconciliation authorization ids must be unique",
+            ));
+        }
+    }
+    Ok(authorizations)
+}
+
+fn validate_build_identity_ref(
+    runtime_value: &str,
+    compiled_value: Option<&str>,
+) -> morn_kernel::Result<String> {
+    let runtime_value = runtime_value.trim();
+    if runtime_value.is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_BUILD_IDENTITY_REF must not be empty when set",
+        ));
+    }
+    if !runtime_value.contains("://") || runtime_value.chars().any(char::is_control) {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_BUILD_IDENTITY_REF must be a single-line explicit evidence URI",
+        ));
+    }
+    let compiled_value = compiled_value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            morn_kernel::error::Error::validation(
+                "this Morn binary has no compile-time build identity; rebuild with MORN_BUILD_IDENTITY_REF set before claiming deployment readiness",
+            )
+        })?;
+    if runtime_value != compiled_value {
+        return Err(morn_kernel::error::Error::validation(format!(
+            "runtime MORN_BUILD_IDENTITY_REF {runtime_value:?} does not match this binary's compile-time build identity {compiled_value:?}"
+        )));
+    }
+    Ok(runtime_value.to_string())
+}
+
+fn configured_build_identity_ref() -> morn_kernel::Result<Option<String>> {
+    match std::env::var("MORN_BUILD_IDENTITY_REF") {
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Ok(value) => {
+            validate_build_identity_ref(&value, option_env!("MORN_BUILD_IDENTITY_REF")).map(Some)
+        }
+        Err(error) => Err(morn_kernel::error::Error::validation(format!(
+            "cannot read MORN_BUILD_IDENTITY_REF: {error}"
+        ))),
+    }
+}
+
+#[cfg(test)]
+mod build_identity_tests {
+    use super::validate_build_identity_ref;
+
+    #[test]
+    fn deployment_build_identity_requires_a_compile_time_anchor() {
+        assert!(validate_build_identity_ref("git://huangdi97/morn/abc123", None).is_err());
+    }
+
+    #[test]
+    fn deployment_build_identity_must_match_the_compiled_binary() {
+        assert!(validate_build_identity_ref(
+            "git://huangdi97/morn/current",
+            Some("git://huangdi97/morn/old"),
+        )
+        .is_err());
+        assert_eq!(
+            validate_build_identity_ref(
+                "git://huangdi97/morn/current",
+                Some("git://huangdi97/morn/current"),
+            )
+            .unwrap(),
+            "git://huangdi97/morn/current"
+        );
+    }
+}
+
+fn configured_deployment_site_ref() -> morn_kernel::Result<Option<String>> {
+    match std::env::var("MORN_DEPLOYMENT_SITE_REF") {
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Ok(value) => {
+            let value = value.trim();
+            if value.is_empty() {
+                return Err(morn_kernel::error::Error::validation(
+                    "MORN_DEPLOYMENT_SITE_REF must not be empty when set",
+                ));
+            }
+            if value.chars().any(char::is_control) {
+                return Err(morn_kernel::error::Error::validation(
+                    "MORN_DEPLOYMENT_SITE_REF must not contain control characters",
+                ));
+            }
+            Ok(Some(value.to_string()))
+        }
+        Err(error) => Err(morn_kernel::error::Error::validation(format!(
+            "cannot read MORN_DEPLOYMENT_SITE_REF: {error}"
+        ))),
+    }
+}
+
+fn configured_evidence_ledger() -> morn_kernel::Result<EvidenceLedger> {
+    let mut ledger = reference_evidence_ledger();
+    let Ok(path) = std::env::var("MORN_EVIDENCE_CLAIMS_FILE") else {
+        return Ok(ledger);
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_EVIDENCE_CLAIMS_FILE must not be empty when set",
+        ));
+    }
+    let trusted_issuer = std::env::var("MORN_EVIDENCE_ISSUER").map_err(|_| {
+        morn_kernel::error::Error::validation(
+            "MORN_EVIDENCE_ISSUER is required when MORN_EVIDENCE_CLAIMS_FILE is configured",
+        )
+    })?;
+    let trusted_issuer = trusted_issuer.trim();
+    if trusted_issuer.is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_EVIDENCE_ISSUER must not be empty",
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read evidence claim file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid evidence claim JSON in {path:?}: {error}"
+        ))
+    })?;
+    let claims: Vec<EvidenceClaim> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid evidence claim entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!("invalid evidence claim entry: {error}"))
+        })?],
+    };
+    for claim in claims {
+        ledger.append_from_trusted_issuer(claim, trusted_issuer)?;
+    }
+    Ok(ledger)
+}
+
+fn canonical_sha256(value: &str) -> bool {
+    let Some(hex) = value.strip_prefix("sha256:") else {
+        return false;
+    };
+    hex.len() == 64
+        && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && hex.bytes().all(|byte| !byte.is_ascii_uppercase())
+}
+
+fn required_single_line_env(name: &str) -> morn_kernel::Result<String> {
+    let value = std::env::var(name).map_err(|_| {
+        morn_kernel::error::Error::validation(format!(
+            "{name} is required when MORN_SUPPLY_CHAIN_VERIFICATIONS_FILE is configured"
+        ))
+    })?;
+    let value = value.trim();
+    if value.is_empty() || value.chars().any(char::is_control) {
+        return Err(morn_kernel::error::Error::validation(format!(
+            "{name} must be a non-empty single-line value"
+        )));
+    }
+    Ok(value.to_string())
+}
+
+fn has_canonical_supply_chain_proof_ref(
+    evidence: &SupplyChainVerificationEvidence,
+    prefix: &str,
+) -> bool {
+    evidence
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.strip_prefix(prefix).is_some_and(canonical_sha256))
+}
+
+fn validate_supply_chain_verification_trust(
+    evidence: &SupplyChainVerificationEvidence,
+    policy: &SigstoreIdentityPolicy,
+    release_runner_ref: &str,
+    cosign_digest: &str,
+    verifier_build_ref: &str,
+) -> morn_kernel::Result<()> {
+    let [signature_ref, provenance_ref] = policy
+        .trusted_verifier_refs()
+        .map_err(morn_kernel::error::Error::validation)?;
+
+    let actual_refs = evidence
+        .verifier_ref
+        .split(" + ")
+        .map(str::trim)
+        .filter(|reference| !reference.is_empty())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut expected_refs = std::collections::BTreeSet::new();
+    if evidence.signature_verified {
+        expected_refs.insert(signature_ref.as_str());
+    }
+    if evidence.provenance_verified {
+        expected_refs.insert(provenance_ref.as_str());
+    }
+    if actual_refs != expected_refs {
+        return Err(morn_kernel::error::Error::validation(
+            "supply-chain verification evidence verifier_ref does not match the deployment-pinned Sigstore policy",
+        ));
+    }
+
+    let runner_ref = supply_chain_verification_context_ref("release-runner", release_runner_ref)
+        .map_err(morn_kernel::error::Error::validation)?;
+    let cosign_ref = supply_chain_verification_context_ref("cosign-binary", cosign_digest)
+        .map_err(morn_kernel::error::Error::validation)?;
+    let verifier_build_context =
+        supply_chain_verification_context_ref("verifier-build", verifier_build_ref)
+            .map_err(morn_kernel::error::Error::validation)?;
+    if !evidence
+        .evidence_refs
+        .iter()
+        .any(|reference| reference == &runner_ref)
+        || !evidence
+            .evidence_refs
+            .iter()
+            .any(|reference| reference == &cosign_ref)
+        || !evidence
+            .evidence_refs
+            .iter()
+            .any(|reference| reference == &verifier_build_context)
+    {
+        return Err(morn_kernel::error::Error::validation(
+            "supply-chain verification evidence is missing the deployment-pinned release runner, Cosign binary or verifier-build witness",
+        ));
+    }
+    if evidence.signature_verified
+        && !has_canonical_supply_chain_proof_ref(evidence, "cosign-verify-output://")
+    {
+        return Err(morn_kernel::error::Error::validation(
+            "signature verification evidence is missing the retained Cosign verify-output proof digest",
+        ));
+    }
+    if evidence.provenance_verified
+        && !has_canonical_supply_chain_proof_ref(evidence, "cosign-attestation-output://")
+    {
+        return Err(morn_kernel::error::Error::validation(
+            "provenance verification evidence is missing the retained Cosign attestation-output proof digest",
+        ));
+    }
+    Ok(())
+}
+
+fn configured_supply_chain_verifications(
+) -> morn_kernel::Result<Vec<SupplyChainVerificationEvidence>> {
+    let Ok(path) = std::env::var("MORN_SUPPLY_CHAIN_VERIFICATIONS_FILE") else {
+        return Ok(Vec::new());
+    };
+    if path.trim().is_empty() {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_SUPPLY_CHAIN_VERIFICATIONS_FILE must not be empty when set",
+        ));
+    }
+    let policy = SigstoreIdentityPolicy {
+        certificate_identity: required_single_line_env("MORN_COSIGN_CERTIFICATE_IDENTITY")?,
+        certificate_oidc_issuer: required_single_line_env("MORN_COSIGN_OIDC_ISSUER")?,
+    };
+    policy
+        .validate()
+        .map_err(morn_kernel::error::Error::validation)?;
+    let release_runner_ref = required_single_line_env("MORN_SUPPLY_CHAIN_RELEASE_RUNNER_REF")?;
+    let cosign_digest = required_single_line_env("MORN_SUPPLY_CHAIN_COSIGN_DIGEST")?;
+    if !canonical_sha256(&cosign_digest) {
+        return Err(morn_kernel::error::Error::validation(
+            "MORN_SUPPLY_CHAIN_COSIGN_DIGEST must be canonical sha256:<64-lowercase-hex>",
+        ));
+    }
+    let verifier_build_ref = required_single_line_env("MORN_SUPPLY_CHAIN_VERIFIER_BUILD_REF")?;
+    validate_supply_chain_verifier_build_ref(&verifier_build_ref)
+        .map_err(morn_kernel::error::Error::validation)?;
+
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        morn_kernel::error::Error::external(format!(
+            "cannot read supply-chain verification file {path:?}: {error}"
+        ))
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| {
+        morn_kernel::error::Error::validation(format!(
+            "invalid supply-chain verification JSON in {path:?}: {error}"
+        ))
+    })?;
+    let items: Vec<SupplyChainVerificationEvidence> = match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|error| {
+                morn_kernel::error::Error::validation(format!(
+                    "invalid supply-chain verification entry: {error}"
+                ))
+            })?,
+        other => vec![serde_json::from_value(other).map_err(|error| {
+            morn_kernel::error::Error::validation(format!(
+                "invalid supply-chain verification entry: {error}"
+            ))
+        })?],
+    };
+
+    let mut merged: Vec<SupplyChainVerificationEvidence> = Vec::new();
+    for evidence in items {
+        evidence
+            .validate_subject_digest(&evidence.subject_digest, false, false)
+            .map_err(morn_kernel::error::Error::validation)?;
+        evidence
+            .validate_bound_subject_ref()
+            .map_err(morn_kernel::error::Error::validation)?;
+        if !evidence.signature_verified && !evidence.provenance_verified {
+            return Err(morn_kernel::error::Error::validation(
+                "supply-chain verification entry must prove signature or provenance",
+            ));
+        }
+        validate_supply_chain_verification_trust(
+            &evidence,
+            &policy,
+            &release_runner_ref,
+            &cosign_digest,
+            &verifier_build_ref,
+        )?;
+        let evidence_subject = evidence
+            .validate_bound_subject_ref()
+            .map_err(morn_kernel::error::Error::validation)?
+            .to_string();
+        if let Some(existing) = merged.iter_mut().find(|current| {
+            current
+                .validate_bound_subject_ref()
+                .is_ok_and(|current_subject| current_subject == evidence_subject)
+        }) {
+            *existing = existing
+                .merge(&evidence)
+                .map_err(morn_kernel::error::Error::validation)?;
+        } else {
+            merged.push(evidence);
+        }
+    }
+    Ok(merged)
+}
+
+#[cfg(test)]
+mod supply_chain_trust_tests {
+    use super::*;
+
+    fn digest(ch: char) -> String {
+        format!("sha256:{}", ch.to_string().repeat(64))
+    }
+
+    fn policy() -> SigstoreIdentityPolicy {
+        SigstoreIdentityPolicy {
+            certificate_identity:
+                "https://github.com/acme/morn/.github/workflows/release.yml@refs/heads/main"
+                    .to_string(),
+            certificate_oidc_issuer: "https://token.actions.githubusercontent.com".to_string(),
+        }
+    }
+
+    fn context_refs() -> Vec<String> {
+        vec![
+            supply_chain_verification_context_ref("release-runner", "runner://attested-release-1")
+                .unwrap(),
+            supply_chain_verification_context_ref(
+                "cosign-binary",
+                &format!("sha256:{}", "a".repeat(64)),
+            )
+            .unwrap(),
+            supply_chain_verification_context_ref(
+                "verifier-build",
+                "git://huangdi97/morn/verifier-1",
+            )
+            .unwrap(),
+            format!("cosign-verify-output://sha256:{}", "b".repeat(64)),
+            format!("cosign-attestation-output://sha256:{}", "c".repeat(64)),
+        ]
+    }
+
+    #[test]
+    fn supply_chain_trust_requires_exact_policy_and_verification_environment() {
+        let policy = policy();
+        let mut evidence = SupplyChainVerificationEvidence {
+            subject_digest: digest('f'),
+            verifier_ref: policy.signature_verifier_ref().unwrap(),
+            signature_verified: true,
+            provenance_verified: false,
+            evidence_refs: context_refs(),
+        };
+        validate_supply_chain_verification_trust(
+            &evidence,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
+        )
+        .unwrap();
+
+        evidence.verifier_ref =
+            "sigstore://cosign?identity=attacker&issuer=https://issuer".to_string();
+        assert!(validate_supply_chain_verification_trust(
+            &evidence,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
+        )
+        .is_err());
+
+        evidence.verifier_ref = policy.signature_verifier_ref().unwrap();
+        let verifier_build_context = supply_chain_verification_context_ref(
+            "verifier-build",
+            "git://huangdi97/morn/verifier-1",
+        )
+        .unwrap();
+        evidence
+            .evidence_refs
+            .retain(|reference| reference != &verifier_build_context);
+        assert!(validate_supply_chain_verification_trust(
+            &evidence,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn supply_chain_trust_requires_axis_specific_retained_proof_witnesses() {
+        let policy = policy();
+        let mut signature = SupplyChainVerificationEvidence {
+            subject_digest: digest('d'),
+            verifier_ref: policy.signature_verifier_ref().unwrap(),
+            signature_verified: true,
+            provenance_verified: false,
+            evidence_refs: context_refs(),
+        };
+        signature
+            .evidence_refs
+            .retain(|reference| !reference.starts_with("cosign-verify-output://"));
+        assert!(validate_supply_chain_verification_trust(
+            &signature,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
+        )
+        .is_err());
+
+        let mut provenance = SupplyChainVerificationEvidence {
+            subject_digest: digest('e'),
+            verifier_ref: policy.provenance_verifier_ref().unwrap(),
+            signature_verified: false,
+            provenance_verified: true,
+            evidence_refs: context_refs(),
+        };
+        provenance
+            .evidence_refs
+            .retain(|reference| !reference.starts_with("cosign-attestation-output://"));
+        assert!(validate_supply_chain_verification_trust(
+            &provenance,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn merged_supply_chain_axes_require_both_expected_verifier_refs() {
+        let policy = policy();
+        let [signature_ref, provenance_ref] = policy.trusted_verifier_refs().unwrap();
+        let evidence = SupplyChainVerificationEvidence {
+            subject_digest: digest('e'),
+            verifier_ref: format!("{signature_ref} + {provenance_ref}"),
+            signature_verified: true,
+            provenance_verified: true,
+            evidence_refs: context_refs(),
+        };
+        validate_supply_chain_verification_trust(
+            &evidence,
+            &policy,
+            "runner://attested-release-1",
+            &format!("sha256:{}", "a".repeat(64)),
+            "git://huangdi97/morn/verifier-1",
+        )
+        .unwrap();
+    }
+}
+
+fn configured_pi_harness() -> morn_kernel::Result<PiHarnessProvider> {
+    match std::env::var("MORN_PI_MODE") {
+        Err(std::env::VarError::NotPresent) => Ok(PiHarnessProvider::new(PiMode::Fixture)),
+        Ok(mode) if mode.eq_ignore_ascii_case("fixture") => {
+            Ok(PiHarnessProvider::new(PiMode::Fixture))
+        }
+        Ok(mode) if mode.eq_ignore_ascii_case("real") => PiHarnessProvider::from_real_env(),
+        Ok(mode) => Err(morn_kernel::error::Error::validation(format!(
+            "unsupported MORN_PI_MODE {mode:?}; expected fixture or real"
+        ))),
+        Err(error) => Err(morn_kernel::error::Error::validation(format!(
+            "cannot read MORN_PI_MODE: {error}"
+        ))),
+    }
+}
+
 /// Thread-safe shared state for HTTP handlers.
 #[derive(Clone)]
 pub struct AppState(pub Arc<Mutex<AppInner>>);
@@ -81,6 +1126,32 @@ pub struct AppState(pub Arc<Mutex<AppInner>>);
 impl AppState {
     /// Build a fresh application with a demo BioLab workspace and harness providers.
     pub fn new(db_path: &str) -> morn_kernel::Result<Self> {
+        // Validate deployment identity/evidence inputs before opening or mutating
+        // durable state. A mismatched build/site/evidence envelope must fail
+        // without creating a workspace or persisting trust records.
+        let build_identity_ref = configured_build_identity_ref()?;
+        let deployment_site_ref = configured_deployment_site_ref()?;
+        let evidence_ledger = configured_evidence_ledger()?;
+        let supply_chain_verifications = configured_supply_chain_verifications()?;
+        let execution_environments = configured_execution_environments()?;
+        let dsh_acp_lifecycle = configured_dsh_acp_lifecycle()?;
+        let source_of_truth_catalog = configured_source_of_truth_bindings()?;
+        let source_observation_attestations = configured_source_observation_attestations()?;
+        let acceptance_reviewers = configured_acceptance_reviewers()?;
+        let acceptance_review_authorizations = configured_acceptance_review_authorizations()?;
+        let customer_value_attestations = configured_customer_value_attestations()?;
+        let executor_reconciliation_authorizations =
+            configured_executor_reconciliation_authorizations()?;
+        let dsh_harness = configured_dsh_harness()?;
+        let pi_harness = configured_pi_harness()?;
+
+        let controller_instance = ActorInstanceId::generate_with("morn-app-controller");
+        let work_controller_holder = format!("morn-app-api:{}", controller_instance);
+        let business_evidence_controller_holder = format!(
+            "morn-app-business-evidence-recovery:{}",
+            controller_instance
+        );
+
         let store = MornStore::open(db_path)?;
         // Reuse the persisted workspace on restart so workspace-scoped records hydrate.
         let workspace = store
@@ -100,16 +1171,38 @@ impl AppState {
             let workspace_id: WorkspaceId = workspace.id.clone();
             BioLabService::new(workspace_id)
         };
+        persist_acceptance_trust_records(
+            &store,
+            &workspace.id,
+            &acceptance_reviewers,
+            &acceptance_review_authorizations,
+        )?;
         let mut inner = AppInner {
             store,
             workspace,
+            work_controller_holder,
+            business_evidence_controller_holder,
             world: WorldService::new(),
             work: WorkService::new(),
             artifacts: ArtifactService::new(),
             #[cfg(feature = "domain-biolab")]
             biolab,
-            native_harness: MornNativeHarness::new(),
-            dsh_harness: DeepSeekHarnessProvider::new(DshMode::Fixture),
+            native_harness: Arc::new(Mutex::new(MornNativeHarness::new())),
+            dsh_harness: Arc::new(Mutex::new(dsh_harness)),
+            pi_harness: Arc::new(Mutex::new(pi_harness)),
+            dsh_acp_lifecycle,
+            dsh_acp_controls: Arc::new(Mutex::new(HashMap::new())),
+            execution_environments,
+            source_of_truth_catalog,
+            source_observation_attestations,
+            acceptance_reviewers,
+            acceptance_review_authorizations,
+            customer_value_attestations,
+            executor_reconciliation_authorizations,
+            build_identity_ref,
+            deployment_site_ref,
+            evidence_ledger,
+            supply_chain_verifications,
             evolution: EvolutionEngine::new(),
             durable: DurableWorkService::new(),
             durable_v2: DurableRuntime::new(),
@@ -119,6 +1212,8 @@ impl AppState {
             shadow: ShadowRunner::new(),
             replay: ReplayRunner::new(),
             certification: CertificationService::new(),
+            v115_admission: AdmissionService::default(),
+            v115_capabilities: Vec::new(),
             managed: ManagedWorkService::new(),
             replacement: ReplacementPilot::new(),
             flywheel: EvolutionFlywheel::new(),
@@ -174,6 +1269,64 @@ impl AppInner {
                 r.id.as_str(),
                 r.released_at.millis(),
                 r,
+            )?;
+        }
+        for capability in &self.v115_capabilities {
+            store.save_record(
+                "capability_record_v115",
+                capability.manifest.id.as_str(),
+                self.workspace.id.as_str(),
+                capability.manifest.declared_at.millis(),
+                capability,
+            )?;
+        }
+        for observation in &self.v115_admission.observations {
+            persist_immutable(
+                store,
+                "capability_observation_v115",
+                observation.id.as_str(),
+                observation.created_at.millis(),
+                observation,
+            )?;
+        }
+        for qualification in &self.v115_admission.qualifications {
+            persist_immutable(
+                store,
+                "qualification_record_v115",
+                qualification.id.as_str(),
+                qualification.created_at.millis(),
+                qualification,
+            )?;
+        }
+        for release in &self.v115_admission.releases {
+            // Release bytes/digest are immutable, while lifecycle status is a
+            // mutable projection. Revocation history is append-only below.
+            store.save_record(
+                "capability_distribution_release_v115",
+                release.id.as_str(),
+                self.workspace.id.as_str(),
+                release.created_at.millis(),
+                release,
+            )?;
+        }
+        for admission in &self.v115_admission.admissions {
+            // Admission status is a current projection; lifecycle events retain
+            // the non-destructive history of admission/suspension.
+            store.save_record(
+                "site_admission_v115",
+                admission.id.as_str(),
+                self.workspace.id.as_str(),
+                admission.created_at.millis(),
+                admission,
+            )?;
+        }
+        for event in &self.v115_admission.events {
+            persist_immutable(
+                store,
+                "capability_lifecycle_event_v115",
+                event.id.as_str(),
+                event.created_at.millis(),
+                event,
             )?;
         }
         for r in &self.managed.runs {
@@ -274,6 +1427,50 @@ impl AppInner {
         self.certification.decisions = store.load_certification_decisions()?;
         self.certification.capabilities = store.load_certified_capabilities()?;
         self.certification.releases = store.load_capability_releases()?;
+        self.v115_capabilities = store
+            .load_records_in_workspace("capability_record_v115", self.workspace.id.as_str())?;
+        let manifest_ids: std::collections::HashSet<String> = self
+            .v115_capabilities
+            .iter()
+            .map(|cap| cap.manifest.id.to_string())
+            .collect();
+        // Historical v11.5 observations, qualification and lifecycle events
+        // were stored as immutable rows with an empty workspace field. Restore
+        // them by their owning capability manifest, never by a global read
+        // directly into the active tenant's runtime state.
+        self.v115_admission.observations = store
+            .load_records::<morn_assurance::CapabilityObservation>("capability_observation_v115")?
+            .into_iter()
+            .filter(|item| manifest_ids.contains(item.manifest_id.as_str()))
+            .collect();
+        self.v115_admission.qualifications = store
+            .load_records::<morn_assurance::QualificationRecord>("qualification_record_v115")?
+            .into_iter()
+            .filter(|item| manifest_ids.contains(item.manifest_id.as_str()))
+            .collect();
+        self.v115_admission.releases = store
+            .load_records_in_workspace::<morn_assurance::CapabilityDistributionRelease>(
+                "capability_distribution_release_v115",
+                self.workspace.id.as_str(),
+            )?
+            .into_iter()
+            .filter(|item| manifest_ids.contains(item.manifest_id.as_str()))
+            .collect();
+        self.v115_admission.admissions = store
+            .load_records_in_workspace::<morn_assurance::SiteAdmission>(
+                "site_admission_v115",
+                self.workspace.id.as_str(),
+            )?
+            .into_iter()
+            .filter(|item| manifest_ids.contains(item.manifest_id.as_str()))
+            .collect();
+        self.v115_admission.events = store
+            .load_records::<morn_assurance::CapabilityLifecycleEvent>(
+                "capability_lifecycle_event_v115",
+            )?
+            .into_iter()
+            .filter(|item| manifest_ids.contains(item.manifest_id.as_str()))
+            .collect();
         self.managed.runs = store.load_managed_runs(&self.workspace.id)?;
         self.managed.receipts = store.load_delivery_receipts()?;
         self.managed.acceptances = store.load_acceptance_decisions()?;
@@ -316,6 +1513,41 @@ impl AppInner {
         Ok(())
     }
 }
+#[cfg(test)]
+mod controller_holder_tests {
+    use super::AppState;
+
+    #[test]
+    fn controller_holders_are_stable_per_app_and_unique_across_app_instances() {
+        let first = AppState::new(":memory:").unwrap();
+        let second = AppState::new(":memory:").unwrap();
+
+        let (first_work, first_business) = {
+            let guard = first.lock();
+            (
+                guard.work_controller_holder.clone(),
+                guard.business_evidence_controller_holder.clone(),
+            )
+        };
+        let (second_work, second_business) = {
+            let guard = second.lock();
+            (
+                guard.work_controller_holder.clone(),
+                guard.business_evidence_controller_holder.clone(),
+            )
+        };
+
+        assert!(first_work.starts_with("morn-app-api:"));
+        assert!(first_business.starts_with("morn-app-business-evidence-recovery:"));
+        assert_ne!(first_work, second_work);
+        assert_ne!(first_business, second_business);
+
+        let guard = first.lock();
+        assert_eq!(guard.work_controller_holder, first_work);
+        assert_eq!(guard.business_evidence_controller_holder, first_business);
+    }
+}
+
 /// Persist an immutable record, treating "already exists" as idempotent no-op.
 fn persist_immutable<T: serde::Serialize>(
     store: &morn_store::store::MornStore,

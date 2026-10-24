@@ -1,6 +1,12 @@
 # DECISIONS.md
 
 > Codex 只能追加/修订有明确依据的 Decision。不要把猜测写成既定事实。
+>
+> **Current v11.5 note (2026-10-17):** D-001–D-030 retain the original
+> greenfield/v1 decision history. Where a historical decision conflicts with
+> the current branch, the later D-031+ decision explicitly supersedes it.
+> Current implementation truth is also summarized in `STATUS.md`; external
+> evidence blockers remain authoritative in `BLOCKERS.md`.
 
 ## D-001 — 近期实现范围
 Status: Accepted
@@ -22,7 +28,7 @@ Status: Accepted
 不 fork DSH 成 Morn，不把 DSH Session 当正式事实。
 
 ## D-004 — Cordis 只做 Spike
-Status: Accepted
+Status: Superseded by D-031 (historical greenfield decision)
 
 除非现有仓库已有稳定依赖并有测试，否则不把 Cordis 设为 Semantic Kernel 硬依赖。
 
@@ -37,7 +43,7 @@ Status: Accepted
 Promotion 生成新 production version，保留 rollback point。
 
 ## D-007 — Greenfield 技术栈选择：Rust workspace + Web 前端 + SQLite adapter
-Status: Accepted
+Status: Accepted as historical greenfield baseline; desktop-build clause superseded by D-033
 
 Context:
 `E:\AI\morn新` 无 `.git`、无源码；环境缺 Rust。M0 安装 rustc/cargo 1.97.1 (MSVC) 成功；Node 22 / npm / pnpm 可用。
@@ -62,7 +68,7 @@ Tests/Proof:
 `scripts/run_all.ps1` exit 0；BioLab E2E smoke 通过。
 
 ## D-008 — DeepSeek Harness 真实集成：当前为外部/凭据 blocker
-Status: Accepted
+Status: Superseded by D-032 (historical August environment observation)
 
 Context:
 官方 DSH（agent harness, "Everything is a Plugin", Cordis 驱动, Developer Preview）在当前环境没有可安装的官方发行物；PyPI 上唯一同名包是第三方 OpenAI 兼容客户端，启动需要真实 DeepSeek API key（无凭据）。
@@ -413,3 +419,111 @@ CLI 传参用 argv（不 shell 插值）。安全测试改为断言 Morn 自身�
 Tests/Proof:
 `morn-package` 5 tests（含 unsafe_names_rejected_path_traversal_and_injection、
 plugin_manifest_validate_type_and_name）；migration_security 10 tests。
+
+## v11.5 Current Decisions — 2026-10-17
+
+### D-031 — Cordis 是参考组合运行时，不是 Morn 语义内核
+Status: Accepted
+
+Context:
+D-004 的“只做 Spike”属于早期 greenfield 决策。当前仓库已经将
+`@deepseek-ai/cordis@4.0.4` 固定为 reference composition host，同时 v11.5 明确
+Work/Authority/Receipt/Outcome/Acceptance 不属于 Cordis 生命周期状态。
+
+Decision:
+- Cordis 负责 node-local Context / Service slot / dependency / Fiber / plugin lifecycle。
+- Cordis 可以影响未来的 provider/capability 可用性，但不得修改既有 Work generation、
+  ExecutionBinding、外部效果真值或业务验收。
+- Morn 协议/语义不得依赖某个 Cordis 插件实现细节；其他实现满足协议与 conformance 即可。
+
+Proof:
+`runtime/cordis-host`、CI Composition runtime job、`docs/architecture-v11.5.md`。
+
+### D-032 — DSH Real adapter 本地实现完成；Live DSH 只剩独立外部证据
+Status: Accepted
+
+Context:
+D-008 记录的是 2026-08 环境。官方 DeepSeek Harness 现有公开发行物；Morn 已有 real
+SDK stdio/JSON-RPC adapter、ACP Work-bound lifecycle controller、live evidence workflows
+和 runtime/environment/profile/route identity gates。
+
+Decision:
+- 当前经 Morn 明确 re-qualification 的官方 DSH distribution 是
+  `0.2.1-rc.2`；SDK/ACP wire identity 与 distribution provenance 分开判断。
+- 生产配置必须匹配 exact qualified version，并绑定 deployment-attested SHA-256 digest、
+  profile configuration、route 和 execution environment。
+- future DSH package 即使保持相同 wire version，也不得自动继承资格；必须重新审核并更新
+  qualification constant/tests/workflow gate。
+- `#[cfg(test)]` protocol fixture 可以使用 synthetic runtime identity，但该 bypass 不可序列化、
+  不可由生产环境启用，也不能产生 live-runtime claim。
+- B-001 的含义因此是“缺 authenticated official-runtime live evidence”，不再是“Real adapter 未实现”。
+
+Proof:
+`crates/morn-harness/src/dsh_sdk.rs`,
+`crates/morn-harness/src/dsh_acp.rs`,
+`.github/workflows/live-dsh-evidence.yml`,
+exact-head Actions `39026643224` for implementation checkpoint `49023ac`.
+
+### D-033 — Provider lifecycle 是 capability-negotiated；ExecutionReceipt 属于 Morn turn boundary
+Status: Accepted
+
+Context:
+不同 harness transport 的生命周期并不一致。当前 DSH SDK 与 Pi RPC 都能完成真实 turn，
+但不能诚实地映射为 provider-neutral per-session close。把 `terminate()` 当成所有 receipt 的
+前置条件会迫使 adapter 伪造上游不存在的语义。
+
+Decision:
+- `start/send/inspect` 是基础执行边界；interrupt/resume/session-close 由
+  `HarnessProviderFeatures` 显式协商，不支持就 fail-closed。
+- 对 Work E0 execution，每次 turn 后由 Morn application boundary 使用 pinned
+  RuntimeContext + normalized events + runtime identity + settlement classification 生成并持久化
+  `ExecutionReceipt`。
+- provider 真正支持 session close 时，`terminate()` 也可以返回 receipt；但 receipt 的业务语义
+  不依赖 fake close。
+- timeout、未知 settlement、tool/subagent policy escape 或无法证明外部结果时，receipt 保持
+  `outcome-unknown` / 未终结并要求 reconciliation。
+- Harness receipt 永远不是 `ObservedOutcome` 或 `AcceptanceDecision`。
+
+Proof:
+`crates/morn-app/src/api.rs::run_e0_harness_turn`,
+`execution_receipt_v115` persistence tests,
+`docs/architecture-v11.5.md` receipt taxonomy。
+
+### D-034 — Terminal Work truth 只能由持久化、可复核的业务证据投影
+Status: Accepted
+
+Context:
+v11.5 将 Accepted/Rejected 从“内存 controller 收到一个 AcceptanceDecision 就改 phase”
+收紧为 durable trust chain。今天的 terminal-review hardening 还禁止 generic Work CAS 直接创建
+Accepted/Rejected projection。
+
+Decision:
+- final Accept/Reject 必须属于 exact Work generation 和 pinned AcceptanceSpec。
+- referenced outcomes 必须 source-grounded，并通过 deployment-attested provenance。
+- reviewer identity、role、validity、exact one-shot review authorization 与 consumption 都必须可持久恢复并重验。
+- generic Work CAS 不得凭 caller-supplied phase 创造 terminal business truth。
+- Conditional/RequestMoreEvidence 保持非 terminal。
+- CustomerValidated value 只能引用同 generation、真正 final-accepted 的 exact outcome。
+
+Proof:
+`morn-control-plane` durable acceptance/trust tests and 2026-10-17 terminal projection commits
+`d4b7ee5`–`c73da10`。
+
+### D-035 — Repository-local complete 与 Production/Customer ready 是两个独立结论
+Status: Accepted
+
+Context:
+用户要求把本地可设计、可编码、可测试部分全部做完；同时 B-001/B-002/B-003/B-004、
+G4-B-002、G12 和 ProductionWrite 依赖真实凭据、部署身份、真实数据或客户系统。
+
+Decision:
+- 当 exact-head CI、current-state docs、local trust/control/provider/UI/conformance gates 全绿且
+  repository-local required-design audit 无缺口，可以声明 `ALL_LOCAL_GATES_PASS`。
+- 不得由上述结论推导 `LIVE_DSH`、`LIVE_PI`、`PRODUCTION_READY`、`CUSTOMER_G12`
+  或 ProductionWrite。
+- PR #1 保持 draft，直到相应外部 evidence gate 真正运行并产生独立证据；fixture、截图、protocol fake
+  和文档不能清除 external blocker。
+
+Proof:
+`STATUS.md`, `BLOCKERS.md`, protected live-evidence workflows and exact-head GitHub Actions.
+

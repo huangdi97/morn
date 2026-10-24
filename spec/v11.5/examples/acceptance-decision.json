@@ -1,0 +1,17 @@
+{
+  "id": "adec-1042",
+  "work_package_id": "work-1042",
+  "acceptance_spec_id": "acceptance-1042",
+  "disposition": "Accept",
+  "outcome_refs": [
+    "out-1042"
+  ],
+  "evidence_refs": [
+    "review://planner/1042"
+  ],
+  "decided_by": "principal-production-owner",
+  "acting_role": "production-owner",
+  "reason": "impact review criteria satisfied",
+  "conditions": [],
+  "decided_at": "2026-10-08T05:12:00Z"
+}
