@@ -3008,13 +3008,15 @@ mod v115_revision_tests {
                 &[stale],
             )
             .is_err());
-        assert!(store
-            .load_record::<serde_json::Value>(
-                "execution_dispatch_admission_v115",
-                "dispatch-stale",
-            )
-            .unwrap()
-            .is_none());
+        assert!(
+            store
+                .load_record::<serde_json::Value>(
+                    "execution_dispatch_admission_v115",
+                    "dispatch-stale",
+                )
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -3022,7 +3024,14 @@ mod v115_revision_tests {
         let store = MornStore::open_in_memory().unwrap();
         assert_eq!(
             store
-                .save_record_cas("work_resource_v115", "work-1", "ws-1", 10, 0, &json!({"generation":1}))
+                .save_record_cas(
+                    "work_resource_v115",
+                    "work-1",
+                    "ws-1",
+                    10,
+                    0,
+                    &json!({"generation":1}),
+                )
                 .unwrap(),
             1
         );
@@ -3033,7 +3042,14 @@ mod v115_revision_tests {
         };
         assert_eq!(
             store
-                .save_record_cas("work_resource_v115", "work-1", "ws-1", 11, 1, &json!({"generation":2}))
+                .save_record_cas(
+                    "work_resource_v115",
+                    "work-1",
+                    "ws-1",
+                    11,
+                    1,
+                    &json!({"generation":2}),
+                )
                 .unwrap(),
             2
         );
