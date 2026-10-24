@@ -4651,6 +4651,23 @@ mod control_plane_persistence_scope_tests {
             .unwrap();
         let admission_ref = format!("execution-dispatch-admission://{}", admission.id);
 
+        let concurrent = ExecutionDispatchAdmission::for_e0(
+            &work,
+            &binding,
+            format!("sha256:{}", "b".repeat(64)),
+        )
+        .unwrap();
+        assert!(store
+            .save_execution_dispatch_admission(&work, &concurrent)
+            .is_err());
+        assert!(store
+            .load_record::<ExecutionDispatchAdmission>(
+                "execution_dispatch_admission_v115",
+                concurrent.id.as_str(),
+            )
+            .unwrap()
+            .is_none());
+
         let event = ExecutionEvent::new(
             work.workspace_id.clone(),
             "session-e0",
@@ -4713,6 +4730,16 @@ mod control_plane_persistence_scope_tests {
         assert!(store
             .save_execution_receipt(&work, &wrong_input)
             .is_err());
+
+        let next = ExecutionDispatchAdmission::for_e0(
+            &work,
+            &binding,
+            format!("sha256:{}", "c".repeat(64)),
+        )
+        .unwrap();
+        store
+            .save_execution_dispatch_admission(&work, &next)
+            .unwrap();
     }
 
     #[test]
