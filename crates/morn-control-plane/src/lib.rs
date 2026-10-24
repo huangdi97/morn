@@ -70,8 +70,7 @@ use morn_runtime::{
     ExecutionManifest, OutcomeReconciler, ReconciliationRecord,
 };
 use morn_store::{
-    ImmutableRecordCommit, MornStore, MutableRecordCommit, RecordKindWatermark,
-    RecordRevisionFence,
+    ImmutableRecordCommit, MornStore, MutableRecordCommit, RecordKindWatermark, RecordRevisionFence,
 };
 use morn_work::acceptance::{
     AcceptanceReviewAuthorization, AcceptanceReviewerAttestation,
@@ -1522,8 +1521,10 @@ impl ControlPlaneStore for MornStore {
         // revision in the same SQLite transaction.
         let watermarks = capture_resolution_admission_watermarks(self, &canonical)?;
         let now = Timestamp::now();
-        let evidence: Vec<ConditionEvidence> = self
-            .load_records_in_workspace("condition_evidence_v115", canonical.workspace_id.as_str())?;
+        let evidence: Vec<ConditionEvidence> = self.load_records_in_workspace(
+            "condition_evidence_v115",
+            canonical.workspace_id.as_str(),
+        )?;
         let decisions: Vec<CapabilityResolutionDecision> = self.load_records_in_workspace(
             "capability_resolution_v115",
             canonical.workspace_id.as_str(),
@@ -1941,8 +1942,8 @@ impl ControlPlaneStore for MornStore {
         });
         let first_persisted_after_dispatch =
             previous.is_none() && attempt_state_crossed_dispatch_boundary(attempt.state);
-        let first_persisted_resolution_scoped = previous.is_none()
-            && (binding.resolution_decision_ref.is_some() || write_like);
+        let first_persisted_resolution_scoped =
+            previous.is_none() && (binding.resolution_decision_ref.is_some() || write_like);
         let requires_resolution_admission = crossing_dispatch_boundary
             || first_persisted_after_dispatch
             || first_persisted_resolution_scoped;
@@ -2889,10 +2890,8 @@ mod tests {
         let store = MornStore::open_in_memory().unwrap();
         store.save_work_resource(&work).unwrap();
         let manifest_id = morn_capability::CapabilityManifestId::generate_with("cap");
-        let resolution_ref =
-            persist_test_e0_resolution(&store, &work, manifest_id.clone(), "dsh");
-        let mut binding =
-            ExecutionBinding::for_work(&work, manifest_id.to_string(), "dsh", "sdk");
+        let resolution_ref = persist_test_e0_resolution(&store, &work, manifest_id.clone(), "dsh");
+        let mut binding = ExecutionBinding::for_work(&work, manifest_id.to_string(), "dsh", "sdk");
         binding.resolution_decision_ref = Some(resolution_ref);
         store.save_execution_binding(&work, &binding).unwrap();
 
@@ -4491,8 +4490,7 @@ mod control_plane_persistence_scope_tests {
             .unwrap();
         assert_eq!(stored.state, AttemptState::Authorized);
 
-        let mut first_snapshot =
-            ActionAttempt::new(binding.id.clone(), "work:read-direct", "read");
+        let mut first_snapshot = ActionAttempt::new(binding.id.clone(), "work:read-direct", "read");
         first_snapshot.transition(AttemptState::Authorized).unwrap();
         first_snapshot.transition(AttemptState::Dispatched).unwrap();
         assert!(store.save_action_attempt(&work, &first_snapshot).is_err());
