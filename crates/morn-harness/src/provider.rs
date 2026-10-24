@@ -470,17 +470,23 @@ impl HarnessProvider for MornNativeHarness {
         ));
         state.last_event = "completed".to_string();
         let event_ids: Vec<String> = state.events.iter().map(|e| e.id.to_string()).collect();
+        let mut trace_refs = event_ids.clone();
+        if let Some(admission_ref) = &state.ctx.dispatch_admission_ref {
+            trace_refs.push(admission_ref.clone());
+        }
         Ok(ExecutionReceipt {
             id: ExecutionReceiptId::generate_with("rcpt"),
             workspace_id: ws,
             work_package_id: Some(state.ctx.work_package_id.clone()),
             work_generation: state.ctx.work_generation,
             execution_binding_ref: state.ctx.execution_binding_ref.clone(),
+            dispatch_admission_ref: state.ctx.dispatch_admission_ref.clone(),
+            dispatch_input_sha256: state.ctx.dispatch_input_sha256.clone(),
             provider_ref: Some(self.name.clone()),
             scope_ref: state.ctx.scope_id.clone(),
             execution_environment_ref: state.ctx.execution_environment_ref.clone(),
             session_id: session_id.to_string(),
-            trace_refs: event_ids.clone(),
+            trace_refs,
             started_at: state
                 .events
                 .first()
@@ -1335,17 +1341,23 @@ impl HarnessProvider for DeepSeekHarnessProvider {
         ));
         state.last_event = "completed".to_string();
         let event_ids: Vec<String> = state.events.iter().map(|e| e.id.to_string()).collect();
+        let mut trace_refs = event_ids.clone();
+        if let Some(admission_ref) = &state.ctx.dispatch_admission_ref {
+            trace_refs.push(admission_ref.clone());
+        }
         Ok(ExecutionReceipt {
             id: ExecutionReceiptId::generate_with("rcpt"),
             workspace_id: ws,
             work_package_id: Some(state.ctx.work_package_id.clone()),
             work_generation: state.ctx.work_generation,
             execution_binding_ref: state.ctx.execution_binding_ref.clone(),
+            dispatch_admission_ref: state.ctx.dispatch_admission_ref.clone(),
+            dispatch_input_sha256: state.ctx.dispatch_input_sha256.clone(),
             provider_ref: Some(self.name.clone()),
             scope_ref: state.ctx.scope_id.clone(),
             execution_environment_ref: state.ctx.execution_environment_ref.clone(),
             session_id: session_id.to_string(),
-            trace_refs: event_ids.clone(),
+            trace_refs,
             started_at: state
                 .events
                 .first()
