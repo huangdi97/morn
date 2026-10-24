@@ -4410,7 +4410,19 @@ mod control_plane_persistence_scope_tests {
     #[test]
     fn e0_dispatch_admission_cannot_be_reused_after_same_generation_reresolution() {
         let store = MornStore::open_in_memory().unwrap();
-        let work = fixture_work();
+        // Keep this regression scoped to resolution-epoch reuse. The Lite
+        // profile's only pre-execution condition is CapabilityResolved, so the
+        // fixture is genuinely Ready once the durable resolution witness is
+        // committed. Factory-specific qualification/source/provenance gates are
+        // covered independently and must not obscure this admission invariant.
+        let work = WorkResource::new(
+            WorkspaceId::generate(),
+            WorkSpec::new(
+                WorkPackageId::generate_with("work"),
+                "reject stale E0 admission after same-generation re-resolution",
+                "morn.lite@1.0.0",
+            ),
+        );
         store.save_work_resource(&work).unwrap();
 
         let manifest_id = morn_capability::CapabilityManifestId::generate_with("cap");
