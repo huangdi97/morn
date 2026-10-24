@@ -3005,6 +3005,8 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
     provider: &mut P,
     work: &morn_work::control::WorkResource,
     binding: &morn_runtime::ExecutionBinding,
+    dispatch_admission_ref: &str,
+    dispatch_input_sha256: &str,
     input: &str,
 ) -> Result<E0HarnessTurnEvidence, Error> {
     use morn_harness::{CapabilityScope, RuntimeContext, ScopeKind};
@@ -3026,6 +3028,8 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
             work.id.clone(),
         )
         .with_work_binding(work.generation, binding.id.clone())
+        .map_err(Error::validation)?
+        .with_dispatch_admission(dispatch_admission_ref, dispatch_input_sha256)
         .map_err(Error::validation)?
         .with_provider_identity(
             binding.provider_ref.clone(),
@@ -3098,7 +3102,7 @@ fn run_e0_harness_turn<P: morn_harness::HarnessProvider>(
         session.id.clone(),
     );
     receipt.event_ids = events.iter().map(|event| event.id.to_string()).collect();
-    receipt.trace_refs = receipt.event_ids.clone();
+    receipt.trace_refs.extend(receipt.event_ids.iter().cloned());
     if let Some(started_at) = events.iter().map(|event| event.created_at).min() {
         receipt.started_at = started_at;
     }
@@ -3411,57 +3415,90 @@ async fn v115_work_execute_e0(State(state): State<AppState>, Json(body): Json<Va
         )
     };
 
-    let work_for_turn = work.clone();
-    let binding_for_turn = binding.clone();
+    let dispatch_admission_ref =
+        format!("execution-dispatch-admission://{}", dispatch_admission.id);
     let provider_ref = binding.provider_ref.clone();
-    let mut turn = match provider_ref.as_str() {
-        "morn-native" => tokio::task::spawn_blocking(move || {
-            let mut provider = native
-                .lock()
-                .map_err(|_| Error::internal("native harness lock poisoned"))?;
-            run_e0_harness_turn(&mut *provider, &work_for_turn, &binding_for_turn, &input)
-        })
-        .await
-        .map_err(|error| {
-            AppError(Error::internal(format!(
-                "native harness task failed: {error}"
-            )))
-        })??,
-        "deepseek-harness" => tokio::task::spawn_blocking(move || {
-            let mut provider = dsh
-                .lock()
-                .map_err(|_| Error::internal("dsh harness lock poisoned"))?;
-            run_e0_harness_turn(&mut *provider, &work_for_turn, &binding_for_turn, &input)
-        })
-        .await
-        .map_err(|error| {
-            AppError(Error::internal(format!("DSH harness task failed: {error}")))
-        })??,
-        "pi" => tokio::task::spawn_blocking(move || {
-            let mut provider = pi
-                .lock()
-                .map_err(|_| Error::internal("pi harness lock poisoned"))?;
-            run_e0_harness_turn(&mut *provider, &work_for_turn, &binding_for_turn, &input)
-        })
-        .await
-        .map_err(|error| AppError(Error::internal(format!("Pi harness task failed: {error}"))))??,
+    let turn = match provider_ref.as_str() {
+        "morn-native" => {
+            let work_for_turn = work.clone();
+            let binding_for_turn = binding.clone();
+            let admission_for_turn = dispatch_admission_ref.clone();
+            let digest_for_turn = input_sha256.clone();
+            let input_for_turn = input.clone();
+            tokio::task::spawn_blocking(move || {
+                let mut provider = native
+                    .lock()
+                    .map_err(|_| Error::internal("native harness lock poisoned"))?;
+                run_e0_harness_turn(
+                    &mut *provider,
+                    &work_for_turn,
+                    &binding_for_turn,
+                    &admission_for_turn,
+                    &digest_for_turn,
+                    &input_for_turn,
+                )
+            })
+            .await
+            .map_err(|error| {
+                AppError(Error::internal(format!(
+                    "native harness task failed: {error}"
+                )))
+            })??
+        }
+        "deepseek-harness" => {
+            let work_for_turn = work.clone();
+            let binding_for_turn = binding.clone();
+            let admission_for_turn = dispatch_admission_ref.clone();
+            let digest_for_turn = input_sha256.clone();
+            let input_for_turn = input.clone();
+            tokio::task::spawn_blocking(move || {
+                let mut provider = dsh
+                    .lock()
+                    .map_err(|_| Error::internal("dsh harness lock poisoned"))?;
+                run_e0_harness_turn(
+                    &mut *provider,
+                    &work_for_turn,
+                    &binding_for_turn,
+                    &admission_for_turn,
+                    &digest_for_turn,
+                    &input_for_turn,
+                )
+            })
+            .await
+            .map_err(|error| {
+                AppError(Error::internal(format!("DSH harness task failed: {error}")))
+            })??
+        }
+        "pi" => {
+            let work_for_turn = work.clone();
+            let binding_for_turn = binding.clone();
+            let admission_for_turn = dispatch_admission_ref.clone();
+            let digest_for_turn = input_sha256.clone();
+            let input_for_turn = input.clone();
+            tokio::task::spawn_blocking(move || {
+                let mut provider = pi
+                    .lock()
+                    .map_err(|_| Error::internal("pi harness lock poisoned"))?;
+                run_e0_harness_turn(
+                    &mut *provider,
+                    &work_for_turn,
+                    &binding_for_turn,
+                    &admission_for_turn,
+                    &digest_for_turn,
+                    &input_for_turn,
+                )
+            })
+            .await
+            .map_err(|error| {
+                AppError(Error::internal(format!("Pi harness task failed: {error}")))
+            })??
+        }
         other => {
             return Err(AppError(Error::validation(format!(
                 "binding provider {other:?} is not an executable harness provider"
             ))))
         }
     };
-
-    let dispatch_admission_ref =
-        format!("execution-dispatch-admission://{}", dispatch_admission.id);
-    if !turn
-        .receipt
-        .trace_refs
-        .iter()
-        .any(|reference| reference == &dispatch_admission_ref)
-    {
-        turn.receipt.trace_refs.push(dispatch_admission_ref.clone());
-    }
 
     let current = {
         let guard = state.lock();
